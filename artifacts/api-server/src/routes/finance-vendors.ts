@@ -308,7 +308,7 @@ vendorsRouter.get("/receivables", authorize({ feature: "finance.vendors", action
               (i.total - COALESCE(i."paidAmount", 0)) AS "remainingAmount",
               c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i."companyId" = $1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
        ORDER BY i."dueDate" ASC LIMIT 100`,
@@ -452,7 +452,7 @@ vendorsRouter.get("/receivables/:id", authorize({ feature: "finance.vendors", ac
     const [row] = await rawQuery<ReceivableDetailRow>(
       `SELECT i.*, c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -553,7 +553,7 @@ vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance.vendo
       `SELECT wr.*, e.name AS "submittedByName"
        FROM workflow_requests wr
        LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE wr.id = $1 AND wr."companyId" = $2 AND wr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -579,7 +579,7 @@ vendorsRouter.get("/financial-requests", authorize({ feature: "finance.vendors",
               e.name AS "submittedByName"
        FROM workflow_requests wr
        LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE wr."companyId" = $1 AND wr."deletedAt" IS NULL AND wr."entityType" IN ('expense','salary_advance','custody','purchase_order')
        ORDER BY wr."createdAt" DESC LIMIT 100`,
       [scope.companyId]

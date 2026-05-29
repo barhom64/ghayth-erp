@@ -25,6 +25,15 @@ const PreventivePlans = lazy(() => import("@/pages/fleet/preventive-plans"));
 const TrafficViolations = lazy(() => import("@/pages/fleet/traffic-violations"));
 const TrafficViolationDetail = lazy(() => import("@/pages/details/traffic-violation-detail"));
 const TCO = lazy(() => import("@/pages/fleet/tco"));
+const TelematicsLiveMap = lazy(() => import("@/pages/fleet/telematics/live-map"));
+const TelematicsAiAlerts = lazy(() => import("@/pages/fleet/telematics/ai-alerts"));
+const TelematicsSensors = lazy(() => import("@/pages/fleet/telematics/sensors"));
+const TelematicsDevices = lazy(() => import("@/pages/fleet/telematics/devices"));
+const TelematicsVideoEvidence = lazy(() => import("@/pages/fleet/telematics/video-evidence"));
+const TelematicsSettings = lazy(() => import("@/pages/fleet/telematics/settings"));
+const TelematicsOperations = lazy(() => import("@/pages/fleet/telematics/operations"));
+const TelematicsEvidence = lazy(() => import("@/pages/fleet/telematics/evidence"));
+const TelematicsScorecard = lazy(() => import("@/pages/fleet/telematics/scorecard"));
 
 export const fleetRoutes = [
   { path: "/fleet", component: Fleet },
@@ -50,6 +59,19 @@ export const fleetRoutes = [
   { path: "/fleet/traffic-violations", component: TrafficViolations },
   { path: "/fleet/traffic-violations/:id", component: TrafficViolationDetail },
   { path: "/fleet/tco", component: TCO },
+  // Telematics surface (#1354). The live-map is the landing tab for the
+  // /fleet/telematics/* section; nested pages live under the same prefix
+  // so the sub-tabs nav (FleetTelematicsTabsNav) highlights correctly.
+  { path: "/fleet/telematics", component: TelematicsLiveMap },
+  { path: "/fleet/telematics/live-map", component: TelematicsLiveMap },
+  { path: "/fleet/telematics/ai-alerts", component: TelematicsAiAlerts },
+  { path: "/fleet/telematics/sensors", component: TelematicsSensors },
+  { path: "/fleet/telematics/devices", component: TelematicsDevices },
+  { path: "/fleet/telematics/video-evidence", component: TelematicsVideoEvidence },
+  { path: "/fleet/telematics/settings", component: TelematicsSettings },
+  { path: "/fleet/telematics/operations", component: TelematicsOperations },
+  { path: "/fleet/telematics/evidence", component: TelematicsEvidence },
+  { path: "/fleet/telematics/scorecard", component: TelematicsScorecard },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },
 ];

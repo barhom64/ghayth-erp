@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateAr , todayLocal } from "@/lib/formatters";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
 import { ErrorState } from "@/components/shared/loading-error-states";
 import { MessageCircle, Mail, Phone, Send, Search, ArrowRightLeft, ClipboardList, Headphones, FileText, ChevronDown, ChevronUp, Bell, BellOff, BellRing, CheckCircle2, XCircle, Clock, Activity, Pencil, Trash2, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -516,6 +516,73 @@ function CommLogActions({ logEntry, onSuccess }: { logEntry: any; onSuccess: () 
   );
 }
 
+function ManualSendPanel({ onSent }: { onSent: () => void }) {
+  // POST /communications/send — single ad-hoc send for the operator to
+  // verify deliverability of an SMS / WhatsApp / email path without
+  // attaching a template. Server schema uses `toNumber` for sms /
+  // whatsapp / call and `toEmail` for email.
+  const [channel, setChannel] = useState("sms");
+  const [to, setTo] = useState("");
+  const [body, setBody] = useState("");
+  const sendMut = useApiMutation<unknown, {
+    channel: string;
+    toNumber?: string;
+    toEmail?: string;
+    body: string;
+  }>(
+    "/communications/send",
+    "POST",
+    [["comm-log"], ["comm-stats"], ["comm-queue-stats"]],
+    { successMessage: "أُرسلت الرسالة" },
+  );
+  const handleSend = () => {
+    const payload = channel === "email"
+      ? { channel, toEmail: to.trim(), body: body.trim() }
+      : { channel, toNumber: to.trim(), body: body.trim() };
+    sendMut.mutate(payload, { onSuccess: () => { setTo(""); setBody(""); onSent(); } });
+  };
+  return (
+    <Card className="mb-3 border-dashed">
+      <CardContent className="p-3 space-y-2">
+        <p className="text-sm font-semibold">إرسال يدوي</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <select
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+            className="h-8 text-xs border rounded px-2 bg-white"
+          >
+            <option value="sms">رسالة نصية</option>
+            <option value="whatsapp">واتساب</option>
+            <option value="email">بريد إلكتروني</option>
+          </select>
+          <input
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            placeholder={channel === "email" ? "to@example.com" : "+966..."}
+            dir="ltr"
+            className="h-8 text-xs border rounded px-2 md:col-span-1"
+          />
+          <input
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="نص الرسالة"
+            className="h-8 text-xs border rounded px-2 md:col-span-2"
+          />
+        </div>
+        <GuardedButton
+          perm="communications:create"
+          size="sm"
+          rateLimitAware
+          disabled={!to.trim() || !body.trim() || sendMut.isPending}
+          onClick={handleSend}
+        >
+          إرسال
+        </GuardedButton>
+      </CardContent>
+    </Card>
+  );
+}
+
 function CommLogTab() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -545,6 +612,7 @@ function CommLogTab() {
     <Card>
       <CardHeader><CardTitle>سجل الاتصالات</CardTitle></CardHeader>
       <CardContent className="space-y-4">
+        <ManualSendPanel onSent={refetch} />
         <div className="relative">
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="ps-9" placeholder="بحث بالرقم أو الموضوع..." value={search} onChange={(e) => setSearch(e.target.value)} />

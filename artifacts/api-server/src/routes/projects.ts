@@ -337,7 +337,7 @@ router.get("/", authorize({ feature: "projects.list", action: "list" }), async (
     }
 
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" AND e."deletedAt" IS NULL WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
+      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."companyId"=p."companyId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" AND e."deletedAt" IS NULL WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -542,7 +542,7 @@ router.get("/:id", authorize({ feature: "projects.list", action: "view", resourc
       }
     }
 
-    const [project] = await rawQuery<Record<string, unknown>>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL WHERE ${detailWhere}`, detailParams);
+    const [project] = await rawQuery<Record<string, unknown>>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."companyId"=p."companyId" AND cl."deletedAt" IS NULL WHERE ${detailWhere}`, detailParams);
     if (!project) throw new NotFoundError("المشروع غير موجود");
     const [phases, tasks] = await Promise.all([
       rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]),

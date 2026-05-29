@@ -259,7 +259,7 @@ export default function ComplianceDetail() {
             <EntityPrintButton
               entityType="compliance"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton
             perm="governance:update"

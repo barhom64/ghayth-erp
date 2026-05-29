@@ -57,6 +57,11 @@ const SAFE_NAMES = new Set([
   // `lim` in routes/events.ts is computed via Math.min/Math.max(Number(...))
   // so it's always a clamped integer, never a raw string.
   "lim",
+  // `SEVERITY_WEIGHT_SQL` in routes/fleet-telematics.ts is a `const`
+  // CASE expression built entirely from hardcoded literals — no user
+  // input can reach it. Used by the driver-safety scorecard endpoints
+  // to compute SUM(severity weight) inside aggregate queries.
+  "SEVERITY_WEIGHT_SQL",
   // `extra` in routes/finance-recurring.ts is built from hardcoded SQL
   // fragments plus properly parameterized $n placeholders — same pattern as
   // `where` and `conditions` above.

@@ -401,7 +401,7 @@ export default function PerformanceDetail() {
             <EntityPrintButton
               entityType="performance_review"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <DetailActionButtons hook={editDelete} editPerm="hr:update" deletePerm="hr:delete" />
         </>

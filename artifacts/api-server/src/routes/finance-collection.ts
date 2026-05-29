@@ -86,7 +86,7 @@ collectionRouter.get("/collection", authorize({ feature: "finance.collection", a
               CURRENT_DATE - i."dueDate" AS "daysOverdue",
               ics.stage AS "currentStage", ics."stageName" AS "currentStageName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        LEFT JOIN LATERAL (
          SELECT stage, "stageName"
          FROM invoice_collection_stages
@@ -244,7 +244,7 @@ collectionRouter.get("/collection/:invoiceId/history", authorize({ feature: "fin
       `SELECT ics.*, e.name AS "performedByName"
        FROM invoice_collection_stages ics
        LEFT JOIN employee_assignments ea ON ea.id = ics."performedBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE ics."invoiceId" = $${historyScope.nextParamIndex} AND ${historyScope.where}
        ORDER BY ics.id ASC`,
       [...historyScope.params, invoiceId],

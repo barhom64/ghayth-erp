@@ -238,7 +238,7 @@ const updateTenantSchema = z.object({
   // through the customer portal. Nullable: existing tenants keep working
   // without a link (their portal account, if any, just doesn't get the
   // "property" section). Column added in migration 230.
-  clientId: z.coerce.number().optional().nullable(),
+  clientId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const payRentPaymentSchema = z.object({
@@ -2085,10 +2085,37 @@ router.post("/late-rent/escalate", authorize({ feature: "properties.payments", a
           const responsible = await getLegalResponsible(cid);
           const lawyerName = responsible?.employeeName ?? null;
 
+          // #1141 cleanup — caseNumber from the numbering center
+          // (scheme `legal.case`, seeded by migration 213). Replaces
+          // the legacy inline Date.now() pattern for rent collection
+          // cases. Issue is awaited so the assignment exists before
+          // the engine call; engine call stays fire-and-forget.
+          let rentCaseNumber: string;
+          try {
+            const issued = await issueNumber({
+              companyId: cid,
+              branchId: scope.branchId ?? null,
+              moduleKey: "legal",
+              entityKey: "case",
+              entityTable: "legal_cases",
+              actorId: scope.userId,
+              metadata: { source: "properties.lateRentCheck", rentPaymentId: payment.id },
+              expectedTiming: "on_draft",
+            });
+            rentCaseNumber = issued.number;
+          } catch (e: unknown) {
+            logger.error(e, "Property legal case numbering issue failed:");
+            // Fall through to engine call without a case number; engine
+            // call's own .catch() handles the downstream INSERT error.
+            // The audit log via issueNumber's failure path records the
+            // attempt either way.
+            continue;
+          }
+
           propertiesEngine.requestLegalCaseCreation(
             { companyId: cid, branchId: scope.branchId, createdBy: scope.userId },
             {
-              caseNumber: `RENT-${payment.id}-${Date.now()}`,
+              caseNumber: rentCaseNumber,
               title: `تحصيل إيجار - ${payment.unitNumber} - ${payment.tenantName}`,
               caseType: "property_rent",
               opposingParty: payment.tenantName as string,

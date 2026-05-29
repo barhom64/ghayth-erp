@@ -19,7 +19,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Pencil, RefreshCw, AlertTriangle } from "lucide-react";
+import { BookOpen, Pencil, RefreshCw, AlertTriangle, Trash2, Plus, Eye } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -90,6 +93,95 @@ export default function DisciplineRegulationPage() {
   );
   const reseeding = reseedMut.isPending;
 
+  // DELETE /hr/discipline/regulation/:id — soft-deletes a single article
+  // from the live catalogue. The reseed action above can restore the
+  // factory copy if too many are removed.
+  const deleteMut = useApiMutation<unknown, number>(
+    (id) => `/hr/discipline/regulation/${id}`,
+    "DELETE",
+    [["discipline-regulation"]],
+    { successMessage: "تم حذف المادة" },
+  );
+
+  // POST /hr/discipline/regulation — add a new article. Used when a
+  // company-specific rule needs to be captured alongside the default
+  // 49-article seed.
+  const { toast: regToast } = useToast();
+  const createMut = useApiMutation<unknown, {
+    section: string;
+    articleNumber: number;
+    title: string;
+    description?: string;
+    penalty1?: string;
+    penalty2?: string;
+    penalty3?: string;
+    penalty4?: string;
+    extraDeduction?: string;
+    severity: string;
+    isTermination?: boolean;
+    legalReference?: string;
+  }>(
+    "/hr/discipline/regulation",
+    "POST",
+    [["discipline-regulation"]],
+    { successMessage: "تمت إضافة المادة" },
+  );
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newArt, setNewArt] = useState({
+    section: "work_time",
+    articleNumber: "",
+    title: "",
+    severity: "medium",
+    isTermination: false,
+    penalty1: "",
+    penalty2: "",
+    penalty3: "",
+    penalty4: "",
+    extraDeduction: "",
+    legalReference: "",
+  });
+  const submitCreate = () => {
+    const num = Number(newArt.articleNumber);
+    if (!newArt.title.trim() || !Number.isFinite(num) || num <= 0) {
+      regToast({ variant: "destructive", title: "العنوان ورقم المادة مطلوبان" });
+      return;
+    }
+    createMut.mutate(
+      {
+        section: newArt.section,
+        articleNumber: num,
+        title: newArt.title.trim(),
+        severity: newArt.severity,
+        isTermination: newArt.isTermination,
+        penalty1: newArt.penalty1.trim() || undefined,
+        penalty2: newArt.penalty2.trim() || undefined,
+        penalty3: newArt.penalty3.trim() || undefined,
+        penalty4: newArt.penalty4.trim() || undefined,
+        extraDeduction: newArt.extraDeduction.trim() || undefined,
+        legalReference: newArt.legalReference.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          setCreateOpen(false);
+          setNewArt({
+            section: "work_time", articleNumber: "", title: "", severity: "medium",
+            isTermination: false, penalty1: "", penalty2: "", penalty3: "", penalty4: "",
+            extraDeduction: "", legalReference: "",
+          });
+        },
+      },
+    );
+  };
+
+  // GET /hr/discipline/regulation/:id — full single-article detail
+  // (description, legal links, history). Opens in a read-only viewer.
+  const [viewId, setViewId] = useState<number | null>(null);
+  const viewQ = useApiQuery<any>(
+    ["discipline-regulation-article", String(viewId ?? 0)],
+    viewId ? `/hr/discipline/regulation/${viewId}` : null,
+    { enabled: viewId !== null },
+  );
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -156,9 +248,26 @@ export default function DisciplineRegulationPage() {
             <p className="text-xs text-orange-700 mt-2">+ {a.extraDeduction}</p>
           )}
         </div>
-        <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>
-          <Pencil className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" onClick={() => setViewId(a.id)} title="عرض">
+            <Eye className="w-4 h-4" />
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>
+            <Pencil className="w-4 h-4" />
+          </Button>
+          <GuardedButton
+            perm="hr:delete"
+            size="sm"
+            variant="ghost"
+            className="text-status-error-foreground"
+            onClick={() => deleteMut.mutate(a.id)}
+            disabled={deleteMut.isPending}
+            rateLimitAware
+            title="حذف"
+          >
+            <Trash2 className="w-4 h-4" />
+          </GuardedButton>
+        </div>
       </div>
     </div>
   );
@@ -174,10 +283,15 @@ export default function DisciplineRegulationPage() {
       ]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="hr:create" variant="outline" onClick={reseedDefaults} disabled={reseeding}>
-          <RefreshCw className={`w-4 h-4 me-2 ${reseeding ? "animate-spin" : ""}`} />
-          استنساخ اللائحة الافتراضية
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <GuardedButton perm="hr:create" onClick={() => setCreateOpen(true)}>
+            <Plus className="w-4 h-4 me-2" /> مادة جديدة
+          </GuardedButton>
+          <GuardedButton perm="hr:create" variant="outline" onClick={reseedDefaults} disabled={reseeding}>
+            <RefreshCw className={`w-4 h-4 me-2 ${reseeding ? "animate-spin" : ""}`} />
+            استنساخ اللائحة الافتراضية
+          </GuardedButton>
+        </div>
       }
     >
       <Tabs defaultValue="work_time" dir="rtl">
@@ -303,6 +417,133 @@ export default function DisciplineRegulationPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>إضافة مادة جديدة للائحة الانضباط</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>القسم *</Label>
+                <Select value={newArt.section} onValueChange={(v) => setNewArt((s) => ({ ...s, section: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(SECTION_LABELS).map(([k, l]) => (
+                      <SelectItem key={k} value={k}>{l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>رقم المادة *</Label>
+                <Input type="number" value={newArt.articleNumber}
+                  onChange={(e) => setNewArt((s) => ({ ...s, articleNumber: e.target.value }))} dir="ltr" />
+              </div>
+              <div>
+                <Label>الشدة</Label>
+                <Select value={newArt.severity} onValueChange={(v) => setNewArt((s) => ({ ...s, severity: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">منخفضة</SelectItem>
+                    <SelectItem value="medium">متوسطة</SelectItem>
+                    <SelectItem value="high">عالية</SelectItem>
+                    <SelectItem value="critical">حرجة</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>وصف المخالفة *</Label>
+              <Textarea value={newArt.title}
+                onChange={(e) => setNewArt((s) => ({ ...s, title: e.target.value }))} rows={3} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>أول مرة</Label>
+                <Input value={newArt.penalty1}
+                  onChange={(e) => setNewArt((s) => ({ ...s, penalty1: e.target.value }))} />
+              </div>
+              <div>
+                <Label>ثاني مرة</Label>
+                <Input value={newArt.penalty2}
+                  onChange={(e) => setNewArt((s) => ({ ...s, penalty2: e.target.value }))} />
+              </div>
+              <div>
+                <Label>ثالث مرة</Label>
+                <Input value={newArt.penalty3}
+                  onChange={(e) => setNewArt((s) => ({ ...s, penalty3: e.target.value }))} />
+              </div>
+              <div>
+                <Label>رابع مرة</Label>
+                <Input value={newArt.penalty4}
+                  onChange={(e) => setNewArt((s) => ({ ...s, penalty4: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <Label>حسم إضافي</Label>
+              <Input value={newArt.extraDeduction}
+                onChange={(e) => setNewArt((s) => ({ ...s, extraDeduction: e.target.value }))} />
+            </div>
+            <div>
+              <Label>مرجع نظامي</Label>
+              <Input value={newArt.legalReference}
+                onChange={(e) => setNewArt((s) => ({ ...s, legalReference: e.target.value }))} />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={newArt.isTermination}
+                onCheckedChange={(v) => setNewArt((s) => ({ ...s, isTermination: v }))} />
+              <Label>تؤدي إلى الفصل عند تكرارها</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button>
+            <GuardedButton perm="hr:create" onClick={submitCreate} disabled={createMut.isPending}>
+              {createMut.isPending ? "جارٍ الحفظ..." : "حفظ"}
+            </GuardedButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={viewId !== null} onOpenChange={(o) => !o && setViewId(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>المادة #{viewQ.data?.articleNumber ?? viewId}</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-sm space-y-2">
+            {viewQ.isLoading ? (
+              <p className="text-muted-foreground">جاري التحميل...</p>
+            ) : viewQ.data ? (
+              <>
+                <p className="font-medium">{viewQ.data.title}</p>
+                {viewQ.data.description && (
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{viewQ.data.description}</p>
+                )}
+                {viewQ.data.legalReference && (
+                  <p className="text-xs">📖 {viewQ.data.legalReference}</p>
+                )}
+                <div className="grid grid-cols-2 gap-2 text-xs mt-2">
+                  <div><span className="text-muted-foreground">القسم:</span> {SECTION_LABELS[viewQ.data.section] ?? viewQ.data.section}</div>
+                  <div><span className="text-muted-foreground">الشدة:</span> {viewQ.data.severity}</div>
+                  {viewQ.data.isTermination && <div className="text-status-error-foreground">⚠ تؤدي إلى الفصل</div>}
+                </div>
+                <div className="border-t pt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div><span className="text-muted-foreground">أول مرة:</span> {viewQ.data.penalty1 ?? "—"}</div>
+                  <div><span className="text-muted-foreground">ثاني مرة:</span> {viewQ.data.penalty2 ?? "—"}</div>
+                  <div><span className="text-muted-foreground">ثالث مرة:</span> {viewQ.data.penalty3 ?? "—"}</div>
+                  <div><span className="text-muted-foreground">رابع مرة:</span> {viewQ.data.penalty4 ?? "—"}</div>
+                </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground">لا توجد بيانات</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewId(null)}>إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

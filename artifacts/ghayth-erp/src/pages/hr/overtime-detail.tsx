@@ -103,7 +103,7 @@ export default function OvertimeDetail() {
       actions={
         <div className="flex items-center gap-2">
           <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
-          <PrintButton entityType="overtime_request" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="overtime_request" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
       overview={

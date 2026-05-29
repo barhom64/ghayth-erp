@@ -258,6 +258,12 @@ export default function UmrahSubAgentDetail() {
                 variant="outline"
                 className="gap-1"
                 onClick={() => {
+                  // Goes through `/api/umrah/statements/:id/pdf`, which is
+                  // itself a renderPrint() orchestrator that gathers
+                  // period-bounded journal entries and feeds them as a
+                  // previewPayload. The engine logs the print job + audit row
+                  // server-side — opening it in a new tab here is just the
+                  // download trigger, not a bypass of the print platform.
                   window.open(`/api/umrah/statements/${sa.id}/pdf`, "_blank");
                 }}
                 rateLimitAware
@@ -285,7 +291,7 @@ export default function UmrahSubAgentDetail() {
 
   return (
     <DetailPageLayout
-      actions={<PrintButton entityType="umrah_sub_agent" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
+      actions={<PrintButton entityType="umrah_sub_agent" entityId={(params?.id ?? id ?? 0) as any} label="طباعة" />}
       title={sa?.name || "تفاصيل الوكيل الفرعي"}
       subtitle={sa?.nuskCode ? `رمز نسك: ${sa.nuskCode}` : undefined}
       backPath="/umrah/sub-agents"

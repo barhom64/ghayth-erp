@@ -10,7 +10,7 @@ import { encryptField, blindIndex } from "./fieldEncryption.js";
 // Arabic header → DB column mapping
 // ---------------------------------------------------------------------------
 
-const MUTAMER_HEADER_MAP: Record<string, string> = {
+export const MUTAMER_HEADER_MAP: Record<string, string> = {
   "رقم المعتمر في النظام": "nuskNumber",
   "رقم المعتمر": "nuskNumber",
   "رقم نسك": "nuskNumber",
@@ -44,7 +44,7 @@ const MUTAMER_HEADER_MAP: Record<string, string> = {
   "الدولة": "country",
 };
 
-const VOUCHER_HEADER_MAP: Record<string, string> = {
+export const VOUCHER_HEADER_MAP: Record<string, string> = {
   "رقم الفاتورة": "nuskInvoiceNumber",
   "رقم فاتورة نسك": "nuskInvoiceNumber",
   "رقم المجموعة": "nuskGroupNumber",
@@ -129,6 +129,66 @@ function normalizeHeader(h: string): string {
 
 export interface ParsedRow {
   [key: string]: string | number | boolean | null;
+}
+
+/**
+ * Normalize Arabic-keyed rows (as the wizard ships them from client-side
+ * XLSX parsing) into engine-readable rows whose keys are camelCase DB
+ * field names.
+ *
+ * The built-in header map handles the standard NUSK / MOFA layouts.
+ * `customMapping` overrides any header on a per-import basis — that's
+ * the column-mapping UI's escape hatch when a partner's Excel uses
+ * non-standard column titles (e.g. "ID Mu'tamir" instead of "رقم
+ * المعتمر"). Custom always beats built-in.
+ *
+ * Keys that don't map (neither built-in nor custom) are dropped quietly
+ * — the engine looks up by camelCase field name anyway, so unmapped
+ * columns are simply invisible to the import logic (no harm done).
+ */
+export function normalizeImportRows(
+  rows: Array<Record<string, unknown>>,
+  fileType: "mutamers" | "vouchers",
+  customMapping?: Record<string, string>,
+): ParsedRow[] {
+  const builtin = fileType === "vouchers" ? VOUCHER_HEADER_MAP : MUTAMER_HEADER_MAP;
+  // Build a fast lookup whose keys are trimmed (Excel files often pad
+  // headers with whitespace). Trim once here, then match against
+  // pre-trimmed runtime keys below.
+  const trimmedBuiltin: Record<string, string> = {};
+  for (const [k, v] of Object.entries(builtin)) trimmedBuiltin[k.trim()] = v;
+  const trimmedCustom: Record<string, string> = {};
+  if (customMapping) {
+    for (const [k, v] of Object.entries(customMapping)) {
+      const trimmedKey = k.trim();
+      // Ignore empty custom values — they signal "operator didn't pick
+      // a target field for this column" and should fall through to the
+      // built-in lookup or be dropped.
+      if (trimmedKey && typeof v === "string" && v.trim()) {
+        trimmedCustom[trimmedKey] = v.trim();
+      }
+    }
+  }
+
+  return rows.map((raw) => {
+    const out: ParsedRow = {};
+    for (const [origKey, val] of Object.entries(raw)) {
+      const key = origKey.trim();
+      // Custom mapping takes priority over built-in. If neither knows
+      // the key, drop it — see the function-level comment.
+      const target = trimmedCustom[key] ?? trimmedBuiltin[key];
+      if (!target) continue;
+      // Engine fields use camelCase strings/numbers; we coerce non-null
+      // values to string to match the ParsedRow value shape (the engine
+      // itself does Number(...) where it needs numeric).
+      out[target] = val === null || val === undefined
+        ? null
+        : typeof val === "number" || typeof val === "boolean"
+          ? val
+          : String(val).trim();
+    }
+    return out;
+  });
 }
 
 export function parseMutamersWorkbook(buffer: Buffer): Promise<ParsedRow[]> {

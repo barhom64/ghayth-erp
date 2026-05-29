@@ -205,7 +205,7 @@ router.get("/exit", authorize({ feature: "hr.exit", action: "list" }), async (re
        FROM hr_exit_requests x
        JOIN employee_assignments ea ON ea.id = x."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        WHERE ${where}
        ORDER BY x."createdAt" DESC
        LIMIT 500`,
@@ -244,7 +244,7 @@ router.get("/exit/:id", authorize({ feature: "hr.exit", action: "view" }), async
        FROM hr_exit_requests x
        JOIN employee_assignments ea ON ea.id = x."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        WHERE x.id = $1 AND x."companyId" = $2 AND x."deletedAt" IS NULL`,
       [id, scope.companyId]
     );

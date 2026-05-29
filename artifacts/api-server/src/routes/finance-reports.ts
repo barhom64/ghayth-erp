@@ -567,7 +567,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     const from = startDate || "1900-01-01";
 
     const [client] = await rawQuery<Record<string, unknown>>(
-      `SELECT id, name, phone, email, "vatNumber" FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT id, name, phone, email, "taxNumber", "taxNumber" AS "vatNumber" FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
     if (!client) { throw new NotFoundError("العميل غير موجود"); return; }
@@ -969,7 +969,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' ${dateFilter}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
        ORDER BY je."createdAt" DESC
@@ -985,7 +985,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410'
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'ADV%' ${dateFilter}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
        ORDER BY je."createdAt" DESC
@@ -1040,7 +1040,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'expense'
        LEFT JOIN branches b ON b.id = je."branchId"
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE jl.debit > jl.credit AND jl."deletedAt" IS NULL
        GROUP BY ${groupCol}
        ORDER BY amount DESC
@@ -2362,7 +2362,7 @@ reportsRouter.get(
                    (COALESCE(il."cogsAmount", 0) - COALESCE(il."cogsReversedAmount", 0)))::float8 AS profit
            FROM invoice_lines il
            JOIN invoices i ON i.id = il."invoiceId" AND i."deletedAt" IS NULL
-           LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+           LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
            LEFT JOIN warehouse_products p ON p.id = il."productId" AND p."deletedAt" IS NULL
           WHERE i."companyId" = $1
             AND COALESCE(il."cogsAmount", 0) > 0

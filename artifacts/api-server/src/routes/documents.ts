@@ -838,7 +838,7 @@ router.post("/templates/:id/generate", authorize({ feature: "documents", action:
         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active' AND ea."companyId" = $2
         LEFT JOIN employee_contracts ec ON ec."assignmentId" = ea.id AND ec."deletedAt" IS NULL AND ec.status = 'active'
         LEFT JOIN departments d ON d.id = ea."departmentId"
-        LEFT JOIN branches b ON b.id = ea."branchId"
+        LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
         WHERE e.id=$1
         ORDER BY ea."hireDate" DESC LIMIT 1
       `, [Number(entityId), scope.companyId]);
@@ -878,7 +878,7 @@ router.post("/templates/:id/generate", authorize({ feature: "documents", action:
       const [inv] = await rawQuery<InvoiceWithClientRow>(`
         SELECT i.*, c.name as "clientName", c.email as "clientEmail", c.phone as "clientPhone"
         FROM invoices i
-        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+        LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
         WHERE i.id=$1 AND i."companyId"=$2 AND i."deletedAt" IS NULL
       `, [Number(entityId), scope.companyId]);
       if (inv) {

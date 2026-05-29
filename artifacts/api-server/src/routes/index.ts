@@ -23,6 +23,8 @@ import { zatcaRouter } from "./finance-zatca.js";
 import notificationsRouter from "./notifications.js";
 import tasksRouter from "./tasks.js";
 import fleetRouter from "./fleet.js";
+import fleetTelematicsRouter from "./fleet-telematics.js";
+import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import warehouseRouter from "./warehouse.js";
 import propertiesRouter from "./properties.js";
 import legalRouter from "./legal.js";
@@ -175,6 +177,11 @@ router.use("/print/verify", printVerifyRouter);
 // Limiters live inside pdpl.ts: per-IP on /privacy-notice, per-user
 // (pdplUserLimiter) on the authenticated routes.
 router.use("/pdpl", pdplRouter);
+// #1354 — CMSV6 telematics webhook. Anonymous surface, HMAC-signed via
+// the integration's webhookSecret. Mounted BEFORE authMiddleware so the
+// vendor doesn't need an ERP JWT. The router enforces per-IP rate limit,
+// timestamp window, and timing-safe signature compare inside.
+router.use("/webhooks/cmsv6", fleetTelematicsWebhookRouter);
 
 router.get("/settings/display", async (req, res) => {
   try {
@@ -344,6 +351,10 @@ router.use("/notifications", notificationsRouter);
 router.use("/tasks", requireModule("operations"), tasksRouter);
 router.use("/fleet", fleetUserLimiter);
 router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRouter);
+// Telematics surface (#1354). Mounted under /fleet so it inherits the same
+// module + financial guard + per-user limiter as the rest of the fleet
+// module, and so URLs stay /fleet/telematics/* in the SPA.
+router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetTelematicsRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);

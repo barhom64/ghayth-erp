@@ -150,6 +150,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadPosReceipt(companyId, entityId);
     case "receipt_voucher":
     case "payment_voucher":
+    case "voucher":
       return await loadVoucher(companyId, entityId);
     case "purchase_order":
       return await loadPurchaseOrder(companyId, entityId);
@@ -192,6 +193,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadFleetMaintenance(companyId, entityId);
     case "insurance_policy":
     case "insurance":
+    case "policy":
       return await loadInsurancePolicy(companyId, entityId);
     case "maintenance_request":
     case "maintenance":
@@ -258,6 +260,12 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadUmrahAgentInvoice(companyId, entityId);
     case "umrah_penalty":
       return await loadUmrahPenalty(companyId, entityId);
+    case "umrah_violation":
+      return await loadUmrahViolation(companyId, entityId);
+    case "umrah_transport":
+      return await loadUmrahTransportTrip(companyId, entityId);
+    case "umrah_package":
+      return await loadUmrahPackage(companyId, entityId);
     case "salary_advance":
       return await loadSalaryAdvance(companyId, entityId);
     case "training_program":
@@ -371,7 +379,10 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   vehicle: "fleet_vehicles",
   fleet_trip: "fleet_trips",
   fuel: "fleet_fuel_logs",
-  driver: "drivers",
+  // The fleet driver master is in `fleet_drivers` — there's no `drivers` table.
+  // Earlier wave (#1286) misnamed this; left a 404 when SPA hit the print
+  // button on a driver detail page. Resolves to a real card now.
+  driver: "fleet_drivers",
   // Legal
   legal_contract: "legal_contracts",
   legal_judgment: "legal_cases",
@@ -392,18 +403,31 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   leave: "hr_leave_requests",
   excuse: "hr_excuse_requests",
   maintenance: "maintenance_requests",
-  voucher: "payment_vouchers",
+  // `voucher` (no dedicated switch case) used to point at the non-existent
+  // `payment_vouchers` table — the real table is `vouchers`. Printing a
+  // voucher card via the short alias returned an empty stub before.
+  voucher: "vouchers",
   season: "umrah_seasons",
   agent: "umrah_agents",
   transport: "umrah_transport",
-  violation: "traffic_violations",
+  // Traffic violations live in `fleet_traffic_violations`, not the
+  // never-created `traffic_violations` the original alias pointed at. The
+  // dedicated case route also covers this — fixing the fallback for safety.
+  violation: "fleet_traffic_violations",
   opportunity: "crm_opportunities",
   task: "tasks",
   ticket: "support_tickets",
   unit: "property_units",
   contract: "rental_contracts",
-  policy: "insurance_policies",
-  property: "buildings",
+  // Same issue as `voucher` — `policy` had no switch case AND pointed at the
+  // non-existent `insurance_policies`. The real table for fleet vehicle
+  // insurance is `fleet_insurance`. (Building insurance / hr exit-policy
+  // are different domains and have their own canonical loaders.)
+  policy: "fleet_insurance",
+  // `property` has a switch case (loadBuildingCard hits property_buildings),
+  // so this entry is only a safety net — but it used to point at the
+  // non-existent `buildings`. Fixed to the canonical name.
+  property: "property_buildings",
   sub_agent: "umrah_sub_agents",
   umrah_package: "umrah_packages",
   performance: "evaluation_cycles",
@@ -429,6 +453,11 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   application: "job_applications",
   campaign: "marketing_campaigns",
   umrah_runsheet: "umrah_pilgrims",
+  // Wave 8 — `umrah_agent` was the last short alias the SPA passed without a
+  // table mapping. Everything else closing-sweep needs was already routed by
+  // an earlier wave; the matching BESPOKE_PRESETS keys now turn those rows
+  // into real layouts instead of the empty fallback grid.
+  umrah_agent: "umrah_agents",
 };
 
 // ─── Focused loaders ────────────────────────────────────────────────────────
@@ -576,7 +605,25 @@ async function loadAccountStatement(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   if (!account) return { entity: { id } };
-  return { entity: { ...account, accountName: account.name }, movements: [] };
+  // Last 100 posted movements on this account, newest first. Bounded so the
+  // print doesn't paginate forever on a heavily-used account — operators who
+  // need the full history go through the dedicated GL ledger report.
+  const movements = await rawQuery<Record<string, unknown>>(
+    `SELECT je.date AS "التاريخ",
+            je.ref  AS "المرجع",
+            je.description AS "البيان",
+            COALESCE(jl.debit,  0)::numeric AS "مدين",
+            COALESCE(jl.credit, 0)::numeric AS "دائن"
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId"
+      WHERE jl."accountId" = $1
+        AND je."companyId" = $2
+        AND je.status = 'posted'
+      ORDER BY je.date DESC, je.id DESC
+      LIMIT 100`,
+    [id, companyId],
+  ).catch(() => []);
+  return { entity: { ...account, accountName: account.name }, movements };
 }
 
 async function loadStockTransfer(companyId: number, id: string) {
@@ -1262,6 +1309,66 @@ async function loadUmrahPenalty(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   return { entity: penalty ?? { id } };
+}
+
+// Like loadUmrahPenalty above, but for the umrah_violations table — the
+// closing-sweep preset references FK columns (mutamerId, agentId, etc.)
+// and without these joins the printed doc shows bare numeric IDs. Joining
+// pilgrim/sub-agent/agent/group/invoice surfaces the human-readable names.
+async function loadUmrahViolation(companyId: number, id: string) {
+  const [violation] = await rawQuery<Record<string, unknown>>(
+    `SELECT v.*,
+            p."fullName" AS "pilgrimName", p."passportNumber" AS "pilgrimPassport",
+            p."nuskNumber" AS "pilgrimNuskNumber",
+            sa.name AS "subAgentName", sa."nuskCode" AS "subAgentNuskCode",
+            a.name AS "agentName", a."nuskAgentNumber" AS "agentNuskNumber",
+            g.name AS "groupName",
+            inv.ref AS "linkedInvoiceRef"
+       FROM umrah_violations v
+       LEFT JOIN umrah_pilgrims p ON p.id = v."mutamerId" AND p."companyId" = $2
+       LEFT JOIN umrah_sub_agents sa ON sa.id = v."subAgentId" AND sa."companyId" = $2
+       LEFT JOIN umrah_agents a ON a.id = v."agentId" AND a."companyId" = $2
+       LEFT JOIN umrah_groups g ON g.id = v."groupId" AND g."companyId" = $2
+       LEFT JOIN umrah_sales_invoices inv ON inv.id = v."linkedInvoiceId" AND inv."companyId" = $2
+      WHERE v.id = $1 AND v."companyId" = $2 AND v."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId],
+  ).catch(() => [null]);
+  return { entity: violation ?? { id } };
+}
+
+// Joins season + vehicle + driver so the umrah_transport preset renders
+// readable names instead of "#42 / #7". Same pattern as loadFleetTrip.
+async function loadUmrahTransportTrip(companyId: number, id: string) {
+  const [trip] = await rawQuery<Record<string, unknown>>(
+    `SELECT t.*,
+            s.name AS "seasonName",
+            v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel",
+            d.name AS "driverName", d."licenseNumber" AS "driverLicense"
+       FROM umrah_transport t
+       LEFT JOIN umrah_seasons s ON s.id = t."seasonId" AND s."companyId" = $2
+       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId" AND v."companyId" = $2
+       LEFT JOIN fleet_drivers d ON d.id = t."driverId" AND d."companyId" = $2
+      WHERE t.id = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId],
+  ).catch(() => [null]);
+  return { entity: trip ?? { id } };
+}
+
+// Surface season name on the package card — the preset uses #{{entity.seasonId}}
+// as fallback, but seeing the season's Arabic name is far more useful for the
+// operator printing the brochure.
+async function loadUmrahPackage(companyId: number, id: string) {
+  const [pkg] = await rawQuery<Record<string, unknown>>(
+    `SELECT p.*, s.name AS "seasonName"
+       FROM umrah_packages p
+       LEFT JOIN umrah_seasons s ON s.id = p."seasonId" AND s."companyId" = $2
+      WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId],
+  ).catch(() => [null]);
+  return { entity: pkg ?? { id } };
 }
 
 // ─── Master cards + transactions with JOINs (from main) ─────────────────

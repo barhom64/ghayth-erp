@@ -718,14 +718,21 @@ describe("phase-7 real-closure (#1141)", () => {
     expect(AUDIT).toMatch(/coverage report.*G[1-9]|caller MUST issue/);
   });
 
-  it("inline-date-now-as-ref lint rule exists with explicit baseline", () => {
+  it("inline-date-now-as-ref lint rule is now a hard rule (no baseline)", () => {
     const LINT = readFileSync(join(REPO_ROOT, "scripts/src/lint-patterns.mjs"), "utf8");
     expect(LINT).toContain('id: "inline-date-now-as-ref"');
-    // After G2 + G14 fixes, baseline = 3. Only 3 offenders remain.
-    expect(LINT).toMatch(/communications\.ts.*CALL/);
-    expect(LINT).toMatch(/finance-invoices\.ts.*ADV/);
-    expect(LINT).toMatch(/properties\.ts.*RENT/);
-    expect(LINT).toMatch(/countBaseline:\s*[0-3]/);
+    // After every offender closed, the rule is hard — zero baseline.
+    // Any new inline-Date.now ref fails CI immediately.
+    const ruleStart = LINT.indexOf('id: "inline-date-now-as-ref"');
+    const ruleSection = LINT.slice(ruleStart, ruleStart + 1500);
+    expect(ruleSection).not.toMatch(/countBaseline:\s*[1-9]/);
+    // The comment must document every closure so a future reader knows
+    // which fixes closed which offenders without running git blame.
+    // `s` flag makes `.` cross newlines so the closure-list comment
+    // can span multiple lines naturally.
+    expect(LINT).toMatch(/communications\.ts[\s\S]{0,200}internalTechRef/);
+    expect(LINT).toMatch(/finance-invoices\.ts[\s\S]{0,200}customer_advance/);
+    expect(LINT).toMatch(/properties\.ts[\s\S]{0,200}"case"|properties\.ts[\s\S]{0,200}entityKey:\s*"case"/);
   });
 });
 

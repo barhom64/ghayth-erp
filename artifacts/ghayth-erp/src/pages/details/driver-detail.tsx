@@ -285,7 +285,7 @@ export default function DriverDetail() {
           <EntityPrintButton
             entityType="driver"
             entityId={id ?? 0}
-            formats={["a4"]}/>
+           />
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
       }

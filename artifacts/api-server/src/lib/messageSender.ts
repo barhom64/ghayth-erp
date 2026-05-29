@@ -128,13 +128,17 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
   const providers = await getActiveProviders(input.channel).catch(() => []);
   const providerOrder = providers.map((p) => p.slug);
 
-  // 3. Persist communications_log row — every attempt is recorded
-  //    even if DLP blocked, so the audit trail captures it. Outbound
-  //    rows land in the 'sent' folder; the 'spam' / 'archive' / 'trash'
+  // 3. Persist message_log row — every attempt is recorded even if
+  //    DLP blocked, so the audit trail captures it. Outbound rows
+  //    land in the 'sent' folder; the 'spam' / 'archive' / 'trash'
   //    folders are user-driven moves via POST /inbox/messages/:id/folder.
+  //
+  //    Phase 4 final contract: the legacy communications_log dual-write
+  //    was removed in PR #post-DROP. All readers migrated through
+  //    slices 1-9 (#1284-#1322); the legacy table is gone from the DB.
   const { insertId: logId } = await rawExecute(
-    `INSERT INTO communications_log
-       ("companyId", channel, direction, "fromNumber", "toNumber",
+    `INSERT INTO message_log
+       ("companyId", channel, direction, "fromAddress", "toAddress",
         subject, body, status, folder, "relatedType", "relatedId", "createdAt")
      VALUES ($1, $2, 'outbound', NULL, $3, $4, $5, $6, 'sent', $7, $8, NOW())`,
     [
@@ -143,34 +147,14 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
       input.relatedType ?? null, input.relatedId ?? null,
     ],
   );
-  assertInsert(logId, "communications_log");
-
-  // 3.b Dual-write to message_log (Phase 4 expand-then-contract).
-  // The legacy row is the source-of-truth during the soak; legacyId on
-  // the new row points back so the contract step can verify integrity.
-  // Failure here is non-fatal — observability writes should never break
-  // the send. legacySource='communications_log' so the row is
-  // discoverable in idx_message_log_legacy.
-  await rawExecute(
-    `INSERT INTO message_log
-       ("companyId", channel, direction, "fromAddress", "toAddress",
-        subject, body, status, folder, "relatedType", "relatedId",
-        "legacySource", "legacyId", "createdAt")
-     VALUES ($1, $2, 'outbound', NULL, $3, $4, $5, $6, 'sent', $7, $8,
-             'communications_log', $9, NOW())`,
-    [
-      input.companyId, input.channel, input.recipient,
-      input.subject ?? null, finalBody, status,
-      input.relatedType ?? null, input.relatedId ?? null, logId,
-    ],
-  ).catch((e) => logger.warn(e, "[messageSender] message_log dual-write failed"));
+  assertInsert(logId, "message_log");
 
   if (blocked) {
     void emitEvent({
       companyId: input.companyId,
       userId: input.userId ?? 0,
       action: "communications.message.blocked_dlp",
-      entity: "communications_log",
+      entity: "message_log",
       entityId: logId,
       details: JSON.stringify({ channel: input.channel, reason, templateKey: input.templateKey }),
     }).catch((e) => logger.warn(e, "[event] blocked_dlp"));
@@ -182,79 +166,27 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
     };
   }
 
-  // 4. Insert to the channel's queue. Existing workers
-  //    (cronScheduler: email_queue_drain etc.) drain these.
-  //    Each branch records the legacy queue row's id so the Phase 4
-  //    dual-write to outbound_queue can backreference it.
-  let legacyQueueId: number | null = null;
-  let legacyQueueSource: "email_queue" | "sms_queue" | "whatsapp_queue" | null = null;
-  switch (input.channel) {
-    case "email": {
-      // Email queue supports `scheduledAt` for future-dated sends.
-      // When absent, the worker treats the row as immediate.
-      const scheduledAt = input.scheduledAt instanceof Date
-        ? input.scheduledAt.toISOString()
-        : input.scheduledAt ?? null;
-      const res = await rawExecute(
-        `INSERT INTO email_queue
-           ("companyId", "toEmail", "recipientName", subject, body, status, "scheduledAt", "createdAt", "refType", "refId")
-         VALUES ($1, $2, $3, $4, $5, 'pending', $6, NOW(), $7, $8)`,
-        [
-          input.companyId, input.recipient, input.recipientName ?? "",
-          input.subject ?? "(بدون عنوان)", finalBody, scheduledAt,
-          input.relatedType ?? null, input.relatedId ?? null,
-        ],
-      );
-      legacyQueueId = res.insertId;
-      legacyQueueSource = "email_queue";
-      break;
-    }
-    case "sms": {
-      const res = await rawExecute(
-        `INSERT INTO sms_queue ("companyId", "recipientPhone", message, status, "createdAt")
-         VALUES ($1, $2, $3, 'pending', NOW())`,
-        [input.companyId, input.recipient, finalBody],
-      );
-      legacyQueueId = res.insertId;
-      legacyQueueSource = "sms_queue";
-      break;
-    }
-    case "whatsapp": {
-      const res = await rawExecute(
-        `INSERT INTO whatsapp_queue ("companyId", phone, "recipientName", message, status, "createdAt")
-         VALUES ($1, $2, $3, $4, 'pending', NOW())`,
-        [input.companyId, input.recipient, input.recipientName ?? "", finalBody],
-      );
-      legacyQueueId = res.insertId;
-      legacyQueueSource = "whatsapp_queue";
-      break;
-    }
-  }
-
-  // 4.b Dual-write to outbound_queue (Phase 4 expand-then-contract).
-  // Workers still drain the legacy queues — this row is observability
-  // only during the soak. Once cronScheduler is flipped to read here,
-  // the legacy inserts above will be removed in the contract step.
-  if (legacyQueueId !== null && legacyQueueSource !== null) {
-    const scheduledAt = input.scheduledAt instanceof Date
-      ? input.scheduledAt.toISOString()
-      : input.scheduledAt ?? null;
-    await rawExecute(
-      `INSERT INTO outbound_queue
-         ("companyId", channel, recipient, "recipientName", subject, body,
-          status, "scheduledAt", "refType", "refId", "messageLogId",
-          "legacySource", "legacyId", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending', COALESCE($7, NOW()),
-               $8, $9, $10, $11, $12, NOW(), NOW())`,
-      [
-        input.companyId, input.channel, input.recipient,
-        input.recipientName ?? null, input.subject ?? null, finalBody,
-        scheduledAt, input.relatedType ?? null, input.relatedId ?? null,
-        null,  // messageLogId — wired in contract phase when message_log id is BIGSERIAL-returned
-        legacyQueueSource, legacyQueueId,
-      ],
-    ).catch((e) => logger.warn(e, "[messageSender] outbound_queue dual-write failed"));
-  }
+  // 4. Insert to the unified outbound_queue. The cron worker
+  //    (processEmailQueue / processSmsQueue / processWhatsAppQueue
+  //    in cronScheduler.ts) drains this table directly since slice 6
+  //    (#1299). The per-channel legacy queue inserts that lived here
+  //    are gone with the tables.
+  const scheduledAt = input.scheduledAt instanceof Date
+    ? input.scheduledAt.toISOString()
+    : input.scheduledAt ?? null;
+  await rawExecute(
+    `INSERT INTO outbound_queue
+       ("companyId", channel, recipient, "recipientName", subject, body,
+        status, "scheduledAt", "refType", "refId", "messageLogId",
+        "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, 'pending', COALESCE($7, NOW()),
+             $8, $9, $10, NOW(), NOW())`,
+    [
+      input.companyId, input.channel, input.recipient,
+      input.recipientName ?? null, input.subject ?? null, finalBody,
+      scheduledAt, input.relatedType ?? null, input.relatedId ?? null, logId,
+    ],
+  );
 
   // 5. Emit event + audit log. Recipient address is masked in the
   //    event details so a log shipper never carries the raw value.
@@ -262,7 +194,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
     companyId: input.companyId,
     userId: input.userId ?? 0,
     action: input.eventAction ?? `communications.${input.channel}.sent`,
-    entity: "communications_log",
+    entity: "message_log",
     entityId: logId,
     details: JSON.stringify({
       channel: input.channel,
@@ -276,7 +208,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
     companyId: input.companyId,
     userId: input.userId ?? 0,
     action: "create",
-    entity: "communications_log",
+    entity: "message_log",
     entityId: logId,
     after: {
       channel: input.channel,

@@ -253,7 +253,7 @@ export default function LegalJudgmentDetail() {
             <EntityPrintButton
               entityType="legal_judgment"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           {judgment && judgment.caseId && (
             <GuardedButton

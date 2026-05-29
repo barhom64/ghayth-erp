@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,6 +22,8 @@ import {
 } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PrintButton } from "@/components/shared/print-button";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { useToast } from "@/hooks/use-toast";
 
 const timelineIcons: Record<string, any> = {
   created: KeyRound,
@@ -75,6 +77,34 @@ export default function CustodyDetailPage() {
   );
 
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("custody", id || "");
+
+  const { toast } = useToast();
+
+  // POST /finance/custodies/:id/settle — atomic settlement that posts a
+  // journal entry. The list-page settle dialog covers most cases; this
+  // button is a quick-action for partial settlements from the detail view.
+  const settleMut = useApiMutation<unknown, { amount: number; description?: string }>(
+    `/finance/custodies/${id}/settle`,
+    "POST",
+    [["custody-detail", id || ""], ["custodies"]],
+    { successMessage: "تمت التسوية", onSuccess: () => refetch() },
+  );
+
+  const handleSettleRemaining = () => {
+    const remaining = Number(data?.remainingAmount || (Number(data?.amount || 0) - Number(data?.settledAmount || 0)));
+    if (remaining <= 0) {
+      toast({ title: "لا يوجد رصيد متبقٍ للتسوية" });
+      return;
+    }
+    const amountStr = window.prompt(`مبلغ التسوية (المتبقي: ${remaining})`, String(remaining));
+    if (amountStr === null) return;
+    const amount = Number(amountStr);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({ variant: "destructive", title: "مبلغ غير صالح" });
+      return;
+    }
+    settleMut.mutate({ amount });
+  };
 
   const progressPercent =
     data?.amount > 0 ? Math.min(100, Math.round((data.settledAmount / data.amount) * 100)) : 0;
@@ -307,7 +337,22 @@ export default function CustodyDetailPage() {
 
   return (
     <DetailPageLayout
-      actions={<PrintButton entityType="custody" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
+      actions={
+        <div className="flex items-center gap-2">
+          <GuardedButton
+            perm="finance:update"
+            size="sm"
+            variant="outline"
+            onClick={handleSettleRemaining}
+            disabled={settleMut.isPending || !data || ["settled", "rejected"].includes(data.status)}
+            rateLimitAware
+          >
+            <ArrowLeftRight className="h-4 w-4 ms-1" />
+            تسوية
+          </GuardedButton>
+          <PrintButton entityType="custody" entityId={(params?.id ?? id ?? 0) as any} label="طباعة" />
+        </div>
+      }
       title={data?.ref ? `عهدة ${data.ref}` : "العهدة"}
       subtitle={data?.description || data?.purpose || undefined}
       backPath="/finance/custodies"

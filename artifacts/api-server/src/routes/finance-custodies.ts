@@ -202,7 +202,7 @@ custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", acti
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'${dateFilter}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id
        ORDER BY je."createdAt" DESC
@@ -287,7 +287,7 @@ custodiesRouter.get("/custodies/report", authorize({ feature: "finance.custodies
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id, e.id
        ORDER BY e.name, je."createdAt" DESC
@@ -433,7 +433,7 @@ custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", 
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id`,
       [id, scope.companyId]

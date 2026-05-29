@@ -469,23 +469,13 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
           });
           deliveryIds.push(dlId);
         } else {
-          // Phase 4 contract slice 8: dual-write to outbound_queue alongside
-          // the legacy email_queue so the worker (slice 6 → outbound_queue
-          // primary) picks it up. Once the legacy queue is dropped, this
-          // legacy INSERT can be removed; the outbound_queue insert below
-          // is the canonical path.
-          await rawExecute(
-            `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
-             VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
-            [companyId, payload.recipientEmail, payload.recipientName ?? "", title, dlp.body, payload.refType ?? null, payload.refId ?? null]
-          );
           await rawExecute(
             `INSERT INTO outbound_queue
                ("companyId", channel, recipient, "recipientName", subject, body,
                 status, "refType", "refId", "createdAt", "updatedAt")
              VALUES ($1, 'email', $2, $3, $4, $5, 'pending', $6, $7, NOW(), NOW())`,
             [companyId, payload.recipientEmail, payload.recipientName ?? null, title, dlp.body, payload.refType ?? null, payload.refId ?? null]
-          ).catch((e) => logger.warn(e, "[notificationEngine] outbound_queue dual-write failed"));
+          );
           const dlId = await insertDeliveryLog({
             companyId, channel: "email",
             recipient: payload.recipientEmail,
@@ -512,8 +502,9 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
           deliveryIds.push(dlId);
         } else {
           await rawExecute(
-            `INSERT INTO sms_queue ("companyId", "recipientPhone", message, status, "createdAt")
-             VALUES ($1, $2, $3, 'pending', NOW())`,
+            `INSERT INTO outbound_queue
+               ("companyId", channel, recipient, body, status, "createdAt", "updatedAt")
+             VALUES ($1, 'sms', $2, $3, 'pending', NOW(), NOW())`,
             [companyId, payload.recipientPhone, `${title}: ${dlp.body}`]
           );
           const dlId = await insertDeliveryLog({
@@ -544,9 +535,10 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
           continue;
         }
         await rawExecute(
-          `INSERT INTO whatsapp_queue ("companyId", phone, "recipientName", "clientId", "assignmentId", message, status, "createdAt")
-           VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())`,
-          [companyId, phone, payload.recipientName ?? "", payload.clientId ?? null, payload.assignmentId ?? null, `${title}: ${dlp.body}`]
+          `INSERT INTO outbound_queue
+             ("companyId", channel, recipient, "recipientName", body, status, "createdAt", "updatedAt")
+           VALUES ($1, 'whatsapp', $2, $3, $4, 'pending', NOW(), NOW())`,
+          [companyId, phone, payload.recipientName ?? null, `${title}: ${dlp.body}`]
         );
         const dlId = await insertDeliveryLog({
           companyId, channel: "whatsapp",
@@ -577,11 +569,21 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
   }
 
   try {
+    // Phase 4 final contract: write only to message_log. The
+    // notification_log table is dropped post-soak. channels is a
+    // multi-channel array; pick the first message-shaped channel
+    // for the unified row.
+    const firstChannel = channels.find((c) =>
+      ['email','sms','whatsapp','push','in_app','internal','pbx'].includes(c)
+    ) ?? 'in_app';
     await rawExecute(
-      `INSERT INTO notification_log ("companyId", channel, recipient, subject, body, status, "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-      [companyId, channels.join(","), payload.recipientEmail ?? payload.recipientPhone ?? `role:${payload.targetRole ?? "all"}`,
-       payload.title, payload.body, "sent"]
+      `INSERT INTO message_log
+         ("companyId", channel, direction, "toAddress", subject, body,
+          status, folder, "createdAt")
+       VALUES ($1, $2, 'outbound', $3, $4, $5, 'sent', 'sent', NOW())`,
+      [companyId, firstChannel,
+       payload.recipientEmail ?? payload.recipientPhone ?? `role:${payload.targetRole ?? "all"}`,
+       payload.title, payload.body]
     );
   } catch (_: unknown) { /* non-critical */ }
 
@@ -635,21 +637,24 @@ export async function processFallbackChains(): Promise<string> {
 
     if (nextChannel === "sms" && delivery.recipient) {
       await rawExecute(
-        `INSERT INTO sms_queue ("companyId", "recipientPhone", message, status, "createdAt")
-         VALUES ($1, $2, $3, 'pending', NOW())`,
+        `INSERT INTO outbound_queue
+           ("companyId", channel, recipient, body, status, "createdAt", "updatedAt")
+         VALUES ($1, 'sms', $2, $3, 'pending', NOW(), NOW())`,
         [delivery.companyId, delivery.recipient, delivery.body]
       );
     } else if (nextChannel === "whatsapp" && delivery.recipient) {
       await rawExecute(
-        `INSERT INTO whatsapp_queue ("companyId", phone, message, status, "createdAt")
-         VALUES ($1, $2, $3, 'pending', NOW())`,
+        `INSERT INTO outbound_queue
+           ("companyId", channel, recipient, body, status, "createdAt", "updatedAt")
+         VALUES ($1, 'whatsapp', $2, $3, 'pending', NOW(), NOW())`,
         [delivery.companyId, delivery.recipient, delivery.body]
       );
     } else if (nextChannel === "email" && delivery.recipient) {
       await rawExecute(
-        `INSERT INTO email_queue ("companyId", "toEmail", subject, body, status, "createdAt")
-         VALUES ($1, $2, $3, $4, 'pending', NOW())`,
-        [delivery.companyId, delivery.recipient, delivery.subject ?? "", delivery.body]
+        `INSERT INTO outbound_queue
+           ("companyId", channel, recipient, subject, body, status, "createdAt", "updatedAt")
+         VALUES ($1, 'email', $2, $3, $4, 'pending', NOW(), NOW())`,
+        [delivery.companyId, delivery.recipient, delivery.subject ?? null, delivery.body]
       );
     }
 

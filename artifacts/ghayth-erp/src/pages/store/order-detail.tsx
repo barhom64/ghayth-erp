@@ -88,7 +88,7 @@ export default function StoreOrderDetailPage() {
     <PrintButton
       entityType="store_order"
       entityId={order.id ?? params?.id ?? 0}
-      formats={["a4"]}
+     
       label="طباعة"
     />
   ) : undefined;

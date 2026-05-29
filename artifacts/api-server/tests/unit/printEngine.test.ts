@@ -229,6 +229,52 @@ describe("Print Engine v2 — variable substitution", () => {
     expect(src).toContain("#each");
   });
 
+  it("universalFallback uses {{entity.title}} so caller-supplied titles win over the static fallback", () => {
+    // printService now pre-fills `data.entity.title` to ARABIC_TITLES[type]
+    // when the caller didn't supply one, so the universalFallback can use a
+    // single token. Without this, the 37 report types whose entityType has
+    // no ARABIC_TITLES entry rendered "report_print_log" / "report_ar_aging"
+    // / etc. as the printed header instead of the SPA's Arabic title.
+    const tmplSrc = read(join(PRINT_LIB, "templateResolver.ts"));
+    expect(tmplSrc).toContain("{{entity.title}}");
+    expect(tmplSrc).toMatch(/export const ARABIC_TITLES/);
+    const svcSrc = read(join(PRINT_LIB, "printService.ts"));
+    expect(svcSrc).toContain("ARABIC_TITLES");
+    expect(svcSrc).toMatch(/entity.*title.*ARABIC_TITLES/s);
+  });
+
+  it("supports {{#if path}}…{{/if}} conditional blocks", () => {
+    // Several presets (customer_statement, vendor_statement, …) were
+    // authored with this Handlebars-style helper. Without an implementation
+    // the literal `{{#if entity.X}}` markers ended up in the printed PDF.
+    expect(src).toContain("expandIf");
+    expect(src).toContain("#if");
+  });
+
+  it("expandIf renders body when truthy, hides when falsy/missing", async () => {
+    // Black-box test through the public substitute() entry point so we
+    // exercise the actual pipeline order (if → each → token).
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = {
+      companyName: "ش", branchName: "ف",
+      address: null, phone: null, email: null,
+      logoUrl: null, footerText: null, taxNumber: null,
+      crNumber: null, vatNumber: null,
+      branchNameEn: null, companyNameEn: null, fullAddress: null,
+    } as Parameters<typeof substitute>[0]["branch"];
+    const template = `before {{#if entity.note}}NOTE={{entity.note}}{{/if}} after`;
+    const withNote = substitute({
+      template, data: { entity: { note: "هام" } }, branch, isThermal: false,
+    });
+    expect(withNote).toContain("NOTE=هام");
+    const withoutNote = substitute({
+      template, data: { entity: { id: 1 } }, branch, isThermal: false,
+    });
+    expect(withoutNote).not.toContain("NOTE=");
+    expect(withoutNote).not.toContain("{{#if");
+    expect(withoutNote).not.toContain("{{/if}}");
+  });
+
   it("escapes HTML by default", () => {
     expect(src).toContain("function escapeHtml");
     // Both & and < must be escaped to avoid stored-XSS via entity data.
@@ -238,6 +284,90 @@ describe("Print Engine v2 — variable substitution", () => {
 
   it("renders the duplicate watermark when present", () => {
     expect(src).toContain('class="watermark"');
+  });
+
+  it("translates English DB enum values to Arabic so printed docs are in the system language", async () => {
+    // formatValue() now looks up ENUM_AR before falling through to the raw
+    // string. Without it, `{{entity.status}} === "active"` printed the
+    // English word — inconsistent with the SPA badge that already shows
+    // "نشط" and a violation of the system-language guarantee the user asked
+    // for. Test the common cases through the public substitute() entry
+    // point so the full pipeline order (autoTokens → expandIf → expandEach
+    // → token replace) is exercised end-to-end.
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = {
+      companyName: "ش", branchName: "ف",
+      address: null, phone: null, email: null,
+      logoUrl: null, footerText: null, taxNumber: null,
+      crNumber: null, vatNumber: null,
+      branchNameEn: null, companyNameEn: null, fullAddress: null,
+    } as Parameters<typeof substitute>[0]["branch"];
+    const cases: Array<[unknown, string]> = [
+      // Lifecycle / payment statuses
+      ["active", "نشط"],
+      ["draft", "مسودة"],
+      ["posted", "مُرحَّل"],
+      ["cancelled", "ملغى"],
+      ["paid", "مدفوع"],
+      ["overdue", "متأخر"],
+      ["receipt", "سند قبض"],
+      ["male", "ذكر"],
+      [true, "نعم"],
+      [false, "لا"],
+      ["YES", "نعم"],
+      ["NEW", "جديد"],
+      // Finance type maps — mirrored from finance-type-maps.ts so the
+      // printed PDF agrees with the on-screen badge. Regression-test the
+      // categories with the highest cross-domain reuse so the next
+      // contributor knows the SPA → print parity is a contract.
+      ["cash", "نقدي"],
+      ["bank_transfer", "تحويل بنكي"],
+      ["credit_card", "بطاقة ائتمان"],
+      ["standard", "فاتورة عادية"],
+      ["asset", "أصول"],
+      ["revenue", "إيرادات"],
+      // HR labels (leave types, exit reasons, doc types)
+      ["annual", "سنوية"],
+      ["resignation", "استقالة"],
+      ["iqama", "إقامة"],
+      // Fleet labels
+      ["preventive", "وقائية"],
+      ["diesel", "ديزل"],
+      ["delivery", "توصيل"],
+      ["comprehensive", "شامل"],
+      // CRM activity types
+      ["call", "مكالمة"],
+      ["meeting", "اجتماع"],
+      // Currency codes — Saudi convention renders the Arabic symbol next
+      // to amounts instead of the ISO triplet.
+      ["SAR", "ر.س"],
+      ["USD", "$"],
+      ["AED", "د.إ"],
+      // Generic fallbacks the SPA also uses
+      ["other", "أخرى"],
+      ["unknown", "غير محدد"],
+      // Priority labels
+      ["high", "عالية"],
+      ["urgent", "عاجلة"],
+    ];
+    for (const [input, expected] of cases) {
+      const out = substitute({
+        template: "[{{entity.status}}]",
+        data: { entity: { status: input } },
+        branch,
+        isThermal: false,
+      });
+      expect(out, `enum "${String(input)}" → "${expected}"`).toContain(`[${expected}]`);
+    }
+    // Unknown enum values pass through unchanged — the engine must not
+    // silently swallow free-form text that the SPA may use.
+    const passthrough = substitute({
+      template: "[{{entity.code}}]",
+      data: { entity: { code: "300SP-X" } },
+      branch,
+      isThermal: false,
+    });
+    expect(passthrough).toContain("[300SP-X]");
   });
 });
 
@@ -565,6 +695,44 @@ describe("Print Engine v2 — preset contract (every BESPOKE_PRESETS entry retur
       if (!titleKeys.has(k) && !aliasOk.has(k)) missing.push(k);
     }
     expect(missing, `ARABIC_TITLES missing entries for: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("preset bodies do NOT carry English subtitle text (system-language guarantee)", async () => {
+    // The user contract is "نظام الطباعة بلغة النظام" — printed docs must
+    // be in Arabic. Several presets used to ship a bilingual subtitle like
+    // "Fleet Trip — #..." beneath the Arabic h2 header; they're now all
+    // Arabic. Lock that in so a future contributor doesn't sneak an
+    // English sub-line back in by copying an older preset.
+    //
+    // We scan EVERY string passed to makePreset({ body: `…` }) for the
+    // common English title-case bigrams that used to leak ("Fleet Trip",
+    // "Vehicle Card", "Lease Agreement", …). A real attorney's bilingual
+    // contract template can still ship two languages — they'd use the
+    // visual builder + a saved DB row, not the seeded preset.
+    const src = read(join(PRINT_LIB, "templateResolver.ts"));
+    const bodies = Array.from(src.matchAll(/body:\s*`([\s\S]*?)`/g)).map((m) => m[1]);
+    expect(bodies.length).toBeGreaterThan(40);
+    // Allowed English tokens: standard acronyms + a few technical refs.
+    const allow = new Set(["SKU", "IBAN", "VAT", "QR", "PDF", "API", "ID"]);
+    const offenders: Array<{ phrase: string; idx: number }> = [];
+    for (let i = 0; i < bodies.length; i++) {
+      const body = bodies[i];
+      // Match `Word Word` outside of attribute values and outside dir="ltr"
+      // spans. Skip lines that look like CSS (contain : or ;).
+      const matches = body.match(/(?:^|>)[^<]*?\b([A-Z][a-z]{2,}\s+[A-Z][a-z]{2,})\b[^<]*?(?=<|$)/gm);
+      if (!matches) continue;
+      for (const m of matches) {
+        const word = m.match(/([A-Z][a-z]{2,}\s+[A-Z][a-z]{2,})/)?.[1] ?? "";
+        // Skip allowlisted technical phrases (none currently span 2 words
+        // but the structure keeps the check extensible).
+        if ([...allow].some((a) => word.includes(a))) continue;
+        offenders.push({ phrase: word, idx: i });
+      }
+    }
+    expect(
+      offenders.map((o) => o.phrase),
+      `English subtitle leaked into preset body. Translate it to Arabic — keep technical refs (SKU, IBAN, VAT) only.`,
+    ).toEqual([]);
   });
 });
 

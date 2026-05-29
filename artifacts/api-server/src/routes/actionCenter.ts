@@ -127,7 +127,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
                 e.name AS "assigneeName"
          FROM tasks t
          LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
-         LEFT JOIN employees e ON e.id = ea."employeeId"
+         LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
          WHERE ${tw}
            AND t."deletedAt" IS NULL
            AND t."scheduledDate" = $${nextParamIndex}
@@ -243,7 +243,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
                 e.name AS "submittedByName"
          FROM workflow_instances wi
          LEFT JOIN employee_assignments ea ON ea.id = wi."submittedBy"
-         LEFT JOIN employees e ON e.id = ea."employeeId"
+         LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
          WHERE wi."currentAssignee" = $1
            AND wi.status IN ('pending', 'in_review', 'escalated')
            AND wi."deletedAt" IS NULL

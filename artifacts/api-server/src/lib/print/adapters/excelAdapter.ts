@@ -11,11 +11,14 @@ function pickRows(data: Record<string, unknown>): {
   rows: Record<string, unknown>[];
   label: string;
 } {
-  if (Array.isArray(data.items)) return { rows: data.items as Record<string, unknown>[], label: "Items" };
-  if (Array.isArray(data.lines)) return { rows: data.lines as Record<string, unknown>[], label: "Lines" };
+  // Sheet tab names show in Excel under the system language. Match the
+  // printed-PDF labels so users see "البنود" / "السطور" / "الحركات"
+  // instead of an English tab on a doc that's otherwise Arabic.
+  if (Array.isArray(data.items)) return { rows: data.items as Record<string, unknown>[], label: "البنود" };
+  if (Array.isArray(data.lines)) return { rows: data.lines as Record<string, unknown>[], label: "السطور" };
   if (Array.isArray(data.movements))
-    return { rows: data.movements as Record<string, unknown>[], label: "Movements" };
-  return { rows: [], label: "Items" };
+    return { rows: data.movements as Record<string, unknown>[], label: "الحركات" };
+  return { rows: [], label: "البنود" };
 }
 
 function flatten(obj: Record<string, unknown>, prefix = ""): Record<string, unknown> {
@@ -34,8 +37,9 @@ function flatten(obj: Record<string, unknown>, prefix = ""): Record<string, unkn
 }
 
 /** Coerce an arbitrary payload value into a plain cell the compat layer
- *  accepts. Mirrors the old `xlsx.json_to_sheet` coercion: dates/numbers
- *  stay typed, booleans render as TRUE/FALSE, everything else stringifies. */
+ *  accepts. Mirrors the old `xlsx.json_to_sheet` coercion but with Arabic
+ *  string forms for booleans so the exported spreadsheet matches the
+ *  printed PDF (which renders true/false as "نعم"/"لا" via ENUM_AR). */
 function toCell(v: unknown): string | number | Date | null {
   if (v === null || v === undefined) return null;
   if (v instanceof Date) return v;
@@ -45,7 +49,7 @@ function toCell(v: unknown): string | number | Date | null {
     case "string":
       return v;
     case "boolean":
-      return v ? "TRUE" : "FALSE";
+      return v ? "نعم" : "لا";
     default:
       return String(v);
   }
@@ -88,8 +92,8 @@ export const excelAdapter: FormatAdapter = {
       _generatedAt: new Date().toISOString(),
       _copyNumber: ctx.copyNumber,
     });
-    const metaRows = Object.entries(meta).map(([k, v]) => ({ field: k, value: v }));
-    sheets.push(sheetFromObjects("Info", metaRows));
+    const metaRows = Object.entries(meta).map(([k, v]) => ({ "الحقل": k, "القيمة": v }));
+    sheets.push(sheetFromObjects("معلومات", metaRows));
 
     const buf = await buildXlsxBuffer(sheets);
     return {

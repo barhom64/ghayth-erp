@@ -298,7 +298,7 @@ export default function CommitmentDetail() {
               <EntityPrintButton
                 entityType="commitment"
                 entityId={id ?? 0}
-                formats={["a4"]}/>
+               />
             )}
           </>
         }

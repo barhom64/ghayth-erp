@@ -33,6 +33,13 @@ import { runAllProactiveChecks, registerProactiveEventListeners } from "./proact
 import { eventBus } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
+import {
+  fleetTelematicsRetention,
+  fleetTelematicsHeartbeat,
+  fleetTelematicsPoll,
+} from "./fleet/telematicsCron.js";
+import { telematicsBreaker } from "./fleet/telematicsReliability.js";
+import { setupBreakerCoordination } from "./fleet/telematicsBreakerCoordinator.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
 import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
@@ -1922,17 +1929,15 @@ async function processEmailQueue(): Promise<string> {
 
   let sent = 0, failed = 0;
 
-  // Helper: update outbound_queue + mirror back to the linked legacy
-  // row (email_queue) if there is one. Mirror direction is the
-  // reverse of slice 4's helper, kept inline because we hold the
-  // legacyId on the row we just selected.
+  // Phase 4 final contract: outbound_queue is the only store. The
+  // reverse-mirror to email_queue (slice 6 leftover) is gone with the
+  // table itself.
   const updateBothEmail = async (
     row: Record<string, unknown>,
     status: "sent" | "failed",
     errorMessage: string | null,
   ) => {
     const id = row.id as number;
-    const legacyId = row.legacyId as number | null;
     const sentAtClause = status === "sent" ? `, "sentAt" = NOW()` : "";
     await rawExecute(
       `UPDATE outbound_queue
@@ -1942,17 +1947,6 @@ async function processEmailQueue(): Promise<string> {
        WHERE id = $3`,
       [status, errorMessage, id],
     );
-    if (legacyId && row.legacySource === "email_queue") {
-      const legacySentClause = status === "sent" ? `, "sentAt" = NOW()` : "";
-      await rawExecute(
-        `UPDATE email_queue
-           SET status = $1, "errorMessage" = $2,
-               "attemptCount" = COALESCE("attemptCount", 0) + 1,
-               "updatedAt" = NOW()${legacySentClause}
-         WHERE id = $3`,
-        [status, errorMessage, legacyId],
-      ).catch((e) => logger.warn(e, `[cronScheduler] legacy email_queue mirror #${legacyId}`));
-    }
   };
 
   for (const email of pending) {
@@ -2048,7 +2042,6 @@ async function processSmsQueue(): Promise<string> {
     bumpAttempts: boolean = true,
   ) => {
     const id = row.id as number;
-    const legacyId = row.legacyId as number | null;
     const setClauses: string[] = [];
     const params: unknown[] = [];
     if (fields.status !== undefined) {
@@ -2068,27 +2061,6 @@ async function processSmsQueue(): Promise<string> {
       `UPDATE outbound_queue SET ${setClauses.join(", ")} WHERE id = $${params.length}`,
       params,
     );
-    if (legacyId && row.legacySource === "sms_queue") {
-      const legacyClauses: string[] = [];
-      const legacyParams: unknown[] = [];
-      if (fields.status !== undefined) {
-        legacyParams.push(fields.status); legacyClauses.push(`status = $${legacyParams.length}`);
-      }
-      if (fields.errorMessage !== undefined) {
-        legacyParams.push(fields.errorMessage); legacyClauses.push(`"errorMessage" = $${legacyParams.length}`);
-      }
-      if (fields.externalId !== undefined) {
-        legacyParams.push(fields.externalId); legacyClauses.push(`"externalId" = $${legacyParams.length}`);
-      }
-      if (fields.sentAt) legacyClauses.push(`"sentAt" = NOW()`);
-      if (bumpAttempts) legacyClauses.push(`"attemptCount" = COALESCE("attemptCount", 0) + 1`);
-      legacyClauses.push(`"updatedAt" = NOW()`);
-      legacyParams.push(legacyId);
-      await rawExecute(
-        `UPDATE sms_queue SET ${legacyClauses.join(", ")} WHERE id = $${legacyParams.length}`,
-        legacyParams,
-      ).catch((e) => logger.warn(e, `[cronScheduler] legacy sms_queue mirror #${legacyId}`));
-    }
   };
 
   for (const sms of pending) {
@@ -2172,7 +2144,6 @@ async function processWhatsAppQueue(): Promise<string> {
     bumpAttempts: boolean = true,
   ) => {
     const id = row.id as number;
-    const legacyId = row.legacyId as number | null;
     const set: string[] = [];
     const params: unknown[] = [];
     if (fields.status !== undefined) { params.push(fields.status); set.push(`status = $${params.length}`); }
@@ -2186,21 +2157,6 @@ async function processWhatsAppQueue(): Promise<string> {
       `UPDATE outbound_queue SET ${set.join(", ")} WHERE id = $${params.length}`,
       params,
     );
-    if (legacyId && row.legacySource === "whatsapp_queue") {
-      const ls: string[] = [];
-      const lp: unknown[] = [];
-      if (fields.status !== undefined) { lp.push(fields.status); ls.push(`status = $${lp.length}`); }
-      if (fields.errorMessage !== undefined) { lp.push(fields.errorMessage); ls.push(`"errorMessage" = $${lp.length}`); }
-      if (fields.externalId !== undefined) { lp.push(fields.externalId); ls.push(`"externalId" = $${lp.length}`); }
-      if (fields.sentAt) ls.push(`"sentAt" = NOW()`);
-      if (bumpAttempts) ls.push(`"attemptCount" = COALESCE("attemptCount", 0) + 1`);
-      ls.push(`"updatedAt" = NOW()`);
-      lp.push(legacyId);
-      await rawExecute(
-        `UPDATE whatsapp_queue SET ${ls.join(", ")} WHERE id = $${lp.length}`,
-        lp,
-      ).catch((e) => logger.warn(e, `[cronScheduler] legacy whatsapp_queue mirror #${legacyId}`));
-    }
   };
 
   for (const msg of pending) {
@@ -2568,8 +2524,10 @@ async function runScheduledReports(): Promise<string> {
             });
             for (const email of recipients) {
               await rawExecute(
-                `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, metadata, status, "createdAt")
-                 VALUES ($1, $2, '', $3, $4, $5::jsonb, 'pending', NOW())`,
+                `INSERT INTO outbound_queue
+                   ("companyId", channel, recipient, subject, body, metadata,
+                    status, "createdAt", "updatedAt")
+                 VALUES ($1, 'email', $2, $3, $4, $5::jsonb, 'pending', NOW(), NOW())`,
                 [report.companyId, email, subject, body, metadataJson]
               );
               queued++;
@@ -2815,10 +2773,17 @@ async function weeklyDataCleanup(): Promise<string> {
   ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldDeliveryLogs;
 
-  const { affectedRows: oldNotifLogs } = await rawExecute(
-    `DELETE FROM notification_log WHERE "createdAt" < NOW() - INTERVAL '90 days'`
+  // notification_log was dropped in Phase 4 final contract — the 90-day
+  // notification cleanup now hits message_log directly (folder='sent',
+  // older than 90 days). Channel scope is the same set logNotification
+  // used to write to notification_log.
+  const { affectedRows: oldMsgLogs } = await rawExecute(
+    `DELETE FROM message_log
+      WHERE folder = 'sent'
+        AND channel IN ('email','sms','whatsapp','push','in_app','internal')
+        AND "createdAt" < NOW() - INTERVAL '90 days'`
   ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
-  cleaned += oldNotifLogs;
+  cleaned += oldMsgLogs;
 
   // user_activity_log fills up fast (every page-view + action gets a row).
   // 90 days is enough for behavioural-intelligence and proactive analytics;
@@ -3631,9 +3596,11 @@ async function sendInfraAdminEmails(
     if (exclude.has(toEmail.toLowerCase())) continue;
     try {
       await rawExecute(
-        `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
-         VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
-        [pivotCompanyId, toEmail, "Infra Admin", title, body, "system_health", null]
+        `INSERT INTO outbound_queue
+           ("companyId", channel, recipient, "recipientName", subject, body,
+            status, "refType", "createdAt", "updatedAt")
+         VALUES ($1, 'email', $2, 'Infra Admin', $3, $4, 'pending', 'system_health', NOW(), NOW())`,
+        [pivotCompanyId, toEmail, title, body]
       );
       queued++;
     } catch (e) {
@@ -3795,6 +3762,9 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
+  { name: "fleet_telematics_retention", description: "تنظيف بيانات Telematics القديمة (مواقع + سجلات مزامنة + جلسات بث منتهية)", schedule: "0 3 * * *", handler: fleetTelematicsRetention },
+  { name: "fleet_telematics_heartbeat", description: "كشف الأجهزة غير المتصلة بناءً على آخر موقع", schedule: "*/2 * * * *", handler: fleetTelematicsHeartbeat },
+  { name: "fleet_telematics_poll", description: "Auto-poll للمواقع من CMSV6 لكل تكامل نشط (مع retry + circuit breaker)", schedule: "* * * * *", handler: fleetTelematicsPoll },
   { name: "leave_escalation_check", description: "تصعيد طلبات الإجازة", schedule: "0 7 * * *", handler: leaveEscalationCheck },
   { name: "leave_return_to_work_closure", description: "إغلاق الإجازات المنتهية وتنبيه العودة للعمل", schedule: "5 0 * * *", handler: leaveReturnToWorkClosure },
   { name: "inquiry_memo_escalation", description: "تصعيد محاضر الاستفسار المعلقة 72 ساعة", schedule: "0 */6 * * *", handler: inquiryMemoEscalation },
@@ -3976,6 +3946,13 @@ const scheduledTasks: ReturnType<typeof cron.schedule>[] = [];
 export async function startCronScheduler(): Promise<void> {
   await seedCronJobs();
   registerProactiveEventListeners();
+  // #1354 — wire the telematics breaker into cross-replica Redis pub/sub.
+  // No-ops when REDIS_URL is unset (single-replica deployments behave
+  // exactly as before). When configured, this is the path that closes
+  // Known Limitation #1 from the Phase 2 commit.
+  void setupBreakerCoordination(telematicsBreaker).catch((err) => {
+    logger.warn({ err }, "[CRON] telematics breaker coordination init failed");
+  });
 
   for (const def of JOB_DEFINITIONS) {
     try {

@@ -123,17 +123,27 @@ export function AlertFatigueTab() {
               { key: "muteUntil", header: "مكتوم حتى", sortable: true, className: "text-sm", render: (s) => s.muteUntil ? formatDateAr(s.muteUntil) : "دائم" },
               { key: "reason", header: "السبب", searchable: true, className: "text-sm text-muted-foreground", render: (s) => s.reason || "-" },
               {
-                key: "actions", header: "", render: (s) => (
+                key: "_unmute",
+                header: "",
+                render: (s) => (
                   <GuardedButton
-                    perm="bi:create"
-                    variant="ghost"
+                    perm="bi:delete"
                     size="sm"
-                    className="h-7 px-2"
-                    onClick={() => handleUnmute(s.alertType)}
-                    disabled={unmuting === s.alertType}
-                    title="إلغاء الكتم"
+                    variant="ghost"
+                    className="h-7 text-xs text-status-error-foreground"
+                    onClick={async () => {
+                      // DELETE /bi/alert-fatigue/mute/:alertType — drops
+                      // the mute rule so this alert type fires again.
+                      if (!s.alertType) return;
+                      try {
+                        await apiFetch(`/bi/alert-fatigue/mute/${encodeURIComponent(s.alertType)}`, { method: "DELETE" });
+                        toast({ title: "تم إلغاء الكتم" });
+                      } catch {
+                        toast({ title: "تعذّر إلغاء الكتم", variant: "destructive" });
+                      }
+                    }}
                   >
-                    <Bell className="h-3 w-3" />
+                    إلغاء الكتم
                   </GuardedButton>
                 ),
               },

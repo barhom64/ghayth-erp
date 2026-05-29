@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { Bell, BellDot, Check, Clock, AlertCircle } from "lucide-react";
+import { Bell, BellDot, Check, Clock, AlertCircle, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDateAr } from "@/lib/formatters";
 
@@ -19,6 +21,39 @@ export default function Notifications() {
     { successMessage: false }
   );
   const markingId = markReadMut.isPending ? markReadMut.variables?.id ?? null : null;
+
+  // GET /notifications/preferences — per-user opt-in/out for the major
+  // notification channels (email, sms, push). POST /notifications/preferences
+  // saves the toggle change. Surfaced as a compact "تفضيلات" panel above
+  // the inbox so the user can mute noisy categories without leaving the page.
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const prefsQ = useApiQuery<any>(["notifications-preferences"], "/notifications/preferences");
+  // Server returns an array of {channel, category, enabled} rows; index
+  // by channel for the per-channel switch UI below. Toggle posts a
+  // single row to the server (it's an upsert; no need to send the
+  // whole bag of preferences).
+  const prefsList: any[] = Array.isArray(prefsQ.data?.data)
+    ? prefsQ.data.data
+    : Array.isArray(prefsQ.data?.preferences)
+    ? prefsQ.data.preferences
+    : Array.isArray(prefsQ.data)
+    ? prefsQ.data
+    : [];
+  const enabledByChannel: Record<string, boolean> = {};
+  for (const p of prefsList) {
+    if (p?.channel && p?.category === "general") {
+      enabledByChannel[p.channel] = Boolean(p.enabled);
+    }
+  }
+  const savePrefsMut = useApiMutation<unknown, { channel: string; category: string; enabled: boolean }>(
+    "/notifications/preferences",
+    "POST",
+    [["notifications-preferences"]],
+    { successMessage: "تم حفظ التفضيلات" },
+  );
+  const togglePref = (channel: string, enabled: boolean) => {
+    savePrefsMut.mutate({ channel, category: "general", enabled });
+  };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -35,16 +70,49 @@ export default function Notifications() {
     }
   };
 
+  const prefChannels = [
+    { key: "email", label: "البريد الإلكتروني" },
+    { key: "sms", label: "رسائل SMS" },
+    { key: "push", label: "إشعارات الجوال" },
+    { key: "whatsapp", label: "واتساب" },
+  ];
+
   return (
     <PageShell
       title="مركز الإشعارات"
       loading={isLoading}
       actions={
-        <Badge variant="secondary" className="px-3 py-1 text-sm">
-          {notifications?.filter((n: any) => !n.isRead).length || 0} إشعار جديد
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setPrefsOpen((v) => !v)}>
+            <Settings className="h-4 w-4 me-1" />
+            تفضيلات
+          </Button>
+          <Badge variant="secondary" className="px-3 py-1 text-sm">
+            {notifications?.filter((n: any) => !n.isRead).length || 0} إشعار جديد
+          </Badge>
+        </div>
       }
     >
+      {prefsOpen && (
+        <Card className="mb-3 border-indigo-100 bg-indigo-50/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">تفضيلات الإشعارات</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            {prefChannels.map((ch) => (
+              <div key={ch.key} className="flex items-center justify-between gap-2 border rounded p-2 bg-white">
+                <span className="text-xs">{ch.label}</span>
+                <Switch
+                  checked={enabledByChannel[ch.key] ?? true}
+                  onCheckedChange={(v) => togglePref(ch.key, v)}
+                  disabled={savePrefsMut.isPending}
+                />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-0">
           {isLoading ? (

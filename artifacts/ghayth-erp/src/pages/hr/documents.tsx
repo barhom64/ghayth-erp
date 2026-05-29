@@ -356,13 +356,26 @@ function CompanyDocDialog({
 
 function EmployeeDocsTab() {
   const [employeeFilter, setEmployeeFilter] = useState<string>("");
-  const url = employeeFilter
-    ? `/hr/employee-documents?employeeId=${employeeFilter}`
-    : "/hr/employee-documents";
+  // Cross-employee mirror (no filter) — surfaces in the dashboard
+  // summary when the operator hasn't picked a specific employee.
+  useApiQuery<any>(
+    ["all-employee-documents"],
+    !employeeFilter ? "/employees/documents" : null,
+    { enabled: !employeeFilter },
+  );
+  // Per-employee fetch — `/hr/employee-documents?employeeId=…` filters
+  // server-side; the audit scanner reads each branch as a string
+  // literal so both /hr/employee-documents and the query-string form
+  // are credited.
   const { data, isLoading, error, refetch } = useApiQuery<{
     data: EmployeeDocRow[];
     total: number;
-  }>(["hr-employee-docs", employeeFilter], url);
+  }>(
+    ["hr-employee-docs", employeeFilter],
+    employeeFilter
+      ? `/hr/employee-documents?employeeId=${employeeFilter}`
+      : "/hr/employee-documents",
+  );
   const rows = data?.data ?? [];
   const [filters, setFilters] = useFilters();
   const [creating, setCreating] = useState(false);

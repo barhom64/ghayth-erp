@@ -2,13 +2,14 @@ import { useState } from "react";
 import { z } from "zod";
 import { useFormContext } from "react-hook-form";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KeyRound, CheckCircle, Shield, Plus, X } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
@@ -85,6 +86,65 @@ export default function AdminRolesPage() {
   const { toast } = useToast();
   const { data: predefinedData, isLoading, isError, refetch: refetchPredefined } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
   const { data: roleModulesData, refetch } = useApiQuery<any>(["role-modules"], "/settings/role-modules");
+  // GET /admin/roles — system + custom roles roll-up used to show the
+  // total count alongside the predefined system roles.
+  const { data: allRolesData } = useApiQuery<any>(["admin-roles"], "/admin/roles");
+  const allRolesCount = Number(allRolesData?.total ?? (allRolesData?.data?.length ?? 0));
+
+  // Admin-only role-permission CRUD.
+  //   GET    /admin/role-permissions          — list (filterable by role)
+  //   POST   /admin/role-permissions          — add a (role, permission) row
+  //   PUT    /admin/role-permissions/bulk     — replace all rows for a role atomically
+  //   DELETE /admin/role-permissions/:id      — drop one (role, permission) row
+  const [permRoleFilter, setPermRoleFilter] = useState("");
+  const rolePermsQ = useApiQuery<any>(
+    ["admin-role-permissions", permRoleFilter],
+    permRoleFilter
+      ? `/admin/role-permissions?role=${encodeURIComponent(permRoleFilter)}`
+      : "/admin/role-permissions",
+  );
+  const rolePermsRows: any[] = rolePermsQ.data?.data ?? [];
+  const [newPermRole, setNewPermRole] = useState("");
+  const [newPerm, setNewPerm] = useState("");
+  const handleAddPerm = async () => {
+    if (!newPermRole.trim() || !newPerm.trim()) return;
+    try {
+      await apiFetch("/admin/role-permissions", {
+        method: "POST",
+        body: JSON.stringify({ role: newPermRole.trim(), permission: newPerm.trim() }),
+      });
+      toast({ title: "أُضيفت الصلاحية" });
+      setNewPerm("");
+      rolePermsQ.refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الإضافة", description: err?.message });
+    }
+  };
+  // Delete uses ConfirmDeleteDialog (R.1.4) — no native confirm() and
+  // gives the user an "are you sure" moment before destroying ACL data.
+  const [deletingPermId, setDeletingPermId] = useState<number | null>(null);
+  const [bulkRole, setBulkRole] = useState("");
+  const [bulkPerms, setBulkPerms] = useState("");
+  const [bulkPreview, setBulkPreview] = useState(false);
+  const handleBulkReplace = async () => {
+    if (!bulkRole.trim()) return;
+    const perms = bulkPerms
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    try {
+      await apiFetch("/admin/role-permissions/bulk", {
+        method: "PUT",
+        body: JSON.stringify({ role: bulkRole.trim(), permissions: perms }),
+      });
+      toast({ title: `استُبدلت ${perms.length} صلاحية للدور` });
+      setBulkPerms("");
+      setBulkRole("");
+      rolePermsQ.refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الاستبدال", description: err?.message });
+    }
+  };
   const predefinedRoles: any[] = predefinedData?.data || [];
   const roleModulesMap = new Map<string, string[]>(
     (roleModulesData?.data || []).map((r: any) => [r.roleKey, Array.isArray(r.modules) ? r.modules : []])
@@ -222,7 +282,12 @@ export default function AdminRolesPage() {
             <KeyRound className="w-8 h-8 text-purple-600" />
             إدارة الأدوار والصلاحيات
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات
+            {allRolesCount > 0 && (
+              <span className="ms-2 text-xs">· إجمالي الأدوار في النظام: {allRolesCount}</span>
+            )}
+          </p>
         </div>
         <GuardedButton perm="admin:create" size="sm" onClick={() => setActiveTab(activeTab === "create" ? "modules" : "create")}>
           {activeTab === "create" ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إنشاء دور جديد</>}
@@ -368,6 +433,140 @@ export default function AdminRolesPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">صلاحيات الأدوار (إدارة منخفضة المستوى)</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            تحرير مباشر لصلاحيات الأدوار في قاعدة بيانات الصلاحيات. الاستبدال الجماعي يستخدم معاملة واحدة لتجنّب وجود حالة وسطية.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3 text-xs">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="text-[10px] text-muted-foreground">فلتر حسب الدور</label>
+              <input
+                value={permRoleFilter}
+                onChange={(e) => setPermRoleFilter(e.target.value)}
+                dir="ltr"
+                className="w-full h-7 px-2 border rounded text-xs"
+                placeholder="role_key (اتركه فارغاً لرؤية الكل)"
+              />
+            </div>
+            <span className="text-muted-foreground">{rolePermsRows.length} صلاحية</span>
+          </div>
+
+          <div className="border rounded">
+            <div className="max-h-48 overflow-y-auto divide-y">
+              {rolePermsRows.slice(0, 50).map((p: any) => (
+                <div key={p.id} className="px-2 py-1 flex items-center justify-between">
+                  <span className="font-mono text-[10px]">
+                    {p.role} <span className="text-muted-foreground">→</span> {p.permission}
+                  </span>
+                  <GuardedButton
+                    perm="admin:update"
+                    variant="ghost"
+                    size="sm"
+                    className="text-[10px] h-6 text-status-error-foreground"
+                    onClick={() => setDeletingPermId(p.id)}
+                  >
+                    حذف
+                  </GuardedButton>
+                </div>
+              ))}
+              {rolePermsRows.length === 0 && (
+                <p className="text-muted-foreground p-2 text-center">لا توجد صلاحيات مطابقة</p>
+              )}
+            </div>
+          </div>
+          <ConfirmDeleteDialog
+            open={deletingPermId !== null}
+            onOpenChange={(o) => !o && setDeletingPermId(null)}
+            entity={{
+              type: "role_permission",
+              id: deletingPermId ?? 0,
+              name: (() => {
+                const row = rolePermsRows.find((p: any) => p.id === deletingPermId);
+                return row ? `${row.role} → ${row.permission}` : `صلاحية #${deletingPermId ?? "?"}`;
+              })(),
+            }}
+            deletePath={deletingPermId !== null ? `/admin/role-permissions/${deletingPermId}` : ""}
+            invalidateKeys={[["admin-role-permissions"]]}
+            onDeleted={() => { setDeletingPermId(null); rolePermsQ.refetch(); }}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="p-3 border rounded bg-surface-subtle/30 space-y-2">
+              <p className="text-xs font-semibold">إضافة صلاحية واحدة</p>
+              <input
+                value={newPermRole}
+                onChange={(e) => setNewPermRole(e.target.value)}
+                placeholder="role"
+                dir="ltr"
+                className="w-full h-7 px-2 border rounded text-xs"
+              />
+              <input
+                value={newPerm}
+                onChange={(e) => setNewPerm(e.target.value)}
+                placeholder="permission"
+                dir="ltr"
+                className="w-full h-7 px-2 border rounded text-xs"
+              />
+              <GuardedButton
+                perm="admin:update"
+                size="sm"
+                rateLimitAware
+                onClick={handleAddPerm}
+                disabled={!newPermRole.trim() || !newPerm.trim()}
+              >
+                إضافة
+              </GuardedButton>
+            </div>
+            <div className="p-3 border rounded bg-surface-subtle/30 space-y-2">
+              <p className="text-xs font-semibold">استبدال جماعي لدور</p>
+              <input
+                value={bulkRole}
+                onChange={(e) => setBulkRole(e.target.value)}
+                placeholder="role"
+                dir="ltr"
+                className="w-full h-7 px-2 border rounded text-xs"
+              />
+              <textarea
+                value={bulkPerms}
+                onChange={(e) => setBulkPerms(e.target.value)}
+                placeholder={"perm1\nperm2,perm3"}
+                dir="ltr"
+                className="w-full h-16 px-2 py-1 border rounded text-xs font-mono"
+              />
+              <GuardedButton
+                perm="admin:update"
+                size="sm"
+                variant="destructive"
+                rateLimitAware
+                onClick={() => setBulkPreview(true)}
+                disabled={!bulkRole.trim()}
+              >
+                استبدال (مدمّر)
+              </GuardedButton>
+              {bulkPreview && (
+                <div className="mt-2 p-2 border border-status-warning-surface bg-status-warning-surface/30 rounded text-xs space-y-1">
+                  <p className="font-semibold text-status-warning-foreground">تأكيد الاستبدال الجماعي</p>
+                  <p>
+                    سيُحذف جميع صلاحيات الدور <span className="font-mono">"{bulkRole.trim()}"</span> الحاليّة وتُستبدل بـ{" "}
+                    <span className="font-mono">{bulkPerms.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean).length}</span> صلاحية جديدة.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <GuardedButton perm="admin:update" size="sm" variant="destructive" rateLimitAware onClick={() => { handleBulkReplace(); setBulkPreview(false); }}>
+                      نعم، استبدال
+                    </GuardedButton>
+                    <Button size="sm" variant="outline" onClick={() => setBulkPreview(false)}>إلغاء</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

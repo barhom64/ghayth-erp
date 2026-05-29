@@ -1,5 +1,5 @@
 import { useRoute, Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   PageShell,
@@ -10,9 +10,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { ScrollText, ArrowLeftRight, ExternalLink, Hash, Calendar, FileText } from "lucide-react";
+import { ScrollText, ArrowLeftRight, ExternalLink, Hash, Calendar, FileText, CheckCircle, Send } from "lucide-react";
 
 // Detail view for any journal entry (sourced from invoice / expense /
 // voucher / reversal / fx_revaluation / manual / ...). The list page at
@@ -99,6 +100,22 @@ export default function JournalDetailPage() {
     ["journal-detail", id ?? ""],
     id ? `/finance/journal/${id}` : null,
     !!id,
+  );
+
+  // POST /finance/journal/:id/approve — moves draft → approved with
+  // permission gate. POST /finance/journal/:id/post moves approved →
+  // posted (applies balances to the chart of accounts).
+  const approveMut = useApiMutation<unknown, Record<string, never>>(
+    `/finance/journal/${id}/approve`,
+    "POST",
+    [["journal-detail", id ?? ""], ["journal"]],
+    { successMessage: "تم اعتماد القيد" },
+  );
+  const postMut = useApiMutation<unknown, Record<string, never>>(
+    `/finance/journal/${id}/post`,
+    "POST",
+    [["journal-detail", id ?? ""], ["journal"]],
+    { successMessage: "تم ترحيل القيد" },
   );
 
   if (isLoading) return <LoadingSpinner />;
@@ -195,7 +212,35 @@ export default function JournalDetailPage() {
             ? <PageStatusBadge status="active">مُرَحَّل</PageStatusBadge>
             : <PageStatusBadge status="pending">مسودة</PageStatusBadge>}
           {je.reversedById && <PageStatusBadge status="reversed" />}
-          <EntityPrintButton entityType="journal_entry" entityId={id ?? ""} formats={["a4"]} />
+          {je.approvalStatus === "draft" && (
+            <GuardedButton
+              perm="finance:approve"
+              size="sm"
+              variant="outline"
+              onClick={() => approveMut.mutate({})}
+              disabled={approveMut.isPending}
+              rateLimitAware
+              className="gap-1"
+            >
+              <Send className="h-4 w-4" />
+              اعتماد
+            </GuardedButton>
+          )}
+          {je.approvalStatus === "approved" && !je.balancesApplied && (
+            <GuardedButton
+              perm="finance:approve"
+              size="sm"
+              variant="outline"
+              onClick={() => postMut.mutate({})}
+              disabled={postMut.isPending}
+              rateLimitAware
+              className="gap-1"
+            >
+              <CheckCircle className="h-4 w-4" />
+              ترحيل
+            </GuardedButton>
+          )}
+          <EntityPrintButton entityType="journal_entry" entityId={id ?? ""} />
         </div>
       }
     >

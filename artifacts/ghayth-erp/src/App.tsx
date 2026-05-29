@@ -31,6 +31,7 @@ import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
 const Dashboard = lazy(() => import("@/pages/dashboard"));
+const PrintVerify = lazy(() => import("@/pages/print-verify"));
 
 interface RouteConfig {
   path: string;
@@ -143,6 +144,15 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      {/* Public QR-verify page — every PDF the print engine emits embeds a
+          QR pointing here, so regulators / counter staff can confirm a
+          doc's audit row without an ERP account. The /api/print/verify/:jobId
+          endpoint backing it is anonymous + rate-limited server-side. */}
+      <Route path="/print/verify/:jobId">
+        <Suspense fallback={<PageLoader />}>
+          <PrintVerify />
+        </Suspense>
+      </Route>
       <Route>
         {isAuthenticated ? <ProtectedRoutes /> : <Redirect to="/login" />}
       </Route>

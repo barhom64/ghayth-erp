@@ -1,6 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { Banknote } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -60,6 +63,34 @@ export default function UmrahInvoiceDetail() {
   const payments: any[] = useMemo(() => {
     return Array.isArray(invoice?.payments) ? invoice.payments : [];
   }, [invoice?.payments]);
+
+  // POST /umrah/agent-invoices/:id/record-payment — record a payment
+  // against the invoice. Backend writes the payment row and updates
+  // paidAmount / status.
+  const { toast } = useToast();
+  const [paymentAmount, setPaymentAmount] = useState<string>("");
+  const recordPaymentMut = useApiMutation<unknown, { amount: number; method?: string }>(
+    `/umrah/agent-invoices/${id}/record-payment`,
+    "POST",
+    [["umrah-invoice", String(id)], ["umrah-agent-invoices"]],
+    {
+      successMessage: "تم تسجيل الدفعة",
+      onSuccess: () => { setPaymentAmount(""); refetch(); },
+    },
+  );
+
+  const handleRecordPayment = () => {
+    const amt = Number(paymentAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      toast({ variant: "destructive", title: "أدخل مبلغاً صحيحاً" });
+      return;
+    }
+    if (amt > remainingAmount) {
+      toast({ variant: "destructive", title: `المبلغ يتجاوز المتبقي (${remainingAmount})` });
+      return;
+    }
+    recordPaymentMut.mutate({ amount: amt, method: "bank_transfer" });
+  };
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -261,14 +292,38 @@ export default function UmrahInvoiceDetail() {
       error={error}
       onRetry={refetch}
       actions={
-        <>
+        <div className="flex items-center gap-2">
+          {invoice && remainingAmount > 0 && (
+            <>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="مبلغ الدفعة"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+                className="w-32 h-8 text-sm"
+                dir="ltr"
+              />
+              <GuardedButton
+                perm="umrah:create"
+                size="sm"
+                onClick={handleRecordPayment}
+                disabled={recordPaymentMut.isPending || !paymentAmount}
+                rateLimitAware
+                className="gap-1"
+              >
+                <Banknote className="h-4 w-4" />
+                تسجيل دفعة
+              </GuardedButton>
+            </>
+          )}
           {invoice && (
             <EntityPrintButton
               entityType="umrah_invoice"
               entityId={invoice.id ?? id}
-              formats={["a4"]}/>
+             />
           )}
-        </>
+        </div>
       }
     />
   );

@@ -210,7 +210,7 @@ financeAlgorithmsRouter.get("/ar-aging", authorize({ feature: "finance.algorithm
          c.phone AS "clientPhone",
          c.email AS "clientEmail"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i."companyId" = $2
          AND i."deletedAt" IS NULL
          AND i.status NOT IN ('paid','cancelled','draft')

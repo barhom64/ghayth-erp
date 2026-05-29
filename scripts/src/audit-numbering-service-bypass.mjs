@@ -79,6 +79,29 @@ const NUMBERING_WRITE_RE = new RegExp(
   "gi",
 );
 
+// Raw nextval() sequence allocation outside the service. PR #232 closure
+// found two of these hiding in lib/umrahInvoicingEngine.ts:
+//   SELECT nextval('umrah_sales_invoice_seq')
+//   SELECT nextval('umrah_payment_seq')
+// Any nextval() targeting a *_seq that ISN'T the numbering center's own
+// counter table fixtures is a probable bypass. The lint rule
+// `nextval-in-route` already catches this in routes/; this scan extends
+// the check to lib/.
+const NEXTVAL_RE = /\bnextval\s*\(\s*['"`]([a-zA-Z_][a-zA-Z0-9_]*)['"`]\s*\)/gi;
+// Allow the numbering center's own seed sequences (created in the
+// migrations) AND seed/bootstrap helpers that legitimately use raw
+// nextval to mint demo employee numbers etc.
+const ALLOWED_NEXTVAL_SEQUENCES = new Set([
+  "numbering_schemes_id_seq",
+  "numbering_counters_id_seq",
+  "numbering_assignments_id_seq",
+  "numbering_audit_logs_id_seq",
+]);
+const NEXTVAL_EXEMPT_FILES = new Set([
+  "lib/seedDemoData.ts",
+  "lib/bootstrapAdmin.ts",
+]);
+
 // The atomic-tx pattern from PR #1254 requires a single follow-up
 // UPDATE on numbering_assignments to set `entityId` to the just-inserted
 // row id. That UPDATE is the documented end of the transactional issue
@@ -185,6 +208,25 @@ async function main() {
           line: lineOf(src, m.index),
           snippet: src.slice(m.index, m.index + 120).replace(/\s+/g, " "),
           pattern: "MAX(...)+1",
+        });
+      }
+    }
+
+    // ── Check 3: raw nextval('..._seq') outside the service
+    // Allowed: numbering_* table id sequences (the migrations create
+    // those and the bootstrap helpers exercise them); seed/bootstrap
+    // helper files explicitly exempted via NEXTVAL_EXEMPT_FILES.
+    if (!NEXTVAL_EXEMPT_FILES.has(rel) && rel !== "lib/numberingService.ts" && rel !== "lib/numberingBackfill.ts") {
+      NEXTVAL_RE.lastIndex = 0;
+      let m;
+      while ((m = NEXTVAL_RE.exec(src)) !== null) {
+        const seqName = m[1];
+        if (ALLOWED_NEXTVAL_SEQUENCES.has(seqName)) continue;
+        countHits.push({
+          file: rel,
+          line: lineOf(src, m.index),
+          snippet: src.slice(m.index, m.index + 120).replace(/\s+/g, " "),
+          pattern: `nextval('${seqName}')`,
         });
       }
     }

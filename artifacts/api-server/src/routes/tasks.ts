@@ -189,8 +189,8 @@ router.get("/", authorize({ feature: "tasks", action: "list" }), async (req, res
               c.name AS "clientName", c.phone AS "clientPhone"
        FROM tasks t
        LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN clients c ON c.id = t."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = t."clientId" AND c."companyId" = t."companyId" AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY t.priority DESC, t."scheduledDate" ASC NULLS LAST
        LIMIT 500`,
@@ -281,8 +281,8 @@ router.get("/:id", authorize({ feature: "tasks", action: "view", resource: { tab
               c.name AS "clientName", c.phone AS "clientPhone"
        FROM tasks t
        LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN clients c ON c.id = t."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = t."clientId" AND c."companyId" = t."companyId" AND c."deletedAt" IS NULL
        WHERE t.id = $1${scopeCondition} AND t."deletedAt" IS NULL`,
       params
     );

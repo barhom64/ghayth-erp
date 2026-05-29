@@ -312,7 +312,7 @@ export default function MaintenanceDetail() {
             <EntityPrintButton
               entityType="maintenance_request"
               entityId={maintenance.id ?? id}
-              formats={["a4"]}/>
+             />
           )}
           {maintenance && !["completed", "cancelled"].includes(maintenance.status) && (
             <>

@@ -137,13 +137,47 @@ export default function Evaluation360DetailPage() {
     `/hr/evaluation-cycles/${cycleId}`
   );
 
+  // GET /hr/evaluation-cycles/:id/system-report — full system-generated
+  // performance breakdown (KPI hits, tardiness, etc). Separate from the
+  // bundled systemEval that the cycle endpoint returns; this is the
+  // detailed log used by HR for back-checking.
+  const sysReportQ = useApiQuery<any>(
+    ["evaluation-system-report", cycleId],
+    cycleId ? `/hr/evaluation-cycles/${cycleId}/system-report` : null,
+    { enabled: !!cycleId },
+  );
+  // GET /hr/evaluation-cycles/:id/summary — server-computed weighted
+  // summary, source of truth for the final 360° score. Falls back to
+  // the bundled `summary` when this endpoint hasn't been refreshed yet.
+  const summaryQ = useApiQuery<any>(
+    ["evaluation-summary", cycleId],
+    cycleId ? `/hr/evaluation-cycles/${cycleId}/summary` : null,
+    { enabled: !!cycleId },
+  );
+
   const cycle = data?.cycle;
   const systemEval = data?.systemEval;
+  const systemReport = sysReportQ.data?.data ?? sysReportQ.data;
   const peerEvals = data?.peerEvals ?? [];
-  const summary = data?.summary;
+  const summary = summaryQ.data?.data ?? summaryQ.data ?? data?.summary;
   const upwardSummary = data?.upwardSummary;
   const managerEvals = peerEvals.filter((p: any) => p.evaluatorRole === 'manager');
   const peerOnlyEvals = peerEvals.filter((p: any) => p.evaluatorRole === 'peer');
+
+  // GET /hr/upward-reviews/manager/:managerId — anonymized aggregate
+  // of all upward reviews received by the cycle's evaluatee (the
+  // manager being reviewed). Surfaced under the "upward" tab.
+  const managerId = cycle?.employeeId ?? cycle?.evaluateeId ?? null;
+  const managerUpwardQ = useApiQuery<any>(
+    ["upward-reviews-manager", String(managerId ?? 0)],
+    managerId ? `/hr/upward-reviews/manager/${managerId}` : null,
+    { enabled: !!managerId },
+  );
+  // Endpoint returns a single aggregate object — never an array. Below
+  // 3 reviews it returns {locked: true, message, avgScore: null}; above
+  // it returns {count, avgScore, leadershipAvg, communicationAvg,
+  // fairnessAvg, supportAvg}.
+  const managerUpwardAgg: any = managerUpwardQ.data ?? null;
 
   const tabs = [
     { id: "summary", label: "ملخص 360°", icon: BarChart3 },
@@ -252,6 +286,40 @@ export default function Evaluation360DetailPage() {
 
       {tab === "system" && (
         <div className="space-y-4">
+          {systemReport && (() => {
+            const rawMetrics = systemReport.metrics;
+            const parsed = (() => {
+              if (!rawMetrics) return null;
+              if (typeof rawMetrics === "string") {
+                try { return JSON.parse(rawMetrics); } catch { return null; }
+              }
+              return rawMetrics;
+            })();
+            const items = parsed && typeof parsed === "object"
+              ? Object.entries(parsed as Record<string, unknown>)
+              : [];
+            if (items.length === 0) return null;
+            return (
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">تقرير النظام المفصّل ({items.length} بند)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1 text-xs max-h-64 overflow-y-auto">
+                    {items.slice(0, 30).map(([key, value]) => (
+                      <div key={key} className="flex items-center justify-between border-b pb-1">
+                        <span>{key}</span>
+                        <span className="font-mono">
+                          {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {!systemEval ? (
             <Card><CardContent className="p-8 text-center text-muted-foreground">لم يتم توليد التقرير الآلي بعد</CardContent></Card>
           ) : (
@@ -455,6 +523,40 @@ export default function Evaluation360DetailPage() {
               </CardContent>
             </Card>
           )}
+
+          {managerUpwardAgg && !managerUpwardAgg.locked && managerUpwardAgg.avgScore != null && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">
+                  ملخص التقييمات العكسية للمدير ({managerUpwardAgg.count ?? 0} تقييم)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                  <div>
+                    <p className="text-muted-foreground">المتوسط العام</p>
+                    <p className="font-mono font-bold">{managerUpwardAgg.avgScore}%</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">القيادة</p>
+                    <p className="font-mono font-bold">{managerUpwardAgg.leadershipAvg ?? "—"}%</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">التواصل</p>
+                    <p className="font-mono font-bold">{managerUpwardAgg.communicationAvg ?? "—"}%</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">الإنصاف</p>
+                    <p className="font-mono font-bold">{managerUpwardAgg.fairnessAvg ?? "—"}%</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">الدعم</p>
+                    <p className="font-mono font-bold">{managerUpwardAgg.supportAvg ?? "—"}%</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </>
@@ -477,7 +579,7 @@ export default function Evaluation360DetailPage() {
       actions={
         <div className="flex items-center gap-2">
           {actions}
-          <PrintButton entityType="evaluation_360" entityId={params?.id ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="evaluation_360" entityId={params?.id ?? 0} label="طباعة" />
         </div>
       }
       createdAt={cycle?.createdAt}

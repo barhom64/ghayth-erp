@@ -214,7 +214,7 @@ export default function LoanDetail() {
       actions={
         <div className="flex items-center gap-2">
           <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
-          {loan && <PrintButton entityType="loan_request" entityId={loan.id ?? id ?? 0} formats={["a4"]} label="طباعة" />}
+          {loan && <PrintButton entityType="loan_request" entityId={loan.id ?? id ?? 0} label="طباعة" />}
         </div>
       }
     />

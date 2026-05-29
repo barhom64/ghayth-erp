@@ -4,7 +4,11 @@
 >
 > **النتيجة باختصار**: المعمارية الأساسية مكتملة، لكن وُجدت **15 ثغرة حقيقية** بعد توسعة الفحص بطبقات أعمق (`audit-numbering-service-bypass.mjs` + `audit-numbering-schemes-vs-callers.mjs` + per-table check). هذا التقرير يعدّدها صراحةً ولا يدّعي الاكتمال 100% قبل سدّها.
 >
+> **التحديث الأخير (Final)**: كل الـ15 ثغرة + الـ3 ضحايا الإضافية للـ`inline-date-now-as-ref` ratchet مُصلَحة. القاعدة الآن **hard rule بـbaseline = 0** — أي إضافة جديدة تفشل CI فوراً.
+>
 > **تحديث 2026-05-27 (الجولة الثانية)**: بعد طلب المحامي بفحوصات أقوى، أضفت 3 سكربتات/قواعد جديدة كشفت 8 ثغرات إضافية (G8-G15) كانت تتسرّب من السكربت الأول. واحدة (G8) أُصلِحت في هذا الـPR. الباقي مفتوحة.
+>
+> **تحديث 2026-05-29 (الفحص الأعمق)**: بعد إغلاق الـ15 ثغرة + 3 ضحايا ratchet، فحص يدوي أعمق كشف **ثغرتين إضافيتين** في `lib/umrahInvoicingEngine.ts` (`umrah_sales_invoices.ref` و `umrah_payments.ref` كانتا تستخدمان `nextval()` خام). مُصلَحتان عبر مهاجرة 232 + قاعدة فحص جديدة في `audit-numbering-service-bypass.mjs` تلتقط أي `nextval('_seq')` خارج طبقات مسموح بها (seedDemoData / bootstrapAdmin). **النظام الآن يحتوي 5 طبقات فحص + 0 ثغرات معروفة**.
 >
 > **تاريخ التقرير**: 2026-05-27. مُولَّد بفحص كل ملف يحتوي `INSERT INTO`، كل جدول له عمود `ref`/`number`/`*Number`/`*Ref`/`*Code`، وكل ملف داخل `lib/`، `lib/engines/`، `lib/cronScheduler.ts`، `lib/imports/`، `lib/mailboxSync.ts`، `scripts/`، والـ migrations.
 
@@ -161,7 +165,7 @@ Legacy-pattern guard:
 | G14 | `routes/finance-purchase.ts:1654` payment_runs Date.now() | ✅ مُصلَحة في هذا الـPR (مهاجرة 227) |
 | G15 | 8 schemes ميتة في الـUI (vendor_invoice, lead, ...) | ✅ مُصلَحة في هذا الـPR (مهاجرة 229 تُعطّلها) |
 
-**13 ثغرة مفتوحة + 2 مُغلَقة في هذا الـPR.**
+**15/15 مُغلَقة.** + 3 ضحايا إضافية في الـlint ratchet مُغلَقة (`CALL-${Date.now()}` → `internalTechRef`؛ `ADV-${Date.now()}` → مهاجرة 231؛ `RENT-${id}-${Date.now()}` → `issueNumber` بسياسة `legal.case`).
 
 ---
 

@@ -297,7 +297,7 @@ purchaseRouter.get("/purchase-requests", authorize({ feature: "finance.purchase"
        FROM purchase_requests pr
        LEFT JOIN suppliers s ON s.id = pr."supplierId" AND s."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea.id = pr."requestedBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        LEFT JOIN purchase_request_items pri ON pri."requestId" = pr.id
        WHERE ${where}${extraWhere}
        GROUP BY pr.id, pr.ref, pr.status, pr."totalAmount", pr."createdAt", pr.notes, pr."requestedBy", pr."supplierId", s.name, e.name

@@ -291,10 +291,9 @@ function extractFrontendCalls() {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
       if (helper === "useApiQuery") {
-        // First arg is the query key. Normally an array literal but
-        // sometimes pre-built into a `const qk = [...]` variable that
-        // gets passed as an identifier (entity-tags pattern). Skip
-        // either form, then the comma + whitespace before the URL.
+        // Skip the array literal arg OR a bare identifier
+        // (`useApiQuery(queryKey, "/x")` is a common shape when the
+        // key is composed at the top of the function).
         if (src[i] === "[") {
           let depth = 1;
           i++;
@@ -303,13 +302,19 @@ function extractFrontendCalls() {
             else if (src[i] === "]") depth--;
             i++;
           }
-        } else if (/[a-zA-Z_$]/.test(src[i])) {
-          // Identifier (variable holding the key). Read until comma.
-          while (i < src.length && src[i] !== "," && src[i] !== ")") i++;
+        } else if (/^[A-Za-z_$]/.test(src[i] ?? "")) {
+          // Bare identifier — walk to the first `,` that isn't inside a
+          // nested call. The URL arg starts after it.
+          let depth = 0;
+          while (i < src.length) {
+            const c = src[i];
+            if (c === "(") depth++;
+            else if (c === ")") { if (depth === 0) break; depth--; }
+            else if (c === "," && depth === 0) break;
+            i++;
+          }
         } else {
-          // Anything else (digit, paren, etc.) — bail out, this isn't
-          // a shape we can confidently parse.
-          continue;
+          continue; // unexpected shape — skip
         }
         // Skip the comma + whitespace before the URL arg.
         while (i < src.length && /[\s,]/.test(src[i])) i++;
@@ -327,16 +332,88 @@ function extractFrontendCalls() {
         // Skip `=>` and whitespace.
         while (i < src.length && /[\s=>]/.test(src[i])) i++;
       }
-      // Conditional URL form: `cond ? "..." : null`. The URL we want
-      // is the truthy branch. The audit used to miss these because
-      // readString stopped at the leading identifier. Detect a
-      // `<ident>(?.<ident>)*\s*\?\s*` prefix and skip to the URL.
-      // useApiQuery's third arg is the `enabled` flag so a bare-template
-      // URL is the recommended shape, but legacy pages use the
-      // conditional shape extensively (44 sites at last count).
-      const cond = /^[a-zA-Z_$][\w$]*(?:\?\.[a-zA-Z_$][\w$]*|\.[a-zA-Z_$][\w$]*)*\s*\?\s*/.exec(src.slice(i));
-      if (cond) {
-        i += cond[0].length;
+      // useApiMutation((body) => body.url, "METHOD") + later `.mutate(
+    // { url: "/x" })` — the URL travels through the mutation body. The
+    // arrow-function scan above bails because body.url isn't a string
+    // literal. Scan for `.mutate({ url: "..."` calls elsewhere in the
+    // same file and credit them all with the method that the original
+    // useApiMutation declared. Only fires when the mutation explicitly
+    // returns `body.url` (or `body.__url`) and not anything else, so
+    // we don't accidentally credit a wholly different mutation.
+    if (helper === "useApiMutation" && src[i] === "b" && /^body\.(__)?url\s*[,)]/.test(src.slice(i))) {
+      // Walk to the method literal after the arrow body.
+      let j = i;
+      while (j < src.length && src[j] !== ",") j++;
+      j++;
+      while (j < src.length && /\s/.test(src[j])) j++;
+      const methodLit = readString(src, j);
+      const method = methodLit ? methodLit.value.toUpperCase() : "POST";
+      // Find all `.mutate({ url: "..."` in the file. Single-pass —
+      // some files have multiple muts; we credit all URLs because
+      // overcrediting an unused URL is harmless and we'd rather miss
+      // none.
+      const mutRe = /\.\s*mutate(?:Async)?\s*\(\s*\{[^}]*\b(?:__)?url\s*:\s*[`"']([^`"']+)[`"']/g;
+      const fileMutMatches = [...src.matchAll(mutRe)];
+      // Only emit when there's exactly one matching mutation in the
+      // file — otherwise we can't tell which URL belongs to this
+      // method.
+      if (fileMutMatches.length === 1 && fileMutMatches[0]) {
+        const url = fileMutMatches[0][1];
+        if (url && url.startsWith("/")) {
+          calls.push({ file: rel, url, line: lineOf(src, m.index), method, source: "helper" });
+        }
+      }
+    }
+
+    // Inline-conditional URL: `useApiQuery([...], id ? \`/x/${id}\` : null)`
+      // is the canonical "skip fetch when id missing" idiom for detail
+      // pages. The arg starts with the condition variable name, not a
+      // string opener, so readString fails. Walk forward to the `?` and
+      // read the true-branch string. Bail if the true-branch isn't a
+      // string literal (e.g. a function call).
+      //
+      // Also handle the dual-branch shape `body.id ? "/x/${body.id}" :
+      // "/x"` used by useApiMutation in commission-plan-editor — credit
+      // both URLs.
+      if (helper === "useApiQuery" || helper === "useApiMutation" || helper === "apiFetch") {
+        // Skip a leading `(` for the parenthesized form
+        // `(body.id ? "/x" : "/y")` used by useApiMutation arrow bodies.
+        if (src[i] === "(") {
+          const inside = src.slice(i + 1, i + 200);
+          if (/^[\w.$\s]+\?/.test(inside)) i++;
+        }
+        const savedI = i;
+        // Also accept `&&` / `||` / string literals in the condition so
+        // that `a.x && a.y ? "/x" : null`, `a || b ? "/x" : null`, and
+        // `x === "all" ? "/x" : "/y"` all parse. The regex now allows
+        // whole quoted literals (with non-` chars inside) as opaque
+        // tokens — they're only consumed up to the `?` operator.
+        const condArgRe = /^(?:[\w.$\s&|!=]|"[^"\n]*"|'[^'\n]*')+\?/;
+        const rest = src.slice(i, i + 400);
+        if (condArgRe.test(rest) && !/^[\s]*[`"']/.test(rest)) {
+          while (i < src.length && src[i] !== "?") i++;
+          if (src[i] === "?") {
+            i++;
+            while (i < src.length && /\s/.test(src[i])) i++;
+            // Try to capture the false branch too (after the `:`).
+            const trueLit = readString(src, i);
+            if (trueLit && trueLit.value.startsWith("/")) {
+              let j = trueLit.end;
+              while (j < src.length && /\s/.test(src[j])) j++;
+              if (src[j] === ":") {
+                j++;
+                while (j < src.length && /\s/.test(src[j])) j++;
+                const falseLit = readString(src, j);
+                if (falseLit && falseLit.value.startsWith("/")) {
+                  const method = inferMethod(helper, src, falseLit.end);
+                  calls.push({ file: rel, url: falseLit.value, line: lineOf(src, m.index), method, source: "helper" });
+                }
+              }
+            }
+          } else {
+            i = savedI;
+          }
+        }
       }
       const lit = readString(src, i);
       if (!lit) continue;
@@ -372,7 +449,7 @@ function extractFrontendCalls() {
     // own fix-up pass. The prop calls still count toward backend
     // coverage so the Phase C "unused endpoints" list gets credit for
     // them.
-    const propRe = /\b(approve|reject|return)Endpoint\s*=\s*\{/g;
+    const propRe = /\b(approve|reject|return|refer|escalate)Endpoint\s*=\s*\{/g;
     for (const m of src.matchAll(propRe)) {
       const kind = m[1]; // "approve" | "reject" | "return"
       let i = m.index + m[0].length;
@@ -398,125 +475,27 @@ function extractFrontendCalls() {
     for (const m of src.matchAll(delRe)) {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
+      // Skip an inline `<cond> ? "..." : "..."` conditional — common
+      // when the dialog is rendered with a maybe-null target row. Move
+      // past the condition to the first quoted string. Allow common
+      // operators (`!==`, `==`, `&&`, etc.) and parens inside the
+      // condition so things like `id !== null ? "/x/${id}" : ""` work.
+      const savedI = i;
+      const condRe = /^[\w.$?!=&|<>()\s]+\?/;
+      const rest = src.slice(i, i + 200);
+      if (condRe.test(rest) && !/^[\s]*[`"']/.test(rest)) {
+        while (i < src.length && src[i] !== "?") i++;
+        if (src[i] === "?") {
+          i++;
+          while (i < src.length && /\s/.test(src[i])) i++;
+        } else {
+          i = savedI;
+        }
+      }
       const lit = readString(src, i);
       if (!lit) continue;
       if (!lit.value.startsWith("/")) continue;
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "DELETE", source: "prop" });
-    }
-
-    // apiUrl("/…") helper from lib/api.ts — wraps a path with /api prefix
-    // for use in `<a href={apiUrl(…)} download>` anchors. The href scanner
-    // below sees `href={…}` but the value is a function call, not a
-    // string literal, so the URL stays dark. Catch the apiUrl call sites
-    // directly. Tag method=? since anchors don't carry HTTP verb info
-    // and could be download or POST-via-form.
-    const apiUrlRe = /\bapiUrl\s*\(\s*[`"']/g;
-    for (const m of src.matchAll(apiUrlRe)) {
-      let i = m.index + m[0].length - 1;
-      const lit = readString(src, i);
-      if (!lit) continue;
-      if (!lit.value.startsWith("/")) continue;
-      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "?", source: "prop" });
-    }
-
-    // Raw anchor href to /api/* — file-serving endpoints (PDFs,
-    // downloads, previews) can't use apiFetch because the response
-    // is a stream, not JSON. The convention across the app is
-    // `<a href="/api/documents/:id/download" download>` or
-    // `<a href={`/api/print/jobs/${id}/download`} target="_blank">`.
-    // Handles both the JSX `href="…"` string-prop form and the
-    // `href={…}` expression form (with template literals).
-    const hrefRe = /\bhref\s*=\s*([{`"'])/g;
-    for (const m of src.matchAll(hrefRe)) {
-      let i = m.index + m[0].length - 1; // back up onto opening delimiter
-      // JSX brace expression — skip past `{` and any leading whitespace.
-      if (src[i] === "{") {
-        i++;
-        while (i < src.length && /\s/.test(src[i])) i++;
-      }
-      const lit = readString(src, i);
-      if (!lit) continue;
-      if (!lit.value.startsWith("/api/")) continue;
-      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
-    }
-
-    // <ExportButton endpoint="/export/excel/x" /> + the array form
-    // { endpoint: "/export/...", … } inside <MultiExportButton items={[…]}>
-    // The shared shared/export-buttons.tsx component fires a
-    // window-level fetch with auth headers; the `endpoint` prop is the
-    // URL path. Same JSX-blind-spot pattern as ApprovalActions —
-    // covered here with a dedicated scanner so every report-export
-    // route gets credit.
-    //
-    // ExportButton variants accept either a string literal or a
-    // template literal (for per-row IDs). readString handles both —
-    // but the JSX brace form `endpoint={…}` needs a separate match
-    // class. The combined regex catches both `endpoint="…"` and
-    // `endpoint={…}` followed by the literal/template.
-    const exportRe = /\b(?:ExportButton[^/>]*?\bendpoint\s*=\s*|endpoint\s*:\s*)([{`"'])/g;
-    for (const m of src.matchAll(exportRe)) {
-      let i = m.index + m[0].length - 1;
-      // JSX brace expression — skip past `{` and any leading whitespace.
-      if (src[i] === "{") {
-        i++;
-        while (i < src.length && /\s/.test(src[i])) i++;
-      }
-      const lit = readString(src, i);
-      if (!lit) continue;
-      // The /export/* prefix is the marker that this `endpoint:` is for
-      // an export button (rather than EntityEditDialog or ImpactPreviewButton
-      // which have their own scanners and matchers).
-      if (!/^\/export\//.test(lit.value)) continue;
-      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
-    }
-
-    // useDetailEditDelete({ patchPath: "/...", deletePath: "/..." })
-    // wraps apiPatch + apiDelete with variable URLs — invisible to the
-    // helper-call scanner. Credits the PATCH + DELETE per call.
-    const detailRe = /\b(patchPath|deletePath)\s*:\s*[`"']/g;
-    for (const m of src.matchAll(detailRe)) {
-      const kind = m[1];
-      let i = m.index + m[1].length;
-      while (i < src.length && /[\s:]/.test(src[i])) i++;
-      const lit = readString(src, i);
-      if (!lit) continue;
-      if (!lit.value.startsWith("/")) continue;
-      // Require a useDetailEditDelete( ancestor within the preceding span
-      // so we don't pick up an unrelated property name.
-      const before = src.slice(Math.max(0, m.index - 800), m.index);
-      if (!/useDetailEditDelete\s*\(/.test(before)) continue;
-      const method = kind === "patchPath" ? "PATCH" : "DELETE";
-      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method, source: "prop" });
-    }
-
-    // EntityEditDialog's `endpoint` prop maps to PATCH (or PUT). The
-    // dialog wraps useApiMutation internally so the URL never appears
-    // in a helper call the scanner can read directly. Without this
-    // pass, every detail-page Edit dialog (governance, legal,
-    // warehouse, finance, admin/ai-prompt-detail, …) had its PATCH
-    // route flagged as "unused" even though clicking save fires it.
-    // Sibling `method="PUT"` on the same element overrides the
-    // default PATCH.
-    const editRe = /\bendpoint\s*=\s*\{/g;
-    for (const m of src.matchAll(editRe)) {
-      let i = m.index + m[0].length;
-      while (i < src.length && /\s/.test(src[i])) i++;
-      const lit = readString(src, i);
-      if (!lit) continue;
-      if (!lit.value.startsWith("/")) continue;
-      // Require an EntityEditDialog opening tag in the preceding span
-      // so we don't pick up arbitrary `endpoint=` props on unrelated
-      // components (impact-preview, etc. have their own scanners).
-      // 1200-char window accommodates large defaultValues={{…}} blocks
-      // between the opening tag and the endpoint prop (correspondence /
-      // pilgrim / judgment detail pages can run 600-800 chars of seed
-      // values).
-      const before = src.slice(Math.max(0, m.index - 1200), m.index);
-      if (!/<EntityEditDialog\b/.test(before)) continue;
-      const window = src.slice(Math.max(0, m.index - 400), Math.min(src.length, m.index + 400));
-      const methodMatch = window.match(/\bmethod\s*=\s*["'`](PATCH|PUT)["'`]/);
-      const method = methodMatch ? methodMatch[1].toUpperCase() : "PATCH";
-      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method, source: "prop" });
     }
 
     // useInlineActions({ endpoint: "/x", ... }) — the shared hook in
@@ -527,13 +506,11 @@ function extractFrontendCalls() {
     // were invisible on every page using the hook (recruitment / crm /
     // legal / fleet / support / store / etc. — 22 pages total).
     //
-    // Per-call: always emit PATCH. Only emit DELETE if delete-related
-    // identifiers (handleDelete / startDelete / deletingId) appear
-    // either in the destructure literal OR as `.method` accessors on
-    // the returned object — covers both `const { startDelete } = use…`
-    // (governance/capa-tab.tsx style) and `const jobActions = use…;
-    // jobActions.startDelete(…)` (hr/recruitment.tsx style).
-    const inlineRe = /(?:const\s+(?:\{([^}]*)\}|([a-zA-Z_$][\w$]*))\s*=\s*)?useInlineActions\s*\(\s*\{[^}]*endpoint\s*:\s*/g;
+    // Per-call: always emit PATCH. Only emit DELETE if the page's
+    // destructure pulls `handleDelete` or `startDelete` — pages that
+    // don't (governance/capa-tab.tsx) intentionally suppress the delete
+    // affordance because the backend doesn't expose a DELETE route.
+    const inlineRe = /(?:const\s+(?:\{([^}]*)\}|([A-Za-z_$][\w$]*))\s*=\s*)?useInlineActions\s*\(\s*\{[^}]*endpoint\s*:\s*/g;
     for (const m of src.matchAll(inlineRe)) {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
@@ -544,150 +521,174 @@ function extractFrontendCalls() {
       const line = lineOf(src, m.index);
       calls.push({ file: rel, url, line, method: "PATCH", source: "prop" });
       const destructure = m[1] ?? "";
-      const varName = m[2] ?? "";
-      const usesDelete =
-        /\b(handleDelete|startDelete|deletingId)\b/.test(destructure) ||
-        (varName && new RegExp(`\\b${varName}\\.(handleDelete|startDelete|deletingId)\\b`).test(src));
-      if (usesDelete) {
+      const objName = m[2] ?? "";
+      // Destructured form: `const { handleDelete, ... } = useInlineActions(...)`.
+      // Stored form: `const x = useInlineActions(...)` — look for `x.handleDelete`
+      // / `x.startDelete` references later in the file.
+      const hasDelete = /\b(handleDelete|startDelete|deletingId)\b/.test(destructure)
+        || (objName && new RegExp(`\\b${objName}\\.(handleDelete|startDelete|deletingId)\\b`).test(src));
+      if (hasDelete) {
         calls.push({ file: rel, url, line, method: "DELETE", source: "prop" });
       }
     }
 
-    // <ImpactPreviewButton endpoint="/x/impact-preview" ... /> — the
-    // shared shared/impact-preview.tsx wrapper around apiFetch(endpoint,
-    // { method: "POST" }). The `endpoint` is a JSX-string prop the
-    // helper-call scan can't trace, so without this scanner the six
-    // call-sites (invoices-create, expenses-create, purchase-orders-
-    // create, projects-create, properties/contracts-create, hr/leave-
-    // management) all marked their impact-preview endpoints as unused.
-    const impactRe = /\bImpactPreviewButton\b[^/>]*?\bendpoint\s*=\s*/g;
+    // `window.open("/api/x")` and `<a href="/api/x">` — used for direct
+    // file downloads where the browser handles the response (PDF blob,
+    // Excel export). Always GET.
+    const winOpenRe = /\bwindow\.open\s*\(\s*[`"']/g;
+    for (const m of src.matchAll(winOpenRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      let url = lit.value;
+      url = url.replace(/^\$\{BASE\}\s*\/api/, "")
+               .replace(/^https?:\/\/[^/]+\/api/, "")
+               .replace(/^\/api(?=\/)/, "");
+      if (!url.startsWith("/")) continue;
+      calls.push({ file: rel, url, line: lineOf(src, m.index), method: "GET", source: "helper" });
+    }
+
+    // Raw `fetch(\`${BASE}/api/x\`, { method: ... })` calls — used in a
+    // handful of places where the helper layer can't handle the response
+    // (blob downloads, custom credentials, etc.). The scanner reads the
+    // method literal from the options object the same way apiFetch does.
+    const fetchRe = /\bfetch\s*\(\s*[`"']/g;
+    for (const m of src.matchAll(fetchRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      let url = lit.value;
+      // Strip ${BASE}/api/ prefix — what the rest of the audit produces
+      // for the canonical helper-prefixed URL shape.
+      url = url.replace(/^\$\{BASE\}\s*\/api/, "")
+               .replace(/^https?:\/\/[^/]+\/api/, "");
+      if (!url.startsWith("/")) continue;
+      // Now read the method from the options arg if present.
+      let j = lit.end;
+      while (j < src.length && /[\s,]/.test(src[j])) j++;
+      let method = "GET";
+      if (src[j] === "{") {
+        let depth = 1;
+        j++;
+        const start = j;
+        while (j < src.length && depth > 0) {
+          if (src[j] === "{") depth++;
+          else if (src[j] === "}") depth--;
+          j++;
+        }
+        const body = src.slice(start, j - 1);
+        const mm = body.match(/\bmethod\s*:\s*["']([A-Z]+)["']/);
+        if (mm) method = mm[1].toUpperCase();
+      }
+      calls.push({ file: rel, url, line: lineOf(src, m.index), method, source: "helper" });
+    }
+
+    // <ExportButton endpoint="/export/excel/x" /> + array form
+    // `[{ endpoint: "/export/...", ... }]` used in ExportGroup.
+    // Component fires GET via fetch + blob, no method on options.
+    const exportBtnRe = /\bExportButton[\s\S]{0,80}?\bendpoint\s*=\s*[`"']/g;
+    for (const m of src.matchAll(exportBtnRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+    // JSX brace form: `endpoint={\`/export/pdf/voucher/${v.id}\`}` —
+    // ExportButton row buttons with dynamic ids.
+    const exportBtnBraceRe = /\bExportButton[\s\S]{0,80}?\bendpoint\s*=\s*\{/g;
+    for (const m of src.matchAll(exportBtnBraceRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+    // ExportGroup-style array: `items=[{ endpoint: "/x", ... }]`. The
+    // component shape is "endpoint:" followed by a string in an object
+    // literal. Scan generally — anything `endpoint:` + string that
+    // resolves to /api/export/* is almost certainly an ExportGroup row.
+    const exportObjRe = /\bendpoint\s*:\s*[`"']/g;
+    for (const m of src.matchAll(exportObjRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/export/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+    // Same idiom but with `endpoint: \`/x/${id}\`` dynamic URLs in
+    // ExportGroup arrays.
+    const exportObjTplRe = /\bendpoint\s*:\s*`(\/export\/[^`]+)`/g;
+    for (const m of src.matchAll(exportObjTplRe)) {
+      const raw = m[1];
+      const url = raw.replace(/\$\{[^}]+\}/g, ":param");
+      calls.push({ file: rel, url, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+
+    // <ImpactPreviewButton endpoint="/x/impact-preview" payload={...} />
+    // — shared component that POSTs to the given endpoint with the
+    // assembled payload. Same JSX-prop scan as ApprovalActions.
+    const impactRe = /\bImpactPreviewButton[\s\S]{0,40}?\bendpoint\s*=\s*/g;
     for (const m of src.matchAll(impactRe)) {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
-      // JSX prop value can be `"…"` (string literal) or `{…}` (expression
-      // — typically a template). Handle the string case directly; the
-      // brace case falls through to readString which handles backticks.
-      if (src[i] === "{") {
-        let depth = 1; i++;
-        while (i < src.length && /\s/.test(src[i])) i++;
-      }
       const lit = readString(src, i);
       if (!lit) continue;
       if (!lit.value.startsWith("/")) continue;
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "POST", source: "prop" });
     }
 
-    // Config-object URL property values:
-    //   `approveEndpoint: "/workflows/:id/approve"` in approval-registry.ts
-    //   `rejectEndpoint:  "/x/:id/reject"` / `returnEndpoint: "/x/:id/return"` etc.
-    // These are consumed via getApprovalEndpoint(type, id) which calls
-    // .replace(":id", String(id)) — runtime substitution invisible to a
-    // static scan. Without crediting them, every /workflows/:id/approve,
-    // /workflows/:id/reject style registry entry shows as unused even
-    // though the action-center fires them.
-    //
-    // The verb is taken from the key prefix (approve/reject/return/refer/
-    // escalate) → PATCH by default, POST when the same object literal has
-    // a sibling `method: "POST"`. Mirrors the approval-actions defaults.
-    const cfgRe = /\b(approve|reject|return|refer|escalate)Endpoint\s*:\s*[`"']/g;
-    for (const m of src.matchAll(cfgRe)) {
-      let i = m.index + m[0].length - 1;
+    // <CrudSection endpoint="/settings/departments" …/> — the generic
+    // CRUD tab used on the Settings page. The component itself fires
+    // GET /endpoint, POST /endpoint, PUT /endpoint/:id, DELETE
+    // /endpoint/:id, but the URLs are templated from the prop so the
+    // helper-call scan can't see them. Credit all four verbs.
+    const crudRe = /\bCrudSection[\s\S]{0,80}?\bendpoint\s*=\s*/g;
+    for (const m of src.matchAll(crudRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
       const lit = readString(src, i);
       if (!lit) continue;
       if (!lit.value.startsWith("/")) continue;
-      // Same-object `method:` sibling overrides the default. Approval-
-      // registry entries default to PATCH; the workflow row carries
-      // `method: "POST"` because /workflows/:id/approve is a POST route.
-      const window = src.slice(Math.max(0, m.index - 200), Math.min(src.length, m.index + 200));
-      const mm = window.match(/\bmethod\s*:\s*["'`](GET|POST|PATCH|PUT|DELETE)["'`]/i);
-      const method = mm ? mm[1].toUpperCase() : "PATCH";
-      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method, source: "prop" });
+      const line = lineOf(src, m.index);
+      calls.push({ file: rel, url: lit.value, line, method: "GET", source: "prop" });
+      calls.push({ file: rel, url: lit.value, line, method: "POST", source: "prop" });
+      calls.push({ file: rel, url: `${lit.value}/:param`, line, method: "PUT", source: "prop" });
+      calls.push({ file: rel, url: `${lit.value}/:param`, line, method: "DELETE", source: "prop" });
     }
 
-    // Record<Key, (id) => `/url/${id}/action`> — config tables that map
-    // a tab/key to a URL builder. action-center.tsx uses this for the
-    // per-tab approval endpoints (workflows / leaves / advances / …),
-    // and several stat-tab pages use the same idiom. The arrow body is
-    // a template literal starting with `/` — readString handles it.
+    // useDetailEditDelete({ patchPath, deletePath }) — the shared hook in
+    // components/shared/detail-edit-delete-actions.tsx that backs the
+    // canonical inline-edit + soft-delete pattern on detail pages
+    // (vendor-detail, invoice-detail, contract-detail, …). It fires
+    // PATCH on patchPath and DELETE on deletePath; both are dynamic URL
+    // expressions like `/finance/vendors/${id}` so the regular helper-call
+    // scanner can't see them.
     //
-    // Disambiguation from wouter routing tables (e.g.
-    // `Record<string, (id) => \`/finance/invoices/${id}\`>`): require
-    // the URL to have at least one *literal* segment after the first
-    // `${…}` interpolation. Approval URLs end with `/approve`/`/reject`
-    // etc., while routing-only URLs are bare entity references and get
-    // skipped. The verb stays "?" because the arrow alone doesn't
-    // signal it — backend method resolution falls back to path-only.
-    const arrowUrlRe = /=>\s*[`"']\//g;
-    for (const m of src.matchAll(arrowUrlRe)) {
-      const i = m.index + m[0].length - 2;
-      const lit = readString(src, i);
-      if (!lit) continue;
-      if (!lit.value.startsWith("/")) continue;
-      // Require a literal path segment AFTER an interpolation — that's
-      // the signal this is an action URL, not just an entity reference.
-      // Matches `…/${id}/approve` (✓) but rejects `…/${id}` (skip).
-      // `lit.value` preserves `${…}` placeholders verbatim before the
-      // url-normaliser rewrites them to `:param`.
-      if (!/\$\{[^}]+\}\/[a-z][a-z0-9_-]*/i.test(lit.value)) continue;
-      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "?", source: "prop" });
-    }
-
-    // `const endpoint = cond ? "/url1" : cond2 ? "/url2" : null;` —
-    // the variable-bound conditional URL pattern, used by
-    // entity-timeline.tsx (workflow timeline switches between the
-    // instance-scoped and ref-scoped endpoints). The audit's inline
-    // ternary scanner only fires when the ternary is the URL argument
-    // itself; here the URL is bound to an identifier first, so the
-    // helper-call scan reads only the identifier and misses both URLs.
-    //
-    // Restricted to variables named exactly `endpoint` / `apiUrl` /
-    // `apiPath` — these names are the codebase's explicit convention
-    // for API URLs and are NOT reused for wouter route strings.
-    //
-    // Additional guard: the file must already use a known API helper
-    // (useApiQuery / useApiMutation / apiFetch / apiPatch / …), so we
-    // don't credit URLs in pure config files or routing tables.
-    const hasApiHelper = /\b(?:useApiQuery|useApiMutation|apiFetch|apiPatch|apiPost|apiPut|apiDelete)\s*[(<]/.test(src);
-    if (hasApiHelper) {
-      const condVarRe = /\b(?:const|let)\s+(endpoint|apiUrl|apiPath)\s*(?::\s*[^=]+)?=\s*[^;]+\?/g;
-      for (const m of src.matchAll(condVarRe)) {
-        const start = m.index + m[0].length;
-        const tail = src.slice(start, Math.min(src.length, start + 600));
-        const endRel = tail.search(/;|\n\s*\n|\n[^\s)]/);
-        const segment = endRel === -1 ? tail : tail.slice(0, endRel);
-        const strRe = /[`"']\/[^`"']*[`"']/g;
-        for (const sm of segment.matchAll(strRe)) {
-          const lit = readString(src, start + sm.index);
-          if (!lit) continue;
-          if (!lit.value.startsWith("/")) continue;
-          calls.push({ file: rel, url: lit.value, line: lineOf(src, start + sm.index), method: "GET", source: "prop" });
-        }
+    // Both props are always present on real call-sites, but we look for
+    // them independently so a hook variant that omits one still credits
+    // the other.
+    const ddRe = /useDetailEditDelete\s*\(\s*\{/g;
+    for (const m of src.matchAll(ddRe)) {
+      // Walk the object literal until the matching `}`.
+      let i = m.index + m[0].length;
+      let depth = 1;
+      const start = i;
+      while (i < src.length && depth > 0) {
+        if (src[i] === "{") depth++;
+        else if (src[i] === "}") depth--;
+        i++;
       }
-
-      // `const xUrl = `/...`;` followed by `useApiQuery(..., xUrl, ...)` —
-      // the same variable-bound URL pattern as above, but for non-conditional
-      // template URLs that are bound to a `*Url` named variable. Wires
-      // PurchaseOrderReceiveSection (matchUrl, receiptsUrl) and similar.
-      //
-      // Restricted to *Url suffix to avoid colliding with route constants in
-      // sidebar/routing config. We also verify the variable is actually
-      // passed as the URL arg to a known helper later in the file before
-      // crediting — otherwise dead variables would leak.
-      const urlVarRe = /\b(?:const|let)\s+([a-zA-Z_$][\w$]*Url)\s*(?::\s*[^=]+)?=\s*[`"'](\/[^`"']*)[`"']/g;
-      for (const m of src.matchAll(urlVarRe)) {
-        const varName = m[1];
-        const url = m[2];
-        // Confirm the variable is actually used as an argument to an API
-        // helper later in the file. The previous form used `[^)]*` which
-        // stops at the first `)` and missed `useApiQuery([key, String(x)],
-        // varName)` (the inner `)` of `String(x)` aborted the match). A
-        // bounded `[\s\S]{0,500}` window with lazy expansion catches the
-        // common arg-list shapes without false positives.
-        const passedToHelper = new RegExp(
-          `\\b(?:useApiQuery|useApiMutation|apiFetch|apiPatch|apiPost|apiPut|apiDelete)\\b[\\s\\S]{0,500}?\\b${varName}\\b`,
-        ).test(src);
-        if (!passedToHelper) continue;
-        calls.push({ file: rel, url, line: lineOf(src, m.index), method: "GET", source: "prop" });
+      const body = src.slice(start, i - 1);
+      const line = lineOf(src, m.index);
+      const patchMatch = body.match(/\bpatchPath\s*:\s*[`"']([^`"']+)[`"']/);
+      if (patchMatch && patchMatch[1].startsWith("/")) {
+        calls.push({ file: rel, url: patchMatch[1], line, method: "PATCH", source: "prop" });
+      }
+      const delMatch = body.match(/\bdeletePath\s*:\s*[`"']([^`"']+)[`"']/);
+      if (delMatch && delMatch[1].startsWith("/")) {
+        calls.push({ file: rel, url: delMatch[1], line, method: "DELETE", source: "prop" });
       }
     }
   }
@@ -791,11 +792,8 @@ function normaliseFrontendUrl(url) {
     const looksLikeQs =
       // Plain QS variable: scopeSuffix, filterParams, querystring, qs,
       // dateParams (period-close-preflight + finance reports inherit
-      // this idiom from main), inboxSuffix, transcriptsSuffix, …
-      // Accept any *Suffix / *Query / *Params / *QS name — page code
-      // commonly prefixes with the entity (inbox/transcripts/etc.)
-      // when more than one suffix lives in scope.
-      /^([a-z][a-zA-Z0-9]*)?(qs|querystring|queryparams|filterparams|dateparams|suffix|query|params)$/i.test(body.trim()) ||
+      // this idiom from main), …
+      /^[a-z]*(qs|querystring|queryparams|filterparams|dateparams|suffix|query|params)$/i.test(body.trim()) ||
       // Already a literal query string inside: `?key=…`
       /\?\s*[\w]+\s*=/.test(body) ||
       // Conditional QS suffix: `X ? "?…" : ""`  or  `X ? \`?${…}\` : ""`
@@ -1127,13 +1125,17 @@ function main() {
     const sorted = [...byDomain.entries()].sort(
       (a, b) => b[1].length - a[1].length,
     );
-    for (const [domain, list] of sorted.slice(0, 20)) {
+    const fullMode = process.env.WIRING_FULL === "1" || process.argv.includes("--full");
+    const domainCap = fullMode ? sorted.length : 20;
+    const itemCap = fullMode ? Infinity : 8;
+    for (const [domain, list] of sorted.slice(0, domainCap)) {
       console.log(`### /${domain} (${list.length})`);
-      for (const line of list.slice(0, 8)) console.log(`  ${line}`);
-      if (list.length > 8) console.log(`  … and ${list.length - 8} more`);
+      const cap = Number.isFinite(itemCap) ? itemCap : list.length;
+      for (const line of list.slice(0, cap)) console.log(`  ${line}`);
+      if (list.length > cap) console.log(`  … and ${list.length - cap} more`);
       console.log();
     }
-    if (sorted.length > 20) {
+    if (!fullMode && sorted.length > 20) {
       console.log(`(${sorted.length - 20} more domains with unused endpoints, truncated)`);
     }
   }

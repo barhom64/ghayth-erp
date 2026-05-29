@@ -28,7 +28,14 @@ import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
-import { confirmVouchersImport } from "../lib/umrahImportEngine.js";
+import {
+  confirmVouchersImport,
+  previewMutamersImport,
+  previewVouchersImport,
+  normalizeImportRows,
+  MUTAMER_HEADER_MAP,
+  VOUCHER_HEADER_MAP,
+} from "../lib/umrahImportEngine.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEASON LOCK — rejects writes on closed/archived seasons
@@ -220,15 +227,24 @@ const patchPilgrimSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+// `columnMapping` lets the wizard's column-mapping step override the
+// built-in Arabic header dictionary on a per-import basis. The shape is
+// { excelHeader → dbField }; values that don't match a known engine
+// field are still accepted (the engine just ignores unknown keys), so
+// operators can experiment without back-end validation churn.
+const columnMappingSchema = z.record(z.string(), z.string()).optional();
+
 const importPreviewSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
   rows: z.array(z.any()).min(1, "بيانات المعاينة غير مكتملة"),
   fileType: z.string().optional(),
+  columnMapping: columnMappingSchema,
 });
 
 const importMutamersSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
   rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  columnMapping: columnMappingSchema,
 });
 
 const importVouchersSchema = z.object({
@@ -239,6 +255,7 @@ const importVouchersSchema = z.object({
   treasuryId: z.coerce.number().int().positive().optional().nullable(),
   /** Override umrah_nusk_cost DR account code (gap #3). */
   purchaseAccountCode: z.string().trim().min(1).optional().nullable(),
+  columnMapping: columnMappingSchema,
 });
 
 const importSchema = z.object({
@@ -843,46 +860,72 @@ router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "delete" })
 router.post("/import/preview", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileType } = zodParse(importPreviewSchema.safeParse(req.body));
-    const passportHashes = importRows.filter((r) => r.passportNumber).map((r) => blindIndex(String(r.passportNumber)));
-    const existingRows = passportHashes.length > 0
-      ? await rawQuery<Record<string, unknown>>(`SELECT "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
-      : [];
-    const existingSet = new Set(existingRows.map((r) => r.passportNumber_hash));
-    const newRows = importRows.filter((r) => r.passportNumber && !existingSet.has(blindIndex(String(r.passportNumber))));
-    const duplicateRows = importRows.filter((r) => r.passportNumber && existingSet.has(blindIndex(String(r.passportNumber))));
-    const errorRows = importRows.filter((r) => !r.passportNumber || !r.fullName);
-    const nuskCodes = [...new Set(importRows.map((r) => r.nuskCode).filter(Boolean))];
-    const linkedAgents = nuskCodes.length > 0
-      ? await rawQuery<Record<string, unknown>>(`SELECT "nuskCode", name FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode" = ANY($2)`, [scope.companyId, nuskCodes])
-      : [];
-    const linkedSet = new Set(linkedAgents.map((a) => a.nuskCode));
-    const unlinkedSubAgents = nuskCodes.filter((c) => !linkedSet.has(c)).map((c) => ({ nuskCode: c }));
-    // Preview is read-only but worth tracking so operators can spot
-    // patterns (e.g. repeated previews of the same broken file, files
-    // with high duplicate counts) before they commit. The event carries
-    // counts only — no row data — so it stays small in the DLQ.
+    const { seasonId, rows: importRows, fileType, columnMapping } = zodParse(importPreviewSchema.safeParse(req.body));
+
+    // Delegate to umrahImportEngine so the preview reflects the same
+    // dedup keys + warnings the confirm step will use. Pre-PR the route
+    // ran an inline legacy query against `umrah_pilgrims.passportNumber_hash`
+    // that returned only basic counts — the wizard's agent-linking
+    // warnings (`newAgentsToCreate`, `rowsWithoutAgent`) never surfaced
+    // because the engine wasn't on the path.
+    const importScope = {
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? 0,
+      userId: scope.userId,
+      seasonId,
+    };
+    // Translate Arabic-keyed Excel rows to engine-keyed rows. The
+    // wizard parses Excel client-side and ships the original headers
+    // unchanged; the engine consumes camelCase fields. Optional
+    // `columnMapping` overrides the built-in map per import.
+    const normalizedFileType: "mutamers" | "vouchers" = fileType === "vouchers" ? "vouchers" : "mutamers";
+    const normalizedRows = normalizeImportRows(importRows, normalizedFileType, columnMapping);
+    const diff = normalizedFileType === "vouchers"
+      ? await previewVouchersImport(importScope, normalizedRows)
+      : await previewMutamersImport(importScope, normalizedRows);
+
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "umrah.import.previewed", entity: "umrah_pilgrims", entityId: 0,
+      action: "umrah.import.previewed",
+      entity: fileType === "vouchers" ? "umrah_nusk_invoices" : "umrah_pilgrims",
+      entityId: 0,
       details: JSON.stringify({
         seasonId, fileType,
-        totalRows: importRows.length,
-        newRecords: newRows.length,
-        duplicateRecords: duplicateRows.length,
-        errorRecords: errorRows.length,
-        unlinkedSubAgentCount: unlinkedSubAgents.length,
+        total: diff.totalRows,
+        newCount: diff.newRows.length,
+        updatedCount: diff.updatedRows.length,
+        unchangedCount: diff.skippedCount,
+        errorCount: diff.errorRows.length,
+        unlinkedSubAgentCount: diff.unlinkedSubAgents.length,
+        newAgentsCount: diff.newAgentsToCreate.length,
+        rowsWithoutAgent: diff.rowsWithoutAgent,
       }),
     }).catch((e) => logger.error(e, "umrah import preview bg"));
+
+    // Response shape mirrors the wizard's `PreviewSummary` interface so
+    // the UI's counters + warning cards work without translation. The
+    // `*Records` aliases are kept for backward compat with older callers
+    // that snapshotted the previous response shape.
     res.json({
-      totalRows: importRows.length,
-      newRecords: newRows.length,
-      duplicateRecords: duplicateRows.length,
-      errorRecords: errorRows.length,
-      unlinkedSubAgents,
-      sampleNew: newRows.slice(0, 5),
-      sampleDuplicate: duplicateRows.slice(0, 5),
-      sampleErrors: errorRows.slice(0, 5),
+      // Canonical UI names
+      total: diff.totalRows,
+      newCount: diff.newRows.length,
+      updatedCount: diff.updatedRows.length,
+      unchangedCount: diff.skippedCount,
+      errorCount: diff.errorRows.length,
+      errors: diff.errorRows.map((e) => ({ row: e.rowIndex, message: e.error })),
+      unlinkedSubAgents: diff.unlinkedSubAgents,
+      newAgentsToCreate: diff.newAgentsToCreate,
+      rowsWithoutAgent: diff.rowsWithoutAgent,
+      financialImpactCount: diff.financialImpactCount,
+      // Back-compat aliases (legacy callers / older clients).
+      totalRows: diff.totalRows,
+      newRecords: diff.newRows.length,
+      duplicateRecords: diff.skippedCount,
+      errorRecords: diff.errorRows.length,
+      sampleNew: diff.newRows.slice(0, 5),
+      sampleDuplicate: diff.updatedRows.slice(0, 5).map((u) => u.row),
+      sampleErrors: diff.errorRows.slice(0, 5),
     });
   } catch (err) { handleRouteError(err, res, "Import preview error"); }
 });
@@ -890,9 +933,14 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
 router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows } = zodParse(importMutamersSchema.safeParse(req.body));
-    const importBody = { seasonId, rows: importRows, fileType: "mutamers", fileName: "import-mutamers" };
-    // Reuse existing import logic via internal redirect
+    const { seasonId, rows: importRows, columnMapping } = zodParse(importMutamersSchema.safeParse(req.body));
+    // Translate Arabic-keyed Excel rows BEFORE the legacy doImport
+    // touches them — doImport reads fields like `passportNumber`,
+    // `fullName`, `nuskNumber` directly. Without normalization the
+    // values would all be `undefined` and every row would be dropped
+    // as an "error row" silently.
+    const normalizedRows = normalizeImportRows(importRows, "mutamers", columnMapping);
+    const importBody = { seasonId, rows: normalizedRows, fileType: "mutamers", fileName: "import-mutamers" };
     const result = await doImport(scope, importBody);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -907,7 +955,7 @@ router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }
 router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode } =
+    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping } =
       zodParse(importVouchersSchema.safeParse(req.body));
     await requireOpenSeason(seasonId, scope.companyId);
     // Wire vouchers through the dedicated engine so they actually create
@@ -924,7 +972,12 @@ router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }
       treasuryId: treasuryId ?? null,
       purchaseAccountCode: purchaseAccountCode ?? null,
     };
-    const result = await confirmVouchersImport(importScope, importRows, fileName ?? "import-vouchers");
+    // Normalize Arabic-keyed Excel rows to engine fields before the
+    // confirm step. Without this confirmVouchersImport would see
+    // `row.nuskInvoiceNumber === undefined` and bucket every row as an
+    // error — the same bug the preview route hit before normalization.
+    const normalizedRows = normalizeImportRows(importRows, "vouchers", columnMapping);
+    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers");
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
 });
@@ -1028,7 +1081,7 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
     let seasonFilterP = "";
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); seasonFilter = ` AND "seasonId"=$${params.length}`; seasonFilterP = ` AND p."seasonId"=$${params.length}`; }
-    const [stats, penaltyStats, agentStats, recentArrivals] = await Promise.all([
+    const [stats, penaltyStats, agentStats, recentArrivals, salesFinancials, nuskFinancials, visaExpiry] = await Promise.all([
       rawQuery(`
         SELECT
           COUNT(*) as total,
@@ -1062,12 +1115,69 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
         FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter} AND "actualArrival" IS NOT NULL
         ORDER BY "actualArrival" DESC LIMIT 10
       `, params),
+      // Sales-side financial position: receivables from sub-agents.
+      // Outstanding = sum(total − paidAmount) for invoices not cancelled.
+      // This gives the operator the umrah-specific "what we are owed" number.
+      rawQuery(`
+        SELECT
+          COUNT(*) FILTER (WHERE status != 'cancelled') AS "invoiceCount",
+          COALESCE(SUM(total) FILTER (WHERE status != 'cancelled'), 0) AS "invoicedTotal",
+          COALESCE(SUM("paidAmount") FILTER (WHERE status != 'cancelled'), 0) AS "collectedTotal",
+          COALESCE(SUM(total - COALESCE("paidAmount", 0)) FILTER (WHERE status NOT IN ('cancelled','paid')), 0) AS "outstandingTotal",
+          COALESCE(SUM(total - COALESCE("paidAmount", 0)) FILTER (WHERE status NOT IN ('cancelled','paid') AND "dueDate" < CURRENT_DATE), 0) AS "overdueTotal"
+        FROM umrah_sales_invoices
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter}
+      `, params),
+      // Purchase-side financial position: what we owe NUSK. The legacy
+      // /finance/payables route nets against allocations; the dashboard
+      // shows the gross numbers as an at-a-glance KPI so the operator
+      // knows the topline without leaving the page.
+      rawQuery(`
+        SELECT
+          COUNT(*) FILTER (WHERE "nuskStatus" != 'cancelled') AS "invoiceCount",
+          COALESCE(SUM("totalAmount") FILTER (WHERE "nuskStatus" != 'cancelled'), 0) AS "totalAmount",
+          COALESCE(SUM("refundAmount") FILTER (WHERE "nuskStatus" != 'cancelled'), 0) AS "refundedTotal",
+          COALESCE(SUM("totalAmount" - COALESCE("refundAmount", 0)) FILTER (WHERE "nuskStatus" NOT IN ('cancelled','paid','refunded')), 0) AS "outstandingTotal"
+        FROM umrah_nusk_invoices
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL
+      `, [scope.companyId]),
+      // Visa expiry alerts — Saudi compliance: pilgrims still inside KSA
+      // whose visa expires within the next 30 days. The buckets let the
+      // UI render a "critical / warning / soon" traffic light.
+      // Filters on pilgrim status to skip departed/cancelled rows that
+      // don't need action.
+      rawQuery(`
+        SELECT
+          COUNT(*) FILTER (WHERE "visaExpiry" < CURRENT_DATE) AS "expired",
+          COUNT(*) FILTER (WHERE "visaExpiry" >= CURRENT_DATE AND "visaExpiry" < CURRENT_DATE + INTERVAL '7 days') AS "critical",
+          COUNT(*) FILTER (WHERE "visaExpiry" >= CURRENT_DATE + INTERVAL '7 days' AND "visaExpiry" < CURRENT_DATE + INTERVAL '30 days') AS "warning"
+        FROM umrah_pilgrims
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter}
+          AND "visaExpiry" IS NOT NULL
+          AND status NOT IN ('departed','cancelled','deceased','visa_rejected')
+      `, params),
     ]);
+    const sales = (salesFinancials[0] || {}) as Record<string, unknown>;
+    const nusk = (nuskFinancials[0] || {}) as Record<string, unknown>;
+    const receivable = Number(sales.outstandingTotal ?? 0);
+    const payable = Number(nusk.outstandingTotal ?? 0);
     res.json(maskFields(req, {
       pilgrims: stats[0],
       penalties: penaltyStats[0],
       topAgents: agentStats,
-      recentArrivals: recentArrivals.map(decryptPilgrimRow)
+      recentArrivals: recentArrivals.map(decryptPilgrimRow),
+      // Financial position at a glance. `net` = receivable − payable;
+      // positive means the umrah module is net-owed; negative means net-owes.
+      financials: {
+        sales: salesFinancials[0],
+        nusk: nuskFinancials[0],
+        net: receivable - payable,
+      },
+      // Visa-expiry compliance buckets: expired / critical (<7d) /
+      // warning (7-30d). UI renders a traffic-light card; cron C31
+      // already handles per-pilgrim notifications — this is the
+      // operator's at-a-glance summary.
+      visaExpiry: visaExpiry[0],
     }));
   } catch (err) { handleRouteError(err, res, "Dashboard error"); }
 });
@@ -1784,6 +1894,117 @@ router.post("/transport/:id/assign-pilgrims", authorize({ feature: "umrah", acti
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.pilgrims_assigned", entity: "umrah_transport", entityId: transportId, details: JSON.stringify({ pilgrimIds, count: pilgrimIds.length }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ transportId, assignedCount: pilgrimIds.length, totalPilgrimCount: newCount });
   } catch (err) { handleRouteError(err, res, "Assign pilgrims to transport error"); }
+});
+
+// Surface the built-in Arabic-header dictionaries to the wizard so the
+// column-mapping step can pre-fill the operator's choices for known
+// NUSK / MOFA layouts. The operator only types when their source uses
+// a header the server doesn't already recognise.
+router.get("/import/header-maps", authorize({ feature: "umrah", action: "create" }), async (_req, res) => {
+  try {
+    // Invert each map to { dbField → [arabicHeaders] } so the wizard
+    // can render a dropdown of recognised targets per column. The flat
+    // forward maps are also included for callers that just want the
+    // raw lookup table.
+    const invertMap = (m: Record<string, string>): Record<string, string[]> => {
+      const out: Record<string, string[]> = {};
+      for (const [k, v] of Object.entries(m)) {
+        if (!out[v]) out[v] = [];
+        out[v].push(k);
+      }
+      return out;
+    };
+    res.json({
+      mutamers: {
+        forward: MUTAMER_HEADER_MAP,
+        targets: invertMap(MUTAMER_HEADER_MAP),
+      },
+      vouchers: {
+        forward: VOUCHER_HEADER_MAP,
+        targets: invertMap(VOUCHER_HEADER_MAP),
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Import header maps error"); }
+});
+
+// ── Column-mapping presets ───────────────────────────────────────────
+// Operators re-import the same Excel layout every week from the same
+// NUSK/MOFA portal. Saving the mapping per (user, fileType) lets the
+// wizard auto-apply the layout on file pick instead of asking the
+// operator to re-pick every column. One default per (company, user,
+// fileType) — enforced by partial unique index in migration 234.
+
+const presetSchema = z.object({
+  name: z.string().trim().min(1, "اسم القالب مطلوب").max(120),
+  fileType: z.enum(["mutamers", "vouchers"]),
+  mapping: z.record(z.string(), z.string()),
+  isDefault: z.boolean().optional().default(false),
+});
+
+router.get("/import/presets", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { fileType } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, scope.userId];
+    let extraWhere = "";
+    if (fileType === "mutamers" || fileType === "vouchers") {
+      params.push(fileType);
+      extraWhere = ` AND "fileType" = $${params.length}`;
+    }
+    const rows = await rawQuery(
+      `SELECT id, name, "fileType", mapping, "isDefault", "createdAt", "updatedAt"
+         FROM umrah_import_mapping_presets
+        WHERE "companyId" = $1 AND "userId" = $2 AND "deletedAt" IS NULL${extraWhere}
+        ORDER BY "isDefault" DESC, "updatedAt" DESC
+        LIMIT 200`,
+      params,
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) { handleRouteError(err, res, "List import presets error"); }
+});
+
+router.post("/import/presets", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { name, fileType, mapping, isDefault } = zodParse(presetSchema.safeParse(req.body));
+    await withTransaction(async (client) => {
+      // Enforce single default per (company, user, fileType) — clear
+      // any other defaults before flipping this row's flag.
+      if (isDefault) {
+        await client.query(
+          `UPDATE umrah_import_mapping_presets
+              SET "isDefault" = false, "updatedAt" = NOW()
+            WHERE "companyId" = $1 AND "userId" = $2 AND "fileType" = $3
+              AND "deletedAt" IS NULL AND "isDefault" = true`,
+          [scope.companyId, scope.userId, fileType],
+        );
+      }
+      // UPSERT on (companyId, userId, fileType, name).
+      await client.query(
+        `INSERT INTO umrah_import_mapping_presets
+           ("companyId", "branchId", "userId", name, "fileType", mapping, "isDefault")
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+         ON CONFLICT ("companyId", "userId", "fileType", name) WHERE "deletedAt" IS NULL
+         DO UPDATE SET mapping = EXCLUDED.mapping, "isDefault" = EXCLUDED."isDefault", "updatedAt" = NOW()`,
+        [scope.companyId, scope.branchId ?? null, scope.userId, name, fileType, JSON.stringify(mapping), isDefault],
+      );
+    });
+    res.status(201).json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "Save import preset error"); }
+});
+
+router.delete("/import/presets/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(
+      `UPDATE umrah_import_mapping_presets
+          SET "deletedAt" = NOW(), "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 AND "userId" = $3 AND "deletedAt" IS NULL`,
+      [id, scope.companyId, scope.userId],
+    );
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "Delete import preset error"); }
 });
 
 router.get("/import-logs", authorize({ feature: "umrah", action: "list" }), async (req, res) => {

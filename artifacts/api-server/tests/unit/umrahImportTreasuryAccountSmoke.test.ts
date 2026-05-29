@@ -58,7 +58,10 @@ describe("umrahImportEngine — ImportScope cash-box + account override (gaps #2
 
 describe("umrah route — /import/vouchers now wires through the engine", () => {
   it("imports confirmVouchersImport from the engine", () => {
-    expect(ROUTE).toMatch(/import \{ confirmVouchersImport \}/);
+    // The named import may be a single line OR part of a multi-line
+    // block that also pulls in preview functions (gap #5 follow-up).
+    // Match either shape.
+    expect(ROUTE).toMatch(/import\s*\{[\s\S]{0,400}\bconfirmVouchersImport\b[\s\S]{0,400}\}\s*from\s*"\.\.\/lib\/umrahImportEngine\.js"/);
   });
 
   it("importVouchersSchema accepts optional treasuryId + purchaseAccountCode", () => {
@@ -76,7 +79,10 @@ describe("umrah route — /import/vouchers now wires through the engine", () => 
   });
 
   it("the handler calls confirmVouchersImport (NOT doImport) for vouchers", () => {
-    expect(ROUTE).toMatch(/await confirmVouchersImport\(importScope,\s*importRows,\s*fileName/);
+    // Row variable may be `importRows` (direct) or `normalizedRows`
+    // (after PR's column-mapping pass). Accept either — what matters is
+    // the call routes through the engine, not through doImport.
+    expect(ROUTE).toMatch(/await confirmVouchersImport\(importScope,\s*(?:importRows|normalizedRows),\s*fileName/);
     // Regression guard: previously this route routed vouchers through
     // doImport (which writes to umrah_pilgrims, dropping NUSK data).
     expect(ROUTE).not.toMatch(/import\/vouchers"[\s\S]{1,600}await doImport\([^,]+,\s*\{\s*seasonId,\s*rows: importRows,\s*fileType: "vouchers"/);
