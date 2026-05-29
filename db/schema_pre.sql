@@ -16729,6 +16729,26 @@ ALTER SEQUENCE public.umrah_import_changes_id_seq OWNED BY public.umrah_import_c
 
 
 --
+-- Name: umrah_import_mapping_presets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.umrah_import_mapping_presets (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "userId" integer NOT NULL,
+    name character varying(120) NOT NULL,
+    "fileType" character varying(20) NOT NULL,
+    mapping jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "isDefault" boolean DEFAULT false NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_import_mapping_presets_filetype_check CHECK ((("fileType")::text = ANY (ARRAY[('mutamers'::character varying)::text, ('vouchers'::character varying)::text])))
+);
+
+
+--
 -- Name: umrah_import_logs; Type: TABLE; Schema: public; Owner: -
 --
 
