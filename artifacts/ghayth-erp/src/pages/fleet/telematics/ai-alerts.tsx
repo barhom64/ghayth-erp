@@ -84,11 +84,10 @@ export default function FleetTelematicsAiAlerts() {
   const qs = new URLSearchParams();
   if (status !== "all") qs.set("status", status);
   if (category !== "all") qs.set("category", category);
-  const path = `/fleet/telematics/ai-alerts${qs.toString() ? `?${qs.toString()}` : ""}`;
 
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: AiAlertRow[] }>(
     ["fleet-telematics-ai-alerts", status, category],
-    path,
+    `/fleet/telematics/ai-alerts?${qs.toString()}`,
   );
   const rows = asList(data) as AiAlertRow[];
 

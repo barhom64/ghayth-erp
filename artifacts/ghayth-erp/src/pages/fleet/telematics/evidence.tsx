@@ -107,11 +107,10 @@ export default function FleetTelematicsEvidence() {
   if (category !== "all") qs.set("category", category);
   if (from) qs.set("from", from);
   if (to) qs.set("to", to);
-  const path = `/fleet/telematics/media-evidence${qs.toString() ? `?${qs.toString()}` : ""}`;
 
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: MediaEvidenceRow[] }>(
     ["fleet-telematics-media-evidence", vehicleId, mediaType, category, from, to],
-    path,
+    `/fleet/telematics/media-evidence?${qs.toString()}`,
   );
   const rows = asList(data) as MediaEvidenceRow[];
 

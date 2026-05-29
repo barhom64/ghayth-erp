@@ -1191,7 +1191,13 @@ router.post("/run-penalty-engine", authorize({ feature: "umrah", action: "create
             const { umrahEngine } = await import("../lib/engines/index.js");
             await umrahEngine.postPenaltyGL(
               { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-              { id: penRows[0].id, amount, pilgrimName: p.fullName, agentName: undefined, type: "overstay" }
+              {
+                id: penRows[0].id, amount,
+                pilgrimName: p.fullName, agentName: undefined,
+                type: "overstay",
+                agentId: p.agentId as number | undefined,
+                seasonId: p.seasonId as number | undefined,
+              }
             );
           } catch (e) { logger.error(e, "umrah penalty GL posting failed (non-blocking)"); }
         }
@@ -1263,7 +1269,12 @@ router.patch("/penalties/:id/waive", authorize({ feature: "umrah", action: "upda
         const { umrahEngine } = await import("../lib/engines/index.js");
         await umrahEngine.postPenaltyWaiverGL(
           { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-          { id, amount: Number(penalty.amount), pilgrimName: (penalty.pilgrimName as string | null) || "" }
+          {
+            id, amount: Number(penalty.amount),
+            pilgrimName: (penalty.pilgrimName as string | null) || "",
+            agentId: penalty.agentId ? Number(penalty.agentId) : undefined,
+            seasonId: penalty.seasonId ? Number(penalty.seasonId) : undefined,
+          }
         );
       } catch (e) { logger.error(e, "umrah penalty waiver GL posting failed (non-blocking)"); }
     }
@@ -1321,7 +1332,12 @@ router.post("/penalties/waive-bulk", authorize({ feature: "umrah", action: "upda
             const { umrahEngine } = await import("../lib/engines/index.js");
             await umrahEngine.postPenaltyWaiverGL(
               { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-              { id, amount: Number(penalty.amount), pilgrimName: (penalty.pilgrimName as string | null) || "" }
+              {
+            id, amount: Number(penalty.amount),
+            pilgrimName: (penalty.pilgrimName as string | null) || "",
+            agentId: penalty.agentId ? Number(penalty.agentId) : undefined,
+            seasonId: penalty.seasonId ? Number(penalty.seasonId) : undefined,
+          }
             );
             totalAmount += Number(penalty.amount);
           } catch (e) {
@@ -1945,7 +1961,12 @@ router.post("/penalties", authorize({ feature: "umrah", action: "create" }), asy
         const { umrahEngine } = await import("../lib/engines/index.js");
         await umrahEngine.postPenaltyGL(
           { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-          { id: rows[0].id as number, amount: Number(b.amount), pilgrimName, agentName, type: b.type || "manual" }
+          {
+            id: rows[0].id as number, amount: Number(b.amount),
+            pilgrimName, agentName, type: b.type || "manual",
+            agentId: b.agentId ? Number(b.agentId) : undefined,
+            seasonId: b.seasonId ? Number(b.seasonId) : undefined,
+          }
         );
       } catch (glErr) {
         logger.error(glErr, "Penalty GL posting failed:");

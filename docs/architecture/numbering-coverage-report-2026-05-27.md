@@ -8,6 +8,8 @@
 >
 > **تحديث 2026-05-27 (الجولة الثانية)**: بعد طلب المحامي بفحوصات أقوى، أضفت 3 سكربتات/قواعد جديدة كشفت 8 ثغرات إضافية (G8-G15) كانت تتسرّب من السكربت الأول. واحدة (G8) أُصلِحت في هذا الـPR. الباقي مفتوحة.
 >
+> **تحديث 2026-05-29 (الفحص الأعمق)**: بعد إغلاق الـ15 ثغرة + 3 ضحايا ratchet، فحص يدوي أعمق كشف **ثغرتين إضافيتين** في `lib/umrahInvoicingEngine.ts` (`umrah_sales_invoices.ref` و `umrah_payments.ref` كانتا تستخدمان `nextval()` خام). مُصلَحتان عبر مهاجرة 232 + قاعدة فحص جديدة في `audit-numbering-service-bypass.mjs` تلتقط أي `nextval('_seq')` خارج طبقات مسموح بها (seedDemoData / bootstrapAdmin). **النظام الآن يحتوي 5 طبقات فحص + 0 ثغرات معروفة**.
+>
 > **تاريخ التقرير**: 2026-05-27. مُولَّد بفحص كل ملف يحتوي `INSERT INTO`، كل جدول له عمود `ref`/`number`/`*Number`/`*Ref`/`*Code`، وكل ملف داخل `lib/`، `lib/engines/`، `lib/cronScheduler.ts`، `lib/imports/`، `lib/mailboxSync.ts`، `scripts/`، والـ migrations.
 
 ---

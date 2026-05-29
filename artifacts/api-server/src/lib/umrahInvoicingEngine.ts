@@ -1,5 +1,6 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog, currentYear, currentMonthPadded, roundTo2 } from "./businessHelpers.js";
+import { issueNumber } from "./numberingService.js";
 import { NotFoundError, ConflictError, ValidationError } from "./errorHandler.js";
 import { logger } from "./logger.js";
 import { getProvider as getEInvoiceProvider } from "./einvoice/index.js";
@@ -215,14 +216,26 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   const vatAmount = roundTo2(marginBase * (vatRate / 100));
   const total = subtotal + penaltiesTotal + vatAmount;
 
-  const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('umrah_sales_invoice_seq') AS seq`);
-  const seqNum = Number(seqRow.seq);
-  const year = currentYear();
-  const month = currentMonthPadded();
-  const ref = `UINV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
-
+  // #1141 closure — umrah sales invoice ref now routes through the
+  // numbering center (scheme umrah.umrah_sales_invoice, seeded by
+  // migration 232). The previous code used a global per-DB sequence
+  // (cross-tenant leak) that bypassed numbering_assignments entirely.
+  // issueNumber's inner withTransaction joins ours via SAVEPOINT so
+  // issue + INSERT + linkback are atomic.
   let invoiceId!: number;
+  let ref!: string;
   await withTransaction(async (client) => {
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId || null,
+      moduleKey: "umrah",
+      entityKey: "umrah_sales_invoice",
+      entityTable: "umrah_sales_invoices",
+      actorId: scope.userId,
+      metadata: { subAgentId, seasonId },
+      expectedTiming: "on_draft",
+    });
+    ref = issued.number;
     const invRes = await client.query(
       `INSERT INTO umrah_sales_invoices
        ("companyId","branchId","subAgentId","clientId","seasonId",ref,"invoiceDate",
@@ -239,6 +252,10 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
       ]
     );
     invoiceId = invRes.rows[0].id;
+    await client.query(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [invoiceId, issued.assignmentId]
+    );
 
     if (lineItems.length > 0) {
       const cols = 8;
@@ -375,17 +392,26 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
   );
   if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
 
-  const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('umrah_payment_seq') AS seq`);
-  const seqNum = Number(seqRow.seq);
-  const year = currentYear();
-  const month = currentMonthPadded();
-  const payRef = `UPAY-${year}${month}-${String(seqNum).padStart(4, "0")}`;
-
+  // #1141 closure — umrah payment ref now routes through the numbering
+  // center (scheme umrah.umrah_payment, seeded by migration 232).
+  // Same fix shape as the sales-invoice path above.
   let paymentId!: number;
+  let payRef!: string;
   const allocations: { invoiceId: number; invoiceRef: string; allocated: number }[] = [];
   let remaining = sarAmount;
 
   await withTransaction(async (client) => {
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId || null,
+      moduleKey: "umrah",
+      entityKey: "umrah_payment",
+      entityTable: "umrah_payments",
+      actorId: scope.userId,
+      metadata: { subAgentId },
+      expectedTiming: "on_draft",
+    });
+    payRef = issued.number;
     const payRes = await client.query(
       `INSERT INTO umrah_payments
        ("companyId","branchId","subAgentId",ref,amount,currency,"exchangeRate","sarAmount",
@@ -399,6 +425,10 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
       ]
     );
     paymentId = payRes.rows[0].id;
+    await client.query(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [paymentId, issued.assignmentId]
+    );
 
     let invoicesToPay: any[];
     if (invoiceIds && invoiceIds.length > 0) {

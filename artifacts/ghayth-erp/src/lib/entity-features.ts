@@ -77,9 +77,10 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   document:           {},
 
   umrah_sales_invoice:{ financialImpact: true },
-  umrah_pilgrim:      {},
-  umrah_season:       { attachments: false },
-  "umrah-season":     { attachments: false },
+  umrah_pilgrim:      { financialImpact: true, financialEntityType: "client" },
+  umrah_season:       { attachments: false, financialImpact: true, financialEntityType: "umrahSeason" },
+  "umrah-season":     { attachments: false, financialImpact: true, financialEntityType: "umrahSeason" },
+  umrah_agent:        { financialImpact: true, financialEntityType: "umrahAgent" },
   governance_policy:  {},
 
   crm_lead:           {},
@@ -88,9 +89,14 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   commitment:         { financialImpact: true, approval: true },
   compliance:         { approval: true },
   correspondence:     {},
-  driver:             {},
+  driver:             { financialImpact: true, financialEntityType: "driver" },
   "financial-request":{ financialImpact: true, approval: true },
-  "fixed-asset":      { financialImpact: true },
+  // fixed-asset now wires through to the GL via entityType="asset"
+  // (entity-360 safeColumns: asset → jl."assetId"). Depreciation JEs
+  // (both monthly + nightly cron) tag each line with the assetId after
+  // the engine fixes in this PR, so the per-asset financial profile tab
+  // finally renders real data instead of an empty card.
+  "fixed-asset":      { financialImpact: true, financialEntityType: "asset" },
   "legal-judgment":   {},
   "legal-session":    { attachments: false },
   owner:              {},
@@ -100,9 +106,13 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   receivable:         { financialImpact: true },
   request:            { approval: true },
   risk:               {},
-  tenant:             { financialImpact: true },
+  // Tenants are tracked as clients in the GL — clientId on every
+  // rent revenue, VAT, and installment-payment JE (after the
+  // engine fixes in this PR). So the tenant detail page's financial
+  // profile uses entityType="client" to pull all per-tenant GL rows.
+  tenant:             { financialImpact: true, financialEntityType: "client" },
   "traffic-violation":{ financialImpact: true },
-  "umrah-agent":      {},
+  "umrah-agent":      { financialImpact: true, financialEntityType: "umrahAgent" },
   "umrah-invoice":    { financialImpact: true },
   "umrah-package":    {},
   "umrah-penalty":    { financialImpact: true },
@@ -115,7 +125,11 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   "project-costing":  { financialImpact: true },
   "evaluation-360":   { attachments: false },
   "hr-evaluation-360":{ attachments: false },
-  pilgrim:            {},
+  // Pilgrims are clients in the GL — every umrah invoice AR DR
+  // carries clientId. The detail page already destructures extraTabs
+  // from useRegistryTabs, so wiring financialEntityType here makes
+  // the Financial Profile tab render automatically.
+  pilgrim:            { financialImpact: true, financialEntityType: "client" },
   transport:          {},
 
   application:        {},

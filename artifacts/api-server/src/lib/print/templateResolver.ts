@@ -384,6 +384,31 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   // universalFallback. payroll is the high-value one (HR prints these as
   // salary slips); the rest get the same bespoke render as the long form.
   payroll: () => buildPayrollRunPreset(),
+  // Issue #1286 closing sweep — every remaining SPA entityType wired to a
+  // real preset so no detail page prints "قالب احتياطي" anymore.
+  tenant: () => buildTenantCardPreset(),
+  owner: () => buildPropertyOwnerCardPreset(),
+  driver: () => buildDriverCardPreset(),
+  correspondence: () => buildCorrespondenceCardPreset(),
+  audit: () => buildAuditLogPreset(),
+  audit_record: () => buildAuditLogPreset(),
+  warehouse_category: () => buildWarehouseCategoryPreset(),
+  campaign: () => buildMarketingCampaignPreset(),
+  compliance: () => buildCompliancePreset(),
+  risk: () => buildRiskPreset(),
+  application: () => buildJobApplicationPreset(),
+  project_costing: () => buildProjectCostingPreset(),
+  umrah_agent: () => buildUmrahAgentCardPreset(),
+  umrah_sub_agent: () => buildUmrahSubAgentCardPreset(),
+  umrah_package: () => buildUmrahPackagePreset(),
+  umrah_penalty: () => buildUmrahPenaltyPreset(),
+  umrah_transport: () => buildUmrahTransportPreset(),
+  transport: () => buildUmrahTransportPreset(),
+  umrah_violation: () => buildUmrahViolationPreset(),
+  account_statement: () => buildAccountStatementPreset(),
+  crm_lead: () => buildOpportunityPreset(),
+  performance: () => buildEvaluationPreset(),
+  performance_review: () => buildEvaluationPreset(),
 };
 
 function buildInvoicePreset(): PrintTemplate {
@@ -2919,6 +2944,535 @@ function buildChartOfAccountPreset(): PrintTemplate {
   });
 }
 
+// ─── Final coverage round: bespoke presets for entityTypes that previously
+// fell through to universalFallback. Each one targets a SPA detail page that
+// users routinely print but were getting the generic ref/date/status grid.
+// Issue #1286 second sweep — adding real layouts so prints look like real
+// documents instead of an empty placeholder card.
+
+function buildTenantCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -80, presetKey: "tenant_card_classic", entityType: "tenant",
+    name: "بطاقة مستأجر",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة مستأجر</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>الاسم:</strong> {{entity.name}}</div>
+  <div><strong>نوع المستأجر:</strong> {{entity.tenantType}}</div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.phone}}</span></div>
+  <div><strong>البريد الإلكتروني:</strong> <span dir="ltr">{{entity.email}}</span></div>
+  <div><strong>رقم الهوية:</strong> <span dir="ltr">{{entity.nationalId}}</span></div>
+  <div><strong>نوع الهوية:</strong> {{entity.idType}}</div>
+  <div><strong>الجنسية:</strong> {{entity.nationality}}</div>
+  <div><strong>تاريخ الميلاد:</strong> {{entity.birthDate}}</div>
+  <div><strong>الجنس:</strong> {{entity.gender}}</div>
+  <div><strong>الحالة الاجتماعية:</strong> {{entity.maritalStatus}}</div>
+  <div><strong>المهنة:</strong> {{entity.occupation}}</div>
+  <div><strong>الدخل الشهري:</strong> {{entity.monthlyIncome}}</div>
+  <div><strong>السجل التجاري:</strong> <span dir="ltr">{{entity.crNumber}}</span></div>
+  <div><strong>الرقم الموحَّد:</strong> <span dir="ltr">{{entity.unifiedNumber}}</span></div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الكفيل / الضامن</div>
+  <div><strong>الاسم:</strong> {{entity.guarantorName}}</div>
+  <div><strong>رقم الهوية:</strong> <span dir="ltr">{{entity.guarantorId}}</span></div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.guarantorPhone}}</span></div>
+  <div><strong>صلة القرابة:</strong> {{entity.guarantorRelation}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fef9c3;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">جهة الاتصال في الطوارئ</div>
+  <div>{{entity.emergencyName}}</div>
+  <div dir="ltr">{{entity.emergencyContact}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">السكن السابق</div>
+  <div><strong>العنوان:</strong> {{entity.previousAddress}}</div>
+  <div><strong>المؤجِّر السابق:</strong> {{entity.previousLandlord}} — <span dir="ltr">{{entity.previousLandlordPhone}}</span></div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+function buildPropertyOwnerCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -81, presetKey: "property_owner_card_classic", entityType: "owner",
+    name: "بطاقة مالك",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة مالك عقار</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>الاسم:</strong> {{entity.name}}</div>
+  <div><strong>نوع المالك:</strong> {{entity.ownerType}}</div>
+  <div><strong>رقم الهوية:</strong> <span dir="ltr">{{entity.nationalId}}</span></div>
+  <div><strong>السجل التجاري:</strong> <span dir="ltr">{{entity.crNumber}}</span></div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.phone}}</span></div>
+  <div><strong>البريد الإلكتروني:</strong> <span dir="ltr">{{entity.email}}</span></div>
+  <div><strong>المدينة:</strong> {{entity.city}}</div>
+  <div><strong>البنك:</strong> {{entity.bankName}}</div>
+  <div><strong>الآيبان:</strong> <span dir="ltr">{{entity.iban}}</span></div>
+  <div><strong>رقم التوكيل:</strong> <span dir="ltr">{{entity.authorizationNumber}}</span></div>
+  <div><strong>تاريخ التوكيل:</strong> {{entity.authorizationDate}}</div>
+  <div><strong>انتهاء التوكيل:</strong> {{entity.authorizationExpiry}}</div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">العنوان الكامل</div>
+  <div style="white-space:pre-wrap">{{entity.address}}</div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+function buildDriverCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -82, presetKey: "fleet_driver_classic", entityType: "driver",
+    name: "بطاقة سائق",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة سائق</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>الاسم:</strong> {{entity.name}}</div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.phone}}</span></div>
+  <div><strong>رقم الرخصة:</strong> <span dir="ltr">{{entity.licenseNumber}}</span></div>
+  <div><strong>نوع الرخصة:</strong> {{entity.licenseType}}</div>
+  <div><strong>انتهاء الرخصة:</strong> {{entity.licenseExpiry}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>التقييم:</strong> {{entity.rating}} / 5.0</div>
+  <div><strong>إجمالي الرحلات:</strong> {{entity.totalTrips}}</div>
+  <div><strong>الموظف المرتبط:</strong> {{entity.employeeId}}</div>
+  <div><strong>آخر تحديث للموقع:</strong> {{entity.lastLocationUpdate}}</div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>السائق<br/>____________________</div>
+  <div>مدير الأسطول<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildCorrespondenceCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -83, presetKey: "correspondence_classic", entityType: "correspondence",
+    name: "مراسلة رسمية",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">مراسلة رسمية</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.subject}}</div>
+<div class="meta-grid">
+  <div><strong>الرقم المرجعي:</strong> <span dir="ltr">{{entity.ref}}</span></div>
+  <div><strong>الاتجاه:</strong> {{entity.direction}}</div>
+  <div><strong>القناة:</strong> {{entity.channel}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>المرسِل:</strong> {{entity.senderName}}</div>
+  <div><strong>جهة المرسِل:</strong> {{entity.senderOrg}}</div>
+  <div><strong>المستلِم:</strong> {{entity.recipientName}}</div>
+  <div><strong>جهة المستلِم:</strong> {{entity.recipientOrg}}</div>
+  <div><strong>تاريخ الإرسال:</strong> {{entity.sentAt}}</div>
+  <div><strong>تاريخ الاستلام:</strong> {{entity.receivedAt}}</div>
+  <div><strong>تاريخ الرد:</strong> {{entity.respondedAt}}</div>
+  <div><strong>المرجع المرتبط:</strong> {{entity.entityType}} #{{entity.entityId}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المحتوى</div>
+  <div style="white-space:pre-wrap;font-size:11pt;line-height:1.9">{{entity.content}}</div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:36px">
+  <div>التوقيع<br/>____________________</div>
+  <div>الختم<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildAuditLogPreset(): PrintTemplate {
+  return makePreset({
+    id: -84, presetKey: "audit_log_entry_classic", entityType: "audit_record",
+    name: "سجل تدقيق",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">سجل تدقيق</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">إجراء: <span dir="ltr">{{entity.action}}</span></div>
+<div class="meta-grid">
+  <div><strong>المعرّف:</strong> {{entity.id}}</div>
+  <div><strong>الإجراء:</strong> <span dir="ltr">{{entity.action}}</span></div>
+  <div><strong>الكيان:</strong> <span dir="ltr">{{entity.entity}}</span></div>
+  <div><strong>معرّف الكيان:</strong> <span dir="ltr">{{entity.entityId}}</span></div>
+  <div><strong>المستخدم:</strong> {{entity.userId}}</div>
+  <div><strong>الفرع:</strong> {{entity.branchId}}</div>
+  <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+  <div><strong>عنوان IP:</strong> <span dir="ltr">{{entity.ipAddress}}</span></div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">السبب</div>
+  <div style="white-space:pre-wrap">{{entity.reason}}</div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569">
+  وكيل المستخدم: <span dir="ltr">{{entity.userAgent}}</span>
+</div>`,
+  });
+}
+
+function buildWarehouseCategoryPreset(): PrintTemplate {
+  return makePreset({
+    id: -85, presetKey: "warehouse_category_classic", entityType: "warehouse_category",
+    name: "تصنيف مستودع",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة تصنيف مستودع</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم التصنيف:</strong> {{entity.name}}</div>
+  <div><strong>الكود:</strong> {{entity.id}}</div>
+  <div><strong>التصنيف الأب:</strong> {{entity.parentId}}</div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+</div>`,
+  });
+}
+
+function buildMarketingCampaignPreset(): PrintTemplate {
+  return makePreset({
+    id: -86, presetKey: "marketing_campaign_classic", entityType: "campaign",
+    name: "حملة تسويقية",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة حملة تسويقية</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم الحملة:</strong> {{entity.name}}</div>
+  <div><strong>النوع:</strong> {{entity.type}}</div>
+  <div><strong>القناة:</strong> {{entity.channel}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الميزانية:</strong> {{entity.budget}}</div>
+  <div><strong>المُنفَق:</strong> {{entity.spent}}</div>
+  <div><strong>الإيرادات:</strong> {{entity.revenue}}</div>
+  <div><strong>تاريخ البدء:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ النهاية:</strong> {{entity.endDate}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الجمهور المستهدَف</div>
+  <div style="white-space:pre-wrap">{{entity.targetAudience}}</div>
+</div>`,
+  });
+}
+
+function buildCompliancePreset(): PrintTemplate {
+  return makePreset({
+    id: -87, presetKey: "governance_compliance_classic", entityType: "compliance",
+    name: "التزام تنظيمي",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">سجل التزام تنظيمي</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.regulation}}</div>
+<div class="meta-grid">
+  <div><strong>التشريع / اللائحة:</strong> {{entity.regulation}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>تاريخ الاستحقاق:</strong> {{entity.dueDate}}</div>
+  <div><strong>الشخص المسؤول:</strong> {{entity.responsiblePerson}}</div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+function buildRiskPreset(): PrintTemplate {
+  return makePreset({
+    id: -88, presetKey: "governance_risk_classic", entityType: "risk",
+    name: "سجل مخاطر",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">سجل مخاطر</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.title}}</div>
+<div class="meta-grid">
+  <div><strong>عنوان المخاطرة:</strong> {{entity.title}}</div>
+  <div><strong>الخطورة:</strong> {{entity.severity}}</div>
+  <div><strong>الاحتمال:</strong> {{entity.likelihood}}</div>
+  <div><strong>الأثر:</strong> {{entity.impact}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>المكلَّف بها:</strong> {{entity.assignedTo}}</div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+  <div><strong>مالك المعالجة:</strong> {{entity.treatmentOwner}}</div>
+  <div><strong>حالة المعالجة:</strong> {{entity.treatmentStatus}}</div>
+  <div><strong>موعد المعالجة:</strong> {{entity.treatmentDueDate}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fef9c3;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">خطة التخفيف</div>
+  <div style="white-space:pre-wrap">{{entity.mitigationPlan}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#dbeafe;border:1px solid #93c5fd;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">خطة المعالجة</div>
+  <div style="white-space:pre-wrap">{{entity.treatmentPlan}}</div>
+</div>`,
+  });
+}
+
+function buildJobApplicationPreset(): PrintTemplate {
+  return makePreset({
+    id: -89, presetKey: "job_application_classic", entityType: "application",
+    name: "طلب توظيف",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب توظيف</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.applicantName}}</div>
+<div class="meta-grid">
+  <div><strong>اسم المتقدِّم:</strong> {{entity.applicantName}}</div>
+  <div><strong>الإعلان:</strong> #{{entity.postingId}}</div>
+  <div><strong>البريد الإلكتروني:</strong> <span dir="ltr">{{entity.email}}</span></div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.phone}}</span></div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>التقييم:</strong> {{entity.rating}}</div>
+  <div><strong>المصدر:</strong> {{entity.source}}</div>
+  <div><strong>الراتب المتوقَّع:</strong> {{entity.expectedSalary}}</div>
+  <div><strong>الشركة الحالية:</strong> {{entity.currentCompany}}</div>
+  <div><strong>تاريخ المقابلة:</strong> {{entity.interviewDate}}</div>
+  <div><strong>تاريخ التقديم:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الخبرة</div>
+  <div style="white-space:pre-wrap">{{entity.experience}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المؤهلات العلمية</div>
+  <div style="white-space:pre-wrap">{{entity.education}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">رسالة التغطية</div>
+  <div style="white-space:pre-wrap">{{entity.coverLetter}}</div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+function buildProjectCostingPreset(): PrintTemplate {
+  return makePreset({
+    id: -90, presetKey: "project_costing_classic", entityType: "project_costing",
+    name: "بند تكلفة مشروع",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بند تكلفة مشروع</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.category}}</div>
+<div class="meta-grid">
+  <div><strong>المشروع:</strong> #{{entity.projectId}}</div>
+  <div><strong>الفئة:</strong> {{entity.category}}</div>
+  <div><strong>القيمة:</strong> {{entity.amount}}</div>
+  <div><strong>تاريخ التكلفة:</strong> {{entity.costDate}}</div>
+  <div><strong>مرجع الفاتورة:</strong> <span dir="ltr">{{entity.invoiceRef}}</span></div>
+  <div><strong>المسجِّل:</strong> {{entity.enteredBy}}</div>
+  <div><strong>تاريخ التسجيل:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:36px">
+  <div>المسجِّل<br/>____________________</div>
+  <div>مدير المشروع<br/>____________________</div>
+  <div>المالية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildUmrahAgentCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -91, presetKey: "umrah_agent_card_classic", entityType: "umrah_agent",
+    name: "وكيل عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة وكيل عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم الوكيل:</strong> {{entity.name}}</div>
+  <div><strong>رقم نسك للوكيل:</strong> <span dir="ltr">{{entity.nuskAgentNumber}}</span></div>
+  <div><strong>الموسم:</strong> {{entity.seasonId}}</div>
+  <div><strong>الدولة:</strong> {{entity.country}}</div>
+  <div><strong>جهة الاتصال:</strong> {{entity.contactPerson}}</div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.phone}}</span></div>
+  <div><strong>البريد الإلكتروني:</strong> <span dir="ltr">{{entity.email}}</span></div>
+  <div><strong>مرجع العقد:</strong> <span dir="ltr">{{entity.contractRef}}</span></div>
+  <div><strong>هامش الربح:</strong> {{entity.profitMargin}}%</div>
+  <div><strong>العملة:</strong> {{entity.currency}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الوكيل<br/>____________________</div>
+  <div>إدارة العمرة<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildUmrahSubAgentCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -92, presetKey: "umrah_sub_agent_card_classic", entityType: "umrah_sub_agent",
+    name: "وكيل عمرة فرعي",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة وكيل عمرة فرعي</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم الوكيل الفرعي:</strong> {{entity.name}}</div>
+  <div><strong>رمز نسك:</strong> <span dir="ltr">{{entity.nuskCode}}</span></div>
+  <div><strong>الوكيل الرئيسي:</strong> #{{entity.agentId}}</div>
+  <div><strong>العميل المرتبط:</strong> #{{entity.clientId}}</div>
+  <div><strong>شروط الدفع:</strong> {{entity.paymentTerms}}</div>
+  <div><strong>السعر الافتراضي للمعتمر:</strong> {{entity.defaultPricePerMutamer}}</div>
+  <div><strong>الدولة:</strong> {{entity.country}}</div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.phone}}</span></div>
+  <div><strong>البريد الإلكتروني:</strong> <span dir="ltr">{{entity.email}}</span></div>
+  <div><strong>الحالة:</strong> {{entity.isActive}}</div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+function buildUmrahPackagePreset(): PrintTemplate {
+  return makePreset({
+    id: -93, presetKey: "umrah_package_classic", entityType: "umrah_package",
+    name: "باقة عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة باقة عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم الباقة:</strong> {{entity.name}}</div>
+  <div><strong>الموسم:</strong> {{entity.seasonName}}</div>
+  <div><strong>سعر التكلفة:</strong> {{entity.costPrice}}</div>
+  <div><strong>سعر البيع:</strong> {{entity.sellPrice}}</div>
+  <div><strong>المدة:</strong> {{entity.duration}} يوم</div>
+  <div><strong>تشمل النقل:</strong> {{entity.includesTransport}}</div>
+  <div><strong>تشمل الإقامة:</strong> {{entity.includesHotel}}</div>
+  <div><strong>تشمل الوجبات:</strong> {{entity.includesMeals}}</div>
+  <div><strong>تشمل الزيارة:</strong> {{entity.includesZiyarat}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>`,
+  });
+}
+
+function buildUmrahPenaltyPreset(): PrintTemplate {
+  return makePreset({
+    id: -94, presetKey: "umrah_penalty_classic", entityType: "umrah_penalty",
+    name: "عقوبة عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">إشعار عقوبة عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.pilgrimName}} — <span dir="ltr">{{entity.nuskNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>المعتمر:</strong> {{entity.pilgrimName}}</div>
+  <div><strong>رقم نسك:</strong> <span dir="ltr">{{entity.nuskNumber}}</span></div>
+  <div><strong>رقم الجواز:</strong> <span dir="ltr">{{entity.passportNumber}}</span></div>
+  <div><strong>الجنسية:</strong> {{entity.nationality}}</div>
+  <div><strong>الوكيل:</strong> {{entity.agentName}}</div>
+  <div><strong>الموسم:</strong> {{entity.seasonName}}</div>
+  <div><strong>نوع العقوبة:</strong> {{entity.type}}</div>
+  <div><strong>قيمة العقوبة:</strong> {{entity.amount}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>تاريخ الرصد:</strong> {{entity.detectedAt}}</div>
+  <div><strong>تاريخ الإصدار:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">سبب العقوبة</div>
+  <div style="white-space:pre-wrap">{{entity.reason}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>إدارة العمرة<br/>____________________</div>
+  <div>الشؤون المالية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildUmrahTransportPreset(): PrintTemplate {
+  return makePreset({
+    id: -95, presetKey: "umrah_transport_classic", entityType: "umrah_transport",
+    name: "نقل عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">رحلة نقل عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.fromLocation}} → {{entity.toLocation}}</div>
+<div class="meta-grid">
+  <div><strong>تاريخ الرحلة:</strong> {{entity.tripDate}}</div>
+  <div><strong>من:</strong> {{entity.fromLocation}}</div>
+  <div><strong>إلى:</strong> {{entity.toLocation}}</div>
+  <div><strong>الموسم:</strong> {{entity.seasonName}}</div>
+  <div><strong>المركبة:</strong> <span dir="ltr">{{entity.plateNumber}}</span> — {{entity.vehicleMake}} {{entity.vehicleModel}}</div>
+  <div><strong>السائق:</strong> {{entity.driverName}} — <span dir="ltr">{{entity.driverLicense}}</span></div>
+  <div><strong>السعة:</strong> {{entity.capacity}}</div>
+  <div><strong>عدد المعتمرين:</strong> {{entity.pilgrimCount}}</div>
+  <div><strong>التكلفة:</strong> {{entity.cost}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>القيد المحاسبي:</strong> #{{entity.journalEntryId}}</div>
+  <div><strong>تاريخ الإنشاء:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:36px">
+  <div>السائق<br/>____________________</div>
+  <div>مشرف الرحلة<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildUmrahViolationPreset(): PrintTemplate {
+  return makePreset({
+    id: -96, presetKey: "umrah_violation_classic", entityType: "umrah_violation",
+    name: "مخالفة عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">سجل مخالفة عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px"><span dir="ltr">{{entity.referenceNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>نوع المخالفة:</strong> {{entity.type}}</div>
+  <div><strong>نوع المرجع:</strong> {{entity.referenceType}}</div>
+  <div><strong>الرقم المرجعي:</strong> <span dir="ltr">{{entity.referenceNumber}}</span></div>
+  <div><strong>المعتمر:</strong> {{entity.pilgrimName}} — <span dir="ltr">{{entity.pilgrimNuskNumber}}</span></div>
+  <div><strong>المجموعة:</strong> {{entity.groupName}}</div>
+  <div><strong>الوكيل الفرعي:</strong> {{entity.subAgentName}} — <span dir="ltr">{{entity.subAgentNuskCode}}</span></div>
+  <div><strong>الوكيل:</strong> {{entity.agentName}} — <span dir="ltr">{{entity.agentNuskNumber}}</span></div>
+  <div><strong>قيمة الغرامة:</strong> {{entity.penaltyAmount}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الفاتورة المرتبطة:</strong> <span dir="ltr">{{entity.linkedInvoiceRef}}</span></div>
+  <div><strong>تاريخ الرصد:</strong> {{entity.detectedAt}}</div>
+  <div><strong>تاريخ التسجيل:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">وصف المخالفة</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>محرر المحضر<br/>____________________</div>
+  <div>المسؤول<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildAccountStatementPreset(): PrintTemplate {
+  return makePreset({
+    id: -97, presetKey: "account_statement_classic", entityType: "account_statement",
+    name: "كشف حساب محاسبي",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">كشف حساب محاسبي</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}} — <span dir="ltr">{{entity.code}}</span></div>
+<div class="meta-grid">
+  <div><strong>رمز الحساب:</strong> <span dir="ltr">{{entity.code}}</span></div>
+  <div><strong>اسم الحساب:</strong> {{entity.name}}</div>
+  <div><strong>نوع الحساب:</strong> {{entity.type}}</div>
+  <div><strong>العملة:</strong> {{entity.currency}}</div>
+  <div><strong>الرصيد الحالي:</strong> {{entity.currentBalance}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+  <div><strong>تاريخ الطباعة:</strong> {{date.now}}</div>
+</div>
+{{entity.movementsTable}}
+<div style="margin-top:18px;font-size:10pt;color:#475569">
+  كشف حساب آلي صادر عن نظام غيث.
+</div>`,
+  });
+}
+
 /** Map snake_case entityType → Arabic display label. Mirrors the labels
  *  the SPA uses on detail/list pages so the printed doc reads the same as
  *  the screen. Anything not in the map falls back to the raw entityType,
@@ -2980,6 +3534,12 @@ const ARABIC_TITLES: Record<string, string> = {
   overtime: "طلب وقت إضافي", leave: "طلب إجازة",
   maintenance: "طلب صيانة", violation: "مخالفة",
   voucher: "سند",
+  // Closing-sweep additions (issue #1286 last gap fill). crm_lead is
+  // already declared above next to client — kept the original entry, only
+  // adding the genuinely new ones here.
+  campaign: "حملة تسويقية", application: "طلب توظيف",
+  performance: "تقييم أداء", transport: "نقل عمرة",
+  audit: "سجل تدقيق", correspondence: "مراسلة رسمية",
 };
 
 function universalFallback(entityType: string): PrintTemplate {

@@ -2427,11 +2427,13 @@ async function monthlyAutoDepreciation(): Promise<string> {
               accountCode: (asset.depreciationAccountCode as string | undefined) ?? "6100",
               debit: depAmount,
               credit: 0,
+              assetId: Number(asset.id),
             },
             {
               accountCode: (asset.accDepreciationAccountCode as string | undefined) ?? "1590",
               debit: 0,
               credit: depAmount,
+              assetId: Number(asset.id),
             },
           ],
           status: "posted",
@@ -2551,11 +2553,19 @@ async function runScheduledReports(): Promise<string> {
               }],
             });
             for (const email of recipients) {
+              // Phase 4 sweep: dual-write to outbound_queue.
               await rawExecute(
                 `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, metadata, status, "createdAt")
                  VALUES ($1, $2, '', $3, $4, $5::jsonb, 'pending', NOW())`,
                 [report.companyId, email, subject, body, metadataJson]
               );
+              await rawExecute(
+                `INSERT INTO outbound_queue
+                   ("companyId", channel, recipient, subject, body, metadata,
+                    status, "createdAt", "updatedAt")
+                 VALUES ($1, 'email', $2, $3, $4, $5::jsonb, 'pending', NOW(), NOW())`,
+                [report.companyId, email, subject, body, metadataJson]
+              ).catch((e) => logger.warn(e, "[cronScheduler scheduled-report] outbound_queue dual-write failed"));
               queued++;
             }
           } catch (queueErr) {
@@ -3614,11 +3624,19 @@ async function sendInfraAdminEmails(
   for (const toEmail of emails) {
     if (exclude.has(toEmail.toLowerCase())) continue;
     try {
+      // Phase 4 sweep: dual-write to outbound_queue.
       await rawExecute(
         `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
          VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
         [pivotCompanyId, toEmail, "Infra Admin", title, body, "system_health", null]
       );
+      await rawExecute(
+        `INSERT INTO outbound_queue
+           ("companyId", channel, recipient, "recipientName", subject, body,
+            status, "refType", "createdAt", "updatedAt")
+         VALUES ($1, 'email', $2, 'Infra Admin', $3, $4, 'pending', 'system_health', NOW(), NOW())`,
+        [pivotCompanyId, toEmail, title, body]
+      ).catch((e) => logger.warn(e, "[cronScheduler infra-alert] outbound_queue dual-write failed"));
       queued++;
     } catch (e) {
       logger.error(e, `[cronScheduler] failed to queue infra-admin email for ${toEmail} (${type})`);
