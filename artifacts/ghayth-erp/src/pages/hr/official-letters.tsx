@@ -64,6 +64,17 @@ export default function OfficialLettersPage() {
   const items = data?.data || [];
   const [editing, setEditing] = useState<any | null>(null);
   const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
+  const [previewId, setPreviewId] = useState<number | null>(null);
+
+  // GET /hr/official-letters/:id — single-letter detail with the
+  // resolved letterhead (logo + branch info). Used by the inline
+  // preview action so users see the full rendered letter without
+  // navigating to print.
+  const previewQ = useApiQuery<any>(
+    ["official-letter", String(previewId ?? 0)],
+    previewId ? `/hr/official-letters/${previewId}` : null,
+    !!previewId,
+  );
   const updateMut = useApiMutation<unknown, { id: number; subject: string; content: string; type: string }>(
     (b) => `/hr/official-letters/${b.id}`,
     "PATCH",
@@ -103,6 +114,14 @@ export default function OfficialLettersPage() {
       header: "إجراءات",
       render: (l) => (
         <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPreviewId(l.id)}
+            title="معاينة"
+          >
+            <FileText className="h-3.5 w-3.5" />
+          </Button>
           <PrintButton
             entityType="official_letter"
             entityId={l.id}
@@ -295,6 +314,33 @@ export default function OfficialLettersPage() {
           successMessage="تم حذف الخطاب"
           onDeleted={() => setDeleting(null)}
         />
+      )}
+
+      {previewId && previewQ.data && (
+        <Card className="border-dashed">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="font-semibold text-sm">معاينة الخطاب</h3>
+              <button type="button" className="text-xs text-muted-foreground" onClick={() => setPreviewId(null)}>
+                إغلاق ×
+              </button>
+            </div>
+            <div className="text-sm">
+              {previewQ.data.branchLogo && (
+                <img src={previewQ.data.branchLogo} alt="branch" className="h-12 mb-2" />
+              )}
+              <p className="font-bold">{previewQ.data.subject}</p>
+              <p className="text-muted-foreground text-xs">
+                {previewQ.data.employeeName ?? "—"}
+                {previewQ.data.empNumber && <span className="ms-2 font-mono">#{previewQ.data.empNumber}</span>}
+                {previewQ.data.jobTitle && <span className="ms-2">{previewQ.data.jobTitle}</span>}
+              </p>
+              <div className="border rounded p-3 bg-muted/30 mt-2 whitespace-pre-wrap text-xs">
+                {previewQ.data.content || "—"}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
     </PageShell>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
@@ -75,6 +76,17 @@ export default function TrainingPage() {
     onSuccess: () => refetchEnrollments(),
   });
 
+  // GET /hr/training/enrollments/:id — single-enrollment detail fetch
+  // used by the edit flow to load the current row's fields (status,
+  // score, attendance %) freshly before editing, so a stale list page
+  // doesn't lose recent edits made by other users.
+  const [editingEnrollmentId, setEditingEnrollmentId] = useState<number | null>(null);
+  useApiQuery<any>(
+    ["training-enrollment", String(editingEnrollmentId ?? 0)],
+    editingEnrollmentId ? `/hr/training/enrollments/${editingEnrollmentId}` : null,
+    !!editingEnrollmentId,
+  );
+
   const enrollmentEditFields = [
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "enrolled", label: "مسجل" }, { value: "completed", label: "مكتمل" }, { value: "cancelled", label: "ملغي" }] },
     { key: "score", label: "الدرجة", type: "number" as const },
@@ -102,7 +114,10 @@ export default function TrainingPage() {
         <div onClick={(ev) => ev.stopPropagation()}>
           <RowActions
             canEdit={canManage}
-            onEdit={() => enrollmentActions.startEdit(e.id, { status: e.status || "enrolled", score: e.score || 0 })}
+            onEdit={() => {
+              setEditingEnrollmentId(e.id);
+              enrollmentActions.startEdit(e.id, { status: e.status || "enrolled", score: e.score || 0 });
+            }}
             onDelete={() => enrollmentActions.startDelete(e.id)}
             deletePerm="hr:delete"
           />
