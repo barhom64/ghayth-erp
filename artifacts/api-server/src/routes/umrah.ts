@@ -1052,7 +1052,7 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
     let seasonFilterP = "";
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); seasonFilter = ` AND "seasonId"=$${params.length}`; seasonFilterP = ` AND p."seasonId"=$${params.length}`; }
-    const [stats, penaltyStats, agentStats, recentArrivals] = await Promise.all([
+    const [stats, penaltyStats, agentStats, recentArrivals, salesFinancials, nuskFinancials] = await Promise.all([
       rawQuery(`
         SELECT
           COUNT(*) as total,
@@ -1086,12 +1086,49 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
         FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter} AND "actualArrival" IS NOT NULL
         ORDER BY "actualArrival" DESC LIMIT 10
       `, params),
+      // Sales-side financial position: receivables from sub-agents.
+      // Outstanding = sum(total − paidAmount) for invoices not cancelled.
+      // This gives the operator the umrah-specific "what we are owed" number.
+      rawQuery(`
+        SELECT
+          COUNT(*) FILTER (WHERE status != 'cancelled') AS "invoiceCount",
+          COALESCE(SUM(total) FILTER (WHERE status != 'cancelled'), 0) AS "invoicedTotal",
+          COALESCE(SUM("paidAmount") FILTER (WHERE status != 'cancelled'), 0) AS "collectedTotal",
+          COALESCE(SUM(total - COALESCE("paidAmount", 0)) FILTER (WHERE status NOT IN ('cancelled','paid')), 0) AS "outstandingTotal",
+          COALESCE(SUM(total - COALESCE("paidAmount", 0)) FILTER (WHERE status NOT IN ('cancelled','paid') AND "dueDate" < CURRENT_DATE), 0) AS "overdueTotal"
+        FROM umrah_sales_invoices
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter}
+      `, params),
+      // Purchase-side financial position: what we owe NUSK. The legacy
+      // /finance/payables route nets against allocations; the dashboard
+      // shows the gross numbers as an at-a-glance KPI so the operator
+      // knows the topline without leaving the page.
+      rawQuery(`
+        SELECT
+          COUNT(*) FILTER (WHERE "nuskStatus" != 'cancelled') AS "invoiceCount",
+          COALESCE(SUM("totalAmount") FILTER (WHERE "nuskStatus" != 'cancelled'), 0) AS "totalAmount",
+          COALESCE(SUM("refundAmount") FILTER (WHERE "nuskStatus" != 'cancelled'), 0) AS "refundedTotal",
+          COALESCE(SUM("totalAmount" - COALESCE("refundAmount", 0)) FILTER (WHERE "nuskStatus" NOT IN ('cancelled','paid','refunded')), 0) AS "outstandingTotal"
+        FROM umrah_nusk_invoices
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL
+      `, [scope.companyId]),
     ]);
+    const sales = (salesFinancials[0] || {}) as Record<string, unknown>;
+    const nusk = (nuskFinancials[0] || {}) as Record<string, unknown>;
+    const receivable = Number(sales.outstandingTotal ?? 0);
+    const payable = Number(nusk.outstandingTotal ?? 0);
     res.json(maskFields(req, {
       pilgrims: stats[0],
       penalties: penaltyStats[0],
       topAgents: agentStats,
-      recentArrivals: recentArrivals.map(decryptPilgrimRow)
+      recentArrivals: recentArrivals.map(decryptPilgrimRow),
+      // Financial position at a glance. `net` = receivable − payable;
+      // positive means the umrah module is net-owed; negative means net-owes.
+      financials: {
+        sales: salesFinancials[0],
+        nusk: nuskFinancials[0],
+        net: receivable - payable,
+      },
     }));
   } catch (err) { handleRouteError(err, res, "Dashboard error"); }
 });
