@@ -79,7 +79,10 @@ describe("umrah route — /import/vouchers now wires through the engine", () => 
   });
 
   it("the handler calls confirmVouchersImport (NOT doImport) for vouchers", () => {
-    expect(ROUTE).toMatch(/await confirmVouchersImport\(importScope,\s*importRows,\s*fileName/);
+    // Row variable may be `importRows` (direct) or `normalizedRows`
+    // (after PR's column-mapping pass). Accept either — what matters is
+    // the call routes through the engine, not through doImport.
+    expect(ROUTE).toMatch(/await confirmVouchersImport\(importScope,\s*(?:importRows|normalizedRows),\s*fileName/);
     // Regression guard: previously this route routed vouchers through
     // doImport (which writes to umrah_pilgrims, dropping NUSK data).
     expect(ROUTE).not.toMatch(/import\/vouchers"[\s\S]{1,600}await doImport\([^,]+,\s*\{\s*seasonId,\s*rows: importRows,\s*fileType: "vouchers"/);

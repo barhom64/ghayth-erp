@@ -43,6 +43,13 @@ export default function UmrahImportWizard() {
   const [seasonId, setSeasonId] = useState("");
   const [dropFiles, setDropFiles] = useState<Attachment[]>([]);
   const [fileName, setFileName] = useState("");
+  // Detected Excel headers + the operator's mapping decisions. Pre-filled
+  // from /umrah/import/header-maps so the wizard recognises NUSK / MOFA
+  // layouts immediately; the operator only touches headers the system
+  // doesn't already know.
+  const [detectedHeaders, setDetectedHeaders] = useState<string[]>([]);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+  const [showMapping, setShowMapping] = useState<boolean>(false);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [parseError, setParseError] = useState("");
   const [previewing, setPreviewing] = useState(false);
@@ -59,6 +66,13 @@ export default function UmrahImportWizard() {
 
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
   const clientsQ = useApiQuery<{ data: any[] }>(["clients"], "/clients");
+  // Built-in Arabic header dictionaries — the wizard pre-fills the
+  // operator's choices from these so the column-mapping step is empty
+  // typing only for unknown layouts.
+  const headerMapsQ = useApiQuery<{
+    mutamers: { forward: Record<string, string>; targets: Record<string, string[]> };
+    vouchers: { forward: Record<string, string>; targets: Record<string, string[]> };
+  }>(["umrah-import-header-maps"], "/umrah/import/header-maps");
   // GET /umrah/import/batches — history of prior imports so the user
   // can see what's already been ingested before adding a new batch.
   const batchesQ = useApiQuery<{ data: any[] }>(
@@ -129,6 +143,24 @@ export default function UmrahImportWizard() {
         return mapped;
       });
       setParsedRows(rows);
+
+      // Detect headers + pre-fill the column mapping from the built-in
+      // dictionary for the current fileType. The operator opens the
+      // mapping step only when something needs to be hand-mapped.
+      const headers = rows.length > 0 ? Object.keys(rows[0] ?? {}) : [];
+      setDetectedHeaders(headers);
+      const forward = headerMapsQ.data?.[fileType]?.forward ?? {};
+      const auto: Record<string, string> = {};
+      let unmapped = 0;
+      for (const h of headers) {
+        const target = forward[h];
+        if (target) auto[h] = target;
+        else { auto[h] = ""; unmapped++; }
+      }
+      setColumnMapping(auto);
+      // If anything is unmapped, open the mapping panel automatically so
+      // the operator doesn't import garbage by accident.
+      setShowMapping(unmapped > 0);
     } catch (e: any) {
       setParseError(`خطأ في قراءة الملف: ${e?.message ?? "خطأ غير معروف"}`);
     }
@@ -145,6 +177,9 @@ export default function UmrahImportWizard() {
           seasonId: Number(seasonId),
           fileName,
           rows: parsedRows,
+          // Operator's column-mapping decisions ride along so the server
+          // translates Excel headers the same way the wizard renders them.
+          columnMapping,
         }),
       });
       const summary: PreviewSummary = res?.data ?? res;
@@ -174,6 +209,10 @@ export default function UmrahImportWizard() {
         if (treasuryId) body.treasuryId = Number(treasuryId);
         if (purchaseAccountCode) body.purchaseAccountCode = purchaseAccountCode;
       }
+      // Server applies columnMapping to normalize Arabic headers → DB
+      // fields. Sent unconditionally — preview already used the same
+      // mapping, so confirm must agree or the row counts diverge.
+      body.columnMapping = columnMapping;
       const res: any = fileType === "mutamers"
         ? await apiFetch("/umrah/import/mutamers", { method: "POST", body: JSON.stringify(body) })
         : await apiFetch("/umrah/import/vouchers", { method: "POST", body: JSON.stringify(body) });
@@ -322,12 +361,59 @@ export default function UmrahImportWizard() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-status-info-foreground truncate">{fileName}</p>
                   <p className="text-xs text-status-info-foreground">
-                    تم قراءة {formatNumber(parsedRows.length)} صف من الملف
+                    تم قراءة {formatNumber(parsedRows.length)} صف من الملف · {detectedHeaders.length} عمود
                   </p>
                 </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowMapping((v) => !v)} className="text-status-info-foreground">
+                  {showMapping ? "إخفاء الأعمدة" : "ربط الأعمدة"}
+                </Button>
                 <Button variant="ghost" size="sm" onClick={clearFile} className="text-status-info-foreground">
                   تغيير الملف
                 </Button>
+              </div>
+            )}
+
+            {/* Column-mapping panel — operator review/override. Opens
+                automatically when at least one header isn't recognised. */}
+            {fileName && parsedRows.length > 0 && showMapping && (
+              <div className="rounded-lg border border-muted/40 p-3 bg-muted/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">ربط أعمدة الملف بحقول النظام</p>
+                    <p className="text-xs text-muted-foreground">العناوين المعروفة مُختارة تلقائياً. اختر يدوياً للأعمدة الجديدة أو اتركها فارغة لتجاهلها.</p>
+                  </div>
+                  {(() => {
+                    const unmapped = detectedHeaders.filter((h) => !columnMapping[h]).length;
+                    if (unmapped === 0) return null;
+                    return (
+                      <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-status-warning-surface bg-status-warning-surface text-status-warning-foreground">
+                        <AlertTriangle className="h-3 w-3" />
+                        {unmapped} عمود غير مربوط
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {detectedHeaders.map((h) => {
+                    const targets = headerMapsQ.data?.[fileType]?.targets ?? {};
+                    const dbFields = Object.keys(targets).sort();
+                    const value = columnMapping[h] ?? "";
+                    return (
+                      <div key={h} className="flex items-center gap-2 text-xs">
+                        <span className="font-mono text-muted-foreground truncate w-1/2" title={h}>{h}</span>
+                        <Select value={value} onValueChange={(v) => setColumnMapping((m) => ({ ...m, [h]: v }))}>
+                          <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="— تجاهل —" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">— تجاهل العمود —</SelectItem>
+                            {dbFields.map((field) => (
+                              <SelectItem key={field} value={field}>{field}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
