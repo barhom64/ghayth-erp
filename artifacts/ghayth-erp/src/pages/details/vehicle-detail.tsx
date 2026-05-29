@@ -13,7 +13,7 @@ import {
   PageStatusBadge,
   DataTable,
 } from "@workspace/ui-core";
-import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, TrendingUp } from "lucide-react";
+import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, TrendingUp, Activity, Radio, Eye, Bot } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +38,7 @@ const TABS = [
   { key: "maintenance", label: "الصيانة", icon: Wrench },
   { key: "fuel", label: "الوقود", icon: Fuel },
   { key: "insurance", label: "التأمين", icon: Shield },
+  { key: "telematics", label: "التتبع الذكي", icon: Radio },
   { key: "tasks", label: "المهام", icon: CheckSquare },
   { key: "finance", label: "المالية", icon: BookOpen },
 ] as const;
@@ -82,6 +83,36 @@ export default function VehicleDetail() {
 
   const { data: vehicle, isLoading, isError, error, refetch } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
   const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
+
+  // Telematics drill-down — only fetched once the user opens the tab so
+  // we don't slow the hot detail page for vehicles without a device.
+  const telematicsEnabled = !!id && activeTab === "telematics";
+  const { data: telematicsLive } = useApiQuery<any>(
+    ["vehicle-telematics-live", id || ""],
+    `/fleet/telematics/vehicles/${id}/live`,
+    telematicsEnabled,
+  );
+  const { data: telematicsPosition } = useApiQuery<any>(
+    ["vehicle-telematics-position", id || ""],
+    `/fleet/telematics/vehicles/${id}/position`,
+    telematicsEnabled,
+  );
+  const { data: telematicsEvents } = useApiQuery<any>(
+    ["vehicle-telematics-events", id || ""],
+    `/fleet/telematics/vehicles/${id}/events`,
+    telematicsEnabled,
+  );
+  const { data: telematicsSensors } = useApiQuery<any>(
+    ["vehicle-telematics-sensors", id || ""],
+    `/fleet/telematics/vehicles/${id}/sensors`,
+    telematicsEnabled,
+  );
+  const { data: telematicsAlerts } = useApiQuery<any>(
+    ["vehicle-telematics-ai-alerts", id || ""],
+    `/fleet/telematics/vehicles/${id}/ai-alerts`,
+    telematicsEnabled,
+  );
+
   const { hideTabs: registryHideTabs } = useRegistryTabs("vehicle", id || "");
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -699,6 +730,109 @@ export default function VehicleDetail() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === "telematics" && id && (
+        <div className="space-y-4">
+          {!telematicsLive?.data && !telematicsPosition?.data && (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <Radio className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                <p>لا يوجد جهاز تتبع ذكي مرتبط بهذه المركبة بعد.</p>
+                <p className="text-xs mt-1">اربط جهاز CMSV6 من <Link href="/fleet/telematics/devices" className="underline">إعدادات الأجهزة</Link>.</p>
+              </CardContent>
+            </Card>
+          )}
+          {telematicsLive?.data?.device && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span className="flex items-center gap-2"><Radio className="w-4 h-4 text-status-info-foreground" /> الجهاز والموقع</span>
+                  <Link href={`/fleet/telematics/live-map?vehicleId=${id}`}>
+                    <Button variant="outline" size="sm" className="gap-1"><MapPin className="w-3 h-3" /> الخريطة المباشرة</Button>
+                  </Link>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div><p className="text-xs text-muted-foreground">رقم الجهاز</p><p className="font-mono">{telematicsLive.data.device.cmsv6DeviceNo || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">الحالة</p><PageStatusBadge status={telematicsLive.data.device.status || "unknown"} /></div>
+                  <div><p className="text-xs text-muted-foreground">السرعة</p><p className="font-mono">{telematicsPosition?.data?.speedKph != null ? `${Number(telematicsPosition.data.speedKph).toFixed(0)} كم/س` : "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">آخر تحديث</p><p className="text-xs">{telematicsPosition?.data?.occurredAt ? formatDateAr(telematicsPosition.data.occurredAt) : "—"}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Activity className="w-4 h-4 text-purple-600" /> الأحداث ({(telematicsEvents?.data || []).length})</CardTitle></CardHeader>
+            <CardContent>
+              {(telematicsEvents?.data || []).length === 0 ? (
+                <p className="text-muted-foreground text-center py-4 text-sm">لا توجد أحداث مسجلة</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "occurredAt", header: "الوقت", render: (e: any) => <span className="text-xs">{formatDateAr(e.occurredAt)}</span> },
+                    { key: "eventType", header: "النوع", render: (e: any) => <Badge variant="outline">{e.eventType}</Badge> },
+                    { key: "severity", header: "الخطورة", render: (e: any) => <PageStatusBadge status={e.severity || "info"} /> },
+                  ]}
+                  data={(telematicsEvents?.data || []).slice(0, 25)}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Eye className="w-4 h-4 text-teal-600" /> قراءات الحساسات ({(telematicsSensors?.data || []).length})</CardTitle></CardHeader>
+            <CardContent>
+              {(telematicsSensors?.data || []).length === 0 ? (
+                <p className="text-muted-foreground text-center py-4 text-sm">لا توجد قراءات</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "occurredAt", header: "الوقت", render: (s: any) => <span className="text-xs">{formatDateAr(s.occurredAt)}</span> },
+                    { key: "sensorType", header: "النوع", render: (s: any) => s.sensorType },
+                    { key: "value", header: "القيمة", render: (s: any) => <span className="font-mono">{s.value} {s.unit || ""}</span> },
+                  ]}
+                  data={(telematicsSensors?.data || []).slice(0, 25)}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center justify-between">
+                <span className="flex items-center gap-2"><Bot className="w-4 h-4 text-rose-600" /> تنبيهات السلامة الذكية ({(telematicsAlerts?.data || []).length})</span>
+                <Link href="/fleet/telematics/ai-alerts">
+                  <Button variant="outline" size="sm">عرض الكل</Button>
+                </Link>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(telematicsAlerts?.data || []).length === 0 ? (
+                <p className="text-muted-foreground text-center py-4 text-sm">لا توجد تنبيهات</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "occurredAt", header: "الوقت", render: (a: any) => <span className="text-xs">{formatDateAr(a.occurredAt)}</span> },
+                    { key: "category", header: "الفئة", render: (a: any) => <Badge variant="outline">{a.category}</Badge> },
+                    { key: "alertType", header: "التنبيه", render: (a: any) => a.alertType },
+                    { key: "severity", header: "الخطورة", render: (a: any) => <PageStatusBadge status={a.severity || "info"} /> },
+                    { key: "status", header: "الحالة", render: (a: any) => <PageStatusBadge status={a.status} /> },
+                  ]}
+                  data={(telematicsAlerts?.data || []).slice(0, 25)}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === "tasks" && id && (

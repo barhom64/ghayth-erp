@@ -11,9 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Archive, Camera, Film, Image as ImageIcon, Music,
-  Search, ShieldAlert, Sparkles, AlertOctagon, Bot,
+  Search, ShieldAlert, Sparkles, AlertOctagon, Bot, Info,
 } from "lucide-react";
 import {
   DataTable,
@@ -94,6 +98,14 @@ export default function FleetTelematicsEvidence() {
   const [category, setCategory] = useState<string>("all");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
+  const [detailId, setDetailId] = useState<number | null>(null);
+
+  const { data: detailData } = useApiQuery<{ data: MediaEvidenceRow & { alertConfidence: number | null; alertOccurredAt: string | null } }>(
+    ["fleet-telematics-media-evidence-detail", String(detailId ?? 0)],
+    `/fleet/telematics/media-evidence/${detailId}`,
+    detailId !== null,
+  );
+  const detail = detailData?.data;
 
   const { data: vehicles } = useApiQuery<{ data: VehicleOption[] }>(
     ["fleet-vehicles-options"],
@@ -227,6 +239,20 @@ export default function FleetTelematicsEvidence() {
           ? new Date(r.occurredAt).toLocaleString("ar-SA")
           : new Date(r.uploadedAt).toLocaleString("ar-SA"),
     },
+    {
+      key: "details",
+      header: "تفاصيل",
+      render: (r) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => { e.stopPropagation(); setDetailId(r.id); }}
+          title="تفاصيل الدليل"
+        >
+          <Info className="h-4 w-4" />
+        </Button>
+      ),
+    },
   ];
 
   if (isLoading) return <LoadingSpinner />;
@@ -332,6 +358,54 @@ export default function FleetTelematicsEvidence() {
           />
         </CardContent>
       </Card>
+
+      <Dialog open={detailId !== null} onOpenChange={(o) => !o && setDetailId(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Archive className="h-5 w-5" />
+              تفاصيل الدليل #{detailId}
+            </DialogTitle>
+          </DialogHeader>
+          {!detail ? (
+            <p className="text-center text-muted-foreground py-8">جاري التحميل…</p>
+          ) : (
+            <div className="space-y-3 text-sm">
+              {detail.mediaType === "image" && (
+                <img
+                  src={`/api/fleet/telematics/media-evidence/${detail.id}/blob`}
+                  alt="evidence"
+                  className="w-full h-48 object-contain rounded border bg-surface-subtle"
+                />
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div><p className="text-xs text-muted-foreground">نوع الوسائط</p><p>{detail.mediaType}</p></div>
+                <div><p className="text-xs text-muted-foreground">المركبة</p><p>{detail.vehiclePlate || detail.deviceLabel || "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">القناة</p><p>{detail.channelNo !== null ? `CH ${detail.channelNo}` : "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">المدة</p><p>{detail.durationSec != null ? `${detail.durationSec}s` : "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">الحجم</p><p>{detail.sizeBytes != null ? formatBytes(detail.sizeBytes) : "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">تاريخ الرفع</p><p className="text-xs">{new Date(detail.uploadedAt).toLocaleString("ar-SA")}</p></div>
+              </div>
+              {detail.alertCategory && (
+                <div className="rounded border p-2 bg-surface-subtle/40">
+                  <p className="text-xs text-muted-foreground mb-1">مرتبط بتنبيه</p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{detail.alertCategory}</Badge>
+                    {detail.alertType && <span>{detail.alertType}</span>}
+                    {detail.alertSeverity && <Badge variant="outline">{detail.alertSeverity}</Badge>}
+                  </div>
+                  {detail.alertConfidence != null && (
+                    <p className="text-xs text-muted-foreground mt-1">الثقة: {Number(detail.alertConfidence).toFixed(0)}%</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailId(null)}>إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }
