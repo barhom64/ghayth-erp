@@ -991,7 +991,7 @@ protectedRouter.get("/property/contracts", withPortalScope(async (req, res) => {
            ON t.id = rc."tenantId"
           AND t."companyId" = rc."companyId"
           AND t."deletedAt" IS NULL
-         LEFT JOIN property_units u ON u.id = rc."unitId" AND u."companyId" = rc."companyId"
+         LEFT JOIN property_units u ON u.id = rc."unitId" AND u."companyId" = rc."companyId" AND u."deletedAt" IS NULL
         WHERE t."clientId" = $1 AND rc."companyId" = $2 AND rc."deletedAt" IS NULL
         ORDER BY rc."startDate" DESC LIMIT 100`,
       [scope.clientId, scope.companyId]
