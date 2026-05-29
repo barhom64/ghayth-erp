@@ -27,6 +27,11 @@ interface JournalLine {
   description: string | null;
   debit: number | string;
   credit: number | string;
+  // Full dimensional payload — every column journal_lines carries.
+  // Pre-fix the type omitted 9 of the 16 dim columns so the UI couldn't
+  // render them even when the engine wrote them. Backend `SELECT jl.*`
+  // returns all of these.
+  costCenter: string | null;
   costCenterId: number | null;
   vehicleId: number | null;
   propertyId: number | null;
@@ -34,6 +39,15 @@ interface JournalLine {
   contractId: number | null;
   umrahSeasonId: number | null;
   umrahAgentId: number | null;
+  employeeId: number | null;
+  departmentId: number | null;
+  unitId: number | null;
+  assetId: number | null;
+  productId: number | null;
+  clientId: number | null;
+  vendorId: number | null;
+  driverId: number | null;
+  activityType: string | null;
 }
 
 interface JournalDetail {
@@ -137,16 +151,31 @@ export default function JournalDetailPage() {
       header: "الأبعاد",
       render: (l) => {
         const dims: string[] = [];
-        if (l.costCenterId)   dims.push(`CC:${l.costCenterId}`);
+        // Render every dimension the GL line carries so reviewers can
+        // verify per-entity attribution at a glance. Order matters: the
+        // most-used dims (cost-center, employee, vehicle, property,
+        // project, contract) come first; less-common ones (umrah,
+        // asset, product, client/vendor, driver, unit) follow.
+        if (l.costCenter)     dims.push(`CC:${l.costCenter}`);
+        else if (l.costCenterId) dims.push(`CC#:${l.costCenterId}`);
+        if (l.employeeId)     dims.push(`E:${l.employeeId}`);
+        if (l.departmentId)   dims.push(`D:${l.departmentId}`);
         if (l.vehicleId)      dims.push(`V:${l.vehicleId}`);
+        if (l.driverId)       dims.push(`DR:${l.driverId}`);
         if (l.propertyId)     dims.push(`P:${l.propertyId}`);
+        if (l.unitId)         dims.push(`U:${l.unitId}`);
         if (l.projectId)      dims.push(`PR:${l.projectId}`);
         if (l.contractId)     dims.push(`C:${l.contractId}`);
+        if (l.clientId)       dims.push(`CL:${l.clientId}`);
+        if (l.vendorId)       dims.push(`VN:${l.vendorId}`);
+        if (l.productId)      dims.push(`PD:${l.productId}`);
+        if (l.assetId)        dims.push(`A:${l.assetId}`);
         if (l.umrahSeasonId)  dims.push(`US:${l.umrahSeasonId}`);
         if (l.umrahAgentId)   dims.push(`UA:${l.umrahAgentId}`);
+        if (l.activityType)   dims.push(`AT:${l.activityType}`);
         return dims.length === 0
           ? <span className="text-muted-foreground italic text-xs">—</span>
-          : <span className="font-mono text-[10px]">{dims.join(" / ")}</span>;
+          : <span className="font-mono text-[10px]" title={dims.join(" • ")}>{dims.join(" / ")}</span>;
       },
     },
   ];
