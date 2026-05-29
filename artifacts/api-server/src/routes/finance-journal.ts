@@ -1048,21 +1048,38 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // Net cash leaving the company = totalWithVat − totalWht. The
     // withheld portion sits in WHT Payable until the next ZATCA filing.
     const netCashOut = roundTo2(totalWithVat - totalWht);
+
+    // Derive line-level dims from the voucher's relatedEntity / contract /
+    // department / costCenter so EVERY leg of the voucher JE carries the
+    // same attribution. Pre-fix the voucher posted with bare lines —
+    // per-supplier voucher analysis, per-tenant payment history, and
+    // per-department cashflow drilldowns were all silently broken.
+    const voucherDims: Record<string, any> = {};
+    if (relatedEntityType === "supplier" && relatedEntityId) voucherDims.vendorId = Number(relatedEntityId);
+    if (relatedEntityType === "client" && relatedEntityId) voucherDims.clientId = Number(relatedEntityId);
+    if (relatedEntityType === "vendor" && relatedEntityId) voucherDims.vendorId = Number(relatedEntityId);
+    if (relatedEntityType === "employee" && relatedEntityId) voucherDims.employeeId = Number(relatedEntityId);
+    if (relatedEntityType === "vehicle" && relatedEntityId) voucherDims.vehicleId = Number(relatedEntityId);
+    if (relatedEntityType === "property" && relatedEntityId) voucherDims.propertyId = Number(relatedEntityId);
+    if (contractId) voucherDims.contractId = Number(contractId);
+    if (departmentId) voucherDims.departmentId = Number(departmentId);
+    if (b.costCenter) voucherDims.costCenter = b.costCenter;
+
     const whtCreditLines = Array.from(whtCreditByAccount.entries()).map(
-      ([accountCode, amount]) => ({ accountCode, debit: 0, credit: amount })
+      ([accountCode, amount]) => ({ accountCode, debit: 0, credit: amount, ...voucherDims })
     );
 
-    const journalLines: { accountCode: string; debit: number; credit: number }[] = isReceipt
+    const journalLines: { accountCode: string; debit: number; credit: number; [k: string]: any }[] = isReceipt
       ? [
-          { accountCode: cashAcct, debit: totalWithVat, credit: 0 },
-          ...(computedVat > 0 ? [{ accountCode: outputVatCode, debit: 0, credit: computedVat }] : []),
-          { accountCode: subAccountCode || accountCode, debit: 0, credit: baseAmount },
+          { accountCode: cashAcct, debit: totalWithVat, credit: 0, ...voucherDims },
+          ...(computedVat > 0 ? [{ accountCode: outputVatCode, debit: 0, credit: computedVat, ...voucherDims }] : []),
+          { accountCode: subAccountCode || accountCode, debit: 0, credit: baseAmount, ...voucherDims },
         ]
       : [
-          { accountCode: subAccountCode || accountCode, debit: baseAmount, credit: 0 },
-          ...(computedVat > 0 ? [{ accountCode: inputVatCode2, debit: computedVat, credit: 0 }] : []),
+          { accountCode: subAccountCode || accountCode, debit: baseAmount, credit: 0, ...voucherDims },
+          ...(computedVat > 0 ? [{ accountCode: inputVatCode2, debit: computedVat, credit: 0, ...voucherDims }] : []),
           ...whtCreditLines,
-          { accountCode: cashAcct, debit: 0, credit: netCashOut },
+          { accountCode: cashAcct, debit: 0, credit: netCashOut, ...voucherDims },
         ];
 
     if (isDryRun(req)) {
