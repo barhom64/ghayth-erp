@@ -91,6 +91,12 @@ export default function FleetTelematicsSettings() {
     [["fleet-telematics-integrations"]],
     { successMessage: "نجح اختبار الاتصال بـ CMSV6" },
   );
+  const webhookTestMut = useApiMutation<unknown, Record<string, unknown>>(
+    "/fleet/telematics/webhook/cmsv6/test",
+    "POST",
+    [["fleet-telematics-sync-logs"]],
+    { successMessage: "تم تشغيل webhook التجريبي" },
+  );
 
   const submit = () => {
     createMut.mutate({
@@ -182,6 +188,17 @@ export default function FleetTelematicsSettings() {
                       >
                         <FlaskConical className="h-4 w-4 me-1" />
                         اختبار
+                      </GuardedButton>
+                      <GuardedButton
+                        perm="fleet.telematics.configure:update"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => webhookTestMut.mutate({ events: [], alerts: [], positions: [], sensors: [] })}
+                        disabled={webhookTestMut.isPending}
+                        title="إرسال webhook فارغ لاختبار المسار"
+                      >
+                        <ServerCog className="h-4 w-4 me-1" />
+                        webhook
                       </GuardedButton>
                       {r.status === "active" ? (
                         <GuardedButton
