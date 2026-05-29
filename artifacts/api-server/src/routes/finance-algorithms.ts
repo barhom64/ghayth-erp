@@ -91,6 +91,42 @@ const depreciateAllSchema = z.object({
   period: z.string().min(1),
 });
 
+// Asset lifecycle schemas — IFRS-compliant transfers / disposal /
+// impairment / revaluation. Each posts a JE through financialEngine
+// (period gate + sourceKey idempotency enforced) and updates the
+// fixed_assets row in the same transaction so the register stays in
+// sync with the ledger.
+const transferAssetSchema = z.object({
+  toBranchId: z.coerce.number().int().positive().optional(),
+  toDepartmentId: z.coerce.number().int().positive().optional(),
+  toCostCenterId: z.coerce.number().int().positive().optional(),
+  transferDate: z.string().optional(),
+  reason: z.string().min(3, "سبب النقل مطلوب (3 أحرف على الأقل)"),
+});
+
+const disposeAssetSchema = z.object({
+  disposalDate: z.string(),
+  disposalProceeds: z.coerce.number().min(0).default(0),
+  disposalType: z.enum(["sale", "scrap", "donation"]).default("sale"),
+  reason: z.string().min(3, "سبب التخلص مطلوب"),
+});
+
+const impairAssetSchema = z.object({
+  impairmentDate: z.string(),
+  // The amount being charged against the asset (DR impairment-loss,
+  // CR accumulated-impairment). Must be positive and ≤ current book value.
+  impairmentAmount: z.coerce.number().positive("قيمة الانخفاض يجب أن تكون أكبر من صفر"),
+  reason: z.string().min(3, "سبب الانخفاض مطلوب"),
+});
+
+const revalueAssetSchema = z.object({
+  revaluationDate: z.string(),
+  // Positive = upward revaluation (DR asset, CR revaluation surplus equity)
+  // Negative = downward revaluation (DR revaluation loss, CR asset)
+  revaluationDelta: z.coerce.number().refine((v) => v !== 0, "قيمة إعادة التقييم لا يمكن أن تكون صفراً"),
+  reason: z.string().min(3, "سبب إعادة التقييم مطلوب"),
+});
+
 const roundingDiffSchema = z.object({
   journalEntryId: z.coerce.number(),
   roundingAmount: z.coerce.number(),
@@ -1154,6 +1190,360 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
     });
   } catch (err) {
     handleRouteError(err, res, "Depreciate all error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ASSET LIFECYCLE — TRANSFER / DISPOSAL / IMPAIRMENT / REVALUATION
+// IFRS-compliant flows. Each posts a GL entry through financialEngine
+// (period gate + sourceKey idempotency) and updates fixed_assets in the
+// same transaction so the register stays in sync with the ledger.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /fixed-assets/:id/transfer — move an asset between branches /
+// departments / cost-centres. No DR/CR pair on the asset code itself
+// (the asset doesn't change value) — the journal carries DIM rebooks
+// only. We still post a balanced entry on the asset's own account so
+// the dim aggregates flip cleanly.
+financeAlgorithmsRouter.post("/fixed-assets/:id/transfer", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertFinanceRole(scope);
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(transferAssetSchema.safeParse(req.body ?? {}));
+    const transferDate = b.transferDate || todayISO();
+
+    const [asset] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2 AND status='active'`,
+      [id, scope.companyId]
+    );
+    if (!asset) throw new NotFoundError("الأصل غير موجود أو غير نشط");
+
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, transferDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن نقل أصل في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "transferDate", meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
+    const oldBranchId = (asset.branchId as number | null) ?? null;
+    const newBranchId = b.toBranchId ?? oldBranchId;
+    if (oldBranchId === newBranchId && !b.toDepartmentId && !b.toCostCenterId) {
+      throw new ValidationError("لا يوجد تغيير في الفرع / القسم / مركز التكلفة");
+    }
+
+    const bookValue = Number(asset.currentBookValue ?? 0);
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const assetCode = (asset.assetAccountCode as string | null) ?? "1500";
+
+    let journalId: number | null = null;
+    await withTransaction(async (client) => {
+      // Post a zero-net reclassification entry: DR + CR on the SAME asset
+      // code, the DR line tagged with the new dims and the CR line tagged
+      // with the old dims. Per-branch / per-dept asset roll-ups flip on
+      // the next period because both legs land on dim-aggregated lines.
+      const posted = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: newBranchId ?? scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `XFER-${asset.code ?? asset.id}-${transferDate}`,
+        description: `نقل أصل: ${asset.name} — ${b.reason}`,
+        type: "asset_transfer",
+        sourceType: "fixed_asset_transfer",
+        sourceId: id,
+        sourceKey: `finance:asset_transfer:${id}:${transferDate}`,
+        lines: [
+          { accountCode: assetCode, debit: bookValue, credit: 0, assetId: id, departmentId: b.toDepartmentId, costCenterId: b.toCostCenterId },
+          { accountCode: assetCode, debit: 0, credit: bookValue, assetId: id, departmentId: (asset.departmentId as number | null) ?? undefined, costCenterId: (asset.costCenterId as number | null) ?? undefined },
+        ],
+      });
+      journalId = posted.journalId;
+      await client.query(
+        `UPDATE fixed_assets SET "branchId"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+        [newBranchId, id, scope.companyId]
+      );
+    });
+
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fixed_assets.transfer", entity: "fixed_assets", entityId: id,
+      before: { branchId: oldBranchId },
+      after: { branchId: newBranchId, departmentId: b.toDepartmentId ?? null, costCenterId: b.toCostCenterId ?? null, transferDate, reason: b.reason, journalEntryId: journalId },
+    }).catch((e) => logger.error(e, "fixed_assets transfer audit failed"));
+
+    res.json({ message: "تم نقل الأصل بنجاح", journalEntryId: journalId, transferDate });
+  } catch (err) {
+    handleRouteError(err, res, "Transfer asset error:");
+  }
+});
+
+// POST /fixed-assets/:id/dispose — retire / sell / scrap / donate an
+// asset. The entry pattern:
+//   DR Cash / Receivable          ← proceeds (if any)
+//   DR Accumulated-Depreciation   ← reverse the dep schedule
+//   DR/CR Loss/Gain on disposal   ← plug to balance
+//        CR Fixed-Asset           ← original cost
+financeAlgorithmsRouter.post("/fixed-assets/:id/dispose", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertFinanceRole(scope);
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(disposeAssetSchema.safeParse(req.body ?? {}));
+
+    const [asset] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!asset) throw new NotFoundError("الأصل غير موجود");
+    if (asset.status !== "active") throw new ConflictError(`لا يمكن التخلص من أصل بحالة "${asset.status}"`);
+
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, b.disposalDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن التخلص من أصل في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "disposalDate", meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
+    const cost = Number(asset.purchaseCost ?? 0);
+    const accDep = Number(asset.accumulatedDepreciation ?? 0);
+    const bookValue = roundTo2(cost - accDep);
+    const proceeds = roundTo2(b.disposalProceeds);
+    const gainLoss = roundTo2(proceeds - bookValue);
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const assetCode = (asset.assetAccountCode as string | null) ?? "1500";
+    const accDepCode = (asset.accDepreciationAccountCode as string | null) ?? "1590";
+    const [cashCode, lossCode, gainCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_cash", "debit", "1100"),
+      financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_loss", "debit", "5999"),
+      financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_gain", "credit", "4999"),
+    ]);
+
+    const lines: any[] = [];
+    if (proceeds > 0) {
+      lines.push({ accountCode: cashCode, debit: proceeds, credit: 0, assetId: id, description: `حصيلة بيع الأصل ${asset.name}` });
+    }
+    if (accDep > 0) {
+      lines.push({ accountCode: accDepCode, debit: accDep, credit: 0, assetId: id, description: `تخلص — إلغاء مجمع الإهلاك` });
+    }
+    lines.push({ accountCode: assetCode, debit: 0, credit: cost, assetId: id, description: `تخلص — إلغاء أصل ثابت` });
+    if (gainLoss < 0) {
+      lines.push({ accountCode: lossCode, debit: Math.abs(gainLoss), credit: 0, assetId: id, description: `خسارة تخلص من أصل` });
+    } else if (gainLoss > 0) {
+      lines.push({ accountCode: gainCode, debit: 0, credit: gainLoss, assetId: id, description: `ربح تخلص من أصل` });
+    }
+
+    let journalId: number | null = null;
+    await withTransaction(async (client) => {
+      const posted = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: (asset.branchId as number | null) ?? scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `DISP-${asset.code ?? asset.id}-${b.disposalDate}`,
+        description: `تخلص من أصل: ${asset.name} (${b.disposalType}) — ${b.reason}`,
+        type: "asset_disposal",
+        sourceType: "fixed_asset_disposal",
+        sourceId: id,
+        sourceKey: `finance:asset_disposal:${id}`,
+        lines,
+      });
+      journalId = posted.journalId;
+      await client.query(
+        `UPDATE fixed_assets SET status='disposed', "disposedAt"=$1, "disposalValue"=$2, "updatedAt"=NOW()
+         WHERE id=$3 AND "companyId"=$4`,
+        [b.disposalDate, proceeds, id, scope.companyId]
+      );
+    });
+
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fixed_assets.dispose", entity: "fixed_assets", entityId: id,
+      before: { status: "active", bookValue },
+      after: { status: "disposed", disposalDate: b.disposalDate, proceeds, gainLoss, journalEntryId: journalId, reason: b.reason },
+    }).catch((e) => logger.error(e, "fixed_assets dispose audit failed"));
+
+    res.json({ message: "تم تسجيل التخلص من الأصل", journalEntryId: journalId, bookValueAtDisposal: bookValue, proceeds, gainLoss });
+  } catch (err) {
+    handleRouteError(err, res, "Dispose asset error:");
+  }
+});
+
+// POST /fixed-assets/:id/impair — IAS 36 impairment loss. The entry:
+//   DR Impairment loss (P&L)         ← impairment amount
+//        CR Accumulated impairment   ← impairment amount
+// We accumulate into a separate ledger (impairment-account, default 1591)
+// so the asset's purchase-cost column stays intact and the depreciation
+// schedule continues on the post-impairment book value.
+financeAlgorithmsRouter.post("/fixed-assets/:id/impair", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertFinanceRole(scope);
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(impairAssetSchema.safeParse(req.body ?? {}));
+
+    const [asset] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2 AND status='active'`,
+      [id, scope.companyId]
+    );
+    if (!asset) throw new NotFoundError("الأصل غير موجود أو غير نشط");
+
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, b.impairmentDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسجيل انخفاض القيمة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "impairmentDate", meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
+    const bookValue = Number(asset.currentBookValue ?? 0);
+    if (b.impairmentAmount > bookValue) {
+      throw new ValidationError(
+        `قيمة الانخفاض (${b.impairmentAmount}) تتجاوز القيمة الدفترية الحالية (${bookValue})`,
+        { field: "impairmentAmount", fix: `الحد الأقصى ${bookValue}` }
+      );
+    }
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [lossCode, accImpairmentCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "asset_impairment_loss", "debit", "5995"),
+      financialEngine.resolveAccountCode(scope.companyId, "asset_accumulated_impairment", "credit", "1591"),
+    ]);
+
+    const newAccumulated = roundTo2(Number(asset.accumulatedDepreciation) + b.impairmentAmount);
+    const newBookValue = roundTo2(bookValue - b.impairmentAmount);
+
+    let journalId: number | null = null;
+    await withTransaction(async (client) => {
+      const posted = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: (asset.branchId as number | null) ?? scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `IMPAIR-${asset.code ?? asset.id}-${b.impairmentDate}`,
+        description: `انخفاض قيمة أصل: ${asset.name} — ${b.reason}`,
+        type: "asset_impairment",
+        sourceType: "fixed_asset_impairment",
+        sourceId: id,
+        sourceKey: `finance:asset_impairment:${id}:${b.impairmentDate}`,
+        lines: [
+          { accountCode: lossCode, debit: b.impairmentAmount, credit: 0, assetId: id, description: `خسارة انخفاض قيمة` },
+          { accountCode: accImpairmentCode, debit: 0, credit: b.impairmentAmount, assetId: id, description: `مجمع انخفاض قيمة` },
+        ],
+      });
+      journalId = posted.journalId;
+      // Treat impairment as a permanent add to accumulated depreciation
+      // so future dep calculations work off the impaired book value
+      // without needing a separate "impairedValue" column.
+      await client.query(
+        `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+        [newAccumulated, newBookValue, id, scope.companyId]
+      );
+    });
+
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fixed_assets.impair", entity: "fixed_assets", entityId: id,
+      before: { bookValue, accumulatedDepreciation: Number(asset.accumulatedDepreciation) },
+      after: { bookValue: newBookValue, accumulatedDepreciation: newAccumulated, impairmentAmount: b.impairmentAmount, impairmentDate: b.impairmentDate, reason: b.reason, journalEntryId: journalId },
+    }).catch((e) => logger.error(e, "fixed_assets impair audit failed"));
+
+    res.json({ message: "تم تسجيل انخفاض قيمة الأصل", journalEntryId: journalId, newBookValue, impairmentAmount: b.impairmentAmount });
+  } catch (err) {
+    handleRouteError(err, res, "Impair asset error:");
+  }
+});
+
+// POST /fixed-assets/:id/revalue — IFRS revaluation model. The entry:
+//   delta > 0 (upward):
+//     DR Fixed-Asset                ← delta
+//          CR Revaluation Surplus   ← delta  (equity 3300)
+//   delta < 0 (downward):
+//     DR Revaluation Loss           ← abs(delta)  (P&L 5996)
+//          CR Fixed-Asset
+// purchaseCost is rebased to the revalued amount so depreciation
+// continues on the new carrying value.
+financeAlgorithmsRouter.post("/fixed-assets/:id/revalue", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertFinanceRole(scope);
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(revalueAssetSchema.safeParse(req.body ?? {}));
+
+    const [asset] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2 AND status='active'`,
+      [id, scope.companyId]
+    );
+    if (!asset) throw new NotFoundError("الأصل غير موجود أو غير نشط");
+
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, b.revaluationDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن إعادة تقييم أصل في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "revaluationDate", meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
+    const bookValue = Number(asset.currentBookValue ?? 0);
+    const delta = roundTo2(b.revaluationDelta);
+    if (delta < 0 && Math.abs(delta) > bookValue) {
+      throw new ValidationError(
+        `قيمة إعادة التقييم السلبية (${delta}) تتجاوز القيمة الدفترية (${bookValue})`,
+        { field: "revaluationDelta", fix: `الحد الأدنى -${bookValue}` }
+      );
+    }
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const assetCode = (asset.assetAccountCode as string | null) ?? "1500";
+    const [surplusCode, lossCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_surplus", "credit", "3300"),
+      financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_loss", "debit", "5996"),
+    ]);
+
+    const lines = delta > 0
+      ? [
+          { accountCode: assetCode, debit: delta, credit: 0, assetId: id, description: `إعادة تقييم — زيادة` },
+          { accountCode: surplusCode, debit: 0, credit: delta, assetId: id, description: `فائض إعادة تقييم` },
+        ]
+      : [
+          { accountCode: lossCode, debit: Math.abs(delta), credit: 0, assetId: id, description: `خسارة إعادة تقييم` },
+          { accountCode: assetCode, debit: 0, credit: Math.abs(delta), assetId: id, description: `إعادة تقييم — نقص` },
+        ];
+
+    const newBookValue = roundTo2(bookValue + delta);
+    const newPurchaseCost = roundTo2(Number(asset.purchaseCost) + delta);
+
+    let journalId: number | null = null;
+    await withTransaction(async (client) => {
+      const posted = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: (asset.branchId as number | null) ?? scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `REVAL-${asset.code ?? asset.id}-${b.revaluationDate}`,
+        description: `إعادة تقييم أصل: ${asset.name} (${delta > 0 ? "زيادة" : "نقص"}) — ${b.reason}`,
+        type: "asset_revaluation",
+        sourceType: "fixed_asset_revaluation",
+        sourceId: id,
+        sourceKey: `finance:asset_revaluation:${id}:${b.revaluationDate}`,
+        lines,
+      });
+      journalId = posted.journalId;
+      await client.query(
+        `UPDATE fixed_assets SET "purchaseCost"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+        [newPurchaseCost, newBookValue, id, scope.companyId]
+      );
+    });
+
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fixed_assets.revalue", entity: "fixed_assets", entityId: id,
+      before: { purchaseCost: Number(asset.purchaseCost), bookValue },
+      after: { purchaseCost: newPurchaseCost, bookValue: newBookValue, revaluationDelta: delta, revaluationDate: b.revaluationDate, reason: b.reason, journalEntryId: journalId },
+    }).catch((e) => logger.error(e, "fixed_assets revalue audit failed"));
+
+    res.json({ message: "تم إعادة تقييم الأصل", journalEntryId: journalId, newBookValue, revaluationDelta: delta });
+  } catch (err) {
+    handleRouteError(err, res, "Revalue asset error:");
   }
 });
 
