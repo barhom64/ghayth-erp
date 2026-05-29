@@ -36,7 +36,11 @@ export interface VerifyContext {
  */
 export async function buildVerifyContext(opts: { baseUrl: string }): Promise<VerifyContext> {
   const jobId = randomUUID();
-  const path = `/api/print/verify/${jobId}`;
+  // QR encodes the SPA verify page (`/print/verify/:jobId`), not the raw
+  // JSON endpoint. The SPA page is public, fetches `/api/print/verify/:jobId`
+  // itself, and renders an Arabic verification card. The JSON endpoint is
+  // still reachable directly for machine clients.
+  const path = `/print/verify/${jobId}`;
   const verifyUrl = opts.baseUrl ? `${opts.baseUrl.replace(/\/$/, "")}${path}` : path;
   let dataUrl: string | null = null;
   try {
