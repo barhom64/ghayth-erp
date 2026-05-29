@@ -69,6 +69,53 @@ const TIMELINE_ICONS: Record<string, { icon: typeof FileText; color: string; bg:
   project: { icon: FolderKanban, color: "text-purple-600", bg: "bg-purple-50" },
 };
 
+// Local card used by the tenancies + legal tabs on the client detail page.
+// Both panels render `<Card> + count-in-title + empty-state + linked-row
+// list`; only the icon, header text, empty message, and row body differ.
+// Extracted so a third relationship (umrah sub-agent, vehicle rental,
+// etc.) is a one-liner instead of a third copy of this shell.
+function ClientRelationshipCard<T extends { id: number | string }>({
+  icon: Icon,
+  title,
+  emptyMessage,
+  items,
+  hrefFor,
+  renderItem,
+}: {
+  icon: typeof FileText;
+  title: string;
+  emptyMessage: string;
+  items: T[];
+  hrefFor: (item: T) => string;
+  renderItem: (item: T) => React.ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Icon className="h-5 w-5" />
+          {title} ({items.length})
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {items.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8 text-sm">{emptyMessage}</p>
+        ) : (
+          <div className="space-y-2">
+            {items.map((item) => (
+              <Link key={item.id} href={hrefFor(item)}>
+                <a className="block p-3 rounded-md border hover:bg-muted/30 transition">
+                  {renderItem(item)}
+                </a>
+              </Link>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ClientDetail() {
   const [, params] = useRoute("/clients/:id");
   const id = params?.id || "";
@@ -609,87 +656,57 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "tenancies" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Home className="h-5 w-5" />
-              الإيجارات المرتبطة ({tenancies.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {tenancies.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8 text-sm">
-                لا توجد إيجارات مرتبطة بهذا العميل — اربط مستأجراً من صفحة تفاصيله ليظهر هنا
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {tenancies.map((t: any) => (
-                  <Link key={t.id} href={`/properties/tenants/${t.id}`}>
-                    <a className="block p-3 rounded-md border hover:bg-muted/30 transition">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-medium">{t.name}</div>
-                          <div className="text-xs text-muted-foreground space-x-2 space-x-reverse">
-                            {t.phone && <span><Phone className="inline h-3 w-3 ml-1" />{t.phone}</span>}
-                            {t.nationalId && <span>هوية: {t.nationalId}</span>}
-                          </div>
-                        </div>
-                        <Badge variant={Number(t.activeContracts) > 0 ? "default" : "outline"}>
-                          {t.activeContracts} عقد نشط
-                        </Badge>
-                      </div>
-                    </a>
-                  </Link>
-                ))}
+        <ClientRelationshipCard<any>
+          icon={Home}
+          title="الإيجارات المرتبطة"
+          emptyMessage="لا توجد إيجارات مرتبطة بهذا العميل — اربط مستأجراً من صفحة تفاصيله ليظهر هنا"
+          items={tenancies}
+          hrefFor={(t) => `/properties/tenants/${t.id}`}
+          renderItem={(t) => (
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">{t.name}</div>
+                <div className="text-xs text-muted-foreground space-x-2 space-x-reverse">
+                  {t.phone && <span><Phone className="inline h-3 w-3 ml-1" />{t.phone}</span>}
+                  {t.nationalId && <span>هوية: {t.nationalId}</span>}
+                </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <Badge variant={Number(t.activeContracts) > 0 ? "default" : "outline"}>
+                {t.activeContracts} عقد نشط
+              </Badge>
+            </div>
+          )}
+        />
       )}
 
       {activeTab === "legal" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Scale className="h-5 w-5" />
-              القضايا القانونية ({legalCases.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {legalCases.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8 text-sm">
-                لا توجد قضايا قانونية مرتبطة بهذا العميل
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {legalCases.map((lc: any) => (
-                  <Link key={lc.id} href={`/legal/cases/${lc.id}`}>
-                    <a className="block p-3 rounded-md border hover:bg-muted/30 transition">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{lc.title}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5 space-x-2 space-x-reverse">
-                            {lc.caseNumber && <span className="font-mono">#{lc.caseNumber}</span>}
-                            {lc.court && <span>{lc.court}</span>}
-                            {lc.filingDate && <span>{formatDateAr(lc.filingDate)}</span>}
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <Badge variant="outline" className="text-xs">{lc.status}</Badge>
-                          {lc.financialRisk && Number(lc.financialRisk) > 0 && (
-                            <span className="text-xs font-medium text-red-700">
-                              {formatCurrency(Number(lc.financialRisk))}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </a>
-                  </Link>
-                ))}
+        <ClientRelationshipCard<any>
+          icon={Scale}
+          title="القضايا القانونية"
+          emptyMessage="لا توجد قضايا قانونية مرتبطة بهذا العميل"
+          items={legalCases}
+          hrefFor={(lc) => `/legal/cases/${lc.id}`}
+          renderItem={(lc) => (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{lc.title}</div>
+                <div className="text-xs text-muted-foreground mt-0.5 space-x-2 space-x-reverse">
+                  {lc.caseNumber && <span className="font-mono">#{lc.caseNumber}</span>}
+                  {lc.court && <span>{lc.court}</span>}
+                  {lc.filingDate && <span>{formatDateAr(lc.filingDate)}</span>}
+                </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div className="flex flex-col items-end gap-1">
+                <Badge variant="outline" className="text-xs">{lc.status}</Badge>
+                {lc.financialRisk && Number(lc.financialRisk) > 0 && (
+                  <span className="text-xs font-medium text-red-700">
+                    {formatCurrency(Number(lc.financialRisk))}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        />
       )}
 
       {activeTab === "umrah" && id && (
