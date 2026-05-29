@@ -33,6 +33,7 @@ const ExitCreate = lazy(() => import("@/pages/create/hr/exit-create"));
 const WpsRuns = lazy(() => import("@/pages/hr/wps-runs"));
 const WpsRunDetail = lazy(() => import("@/pages/hr/wps-run-detail"));
 const Saudization = lazy(() => import("@/pages/hr/saudization"));
+const SaudiCompliance = lazy(() => import("@/pages/hr/saudi-compliance"));
 const Violations = lazy(() => import("@/pages/hr/violations"));
 const ViolationDetail = lazy(() => import("@/pages/hr/violation-detail"));
 const ViolationsCreate = lazy(() => import("@/pages/create/hr/violations-create"));
@@ -194,4 +195,5 @@ export const hrRoutes = [
   { path: "/hr/wps", component: WpsRuns, subKey: "payroll" },
   { path: "/hr/wps/:id", component: WpsRunDetail, subKey: "payroll" },
   { path: "/hr/saudization", component: Saudization, subKey: "employees" },
+  { path: "/hr/saudi-compliance", component: SaudiCompliance, subKey: "payroll" },
 ];

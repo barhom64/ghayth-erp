@@ -295,6 +295,25 @@ function extractFrontendCalls() {
     // `useApiMutation<T, Record<string, unknown>>(...)` call would parse
     // as `<T, Record<string, unknown>` then fail to reach the `(`,
     // hiding every typed-mutation call with a Record/Array/Map generic.
+    // apiUrl("/x") — direct URL builder used in <a href={apiUrl(...)} download>
+    // and `<img src={apiUrl(...)}>`. Always a GET (browser navigation/fetch).
+    // Detected first so it doesn't get caught by the broader helper regex.
+    const apiUrlRe = /\bapiUrl\s*\(\s*(?:["']([^"']+)["']|`([^`$]+)`)/g;
+    for (const m of src.matchAll(apiUrlRe)) {
+      const url = (m[1] ?? m[2] ?? "").trim();
+      if (url.startsWith("/")) {
+        calls.push({ file: rel, url, line: lineOf(src, m.index), method: "GET", source: "apiUrl" });
+      }
+    }
+    // apiUrl(`/x/${id}/y`) — template-literal form with interpolation.
+    const apiUrlTplRe = /\bapiUrl\s*\(\s*`/g;
+    for (const m of src.matchAll(apiUrlTplRe)) {
+      const start = m.index + m[0].length - 1;
+      const lit = readString(src, start);
+      if (lit && lit.value.startsWith("/")) {
+        calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "apiUrl" });
+      }
+    }
     const re = /\b(apiFetch|apiPatch|apiPost|apiPut|apiDelete|useApiQuery|useApiMutation)\b\s*(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(/g;
     for (const m of src.matchAll(re)) {
       const helper = m[1];
@@ -676,15 +695,18 @@ function extractFrontendCalls() {
     // method is PATCH; allow PUT via the `method` prop. The URL lives
     // in a JSX brace expression so we read it via the
     // `endpoint\s*=\s*\{` opener and walk the template literal.
-    const entityEditRe = /\bEntityEditDialog[\s\S]{0,200}?\bendpoint\s*=\s*\{/g;
+    // 1500-char window: EntityEditDialog blocks routinely span >400 chars
+    // when `defaultValues={{ ... }}` is multi-line, putting `endpoint=` past
+    // the 200-char fence and hiding ~15 real wirings (property-maintenance,
+    // hr-violation edits, etc.).
+    const entityEditRe = /\bEntityEditDialog[\s\S]{0,1500}?\bendpoint\s*=\s*\{/g;
     for (const m of src.matchAll(entityEditRe)) {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
       const lit = readString(src, i);
       if (!lit) continue;
       if (!lit.value.startsWith("/")) continue;
-      // Look ahead for `method="PUT"` in the same JSX block (within ~200 chars)
-      const lookahead = src.slice(m.index, m.index + 400);
+      const lookahead = src.slice(m.index, m.index + 1700);
       const verb = /method\s*=\s*["']PUT["']/.test(lookahead) ? "PUT" : "PATCH";
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: verb, source: "prop" });
     }

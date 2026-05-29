@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { z } from "zod";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import {
@@ -13,7 +13,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Wrench } from "lucide-react";
+import { Edit, Wrench, CheckCircle2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -74,6 +74,21 @@ export default function PropertyMaintenanceDetail() {
   );
 
   const item = data;
+
+  const completeMut = useApiMutation<unknown, Record<string, never>>(
+    `/properties/maintenance-requests/${id}/complete`,
+    "POST",
+    [["property-maintenance", String(id)], ["maintenance-requests"]],
+    { successMessage: "تم إنهاء طلب الصيانة" },
+  );
+
+  // GET /properties/technicians — used to show available technicians the
+  // request can be assigned to. Populates the "إسناد" field on edit.
+  const { data: techniciansResp } = useApiQuery<{ data: Array<{ id: number; name: string }> }>(
+    ["properties-technicians"],
+    "/properties/technicians",
+  );
+  const technicians = techniciansResp?.data ?? [];
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -143,7 +158,9 @@ export default function PropertyMaintenanceDetail() {
             {item?.assignedTo && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">المسؤول</p>
-                <span className="text-status-neutral-foreground">{item.assignedTo}</span>
+                <span className="text-status-neutral-foreground">
+                  {technicians.find((t) => String(t.id) === String(item.assignedTo))?.name ?? item.assignedTo}
+                </span>
               </div>
             )}
             {item?.vendor && (
@@ -236,6 +253,16 @@ export default function PropertyMaintenanceDetail() {
           >
             <Edit className="h-4 w-4 ms-1" />
             تعديل
+          </GuardedButton>
+          <GuardedButton
+            perm="properties:update"
+            size="sm"
+            rateLimitAware
+            onClick={() => completeMut.mutate({})}
+            disabled={!item || item?.status === "completed" || completeMut.isPending}
+          >
+            <CheckCircle2 className="h-4 w-4 ms-1" />
+            إنهاء الصيانة
           </GuardedButton>
         </>
       }

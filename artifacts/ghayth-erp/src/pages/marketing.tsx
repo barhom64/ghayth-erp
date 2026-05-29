@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -47,6 +48,16 @@ function CampaignRoasDialog({ campaign, onClose }: { campaign: any | null; onClo
   const { data: roas, isLoading, refetch } = useApiQuery<CampaignRoas>(
     ["campaign-roas", String(campaign?.id ?? "")],
     campaign ? `/marketing/campaigns/${campaign.id}/roas` : "",
+    !!campaign,
+  );
+
+  // GET /marketing/campaigns/:id — full campaign row including
+  // status/budget/spend/channel/period info. The list view only fetches
+  // summary fields; load this when the ROAS dialog opens so we can show
+  // the campaign metadata too.
+  const { data: campaignDetail } = useApiQuery<any>(
+    ["campaign-detail", String(campaign?.id ?? "")],
+    campaign ? `/marketing/campaigns/${campaign.id}` : null,
     !!campaign,
   );
 
@@ -122,6 +133,14 @@ function CampaignRoasDialog({ campaign, onClose }: { campaign: any | null; onClo
                 </CardContent>
               </Card>
             </div>
+            {campaignDetail && (
+              <div className="text-xs grid grid-cols-2 gap-1 border rounded p-2 bg-muted/30">
+                {campaignDetail.channel && <p className="text-muted-foreground">القناة: <span className="font-medium">{campaignDetail.channel}</span></p>}
+                {campaignDetail.status && <p className="text-muted-foreground">الحالة: <span className="font-medium">{campaignDetail.status}</span></p>}
+                {campaignDetail.startDate && <p className="text-muted-foreground">البداية: <span className="font-medium">{campaignDetail.startDate}</span></p>}
+                {campaignDetail.endDate && <p className="text-muted-foreground">النهاية: <span className="font-medium">{campaignDetail.endDate}</span></p>}
+              </div>
+            )}
             <div className="pt-3 border-t space-y-2">
               <Label className="text-xs">تحديث قيمة الإيرادات</Label>
               <div className="flex gap-2">
@@ -250,6 +269,11 @@ function FunnelTab() {
 function CampaignsTab() {
   const { data: stats } = useApiQuery<any>(["mkt-stats"], "/marketing/stats");
   const { data: campaignsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["mkt-campaigns"], "/marketing/campaigns");
+  // GET /marketing/templates — reusable creative templates (subject + body
+  // for email, body for SMS/WhatsApp). Exposed as a hint badge in the
+  // header strip so users know how many are available.
+  const { data: templatesResp } = useApiQuery<{ data: any[] }>(["mkt-templates"], "/marketing/templates");
+  const templates = templatesResp?.data ?? [];
   const items = asList(campaignsResp);
   const [filters, setFilters] = useFilters();
   const pageSize = 20;
@@ -371,9 +395,16 @@ function CampaignsTab() {
 
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold">الحملات التسويقية</h2>
-        <Link href="/marketing/create">
-          <GuardedButton perm="marketing:create" size="sm"><Plus className="h-4 w-4 me-1" />حملة جديدة</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          {templates.length > 0 && (
+            <Badge variant="outline" className="text-[10px]">
+              {templates.length} قالب متاح
+            </Badge>
+          )}
+          <Link href="/marketing/create">
+            <GuardedButton perm="marketing:create" size="sm"><Plus className="h-4 w-4 me-1" />حملة جديدة</GuardedButton>
+          </Link>
+        </div>
       </div>
 
       <AdvancedFilters

@@ -253,6 +253,11 @@ interface DependencyNode {
 
 export default function AdminMonitoring() {
   const { data: health, isLoading, error, refetch } = useApiQuery<any>(["system-health"], "/admin/system-health");
+  // Lightweight rolled-up widget — GET /admin/api-health returns
+  // uptime + per-service ok/degraded summary. Surfaced as a small badge
+  // strip at the top of the page; fast to load and good as a "is the API
+  // up at all?" quick check.
+  const apiHealthQ = useApiQuery<any>(["admin-api-health"], "/admin/api-health");
   // Lower-level operational endpoints under /health/* — schema integrity,
   // raw Prometheus counters, environment-config dump, system tuning.
   // Rendered as a tabbed "snapshot" panel for SRE-level debugging.
@@ -353,6 +358,23 @@ export default function AdminMonitoring() {
     >
       <PageStateWrapper isLoading={isLoading && !health} error={error} onRetry={refetch}>
       <div className="space-y-6">
+
+      {/* الرولد-أب API health (نقطة بسيطة "هل الـ API يعمل؟") */}
+      {apiHealthQ.data && (
+        <div className="flex items-center gap-2 text-xs border rounded p-2 bg-muted/30">
+          <Badge variant={apiHealthQ.data.status === "ok" ? "default" : "destructive"} className="text-[10px]">
+            {apiHealthQ.data.status}
+          </Badge>
+          <span className="text-muted-foreground">
+            uptime: <span className="font-mono">{Math.round(Number(apiHealthQ.data.uptime ?? 0))}s</span>
+          </span>
+          {apiHealthQ.data.services && Object.entries(apiHealthQ.data.services).map(([k, v]) => (
+            <span key={k} className="text-muted-foreground">
+              {k}: <span className={String(v) === "ok" ? "text-status-success-foreground font-medium" : "text-status-error-foreground"}>{String(v)}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Low-level health probes — these are SRE-facing snapshots. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">

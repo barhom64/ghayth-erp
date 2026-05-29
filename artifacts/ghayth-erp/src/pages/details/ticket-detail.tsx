@@ -140,6 +140,38 @@ export default function TicketDetail() {
 
   const replies = ticket?.replies || [];
 
+  // POST /support/tickets/:id/field-visit — schedule an on-site visit.
+  // Useful for properties/maintenance tickets that escalate beyond a
+  // remote fix.
+  const handleScheduleVisit = async () => {
+    try {
+      const dateInput = window.prompt("تاريخ الزيارة (YYYY-MM-DD)");
+      if (!dateInput) return;
+      await apiFetch(`/support/tickets/${id}/field-visit`, {
+        method: "POST",
+        body: JSON.stringify({ scheduledDate: dateInput }),
+      });
+      toast({ title: "تم جدولة الزيارة الميدانية" });
+      qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
+    } catch (err) {
+      toast({ variant: "destructive", title: "تعذر الجدولة", description: getErrorMessage(err) });
+    }
+  };
+
+  // POST /support/tickets/check-sla — runs the SLA bookkeeper across all
+  // open tickets and flags breaches. Triggered manually from this page as
+  // an "احسب الـ SLA الآن" diagnostic.
+  const handleCheckSla = async () => {
+    try {
+      await apiFetch("/support/tickets/check-sla", { method: "POST" });
+      toast({ title: "تم احتساب الـ SLA" });
+      qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
+      qc.invalidateQueries({ queryKey: ["tickets"] });
+    } catch (err) {
+      toast({ variant: "destructive", title: "تعذر الاحتساب", description: getErrorMessage(err) });
+    }
+  };
+
   const overview = ticket ? (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
@@ -340,6 +372,8 @@ export default function TicketDetail() {
       actions={
         <div className="flex items-center gap-2">
           <PrintButton entityType="support_ticket" entityId={id ?? 0} formats={["a4"]} label="طباعة" />
+          <Button variant="outline" size="sm" onClick={handleCheckSla} rateLimitAware>احسب الـ SLA</Button>
+          <Button variant="outline" size="sm" onClick={handleScheduleVisit} rateLimitAware>زيارة ميدانية</Button>
           {deleting ? (
             <div className="flex gap-2">
               <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>

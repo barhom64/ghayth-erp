@@ -112,6 +112,14 @@ export default function UmrahSubAgentDetail() {
   );
   const payments = asList(paymentsResp?.data ?? paymentsResp);
 
+  // GET /umrah/statements/:subAgentId — rolled-up running balance + per-
+  // booking breakdown, computed server-side.
+  const { data: statement } = useApiQuery<any>(
+    ["umrah-sub-agent-statement", String(id ?? 0)],
+    id ? `/umrah/statements/${id}` : null,
+    !!id,
+  );
+
   const paymentsTab: ExtraTab = {
     key: "payments",
     label: "الدفعات",
@@ -162,6 +170,31 @@ export default function UmrahSubAgentDetail() {
 
   const overview = (
     <div className="space-y-4">
+      {statement && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">كشف الحساب الجاري</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div>
+              <p className="text-muted-foreground">الرصيد</p>
+              <p className="font-bold font-mono">{formatCurrency(Number(statement.balance ?? 0))}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">المدفوع</p>
+              <p className="font-mono">{formatCurrency(Number(statement.totalPaid ?? 0))}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">المستحق</p>
+              <p className="font-mono">{formatCurrency(Number(statement.totalDue ?? 0))}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">عدد الحجوزات</p>
+              <p className="font-mono">{statement.bookingsCount ?? 0}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="inline-flex items-center gap-2 text-sm">

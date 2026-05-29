@@ -144,13 +144,11 @@ export default function PropertiesOwnerStatement() {
     ? ownersResp
     : (ownersResp?.data ?? []);
 
-  const queryUrl = ownerId
-    ? `/properties/owners/${ownerId}/statement?from=${from}&to=${to}${commissionOverride ? `&commissionRate=${commissionOverride}` : ""}`
-    : null;
-
   const { data, isLoading, isError, error, refetch } = useApiQuery<OwnerStatement>(
     ["owner-statement", ownerId, from, to, commissionOverride],
-    queryUrl,
+    ownerId
+      ? `/properties/owners/${ownerId}/statement?from=${from}&to=${to}${commissionOverride ? `&commissionRate=${commissionOverride}` : ""}`
+      : null,
   );
 
   const { data: payoutsResp, refetch: refetchPayouts } = useApiQuery<{ data: PayoutRow[] }>(

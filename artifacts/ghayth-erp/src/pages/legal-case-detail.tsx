@@ -35,6 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { LoadingSpinner } from "@/components/shared/loading-error-states";
 
 
 const STEP_IMPACTS: Record<string, { icon: string; title: string; description: string; severity: "info" | "warning" | "danger" | "success" }> = {
@@ -402,6 +403,16 @@ export default function LegalCaseDetail() {
   const [showAddJudgment, setShowAddJudgment] = useState(false);
   const [showAddCorrespondence, setShowAddCorrespondence] = useState(false);
   const [showAddCost, setShowAddCost] = useState(false);
+  const [viewCorrespondenceId, setViewCorrespondenceId] = useState<number | null>(null);
+
+  // GET /legal/correspondence/:id — full correspondence row including
+  // its parent caseNumber/caseTitle. Used when the user clicks a row in
+  // the correspondence tab.
+  const { data: corrDetail } = useApiQuery<any>(
+    ["legal-correspondence", String(viewCorrespondenceId)],
+    viewCorrespondenceId ? `/legal/correspondence/${viewCorrespondenceId}` : null,
+    !!viewCorrespondenceId,
+  );
 
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("legal_case", Number(id));
 
@@ -420,8 +431,26 @@ export default function LegalCaseDetail() {
     `/legal/cases/${id}/correspondence`,
     !!id,
   );
+  // Dedicated sessions endpoint — falls back to caseData.sessions if the
+  // main payload still embeds them, but lets us refresh sessions without
+  // refetching the entire case header.
+  const { data: sessionsResp, refetch: refetchSessions } = useApiQuery<any>(
+    ["legal-case-sessions", id],
+    `/legal/cases/${id}/sessions`,
+    !!id,
+  );
   const judgments: any[] = asList(judgmentsResp?.data ?? judgmentsResp);
   const correspondence: any[] = asList(correspondenceResp?.data ?? correspondenceResp);
+
+  // PATCH /legal/cases/:id/financial-risk — adjusts the case's posted
+  // financial-risk amount independently from the status flow. Required
+  // for re-estimates when the risk assessment changes mid-case.
+  const financialRiskMut = useApiMutation<any, { amount: number; notes?: string }>(
+    () => `/legal/cases/${id}/financial-risk`,
+    "PATCH",
+    [["legal-case", String(id)]],
+    { successMessage: "تم تحديث المخاطر المالية" },
+  );
 
   const transitionMut = useApiMutation<any, { status: string }>(
     () => `/legal/cases/${id}`,
@@ -445,10 +474,11 @@ export default function LegalCaseDetail() {
     { successMessage: "تم إغلاق القضية", onSuccess: () => refetch() },
   );
 
-  const sessions = caseData?.sessions || [];
+  const sessions = asList(sessionsResp?.data ?? sessionsResp) || caseData?.sessions || [];
 
   const handleSessionAdded = () => {
     setShowAddSession(false);
+    refetchSessions();
     refetch();
     qc.invalidateQueries({ queryKey: ["legal-cases"] });
     qc.invalidateQueries({ queryKey: ["legal-stats"] });
@@ -745,7 +775,39 @@ export default function LegalCaseDetail() {
               data={correspondence}
               noToolbar
               pageSize={10}
+              onRowClick={(r) => setViewCorrespondenceId(r.id)}
             />
+          )}
+          {viewCorrespondenceId && (
+            <Card className="border-dashed">
+              <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm">تفاصيل المراسلة</CardTitle>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground"
+                  onClick={() => setViewCorrespondenceId(null)}
+                >
+                  إغلاق ×
+                </button>
+              </CardHeader>
+              <CardContent>
+                {corrDetail ? (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">الموضوع:</span><span className="font-medium">{corrDetail.subject}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">التاريخ:</span><span>{corrDetail.correspondenceDate ? formatDateAr(corrDetail.correspondenceDate) : "—"}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">الاتجاه:</span><Badge variant="outline">{corrDetail.direction === "outgoing" ? "صادرة" : "واردة"}</Badge></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">الأطراف:</span><span>{corrDetail.parties ?? "—"}</span></div>
+                    <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">المرجع:</span><span className="font-mono text-xs">{corrDetail.documentRef ?? "—"}</span></div>
+                    {corrDetail.notes && (
+                      <div className="pt-1">
+                        <p className="text-muted-foreground text-xs">ملاحظات</p>
+                        <p className="whitespace-pre-wrap">{corrDetail.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : <LoadingSpinner />}
+              </CardContent>
+            </Card>
           )}
         </div>
       ),
@@ -764,14 +826,38 @@ export default function LegalCaseDetail() {
           </div>
           {showAddCost && <AddCostForm caseId={Number(id)} onSuccess={handleCostAdded} />}
           <Card>
-            <CardContent className="p-4 text-sm text-muted-foreground">
-              مجموع المخاطر المالية المتراكم على القضية:
-              <span className="font-bold text-status-error-foreground ms-2">
-                {formatCurrency(Number(caseData?.financialRisk || 0))}
-              </span>
-              <p className="text-xs text-muted-foreground mt-2">
+            <CardContent className="p-4 text-sm text-muted-foreground space-y-2">
+              <div>
+                مجموع المخاطر المالية المتراكم على القضية:
+                <span className="font-bold text-status-error-foreground ms-2">
+                  {formatCurrency(Number(caseData?.financialRisk || 0))}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
                 إضافة تكلفة جديدة تُراكم القيمة على financialRisk الإجمالي للقضية.
               </p>
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <span className="text-xs">تعديل يدوي:</span>
+                <GuardedButton
+                  perm="legal.cases:update"
+                  variant="outline"
+                  size="sm"
+                  rateLimitAware
+                  disabled={financialRiskMut.isPending}
+                  onClick={() => {
+                    const v = window.prompt("القيمة الجديدة للمخاطر المالية:", String(caseData?.financialRisk ?? 0));
+                    if (v == null) return;
+                    const amount = Number(v);
+                    if (!Number.isFinite(amount) || amount < 0) {
+                      toast({ variant: "destructive", title: "قيمة غير صالحة" });
+                      return;
+                    }
+                    financialRiskMut.mutate({ amount });
+                  }}
+                >
+                  تحديث المخاطر
+                </GuardedButton>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -786,6 +872,7 @@ export default function LegalCaseDetail() {
   ];
 
   return (
+    <>
     <DetailPageLayout
       title={caseData?.title || ""}
       subtitle={caseData?.caseNumber || undefined}
@@ -808,6 +895,7 @@ export default function LegalCaseDetail() {
       extraTabs={[...extraTabs, ...registryExtraTabs]}
       hideTabs={registryHideTabs}
     />
+    </>
   );
 }
 
