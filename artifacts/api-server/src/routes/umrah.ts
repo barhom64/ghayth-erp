@@ -28,7 +28,11 @@ import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
-import { confirmVouchersImport } from "../lib/umrahImportEngine.js";
+import {
+  confirmVouchersImport,
+  previewMutamersImport,
+  previewVouchersImport,
+} from "../lib/umrahImportEngine.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEASON LOCK — rejects writes on closed/archived seasons
@@ -844,45 +848,65 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
   try {
     const scope = req.scope!;
     const { seasonId, rows: importRows, fileType } = zodParse(importPreviewSchema.safeParse(req.body));
-    const passportHashes = importRows.filter((r) => r.passportNumber).map((r) => blindIndex(String(r.passportNumber)));
-    const existingRows = passportHashes.length > 0
-      ? await rawQuery<Record<string, unknown>>(`SELECT "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
-      : [];
-    const existingSet = new Set(existingRows.map((r) => r.passportNumber_hash));
-    const newRows = importRows.filter((r) => r.passportNumber && !existingSet.has(blindIndex(String(r.passportNumber))));
-    const duplicateRows = importRows.filter((r) => r.passportNumber && existingSet.has(blindIndex(String(r.passportNumber))));
-    const errorRows = importRows.filter((r) => !r.passportNumber || !r.fullName);
-    const nuskCodes = [...new Set(importRows.map((r) => r.nuskCode).filter(Boolean))];
-    const linkedAgents = nuskCodes.length > 0
-      ? await rawQuery<Record<string, unknown>>(`SELECT "nuskCode", name FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode" = ANY($2)`, [scope.companyId, nuskCodes])
-      : [];
-    const linkedSet = new Set(linkedAgents.map((a) => a.nuskCode));
-    const unlinkedSubAgents = nuskCodes.filter((c) => !linkedSet.has(c)).map((c) => ({ nuskCode: c }));
-    // Preview is read-only but worth tracking so operators can spot
-    // patterns (e.g. repeated previews of the same broken file, files
-    // with high duplicate counts) before they commit. The event carries
-    // counts only — no row data — so it stays small in the DLQ.
+
+    // Delegate to umrahImportEngine so the preview reflects the same
+    // dedup keys + warnings the confirm step will use. Pre-PR the route
+    // ran an inline legacy query against `umrah_pilgrims.passportNumber_hash`
+    // that returned only basic counts — the wizard's agent-linking
+    // warnings (`newAgentsToCreate`, `rowsWithoutAgent`) never surfaced
+    // because the engine wasn't on the path.
+    const importScope = {
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? 0,
+      userId: scope.userId,
+      seasonId,
+    };
+    const diff = fileType === "vouchers"
+      ? await previewVouchersImport(importScope, importRows)
+      : await previewMutamersImport(importScope, importRows);
+
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "umrah.import.previewed", entity: "umrah_pilgrims", entityId: 0,
+      action: "umrah.import.previewed",
+      entity: fileType === "vouchers" ? "umrah_nusk_invoices" : "umrah_pilgrims",
+      entityId: 0,
       details: JSON.stringify({
         seasonId, fileType,
-        totalRows: importRows.length,
-        newRecords: newRows.length,
-        duplicateRecords: duplicateRows.length,
-        errorRecords: errorRows.length,
-        unlinkedSubAgentCount: unlinkedSubAgents.length,
+        total: diff.totalRows,
+        newCount: diff.newRows.length,
+        updatedCount: diff.updatedRows.length,
+        unchangedCount: diff.skippedCount,
+        errorCount: diff.errorRows.length,
+        unlinkedSubAgentCount: diff.unlinkedSubAgents.length,
+        newAgentsCount: diff.newAgentsToCreate.length,
+        rowsWithoutAgent: diff.rowsWithoutAgent,
       }),
     }).catch((e) => logger.error(e, "umrah import preview bg"));
+
+    // Response shape mirrors the wizard's `PreviewSummary` interface so
+    // the UI's counters + warning cards work without translation. The
+    // `*Records` aliases are kept for backward compat with older callers
+    // that snapshotted the previous response shape.
     res.json({
-      totalRows: importRows.length,
-      newRecords: newRows.length,
-      duplicateRecords: duplicateRows.length,
-      errorRecords: errorRows.length,
-      unlinkedSubAgents,
-      sampleNew: newRows.slice(0, 5),
-      sampleDuplicate: duplicateRows.slice(0, 5),
-      sampleErrors: errorRows.slice(0, 5),
+      // Canonical UI names
+      total: diff.totalRows,
+      newCount: diff.newRows.length,
+      updatedCount: diff.updatedRows.length,
+      unchangedCount: diff.skippedCount,
+      errorCount: diff.errorRows.length,
+      errors: diff.errorRows.map((e) => ({ row: e.rowIndex, message: e.error })),
+      unlinkedSubAgents: diff.unlinkedSubAgents,
+      newAgentsToCreate: diff.newAgentsToCreate,
+      rowsWithoutAgent: diff.rowsWithoutAgent,
+      financialImpactCount: diff.financialImpactCount,
+      // Back-compat aliases (legacy callers / older clients).
+      totalRows: diff.totalRows,
+      newRecords: diff.newRows.length,
+      duplicateRecords: diff.skippedCount,
+      errorRecords: diff.errorRows.length,
+      sampleNew: diff.newRows.slice(0, 5),
+      sampleDuplicate: diff.updatedRows.slice(0, 5).map((u) => u.row),
+      sampleErrors: diff.errorRows.slice(0, 5),
     });
   } catch (err) { handleRouteError(err, res, "Import preview error"); }
 });
