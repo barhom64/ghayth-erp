@@ -36,8 +36,220 @@ function get(obj: unknown, path: string): unknown {
   return cur;
 }
 
+/** Canonical English DB enum value → Arabic display label, used by
+ *  formatValue() so `{{entity.status}}` renders "نشط" instead of "active"
+ *  in every printed doc. Covers the 27 distinct status values found in
+ *  db/schema_pre.sql plus common type/workflow synonyms. Keep this in sync
+ *  with the SPA's per-page STATUS_LABELS maps so the on-screen badge and
+ *  the printed-doc text never disagree. */
+const ENUM_AR: Record<string, string> = {
+  // Lifecycle statuses
+  draft: "مسودة",
+  pending: "قيد المراجعة",
+  pending_approval: "بانتظار الاعتماد",
+  approved: "معتمد",
+  rejected: "مرفوض",
+  active: "نشط",
+  inactive: "غير نشط",
+  posted: "مُرحَّل",
+  completed: "مكتمل",
+  cancelled: "ملغى",
+  void: "ملغى",
+  closed: "مغلق",
+  open: "مفتوح",
+  new: "جديد",
+  in_progress: "قيد التنفيذ",
+  scheduled: "مجدول",
+  on_hold: "معلَّق",
+  suspended: "موقوف",
+  blocked: "محظور",
+  expired: "منتهٍ",
+  overdue: "متأخر",
+  // Payment / settlement statuses
+  paid: "مدفوع",
+  unpaid: "غير مدفوع",
+  partial: "جزئي",
+  partially_paid: "مدفوع جزئياً",
+  invoiced: "مُفوتر",
+  disputed: "متنازع عليه",
+  // Inventory / logistics
+  delivered: "مُسلَّم",
+  received: "مُستلَم",
+  shipped: "مشحون",
+  returned: "مُرتجع",
+  fulfilled: "مُلبَّى",
+  // Voucher / journal types
+  receipt: "سند قبض",
+  payment: "سند صرف",
+  // Boolean stringifications a few loaders produce
+  true: "نعم",
+  false: "لا",
+  yes: "نعم",
+  no: "لا",
+  // Gender (one of the few enums printed unchanged today)
+  male: "ذكر",
+  female: "أنثى",
+  // Common direction / channel words
+  incoming: "وارد",
+  outgoing: "صادر",
+  internal: "داخلي",
+  external: "خارجي",
+  // ── Finance type maps ─ mirrored from
+  // artifacts/ghayth-erp/src/lib/finance-type-maps.ts so the printed PDF
+  // reads the same Arabic label as the SPA badge for the same value.
+  // Payment methods
+  cash: "نقدي",
+  bank_transfer: "تحويل بنكي",
+  bank: "تحويل بنكي",
+  check: "شيك",
+  cheque: "شيك",
+  credit_card: "بطاقة ائتمان",
+  card: "بطاقة ائتمان",
+  custody: "من العهدة",
+  // Voucher operations (when used as `type` on a voucher row)
+  rent: "تحصيل إيجار",
+  invoice_payment: "سداد فاتورة عميل",
+  deposit: "إيداع ضمان",
+  refund: "استرداد",
+  vendor_invoice: "سداد فاتورة مورد",
+  salary: "صرف راتب",
+  advance: "سلفة موظف",
+  legal_fee: "أتعاب قانونية",
+  purchase: "مشتريات",
+  insurance: "سداد تأمين",
+  maintenance: "صيانة",
+  // Invoice types
+  standard: "فاتورة عادية",
+  simplified: "فاتورة مبسطة",
+  credit_memo: "إشعار دائن",
+  debit_memo: "إشعار مدين",
+  credit_note: "إشعار دائن",
+  debit_note: "إشعار مدين",
+  // Depreciation methods
+  straight_line: "القسط الثابت",
+  declining_balance: "القسط المتناقص",
+  // Account types
+  asset: "أصول",
+  liability: "التزامات",
+  equity: "حقوق ملكية",
+  revenue: "إيرادات",
+  expense: "مصروفات",
+  contra: "حساب مقابل",
+  // Expense categories
+  operational: "تشغيلية",
+  administrative: "إدارية",
+  marketing: "تسويقية",
+  travel: "سفر",
+  utilities: "مرافق",
+  salaries: "رواتب",
+  // Priority labels (priority-labels.ts)
+  high: "عالية",
+  medium: "متوسطة",
+  low: "منخفضة",
+  urgent: "عاجلة",
+  critical: "حرجة",
+  // ── HR type maps ─ from hr-type-maps.ts
+  // Leave types
+  annual: "سنوية",
+  sick: "مرضية",
+  personal: "شخصية",
+  maternity: "أمومة",
+  paternity: "أبوة",
+  emergency: "طارئة",
+  // Discipline reasons
+  late: "تأخر",
+  early_leave: "مغادرة مبكرة",
+  absence: "غياب",
+  behavior: "سلوك",
+  organization: "تنظيم",
+  gps_out_of_range: "خروج عن النطاق",
+  // Document types
+  employment_certificate: "شهادة عمل",
+  salary_certificate: "شهادة راتب",
+  experience_letter: "شهادة خبرة",
+  warning_letter: "خطاب إنذار",
+  termination_letter: "خطاب إنهاء خدمة",
+  work_permit: "تصريح عمل",
+  iqama: "إقامة",
+  passport: "جواز سفر",
+  contract: "عقد عمل",
+  driving_license: "رخصة قيادة",
+  vehicle_registration: "رخصة سير",
+  vehicle_insurance: "تأمين مركبة",
+  vehicle_inspection: "فحص دوري",
+  commercial_registration: "سجل تجاري",
+  // Exit / termination reasons
+  resignation: "استقالة",
+  termination: "فصل",
+  end_of_service: "إنهاء خدمة",
+  contract_end: "انتهاء عقد",
+  retirement: "تقاعد",
+  mutual: "اتفاق متبادل",
+  // Loan / advance types
+  salary_advance: "سلفة راتب",
+  housing: "سكن",
+  education: "تعليمية",
+  // Salary component types
+  fixed: "ثابت",
+  percentage: "نسبة",
+  variable: "متغير",
+  formula: "معادلة",
+  allowance: "بدل",
+  // ── Fleet type maps ─ from fleet-type-maps.ts
+  preventive: "وقائية",
+  corrective: "تصحيحية",
+  inspection: "فحص دوري",
+  // Fuel types
+  gasoline_91: "بنزين 91",
+  gasoline_95: "بنزين 95",
+  diesel: "ديزل",
+  electric: "كهربائي",
+  hybrid: "هجين",
+  // Trip types
+  delivery: "توصيل",
+  pickup: "استلام",
+  transfer: "نقل",
+  client_visit: "زيارة عميل",
+  // Insurance / coverage
+  comprehensive: "شامل",
+  third_party: "ضد الغير",
+  extended: "موسع",
+  // Traffic violation types
+  speeding: "تجاوز السرعة",
+  parking: "مخالفة وقوف",
+  signal: "قطع إشارة",
+  lane: "مخالفة مسار",
+  license: "رخصة منتهية",
+  phone: "استخدام الهاتف",
+  seatbelt: "عدم ربط الحزام",
+  // ── CRM type maps ─ from crm-type-maps.ts
+  call: "مكالمة",
+  email: "بريد إلكتروني",
+  meeting: "اجتماع",
+  note: "ملاحظة",
+  // ── Currency codes ─ Saudi convention prints the Arabic symbol next to
+  // amounts (not the ISO triplet). Leaving the three-letter code in the
+  // doc looked like a typo to non-technical readers.
+  sar: "ر.س",
+  usd: "$",
+  eur: "€",
+  aed: "د.إ",
+  kwd: "د.ك",
+  bhd: "د.ب",
+  qar: "ر.ق",
+  omr: "ر.ع",
+  egp: "ج.م",
+  jod: "د.أ",
+  // ── Generic fallbacks
+  other: "أخرى",
+  unknown: "غير محدد",
+  none: "لا يوجد",
+  custom: "مخصّص",
+};
+
 function formatValue(v: unknown): string {
   if (v === null || v === undefined) return "";
+  if (typeof v === "boolean") return v ? "نعم" : "لا";
   if (typeof v === "number") {
     if (!Number.isFinite(v)) return "";
     return v.toLocaleString("en-US", {
@@ -47,6 +259,11 @@ function formatValue(v: unknown): string {
   }
   if (typeof v === "string") {
     const trimmed = v.trim();
+    // Enum lookup BEFORE date/numeric checks so values like "open" / "new"
+    // don't fall through to the raw-string return. Case-insensitive to
+    // handle "Active" / "ACTIVE" variants some loaders pass through.
+    const enumAr = ENUM_AR[trimmed.toLowerCase()];
+    if (enumAr !== undefined) return enumAr;
     // ISO date / timestamp detection — formats like "2025-06-15" or
     // "2025-06-15T12:34:56.000Z" come back from PG date/timestamp columns
     // as strings. Convert to Arabic locale date so {{entity.createdAt}}
@@ -79,7 +296,7 @@ function formatValue(v: unknown): string {
 
 function buildLetterheadA4(branch: BranchLetterhead): string {
   const logo = branch.logoUrl
-    ? `<img src="${escapeHtml(branch.logoUrl)}" alt="logo" style="max-height:64px"/>`
+    ? `<img src="${escapeHtml(branch.logoUrl)}" alt="شعار الشركة" style="max-height:64px"/>`
     : "";
   return `<header class="branch-letterhead" style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #334155;padding-bottom:8px;margin-bottom:12px">
   <div>${logo}</div>
