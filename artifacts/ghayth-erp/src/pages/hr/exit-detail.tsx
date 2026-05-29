@@ -12,6 +12,7 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import {
   LogOut, Calendar, DollarSign, CheckCircle, Clock,
   User, AlertTriangle,
@@ -288,30 +289,37 @@ export default function ExitDetail() {
       updatedAt={item?.updatedAt}
       actions={
         <div className="flex items-center gap-2">
-          item?.status === "pending" ? (
-          <GuardedButton
-            perm="hr:approve"
-            size="sm"
-            className="bg-green-600 hover:bg-green-700"
-            onClick={handleApprove}
-            disabled={approveMut.isPending}
-            rateLimitAware
-          >
-            <CheckCircle className="h-4 w-4 ml-1" />
-            اعتماد
-          </GuardedButton>
-        ) : item?.status === "approved" ? (
-          <GuardedButton
-            perm="hr:update"
-            size="sm"
-            onClick={handleComplete}
-            disabled={completeMut.isPending || !item?.clearanceCompleted}
-            rateLimitAware
-          >
-            <CheckCircle className="h-4 w-4 ml-1" />
-            إتمام نهاية الخدمة
-          </GuardedButton>
-        ) : undefined
+          {item?.status === "pending" ? (
+            <GuardedButton
+              perm="hr:approve"
+              size="sm"
+              className="bg-green-600 hover:bg-green-700"
+              onClick={handleApprove}
+              disabled={approveMut.isPending}
+              rateLimitAware
+            >
+              <CheckCircle className="h-4 w-4 ml-1" />
+              اعتماد
+            </GuardedButton>
+          ) : item?.status === "approved" ? (
+            <GuardedButton
+              perm="hr:update"
+              size="sm"
+              onClick={handleComplete}
+              disabled={completeMut.isPending || !item?.clearanceCompleted}
+              rateLimitAware
+            >
+              <CheckCircle className="h-4 w-4 ml-1" />
+              إتمام نهاية الخدمة
+            </GuardedButton>
+          ) : null}
+          {item?.employeeId && (
+            <ImpactPreviewButton
+              endpoint="/hr/impact-preview/termination"
+              payload={{ employeeId: item.employeeId }}
+              label="معاينة أثر الإنهاء"
+            />
+          )}
           <PrintButton entityType="exit_request" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
         </div>
       }

@@ -21,6 +21,22 @@ export default function PurchaseOrderDetailPage() {
   const id = params?.id;
   const { extraTabs, hideTabs } = useRegistryTabs("purchase_order", id || "");
   const { data: po, isLoading, isError } = useApiQuery<any>(["po-detail", id || ""], `/finance/purchase-orders/${id}`, !!id);
+  // GET /finance/purchase-orders/:id/receipts — goods-receipt notes
+  // recorded against this PO. Fetched lazily once the PO is loaded.
+  const { data: receiptsResp } = useApiQuery<any>(
+    ["po-receipts", id || ""],
+    id ? `/finance/purchase-orders/${id}/receipts` : null,
+    { enabled: !!id },
+  );
+  const receipts: any[] = receiptsResp?.data ?? receiptsResp?.receipts ?? [];
+  // GET /finance/purchase-orders/:id/match — 3-way match results
+  // (PO ↔ GRN ↔ supplier invoice) for AP review.
+  const { data: matchResp } = useApiQuery<any>(
+    ["po-match", id || ""],
+    id ? `/finance/purchase-orders/${id}/match` : null,
+    { enabled: !!id },
+  );
+  const matchData = matchResp?.data ?? matchResp;
 
   if (!isLoading && !isError && !po) return (
     <div className="text-center py-12">
@@ -113,6 +129,46 @@ export default function PurchaseOrderDetailPage() {
         <Card>
           <CardHeader><CardTitle>ملاحظات</CardTitle></CardHeader>
           <CardContent><p className="text-muted-foreground whitespace-pre-wrap">{po.notes}</p></CardContent>
+        </Card>
+      )}
+
+      {receipts.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">سندات استلام البضاعة ({receipts.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y text-xs">
+              {receipts.slice(0, 10).map((r: any, i: number) => (
+                <div key={r.id ?? i} className="px-3 py-2 flex items-center justify-between">
+                  <span className="font-mono">{r.grnRef ?? r.ref ?? `#${r.id ?? i}`}</span>
+                  <span className="text-muted-foreground">
+                    {r.receivedAt ? new Date(r.receivedAt).toLocaleDateString("ar-SA") : ""}
+                    {r.status && <span className="ms-2">· {r.status}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {matchData && (
+        <Card className="border-status-info-surface bg-status-info-surface/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">المطابقة الثلاثية (PO ↔ GRN ↔ فاتورة)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            {Object.entries(matchData)
+              .filter(([, v]) => typeof v !== "object" || v === null)
+              .slice(0, 8)
+              .map(([k, v]) => (
+                <div key={k} className="border rounded p-1 bg-white">
+                  <p className="text-muted-foreground text-[10px]">{k}</p>
+                  <p className="font-mono">{v == null ? "—" : String(v)}</p>
+                </div>
+              ))}
+          </CardContent>
         </Card>
       )}
     </>

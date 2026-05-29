@@ -168,11 +168,24 @@ function buildBackendRoutes() {
     // mounted import (covers the case where the file defines the
     // router locally as `myRouter` and exports it).
     const callsBy = extractRouterCalls(path.join(ROUTES_DIR, f));
-    // Emit each call once per mount prefix the file's exported router(s)
-    // are mounted on. When a router is mounted at /requests AND
-    // /request-catalog, both prefixes are real backend URLs.
-    const prefixes = [...new Set(imps.map((i) => i.mountPrefix))];
+    // Build varName → mountPrefixes (one router var may be mounted at multiple prefixes).
+    // A file can export several routers — each one mounts on its own prefix. We MUST
+    // honour the call's varName so that e.g. `warehouseStubsRouter.get("/x")` is
+    // emitted only under /warehouse, not also under /hr/finance/admin where the
+    // OTHER routers exported by the same file are mounted.
+    const varToPrefixes = new Map();
+    for (const i of imps) {
+      if (!varToPrefixes.has(i.varName)) varToPrefixes.set(i.varName, new Set());
+      varToPrefixes.get(i.varName).add(i.mountPrefix);
+    }
+    const allPrefixes = [...new Set(imps.map((i) => i.mountPrefix))];
     for (const c of callsBy) {
+      // If the call's varName matches a known export, only use that export's prefixes.
+      // Otherwise (local `router` var or unrecognised name), fall back to all prefixes
+      // — the original behaviour for files that define exactly one router locally.
+      const prefixes = varToPrefixes.has(c.varName)
+        ? [...varToPrefixes.get(c.varName)]
+        : allPrefixes;
       for (const mountPrefix of prefixes) {
         const localPath = c.path.startsWith("/") ? c.path : "/" + c.path;
         const full = ("/api" + mountPrefix + localPath).replace(/\/+$/, "") || "/";
@@ -656,6 +669,24 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: lit.value, line, method: "POST", source: "prop" });
       calls.push({ file: rel, url: `${lit.value}/:param`, line, method: "PUT", source: "prop" });
       calls.push({ file: rel, url: `${lit.value}/:param`, line, method: "DELETE", source: "prop" });
+    }
+
+    // <EntityEditDialog endpoint={`/finance/vouchers/${id}`} method="PATCH" /> —
+    // the standard inline-edit dialog used by detail pages. Default
+    // method is PATCH; allow PUT via the `method` prop. The URL lives
+    // in a JSX brace expression so we read it via the
+    // `endpoint\s*=\s*\{` opener and walk the template literal.
+    const entityEditRe = /\bEntityEditDialog[\s\S]{0,200}?\bendpoint\s*=\s*\{/g;
+    for (const m of src.matchAll(entityEditRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      // Look ahead for `method="PUT"` in the same JSX block (within ~200 chars)
+      const lookahead = src.slice(m.index, m.index + 400);
+      const verb = /method\s*=\s*["']PUT["']/.test(lookahead) ? "PUT" : "PATCH";
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: verb, source: "prop" });
     }
 
     // useDetailEditDelete({ patchPath, deletePath }) — the shared hook in
