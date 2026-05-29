@@ -208,7 +208,7 @@ export default function AdminDataImportPage() {
                   variant="default"
                   rateLimitAware
                   onClick={handleConfirm}
-                  disabled={confirming || (preview.errors?.length ?? 0) > 0}
+                  disabled={confirming || (preview.errorRows?.length ?? 0) > 0}
                 >
                   <CheckCircle className="h-3.5 w-3.5 me-1" />
                   {confirming ? "جاري التطبيق..." : "تطبيق (Confirm)"}
@@ -218,13 +218,15 @@ export default function AdminDataImportPage() {
             {preview && (
               <div className="p-2 bg-surface-subtle rounded text-xs space-y-1">
                 <p>
-                  جديد: <span className="font-mono">{preview.inserts?.length ?? preview.inserted ?? 0}</span>
-                  · تحديث: <span className="font-mono">{preview.updates?.length ?? preview.updated ?? 0}</span>
-                  · أخطاء: <span className="font-mono text-status-error-foreground">{preview.errors?.length ?? 0}</span>
+                  إجمالي: <span className="font-mono">{preview.totalRows ?? 0}</span>
+                  · جديد: <span className="font-mono">{preview.newRows?.length ?? 0}</span>
+                  · تحديث: <span className="font-mono">{preview.updatedRows?.length ?? 0}</span>
+                  · تخطي: <span className="font-mono">{preview.skippedCount ?? 0}</span>
+                  · أخطاء: <span className="font-mono text-status-error-foreground">{preview.errorRows?.length ?? 0}</span>
                 </p>
-                {(preview.errors ?? []).slice(0, 5).map((er: any, i: number) => (
+                {(preview.errorRows ?? []).slice(0, 5).map((er: any, i: number) => (
                   <p key={i} className="text-status-error-foreground">
-                    صف {er.row ?? i}: {er.message ?? er.error ?? JSON.stringify(er)}
+                    صف {er.rowIndex ?? i}: {er.error ?? JSON.stringify(er)}
                   </p>
                 ))}
               </div>
