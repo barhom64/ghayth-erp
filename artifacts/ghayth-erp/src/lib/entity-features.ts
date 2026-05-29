@@ -125,7 +125,11 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   "project-costing":  { financialImpact: true },
   "evaluation-360":   { attachments: false },
   "hr-evaluation-360":{ attachments: false },
-  pilgrim:            {},
+  // Pilgrims are clients in the GL — every umrah invoice AR DR
+  // carries clientId. The detail page already destructures extraTabs
+  // from useRegistryTabs, so wiring financialEntityType here makes
+  // the Financial Profile tab render automatically.
+  pilgrim:            { financialImpact: true, financialEntityType: "client" },
   transport:          {},
 
   application:        {},
