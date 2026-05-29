@@ -28,6 +28,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useState } from "react";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const STATUS_OPTIONS = Object.entries(LOAN_STATUS).map(([value, { label }]) => ({ value, label }));
 
 export default function LoansPage() {
@@ -277,6 +278,7 @@ export default function LoansPage() {
         </Link>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       {/* Pending alert */}

@@ -17,6 +17,7 @@ import { Clock, Users, AlertTriangle, DollarSign } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 export default function AttendanceReportsPage() {
   const [month, setMonth] = useState(todayLocal().slice(0, 7));
   const [filters, setFilters] = useFilters();
@@ -78,6 +79,7 @@ export default function AttendanceReportsPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تقارير الحضور والانصراف" }]}
       actions={<Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />}
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <AdvancedFilters

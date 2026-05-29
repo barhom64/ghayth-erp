@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { todayLocal } from "@/lib/formatters";
 
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 // New count session — schema enforces countDate required (was no
 // validation at all on the create form). `Input` per-item edits inside
 // the table are NOT migrated here (different UX, different form).
@@ -371,6 +372,7 @@ export default function InventoryCountPage() {
         </GuardedButton>
       }
     >
+      <WarehouseTabsNav />
       <KpiGrid items={kpis} />
 
       {stats.draft > 0 && (

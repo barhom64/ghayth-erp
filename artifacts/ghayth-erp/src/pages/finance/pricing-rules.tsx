@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tag, Edit, Trash2, TestTube2 } from "lucide-react";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 interface PricingRule {
   id: number;
   name: string;
@@ -136,6 +137,7 @@ export default function PricingRulesPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">

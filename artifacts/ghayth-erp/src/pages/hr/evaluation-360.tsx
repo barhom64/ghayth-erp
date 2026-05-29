@@ -18,6 +18,7 @@ import {
 import { Plus, Target, TrendingUp, Award, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "in_progress", label: "جارٍ التقييم" },
   { value: "completed",   label: "مكتمل"        },
@@ -155,6 +156,7 @@ export default function Evaluation360Page() {
         </Link>
       }
     >
+      <HrTabsNav />
       {/* KPI cards */}
       <KpiGrid items={kpis} />
 

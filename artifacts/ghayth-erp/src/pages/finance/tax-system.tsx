@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Receipt, TrendingUp, TrendingDown, DollarSign, Calendar, Zap, CheckCircle, XCircle, Clock, AlertTriangle, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 export default function TaxSystemPage() {
   const currentPeriod = todayLocal().slice(0, 7);
   const [period, setPeriod] = useState(currentPeriod);
@@ -100,6 +101,7 @@ export default function TaxSystemPage() {
         ) : undefined
       }
     >
+      <FinanceTabsNav />
       <div className="flex gap-2 border-b pb-2">
         <button
           onClick={() => setActiveTab("vat")}

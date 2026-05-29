@@ -8,6 +8,7 @@ import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import { TrendingUp, TrendingDown, DollarSign, Calendar, AlertCircle, Banknote, BarChart3 } from "lucide-react";
 import { PageShell } from "@workspace/ui-core";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 function ForecastCard({ label, days, data }: { label: string; days: string; data: any }) {
   const net = data?.net ?? 0;
   return (
@@ -91,6 +92,7 @@ export default function CashFlowForecastPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       {isLoading ? (
         <div className="text-center py-16 text-muted-foreground">جاري تحميل البيانات...</div>
       ) : (

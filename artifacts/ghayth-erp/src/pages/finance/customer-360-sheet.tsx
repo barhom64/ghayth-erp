@@ -431,7 +431,7 @@ export default function Customer360SheetPage() {
                     <ExternalLink className="w-3 h-3 mr-auto" />
                   </Button>
                 </Link>
-                <Link href={`/finance/receivables/receipt?clientId=${clientId}`}>
+                <Link href={`/finance/receivables?clientId=${clientId}`}>
                   <Button variant="outline" size="sm" className="w-full justify-start">
                     <DollarSign className="w-4 h-4 ml-1" />
                     تسجيل دفعة

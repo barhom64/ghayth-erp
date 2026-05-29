@@ -35,6 +35,7 @@ import { ApprovalActions } from "@workspace/workflow-kit";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { LETTER_TYPES } from "@/lib/hr-type-maps";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 // Old: subject was guarded only by `disabled={!form.subject}`. Schema
 // makes it required at validation time + trims whitespace.
 // employeeId stays a string so it can be cleanly omitted; the submit
@@ -196,6 +197,7 @@ export default function OfficialLettersPage() {
         </GuardedButton>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={[
         { label: "إجمالي الخطابات", value: items.length, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "مسودة", value: items.filter((l: any) => l.status === "draft").length, icon: FileSignature, color: "text-muted-foreground bg-surface-subtle" },

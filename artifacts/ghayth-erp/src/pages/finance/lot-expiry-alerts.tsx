@@ -13,6 +13,7 @@ import {
 import { Download, AlertTriangle, Clock, Calendar } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * Lot expiry alerts — consumes #1042's /reports/lot-expiry-alerts.
  *
@@ -209,6 +210,7 @@ export default function LotExpiryAlertsPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       {/* Hero alert when there are overdue lots */}
       {(() => {
         const overdueBucket = byBucket.find((b) => b.threshold === "overdue");

@@ -25,6 +25,7 @@ import {
 import { MoreHorizontal, Plus, FileText } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 // ─── Arabic Maps ────────────────────────────────────────────────────
 
 const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -114,7 +115,8 @@ export default function ContractsPage() {
     { successMessage: "تم إنهاء العقد" },
   );
 
-  if (isLoading) return <PageShell title="عقود الموظفين"><LoadingSpinner /></PageShell>;
+  if (isLoading) return <PageShell title="عقود الموظفين">
+      <HrTabsNav /><LoadingSpinner /></PageShell>;
   if (isError) return <PageShell title="عقود الموظفين"><ErrorState onRetry={() => refetch()} /></PageShell>;
 
   const contracts = data?.data || [];

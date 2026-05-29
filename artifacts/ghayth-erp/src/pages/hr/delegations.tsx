@@ -16,6 +16,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { formatDateAr } from "@/lib/formatters";
 import { Plus, X } from "lucide-react";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 /**
  * HR-010 — Delegations admin page. Lists active/historical delegations from
  * GET /hr/delegations and creates new ones via POST. Server has no
@@ -92,6 +93,7 @@ export default function DelegationsPage() {
         )
       }
     >
+      <HrTabsNav />
       {showNew && (
         <Card className="mb-4 border-status-info-surface">
           <CardHeader className="pb-3"><CardTitle className="text-base">تفويض جديد</CardTitle></CardHeader>

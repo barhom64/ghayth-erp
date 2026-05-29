@@ -17,6 +17,7 @@ import {
 import { useState } from "react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 
 function exportCSV(rows: any[], headers: string[], filename: string) {
@@ -93,6 +94,7 @@ export default function LedgerPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-4">
         <Card><CardContent className="p-4 text-center">
           <p className="text-xs text-muted-foreground">عدد القيود</p>

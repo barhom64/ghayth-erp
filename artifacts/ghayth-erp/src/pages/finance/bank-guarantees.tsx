@@ -48,6 +48,7 @@ import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { cn } from "@/lib/utils";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * Bank guarantees list — R.3 iter 3 end-to-end reference page.
  *
@@ -478,6 +479,7 @@ export default function BankGuaranteesPage() {
           </>
         }
       >
+      <FinanceTabsNav />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Card>
             <CardContent className="p-4 flex items-center gap-3">

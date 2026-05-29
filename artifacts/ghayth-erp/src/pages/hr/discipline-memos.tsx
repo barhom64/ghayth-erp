@@ -10,6 +10,7 @@ import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 export default function DisciplineMemosPage() {
   const [, navigate] = useLocation();
   useEffect(() => {
@@ -18,6 +19,7 @@ export default function DisciplineMemosPage() {
 
   return (
     <PageShell title="جارٍ التحويل..." breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}>
+      <HrTabsNav />
       <Card><CardContent className="py-12"><LoadingSpinner /></CardContent></Card>
     </PageShell>
   );

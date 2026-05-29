@@ -15,6 +15,7 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ScrollText, ArrowLeftRight, ExternalLink, Hash, Calendar, FileText, CheckCircle, Send } from "lucide-react";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 // Detail view for any journal entry (sourced from invoice / expense /
 // voucher / reversal / fx_revaluation / manual / ...). The list page at
 // /finance/journal navigated rows to /finance/journal/:id but no route
@@ -244,6 +245,7 @@ export default function JournalDetailPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <Card>
           <CardContent className="p-3">

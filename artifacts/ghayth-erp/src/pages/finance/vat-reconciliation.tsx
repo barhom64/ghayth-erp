@@ -12,6 +12,7 @@ import {
 import { Download, AlertTriangle, CheckCircle2, Scale } from "lucide-react";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * VAT Reconciliation report page — UI for #1037's
  * GET /reports/vat-reconciliation endpoint.
@@ -181,6 +182,7 @@ export default function VatReconciliationPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       {/* الرسالة الرئيسية: drift صفر أم لا */}
       <Card className={summary.driftIsClean
         ? "border-emerald-300 bg-emerald-50/40"

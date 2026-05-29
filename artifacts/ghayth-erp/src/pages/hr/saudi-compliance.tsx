@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Banknote, FileCheck, Receipt, Lock } from "lucide-react";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 interface SaudiBank { code: string; name: string; swift: string }
 
 export default function HrSaudiCompliancePage() {
@@ -89,6 +90,7 @@ export default function HrSaudiCompliancePage() {
       subtitle="بنوك سعودية، تواريخ WPS، تسويات مدد، إعدادات APIs البنوك"
       breadcrumbs={[{ label: "الموارد البشرية" }, { label: "الامتثال السعودي" }]}
     >
+      <HrTabsNav />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* البنوك السعودية + اختيار بنك لإعداد بيانات WPS */}
         <Card>

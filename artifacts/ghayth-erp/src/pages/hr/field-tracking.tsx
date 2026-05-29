@@ -15,6 +15,7 @@ import "leaflet/dist/leaflet.css";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const defaultCenter: [number, number] = [24.7136, 46.6753];
 
 function AttendanceMap({ items }: { items: any[] }) {
@@ -98,6 +99,7 @@ export default function FieldTrackingPage() {
       subtitle="متابعة مواقع الموظفين الميدانيين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "التتبع الميداني" }]}
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <Card>

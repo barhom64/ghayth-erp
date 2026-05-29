@@ -15,6 +15,7 @@ import { Download, AlertTriangle, Clock, Users } from "lucide-react";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 function csvEscape(val: string): string {
   if (val.includes(",") || val.includes('"') || val.includes("\n")) {
     return `"${val.replace(/"/g, '""')}"`;
@@ -115,6 +116,7 @@ export default function ArAgingPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         {BUCKETS.map(b => (
           <Card key={b.key}>

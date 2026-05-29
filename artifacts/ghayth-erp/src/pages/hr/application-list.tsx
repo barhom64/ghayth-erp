@@ -18,6 +18,7 @@ import {
 } from "@workspace/ui-core";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const STATUS_OPTIONS = Object.entries(RECRUITMENT_STAGES).map(([value, { label }]) => ({ value, label }));
 
 export default function ApplicationListPage() {
@@ -169,6 +170,7 @@ export default function ApplicationListPage() {
         </Link>
       }
     >
+      <HrTabsNav />
       {/* KPI cards */}
       <KpiGrid items={kpis} />
 

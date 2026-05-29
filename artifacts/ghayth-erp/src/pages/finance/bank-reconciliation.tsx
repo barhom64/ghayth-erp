@@ -18,6 +18,7 @@ import { Link } from "wouter";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 export default function BankReconciliationPage() {
   const [activeBatch, setActiveBatch] = useState<string | null>(null);
   const [accountCode, setAccountCode] = useState("1120");
@@ -149,6 +150,7 @@ export default function BankReconciliationPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
           <CardHeader><CardTitle className="text-base">استيراد كشف بنكي </CardTitle></CardHeader>

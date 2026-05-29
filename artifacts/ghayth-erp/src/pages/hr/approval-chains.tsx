@@ -23,6 +23,7 @@ import {
 } from "@workspace/ui-core";
 import { APPROVAL_ROLES, APPROVAL_CHAIN_STATUS } from "@/lib/hr-type-maps";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const STATUS_OPTIONS = Object.entries(APPROVAL_CHAIN_STATUS).map(([value, { label }]) => ({ value, label }));
 
 const CHAIN_TYPES: Record<string, string> = {
@@ -173,6 +174,7 @@ export default function ApprovalChainsPage() {
         </GuardedButton>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       {showForm && (

@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { AllocationHealthCard } from "@/components/shared/allocation-health-card";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * Finance Dashboard — R.1.5 of the Reference UI/UX phase.
  *
@@ -280,6 +281,7 @@ export default function FinanceDashboard() {
         </div>
       }
     >
+      <FinanceTabsNav />
       {/* ── Allocation engine health — surfaced at the top of finance so the
            enforce flag + coverage % + bypass count are always visible from
            the home page, not buried in settings (integration polish). ── */}
