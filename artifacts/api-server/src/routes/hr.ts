@@ -2717,6 +2717,9 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       gross: number; gosiEmployee: number; gosiEmployer: number;
       lateDeduction: number; absenceDeduction: number; violationDeduction: number;
       loanDeduction: number; overtime: number; overtimeHours: number; net: number;
+      // ZATCA WHT amount per line — persisted on payroll_lines.whtAmount
+      // and aggregated to a WHT-payable CR on the run JE.
+      whtAmount: number;
       // Departmental dimension carried through to journal_lines.departmentId
       // on the per-employee payroll breakdown.
       departmentId: number | null; branchId: number | null;

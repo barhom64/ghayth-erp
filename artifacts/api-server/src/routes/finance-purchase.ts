@@ -2927,3 +2927,217 @@ purchaseRouter.get("/vendor-credits", authorize({ feature: "finance.purchase", a
     handleRouteError(err, res, "List vendor credits error:");
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VENDOR INVOICES — supplier-issued invoices entered as AP documents
+// Separate from /invoices (AR). vendor_invoices share schema with
+// the invoices table conceptually (header + lines) but the entry
+// goes through the AP subledger: clientId column unused, supplierId
+// is the key. Approval posts DR Expense / DR VAT input / CR AP.
+// Without this, supplier invoices had to be entered as AR invoices
+// with the vendor's name in a fake "client" record, corrupting both
+// subledgers.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const createVendorInvoiceSchema = z.object({
+  supplierId: z.coerce.number({ required_error: "المورد مطلوب" }),
+  ref: z.string().min(1, "رقم فاتورة المورد مطلوب"),
+  invoiceDate: z.string().min(1, "تاريخ الفاتورة مطلوب"),
+  dueDate: z.string().optional(),
+  poId: z.coerce.number().optional(),
+  subtotal: z.coerce.number().nonnegative("المبلغ مطلوب"),
+  vatAmount: z.coerce.number().nonnegative().default(0),
+  description: z.string().optional(),
+  expenseAccountCode: z.string().optional(),
+  costCenterId: z.coerce.number().optional(),
+  projectId: z.coerce.number().optional(),
+  departmentId: z.coerce.number().optional(),
+});
+
+// POST /vendor-invoices — create a supplier-issued invoice (AP).
+// Posts immediately to the AP subledger; no separate approval cycle
+// (mirror customer-advances model). Per-line allocation comes later
+// via /vendor-invoices/:id/allocate if needed.
+purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createVendorInvoiceSchema.safeParse(req.body));
+
+    const [supplier] = await rawQuery<{ id: number; name: string }>(
+      `SELECT id, name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [b.supplierId, scope.companyId]
+    );
+    if (!supplier) throw new ValidationError("المورد غير موجود", { field: "supplierId" });
+
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, b.invoiceDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسجيل فاتورة مورد في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "invoiceDate", meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
+    const subtotal = roundTo2(b.subtotal);
+    const vatAmount = roundTo2(b.vatAmount);
+    const total = roundTo2(subtotal + vatAmount);
+    const sourceKey = `finance:vendor_invoice:${b.supplierId}:${b.ref}:${requestIdempotencyToken(req)}`;
+
+    // Pre-INSERT idempotency: same supplier + same supplier-issued
+    // ref + same idempotency token = same invoice.
+    const [existingInv] = await rawQuery<{ id: number; ref: string }>(
+      `SELECT id, ref FROM vendor_invoices
+        WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, sourceKey]
+    ).catch(() => [] as { id: number; ref: string }[]);
+    if (existingInv) {
+      markIdempotencyReplay(req, res, true);
+      res.status(200).json({ invoiceId: existingInv.id, ref: existingInv.ref, supplierId: b.supplierId, total, replayed: true });
+      return;
+    }
+
+    let invoiceId: number | null = null;
+    await withTransaction(async (client: any) => {
+      try {
+        const ins = await client.query(
+          `INSERT INTO vendor_invoices ("companyId","branchId","supplierId",ref,"invoiceDate","dueDate","poId",subtotal,"vatAmount",total,"paidAmount",description,"createdBy",status,"sourceKey")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,'approved',$13) RETURNING id`,
+          [scope.companyId, scope.branchId, b.supplierId, b.ref, b.invoiceDate, b.dueDate ?? null,
+           b.poId ?? null, subtotal, vatAmount, total, b.description ?? null, scope.activeAssignmentId, sourceKey]
+        );
+        invoiceId = ins.rows[0].id;
+      } catch (e: any) {
+        if (e?.code === "42P01") {
+          await client.query(
+            `CREATE TABLE IF NOT EXISTS vendor_invoices (
+               id SERIAL PRIMARY KEY,
+               "companyId" INTEGER NOT NULL,
+               "branchId" INTEGER,
+               "supplierId" INTEGER NOT NULL,
+               ref TEXT NOT NULL,
+               "invoiceDate" DATE NOT NULL,
+               "dueDate" DATE,
+               "poId" INTEGER,
+               subtotal NUMERIC(18,2) NOT NULL,
+               "vatAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               total NUMERIC(18,2) NOT NULL,
+               "paidAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               description TEXT,
+               status TEXT NOT NULL DEFAULT 'approved',
+               "journalId" INTEGER,
+               "sourceKey" VARCHAR(128),
+               "createdBy" INTEGER,
+               "createdAt" TIMESTAMP DEFAULT NOW(),
+               "deletedAt" TIMESTAMP
+             );
+             CREATE UNIQUE INDEX IF NOT EXISTS idx_vendor_invoices_source_key
+               ON vendor_invoices ("companyId", "sourceKey")
+               WHERE "sourceKey" IS NOT NULL;
+             CREATE INDEX IF NOT EXISTS idx_vendor_invoices_supplier_status
+               ON vendor_invoices ("companyId", "supplierId", status)
+               WHERE "deletedAt" IS NULL;`
+          );
+          const ins2 = await client.query(
+            `INSERT INTO vendor_invoices ("companyId","branchId","supplierId",ref,"invoiceDate","dueDate","poId",subtotal,"vatAmount",total,"paidAmount",description,"createdBy",status,"sourceKey")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,'approved',$13) RETURNING id`,
+            [scope.companyId, scope.branchId, b.supplierId, b.ref, b.invoiceDate, b.dueDate ?? null,
+             b.poId ?? null, subtotal, vatAmount, total, b.description ?? null, scope.activeAssignmentId, sourceKey]
+          );
+          invoiceId = ins2.rows[0].id;
+        } else {
+          throw e;
+        }
+      }
+    });
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const expenseCode = b.expenseAccountCode
+      ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5400");
+    const [vatInputCode, apCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1400"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+    ]);
+
+    let journalId: number | null = null;
+    try {
+      const invResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `VINV-${invoiceId}`,
+        description: `فاتورة مورد ${supplier.name} (${b.ref}): ${b.description ?? ""}`,
+        type: "vendor_invoice",
+        sourceType: "vendor_invoice",
+        sourceId: invoiceId ?? 0,
+        sourceKey: `finance:vendor_invoice_je:${invoiceId}`,
+        lines: [
+          { accountCode: expenseCode, debit: subtotal, credit: 0, vendorId: b.supplierId,
+            costCenterId: b.costCenterId, projectId: b.projectId, departmentId: b.departmentId,
+            description: `مصروف فاتورة مورد` },
+          ...(vatAmount > 0 ? [{ accountCode: vatInputCode, debit: vatAmount, credit: 0, vendorId: b.supplierId, description: `ضريبة مدخلات` }] : []),
+          { accountCode: apCode, debit: 0, credit: total, vendorId: b.supplierId, description: `ذمم دائنة — ${supplier.name}` },
+        ],
+        guardTable: "vendor_invoices",
+        guardId: invoiceId ?? 0,
+      });
+      journalId = invResult.journalId;
+      markIdempotencyReplay(req, res, invResult.alreadyExists);
+      if (journalId && invoiceId) {
+        await rawExecute(`UPDATE vendor_invoices SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, invoiceId, scope.companyId]);
+      }
+    } catch (glErr) {
+      if (invoiceId) {
+        await rawExecute(`DELETE FROM vendor_invoices WHERE id = $1 AND "companyId" = $2`, [invoiceId, scope.companyId]);
+      }
+      throw glErr;
+    }
+
+    res.status(201).json({ invoiceId, ref: b.ref, supplierId: b.supplierId, subtotal, vatAmount, total, journalId, status: "approved" });
+  } catch (err) {
+    handleRouteError(err, res, "Vendor invoice create error:");
+  }
+});
+
+// GET /vendor-invoices — list with optional supplier / status filter
+purchaseRouter.get("/vendor-invoices", authorize({ feature: "finance.purchase", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const supplierId = req.query.supplierId ? Number(req.query.supplierId) : undefined;
+    const status = req.query.status as string | undefined;
+    const params: any[] = [scope.companyId];
+    const conds: string[] = [`vi."companyId" = $1`, `vi."deletedAt" IS NULL`];
+    if (supplierId) { params.push(supplierId); conds.push(`vi."supplierId" = $${params.length}`); }
+    if (status) { params.push(status); conds.push(`vi.status = $${params.length}`); }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT vi.*, s.name AS "supplierName"
+         FROM vendor_invoices vi
+         LEFT JOIN suppliers s ON s.id = vi."supplierId"
+        WHERE ${conds.join(" AND ")}
+        ORDER BY vi.id DESC
+        LIMIT 500`,
+      params
+    ).catch(() => [] as Record<string, unknown>[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "List vendor invoices error:");
+  }
+});
+
+// GET /vendor-invoices/:id — detail
+purchaseRouter.get("/vendor-invoices/:id", authorize({ feature: "finance.purchase", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [inv] = await rawQuery<Record<string, unknown>>(
+      `SELECT vi.*, s.name AS "supplierName", s.phone AS "supplierPhone", s.email AS "supplierEmail"
+         FROM vendor_invoices vi
+         LEFT JOIN suppliers s ON s.id = vi."supplierId"
+        WHERE vi.id = $1 AND vi."companyId" = $2 AND vi."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!inv) throw new NotFoundError("فاتورة المورد غير موجودة");
+    res.json(inv);
+  } catch (err) {
+    handleRouteError(err, res, "Get vendor invoice error:");
+  }
+});
