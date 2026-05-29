@@ -97,6 +97,24 @@ export default function OfficialLettersPage() {
     onSuccess: () => refetch(),
   });
 
+  // GET /umrah/letters/:id/pdf — letters typed as `umrah_*` use the
+  // umrah-print pipeline (different letterhead, multilingual). Opens
+  // in a new tab for download/print.
+  const handleUmrahPdf = (letter: any) => {
+    if (!letter?.id) return;
+    window.open(`/api/umrah/letters/${letter.id}/pdf`, "_blank");
+  };
+  // POST /umrah/letters/:id/dispatch — records that the operator
+  // handed the printed letter to the consul/dispatched it externally.
+  // The dispatchMethod toggles between in-person delivery and courier
+  // pickup so the audit trail is unambiguous.
+  const dispatchUmrahLetterMut = useApiMutation<unknown, { id: number; dispatchMethod: string }>(
+    (b) => `/umrah/letters/${b.id}/dispatch`,
+    "POST",
+    [["official-letters"]],
+    { successMessage: "تم تسجيل التسليم" },
+  );
+
   const letterEditFields = [
     { key: "subject", label: "الموضوع" },
     { key: "body", label: "النص" },
@@ -118,28 +136,57 @@ export default function OfficialLettersPage() {
     {
       key: "actions",
       header: "إجراءات",
-      render: (l) => (
-        <div className="flex gap-1 items-center">
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setViewId(l.id)}>
-            تفاصيل
-          </Button>
-          <PrintButton
-            entityType="official_letter"
-            entityId={l.id}
-            formats={["a4"]}
-            label=""
-            variant="ghost"
-            size="sm"
-          />
-          <RowActions
-            onEdit={() => startEdit(l.id, { subject: l.subject, body: l.body, notes: l.notes })}
-            onDelete={() => startDelete(l.id)}
-            canEdit={["draft", "rejected"].includes(l.status)}
-            canDelete={["draft", "rejected"].includes(l.status)}
-            deletePerm="hr:delete"
-          />
-        </div>
-      ),
+      render: (l) => {
+        const isUmrahLetter = typeof l.type === "string" && l.type.startsWith("umrah");
+        return (
+          <div className="flex gap-1 items-center">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setViewId(l.id)}>
+              تفاصيل
+            </Button>
+            {isUmrahLetter ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => handleUmrahPdf(l)}
+                  title="PDF (مسار العمرة)"
+                >
+                  PDF
+                </Button>
+                <GuardedButton
+                  perm="umrah:update"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => dispatchUmrahLetterMut.mutate({ id: l.id, dispatchMethod: "in_person" })}
+                  disabled={dispatchUmrahLetterMut.isPending || l.status !== "approved"}
+                  rateLimitAware
+                  title="تسليم الخطاب (تسجيل في السجل)"
+                >
+                  تسليم
+                </GuardedButton>
+              </>
+            ) : (
+              <PrintButton
+                entityType="official_letter"
+                entityId={l.id}
+                formats={["a4"]}
+                label=""
+                variant="ghost"
+                size="sm"
+              />
+            )}
+            <RowActions
+              onEdit={() => startEdit(l.id, { subject: l.subject, body: l.body, notes: l.notes })}
+              onDelete={() => startDelete(l.id)}
+              canEdit={["draft", "rejected"].includes(l.status)}
+              canDelete={["draft", "rejected"].includes(l.status)}
+              deletePerm="hr:delete"
+            />
+          </div>
+        );
+      },
     },
     {
       key: "approval",

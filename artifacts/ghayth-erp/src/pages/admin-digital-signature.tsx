@@ -30,7 +30,11 @@ export default function AdminDigitalSignaturePage() {
   const [entityId, setEntityId] = useState("");
   const [action, setAction] = useState("sign");
   const [otpCode, setOtpCode] = useState("");
-  const [lastOtpId, setLastOtpId] = useState<number | null>(null);
+  // In production the server delivers the OTP out-of-band (SMS/email)
+  // and the response only confirms dispatch. The dev-mode probe also
+  // echoes the OTP in `res.otp` — handy for testing without a live
+  // delivery channel.
+  const [lastOtpPreview, setLastOtpPreview] = useState<string>("");
 
   const handleRequestOtp = async () => {
     const id = Number(entityId);
@@ -43,7 +47,7 @@ export default function AdminDigitalSignaturePage() {
         method: "POST",
         body: JSON.stringify({ entityType, entityId: id, action }),
       });
-      setLastOtpId(res?.otpId ?? null);
+      setLastOtpPreview(typeof res?.otp === "string" ? res.otp : "");
       toast({
         title: "أُرسلت كلمة المرور لمرة واحدة",
         description: res?.expiresAt ? `صالحة حتى ${new Date(res.expiresAt).toLocaleString("ar-SA")}` : "",
@@ -66,7 +70,7 @@ export default function AdminDigitalSignaturePage() {
     try {
       const res: any = await apiFetch("/digital-signature/verify", {
         method: "POST",
-        body: JSON.stringify({ entityType, entityId: id, otp: otpCode.trim() }),
+        body: JSON.stringify({ entityType, entityId: id, action, otp: otpCode.trim() }),
       });
       toast({
         title: "تم التحقق",
@@ -118,8 +122,10 @@ export default function AdminDigitalSignaturePage() {
             <GuardedButton perm="documents:create" size="sm" rateLimitAware onClick={handleRequestOtp}>
               إصدار OTP
             </GuardedButton>
-            {lastOtpId != null && (
-              <p className="text-[10px] text-muted-foreground">آخر OTP صادر برقم #{lastOtpId}</p>
+            {lastOtpPreview && (
+              <p className="text-[10px] text-muted-foreground">
+                OTP المطوّر: <span className="font-mono">{lastOtpPreview}</span>
+              </p>
             )}
           </CardContent>
         </Card>
