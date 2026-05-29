@@ -20,6 +20,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -154,7 +155,18 @@ export default function AdminObservability() {
   const livezQ = useApiQuery<any>(["k8s-livez"], "/livez");
   const readyzQ = useApiQuery<any>(["k8s-readyz"], "/readyz");
   const healthzQ = useApiQuery<any>(["k8s-healthz"], "/healthz");
-  const metricsQ = useApiQuery<any>(["k8s-metrics"], "/metrics");
+  // /metrics returns Prometheus text/plain — useApiQuery's JSON parser
+  // would always reject it. Probe reachability via a raw fetch so the
+  // pill reflects HTTP status rather than parser success.
+  const metricsQ = useQuery({
+    queryKey: ["k8s-metrics-probe"],
+    queryFn: async () => {
+      const res = await fetch("/api/metrics", { credentials: "include" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return { ok: true };
+    },
+    retry: false,
+  });
 
   const anomalies = data?.anomalies ?? [];
   const queues = data?.queues?.eventBus;
