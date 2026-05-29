@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useSearch } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { MapPin, RefreshCw, Video, Wifi, WifiOff } from "lucide-react";
+import { MapPin, RefreshCw, Video, Wifi, WifiOff, Filter, X } from "lucide-react";
 import {
   DataTable,
   type DataTableColumn,
@@ -37,11 +39,24 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
 };
 
 export default function FleetTelematicsLiveMap() {
+  const search = useSearch();
+  const vehicleIdFilter = new URLSearchParams(search).get("vehicleId");
+
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: LiveRow[] }>(
     ["fleet-telematics-live"],
     "/fleet/telematics/live",
   );
-  const rows = asList(data) as LiveRow[];
+  // Live view: positions are updated by the CMSV6 poller every 30s
+  // (configurable per integration). Match that cadence so the operator
+  // sees fresh data without manually clicking refresh.
+  useEffect(() => {
+    const t = setInterval(() => refetch(), 30_000);
+    return () => clearInterval(t);
+  }, [refetch]);
+  const allRows = asList(data) as LiveRow[];
+  const rows = vehicleIdFilter
+    ? allRows.filter((r) => String(r.vehicleId) === vehicleIdFilter)
+    : allRows;
 
   const syncPositions = useApiMutation<unknown, Record<string, never>>(
     "/fleet/telematics/sync/positions",
@@ -141,6 +156,15 @@ export default function FleetTelematicsLiveMap() {
     >
       <FleetTabsNav />
       <FleetTelematicsTabsNav />
+      {vehicleIdFilter && (
+        <div className="mb-3 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-status-info-surface text-status-info-foreground text-xs">
+          <Filter className="h-3 w-3" />
+          مفلتر على مركبة #{vehicleIdFilter}
+          <a href="/fleet/telematics/live-map" className="hover:bg-white/30 rounded-full p-0.5">
+            <X className="h-3 w-3" />
+          </a>
+        </div>
+      )}
       <KpiGrid
         items={[
           { label: "إجمالي الأجهزة", value: total, icon: Video, color: "text-status-info-foreground bg-status-info-surface" },

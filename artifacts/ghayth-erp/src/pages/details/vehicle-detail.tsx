@@ -8,15 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
 import {
   PageStatusBadge,
   DataTable,
 } from "@workspace/ui-core";
-import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, TrendingUp } from "lucide-react";
+import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, TrendingUp, Activity, Radio, Eye, Bot } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -31,7 +29,6 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { PrintButton } from "@/components/shared/print-button";
-
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
   { key: "info", label: "المعلومات", icon: Car },
@@ -39,39 +36,33 @@ const TABS = [
   { key: "maintenance", label: "الصيانة", icon: Wrench },
   { key: "fuel", label: "الوقود", icon: Fuel },
   { key: "insurance", label: "التأمين", icon: Shield },
-  { key: "telematics", label: "التتبّع", icon: MapPin },
+  { key: "telematics", label: "التتبع الذكي", icon: Radio },
   { key: "tasks", label: "المهام", icon: CheckSquare },
   { key: "finance", label: "المالية", icon: BookOpen },
 ] as const;
-
 type TabKey = (typeof TABS)[number]["key"];
-
 const VEHICLE_STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },
   { value: "in_use", label: "قيد الاستخدام" },
   { value: "maintenance", label: "في الصيانة" },
   { value: "out_of_service", label: "خارج الخدمة" },
 ];
-
 const IMPACT_ICONS = {
   financial: Banknote,
   operational: Car,
   legal: FileText,
   notification: AlertTriangle,
 };
-
 const SEVERITY_COLORS = {
   info: "bg-status-info-surface border-status-info-surface text-status-info-foreground",
   warning: "bg-status-warning-surface border-status-warning-surface text-status-warning-foreground",
   critical: "bg-status-error-surface border-status-error-surface text-status-error-foreground",
 };
-
 const SEVERITY_ICON = {
   info: Info,
   warning: AlertTriangle,
   critical: XCircle,
 };
-
 export default function VehicleDetail() {
   const [, params] = useRoute("/fleet/:id");
   const id = params?.id;
@@ -81,35 +72,38 @@ export default function VehicleDetail() {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
-
   const { data: vehicle, isLoading, isError, error, refetch } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
   const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
-  // Per-vehicle telematics rollups — populate the "تتبّع" tab. Each is a
-  // dedicated endpoint so a chatty UI doesn't block on the slowest one.
-  const { data: telematicsPosition } = useApiQuery<any>(
-    ["vehicle-telematics-position", id || ""],
-    id ? `/fleet/telematics/vehicles/${id}/position` : null,
-    !!id,
-  );
+  // Telematics drill-down — only fetched once the user opens the tab so
+  // we don't slow the hot detail page for vehicles without a device.
+  const telematicsEnabled = !!id && activeTab === "telematics";
   const { data: telematicsLive } = useApiQuery<any>(
     ["vehicle-telematics-live", id || ""],
-    id ? `/fleet/telematics/vehicles/${id}/live` : null,
-    !!id,
+    `/fleet/telematics/vehicles/${id}/live`,
+    telematicsEnabled,
   );
-  const { data: telematicsEvents } = useApiQuery<{ data: any[] }>(
+  const { data: telematicsPosition } = useApiQuery<any>(
+    ["vehicle-telematics-position", id || ""],
+    `/fleet/telematics/vehicles/${id}/position`,
+    telematicsEnabled,
+  );
+  const { data: telematicsEvents } = useApiQuery<any>(
     ["vehicle-telematics-events", id || ""],
-    id ? `/fleet/telematics/vehicles/${id}/events` : null,
-    !!id,
+    `/fleet/telematics/vehicles/${id}/events`,
+    telematicsEnabled,
   );
-  const { data: telematicsAlerts } = useApiQuery<{ data: any[] }>(
-    ["vehicle-telematics-alerts", id || ""],
-    id ? `/fleet/telematics/vehicles/${id}/ai-alerts` : null,
-    !!id,
+  const { data: telematicsSensors } = useApiQuery<any>(
+    ["vehicle-telematics-sensors", id || ""],
+    `/fleet/telematics/vehicles/${id}/sensors`,
+    telematicsEnabled,
+  );
+  const { data: telematicsAlerts } = useApiQuery<any>(
+    ["vehicle-telematics-ai-alerts", id || ""],
+    `/fleet/telematics/vehicles/${id}/ai-alerts`,
+    telematicsEnabled,
   );
   const { hideTabs: registryHideTabs } = useRegistryTabs("vehicle", id || "");
-
   const [editForm, setEditForm] = useState<Record<string, string>>({});
-
   const vehicleStatusTone = (s: string): "success" | "warning" | "info" | "muted" | "destructive" | "default" => {
     switch (s) {
       case "available": return "success";
@@ -119,15 +113,12 @@ export default function VehicleDetail() {
       default: return "default";
     }
   };
-
   const trips: any[] = vehicle?.trips || [];
   const maintenance: any[] = vehicle?.maintenance || [];
   const fuelLogs: any[] = vehicle?.fuelLogs || [];
   const insuranceList: any[] = vehicle?.insurance || [];
-
   const totalFuelCost = fuelLogs.reduce((s: number, f: any) => s + (Number(f.totalCost) || 0), 0);
   const totalMaintenanceCost = maintenance.reduce((s: number, m: any) => s + (Number(m.cost) || 0), 0);
-
   const startEdit = () => {
     setEditForm({
       plateNumber: vehicle?.plateNumber || "",
@@ -143,7 +134,6 @@ export default function VehicleDetail() {
     });
     setEditing(true);
   };
-
   const saveEdit = async () => {
     try {
       await apiFetch(`/fleet/vehicles/${id}`, {
@@ -169,7 +159,6 @@ export default function VehicleDetail() {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
-
   const handleDelete = async () => {
     try {
       await apiFetch(`/fleet/vehicles/${id}`, { method: "DELETE" });
@@ -179,9 +168,7 @@ export default function VehicleDetail() {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
-
   const statusLabel = VEHICLE_STATUS_OPTIONS.find(o => o.value === vehicle?.status)?.label || vehicle?.status || "";
-
   const actions = (
     <div className="flex items-center gap-2 flex-wrap">
       <Link href={`/fleet/${id}/status`}>
@@ -200,7 +187,6 @@ export default function VehicleDetail() {
       )}
     </div>
   );
-
   const overview = !vehicle ? (
     <div className="text-sm text-muted-foreground p-4">جاري التحميل...</div>
   ) : (
@@ -280,7 +266,6 @@ export default function VehicleDetail() {
           </CardContent>
         </Card>
       )}
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-info-surface"><Gauge className="w-5 h-5 text-status-info-foreground" /></div>
@@ -299,7 +284,6 @@ export default function VehicleDetail() {
           <div><p className="text-xl font-bold">{trips.length}</p><p className="text-xs text-muted-foreground">الرحلات</p></div>
         </CardContent></Card>
       </div>
-
       {(() => {
         const totalTripCost = trips.reduce((s: number, t: any) => s + (Number(t.cost) || 0), 0);
         const totalDistance = trips.reduce((s: number, t: any) => s + (Number(t.distance) || 0), 0);
@@ -339,7 +323,6 @@ export default function VehicleDetail() {
           </Card>
         );
       })()}
-
       <div className="flex gap-2 border-b overflow-x-auto pb-px">
         {TABS.map((tab) => {
           const count = tab.key === "trips" ? trips.length
@@ -366,7 +349,6 @@ export default function VehicleDetail() {
           );
         })}
       </div>
-
       {activeTab === "overview" && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -398,7 +380,6 @@ export default function VehicleDetail() {
               </CardContent>
             </Card>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
@@ -435,7 +416,6 @@ export default function VehicleDetail() {
                 </div>
               </CardContent>
             </Card>
-
             {insuranceList.length > 0 && (
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
@@ -466,7 +446,6 @@ export default function VehicleDetail() {
               </Card>
             )}
           </div>
-
           {maintenance.filter((m: any) => m.status === "pending" || m.status === "in_progress").length > 0 && (
             <Card className="border-orange-200 bg-orange-50/30">
               <CardHeader className="pb-2">
@@ -490,7 +469,6 @@ export default function VehicleDetail() {
               </CardContent>
             </Card>
           )}
-
           {fuelLogs.length > 0 && (
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
@@ -533,7 +511,6 @@ export default function VehicleDetail() {
               </CardContent>
             </Card>
           )}
-
           {maintenance.length > 0 && (
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
@@ -564,7 +541,6 @@ export default function VehicleDetail() {
           )}
         </div>
       )}
-
       {activeTab === "info" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
@@ -578,7 +554,6 @@ export default function VehicleDetail() {
               {vehicle.driverPhone && <div className="grid grid-cols-3 py-2"><span className="text-muted-foreground">هاتف السائق</span><span className="col-span-2" dir="ltr">{vehicle.driverPhone}</span></div>}
             </CardContent>
           </Card>
-
           {insuranceList.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Shield className="w-5 h-5" /> التأمين الحالي</CardTitle></CardHeader>
@@ -597,7 +572,6 @@ export default function VehicleDetail() {
               <CardContent><p className="text-center text-muted-foreground py-4">لا توجد بيانات تأمين</p></CardContent>
             </Card>
           )}
-
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -618,7 +592,6 @@ export default function VehicleDetail() {
           </Card>
         </div>
       )}
-
       {activeTab === "trips" && (
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><MapPin className="w-5 h-5" /> الرحلات ({trips.length})</CardTitle></CardHeader>
@@ -644,7 +617,6 @@ export default function VehicleDetail() {
           </CardContent>
         </Card>
       )}
-
       {activeTab === "maintenance" && (
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Wrench className="w-5 h-5" /> سجل الصيانة ({maintenance.length})</CardTitle></CardHeader>
@@ -670,7 +642,6 @@ export default function VehicleDetail() {
           </CardContent>
         </Card>
       )}
-
       {activeTab === "fuel" && (
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Fuel className="w-5 h-5" /> سجل الوقود ({fuelLogs.length})</CardTitle></CardHeader>
@@ -695,7 +666,6 @@ export default function VehicleDetail() {
           </CardContent>
         </Card>
       )}
-
       {activeTab === "insurance" && (
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Shield className="w-5 h-5" /> سجل التأمين ({insuranceList.length})</CardTitle></CardHeader>
@@ -724,21 +694,111 @@ export default function VehicleDetail() {
           </CardContent>
         </Card>
       )}
-
       {activeTab === "telematics" && id && (
-        <VehicleTelematicsTab
-          vehicleId={id}
-          position={telematicsPosition}
-          live={telematicsLive}
-          events={telematicsEvents?.data ?? []}
-          alerts={telematicsAlerts?.data ?? []}
-        />
+        <div className="space-y-4">
+          {!telematicsLive?.data && !telematicsPosition?.data && (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <Radio className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                <p>لا يوجد جهاز تتبع ذكي مرتبط بهذه المركبة بعد.</p>
+                <p className="text-xs mt-1">اربط جهاز CMSV6 من <Link href="/fleet/telematics/devices" className="underline">إعدادات الأجهزة</Link>.</p>
+              </CardContent>
+            </Card>
+          )}
+          {telematicsLive?.data?.device && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span className="flex items-center gap-2"><Radio className="w-4 h-4 text-status-info-foreground" /> الجهاز والموقع</span>
+                  <Link href={`/fleet/telematics/live-map?vehicleId=${id}`}>
+                    <Button variant="outline" size="sm" className="gap-1"><MapPin className="w-3 h-3" /> الخريطة المباشرة</Button>
+                  </Link>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div><p className="text-xs text-muted-foreground">رقم الجهاز</p><p className="font-mono">{telematicsLive.data.device.cmsv6DeviceNo || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">الحالة</p><PageStatusBadge status={telematicsLive.data.device.status || "unknown"} /></div>
+                  <div><p className="text-xs text-muted-foreground">السرعة</p><p className="font-mono">{telematicsPosition?.data?.speedKph != null ? `${Number(telematicsPosition.data.speedKph).toFixed(0)} كم/س` : "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">آخر تحديث</p><p className="text-xs">{telematicsPosition?.data?.occurredAt ? formatDateAr(telematicsPosition.data.occurredAt) : "—"}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Activity className="w-4 h-4 text-purple-600" /> الأحداث ({(telematicsEvents?.data || []).length})</CardTitle></CardHeader>
+            <CardContent>
+              {(telematicsEvents?.data || []).length === 0 ? (
+                <p className="text-muted-foreground text-center py-4 text-sm">لا توجد أحداث مسجلة</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "occurredAt", header: "الوقت", render: (e: any) => <span className="text-xs">{formatDateAr(e.occurredAt)}</span> },
+                    { key: "eventType", header: "النوع", render: (e: any) => <Badge variant="outline">{e.eventType}</Badge> },
+                    { key: "severity", header: "الخطورة", render: (e: any) => <PageStatusBadge status={e.severity || "info"} /> },
+                  ]}
+                  data={(telematicsEvents?.data || []).slice(0, 25)}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><Eye className="w-4 h-4 text-teal-600" /> قراءات الحساسات ({(telematicsSensors?.data || []).length})</CardTitle></CardHeader>
+            <CardContent>
+              {(telematicsSensors?.data || []).length === 0 ? (
+                <p className="text-muted-foreground text-center py-4 text-sm">لا توجد قراءات</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "occurredAt", header: "الوقت", render: (s: any) => <span className="text-xs">{formatDateAr(s.occurredAt)}</span> },
+                    { key: "sensorType", header: "النوع", render: (s: any) => s.sensorType },
+                    { key: "value", header: "القيمة", render: (s: any) => <span className="font-mono">{s.value} {s.unit || ""}</span> },
+                  ]}
+                  data={(telematicsSensors?.data || []).slice(0, 25)}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center justify-between">
+                <span className="flex items-center gap-2"><Bot className="w-4 h-4 text-rose-600" /> تنبيهات السلامة الذكية ({(telematicsAlerts?.data || []).length})</span>
+                <Link href="/fleet/telematics/ai-alerts">
+                  <Button variant="outline" size="sm">عرض الكل</Button>
+                </Link>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(telematicsAlerts?.data || []).length === 0 ? (
+                <p className="text-muted-foreground text-center py-4 text-sm">لا توجد تنبيهات</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "occurredAt", header: "الوقت", render: (a: any) => <span className="text-xs">{formatDateAr(a.occurredAt)}</span> },
+                    { key: "category", header: "الفئة", render: (a: any) => <Badge variant="outline">{a.category}</Badge> },
+                    { key: "alertType", header: "التنبيه", render: (a: any) => a.alertType },
+                    { key: "severity", header: "الخطورة", render: (a: any) => <PageStatusBadge status={a.severity || "info"} /> },
+                    { key: "status", header: "الحالة", render: (a: any) => <PageStatusBadge status={a.status} /> },
+                  ]}
+                  data={(telematicsAlerts?.data || []).slice(0, 25)}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
-
       {activeTab === "tasks" && id && (
         <LinkedTasks entityType="vehicle" entityId={id} />
       )}
-
       {activeTab === "finance" && id && (
         <div className="space-y-6">
           {tco && (
@@ -810,16 +870,13 @@ export default function VehicleDetail() {
           </Card>
         </div>
       )}
-
       {id && (
         <EntityObligations entityType="fleet-vehicle,fleet-maintenance,fleet-insurance" entityId={id} hideWhenEmpty />
       )}
-
       {id && <EntityComments entityType="vehicle" entityId={id} />}
       {id && <EntityTags entityType="vehicle" entityId={id} />}
     </div>
   );
-
   return (
     <DetailPageLayout
       title={`${vehicle?.make || ""} ${vehicle?.model || ""} ${vehicle?.year || ""}`.trim() || "المركبة"}
@@ -843,159 +900,29 @@ export default function VehicleDetail() {
               <TrendingUp className="h-4 w-4" /> الربحية
             </Button>
           </Link>
-          <PrintButton entityType="vehicle" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="vehicle" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
       hideTabs={[...registryHideTabs, "tasks"]}
     />
   );
 }
-
 function fuelTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     gasoline: "بنزين", diesel: "ديزل", electric: "كهربائي", hybrid: "هجين",
   };
   return labels[type] || type || "-";
 }
-
 function insuranceTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     comprehensive: "شامل", third_party: "طرف ثالث", "against-others": "ضد الغير",
   };
   return labels[type] || type || "-";
 }
-
 function maintenanceTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     oil_change: "تغيير زيت", tire_replacement: "استبدال إطارات",
     scheduled: "صيانة دورية", repair: "إصلاح", inspection: "فحص",
   };
   return labels[type] || type || "-";
-}
-
-function VehicleTelematicsTab({
-  vehicleId,
-  position,
-  live,
-  events,
-  alerts,
-}: {
-  vehicleId: string;
-  position: any;
-  live: any;
-  events: any[];
-  alerts: any[];
-}) {
-  const { toast } = useToast();
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-
-  // POST /fleet/telematics/video/session — kicks off a live video session
-  // and returns the stream URL. Used by the "بدء بث الفيديو" action.
-  const handleStartVideo = async () => {
-    try {
-      const resp = await apiFetch<{ url?: string; sessionId?: string }>(
-        "/fleet/telematics/video/session",
-        { method: "POST", body: JSON.stringify({ vehicleId: Number(vehicleId) }) },
-      );
-      if (resp?.url) {
-        setVideoUrl(resp.url);
-        toast({ title: "بدأ بث الفيديو" });
-      } else {
-        toast({ title: "تم تجهيز الجلسة", description: resp?.sessionId ?? "" });
-      }
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "تعذر بدء البث", description: getErrorMessage(err) });
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">الموقع الأخير</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs space-y-1">
-            {position ? (
-              <>
-                <p className="text-muted-foreground">خط العرض: <span className="font-mono">{position.lat ?? position.latitude ?? "—"}</span></p>
-                <p className="text-muted-foreground">خط الطول: <span className="font-mono">{position.lng ?? position.longitude ?? "—"}</span></p>
-                <p className="text-muted-foreground">السرعة: <span className="font-mono">{position.speed ?? "—"} كم/س</span></p>
-                <p className="text-muted-foreground">آخر تحديث: <span className="font-mono">{position.timestamp ?? position.updatedAt ?? "—"}</span></p>
-              </>
-            ) : <p className="text-muted-foreground">لا توجد بيانات موقع.</p>}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm">الحالة المباشرة</CardTitle>
-            <GuardedButton perm="fleet:update" size="sm" rateLimitAware onClick={handleStartVideo}>
-              <Video className="h-3.5 w-3.5 me-1" />بث فيديو
-            </GuardedButton>
-          </CardHeader>
-          <CardContent className="text-xs">
-            {live ? (
-              <div className="grid grid-cols-2 gap-2">
-                {Object.entries(live).filter(([, v]) => typeof v !== "object").slice(0, 8).map(([k, v]) => (
-                  <div key={k} className="border rounded p-1.5">
-                    <p className="text-muted-foreground text-[10px]">{k}</p>
-                    <p className="font-mono">{v == null ? "—" : String(v)}</p>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="text-muted-foreground">لا توجد بيانات حية.</p>}
-            {videoUrl && (
-              <p className="mt-2 text-status-info-foreground">
-                رابط البث: <a href={videoUrl} className="underline font-mono" target="_blank" rel="noopener noreferrer">{videoUrl}</a>
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">الأحداث الأخيرة ({events.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {events.length === 0 ? (
-              <p className="p-3 text-muted-foreground text-center text-xs">لا توجد أحداث.</p>
-            ) : (
-              <div className="divide-y text-xs max-h-64 overflow-y-auto">
-                {events.slice(0, 30).map((e: any, i: number) => (
-                  <div key={e.id ?? i} className="px-3 py-1.5 flex justify-between">
-                    <span>{e.type ?? e.eventType ?? "—"}</span>
-                    <span className="text-muted-foreground">{e.timestamp ? formatDateAr(e.timestamp) : ""}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">تنبيهات AI ({alerts.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {alerts.length === 0 ? (
-              <p className="p-3 text-muted-foreground text-center text-xs">لا توجد تنبيهات.</p>
-            ) : (
-              <div className="divide-y text-xs max-h-64 overflow-y-auto">
-                {alerts.slice(0, 30).map((a: any, i: number) => (
-                  <div key={a.id ?? i} className="px-3 py-1.5 flex justify-between">
-                    <span>
-                      <Badge variant={a.severity === "critical" ? "destructive" : "outline"} className="text-[10px] me-1">{a.severity ?? "—"}</Badge>
-                      {a.title ?? a.category ?? "—"}
-                    </span>
-                    <span className="text-muted-foreground">{a.createdAt ? formatDateAr(a.createdAt) : ""}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
 }

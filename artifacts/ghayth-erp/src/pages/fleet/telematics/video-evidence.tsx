@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { useApiQuery, useApiMutation, asList, apiUrl } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Video, Square, ShieldCheck } from "lucide-react";
+import { Video, Square, ShieldCheck, ScrollText } from "lucide-react";
 import {
   DataTable,
   type DataTableColumn,
@@ -37,12 +41,30 @@ const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
   error: { label: "خطأ", tone: "bg-rose-100 text-rose-700" },
 };
 
+interface AccessLogRow {
+  id: number;
+  status: string;
+  accessedAt: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  errorReason: string | null;
+}
+
 export default function FleetTelematicsVideoEvidence() {
+  const [logsForSessionId, setLogsForSessionId] = useState<number | null>(null);
+
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: VideoSessionRow[] }>(
     ["fleet-telematics-video"],
     "/fleet/telematics/video/sessions",
   );
   const rows = asList(data) as VideoSessionRow[];
+
+  const { data: accessLogs } = useApiQuery<{ data: AccessLogRow[] }>(
+    ["fleet-telematics-video-access-logs", String(logsForSessionId ?? 0)],
+    `/fleet/telematics/video/sessions/${logsForSessionId}/access-logs`,
+    logsForSessionId !== null,
+  );
+  const logRows = asList(accessLogs) as AccessLogRow[];
 
   const stopMut = useApiMutation<unknown, { id: number }>(
     (body) => `/fleet/telematics/video/session/${body.id}/stop`,
@@ -117,6 +139,14 @@ export default function FleetTelematicsVideoEvidence() {
               تشغيل
             </a>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setLogsForSessionId(s.id)}
+            title="سجل الوصول"
+          >
+            <ScrollText className="h-4 w-4" />
+          </Button>
           {s.status === "active" && (
             <GuardedButton
               perm="fleet.telematics.video:delete"
@@ -173,6 +203,41 @@ export default function FleetTelematicsVideoEvidence() {
           />
         </CardContent>
       </Card>
+
+      <Dialog open={logsForSessionId !== null} onOpenChange={(o) => !o && setLogsForSessionId(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ScrollText className="h-5 w-5" />
+              سجل وصول الجلسة #{logsForSessionId}
+            </DialogTitle>
+          </DialogHeader>
+          {logRows.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">لا توجد سجلات وصول</p>
+          ) : (
+            <div className="max-h-96 overflow-y-auto space-y-1 text-sm">
+              {logRows.map((l) => (
+                <div key={l.id} className="border rounded-md p-2 flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={l.status === "allowed" ? "bg-status-success-surface text-status-success-foreground" : "bg-rose-100 text-rose-700"}>
+                        {l.status}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{new Date(l.accessedAt).toLocaleString("ar-SA")}</span>
+                    </div>
+                    {l.errorReason && <p className="text-xs text-rose-700 mt-1">{l.errorReason}</p>}
+                    {l.userAgent && <p className="text-xs text-muted-foreground truncate mt-1">{l.userAgent}</p>}
+                  </div>
+                  <span className="text-xs font-mono text-muted-foreground">{l.ipAddress || "—"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLogsForSessionId(null)}>إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

@@ -169,7 +169,7 @@ export default function WarehouseCategoryDetail() {
       onRetry={refetch}
       actions={
         <div className="flex items-center gap-2">
-          <PrintButton entityType="warehouse_category" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="warehouse_category" entityId={(id as any) ?? 0} label="طباعة" />
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={!category}>
             <Edit className="h-4 w-4 ms-1" /> تعديل
           </GuardedButton>

@@ -230,7 +230,7 @@ export default function PilgrimDetail() {
       actions={
         <div className="flex items-center gap-2">
           {actions}
-          <PrintButton entityType="umrah_pilgrim" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="umrah_pilgrim" entityId={(id as any) ?? 0} label="طباعة" />
           <DetailActionButtons hook={editDelete} editPerm="umrah:update" deletePerm="umrah:delete" />
         </div>
       }

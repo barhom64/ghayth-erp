@@ -384,7 +384,7 @@ export default function PolicyDetail() {
             <EntityPrintButton
               entityType="policy"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton
             perm="governance:update"

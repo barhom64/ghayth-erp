@@ -21,7 +21,8 @@ import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Users, Split, Merge, ChevronRight } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
 // Umrah groups list + split / merge operations.
@@ -46,6 +47,19 @@ interface Group {
   status: string;
   salesInvoiceId: number | null;
   createdAt: string;
+  // Enriched operational fields — backend joins on every list row.
+  agentName?: string | null;
+  subAgentName?: string | null;
+  seasonTitle?: string | null;
+  nuskInvoiceCount?: number;
+  nuskCostTotal?: number | string;
+  salesInvoiceRef?: string | null;
+  salesInvoiceTotal?: number | string | null;
+  salesInvoiceStatus?: string | null;
+  salesOutstanding?: number | string;
+  pilgrimsInside?: number;
+  pilgrimsOverstayed?: number;
+  visaAtRisk?: number;
 }
 
 interface Pilgrim {
@@ -198,8 +212,41 @@ export default function UmrahGroups() {
   const columns: DataTableColumn<Group>[] = [
     { key: "nuskGroupNumber", header: "رقم نسك", render: (g) => <span className="font-medium">{g.nuskGroupNumber}</span> },
     { key: "name", header: "الاسم", render: (g) => g.name || "—" },
-    { key: "mutamerCount", header: "عدد المعتمرين" },
-    { key: "programDuration", header: "المدة (يوم)", render: (g) => g.programDuration ?? "—" },
+    { key: "subAgentName" as any, header: "الوكيل الفرعي", render: (g) => g.subAgentName ?? g.agentName ?? "—" },
+    { key: "mutamerCount", header: "معتمرون", render: (g) => (
+      <div className="flex items-center gap-1 text-xs">
+        <span className="font-medium">{g.mutamerCount}</span>
+        {Number(g.pilgrimsInside ?? 0) > 0 && (
+          <Badge variant="outline" className="border-status-success-surface text-status-success-foreground text-[10px]">{g.pilgrimsInside} داخل</Badge>
+        )}
+        {Number(g.pilgrimsOverstayed ?? 0) > 0 && (
+          <Badge variant="destructive" className="text-[10px]">{g.pilgrimsOverstayed} متأخر</Badge>
+        )}
+      </div>
+    ) },
+    { key: "nuskCostTotal" as any, header: "تكلفة نسك", render: (g) => (
+      <div className="text-xs">
+        <div className="font-medium">{formatCurrency(Number(g.nuskCostTotal ?? 0))}</div>
+        {Number(g.nuskInvoiceCount ?? 0) > 0 && (
+          <div className="text-muted-foreground">{g.nuskInvoiceCount} فاتورة</div>
+        )}
+      </div>
+    ) },
+    { key: "salesInvoiceRef" as any, header: "فاتورة المبيعات", render: (g) => g.salesInvoiceRef ? (
+      <div className="text-xs">
+        <div className="font-mono">{g.salesInvoiceRef}</div>
+        <div className="font-medium">{formatCurrency(Number(g.salesInvoiceTotal ?? 0))}</div>
+        {Number(g.salesOutstanding ?? 0) > 0 && (
+          <Badge variant="outline" className="border-status-warning-surface text-status-warning-foreground text-[10px] mt-0.5">باق {formatCurrency(Number(g.salesOutstanding))}</Badge>
+        )}
+      </div>
+    ) : <span className="text-muted-foreground text-xs">— غير مفوترة</span> },
+    { key: "visaAtRisk" as any, header: "التأشيرات", render: (g) => {
+      const n = Number(g.visaAtRisk ?? 0);
+      if (n === 0) return <span className="text-muted-foreground text-xs">—</span>;
+      return <Badge variant="destructive" className="text-[10px]">{n} عاجل</Badge>;
+    } },
+    { key: "programDuration", header: "المدة", render: (g) => g.programDuration ? `${g.programDuration} يوم` : "—" },
     { key: "status", header: "الحالة" },
     { key: "createdAt", header: "تاريخ الإنشاء", render: (g) => formatDateAr(g.createdAt) },
     {

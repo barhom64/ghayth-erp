@@ -106,7 +106,7 @@ export default function ProjectCostingDetailPage() {
 
   return (
     <DetailPageLayout
-      actions={<PrintButton entityType="project_costing" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
+      actions={<PrintButton entityType="project_costing" entityId={(params?.id ?? id ?? 0) as any} label="طباعة" />}
       title={project?.name || "المشروع"}
       subtitle={project?.description || undefined}
       backPath="/finance/project-costing"

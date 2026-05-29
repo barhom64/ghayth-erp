@@ -126,7 +126,7 @@ export default function OfficialLettersPage() {
           <PrintButton
             entityType="official_letter"
             entityId={l.id}
-            formats={["a4"]}
+           
             label=""
             variant="ghost"
             size="sm"

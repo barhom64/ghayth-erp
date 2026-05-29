@@ -28,7 +28,11 @@ import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
-import { confirmVouchersImport } from "../lib/umrahImportEngine.js";
+import {
+  confirmVouchersImport,
+  previewMutamersImport,
+  previewVouchersImport,
+} from "../lib/umrahImportEngine.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEASON LOCK — rejects writes on closed/archived seasons
@@ -844,45 +848,65 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
   try {
     const scope = req.scope!;
     const { seasonId, rows: importRows, fileType } = zodParse(importPreviewSchema.safeParse(req.body));
-    const passportHashes = importRows.filter((r) => r.passportNumber).map((r) => blindIndex(String(r.passportNumber)));
-    const existingRows = passportHashes.length > 0
-      ? await rawQuery<Record<string, unknown>>(`SELECT "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
-      : [];
-    const existingSet = new Set(existingRows.map((r) => r.passportNumber_hash));
-    const newRows = importRows.filter((r) => r.passportNumber && !existingSet.has(blindIndex(String(r.passportNumber))));
-    const duplicateRows = importRows.filter((r) => r.passportNumber && existingSet.has(blindIndex(String(r.passportNumber))));
-    const errorRows = importRows.filter((r) => !r.passportNumber || !r.fullName);
-    const nuskCodes = [...new Set(importRows.map((r) => r.nuskCode).filter(Boolean))];
-    const linkedAgents = nuskCodes.length > 0
-      ? await rawQuery<Record<string, unknown>>(`SELECT "nuskCode", name FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode" = ANY($2)`, [scope.companyId, nuskCodes])
-      : [];
-    const linkedSet = new Set(linkedAgents.map((a) => a.nuskCode));
-    const unlinkedSubAgents = nuskCodes.filter((c) => !linkedSet.has(c)).map((c) => ({ nuskCode: c }));
-    // Preview is read-only but worth tracking so operators can spot
-    // patterns (e.g. repeated previews of the same broken file, files
-    // with high duplicate counts) before they commit. The event carries
-    // counts only — no row data — so it stays small in the DLQ.
+
+    // Delegate to umrahImportEngine so the preview reflects the same
+    // dedup keys + warnings the confirm step will use. Pre-PR the route
+    // ran an inline legacy query against `umrah_pilgrims.passportNumber_hash`
+    // that returned only basic counts — the wizard's agent-linking
+    // warnings (`newAgentsToCreate`, `rowsWithoutAgent`) never surfaced
+    // because the engine wasn't on the path.
+    const importScope = {
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? 0,
+      userId: scope.userId,
+      seasonId,
+    };
+    const diff = fileType === "vouchers"
+      ? await previewVouchersImport(importScope, importRows)
+      : await previewMutamersImport(importScope, importRows);
+
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "umrah.import.previewed", entity: "umrah_pilgrims", entityId: 0,
+      action: "umrah.import.previewed",
+      entity: fileType === "vouchers" ? "umrah_nusk_invoices" : "umrah_pilgrims",
+      entityId: 0,
       details: JSON.stringify({
         seasonId, fileType,
-        totalRows: importRows.length,
-        newRecords: newRows.length,
-        duplicateRecords: duplicateRows.length,
-        errorRecords: errorRows.length,
-        unlinkedSubAgentCount: unlinkedSubAgents.length,
+        total: diff.totalRows,
+        newCount: diff.newRows.length,
+        updatedCount: diff.updatedRows.length,
+        unchangedCount: diff.skippedCount,
+        errorCount: diff.errorRows.length,
+        unlinkedSubAgentCount: diff.unlinkedSubAgents.length,
+        newAgentsCount: diff.newAgentsToCreate.length,
+        rowsWithoutAgent: diff.rowsWithoutAgent,
       }),
     }).catch((e) => logger.error(e, "umrah import preview bg"));
+
+    // Response shape mirrors the wizard's `PreviewSummary` interface so
+    // the UI's counters + warning cards work without translation. The
+    // `*Records` aliases are kept for backward compat with older callers
+    // that snapshotted the previous response shape.
     res.json({
-      totalRows: importRows.length,
-      newRecords: newRows.length,
-      duplicateRecords: duplicateRows.length,
-      errorRecords: errorRows.length,
-      unlinkedSubAgents,
-      sampleNew: newRows.slice(0, 5),
-      sampleDuplicate: duplicateRows.slice(0, 5),
-      sampleErrors: errorRows.slice(0, 5),
+      // Canonical UI names
+      total: diff.totalRows,
+      newCount: diff.newRows.length,
+      updatedCount: diff.updatedRows.length,
+      unchangedCount: diff.skippedCount,
+      errorCount: diff.errorRows.length,
+      errors: diff.errorRows.map((e) => ({ row: e.rowIndex, message: e.error })),
+      unlinkedSubAgents: diff.unlinkedSubAgents,
+      newAgentsToCreate: diff.newAgentsToCreate,
+      rowsWithoutAgent: diff.rowsWithoutAgent,
+      financialImpactCount: diff.financialImpactCount,
+      // Back-compat aliases (legacy callers / older clients).
+      totalRows: diff.totalRows,
+      newRecords: diff.newRows.length,
+      duplicateRecords: diff.skippedCount,
+      errorRecords: diff.errorRows.length,
+      sampleNew: diff.newRows.slice(0, 5),
+      sampleDuplicate: diff.updatedRows.slice(0, 5).map((u) => u.row),
+      sampleErrors: diff.errorRows.slice(0, 5),
     });
   } catch (err) { handleRouteError(err, res, "Import preview error"); }
 });
@@ -1028,7 +1052,7 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
     let seasonFilterP = "";
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); seasonFilter = ` AND "seasonId"=$${params.length}`; seasonFilterP = ` AND p."seasonId"=$${params.length}`; }
-    const [stats, penaltyStats, agentStats, recentArrivals] = await Promise.all([
+    const [stats, penaltyStats, agentStats, recentArrivals, salesFinancials, nuskFinancials, visaExpiry] = await Promise.all([
       rawQuery(`
         SELECT
           COUNT(*) as total,
@@ -1062,12 +1086,69 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
         FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter} AND "actualArrival" IS NOT NULL
         ORDER BY "actualArrival" DESC LIMIT 10
       `, params),
+      // Sales-side financial position: receivables from sub-agents.
+      // Outstanding = sum(total − paidAmount) for invoices not cancelled.
+      // This gives the operator the umrah-specific "what we are owed" number.
+      rawQuery(`
+        SELECT
+          COUNT(*) FILTER (WHERE status != 'cancelled') AS "invoiceCount",
+          COALESCE(SUM(total) FILTER (WHERE status != 'cancelled'), 0) AS "invoicedTotal",
+          COALESCE(SUM("paidAmount") FILTER (WHERE status != 'cancelled'), 0) AS "collectedTotal",
+          COALESCE(SUM(total - COALESCE("paidAmount", 0)) FILTER (WHERE status NOT IN ('cancelled','paid')), 0) AS "outstandingTotal",
+          COALESCE(SUM(total - COALESCE("paidAmount", 0)) FILTER (WHERE status NOT IN ('cancelled','paid') AND "dueDate" < CURRENT_DATE), 0) AS "overdueTotal"
+        FROM umrah_sales_invoices
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter}
+      `, params),
+      // Purchase-side financial position: what we owe NUSK. The legacy
+      // /finance/payables route nets against allocations; the dashboard
+      // shows the gross numbers as an at-a-glance KPI so the operator
+      // knows the topline without leaving the page.
+      rawQuery(`
+        SELECT
+          COUNT(*) FILTER (WHERE "nuskStatus" != 'cancelled') AS "invoiceCount",
+          COALESCE(SUM("totalAmount") FILTER (WHERE "nuskStatus" != 'cancelled'), 0) AS "totalAmount",
+          COALESCE(SUM("refundAmount") FILTER (WHERE "nuskStatus" != 'cancelled'), 0) AS "refundedTotal",
+          COALESCE(SUM("totalAmount" - COALESCE("refundAmount", 0)) FILTER (WHERE "nuskStatus" NOT IN ('cancelled','paid','refunded')), 0) AS "outstandingTotal"
+        FROM umrah_nusk_invoices
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL
+      `, [scope.companyId]),
+      // Visa expiry alerts — Saudi compliance: pilgrims still inside KSA
+      // whose visa expires within the next 30 days. The buckets let the
+      // UI render a "critical / warning / soon" traffic light.
+      // Filters on pilgrim status to skip departed/cancelled rows that
+      // don't need action.
+      rawQuery(`
+        SELECT
+          COUNT(*) FILTER (WHERE "visaExpiry" < CURRENT_DATE) AS "expired",
+          COUNT(*) FILTER (WHERE "visaExpiry" >= CURRENT_DATE AND "visaExpiry" < CURRENT_DATE + INTERVAL '7 days') AS "critical",
+          COUNT(*) FILTER (WHERE "visaExpiry" >= CURRENT_DATE + INTERVAL '7 days' AND "visaExpiry" < CURRENT_DATE + INTERVAL '30 days') AS "warning"
+        FROM umrah_pilgrims
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter}
+          AND "visaExpiry" IS NOT NULL
+          AND status NOT IN ('departed','cancelled','deceased','visa_rejected')
+      `, params),
     ]);
+    const sales = (salesFinancials[0] || {}) as Record<string, unknown>;
+    const nusk = (nuskFinancials[0] || {}) as Record<string, unknown>;
+    const receivable = Number(sales.outstandingTotal ?? 0);
+    const payable = Number(nusk.outstandingTotal ?? 0);
     res.json(maskFields(req, {
       pilgrims: stats[0],
       penalties: penaltyStats[0],
       topAgents: agentStats,
-      recentArrivals: recentArrivals.map(decryptPilgrimRow)
+      recentArrivals: recentArrivals.map(decryptPilgrimRow),
+      // Financial position at a glance. `net` = receivable − payable;
+      // positive means the umrah module is net-owed; negative means net-owes.
+      financials: {
+        sales: salesFinancials[0],
+        nusk: nuskFinancials[0],
+        net: receivable - payable,
+      },
+      // Visa-expiry compliance buckets: expired / critical (<7d) /
+      // warning (7-30d). UI renders a traffic-light card; cron C31
+      // already handles per-pilgrim notifications — this is the
+      // operator's at-a-glance summary.
+      visaExpiry: visaExpiry[0],
     }));
   } catch (err) { handleRouteError(err, res, "Dashboard error"); }
 });

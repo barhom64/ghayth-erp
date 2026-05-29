@@ -7,7 +7,6 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PrintButton } from "@/components/shared/print-button";
-import { ExportButton } from "@/components/shared/export-buttons";
 import {
   Banknote,
   DollarSign,
@@ -282,20 +281,16 @@ export default function InvoiceDetailPage() {
         </GuardedButton>
       )}
       {invoice && (
+        // PrintButton dropdown now offers a "تنزيل" item that calls the
+        // engine in download mode — the legacy ExportButton calling
+        // /export/pdf/invoice/:id (which itself proxies to renderPrint)
+        // was redundant UX and produced a duplicate print_jobs row when
+        // users hit both buttons.
         <PrintButton
           entityType="invoice"
           entityId={invoice.id ?? id}
           formats={["a4", "thermal_80", "excel"]}
           label="طباعة"
-        />
-      )}
-      {invoice && (
-        <ExportButton
-          endpoint={`/export/pdf/invoice/${invoice.id ?? id}`}
-          filename={`invoice-${invoice.id ?? id}.pdf`}
-          type="pdf"
-          label="PDF"
-          size="sm"
         />
       )}
     </div>

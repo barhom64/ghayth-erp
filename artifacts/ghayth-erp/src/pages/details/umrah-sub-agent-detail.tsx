@@ -324,7 +324,7 @@ export default function UmrahSubAgentDetail() {
 
   return (
     <DetailPageLayout
-      actions={<PrintButton entityType="umrah_sub_agent" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
+      actions={<PrintButton entityType="umrah_sub_agent" entityId={(params?.id ?? id ?? 0) as any} label="طباعة" />}
       title={sa?.name || "تفاصيل الوكيل الفرعي"}
       subtitle={sa?.nuskCode ? `رمز نسك: ${sa.nuskCode}` : undefined}
       backPath="/umrah/sub-agents"

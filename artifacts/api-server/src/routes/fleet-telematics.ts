@@ -878,10 +878,12 @@ router.get(
         params.push(category);
       }
       const rows = await rawQuery(
-        `SELECT a.*, v."plateNumber" AS "vehiclePlate", d."deviceLabel"
+        `SELECT a.*, v."plateNumber" AS "vehiclePlate", d."deviceLabel",
+                dr.name AS "driverName"
            FROM fleet_ai_alerts a
            LEFT JOIN fleet_vehicles v ON v.id = a."vehicleId" AND v."companyId" = a."companyId" AND v."deletedAt" IS NULL
            LEFT JOIN fleet_telematics_devices d ON d.id = a."deviceId" AND d."companyId" = a."companyId" AND d."deletedAt" IS NULL
+           LEFT JOIN fleet_drivers dr ON dr.id = a."driverId" AND dr."companyId" = a."companyId" AND dr."deletedAt" IS NULL
           WHERE ${conditions.join(" AND ")}
           ORDER BY a."occurredAt" DESC LIMIT 500`,
         params,
@@ -2634,13 +2636,38 @@ export async function persistPosition(
       JSON.stringify(p.rawPayload ?? {}),
     ],
   );
-  // Touch the device's last-known timestamps.
+  // Touch the device's last-known timestamps. Split into two updates
+  // so we can detect the offline→online transition atomically (the
+  // first UPDATE only fires when status was actually `offline`, so its
+  // affectedRows reliably tells us "this position just brought the
+  // device back online"). Without the split, the back-online edge is
+  // invisible to the eventCatalog `fleet.telematics.device.online`
+  // consumer (heartbeat fires the offline edge, but nothing fires the
+  // online edge — leaving the dashboards stuck on red).
+  const flip = await rawExecute(
+    `UPDATE fleet_telematics_devices
+        SET status = 'online'
+      WHERE id = $1 AND status = 'offline'`,
+    [device.id],
+  );
   await rawExecute(
     `UPDATE fleet_telematics_devices
-        SET "lastPositionAt" = $1, "lastOnlineAt" = NOW(), status = 'online'
+        SET "lastPositionAt" = $1, "lastOnlineAt" = NOW()
       WHERE id = $2`,
     [p.occurredAt, device.id],
   );
+  if ((flip.affectedRows ?? 0) > 0) {
+    void emitEvent({
+      companyId,
+      branchId: branchId ?? undefined,
+      userId: null,
+      action: "fleet.telematics.device.online",
+      entity: "fleet_telematics_devices",
+      entityId: device.id,
+      details: `جهاز #${device.id} عاد للاتصال`,
+      after: { deviceId: device.id, vehicleId: device.vehicleId, lastSeenAt: p.occurredAt.toISOString() },
+    });
+  }
   if (affectedRows > 0) {
     const now = Date.now();
     const last = lastPositionEventAt.get(device.id) ?? 0;

@@ -45,7 +45,7 @@ function exportCSV(rows: any[], headers: string[], filename: string) {
 // entityType. The entityId encodes the date filter as
 // "YYYY-MM-DD..YYYY-MM-DD" so each rendered job is traceable to its filter.
 function PrintButton({ entityType, entityId }: { entityType: string; entityId?: string }) {
-  return <EntityPrintButton entityType={entityType} entityId={entityId ?? "all"} formats={["a4"]} />;
+  return <EntityPrintButton entityType={entityType} entityId={entityId ?? "all"} />;
 }
 
 function dateRangeId(startDate?: string, endDate?: string): string {

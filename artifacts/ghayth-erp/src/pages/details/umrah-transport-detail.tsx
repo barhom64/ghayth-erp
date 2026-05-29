@@ -199,7 +199,7 @@ export default function UmrahTransportDetail() {
             deletePerm="umrah:delete"
             extra={item ? <Badge className="text-sm px-3 py-1">{st.label}</Badge> : null}
           />
-          <PrintButton entityType="umrah_transport" entityId={item?.id ?? id ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="umrah_transport" entityId={item?.id ?? id ?? 0} label="طباعة" />
         </div>
       }
     />

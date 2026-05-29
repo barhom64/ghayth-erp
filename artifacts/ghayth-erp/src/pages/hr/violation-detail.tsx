@@ -267,7 +267,7 @@ export default function ViolationDetail() {
               label="معاينة أثر الخصم"
             />
           )}
-          <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} label="طباعة" />
           <DetailActionButtons hook={editDelete} editPerm="hr:approve" deletePerm="hr:delete" />
         </div>
       }

@@ -189,7 +189,7 @@ export default function WhtSummaryPage() {
           <EntityPrintButton
             entityType="report_wht_summary"
             entityId={`${startDate ?? ""}..${endDate ?? ""}`}
-            formats={["a4"]}
+           
           />
         </div>
       }

@@ -200,7 +200,7 @@ export default function LeadDetailPage() {
         <Phone className="h-4 w-4" />
         تسجيل اتصال
       </Button>
-      <EntityPrintButton entityType="crm_lead" entityId={id ?? ""} formats={["a4"]} />
+      <EntityPrintButton entityType="crm_lead" entityId={id ?? ""} />
     </div>
   );
 

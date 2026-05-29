@@ -106,7 +106,7 @@ export function PrintButton({
     entityId !== 0 &&
     entityId !== "0";
 
-  async function run(format: PrintFormat) {
+  async function run(format: PrintFormat, opts: { forceDownload?: boolean } = {}) {
     if (!hasRealId) {
       toast({
         title: "الوثيقة غير محمّلة",
@@ -115,15 +115,20 @@ export function PrintButton({
       });
       return;
     }
+    // Download mode: prop-level `download` makes every click a direct download
+    // (no preview); the dropdown "تنزيل" item passes `forceDownload: true` so
+    // a single button can offer both flows without opening a redundant
+    // ExportButton beside it. The Excel format is also always a direct
+    // download (no preview makes sense for a spreadsheet).
+    const wantsDownload = opts.forceDownload || download || format === "excel";
     setLoading(true);
     // Open the preview window synchronously *before* awaiting the API call so
     // browsers don't treat it as a popup (popup blockers permit windows opened
     // directly from user gesture handlers). For downloads we don't need a
     // window at all.
-    const previewWindow =
-      format === "excel" || download ? null : window.open("", "_blank");
+    const previewWindow = wantsDownload ? null : window.open("", "_blank");
 
-    if (previewWindow && !download && format !== "excel") {
+    if (previewWindow) {
       // Friendly loading screen until the bytes arrive — beats the user
       // staring at an empty about:blank tab.
       previewWindow.document.write(
@@ -145,7 +150,7 @@ export function PrintButton({
         }),
       });
 
-      if (format === "excel" || download) {
+      if (wantsDownload) {
         // Binary downloads stay on the current tab.
         const bytes = base64ToUint8Array(resp.base64);
         const blob = new Blob([bytes.buffer as ArrayBuffer], { type: resp.mime });
@@ -297,7 +302,7 @@ export function PrintButton({
               <span>{FORMAT_LABEL[f]}</span>
             </DropdownMenuItem>
           ))}
-          <DropdownMenuItem onClick={() => run(primary)} className="gap-2 border-t mt-1 pt-2">
+          <DropdownMenuItem onClick={() => run(primary, { forceDownload: true })} className="gap-2 border-t mt-1 pt-2">
             <Download className="h-4 w-4" />
             <span>تنزيل</span>
           </DropdownMenuItem>

@@ -371,7 +371,7 @@ export default function TicketDetail() {
       overview={overview}
       actions={
         <div className="flex items-center gap-2">
-          <PrintButton entityType="support_ticket" entityId={id ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="support_ticket" entityId={id ?? 0} label="طباعة" />
           <GuardedButton perm="support:update" variant="outline" size="sm" onClick={handleCheckSla} rateLimitAware>احسب الـ SLA</GuardedButton>
           <GuardedButton perm="support:update" variant="outline" size="sm" onClick={handleScheduleVisit} rateLimitAware>زيارة ميدانية</GuardedButton>
           {deleting ? (

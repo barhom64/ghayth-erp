@@ -1340,7 +1340,7 @@ function buildVehiclePreset(): PrintTemplate {
     name: "بطاقة مركبة",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة مركبة</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Vehicle Card — <span dir="ltr">{{entity.plateNumber}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">بطاقة مركبة — <span dir="ltr">{{entity.plateNumber}}</span></div>
 <div class="meta-grid">
   <div><strong>رقم اللوحة:</strong> <span dir="ltr">{{entity.plateNumber}}</span></div>
   <div><strong>الصانع:</strong> {{entity.make}}</div>
@@ -1367,7 +1367,7 @@ function buildFixedAssetPreset(): PrintTemplate {
     name: "بطاقة أصل ثابت",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة أصل ثابت</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Fixed Asset Card — <span dir="ltr">{{entity.code}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">بطاقة أصل ثابت — <span dir="ltr">{{entity.code}}</span></div>
 <div class="meta-grid">
   <div><strong>اسم الأصل:</strong> {{entity.name}}</div>
   <div><strong>الرمز:</strong> {{entity.code}}</div>
@@ -1392,7 +1392,7 @@ function buildEmployeeProfilePreset(): PrintTemplate {
     name: "بطاقة موظف",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة موظف</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Employee Profile — <span dir="ltr">{{entity.empNumber}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">بطاقة موظف — <span dir="ltr">{{entity.empNumber}}</span></div>
 <div class="meta-grid">
   <div><strong>الاسم:</strong> {{entity.name}}</div>
   <div><strong>الاسم (إنجليزي):</strong> <span dir="ltr">{{entity.nameEn}}</span></div>
@@ -1418,7 +1418,7 @@ function buildRentalContractPreset(): PrintTemplate {
     name: "عقد إيجار",
     body: `
 <h1 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">عقد إيجار</h1>
-<div style="text-align:center;color:#475569;margin-bottom:18px">Lease Agreement</div>
+<div style="text-align:center;color:#475569;margin-bottom:18px">عقد إيجار وحدة عقارية</div>
 <div style="line-height:1.9;font-size:11pt">
   <p>في يوم <strong>{{entity.startDate}}</strong> تم إبرام هذا العقد بين:</p>
   <p><strong>المؤجِّر:</strong> {{branch.companyName}} (الطرف الأول)<br/>
@@ -1452,7 +1452,7 @@ function buildPropertyUnitPreset(): PrintTemplate {
     name: "بطاقة وحدة عقارية",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة وحدة عقارية</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Property Unit — <span dir="ltr">{{entity.unitNumber}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">وحدة عقارية — <span dir="ltr">{{entity.unitNumber}}</span></div>
 <div class="meta-grid">
   <div><strong>رقم الوحدة:</strong> {{entity.unitNumber}}</div>
   <div><strong>المبنى:</strong> {{entity.buildingName}}</div>
@@ -1476,7 +1476,7 @@ function buildLegalContractPreset(): PrintTemplate {
     name: "عقد قانوني",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">{{entity.title}}</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Legal Contract — <span dir="ltr">{{entity.ref}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">عقد قانوني — <span dir="ltr">{{entity.ref}}</span></div>
 <div class="meta-grid">
   <div><strong>المرجع:</strong> {{entity.ref}}</div>
   <div><strong>نوع العقد:</strong> {{entity.contractType}}</div>
@@ -1501,7 +1501,7 @@ function buildLegalCasePreset(): PrintTemplate {
     name: "ملف قضية",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">ملف قضية — {{entity.title}}</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Case File — <span dir="ltr">{{entity.caseNumber}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">ملف قضية — <span dir="ltr">{{entity.caseNumber}}</span></div>
 <div class="meta-grid">
   <div><strong>رقم القضية:</strong> {{entity.caseNumber}}</div>
   <div><strong>نوع القضية:</strong> {{entity.caseType}}</div>
@@ -1529,7 +1529,7 @@ function buildOvertimeRequestPreset(): PrintTemplate {
     name: "طلب عمل إضافي",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب عمل إضافي</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Overtime Request — <span dir="ltr">{{entity.requestNumber}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">طلب عمل إضافي — <span dir="ltr">{{entity.requestNumber}}</span></div>
 <div class="meta-grid">
   <div><strong>الرقم:</strong> {{entity.requestNumber}}</div>
   <div><strong>التاريخ:</strong> {{entity.overtimeDate}}</div>
@@ -1558,7 +1558,7 @@ function buildExitRequestPreset(): PrintTemplate {
     name: "طلب إنهاء خدمة",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب إنهاء خدمة</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Exit Request — <span dir="ltr">{{entity.exitNumber}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">طلب إنهاء خدمة — <span dir="ltr">{{entity.exitNumber}}</span></div>
 <div class="meta-grid">
   <div><strong>الرقم:</strong> {{entity.exitNumber}}</div>
   <div><strong>نوع الإنهاء:</strong> {{entity.exitType}}</div>
@@ -1586,7 +1586,7 @@ function buildFleetTripPreset(): PrintTemplate {
     name: "كشف رحلة",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">كشف رحلة أسطول</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Fleet Trip — <span dir="ltr">#{{entity.id}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رحلة أسطول — <span dir="ltr">#{{entity.id}}</span></div>
 <div class="meta-grid">
   <div><strong>المركبة:</strong> #{{entity.vehicleId}}</div>
   <div><strong>السائق:</strong> #{{entity.driverId}}</div>
@@ -3477,7 +3477,10 @@ function buildAccountStatementPreset(): PrintTemplate {
  *  the SPA uses on detail/list pages so the printed doc reads the same as
  *  the screen. Anything not in the map falls back to the raw entityType,
  *  which is rare now that every common type has a bespoke preset. */
-const ARABIC_TITLES: Record<string, string> = {
+/** Exported so printService can pre-fill `data.entity.title` when the
+ *  caller hasn't supplied one — the universalFallback template references
+ *  `{{entity.title}}` instead of baking the title at template-build time. */
+export const ARABIC_TITLES: Record<string, string> = {
   invoice: "فاتورة ضريبية", sales_invoice: "فاتورة مبيعات",
   credit_note: "إشعار دائن", pos_receipt: "إيصال نقطة بيع",
   receipt_voucher: "سند قبض", payment_voucher: "سند صرف",
@@ -3553,9 +3556,15 @@ function universalFallback(entityType: string): PrintTemplate {
     paperSize: "A4",
     mode: "preset",
     presetKey: "universal",
+    // Title token resolution: printService sets `data.entity.title` to the
+    // caller-supplied value when present, else the ARABIC_TITLES lookup, so
+    // by the time substitute() runs there's always a usable title in
+    // entity.title. Without that defaulting, the 37 report types whose
+    // entityType is not in ARABIC_TITLES (report_print_log, report_ar_aging,
+    // …) rendered the raw snake_case slug in the printed header.
     htmlContent: `<div class="print-doc">
 {{branch.letterhead}}
-<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${title}</h2>
+<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">{{entity.title}}</h2>
 <div class="meta-grid">
   <div><strong>المرجع:</strong> {{entity.ref}}</div>
   <div><strong>التاريخ:</strong> {{entity.date}}</div>

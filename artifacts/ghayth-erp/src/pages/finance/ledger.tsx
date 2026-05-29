@@ -86,7 +86,7 @@ export default function LedgerPage() {
           <EntityPrintButton
             entityType="report_general_ledger"
             entityId={`${code}:${startDate ?? ""}..${endDate ?? ""}`}
-            formats={["a4"]}
+           
           />
           <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(entries, ["date", "ref", "description", "debit", "credit", "runningBalance"], `ledger-${code}.csv`)}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي

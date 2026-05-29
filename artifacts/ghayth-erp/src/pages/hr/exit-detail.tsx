@@ -320,7 +320,7 @@ export default function ExitDetail() {
               label="معاينة أثر الإنهاء"
             />
           )}
-          <PrintButton entityType="exit_request" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="exit_request" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
       overview={overviewContent}

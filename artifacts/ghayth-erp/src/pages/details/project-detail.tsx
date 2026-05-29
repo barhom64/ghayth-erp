@@ -814,7 +814,7 @@ export default function ProjectDetail() {
               <TrendingUp className="h-4 w-4" /> الربحية
             </Button>
           </Link>
-          <PrintButton entityType="project" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="project" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
     />
