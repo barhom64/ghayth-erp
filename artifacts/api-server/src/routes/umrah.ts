@@ -913,7 +913,17 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
       updatedCount: diff.updatedRows.length,
       unchangedCount: diff.skippedCount,
       errorCount: diff.errorRows.length,
-      errors: diff.errorRows.map((e) => ({ row: e.rowIndex, message: e.error })),
+      // Surfaces the engine's structured rejection metadata
+      // (fieldName + sample) so the wizard can render a real diagnostics
+      // table + offer a CSV download instead of a row-number-only list.
+      // `row` stays 1-based to align with Excel's row numbering when
+      // operators cross-reference.
+      errors: diff.errorRows.map((e) => ({
+        row: e.rowIndex + 1,
+        message: e.error,
+        fieldName: e.fieldName ?? null,
+        sample: e.sample ?? null,
+      })),
       unlinkedSubAgents: diff.unlinkedSubAgents,
       newAgentsToCreate: diff.newAgentsToCreate,
       rowsWithoutAgent: diff.rowsWithoutAgent,

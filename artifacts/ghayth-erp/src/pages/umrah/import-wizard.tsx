@@ -14,7 +14,7 @@ import { SearchableSelect } from "@/components/shared/searchable-select";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
-import { formatNumber } from "@/lib/formatters";
+import { formatNumber, todayLocal } from "@/lib/formatters";
 import { Upload, CheckCircle2, AlertTriangle, Link2, ArrowRight, FileSpreadsheet, AlertOctagon } from "lucide-react";
 
 type FileType = "mutamers" | "vouchers";
@@ -25,7 +25,14 @@ interface PreviewSummary {
   updatedCount?: number;
   unchangedCount?: number;
   errorCount?: number;
-  errors?: { row: number; message: string }[];
+  errors?: {
+    row: number;
+    message: string;
+    /** Engine field that triggered the rejection (nullable for legacy responses). */
+    fieldName?: string | null;
+    /** Small subset of the row values so the operator can identify it in Excel. */
+    sample?: Record<string, unknown> | null;
+  }[];
   unlinkedSubAgents?: { nuskCode: string; name: string; rowCount: number }[];
   /** Primary agents the confirm step will auto-create (no existing match). */
   newAgentsToCreate?: { nuskAgentNumber: string | null; agentName: string; rowCount: number }[];
@@ -33,6 +40,48 @@ interface PreviewSummary {
   rowsWithoutAgent?: number;
   violationsDetected?: number;
   rows?: any[];
+}
+
+function formatSamplePreview(sample: Record<string, unknown>): string {
+  const entries = Object.entries(sample).filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (entries.length === 0) return "—";
+  return entries.map(([k, v]) => `${k}: ${String(v)}`).join(" · ");
+}
+
+function csvEscape(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const s = String(value);
+  // Quote when the cell contains the CSV delimiters, a newline, or the
+  // quote char itself; double internal quotes per RFC 4180.
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadRejectedRowsCsv(
+  errors: NonNullable<PreviewSummary["errors"]>,
+  fileType: FileType,
+): void {
+  // CSV is opened in Excel/Sheets, which detect UTF-8 reliably only when
+  // a BOM is present at the start of the file — without it Arabic
+  // headers render as mojibake.
+  const BOM = "﻿";
+  const sampleKeys = Array.from(
+    new Set(errors.flatMap((e) => (e.sample ? Object.keys(e.sample) : []))),
+  );
+  const header = ["row", "field", "reason", ...sampleKeys].map(csvEscape).join(",");
+  const rows = errors.map((e) => {
+    const sampleCols = sampleKeys.map((k) => csvEscape(e.sample?.[k] ?? ""));
+    return [csvEscape(e.row), csvEscape(e.fieldName ?? ""), csvEscape(e.message), ...sampleCols].join(",");
+  });
+  const csv = BOM + [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `umrah-rejected-${fileType}-${todayLocal()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export default function UmrahImportWizard() {
@@ -691,23 +740,48 @@ export default function UmrahImportWizard() {
           {/* Errors */}
           {preview.errors && preview.errors.length > 0 && (
             <Card className="border-status-error-surface">
-              <CardContent className="p-4">
-                <h3 className="font-semibold mb-2 text-status-error-foreground">أخطاء في الصفوف</h3>
-                <ul className="text-xs space-y-1 max-h-40 overflow-y-auto">
-                  {preview.errors.slice(0, 20).map((e, i) => (
-                    <li key={i} className="flex gap-2 p-1.5 bg-status-error-surface rounded">
-                      <Badge variant="outline" className="bg-status-error-surface text-status-error-foreground border-status-error-surface">
-                        صف {formatNumber(e.row)}
-                      </Badge>
-                      <span>{e.message}</span>
-                    </li>
-                  ))}
-                  {preview.errors.length > 20 && (
-                    <li className="text-xs text-muted-foreground text-center py-1">
-                      و {formatNumber(preview.errors.length - 20)} خطأ آخر...
-                    </li>
-                  )}
-                </ul>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-semibold text-status-error-foreground">
+                    أخطاء في الصفوف ({formatNumber(preview.errors.length)})
+                  </h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadRejectedRowsCsv(preview.errors ?? [], fileType)}
+                    data-testid="download-rejected-rows-csv"
+                  >
+                    تنزيل الصفوف المرفوضة (CSV)
+                  </Button>
+                </div>
+                <div className="max-h-72 overflow-auto border rounded">
+                  <table className="w-full text-xs">
+                    <thead className="bg-status-error-surface sticky top-0">
+                      <tr className="text-right text-status-error-foreground">
+                        <th className="p-2 font-semibold">صف</th>
+                        <th className="p-2 font-semibold">الحقل</th>
+                        <th className="p-2 font-semibold">سبب الرفض</th>
+                        <th className="p-2 font-semibold">قيم الصف</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.errors.map((e, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="p-2 align-top">
+                            <Badge variant="outline" className="font-mono">{formatNumber(e.row)}</Badge>
+                          </td>
+                          <td className="p-2 align-top font-mono text-muted-foreground">
+                            {e.fieldName || "—"}
+                          </td>
+                          <td className="p-2 align-top">{e.message}</td>
+                          <td className="p-2 align-top text-muted-foreground">
+                            {e.sample ? formatSamplePreview(e.sample) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
