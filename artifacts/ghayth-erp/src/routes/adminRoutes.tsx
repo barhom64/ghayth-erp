@@ -26,6 +26,7 @@ const AdminPrintTemplates = lazy(() => import("@/pages/admin/print-templates"));
 const AdminPrintDiagnostics = lazy(() => import("@/pages/admin/print-diagnostics"));
 const AdminApprovalOverrides = lazy(() => import("@/pages/admin/approval-overrides-report"));
 const AdminPdpl = lazy(() => import("@/pages/admin-pdpl"));
+const AdminDataImport = lazy(() => import("@/pages/admin-data-import"));
 
 export const adminRoutes = [
   { path: "/admin", component: Admin },
@@ -54,4 +55,5 @@ export const adminRoutes = [
   { path: "/admin/print-diagnostics", component: AdminPrintDiagnostics },
   { path: "/admin/approval-overrides", component: AdminApprovalOverrides },
   { path: "/admin/pdpl", component: AdminPdpl },
+  { path: "/admin/data-import", component: AdminDataImport },
 ];
