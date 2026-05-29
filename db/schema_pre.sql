@@ -326,12 +326,43 @@ ALTER TABLE IF EXISTS ONLY public.fx_rates DROP CONSTRAINT IF EXISTS "fx_rates_c
 ALTER TABLE IF EXISTS ONLY public.fleet_violations DROP CONSTRAINT IF EXISTS "fleet_violations_vehicleId_fkey";
 ALTER TABLE IF EXISTS ONLY public.fleet_violations DROP CONSTRAINT IF EXISTS "fleet_violations_driverId_fkey";
 ALTER TABLE IF EXISTS ONLY public.fleet_violations DROP CONSTRAINT IF EXISTS "fleet_violations_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_video_sessions DROP CONSTRAINT IF EXISTS "fleet_video_sessions_vehicleId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_video_sessions DROP CONSTRAINT IF EXISTS "fleet_video_sessions_deviceId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_video_sessions DROP CONSTRAINT IF EXISTS "fleet_video_sessions_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_video_channels DROP CONSTRAINT IF EXISTS "fleet_video_channels_deviceId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_video_channels DROP CONSTRAINT IF EXISTS "fleet_video_channels_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_video_access_logs DROP CONSTRAINT IF EXISTS "fleet_video_access_logs_sessionId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_video_access_logs DROP CONSTRAINT IF EXISTS "fleet_video_access_logs_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.fleet_trips DROP CONSTRAINT IF EXISTS "fleet_trips_vehicleId_fkey";
 ALTER TABLE IF EXISTS ONLY public.fleet_trips DROP CONSTRAINT IF EXISTS "fleet_trips_driverId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_telematics_integrations DROP CONSTRAINT IF EXISTS "fleet_telematics_integrations_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_telematics_devices DROP CONSTRAINT IF EXISTS "fleet_telematics_devices_vehicleId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_telematics_devices DROP CONSTRAINT IF EXISTS "fleet_telematics_devices_integrationId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_telematics_devices DROP CONSTRAINT IF EXISTS "fleet_telematics_devices_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_sensor_readings DROP CONSTRAINT IF EXISTS "fleet_sensor_readings_vehicleId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_sensor_readings DROP CONSTRAINT IF EXISTS "fleet_sensor_readings_deviceId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_sensor_readings DROP CONSTRAINT IF EXISTS "fleet_sensor_readings_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_media_evidence DROP CONSTRAINT IF EXISTS "fleet_media_evidence_vehicleId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_media_evidence DROP CONSTRAINT IF EXISTS "fleet_media_evidence_deviceId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_media_evidence DROP CONSTRAINT IF EXISTS "fleet_media_evidence_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_media_evidence DROP CONSTRAINT IF EXISTS "fleet_media_evidence_alertId_fkey";
 ALTER TABLE IF EXISTS ONLY public.fleet_maintenance DROP CONSTRAINT IF EXISTS "fleet_maintenance_vehicleId_fkey";
 ALTER TABLE IF EXISTS ONLY public.fleet_insurance DROP CONSTRAINT IF EXISTS "fleet_insurance_vehicleId_fkey";
 ALTER TABLE IF EXISTS ONLY public.fleet_gps_tracking DROP CONSTRAINT IF EXISTS "fleet_gps_tracking_vehicleId_fkey";
 ALTER TABLE IF EXISTS ONLY public.fleet_fuel_logs DROP CONSTRAINT IF EXISTS "fleet_fuel_logs_vehicleId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_device_sync_logs DROP CONSTRAINT IF EXISTS "fleet_device_sync_logs_integrationId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_device_sync_logs DROP CONSTRAINT IF EXISTS "fleet_device_sync_logs_deviceId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_device_sync_logs DROP CONSTRAINT IF EXISTS "fleet_device_sync_logs_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_device_positions DROP CONSTRAINT IF EXISTS "fleet_device_positions_vehicleId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_device_positions DROP CONSTRAINT IF EXISTS "fleet_device_positions_deviceId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_device_positions DROP CONSTRAINT IF EXISTS "fleet_device_positions_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_device_events DROP CONSTRAINT IF EXISTS "fleet_device_events_vehicleId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_device_events DROP CONSTRAINT IF EXISTS "fleet_device_events_deviceId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_device_events DROP CONSTRAINT IF EXISTS "fleet_device_events_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_ai_alerts DROP CONSTRAINT IF EXISTS "fleet_ai_alerts_vehicleId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_ai_alerts DROP CONSTRAINT IF EXISTS "fleet_ai_alerts_driverId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_ai_alerts DROP CONSTRAINT IF EXISTS "fleet_ai_alerts_deviceId_fkey";
+ALTER TABLE IF EXISTS ONLY public.fleet_ai_alerts DROP CONSTRAINT IF EXISTS "fleet_ai_alerts_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.fixed_assets DROP CONSTRAINT IF EXISTS "fixed_assets_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.fixed_assets DROP CONSTRAINT IF EXISTS "fixed_assets_assignedTo_fkey";
 ALTER TABLE IF EXISTS ONLY public.financial_periods DROP CONSTRAINT IF EXISTS "financial_periods_reopenedBy_fkey";
@@ -473,6 +504,11 @@ DROP INDEX IF EXISTS public.uq_invoices_company_icv;
 DROP INDEX IF EXISTS public.uq_goods_receipts_ref;
 DROP INDEX IF EXISTS public.uq_fx_realized_postings_triple;
 DROP INDEX IF EXISTS public.uq_fx_rates_company_pair_date;
+DROP INDEX IF EXISTS public.uq_fleet_video_channels_device_channel;
+DROP INDEX IF EXISTS public.uq_fleet_telematics_devices_company_deviceno;
+DROP INDEX IF EXISTS public.uq_fleet_sensor_readings_dedup;
+DROP INDEX IF EXISTS public.uq_fleet_device_events_dedup;
+DROP INDEX IF EXISTS public.uq_fleet_ai_alerts_dedup;
 DROP INDEX IF EXISTS public.uq_allocation_results_source_line;
 DROP INDEX IF EXISTS public.uq_abc_company_product_period;
 DROP INDEX IF EXISTS public.uniq_requests_ref;
@@ -944,11 +980,35 @@ DROP INDEX IF EXISTS public.idx_fx_realized_postings_company_posted_at;
 DROP INDEX IF EXISTS public.idx_fx_rates_lookup;
 DROP INDEX IF EXISTS public.idx_fx_rates_company;
 DROP INDEX IF EXISTS public.idx_fpf_company_resolved;
+DROP INDEX IF EXISTS public.idx_fleet_video_sessions_proxy_token;
+DROP INDEX IF EXISTS public.idx_fleet_video_sessions_external_session;
+DROP INDEX IF EXISTS public.idx_fleet_video_sessions_device_status;
+DROP INDEX IF EXISTS public.idx_fleet_video_sessions_company_started;
+DROP INDEX IF EXISTS public.idx_fleet_video_access_logs_user;
+DROP INDEX IF EXISTS public.idx_fleet_video_access_logs_session_time;
+DROP INDEX IF EXISTS public.idx_fleet_video_access_logs_company_time;
+DROP INDEX IF EXISTS public.idx_fleet_trips_vehicle_status_starttime;
 DROP INDEX IF EXISTS public.idx_fleet_trips_client;
 DROP INDEX IF EXISTS public.idx_fleet_traffic_violations_deletedat;
 DROP INDEX IF EXISTS public.idx_fleet_traffic_violations_companyid;
+DROP INDEX IF EXISTS public.idx_fleet_telematics_integrations_company;
+DROP INDEX IF EXISTS public.idx_fleet_telematics_devices_vehicle;
+DROP INDEX IF EXISTS public.idx_fleet_telematics_devices_company_status;
+DROP INDEX IF EXISTS public.idx_fleet_sensor_readings_vehicle_time;
+DROP INDEX IF EXISTS public.idx_fleet_sensor_readings_device_time;
 DROP INDEX IF EXISTS public.idx_fleet_preventive_plans_deletedat;
 DROP INDEX IF EXISTS public.idx_fleet_preventive_plans_companyid;
+DROP INDEX IF EXISTS public.idx_fleet_positions_vehicle_time;
+DROP INDEX IF EXISTS public.idx_fleet_positions_device_time;
+DROP INDEX IF EXISTS public.idx_fleet_positions_company_time;
+DROP INDEX IF EXISTS public.idx_fleet_media_evidence_company_time;
+DROP INDEX IF EXISTS public.idx_fleet_media_evidence_alert;
+DROP INDEX IF EXISTS public.idx_fleet_device_sync_logs_integration;
+DROP INDEX IF EXISTS public.idx_fleet_device_sync_logs_company_started;
+DROP INDEX IF EXISTS public.idx_fleet_device_events_vehicle_type;
+DROP INDEX IF EXISTS public.idx_fleet_device_events_company_time;
+DROP INDEX IF EXISTS public.idx_fleet_ai_alerts_vehicle_category;
+DROP INDEX IF EXISTS public.idx_fleet_ai_alerts_company_time;
 DROP INDEX IF EXISTS public.idx_fixed_assets_company;
 DROP INDEX IF EXISTS public.idx_financial_periods_status;
 DROP INDEX IF EXISTS public.idx_financial_periods_deleted_at;
@@ -1478,15 +1538,26 @@ ALTER TABLE IF EXISTS ONLY public.fx_realized_postings DROP CONSTRAINT IF EXISTS
 ALTER TABLE IF EXISTS ONLY public.fx_rates DROP CONSTRAINT IF EXISTS fx_rates_pkey;
 ALTER TABLE IF EXISTS ONLY public.fx_rates DROP CONSTRAINT IF EXISTS "fx_rates_companyId_rateDate_fromCurrency_toCurrency_type_key";
 ALTER TABLE IF EXISTS ONLY public.fleet_violations DROP CONSTRAINT IF EXISTS fleet_violations_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_video_sessions DROP CONSTRAINT IF EXISTS fleet_video_sessions_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_video_channels DROP CONSTRAINT IF EXISTS fleet_video_channels_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_video_access_logs DROP CONSTRAINT IF EXISTS fleet_video_access_logs_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_vehicles DROP CONSTRAINT IF EXISTS fleet_vehicles_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_trips DROP CONSTRAINT IF EXISTS fleet_trips_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_traffic_violations DROP CONSTRAINT IF EXISTS fleet_traffic_violations_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_telematics_integrations DROP CONSTRAINT IF EXISTS fleet_telematics_integrations_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_telematics_devices DROP CONSTRAINT IF EXISTS fleet_telematics_devices_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_sensor_readings DROP CONSTRAINT IF EXISTS fleet_sensor_readings_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_preventive_plans DROP CONSTRAINT IF EXISTS fleet_preventive_plans_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_media_evidence DROP CONSTRAINT IF EXISTS fleet_media_evidence_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_maintenance DROP CONSTRAINT IF EXISTS fleet_maintenance_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_insurance DROP CONSTRAINT IF EXISTS fleet_insurance_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_gps_tracking DROP CONSTRAINT IF EXISTS fleet_gps_tracking_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_fuel_logs DROP CONSTRAINT IF EXISTS fleet_fuel_logs_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_drivers DROP CONSTRAINT IF EXISTS fleet_drivers_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_device_sync_logs DROP CONSTRAINT IF EXISTS fleet_device_sync_logs_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_device_positions DROP CONSTRAINT IF EXISTS fleet_device_positions_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_device_events DROP CONSTRAINT IF EXISTS fleet_device_events_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_ai_alerts DROP CONSTRAINT IF EXISTS fleet_ai_alerts_pkey;
 ALTER TABLE IF EXISTS ONLY public.fixed_assets DROP CONSTRAINT IF EXISTS fixed_assets_pkey;
 ALTER TABLE IF EXISTS ONLY public.financial_posting_failures DROP CONSTRAINT IF EXISTS financial_posting_failures_pkey;
 ALTER TABLE IF EXISTS ONLY public.financial_periods DROP CONSTRAINT IF EXISTS financial_periods_pkey;
@@ -1852,15 +1923,26 @@ ALTER TABLE IF EXISTS public.fx_revaluation_lines ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fx_realized_postings ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fx_rates ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_violations ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_video_sessions ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_video_channels ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_video_access_logs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_vehicles ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_trips ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_traffic_violations ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_telematics_integrations ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_telematics_devices ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_sensor_readings ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_preventive_plans ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_media_evidence ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_maintenance ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_insurance ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_gps_tracking ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_fuel_logs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_drivers ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_device_sync_logs ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_device_positions ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_device_events ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_ai_alerts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fixed_assets ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.financial_posting_failures ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.financial_periods ALTER COLUMN id DROP DEFAULT;
@@ -2447,14 +2529,28 @@ DROP SEQUENCE IF EXISTS public.fx_rates_id_seq;
 DROP TABLE IF EXISTS public.fx_rates;
 DROP SEQUENCE IF EXISTS public.fleet_violations_id_seq;
 DROP TABLE IF EXISTS public.fleet_violations;
+DROP SEQUENCE IF EXISTS public.fleet_video_sessions_id_seq;
+DROP TABLE IF EXISTS public.fleet_video_sessions;
+DROP SEQUENCE IF EXISTS public.fleet_video_channels_id_seq;
+DROP TABLE IF EXISTS public.fleet_video_channels;
+DROP SEQUENCE IF EXISTS public.fleet_video_access_logs_id_seq;
+DROP TABLE IF EXISTS public.fleet_video_access_logs;
 DROP SEQUENCE IF EXISTS public.fleet_vehicles_id_seq;
 DROP TABLE IF EXISTS public.fleet_vehicles;
 DROP SEQUENCE IF EXISTS public.fleet_trips_id_seq;
 DROP TABLE IF EXISTS public.fleet_trips;
 DROP SEQUENCE IF EXISTS public.fleet_traffic_violations_id_seq;
 DROP TABLE IF EXISTS public.fleet_traffic_violations;
+DROP SEQUENCE IF EXISTS public.fleet_telematics_integrations_id_seq;
+DROP TABLE IF EXISTS public.fleet_telematics_integrations;
+DROP SEQUENCE IF EXISTS public.fleet_telematics_devices_id_seq;
+DROP TABLE IF EXISTS public.fleet_telematics_devices;
+DROP SEQUENCE IF EXISTS public.fleet_sensor_readings_id_seq;
+DROP TABLE IF EXISTS public.fleet_sensor_readings;
 DROP SEQUENCE IF EXISTS public.fleet_preventive_plans_id_seq;
 DROP TABLE IF EXISTS public.fleet_preventive_plans;
+DROP SEQUENCE IF EXISTS public.fleet_media_evidence_id_seq;
+DROP TABLE IF EXISTS public.fleet_media_evidence;
 DROP SEQUENCE IF EXISTS public.fleet_maintenance_id_seq;
 DROP TABLE IF EXISTS public.fleet_maintenance;
 DROP SEQUENCE IF EXISTS public.fleet_insurance_id_seq;
@@ -2465,8 +2561,16 @@ DROP SEQUENCE IF EXISTS public.fleet_fuel_logs_id_seq;
 DROP TABLE IF EXISTS public.fleet_fuel_logs;
 DROP SEQUENCE IF EXISTS public.fleet_drivers_id_seq;
 DROP TABLE IF EXISTS public.fleet_drivers;
+DROP SEQUENCE IF EXISTS public.fleet_device_sync_logs_id_seq;
+DROP TABLE IF EXISTS public.fleet_device_sync_logs;
+DROP SEQUENCE IF EXISTS public.fleet_device_positions_id_seq;
+DROP TABLE IF EXISTS public.fleet_device_positions;
+DROP SEQUENCE IF EXISTS public.fleet_device_events_id_seq;
+DROP TABLE IF EXISTS public.fleet_device_events;
 DROP SEQUENCE IF EXISTS public.fleet_alerts_id_seq;
 DROP TABLE IF EXISTS public.fleet_alerts;
+DROP SEQUENCE IF EXISTS public.fleet_ai_alerts_id_seq;
+DROP TABLE IF EXISTS public.fleet_ai_alerts;
 DROP SEQUENCE IF EXISTS public.fixed_assets_id_seq;
 DROP TABLE IF EXISTS public.fixed_assets;
 DROP SEQUENCE IF EXISTS public.financial_posting_failures_id_seq;
@@ -4501,7 +4605,8 @@ CREATE TABLE public.clients (
     notes text,
     "deletedAt" timestamp with time zone,
     attachments jsonb,
-    "taxNumber" text
+    "taxNumber" text,
+    CONSTRAINT clients_id_company_uq UNIQUE (id, "companyId")
 );
 
 
@@ -7450,6 +7555,64 @@ ALTER SEQUENCE public.fixed_assets_id_seq OWNED BY public.fixed_assets.id;
 
 
 --
+-- Name: fleet_ai_alerts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_ai_alerts (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "deviceId" integer NOT NULL,
+    "vehicleId" integer,
+    "driverId" integer,
+    category character varying(20) NOT NULL,
+    "alertType" character varying(60) NOT NULL,
+    "alertCode" character varying(40),
+    severity character varying(20) DEFAULT 'medium'::character varying NOT NULL,
+    confidence numeric(5,2),
+    "occurredAt" timestamp with time zone NOT NULL,
+    "receivedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    lat numeric(10,6),
+    lng numeric(10,6),
+    speed numeric(6,2),
+    "imageUrl" text,
+    "videoUrl" text,
+    "externalAlertId" character varying(120),
+    "rawPayload" jsonb,
+    "normalizedPayload" jsonb,
+    status character varying(20) DEFAULT 'open'::character varying NOT NULL,
+    "acknowledgedBy" integer,
+    "acknowledgedAt" timestamp with time zone,
+    "resolvedBy" integer,
+    "resolvedAt" timestamp with time zone,
+    "resolutionNote" text,
+    CONSTRAINT fleet_ai_alerts_category_check CHECK (((category)::text = ANY ((ARRAY['adas'::character varying, 'dms'::character varying, 'bsd'::character varying, 'safety'::character varying, 'other'::character varying])::text[]))),
+    CONSTRAINT fleet_ai_alerts_payload_size CHECK (((("rawPayload" IS NULL) OR (octet_length(("rawPayload")::text) < 65536)) AND (("normalizedPayload" IS NULL) OR (octet_length(("normalizedPayload")::text) < 65536)))),
+    CONSTRAINT fleet_ai_alerts_severity_check CHECK (((severity)::text = ANY ((ARRAY['info'::character varying, 'low'::character varying, 'medium'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))),
+    CONSTRAINT fleet_ai_alerts_status_check CHECK (((status)::text = ANY ((ARRAY['open'::character varying, 'acknowledged'::character varying, 'resolved'::character varying, 'dismissed'::character varying])::text[])))
+);
+
+
+--
+-- Name: fleet_ai_alerts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_ai_alerts_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_ai_alerts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_ai_alerts_id_seq OWNED BY public.fleet_ai_alerts.id;
+
+
+--
 -- Name: fleet_alerts; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -7492,6 +7655,140 @@ CREATE SEQUENCE public.fleet_alerts_id_seq
 --
 
 ALTER SEQUENCE public.fleet_alerts_id_seq OWNED BY public.fleet_alerts.id;
+
+
+--
+-- Name: fleet_device_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_device_events (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "deviceId" integer NOT NULL,
+    "vehicleId" integer,
+    "eventType" character varying(60) NOT NULL,
+    "eventCode" character varying(40),
+    severity character varying(20) DEFAULT 'info'::character varying NOT NULL,
+    "occurredAt" timestamp with time zone NOT NULL,
+    "receivedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    lat numeric(10,6),
+    lng numeric(10,6),
+    speed numeric(6,2),
+    message text,
+    "externalEventId" character varying(120),
+    "rawPayload" jsonb,
+    "normalizedPayload" jsonb,
+    CONSTRAINT fleet_device_events_payload_size CHECK (((("rawPayload" IS NULL) OR (octet_length(("rawPayload")::text) < 65536)) AND (("normalizedPayload" IS NULL) OR (octet_length(("normalizedPayload")::text) < 65536)))),
+    CONSTRAINT fleet_device_events_severity_check CHECK (((severity)::text = ANY ((ARRAY['info'::character varying, 'low'::character varying, 'medium'::character varying, 'high'::character varying, 'critical'::character varying])::text[])))
+);
+
+
+--
+-- Name: fleet_device_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_device_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_device_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_device_events_id_seq OWNED BY public.fleet_device_events.id;
+
+
+--
+-- Name: fleet_device_positions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_device_positions (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "deviceId" integer NOT NULL,
+    "vehicleId" integer,
+    "occurredAt" timestamp with time zone NOT NULL,
+    "receivedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    lat numeric(10,6) NOT NULL,
+    lng numeric(10,6) NOT NULL,
+    speed numeric(6,2),
+    direction numeric(6,2),
+    altitude numeric(8,2),
+    accuracy numeric(6,2),
+    "ignitionOn" boolean,
+    "satelliteCount" smallint,
+    "rawPayload" jsonb,
+    CONSTRAINT fleet_device_positions_lat_range CHECK (((lat >= ('-90'::integer)::numeric) AND (lat <= (90)::numeric))),
+    CONSTRAINT fleet_device_positions_lng_range CHECK (((lng >= ('-180'::integer)::numeric) AND (lng <= (180)::numeric))),
+    CONSTRAINT fleet_device_positions_payload_size CHECK ((("rawPayload" IS NULL) OR (octet_length(("rawPayload")::text) < 65536)))
+);
+
+
+--
+-- Name: fleet_device_positions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_device_positions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_device_positions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_device_positions_id_seq OWNED BY public.fleet_device_positions.id;
+
+
+--
+-- Name: fleet_device_sync_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_device_sync_logs (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "integrationId" integer,
+    "deviceId" integer,
+    operation character varying(60) NOT NULL,
+    status character varying(20) NOT NULL,
+    "durationMs" integer,
+    "itemsProcessed" integer DEFAULT 0 NOT NULL,
+    "itemsCreated" integer DEFAULT 0 NOT NULL,
+    "itemsSkipped" integer DEFAULT 0 NOT NULL,
+    message text,
+    payload jsonb,
+    "startedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "finishedAt" timestamp with time zone,
+    CONSTRAINT fleet_device_sync_logs_status_check CHECK (((status)::text = ANY ((ARRAY['success'::character varying, 'partial'::character varying, 'failure'::character varying, 'skipped'::character varying])::text[])))
+);
+
+
+--
+-- Name: fleet_device_sync_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_device_sync_logs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_device_sync_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_device_sync_logs_id_seq OWNED BY public.fleet_device_sync_logs.id;
 
 
 --
@@ -7701,6 +7998,52 @@ ALTER SEQUENCE public.fleet_maintenance_id_seq OWNED BY public.fleet_maintenance
 
 
 --
+-- Name: fleet_media_evidence; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_media_evidence (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "deviceId" integer NOT NULL,
+    "vehicleId" integer,
+    "alertId" integer,
+    "channelNo" smallint,
+    "mediaType" character varying(20) NOT NULL,
+    "mediaUrl" text NOT NULL,
+    "thumbnailUrl" text,
+    "durationSec" integer,
+    "sizeBytes" bigint,
+    "occurredAt" timestamp with time zone,
+    "uploadedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "uploadedBy" integer,
+    "externalMediaId" character varying(120),
+    "rawPayload" jsonb,
+    CONSTRAINT fleet_media_evidence_type_check CHECK ((("mediaType")::text = ANY ((ARRAY['image'::character varying, 'video'::character varying, 'audio'::character varying])::text[])))
+);
+
+
+--
+-- Name: fleet_media_evidence_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_media_evidence_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_media_evidence_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_media_evidence_id_seq OWNED BY public.fleet_media_evidence.id;
+
+
+--
 -- Name: fleet_preventive_plans; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -7742,6 +8085,157 @@ CREATE SEQUENCE public.fleet_preventive_plans_id_seq
 --
 
 ALTER SEQUENCE public.fleet_preventive_plans_id_seq OWNED BY public.fleet_preventive_plans.id;
+
+
+--
+-- Name: fleet_sensor_readings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_sensor_readings (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "deviceId" integer NOT NULL,
+    "vehicleId" integer,
+    "sensorType" character varying(40) NOT NULL,
+    "sensorChannel" character varying(40),
+    "readingValue" numeric(14,4),
+    "readingState" character varying(40),
+    unit character varying(20),
+    "occurredAt" timestamp with time zone NOT NULL,
+    "receivedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "externalReadingId" character varying(120),
+    "rawPayload" jsonb,
+    CONSTRAINT fleet_sensor_readings_payload_size CHECK ((("rawPayload" IS NULL) OR (octet_length(("rawPayload")::text) < 65536))),
+    CONSTRAINT fleet_sensor_readings_type_check CHECK ((("sensorType")::text = ANY ((ARRAY['fuel_level'::character varying, 'weight'::character varying, 'air_pressure'::character varying, 'pto'::character varying, 'dump_piston'::character varying, 'door'::character varying, 'temperature'::character varying, 'engine_rpm'::character varying, 'battery_voltage'::character varying, 'odometer'::character varying, 'custom'::character varying])::text[])))
+);
+
+
+--
+-- Name: fleet_sensor_readings_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_sensor_readings_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_sensor_readings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_sensor_readings_id_seq OWNED BY public.fleet_sensor_readings.id;
+
+
+--
+-- Name: fleet_telematics_devices; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_telematics_devices (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "integrationId" integer,
+    "vehicleId" integer,
+    "cmsv6DeviceNo" character varying(60) NOT NULL,
+    "deviceLabel" character varying(120),
+    "deviceModel" character varying(80),
+    "firmwareVersion" character varying(80),
+    "channelCount" smallint DEFAULT 4 NOT NULL,
+    imei character varying(40),
+    sim character varying(40),
+    "plateNumber" character varying(40),
+    status character varying(20) DEFAULT 'unlinked'::character varying NOT NULL,
+    "lastOnlineAt" timestamp with time zone,
+    "lastOfflineAt" timestamp with time zone,
+    "lastPositionAt" timestamp with time zone,
+    capabilities jsonb DEFAULT '{}'::jsonb NOT NULL,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "createdBy" integer,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT fleet_telematics_devices_status_check CHECK (((status)::text = ANY ((ARRAY['unlinked'::character varying, 'linked'::character varying, 'online'::character varying, 'offline'::character varying, 'error'::character varying, 'decommissioned'::character varying])::text[])))
+);
+
+
+--
+-- Name: fleet_telematics_devices_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_telematics_devices_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_telematics_devices_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_telematics_devices_id_seq OWNED BY public.fleet_telematics_devices.id;
+
+
+--
+-- Name: fleet_telematics_integrations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_telematics_integrations (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    provider character varying(40) DEFAULT 'cmsv6'::character varying NOT NULL,
+    "displayName" character varying(120) NOT NULL,
+    "baseUrl" text NOT NULL,
+    "vendorSecretSlug" character varying(80),
+    "pollIntervalSec" integer DEFAULT 30 NOT NULL,
+    "videoOnDemandOnly" boolean DEFAULT true NOT NULL,
+    status character varying(20) DEFAULT 'inactive'::character varying NOT NULL,
+    "lastSyncAt" timestamp with time zone,
+    "lastSyncStatus" character varying(20),
+    "lastSyncError" text,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "createdBy" integer,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    "webhookSecret" text,
+    "positionRetentionDays" smallint DEFAULT 90 NOT NULL,
+    "syncLogRetentionDays" smallint DEFAULT 30 NOT NULL,
+    "offlineThresholdSec" integer DEFAULT 600 NOT NULL,
+    "videoAccessLogRetentionDays" smallint DEFAULT 90 NOT NULL,
+    CONSTRAINT fleet_telematics_integrations_provider_check CHECK (((provider)::text = ANY ((ARRAY['cmsv6'::character varying, 'wialon'::character varying, 'teltonika'::character varying, 'manual'::character varying])::text[]))),
+    CONSTRAINT fleet_telematics_integrations_retention_check CHECK (((("positionRetentionDays" >= 1) AND ("positionRetentionDays" <= 3650)) AND (("syncLogRetentionDays" >= 1) AND ("syncLogRetentionDays" <= 365)) AND (("offlineThresholdSec" >= 60) AND ("offlineThresholdSec" <= 86400)))),
+    CONSTRAINT fleet_telematics_integrations_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'inactive'::character varying, 'error'::character varying, 'paused'::character varying])::text[]))),
+    CONSTRAINT fleet_telematics_integrations_video_log_retention_check CHECK ((("videoAccessLogRetentionDays" >= 1) AND ("videoAccessLogRetentionDays" <= 365)))
+);
+
+
+--
+-- Name: fleet_telematics_integrations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_telematics_integrations_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_telematics_integrations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_telematics_integrations_id_seq OWNED BY public.fleet_telematics_integrations.id;
 
 
 --
@@ -7896,6 +8390,131 @@ CREATE SEQUENCE public.fleet_vehicles_id_seq
 --
 
 ALTER SEQUENCE public.fleet_vehicles_id_seq OWNED BY public.fleet_vehicles.id;
+
+
+--
+-- Name: fleet_video_access_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_video_access_logs (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "sessionId" integer NOT NULL,
+    "accessedBy" integer,
+    "accessedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "accessIp" character varying(45),
+    "userAgent" text,
+    status character varying(20) NOT NULL,
+    "errorReason" text,
+    CONSTRAINT fleet_video_access_logs_status_check CHECK (((status)::text = ANY ((ARRAY['granted'::character varying, 'denied_token'::character varying, 'denied_expired'::character varying, 'denied_session'::character varying, 'denied_user'::character varying])::text[])))
+);
+
+
+--
+-- Name: fleet_video_access_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_video_access_logs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_video_access_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_video_access_logs_id_seq OWNED BY public.fleet_video_access_logs.id;
+
+
+--
+-- Name: fleet_video_channels; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_video_channels (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "deviceId" integer NOT NULL,
+    "channelNo" smallint NOT NULL,
+    "channelLabel" character varying(80),
+    "channelType" character varying(40),
+    enabled boolean DEFAULT true NOT NULL,
+    "rtspUrl" text,
+    "hlsUrl" text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fleet_video_channels_type_check CHECK ((("channelType" IS NULL) OR (("channelType")::text = ANY ((ARRAY['front'::character varying, 'driver'::character varying, 'side_left'::character varying, 'side_right'::character varying, 'rear'::character varying, 'cabin'::character varying, 'other'::character varying])::text[]))))
+);
+
+
+--
+-- Name: fleet_video_channels_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_video_channels_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_video_channels_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_video_channels_id_seq OWNED BY public.fleet_video_channels.id;
+
+
+--
+-- Name: fleet_video_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_video_sessions (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "deviceId" integer NOT NULL,
+    "vehicleId" integer,
+    "channelNo" smallint NOT NULL,
+    "streamType" character varying(20) DEFAULT 'hls'::character varying NOT NULL,
+    "streamUrl" text,
+    "startedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "expiresAt" timestamp with time zone,
+    "endedAt" timestamp with time zone,
+    "requestedBy" integer NOT NULL,
+    reason text,
+    status character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    "linkedAlertId" integer,
+    "externalSessionId" character varying(120),
+    "streamProxyToken" text,
+    "streamProxyExpiresAt" timestamp with time zone,
+    CONSTRAINT fleet_video_sessions_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'stopped'::character varying, 'expired'::character varying, 'error'::character varying])::text[]))),
+    CONSTRAINT fleet_video_sessions_stream_check CHECK ((("streamType")::text = ANY ((ARRAY['rtsp'::character varying, 'hls'::character varying, 'http_flv'::character varying, 'webrtc'::character varying])::text[])))
+);
+
+
+--
+-- Name: fleet_video_sessions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_video_sessions_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_video_sessions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_video_sessions_id_seq OWNED BY public.fleet_video_sessions.id;
 
 
 --
@@ -10358,7 +10977,9 @@ CREATE TABLE public.legal_cases (
     "deletedAt" timestamp with time zone,
     "financialRisk" numeric(15,2),
     "riskLevel" text,
-    CONSTRAINT "legal_cases_riskLevel_check" CHECK ((("riskLevel" = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])) OR ("riskLevel" IS NULL)))
+    "clientId" integer,
+    CONSTRAINT "legal_cases_riskLevel_check" CHECK ((("riskLevel" = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])) OR ("riskLevel" IS NULL))),
+    CONSTRAINT legal_cases_client_company_fk FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients (id, "companyId") ON DELETE SET NULL
 );
 
 
@@ -10658,7 +11279,7 @@ CREATE TABLE public.mailbox_accounts (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT mailbox_accounts_provider_check CHECK (((provider)::text = ANY ((ARRAY['microsoft365'::character varying, 'imap'::character varying, 'hostinger'::character varying])::text[])))
+    CONSTRAINT mailbox_accounts_provider_check CHECK (((provider)::text = ANY (ARRAY[('microsoft365'::character varying)::text, ('imap'::character varying)::text, ('hostinger'::character varying)::text])))
 );
 
 
@@ -10842,9 +11463,9 @@ CREATE TABLE public.message_log (
     "legacyId" integer,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT message_log_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'push'::character varying, 'in_app'::character varying, 'internal'::character varying, 'pbx'::character varying])::text[]))),
-    CONSTRAINT message_log_direction_check CHECK (((direction)::text = ANY ((ARRAY['inbound'::character varying, 'outbound'::character varying])::text[]))),
-    CONSTRAINT message_log_legacy_source_check CHECK ((("legacySource")::text = ANY ((ARRAY['message_log'::character varying, 'communications_log'::character varying, 'notification_log'::character varying])::text[])))
+    CONSTRAINT message_log_channel_check CHECK (((channel)::text = ANY (ARRAY[('email'::character varying)::text, ('sms'::character varying)::text, ('whatsapp'::character varying)::text, ('push'::character varying)::text, ('in_app'::character varying)::text, ('internal'::character varying)::text, ('pbx'::character varying)::text]))),
+    CONSTRAINT message_log_direction_check CHECK (((direction)::text = ANY (ARRAY[('inbound'::character varying)::text, ('outbound'::character varying)::text]))),
+    CONSTRAINT message_log_legacy_source_check CHECK ((("legacySource")::text = ANY (ARRAY[('message_log'::character varying)::text, ('communications_log'::character varying)::text, ('notification_log'::character varying)::text])))
 );
 
 
@@ -11613,9 +12234,9 @@ CREATE TABLE public.outbound_queue (
     "legacyId" integer,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT outbound_queue_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'push'::character varying, 'internal'::character varying, 'pbx'::character varying])::text[]))),
-    CONSTRAINT outbound_queue_legacy_source_check CHECK ((("legacySource")::text = ANY ((ARRAY['outbound_queue'::character varying, 'email_queue'::character varying, 'sms_queue'::character varying, 'whatsapp_queue'::character varying])::text[]))),
-    CONSTRAINT outbound_queue_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'sending'::character varying, 'sent'::character varying, 'failed'::character varying, 'cancelled'::character varying])::text[])))
+    CONSTRAINT outbound_queue_channel_check CHECK (((channel)::text = ANY (ARRAY[('email'::character varying)::text, ('sms'::character varying)::text, ('whatsapp'::character varying)::text, ('push'::character varying)::text, ('internal'::character varying)::text, ('pbx'::character varying)::text]))),
+    CONSTRAINT outbound_queue_legacy_source_check CHECK ((("legacySource")::text = ANY (ARRAY[('outbound_queue'::character varying)::text, ('email_queue'::character varying)::text, ('sms_queue'::character varying)::text, ('whatsapp_queue'::character varying)::text]))),
+    CONSTRAINT outbound_queue_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('sending'::character varying)::text, ('sent'::character varying)::text, ('failed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
 
@@ -15531,7 +16152,9 @@ CREATE TABLE public.tenants (
     "previousAddress" text,
     "previousLandlord" character varying(200),
     "previousLandlordPhone" character varying(50),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "clientId" integer,
+    CONSTRAINT tenants_client_company_fk FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients (id, "companyId") ON DELETE SET NULL
 );
 
 

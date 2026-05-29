@@ -3297,7 +3297,26 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     const amt = roundTo2(Number(amount));
 
     let advanceId: number | null = null;
-    const advRef = reference || `ADV-${Date.now()}`;
+    // #1141 cleanup — customer_advance ref through the numbering center
+    // (scheme `finance.customer_advance`, seeded by migration 231).
+    // The `reference` query-param is still honoured for legacy imports.
+    let advRef: string;
+    let issuedAdv: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    if (reference) {
+      advRef = reference;
+    } else {
+      issuedAdv = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "finance",
+        entityKey: "customer_advance",
+        entityTable: "customer_advances",
+        actorId: scope.userId,
+        metadata: { clientId },
+        expectedTiming: "on_draft",
+      });
+      advRef = issuedAdv.number;
+    }
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -3335,6 +3354,12 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
         } else {
           throw e;
         }
+      }
+      if (issuedAdv && advanceId) {
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [advanceId, issuedAdv.assignmentId]
+        );
       }
     });
 

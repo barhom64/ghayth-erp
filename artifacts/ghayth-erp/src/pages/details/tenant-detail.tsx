@@ -168,6 +168,7 @@ export default function TenantDetail() {
           linkedClientName={tenant?.clientName ?? null}
           perm="properties.tenants:update"
           onUpdated={refetch}
+          invalidateKeys={[["tenant-detail", id || ""], ["tenants"]]}
         />
       )}
 
