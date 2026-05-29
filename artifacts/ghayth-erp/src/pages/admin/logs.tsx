@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -161,15 +162,11 @@ export default function AdminLogsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <ScrollText className="w-8 h-8 text-status-warning-foreground" />
-            سجل التدقيق
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">عرض وتصفية جميع العمليات والتغييرات في النظام</p>
-        </div>
+    <PageShell
+      title="سجل التدقيق"
+      subtitle="عرض وتصفية جميع العمليات والتغييرات في النظام"
+      breadcrumbs={[{ label: "الإدارة" }, { label: "سجل التدقيق" }]}
+      actions={
         <div className="flex gap-2">
           <GuardedButton perm="admin:export" variant="outline" size="sm" onClick={exportCSV}>
             <Download className="h-4 w-4 me-1" />تصدير جدولي
@@ -194,7 +191,8 @@ export default function AdminLogsPage() {
           />
           <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
         </div>
-      </div>
+      }
+    >
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -286,6 +284,6 @@ export default function AdminLogsPage() {
           onPageChange={setPage}
         />
       </div>
-    </div>
+    </PageShell>
   );
 }
