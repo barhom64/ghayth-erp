@@ -452,7 +452,7 @@ export default function UmrahGroups() {
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div><span className="text-muted-foreground">الاسم:</span> {groupDetailQ.data.name ?? "—"}</div>
                 <div><span className="text-muted-foreground">رقم نُسك:</span> {groupDetailQ.data.nuskGroupNumber ?? "—"}</div>
-                <div><span className="text-muted-foreground">الموسم:</span> {groupDetailQ.data.seasonName ?? groupDetailQ.data.seasonId ?? "—"}</div>
+                <div><span className="text-muted-foreground">الموسم:</span> {groupDetailQ.data.seasonTitle ?? groupDetailQ.data.seasonId ?? "—"}</div>
                 <div><span className="text-muted-foreground">الوكيل:</span> {groupDetailQ.data.agentName ?? "—"}</div>
                 <div><span className="text-muted-foreground">عدد المعتمرين:</span> {groupDetailQ.data.mutamerCount ?? "—"}</div>
                 <div><span className="text-muted-foreground">مدة البرنامج:</span> {groupDetailQ.data.programDuration ?? "—"} يوم</div>
