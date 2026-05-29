@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useApiQuery, apiFetch, ApiError } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useQueryClient } from "@tanstack/react-query";
 import { renderDocument, listJobs, listTemplates, type PrintJobRow, type PrintTemplateRow } from "@/lib/print-client";
 import { AlertTriangle, CheckCircle, RotateCw, PlayCircle, ScrollText } from "lucide-react";
@@ -227,11 +228,34 @@ export default function PrintDiagnosticsPage() {
     },
   ];
 
+  // POST /print/jobs/prune — admin maintenance: removes old print-job
+  // rows (older than the configurable retention window) to keep the
+  // audit table bounded.
+  const handlePruneJobs = async () => {
+    const days = window.prompt("احذف سجلات الطباعة الأقدم من (أيام):", "90");
+    if (!days) return;
+    try {
+      await apiFetch("/print/jobs/prune", {
+        method: "POST",
+        body: JSON.stringify({ olderThanDays: Number(days) }),
+      });
+      toast({ title: "تم تنظيف السجلات" });
+      jobs.refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل التنظيف", description: err?.message });
+    }
+  };
+
   return (
     <PageShell
       title="تشخيص الطباعة"
       subtitle="القوالب النشطة، الإسنادات، والمحاولات الأخيرة — مع زر إعادة ضبط لكل إسناد فاسد"
       loading={templates.isLoading || assignments.isLoading || jobs.isLoading}
+      actions={
+        <GuardedButton perm="admin:update" size="sm" variant="outline" rateLimitAware onClick={handlePruneJobs}>
+          تنظيف السجلات القديمة
+        </GuardedButton>
+      }
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <Card>
