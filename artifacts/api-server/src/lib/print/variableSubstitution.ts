@@ -245,6 +245,29 @@ function expandEach(template: string, data: Record<string, unknown>): string {
   });
 }
 
+/** Expand `{{#if path}}body{{/if}}` blocks. A value counts as truthy if it's
+ *  present, non-empty, non-zero, and not the string "0" / "false". Several
+ *  presets (customer_statement, vendor_statement, …) were authored with
+ *  this Handlebars-style helper assuming it would gate optional rows like
+ *  the customer's VAT number — without an implementation the literal
+ *  `{{#if entity.X}}` and `{{/if}}` markers ended up in the printed PDF.
+ *  Single-pass non-greedy match is fine for now: none of the presets nest
+ *  these blocks, and `[\s\S]*?` keeps each helper self-contained. */
+function expandIf(template: string, data: Record<string, unknown>): string {
+  const re = /\{\{#if ([\w.]+)\}\}([\s\S]*?)\{\{\/if\}\}/g;
+  return template.replace(re, (_match, path, body) => {
+    const v = get(data, path);
+    if (v === undefined || v === null) return "";
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (s === "" || s === "0" || s.toLowerCase() === "false") return "";
+    }
+    if (typeof v === "number" && v === 0) return "";
+    if (Array.isArray(v) && v.length === 0) return "";
+    return body;
+  });
+}
+
 export interface SubstitutionInput {
   template: string;
   data: Record<string, unknown>;
@@ -294,6 +317,10 @@ export function substitute(input: SubstitutionInput): string {
     html = html.split(`{{${key}}}`).join(val);
   }
 
+  // Expand {{#if path}}…{{/if}} blocks before {{#each}} so a conditional
+  // wrapper around an each-block still works. Both helpers are non-greedy
+  // single-pass — none of the existing presets nest them.
+  html = expandIf(html, data);
   // Expand {{#each path}}…{{/each}} blocks
   html = expandEach(html, data);
 
