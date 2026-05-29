@@ -141,28 +141,25 @@ export default function FleetTelematicsEvidence() {
     {
       key: "thumbnailUrl",
       header: "معاينة",
-      render: (r) =>
-        r.thumbnailUrl ? (
-          <a href={r.mediaUrl} target="_blank" rel="noreferrer">
+      render: (r) => {
+        // Always route through the server-side proxy — the CMSV6 URL
+        // never reaches the browser. Same security model as the video
+        // proxy (cb870a1) extended to media evidence.
+        const proxyHref = `/api/fleet/telematics/media-evidence/${r.id}/blob`;
+        return r.mediaType === "image" ? (
+          <a href={proxyHref} target="_blank" rel="noreferrer">
             <img
-              src={r.thumbnailUrl}
-              alt="evidence thumbnail"
-              className="h-12 w-20 object-cover rounded border"
-            />
-          </a>
-        ) : r.mediaType === "image" ? (
-          <a href={r.mediaUrl} target="_blank" rel="noreferrer">
-            <img
-              src={r.mediaUrl}
+              src={proxyHref}
               alt="evidence"
               className="h-12 w-20 object-cover rounded border"
             />
           </a>
         ) : (
-          <a href={r.mediaUrl} target="_blank" rel="noreferrer">
+          <a href={proxyHref} target="_blank" rel="noreferrer">
             <Camera className="h-5 w-5 text-muted-foreground" />
           </a>
-        ),
+        );
+      },
     },
     {
       key: "alertCategory",

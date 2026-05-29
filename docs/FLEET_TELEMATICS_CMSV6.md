@@ -417,6 +417,43 @@ per-replica (`mode: "per-replica"`).
 - Drill-down لكل دليل مع category + severity
 - مرشحات date-range + vehicle + type + category
 
+## Media Evidence Byte Proxy
+
+`GET /telematics/media-evidence/:id/blob` — يبثّ بايتات الصورة/الفيديو
+من CMSV6 عبر الخادم. الـ URL الخام لا يصل للمتصفح أبداً (نفس النموذج
+الأمني للـ Phase 2 video proxy).
+
+- نفس الـ RBAC (`fleet.telematics.ai_alerts:view`) + tenant scope
+- SSRF guard: يرفض IP literals (RFC1918, loopback, link-local, IPv6 ULA/LL)
+- Per-user cache-control private (max-age 300)
+- backpressure-aware byte streaming
+- AbortController يلغي upstream عند client disconnect
+
+الـ frontend evidence page يستخدم `proxyHref` للـ `<img src>`
+و `<a href>` — الـ URL الأصلي محجوب تماماً.
+
+## Pagination
+
+دالة مساعدة `parsePagination(req)` على endpoints الرئيسية:
+- Default: `limit=100`, `offset=0`
+- Clamped: `limit ∈ [1, 500]`, `offset ∈ [0, 100_000]`
+- Response meta: `{ limit, offset, hasMore }`
+
+مُطبّقة على:
+- `GET /telematics/media-evidence`
+- `GET /telematics/sync-logs`
+- `GET /telematics/drivers/scorecard-leaderboard`
+
+`hasMore` يُحسَب من `data.length === limit` (heuristic، أرخص من COUNT(*)).
+
+## Position Throttle Memory Bound
+
+الـ `lastPositionEventAt` Map كان ينمو بلا حدود مع كل deviceId جديد.
+الآن:
+- حد أقصى **10,000 entry** (يغطّي fleet capacity عدة أضعاف)
+- عند التجاوز: pruning للـ entries الأقدم من `10 × throttle_window`
+- fallback: insertion-order eviction للأقدم
+
 ## Driver Safety Scorecard
 
 اثنان endpoints جديدان يربطان AI alerts بالسائقين عبر `driverId`

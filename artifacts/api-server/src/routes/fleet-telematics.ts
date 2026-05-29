@@ -123,6 +123,29 @@ const ackAlertSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────
+// Pagination helper — offset-based, clamped. Cursor pagination would be
+// nicer at very large scale but offset is enough for the Pilot's row
+// counts (≤ 100k positions/day, even smaller for alerts/logs). The
+// `meta.hasMore` field is a heuristic: when data.length === limit we
+// assume there's at least one more row available. This avoids the
+// COUNT(*) cost that exact pagination would require.
+// ─────────────────────────────────────────────────────────────────────────
+function parsePagination(req: { query: Record<string, unknown> }): {
+  limit: number;
+  offset: number;
+} {
+  const rawLimit = Number(req.query.limit);
+  const rawOffset = Number(req.query.offset);
+  const limit = Number.isFinite(rawLimit)
+    ? Math.min(500, Math.max(1, Math.floor(rawLimit)))
+    : 100;
+  const offset = Number.isFinite(rawOffset)
+    ? Math.min(100_000, Math.max(0, Math.floor(rawOffset)))
+    : 0;
+  return { limit, offset };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 export interface IntegrationRow {
   id: number;
   companyId: number;
@@ -2021,13 +2044,18 @@ router.get(
   async (req, res) => {
     try {
       const scope = req.scope!;
+      const { limit, offset } = parsePagination(req);
       const rows = await rawQuery(
         `SELECT * FROM fleet_device_sync_logs
           WHERE "companyId" = ANY($1::int[])
-          ORDER BY "startedAt" DESC LIMIT 200`,
-        [scope.allowedCompanies],
+          ORDER BY "startedAt" DESC
+          LIMIT $2 OFFSET $3`,
+        [scope.allowedCompanies, limit, offset],
       );
-      res.json({ data: rows });
+      res.json({
+        data: rows,
+        meta: { limit, offset, hasMore: rows.length === limit },
+      });
     } catch (e) {
       handleRouteError(e, res, "fleet-telematics");
     }
@@ -2094,10 +2122,10 @@ router.get(
 // and AI alert category. The query joins the alert row so the operator
 // can see WHY the evidence was captured without a second round-trip.
 //
-// Pagination: cursor-based on (uploadedAt DESC, id DESC) would scale
-// to millions of rows, but for the Pilot a hard LIMIT of 200 with
-// `from`/`to` filtering is enough — the retention cron + per-tenant
-// retentionDays bound the search space.
+// Pagination: offset+limit via `parsePagination`. Cursor-based
+// (uploadedAt DESC, id DESC) would scale better, but for the Pilot's
+// row counts offset is enough and matches the rest of the system.
+// Default limit 100, max 500, max offset 100_000.
 // ─────────────────────────────────────────────────────────────────────────
 router.get(
   "/telematics/media-evidence",
@@ -2105,6 +2133,7 @@ router.get(
   async (req, res) => {
     try {
       const scope = req.scope!;
+      const { limit, offset } = parsePagination(req);
       const from = req.query.from ? String(req.query.from) : null;
       const to = req.query.to ? String(req.query.to) : null;
       const vehicleId = req.query.vehicleId ? Number(req.query.vehicleId) : null;
@@ -2151,10 +2180,13 @@ router.get(
            LEFT JOIN fleet_telematics_devices d ON d.id = m."deviceId"
           WHERE ${conditions.join(" AND ")}
           ORDER BY m."uploadedAt" DESC, m.id DESC
-          LIMIT 200`,
-        params,
+          LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
+        [...params, limit, offset],
       );
-      res.json({ data: rows });
+      res.json({
+        data: rows,
+        meta: { limit, offset, hasMore: rows.length === limit },
+      });
     } catch (e) {
       handleRouteError(e, res, "fleet-telematics");
     }
@@ -2186,6 +2218,138 @@ router.get(
       );
       if (!row) throw new NotFoundError("الدليل غير موجود");
       res.json({ data: row });
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Media evidence byte proxy — closes the URL-exposure gap left by the
+// evidence archive (bf60d73). Without this, the evidence search page
+// renders `<img src={r.mediaUrl}>` which fetches directly from the
+// CMSV6 host — the URL leaks into browser network tab, history, and
+// any DOM-inspection vector. The proxy streams bytes through the
+// server so the only URL the browser ever sees is our own.
+//
+// Same RBAC gate as the list endpoint (`fleet.telematics.ai_alerts:view`)
+// plus per-tenant scope. Defence-in-depth SSRF guard: any media URL
+// pointing at an IP-literal in private space is rejected before fetch
+// (operator-controlled config means a hostile mediaUrl would have had
+// to come from a CMSV6 compromise; still worth refusing). DNS resolution
+// is intentionally skipped — the per-image fetch cost would be
+// prohibitive under live operator browsing.
+// ─────────────────────────────────────────────────────────────────────────
+function isPrivateIpLiteral(host: string): boolean {
+  if (host === "localhost" || host === "::1" || host === "0.0.0.0") return true;
+  const parts = host.split(".").map(Number);
+  if (parts.length === 4 && parts.every((n) => Number.isFinite(n) && n >= 0 && n < 256)) {
+    if (parts[0] === 10) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    if (parts[0] === 127 || parts[0] === 0) return true;
+  }
+  // IPv6 private/link-local prefixes.
+  if (/^\[?(fc|fd|fe8|fe9|fea|feb)/i.test(host)) return true;
+  return false;
+}
+
+function defaultMediaContentType(mediaType: string): string {
+  if (mediaType === "video") return "video/mp4";
+  if (mediaType === "audio") return "audio/mpeg";
+  return "image/jpeg";
+}
+
+router.get(
+  "/telematics/media-evidence/:id/blob",
+  authorize({ feature: "fleet.telematics.ai_alerts", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id);
+      const [row] = await rawQuery<{
+        id: number;
+        companyId: number;
+        mediaUrl: string;
+        mediaType: string;
+      }>(
+        `SELECT id, "companyId", "mediaUrl", "mediaType"
+           FROM fleet_media_evidence
+          WHERE id = $1 AND "companyId" = ANY($2::int[])`,
+        [id, scope.allowedCompanies],
+      );
+      if (!row) throw new NotFoundError("الدليل غير موجود");
+
+      let upstream: URL;
+      try {
+        upstream = new URL(row.mediaUrl);
+      } catch {
+        res.status(400).json({ error: "عنوان الدليل غير صالح" });
+        return;
+      }
+      if (upstream.protocol !== "http:" && upstream.protocol !== "https:") {
+        res.status(400).json({ error: "بروتوكول غير مدعوم" });
+        return;
+      }
+      if (isPrivateIpLiteral(upstream.hostname)) {
+        res.status(400).json({ error: "العنوان يشير إلى شبكة خاصة" });
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
+      const onClientClose = () => controller.abort();
+      req.on("close", onClientClose);
+      let upresp: Response;
+      try {
+        upresp = await fetch(row.mediaUrl, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (!upresp.ok) {
+        req.off("close", onClientClose);
+        res.status(upresp.status === 404 ? 404 : 502).end();
+        return;
+      }
+
+      const ct = upresp.headers.get("content-type") ?? defaultMediaContentType(row.mediaType);
+      const cl = upresp.headers.get("content-length");
+      res.setHeader("content-type", ct);
+      if (cl) res.setHeader("content-length", cl);
+      // Private cache — per-user RBAC means this response is not shareable.
+      res.setHeader("cache-control", "private, max-age=300");
+      res.setHeader("x-content-type-options", "nosniff");
+
+      const body = upresp.body;
+      if (!body) {
+        req.off("close", onClientClose);
+        res.end();
+        return;
+      }
+      const reader = body.getReader();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (!res.write(Buffer.from(value))) {
+            await new Promise<void>((resolve) => res.once("drain", () => resolve()));
+          }
+        }
+        res.end();
+      } catch (streamErr) {
+        if (!(streamErr instanceof Error) || streamErr.name !== "AbortError") {
+          logger.warn({ err: streamErr, evidenceId: id }, "media blob stream aborted");
+        }
+        try { reader.cancel().catch(() => undefined); } catch { /* noop */ }
+        if (!res.headersSent) {
+          res.status(502).end();
+        } else {
+          res.destroy();
+        }
+      } finally {
+        req.off("close", onClientClose);
+      }
     } catch (e) {
       handleRouteError(e, res, "fleet-telematics");
     }
@@ -2249,6 +2413,7 @@ router.get(
     try {
       const scope = req.scope!;
       const { from, to } = scorecardWindow(req);
+      const { limit, offset } = parsePagination(req);
 
       const rows = await rawQuery(
         `SELECT d.id AS "driverId",
@@ -2271,8 +2436,8 @@ router.get(
           WHERE d."companyId" = ANY($1::int[])
           GROUP BY d.id, d.name, d."licenseNumber"
           ORDER BY "safetyScore" ASC, "totalAlerts" DESC
-          LIMIT 200`,
-        [scope.allowedCompanies, from, to],
+          LIMIT $4 OFFSET $5`,
+        [scope.allowedCompanies, from, to, limit, offset],
       );
 
       res.json({
@@ -2281,6 +2446,7 @@ router.get(
           window: { from, to },
           weights: { info: 0, low: 1, medium: 3, high: 7, critical: 15 },
           maxScore: 100,
+          limit, offset, hasMore: rows.length === limit,
         },
       });
     } catch (e) {
@@ -2409,7 +2575,35 @@ router.get(
  * point landed in a new window.
  */
 const POSITION_EVENT_THROTTLE_MS = 60_000;
+// Cap the map's growth so a long-running process with churning device
+// ids (e.g. operator unlinks + relinks many devices over weeks) doesn't
+// accumulate dead entries forever. 10_000 covers the entire fleet
+// capacity many times over; eviction prunes entries older than ~10×
+// the throttle window since they're irrelevant for the throttle
+// decision anyway. JS's Map preserves insertion order so deleting the
+// oldest entries is O(eviction count).
+const LAST_POSITION_EVENT_MAX_ENTRIES = 10_000;
 const lastPositionEventAt = new Map<number, number>();
+
+function trimLastPositionEventAt(): void {
+  if (lastPositionEventAt.size <= LAST_POSITION_EVENT_MAX_ENTRIES) return;
+  const cutoff = Date.now() - 10 * POSITION_EVENT_THROTTLE_MS;
+  for (const [deviceId, at] of lastPositionEventAt) {
+    if (at < cutoff) lastPositionEventAt.delete(deviceId);
+    if (lastPositionEventAt.size <= LAST_POSITION_EVENT_MAX_ENTRIES) break;
+  }
+  // If cutoff-based eviction didn't get us under the cap (everything
+  // is fresh), fall back to deleting the oldest by insertion order
+  // until we are.
+  if (lastPositionEventAt.size > LAST_POSITION_EVENT_MAX_ENTRIES) {
+    const toEvict = lastPositionEventAt.size - LAST_POSITION_EVENT_MAX_ENTRIES;
+    let n = 0;
+    for (const k of lastPositionEventAt.keys()) {
+      lastPositionEventAt.delete(k);
+      if (++n >= toEvict) break;
+    }
+  }
+}
 
 export async function persistPosition(
   companyId: number,
@@ -2452,6 +2646,7 @@ export async function persistPosition(
     const last = lastPositionEventAt.get(device.id) ?? 0;
     if (now - last >= POSITION_EVENT_THROTTLE_MS) {
       lastPositionEventAt.set(device.id, now);
+      trimLastPositionEventAt();
       void emitEvent({
         companyId,
         branchId: branchId ?? undefined,

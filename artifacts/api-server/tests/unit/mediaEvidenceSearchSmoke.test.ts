@@ -164,14 +164,39 @@ describe("Media evidence search — filter handling", () => {
     expect(params).toContain("2026-05-28T23:59:59Z");
   });
 
-  it("LIMIT 200 cap is always present", async () => {
+  it("paginated: parsePagination defaults to limit=100, offset=0", async () => {
     const app = await makeApp();
     const { rawQuery } = await mockedRawdb();
 
-    await request(app).get("/api/fleet/telematics/media-evidence").expect(200);
+    const res = await request(app)
+      .get("/api/fleet/telematics/media-evidence")
+      .expect(200);
 
-    const [sql] = rawQuery.mock.calls[0];
-    expect(String(sql)).toMatch(/LIMIT 200/);
+    const [sql, params] = rawQuery.mock.calls[0];
+    expect(String(sql)).toMatch(/LIMIT \$\d+ OFFSET \$\d+/);
+    // Last two params are limit and offset.
+    expect(params.slice(-2)).toEqual([100, 0]);
+    expect(res.body.meta).toEqual({ limit: 100, offset: 0, hasMore: false });
+  });
+
+  it("paginated: explicit ?limit&offset are respected and clamped", async () => {
+    const app = await makeApp();
+    const { rawQuery } = await mockedRawdb();
+
+    await request(app)
+      .get("/api/fleet/telematics/media-evidence")
+      .query({ limit: "50", offset: "100" })
+      .expect(200);
+    expect(rawQuery.mock.calls[0][1].slice(-2)).toEqual([50, 100]);
+
+    // Limit clamped to 500 max.
+    rawQuery.mockClear();
+    rawQuery.mockResolvedValueOnce([]);
+    await request(app)
+      .get("/api/fleet/telematics/media-evidence")
+      .query({ limit: "99999" })
+      .expect(200);
+    expect(rawQuery.mock.calls[0][1].slice(-2)).toEqual([500, 0]);
   });
 
   it("orders by uploadedAt DESC for newest-first archive view", async () => {
