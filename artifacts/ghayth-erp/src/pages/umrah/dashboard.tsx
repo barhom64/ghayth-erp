@@ -11,7 +11,8 @@ import {
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Users, Plane, AlertTriangle, UserPlus, Play, Zap } from "lucide-react";
+import { Users, Plane, AlertTriangle, UserPlus, Play, Zap, TrendingUp, TrendingDown, Wallet, ShieldAlert } from "lucide-react";
+import { formatCurrency } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function UmrahDashboard() {
@@ -25,6 +26,16 @@ export default function UmrahDashboard() {
   const { toast } = useToast();
   const p = dash?.pilgrims || {};
   const pen = dash?.penalties || {};
+  const fin = dash?.financials || {};
+  const salesFin = fin.sales || {};
+  const nuskFin = fin.nusk || {};
+  const netPosition: number = Number(fin.net ?? 0);
+  const isNetPositive = netPosition >= 0;
+  const visa = dash?.visaExpiry || {};
+  const visaExpired = Number(visa.expired ?? 0);
+  const visaCritical = Number(visa.critical ?? 0);
+  const visaWarning = Number(visa.warning ?? 0);
+  const visaTotal = visaExpired + visaCritical + visaWarning;
 
   const runDaily = async () => {
     try {
@@ -121,6 +132,82 @@ export default function UmrahDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Financial position at a glance — receivable from sub-agents vs.
+          payable to NUSK + the net umrah position. Lets the operator see
+          the financial story without leaving the dashboard. */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="border-status-success-surface">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm inline-flex items-center gap-2 text-muted-foreground">
+              <TrendingUp className="h-4 w-4 text-status-success-foreground" />
+              مستحق لنا (مبيعات)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-status-success-foreground">{formatCurrency(Number(salesFin.outstandingTotal ?? 0))}</p>
+            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+              <span>{formatNumber(Number(salesFin.invoiceCount ?? 0))} فاتورة</span>
+              {Number(salesFin.overdueTotal ?? 0) > 0 && (
+                <Badge variant="destructive" className="text-[10px]">متأخر {formatCurrency(Number(salesFin.overdueTotal))}</Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-status-warning-surface">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm inline-flex items-center gap-2 text-muted-foreground">
+              <TrendingDown className="h-4 w-4 text-status-warning-foreground" />
+              مستحق علينا (نسك)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-status-warning-foreground">{formatCurrency(Number(nuskFin.outstandingTotal ?? 0))}</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatNumber(Number(nuskFin.invoiceCount ?? 0))} فاتورة نسك</p>
+          </CardContent>
+        </Card>
+        <Card className={isNetPositive ? "border-status-info-surface" : "border-status-error-surface"}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm inline-flex items-center gap-2 text-muted-foreground">
+              <Wallet className="h-4 w-4 text-status-info-foreground" />
+              صافي المركز
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-2xl font-bold ${isNetPositive ? "text-status-info-foreground" : "text-status-error-foreground"}`}>
+              {formatCurrency(Math.abs(netPosition))}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {isNetPositive ? "صافي مستحق لنا" : "صافي مستحق علينا"} — مستحق المبيعات − مستحق نسك
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {visaTotal > 0 && (
+        <Card className={visaExpired > 0 ? "border-status-error-surface" : visaCritical > 0 ? "border-status-warning-surface" : "border-status-info-surface"}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm inline-flex items-center gap-2">
+              <ShieldAlert className={`h-4 w-4 ${visaExpired > 0 ? "text-status-error-foreground" : visaCritical > 0 ? "text-status-warning-foreground" : "text-status-info-foreground"}`} />
+              تنبيهات انتهاء التأشيرات
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-xl font-bold text-status-error-foreground">{formatNumber(visaExpired)}</p>
+              <p className="text-xs text-muted-foreground">منتهية الصلاحية</p>
+            </div>
+            <div>
+              <p className="text-xl font-bold text-status-warning-foreground">{formatNumber(visaCritical)}</p>
+              <p className="text-xs text-muted-foreground">حرج (أقل من 7 أيام)</p>
+            </div>
+            <div>
+              <p className="text-xl font-bold text-status-info-foreground">{formatNumber(visaWarning)}</p>
+              <p className="text-xs text-muted-foreground">تحذير (7-30 يوماً)</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
