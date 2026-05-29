@@ -88,9 +88,14 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   commitment:         { financialImpact: true, approval: true },
   compliance:         { approval: true },
   correspondence:     {},
-  driver:             {},
+  driver:             { financialImpact: true, financialEntityType: "driver" },
   "financial-request":{ financialImpact: true, approval: true },
-  "fixed-asset":      { financialImpact: true },
+  // fixed-asset now wires through to the GL via entityType="asset"
+  // (entity-360 safeColumns: asset → jl."assetId"). Depreciation JEs
+  // (both monthly + nightly cron) tag each line with the assetId after
+  // the engine fixes in this PR, so the per-asset financial profile tab
+  // finally renders real data instead of an empty card.
+  "fixed-asset":      { financialImpact: true, financialEntityType: "asset" },
   "legal-judgment":   {},
   "legal-session":    { attachments: false },
   owner:              {},
