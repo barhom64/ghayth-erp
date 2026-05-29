@@ -1927,6 +1927,86 @@ router.get("/import/header-maps", authorize({ feature: "umrah", action: "create"
   } catch (err) { handleRouteError(err, res, "Import header maps error"); }
 });
 
+// ── Column-mapping presets ───────────────────────────────────────────
+// Operators re-import the same Excel layout every week from the same
+// NUSK/MOFA portal. Saving the mapping per (user, fileType) lets the
+// wizard auto-apply the layout on file pick instead of asking the
+// operator to re-pick every column. One default per (company, user,
+// fileType) — enforced by partial unique index in migration 234.
+
+const presetSchema = z.object({
+  name: z.string().trim().min(1, "اسم القالب مطلوب").max(120),
+  fileType: z.enum(["mutamers", "vouchers"]),
+  mapping: z.record(z.string(), z.string()),
+  isDefault: z.boolean().optional().default(false),
+});
+
+router.get("/import/presets", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { fileType } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, scope.userId];
+    let extraWhere = "";
+    if (fileType === "mutamers" || fileType === "vouchers") {
+      params.push(fileType);
+      extraWhere = ` AND "fileType" = $${params.length}`;
+    }
+    const rows = await rawQuery(
+      `SELECT id, name, "fileType", mapping, "isDefault", "createdAt", "updatedAt"
+         FROM umrah_import_mapping_presets
+        WHERE "companyId" = $1 AND "userId" = $2 AND "deletedAt" IS NULL${extraWhere}
+        ORDER BY "isDefault" DESC, "updatedAt" DESC
+        LIMIT 200`,
+      params,
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) { handleRouteError(err, res, "List import presets error"); }
+});
+
+router.post("/import/presets", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { name, fileType, mapping, isDefault } = zodParse(presetSchema.safeParse(req.body));
+    await withTransaction(async (client) => {
+      // Enforce single default per (company, user, fileType) — clear
+      // any other defaults before flipping this row's flag.
+      if (isDefault) {
+        await client.query(
+          `UPDATE umrah_import_mapping_presets
+              SET "isDefault" = false, "updatedAt" = NOW()
+            WHERE "companyId" = $1 AND "userId" = $2 AND "fileType" = $3
+              AND "deletedAt" IS NULL AND "isDefault" = true`,
+          [scope.companyId, scope.userId, fileType],
+        );
+      }
+      // UPSERT on (companyId, userId, fileType, name).
+      await client.query(
+        `INSERT INTO umrah_import_mapping_presets
+           ("companyId", "branchId", "userId", name, "fileType", mapping, "isDefault")
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+         ON CONFLICT ("companyId", "userId", "fileType", name) WHERE "deletedAt" IS NULL
+         DO UPDATE SET mapping = EXCLUDED.mapping, "isDefault" = EXCLUDED."isDefault", "updatedAt" = NOW()`,
+        [scope.companyId, scope.branchId ?? null, scope.userId, name, fileType, JSON.stringify(mapping), isDefault],
+      );
+    });
+    res.status(201).json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "Save import preset error"); }
+});
+
+router.delete("/import/presets/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(
+      `UPDATE umrah_import_mapping_presets
+          SET "deletedAt" = NOW(), "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 AND "userId" = $3 AND "deletedAt" IS NULL`,
+      [id, scope.companyId, scope.userId],
+    );
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "Delete import preset error"); }
+});
+
 router.get("/import-logs", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;

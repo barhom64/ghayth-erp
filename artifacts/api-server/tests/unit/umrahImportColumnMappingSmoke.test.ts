@@ -143,7 +143,10 @@ describe("import-wizard UI — column-mapping step", () => {
 
   it("captures detected headers + auto-fills mapping from the built-in dictionary", () => {
     expect(WIZARD).toContain("setDetectedHeaders(headers)");
-    expect(WIZARD).toMatch(/const target = forward\[h\]/);
+    // Built-in lookup must be on the assignment path. The variable may
+    // sit alone (`= forward[h]`) or as a fallback after a preset lookup
+    // (`= fromPreset || forward[h]`) — both shapes count.
+    expect(WIZARD).toMatch(/const target = (?:fromPreset \|\| )?forward\[h\]/);
   });
 
   it("auto-opens the mapping panel when any column is unmapped", () => {
