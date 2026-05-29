@@ -26,14 +26,14 @@ export function ReportsTab() {
     searchFields: ["title", "type", "description"],
   });
 
-  // GET /bi/reports/umrah-season-summary — built-in season analytics
-  // (total pilgrims, revenue, top agents). Surfaced as a "summary card"
-  // tile above the reports list so it's discoverable without browsing.
+  // GET /bi/reports/umrah-season-summary — server returns {data, summary}
+  // where summary aggregates totalSeasons, totalPilgrims, totalInvoiced,
+  // totalPaid, totalOutstanding, totalOverstay.
   const { data: umrahSummaryResp } = useApiQuery<any>(
     ["bi-umrah-season-summary"],
     "/bi/reports/umrah-season-summary",
   );
-  const umrahSummary = umrahSummaryResp?.data ?? umrahSummaryResp;
+  const umrahSummary = umrahSummaryResp?.summary;
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -68,24 +68,32 @@ export function ReportsTab() {
       {umrahSummary && (
         <Card className="border-emerald-200 bg-emerald-50/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">ملخص موسم العمرة</CardTitle>
+            <CardTitle className="text-sm">ملخص مواسم العمرة</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
             <div>
-              <p className="text-muted-foreground">عدد المعتمرين</p>
-              <p className="font-bold text-base">{umrahSummary.pilgrimCount ?? umrahSummary.totalPilgrims ?? "—"}</p>
+              <p className="text-muted-foreground">عدد المواسم</p>
+              <p className="font-bold text-base">{umrahSummary.totalSeasons ?? "—"}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">إجمالي الإيرادات</p>
-              <p className="font-bold text-base font-mono">{umrahSummary.totalRevenue ?? "—"}</p>
+              <p className="text-muted-foreground">إجمالي المعتمرين</p>
+              <p className="font-bold text-base">{umrahSummary.totalPilgrims ?? "—"}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">عدد الوكلاء</p>
-              <p className="font-bold text-base">{umrahSummary.agentCount ?? umrahSummary.activeAgents ?? "—"}</p>
+              <p className="text-muted-foreground">حالات تجاوز المدة</p>
+              <p className="font-bold text-base">{umrahSummary.totalOverstay ?? "—"}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">عدد الباقات النشطة</p>
-              <p className="font-bold text-base">{umrahSummary.activePackages ?? "—"}</p>
+              <p className="text-muted-foreground">قيمة الفواتير</p>
+              <p className="font-bold text-base font-mono">{Number(umrahSummary.totalInvoiced ?? 0).toLocaleString("ar-SA")}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">إجمالي المحصّل</p>
+              <p className="font-bold text-base font-mono">{Number(umrahSummary.totalPaid ?? 0).toLocaleString("ar-SA")}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">مستحقات قائمة</p>
+              <p className="font-bold text-base font-mono">{Number(umrahSummary.totalOutstanding ?? 0).toLocaleString("ar-SA")}</p>
             </div>
           </CardContent>
         </Card>
