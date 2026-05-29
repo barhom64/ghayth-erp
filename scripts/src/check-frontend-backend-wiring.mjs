@@ -888,8 +888,12 @@ function normaliseFrontendUrl(url) {
 }
 
 function normaliseBackendUrl(url) {
-  // Backend uses :param. Strip trailing slash.
-  return url.replace(/\/+$/, "") || "/";
+  // Backend uses :param OR Express wildcard `*name` for filesystem paths.
+  // Treat both as :param-equivalent placeholders so a frontend `${path}`
+  // resolves against either form.
+  let u = url.replace(/\/\*[A-Za-z_][\w]*/g, "/:param");
+  // Strip trailing slash.
+  return u.replace(/\/+$/, "") || "/";
 }
 
 /**
