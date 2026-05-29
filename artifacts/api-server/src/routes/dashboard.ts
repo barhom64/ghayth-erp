@@ -57,7 +57,7 @@ router.get("/", authorize({ feature: "dashboard", action: "view" }), async (req,
                 e.name AS "assigneeName"
          FROM tasks t
          LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
-         LEFT JOIN employees e ON e.id = ea."employeeId"
+         LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
          WHERE ${taskAliasWhere}
            AND t."deletedAt" IS NULL
            AND t."scheduledDate" = $${taskAliasTodayIdx}

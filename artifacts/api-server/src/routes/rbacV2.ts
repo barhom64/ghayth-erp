@@ -513,7 +513,7 @@ router.get("/users", authorize({ feature: "admin.users", action: "list" }), asyn
          FROM users u
          JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
          JOIN employees e ON e.id = u."employeeId"
-         LEFT JOIN branches b ON b.id = ea."branchId"
+         LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
          LEFT JOIN departments d ON d.id = ea."departmentId"
         WHERE ${where}
         ORDER BY e.name LIMIT 200`,
