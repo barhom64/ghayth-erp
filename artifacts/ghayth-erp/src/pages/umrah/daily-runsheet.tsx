@@ -6,10 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { GuardedButton } from "@/components/shared/permission-gate";
 import { PrintButton } from "@/components/shared/print-button";
-import { PlaneTakeoff, PlaneLanding, AlertTriangle, Download, RefreshCw } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { PlaneTakeoff, PlaneLanding, AlertTriangle, RefreshCw } from "lucide-react";
 import { todayLocal } from "@/lib/formatters";
 
 // Daily ops run-sheet — backs GET /api/umrah/reports/daily-runsheet (PR #305).
@@ -42,7 +40,6 @@ const today = () => todayLocal();
 
 export default function UmrahDailyRunsheet() {
   const [date, setDate] = useState(today());
-  const { toast } = useToast();
 
   const { data, isLoading, isError, refetch } = useApiQuery<Payload>(
     ["umrah-daily-runsheet", date],
@@ -55,27 +52,6 @@ export default function UmrahDailyRunsheet() {
   const arrivals = data?.arrivals ?? [];
   const departures = data?.departures ?? [];
   const overstays = data?.overstays ?? [];
-
-  const handleExport = async () => {
-    // PDF download has to bypass `apiFetch` since the helper only parses
-    // JSON responses. We still rely on the same cookie-based auth via
-    // `credentials: "include"`.
-    try {
-      const res = await fetch(`/api/umrah/reports/daily-runsheet/pdf?date=${date}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `umrah-runsheet-${date}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast({ variant: "destructive", title: "تعذّر تحميل PDF" });
-    }
-  };
 
   const arrivalCols: DataTableColumn<Pilgrim>[] = [
     { key: "nuskNumber", header: "رقم نسك" },
@@ -137,9 +113,6 @@ export default function UmrahDailyRunsheet() {
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1">
             <RefreshCw className="h-4 w-4" /> تحديث
           </Button>
-          <GuardedButton perm="umrah:export" onClick={handleExport} className="gap-1" rateLimitAware>
-            <Download className="h-4 w-4" /> تصدير PDF (قديم)
-          </GuardedButton>
           <PrintButton
             entityType="umrah_runsheet"
             entityId={date}
