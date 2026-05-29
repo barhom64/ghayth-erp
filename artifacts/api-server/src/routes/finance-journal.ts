@@ -1852,6 +1852,7 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
                 "unitId", "assetId", "contractId",
                 "umrahSeasonId", "umrahAgentId", "activityType",
                 "productId", "clientId", "vendorId", "driverId",
+                "templateId", "dimensionJson",
                 "sourceLineTable", "sourceLineId"
          FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
         [id]
@@ -1882,6 +1883,8 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         clientId: l.clientId as number | undefined,
         vendorId: l.vendorId as number | undefined,
         driverId: l.driverId as number | undefined,
+        templateId: l.templateId as number | undefined,
+        dimensionJson: l.dimensionJson as Record<string, unknown> | undefined,
         sourceLineTable: l.sourceLineTable as string | undefined,
         sourceLineId: l.sourceLineId as number | undefined,
       }));
