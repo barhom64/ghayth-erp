@@ -45,6 +45,10 @@ import {
 } from "@/components/shared/detail-edit-delete-actions";
 import { CreditMemoDialog } from "@/components/shared/credit-memo-dialog";
 import { DebitMemoDialog } from "@/components/shared/debit-memo-dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides
@@ -135,6 +139,7 @@ export default function InvoiceDetailPage() {
   const [showCreditMemo, setShowCreditMemo] = useState(false);
   const [showDebitMemo, setShowDebitMemo] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
+  const [confirmPost, setConfirmPost] = useState(false);
 
   // R.4 iter 4 — both mutations now flow through useApiMutation so
   // typed errors (VALIDATION_ERROR with field, CONFLICT with meta,
@@ -598,11 +603,7 @@ export default function InvoiceDetailPage() {
               <span>الترحيل المحاسبي</span>
               <GuardedButton
                 perm="finance:approve"
-                onClick={() => {
-                  if (window.confirm("سيتم ترحيل الفاتورة وإنشاء قيد المحاسبة. متابعة؟")) {
-                    postMut.mutate({});
-                  }
-                }}
+                onClick={() => setConfirmPost(true)}
                 disabled={postMut.isPending}
                 rateLimitAware
               >
@@ -677,6 +678,22 @@ export default function InvoiceDetailPage() {
           />
         </>
       )}
+      <AlertDialog open={confirmPost} onOpenChange={(o) => !o && setConfirmPost(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد ترحيل الفاتورة</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم ترحيل الفاتورة وإنشاء قيد المحاسبة الذي يُرحَّل إلى دفتر الأستاذ العام. هذا الإجراء غير قابل للتراجع. متابعة؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmPost(false); postMut.mutate({}); }}>
+              تأكيد الترحيل
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
