@@ -111,7 +111,7 @@ const updateCaseSchema = z.object({
   // shows their own legal/cases + legal/sessions/upcoming tabs.
   // Column added in migration 230. Nullable: existing cases stay
   // un-linked until an operator (legal manager) sets it explicitly.
-  clientId: z.coerce.number().optional().nullable(),
+  clientId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const updateJudgmentSchema = z.object({

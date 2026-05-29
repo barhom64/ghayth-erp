@@ -238,7 +238,7 @@ const updateTenantSchema = z.object({
   // through the customer portal. Nullable: existing tenants keep working
   // without a link (their portal account, if any, just doesn't get the
   // "property" section). Column added in migration 230.
-  clientId: z.coerce.number().optional().nullable(),
+  clientId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const payRentPaymentSchema = z.object({
