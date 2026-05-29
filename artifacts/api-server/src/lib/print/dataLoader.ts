@@ -150,6 +150,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadPosReceipt(companyId, entityId);
     case "receipt_voucher":
     case "payment_voucher":
+    case "voucher":
       return await loadVoucher(companyId, entityId);
     case "purchase_order":
       return await loadPurchaseOrder(companyId, entityId);
@@ -192,6 +193,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadFleetMaintenance(companyId, entityId);
     case "insurance_policy":
     case "insurance":
+    case "policy":
       return await loadInsurancePolicy(companyId, entityId);
     case "maintenance_request":
     case "maintenance":
@@ -395,18 +397,31 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   leave: "hr_leave_requests",
   excuse: "hr_excuse_requests",
   maintenance: "maintenance_requests",
-  voucher: "payment_vouchers",
+  // `voucher` (no dedicated switch case) used to point at the non-existent
+  // `payment_vouchers` table — the real table is `vouchers`. Printing a
+  // voucher card via the short alias returned an empty stub before.
+  voucher: "vouchers",
   season: "umrah_seasons",
   agent: "umrah_agents",
   transport: "umrah_transport",
-  violation: "traffic_violations",
+  // Traffic violations live in `fleet_traffic_violations`, not the
+  // never-created `traffic_violations` the original alias pointed at. The
+  // dedicated case route also covers this — fixing the fallback for safety.
+  violation: "fleet_traffic_violations",
   opportunity: "crm_opportunities",
   task: "tasks",
   ticket: "support_tickets",
   unit: "property_units",
   contract: "rental_contracts",
-  policy: "insurance_policies",
-  property: "buildings",
+  // Same issue as `voucher` — `policy` had no switch case AND pointed at the
+  // non-existent `insurance_policies`. The real table for fleet vehicle
+  // insurance is `fleet_insurance`. (Building insurance / hr exit-policy
+  // are different domains and have their own canonical loaders.)
+  policy: "fleet_insurance",
+  // `property` has a switch case (loadBuildingCard hits property_buildings),
+  // so this entry is only a safety net — but it used to point at the
+  // non-existent `buildings`. Fixed to the canonical name.
+  property: "property_buildings",
   sub_agent: "umrah_sub_agents",
   umrah_package: "umrah_packages",
   performance: "evaluation_cycles",
