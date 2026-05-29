@@ -22,6 +22,33 @@ export interface JournalLine {
   /** Optional foreign-key to the originating row for drilldowns. */
   referenceType?: string;
   referenceId?: number;
+  // Dimensional FK payload — postJournalEntry (lib/gl/posting.ts) writes
+  // these onto journal_lines so FX revaluation / realized FX / cycle-count
+  // variance / inventory write-off entries carry the same per-entity
+  // drilldown columns as createJournalEntry (businessHelpers.ts). Without
+  // them, per-vehicle / per-property / per-contract profitability reports
+  // silently exclude every FX + inventory line. All NULLABLE.
+  costCenter?: string | null;
+  costCenterId?: number | null;
+  departmentId?: number | null;
+  projectId?: number | null;
+  employeeId?: number | null;
+  vehicleId?: number | null;
+  propertyId?: number | null;
+  contractId?: number | null;
+  unitId?: number | null;
+  assetId?: number | null;
+  umrahSeasonId?: number | null;
+  umrahAgentId?: number | null;
+  productId?: number | null;
+  clientId?: number | null;
+  vendorId?: number | null;
+  driverId?: number | null;
+  activityType?: string | null;
+  templateId?: number | null;
+  sourceLineTable?: string | null;
+  sourceLineId?: number | null;
+  dimensionJson?: Record<string, unknown> | null;
 }
 
 export interface JournalEntryPayload {
@@ -74,6 +101,27 @@ export function buildEntry(input: BuildEntryInput): JournalEntryPayload {
       description: raw.description,
       referenceType: raw.referenceType,
       referenceId: raw.referenceId,
+      costCenter: raw.costCenter,
+      costCenterId: raw.costCenterId,
+      departmentId: raw.departmentId,
+      projectId: raw.projectId,
+      employeeId: raw.employeeId,
+      vehicleId: raw.vehicleId,
+      propertyId: raw.propertyId,
+      contractId: raw.contractId,
+      unitId: raw.unitId,
+      assetId: raw.assetId,
+      umrahSeasonId: raw.umrahSeasonId,
+      umrahAgentId: raw.umrahAgentId,
+      productId: raw.productId,
+      clientId: raw.clientId,
+      vendorId: raw.vendorId,
+      driverId: raw.driverId,
+      activityType: raw.activityType,
+      templateId: raw.templateId,
+      sourceLineTable: raw.sourceLineTable,
+      sourceLineId: raw.sourceLineId,
+      dimensionJson: raw.dimensionJson,
     });
 
     totalDebit += debit;
@@ -122,7 +170,15 @@ export function buildSimpleEntry(input: {
   referenceId?: number;
   debitDescription?: string;
   creditDescription?: string;
+  // Dimensional payload — propagated to BOTH legs so a 2-line FX /
+  // inventory / payroll entry carries the same per-entity drilldown
+  // dims as the multi-line createJournalEntry path. Without this,
+  // FX revaluation entries — the most common consumer of buildSimpleEntry
+  // — silently NULL their vehicleId / propertyId / contractId, breaking
+  // per-asset profitability roll-ups.
+  dims?: Partial<Omit<JournalLine, "accountId" | "debit" | "credit" | "description" | "referenceType" | "referenceId">>;
 }): JournalEntryPayload {
+  const dims = input.dims ?? {};
   return buildEntry({
     description: input.description,
     lines: [
@@ -132,6 +188,7 @@ export function buildSimpleEntry(input: {
         description: input.debitDescription ?? input.description,
         referenceType: input.referenceType,
         referenceId: input.referenceId,
+        ...dims,
       },
       {
         accountId: input.creditAccountId,
@@ -139,6 +196,7 @@ export function buildSimpleEntry(input: {
         description: input.creditDescription ?? input.description,
         referenceType: input.referenceType,
         referenceId: input.referenceId,
+        ...dims,
       },
     ],
   });
