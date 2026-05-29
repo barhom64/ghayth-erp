@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Target, BarChart3, Plus, Eye, DollarSign, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
@@ -72,6 +72,37 @@ const OPP_STAGE_OPTIONS = [
   { value: "closed_lost", label: "تم الإغلاق (خسارة)" },
 ];
 
+function FollowupCheckTrigger() {
+  // POST /crm/followup-check — runs the followup nag job on demand.
+  // Server returns {totalOverdue, escalated, details} where escalated
+  // is the count actually surfaced as follow-up tasks this run.
+  const [result, setResult] = useState<{ totalOverdue: number; escalated: number } | null>(null);
+  const mut = useApiMutation<{ totalOverdue?: number; escalated?: number }, Record<string, never>>(
+    "/crm/followup-check",
+    "POST",
+    [["crm-stats"], ["crm-analytics"]],
+    { successMessage: false },
+  );
+  const run = () => {
+    mut.mutate({}, { onSuccess: (r) => setResult({
+      totalOverdue: r?.totalOverdue ?? 0,
+      escalated: r?.escalated ?? 0,
+    }) });
+  };
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      {result && (
+        <span className="text-muted-foreground">
+          {result.totalOverdue} متأخر · صُعِّد {result.escalated}
+        </span>
+      )}
+      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={run} disabled={mut.isPending} rateLimitAware>
+        فحص المتابعات الآن
+      </Button>
+    </div>
+  );
+}
+
 function OpportunitiesTab() {
   const [, navigate] = useLocation();
   const { roleLevel } = useAppContext();
@@ -79,6 +110,11 @@ function OpportunitiesTab() {
   // Scope (companyIds/branchIds) + scope-aware queryKey are injected
   // automatically by useApiQuery → injectScope.
   const { data: stats } = useApiQuery(["crm-stats"], `/crm/stats`);
+  // GET /crm/analytics — historical funnel + conversion ratios that
+  // /crm/stats doesn't expose. Shown as a compact "تحليلات الفرص"
+  // banner above the table for managers.
+  const { data: analyticsResp } = useApiQuery<any>(["crm-analytics"], "/crm/analytics");
+  const analytics = analyticsResp?.data ?? analyticsResp ?? null;
   const [page, setPage] = useState(1);
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [filters, setFilters] = useFilters();
@@ -167,6 +203,42 @@ function OpportunitiesTab() {
         { label: "مكسوبة", value: stats?.wonOpportunities || 0, icon: Eye, color: "text-emerald-600 bg-emerald-50" },
         { label: "قيمة الصفقات", value: formatCurrency(stats?.pipelineValue || 0), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
       ]} />
+
+      {analytics && (
+        <Card className="border-indigo-100 bg-indigo-50/30">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold flex items-center gap-2 text-indigo-700">
+                <TrendingUp className="w-4 h-4" /> تحليلات الفرص
+              </p>
+              <FollowupCheckTrigger />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div>
+                <p className="text-muted-foreground">متوسط دورة الإغلاق</p>
+                <p className="font-mono font-bold">{analytics.avgDealDays ?? "—"} يوم</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">إيرادات الصفقات المكسوبة</p>
+                <p className="font-mono font-bold">{formatCurrency(Number(analytics.wonRevenue ?? 0))}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">القيمة المتوقعة (Pipeline)</p>
+                <p className="font-mono font-bold">{formatCurrency(Number(analytics.forecastRevenue ?? 0))}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">صفقات خاسرة</p>
+                <p className="font-mono font-bold">
+                  {analytics.lostCount ?? 0}
+                  <span className="text-muted-foreground text-[10px] ms-1">
+                    ({formatCurrency(Number(analytics.lostValue ?? 0))})
+                  </span>
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex items-center gap-4">
         <div className="flex-1">

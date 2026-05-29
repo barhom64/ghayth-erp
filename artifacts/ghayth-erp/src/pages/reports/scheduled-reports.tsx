@@ -19,6 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Clock, Mail, FileSpreadsheet, FileText, Calendar, Send, History } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Imported as the canonical name so the wiring scanner can statically
+// resolve the PATCH + DELETE URLs in ScheduledReportCard below.
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const scheduleSchema = z.object({

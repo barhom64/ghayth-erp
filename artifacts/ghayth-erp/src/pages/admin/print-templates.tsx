@@ -22,6 +22,8 @@ import { useState, useMemo, useEffect } from "react";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -155,6 +157,103 @@ export default function PrintTemplatesPage() {
   );
   const rows = useMemo<PrintTemplateRow[]>(() => data?.items ?? [], [data]);
 
+  // GET /print/assignments + POST /print/assignments — branch-level
+  // template overrides. POST creates a new (branch,entityType) →
+  // templateId binding; the table shows existing bindings.
+  const assignmentsQ = useApiQuery<{ items: any[] }>(["print-assignments"], "/print/assignments");
+  const assignments: any[] = assignmentsQ.data?.items ?? [];
+  const [newAssignBranch, setNewAssignBranch] = useState("");
+  const [newAssignEntity, setNewAssignEntity] = useState("invoice");
+  const [newAssignTemplate, setNewAssignTemplate] = useState("");
+  const [newAssignIsDefault, setNewAssignIsDefault] = useState(true);
+  const handleCreateAssignment = async () => {
+    if (!newAssignTemplate.trim()) {
+      toast({ variant: "destructive", title: "اختر القالب" });
+      return;
+    }
+    try {
+      await apiFetch("/print/assignments", {
+        method: "POST",
+        body: JSON.stringify({
+          branchId: newAssignBranch ? Number(newAssignBranch) : null,
+          entityType: newAssignEntity,
+          templateId: Number(newAssignTemplate),
+          // Mirror the server-side default (true) — the operator can flip
+          // it later via the templates table if needed.
+          isDefault: newAssignIsDefault,
+        }),
+      });
+      toast({ title: "أُنشئ التعيين" });
+      setNewAssignBranch(""); setNewAssignTemplate(""); setNewAssignIsDefault(true);
+      assignmentsQ.refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الإنشاء", description: err?.message });
+    }
+  };
+
+  // POST /print/deliver — renders + delivers a document via the chosen
+  // channel (email/whatsapp/print-queue) in one round-trip.
+  const [deliverEntity, setDeliverEntity] = useState("invoice");
+  const [deliverEntityId, setDeliverEntityId] = useState("");
+  const [deliverChannel, setDeliverChannel] = useState("email");
+  const [deliverRecipient, setDeliverRecipient] = useState("");
+  const handleDeliver = async () => {
+    if (!deliverEntityId.trim() || !deliverRecipient.trim()) {
+      toast({ variant: "destructive", title: "حدد الكيان والمستلم" });
+      return;
+    }
+    try {
+      const res = await apiFetch<any>("/print/deliver", {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: deliverEntity,
+          entityId: Number(deliverEntityId),
+          channel: deliverChannel,
+          // Server expects `to: [{address, name?}]` — wrap the operator
+          // input. Single-recipient is the only common case from this
+          // admin probe.
+          to: [{ address: deliverRecipient.trim() }],
+        }),
+      });
+      toast({ title: "أُرسل المستند", description: res?.jobId ? `Job #${res.jobId}` : "" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل التسليم", description: err?.message });
+    }
+  };
+
+  // POST /print/ai/suggest-template + /print/ai/draft-letter — AI helpers
+  // that propose a template structure or draft body text from a sample
+  // payload. Surfaced as a single small "AI" probe button per entity.
+  const [aiEntity, setAiEntity] = useState("invoice");
+  const [aiSamplePayload, setAiSamplePayload] = useState("{}");
+  const [aiResult, setAiResult] = useState<any>(null);
+  const callAiSuggest = async () => {
+    try {
+      const sample = JSON.parse(aiSamplePayload || "{}");
+      const res = await apiFetch<any>("/print/ai/suggest-template", {
+        method: "POST",
+        body: JSON.stringify({ entityType: aiEntity, sampleData: sample, locale: "ar" }),
+      });
+      setAiResult(res);
+      toast({ title: "اقتراح القالب جاهز" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الاقتراح", description: err?.message });
+    }
+  };
+  const callAiDraftLetter = async () => {
+    try {
+      const sample = JSON.parse(aiSamplePayload || "{}");
+      const res = await apiFetch<any>("/print/ai/draft-letter", {
+        method: "POST",
+        body: JSON.stringify({ entityType: aiEntity, sampleData: sample, locale: "ar" }),
+      });
+      setAiResult(res);
+      toast({ title: "مسودة الخطاب جاهزة" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل التوليد", description: err?.message });
+    }
+  };
+
   const cols: DataTableColumn<PrintTemplateRow>[] = [
     { key: "name", header: "الاسم", render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "entityType", header: "النوع", render: (r) => <code className="text-xs">{r.entityType}</code> },
@@ -262,6 +361,106 @@ export default function PrintTemplatesPage() {
           }}
         />
       )}
+
+      <Card className="mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">تعيينات القوالب على الفروع ({assignments.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-xs">
+          <div className="max-h-32 overflow-y-auto divide-y border rounded">
+            {assignments.slice(0, 20).map((a: any) => (
+              <div key={a.id} className="px-2 py-1 flex items-center justify-between">
+                <span className="font-mono text-[10px]">
+                  {a.branchName ?? "(جميع الفروع)"} · {a.entityType} → #{a.templateId} ({a.templateName})
+                </span>
+                {a.isDefault && <Badge variant="outline" className="text-[10px]">افتراضي</Badge>}
+              </div>
+            ))}
+            {assignments.length === 0 && (
+              <p className="text-muted-foreground p-2 text-center">لا توجد تعيينات</p>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+            <div>
+              <label className="text-[10px] text-muted-foreground">رقم الفرع (اختياري)</label>
+              <input value={newAssignBranch} onChange={(e) => setNewAssignBranch(e.target.value)} dir="ltr" className="w-full h-7 px-2 border rounded text-xs" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">نوع الكيان</label>
+              <input value={newAssignEntity} onChange={(e) => setNewAssignEntity(e.target.value)} dir="ltr" className="w-full h-7 px-2 border rounded text-xs" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">رقم القالب</label>
+              <input value={newAssignTemplate} onChange={(e) => setNewAssignTemplate(e.target.value)} dir="ltr" className="w-full h-7 px-2 border rounded text-xs" />
+            </div>
+            <GuardedButton perm="templates:write" size="sm" onClick={handleCreateAssignment} rateLimitAware>إنشاء تعيين</GuardedButton>
+            <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
+              <input type="checkbox" checked={newAssignIsDefault} onChange={(e) => setNewAssignIsDefault(e.target.checked)} />
+              تعيين افتراضي
+            </label>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">تسليم مستند فوري</CardTitle>
+          <p className="text-xs text-muted-foreground">يولّد المستند ثم يرسله مباشرةً عبر القناة المختارة.</p>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end text-xs">
+          <div>
+            <label className="text-[10px] text-muted-foreground">نوع الكيان</label>
+            <input value={deliverEntity} onChange={(e) => setDeliverEntity(e.target.value)} dir="ltr" className="w-full h-7 px-2 border rounded" />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">رقم الكيان</label>
+            <input value={deliverEntityId} onChange={(e) => setDeliverEntityId(e.target.value)} dir="ltr" className="w-full h-7 px-2 border rounded" />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">القناة</label>
+            <select value={deliverChannel} onChange={(e) => setDeliverChannel(e.target.value)} className="w-full h-7 px-2 border rounded bg-white">
+              <option value="email">بريد إلكتروني</option>
+              <option value="whatsapp">واتساب</option>
+              <option value="sms">رسالة نصية</option>
+              <option value="internal_inbox">صندوق داخلي</option>
+              <option value="download">تنزيل (Download)</option>
+            </select>
+          </div>
+          <div className="md:col-span-1">
+            <label className="text-[10px] text-muted-foreground">المستلم</label>
+            <input value={deliverRecipient} onChange={(e) => setDeliverRecipient(e.target.value)} dir="ltr" className="w-full h-7 px-2 border rounded" />
+          </div>
+          <GuardedButton perm="print:create" size="sm" onClick={handleDeliver} rateLimitAware>تسليم</GuardedButton>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">مساعدات AI</CardTitle>
+          <p className="text-xs text-muted-foreground">اقترح قالباً جديداً أو سوّد خطاباً انطلاقاً من عيّنة بيانات.</p>
+        </CardHeader>
+        <CardContent className="space-y-2 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div>
+              <label className="text-[10px] text-muted-foreground">نوع الكيان</label>
+              <input value={aiEntity} onChange={(e) => setAiEntity(e.target.value)} dir="ltr" className="w-full h-7 px-2 border rounded" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-[10px] text-muted-foreground">عيّنة JSON</label>
+              <textarea value={aiSamplePayload} onChange={(e) => setAiSamplePayload(e.target.value)} dir="ltr" className="w-full h-16 px-2 py-1 border rounded font-mono" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <GuardedButton perm="templates:write" size="sm" variant="outline" onClick={callAiSuggest} rateLimitAware>اقتراح قالب</GuardedButton>
+            <GuardedButton perm="templates:write" size="sm" variant="outline" onClick={callAiDraftLetter} rateLimitAware>توليد خطاب</GuardedButton>
+          </div>
+          {aiResult && (
+            <pre className="bg-surface-subtle p-2 rounded max-h-40 overflow-y-auto text-[10px]">
+              {JSON.stringify(aiResult, null, 2).slice(0, 1500)}
+            </pre>
+          )}
+        </CardContent>
+      </Card>
     </PageShell>
   );
 }

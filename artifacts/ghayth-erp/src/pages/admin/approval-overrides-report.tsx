@@ -37,11 +37,11 @@ export default function ApprovalOverridesReportPage() {
   const qs: string[] = [];
   if (from) qs.push(`from=${encodeURIComponent(from)}`);
   if (to)   qs.push(`to=${encodeURIComponent(to)}`);
-  const url = `/approval-actions/overrides/report${qs.length ? "?" + qs.join("&") : ""}`;
+  const suffix = qs.length ? `?${qs.join("&")}` : "";
 
   const { data, isLoading, isError, refetch, isFetching } = useApiQuery<{ data: OverrideRecord[] }>(
     ["approval-overrides", from, to],
-    url,
+    `/approval-actions/overrides/report${suffix}`,
   );
 
   if (isLoading) return <LoadingSpinner />;

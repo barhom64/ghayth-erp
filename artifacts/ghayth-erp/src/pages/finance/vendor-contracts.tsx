@@ -3,6 +3,12 @@ import { Link } from "wouter";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
+  useInlineActions,
+  RowActions,
+  InlineEditForm,
+  InlineDeleteConfirm,
+} from "@/components/inline-actions";
+import {
   PageShell,
   DataTable,
   type DataTableColumn,
@@ -78,6 +84,18 @@ export default function VendorContractsPage() {
     `/finance/contracts${qs ? `?${qs}` : ""}`,
   );
 
+  // Quick-preview: when the user clicks "تفاصيل" we lazy-fetch the
+  // single row's full detail (lines + payment schedule) from
+  // GET /finance/contracts/:id. The list endpoint above only carries
+  // the header columns.
+  const [previewId, setPreviewId] = useState<number | null>(null);
+  const { data: detailResp } = useApiQuery<any>(
+    ["vendor-contract-detail", String(previewId ?? 0)],
+    previewId ? `/finance/contracts/${previewId}` : null,
+    { enabled: !!previewId },
+  );
+  const detail = detailResp?.data ?? detailResp;
+
   const createMut = useApiMutation("/finance/contracts", "POST", [["vendor-contracts"]]);
   const updateMut = useApiMutation<unknown, { id: number; patch: Partial<VendorContract> }>(
     (body) => `/finance/contracts/${body.id}`,
@@ -88,6 +106,25 @@ export default function VendorContractsPage() {
       onSuccess: () => setEditing(null),
     },
   );
+
+  // Inline edit + delete on rows. Backend's PATCH /finance/contracts/:id
+  // accepts the typical column set; DELETE soft-deletes.
+  const {
+    editingId, deletingId, editForm,
+    startEdit, startDelete, cancelEdit, cancelDelete,
+    isPending, handleSave, handleDelete,
+  } = useInlineActions({
+    endpoint: "/finance/contracts",
+    queryKeys: [["vendor-contracts"]],
+  });
+
+  const contractEditFields = [
+    { key: "title", label: "العنوان" },
+    { key: "endDate", label: "تاريخ النهاية", type: "date" as const },
+    { key: "contractValue", label: "القيمة", type: "number" as const },
+    { key: "status", label: "الحالة" },
+    { key: "notes", label: "ملاحظات" },
+  ];
 
   const [form, setForm] = useState({
     vendorId: 0,
@@ -203,30 +240,30 @@ export default function VendorContractsPage() {
       ),
     },
     {
-      key: "actions",
+      key: "_actions" as any,
       header: "",
       render: (r) => (
         <div className="flex items-center gap-1">
-          <GuardedButton
-            perm="finance:update"
+          <Button
             variant="ghost"
             size="sm"
             className="h-7 px-2"
-            onClick={() => setEditing(r)}
-            title="تعديل"
+            onClick={() => setPreviewId(r.id)}
+            title="تفاصيل"
           >
-            <Pencil className="h-3 w-3" />
-          </GuardedButton>
-          <GuardedButton
-            perm="finance:delete"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-status-error-foreground"
-            onClick={() => setDeleting(r)}
-            title="حذف"
-          >
-            <Trash2 className="h-3 w-3" />
-          </GuardedButton>
+            تفاصيل
+          </Button>
+          <RowActions
+            onEdit={() => startEdit(r.id, {
+              title: r.title,
+              endDate: r.endDate,
+              contractValue: r.contractValue ? String(r.contractValue) : "",
+              status: r.status,
+              notes: r.notes ?? "",
+            })}
+            onDelete={() => startDelete(r.id)}
+            deletePerm="finance:delete"
+          />
         </div>
       ),
     },
@@ -402,107 +439,47 @@ export default function VendorContractsPage() {
         </CardContent>
       </Card>
 
-      {/* Edit dialog — opens with the row's current values; saves via
-          PATCH /finance/contracts/:id. */}
-      {editing && (
-        <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
-          <DialogContent>
+      {editingId !== null && (
+        <InlineEditForm
+          fields={contractEditFields}
+          initialValues={editForm}
+          onSave={(values) => handleSave(editingId, values)}
+          onCancel={cancelEdit}
+          isPending={isPending}
+        />
+      )}
+
+      {previewId !== null && (
+        <Dialog open={!!previewId} onOpenChange={(o) => !o && setPreviewId(null)}>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>تعديل العقد: {editing.title}</DialogTitle>
+              <DialogTitle>تفاصيل العقد {detail?.title || `#${previewId}`}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">العنوان</Label>
-                <Input
-                  value={editing.title}
-                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">تاريخ البداية</Label>
-                  <Input
-                    type="date"
-                    value={editing.startDate ?? ""}
-                    onChange={(e) => setEditing({ ...editing, startDate: e.target.value || null })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">تاريخ النهاية</Label>
-                  <Input
-                    type="date"
-                    value={editing.endDate}
-                    onChange={(e) => setEditing({ ...editing, endDate: e.target.value })}
-                  />
+            {detail ? (
+              <div className="space-y-2 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div><span className="text-muted-foreground">المورد:</span> {detail.vendorName ?? "—"}</div>
+                  <div><span className="text-muted-foreground">القيمة:</span> {formatCurrency(Number(detail.contractValue ?? 0))} {detail.currency ?? "SAR"}</div>
+                  <div><span className="text-muted-foreground">من:</span> {detail.startDate ? formatDateAr(detail.startDate) : "—"}</div>
+                  <div><span className="text-muted-foreground">إلى:</span> {formatDateAr(detail.endDate)}</div>
+                  <div className="col-span-2"><span className="text-muted-foreground">الحالة:</span> <Badge className={`text-[10px] ${STATUS_BADGE[detail.status as VendorContract["status"]]}`}>{STATUS_LABEL[detail.status as VendorContract["status"]]}</Badge></div>
+                  {detail.notes && (
+                    <div className="col-span-2 text-xs text-muted-foreground">{detail.notes}</div>
+                  )}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">القيمة</Label>
-                  <Input
-                    type="number"
-                    value={String(editing.contractValue ?? "")}
-                    onChange={(e) => setEditing({ ...editing, contractValue: e.target.value === "" ? null : Number(e.target.value) })}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">الحالة</Label>
-                  <Select
-                    value={editing.status}
-                    onValueChange={(v) => setEditing({ ...editing, status: v as VendorContract["status"] })}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">ساري</SelectItem>
-                      <SelectItem value="pending">قيد التفعيل</SelectItem>
-                      <SelectItem value="expired">منتهي</SelectItem>
-                      <SelectItem value="terminated">مفسوخ</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">ملاحظات</Label>
-                <Textarea
-                  value={editing.notes ?? ""}
-                  onChange={(e) => setEditing({ ...editing, notes: e.target.value || null })}
-                  rows={3}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>
-              <Button
-                rateLimitAware
-                disabled={updateMut.isPending || !editing.title.trim() || !editing.endDate}
-                onClick={() => updateMut.mutate({
-                  id: editing.id,
-                  patch: {
-                    title: editing.title,
-                    startDate: editing.startDate,
-                    endDate: editing.endDate,
-                    contractValue: editing.contractValue,
-                    status: editing.status,
-                    notes: editing.notes,
-                  },
-                })}
-              >
-                حفظ
-              </Button>
-            </DialogFooter>
+            ) : (
+              <p className="text-sm text-muted-foreground">جارٍ التحميل...</p>
+            )}
           </DialogContent>
         </Dialog>
       )}
 
-      {deleting && (
-        <ConfirmDeleteDialog
-          open={!!deleting}
-          onOpenChange={(o) => { if (!o) setDeleting(null); }}
-          entity={{ type: "vendor-contract", id: deleting.id, name: deleting.title }}
-          deletePath={`/finance/contracts/${deleting.id}`}
-          invalidateKeys={[["vendor-contracts"]]}
-          successMessage="تم حذف العقد"
-          onDeleted={() => setDeleting(null)}
+      {deletingId !== null && (
+        <InlineDeleteConfirm
+          onConfirm={() => handleDelete(deletingId)}
+          onCancel={cancelDelete}
+          isPending={isPending}
         />
       )}
     </PageShell>

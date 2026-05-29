@@ -27,6 +27,10 @@ const AdminSystemRegistry = lazy(() => import("@/pages/admin-system-registry"));
 const AdminPrintTemplates = lazy(() => import("@/pages/admin/print-templates"));
 const AdminPrintDiagnostics = lazy(() => import("@/pages/admin/print-diagnostics"));
 const AdminApprovalOverrides = lazy(() => import("@/pages/admin/approval-overrides-report"));
+const AdminPdpl = lazy(() => import("@/pages/admin-pdpl"));
+const AdminDataImport = lazy(() => import("@/pages/admin-data-import"));
+const AdminIntelligencePlayground = lazy(() => import("@/pages/admin-intelligence-playground"));
+const AdminDigitalSignature = lazy(() => import("@/pages/admin-digital-signature"));
 
 export const adminRoutes = [
   { path: "/admin", component: Admin },
@@ -56,4 +60,8 @@ export const adminRoutes = [
   { path: "/admin/print-templates", component: AdminPrintTemplates },
   { path: "/admin/print-diagnostics", component: AdminPrintDiagnostics },
   { path: "/admin/approval-overrides", component: AdminApprovalOverrides },
+  { path: "/admin/pdpl", component: AdminPdpl },
+  { path: "/admin/data-import", component: AdminDataImport },
+  { path: "/admin/intelligence-playground", component: AdminIntelligencePlayground },
+  { path: "/admin/digital-signature", component: AdminDigitalSignature },
 ];
