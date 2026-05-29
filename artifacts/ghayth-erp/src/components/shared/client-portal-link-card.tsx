@@ -32,6 +32,14 @@ export interface ClientPortalLinkCardProps {
   linkedClientName?: string | null;
   perm: string;
   onUpdated?: () => void;
+  /**
+   * Query keys to invalidate after a successful link/unlink. Each host page
+   * uses its own query key shape (tenant-detail uses ["tenant-detail", id],
+   * legal-case detail uses ["legal-case", id], etc.), so the card cannot
+   * guess — caller must pass the exact keys to refresh. Optional; the
+   * card always also calls `onUpdated` so refetch() works without keys.
+   */
+  invalidateKeys?: ReadonlyArray<ReadonlyArray<unknown>>;
 }
 
 const ENTITY_LABEL: Record<ClientPortalLinkCardProps["entityType"], { ar: string; section: string }> = {
@@ -47,9 +55,13 @@ export function ClientPortalLinkCard({
   linkedClientName,
   perm,
   onUpdated,
+  invalidateKeys,
 }: ClientPortalLinkCardProps) {
   const [open, setOpen] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState<string>(linkedClientId ? String(linkedClientId) : "");
+  // linkedClientId == null means "no link"; explicit `!= null` so an id of 0
+  // (theoretical, but defensible) doesn't get treated as "unlinked".
+  const isLinked = linkedClientId != null;
+  const [selectedClientId, setSelectedClientId] = useState<string>(isLinked ? String(linkedClientId) : "");
   const queryClient = useQueryClient();
   const meta = ENTITY_LABEL[entityType];
 
@@ -59,11 +71,11 @@ export function ClientPortalLinkCard({
   // { account: PortalAccountRow | null }.
   const { data: portalResp } = useApiQuery<{ account: { isActive: boolean; lastLoginAt?: string | null } | null }>(
     ["client-portal-account", String(linkedClientId ?? "")],
-    linkedClientId ? `/clients/${linkedClientId}/portal-account` : null,
+    isLinked ? `/clients/${linkedClientId}/portal-account` : null,
   );
   const portalStatus = portalResp?.account
     ? { hasPortalAccount: portalResp.account.isActive, lastLoginAt: portalResp.account.lastLoginAt ?? null }
-    : linkedClientId
+    : isLinked
       ? { hasPortalAccount: false, lastLoginAt: null }
       : undefined;
 
@@ -72,19 +84,21 @@ export function ClientPortalLinkCard({
     "PATCH",
     [],
     {
-      successMessage: linkedClientId ? "تم تحديث الربط" : "تم ربط حساب العميل",
+      successMessage: isLinked ? "تم تحديث الربط" : "تم ربط حساب العميل",
       onSuccess: () => {
         setOpen(false);
-        // Invalidate the parent detail query + any list queries that
-        // would render the link. Caller is expected to refetch via
-        // onUpdated; this is a belt-and-suspenders pass.
-        queryClient.invalidateQueries({ queryKey: [`${entityType}-detail`] });
+        // Invalidate caller-provided keys (each host page uses its own
+        // shape) + always call onUpdated so refetch() picks up the new
+        // linkedClientId without depending on key conventions.
+        if (invalidateKeys) {
+          for (const key of invalidateKeys) {
+            queryClient.invalidateQueries({ queryKey: key as unknown[] });
+          }
+        }
         onUpdated?.();
       },
     },
   );
-
-  const isLinked = linkedClientId != null;
 
   return (
     <>
@@ -99,7 +113,7 @@ export function ClientPortalLinkCard({
             size="sm"
             variant="outline"
             onClick={() => {
-              setSelectedClientId(linkedClientId ? String(linkedClientId) : "");
+              setSelectedClientId(isLinked ? String(linkedClientId) : "");
               setOpen(true);
             }}
           >

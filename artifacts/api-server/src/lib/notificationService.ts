@@ -93,6 +93,19 @@ async function logNotification(
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
       [companyId, channel, recipient, subject, body, status, errorMessage ?? null]
     );
+    // Phase 4 sweep: mirror to message_log. notification_log carries
+    // 'in_app' and 'webhook' channels alongside the message ones — the
+    // first is in the message_log check constraint, 'webhook' isn't, so
+    // we map unknown channels to 'in_app' for the unified row.
+    const mappedChannel = ['email','sms','whatsapp','push','in_app','internal','pbx'].includes(channel)
+      ? channel : 'in_app';
+    await rawExecute(
+      `INSERT INTO message_log
+         ("companyId", channel, direction, "toAddress", subject, body,
+          status, folder, "errorMessage", "createdAt")
+       VALUES ($1, $2, 'outbound', $3, $4, $5, $6, 'sent', $7, NOW())`,
+      [companyId, mappedChannel, recipient, subject, body, status, errorMessage ?? null]
+    ).catch(() => { /* non-critical */ });
   } catch (_: unknown) { /* non-critical */ }
 }
 
@@ -124,11 +137,20 @@ async function sendNotificationLegacy(payload: NotificationPayload): Promise<voi
         }
         await logNotification(companyId, channel, `assignment:${assignmentId ?? "broadcast"}`, title, body, "sent");
       } else if (channel === "email" && recipientEmail) {
+        // Phase 4 sweep: dual-write to outbound_queue alongside the
+        // legacy email_queue so the unified table sees every send.
         await rawExecute(
           `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
            VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
           [companyId, recipientEmail, recipientName ?? "", title, body, refType ?? null, refId ?? null]
         );
+        await rawExecute(
+          `INSERT INTO outbound_queue
+             ("companyId", channel, recipient, "recipientName", subject, body,
+              status, "refType", "refId", "createdAt", "updatedAt")
+           VALUES ($1, 'email', $2, $3, $4, $5, 'pending', $6, $7, NOW(), NOW())`,
+          [companyId, recipientEmail, recipientName ?? null, title, body, refType ?? null, refId ?? null]
+        ).catch((e) => logger.warn(`[notificationService] outbound_queue email dual-write failed: ${e instanceof Error ? e.message : String(e)}`));
         await logNotification(companyId, channel, recipientEmail, title, body, "queued");
       } else if (channel === "sms" && recipientPhone) {
         await rawExecute(
@@ -136,6 +158,13 @@ async function sendNotificationLegacy(payload: NotificationPayload): Promise<voi
            VALUES ($1, $2, $3, 'pending', NOW())`,
           [companyId, recipientPhone, `${title}: ${body}`]
         );
+        await rawExecute(
+          `INSERT INTO outbound_queue
+             ("companyId", channel, recipient, body, status,
+              "refType", "refId", "createdAt", "updatedAt")
+           VALUES ($1, 'sms', $2, $3, 'pending', $4, $5, NOW(), NOW())`,
+          [companyId, recipientPhone, `${title}: ${body}`, refType ?? null, refId ?? null]
+        ).catch((e) => logger.warn(`[notificationService] outbound_queue sms dual-write failed: ${e instanceof Error ? e.message : String(e)}`));
         await logNotification(companyId, channel, recipientPhone, title, body, "queued");
       } else if (channel === "whatsapp" && (recipientWhatsApp || recipientPhone)) {
         const phone = recipientWhatsApp ?? recipientPhone ?? "";
@@ -144,6 +173,13 @@ async function sendNotificationLegacy(payload: NotificationPayload): Promise<voi
            VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())`,
           [companyId, phone, recipientName ?? "", clientId ?? null, assignmentId ?? null, `${title}: ${body}`]
         );
+        await rawExecute(
+          `INSERT INTO outbound_queue
+             ("companyId", channel, recipient, "recipientName", body, status,
+              "refType", "refId", "createdAt", "updatedAt")
+           VALUES ($1, 'whatsapp', $2, $3, $4, 'pending', $5, $6, NOW(), NOW())`,
+          [companyId, phone, recipientName ?? null, `${title}: ${body}`, refType ?? null, refId ?? null]
+        ).catch((e) => logger.warn(`[notificationService] outbound_queue whatsapp dual-write failed: ${e instanceof Error ? e.message : String(e)}`));
         await logNotification(companyId, channel, phone, title, body, "queued");
       }
     } catch (err) {

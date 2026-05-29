@@ -33,6 +33,13 @@ import { runAllProactiveChecks, registerProactiveEventListeners } from "./proact
 import { eventBus } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
+import {
+  fleetTelematicsRetention,
+  fleetTelematicsHeartbeat,
+  fleetTelematicsPoll,
+} from "./fleet/telematicsCron.js";
+import { telematicsBreaker } from "./fleet/telematicsReliability.js";
+import { setupBreakerCoordination } from "./fleet/telematicsBreakerCoordinator.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
 import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
@@ -2420,11 +2427,13 @@ async function monthlyAutoDepreciation(): Promise<string> {
               accountCode: (asset.depreciationAccountCode as string | undefined) ?? "6100",
               debit: depAmount,
               credit: 0,
+              assetId: Number(asset.id),
             },
             {
               accountCode: (asset.accDepreciationAccountCode as string | undefined) ?? "1590",
               debit: 0,
               credit: depAmount,
+              assetId: Number(asset.id),
             },
           ],
           status: "posted",
@@ -2544,11 +2553,19 @@ async function runScheduledReports(): Promise<string> {
               }],
             });
             for (const email of recipients) {
+              // Phase 4 sweep: dual-write to outbound_queue.
               await rawExecute(
                 `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, metadata, status, "createdAt")
                  VALUES ($1, $2, '', $3, $4, $5::jsonb, 'pending', NOW())`,
                 [report.companyId, email, subject, body, metadataJson]
               );
+              await rawExecute(
+                `INSERT INTO outbound_queue
+                   ("companyId", channel, recipient, subject, body, metadata,
+                    status, "createdAt", "updatedAt")
+                 VALUES ($1, 'email', $2, $3, $4, $5::jsonb, 'pending', NOW(), NOW())`,
+                [report.companyId, email, subject, body, metadataJson]
+              ).catch((e) => logger.warn(e, "[cronScheduler scheduled-report] outbound_queue dual-write failed"));
               queued++;
             }
           } catch (queueErr) {
@@ -3607,11 +3624,19 @@ async function sendInfraAdminEmails(
   for (const toEmail of emails) {
     if (exclude.has(toEmail.toLowerCase())) continue;
     try {
+      // Phase 4 sweep: dual-write to outbound_queue.
       await rawExecute(
         `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
          VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
         [pivotCompanyId, toEmail, "Infra Admin", title, body, "system_health", null]
       );
+      await rawExecute(
+        `INSERT INTO outbound_queue
+           ("companyId", channel, recipient, "recipientName", subject, body,
+            status, "refType", "createdAt", "updatedAt")
+         VALUES ($1, 'email', $2, 'Infra Admin', $3, $4, 'pending', 'system_health', NOW(), NOW())`,
+        [pivotCompanyId, toEmail, title, body]
+      ).catch((e) => logger.warn(e, "[cronScheduler infra-alert] outbound_queue dual-write failed"));
       queued++;
     } catch (e) {
       logger.error(e, `[cronScheduler] failed to queue infra-admin email for ${toEmail} (${type})`);
@@ -3772,6 +3797,9 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
+  { name: "fleet_telematics_retention", description: "تنظيف بيانات Telematics القديمة (مواقع + سجلات مزامنة + جلسات بث منتهية)", schedule: "0 3 * * *", handler: fleetTelematicsRetention },
+  { name: "fleet_telematics_heartbeat", description: "كشف الأجهزة غير المتصلة بناءً على آخر موقع", schedule: "*/2 * * * *", handler: fleetTelematicsHeartbeat },
+  { name: "fleet_telematics_poll", description: "Auto-poll للمواقع من CMSV6 لكل تكامل نشط (مع retry + circuit breaker)", schedule: "* * * * *", handler: fleetTelematicsPoll },
   { name: "leave_escalation_check", description: "تصعيد طلبات الإجازة", schedule: "0 7 * * *", handler: leaveEscalationCheck },
   { name: "leave_return_to_work_closure", description: "إغلاق الإجازات المنتهية وتنبيه العودة للعمل", schedule: "5 0 * * *", handler: leaveReturnToWorkClosure },
   { name: "inquiry_memo_escalation", description: "تصعيد محاضر الاستفسار المعلقة 72 ساعة", schedule: "0 */6 * * *", handler: inquiryMemoEscalation },
@@ -3953,6 +3981,13 @@ const scheduledTasks: ReturnType<typeof cron.schedule>[] = [];
 export async function startCronScheduler(): Promise<void> {
   await seedCronJobs();
   registerProactiveEventListeners();
+  // #1354 — wire the telematics breaker into cross-replica Redis pub/sub.
+  // No-ops when REDIS_URL is unset (single-replica deployments behave
+  // exactly as before). When configured, this is the path that closes
+  // Known Limitation #1 from the Phase 2 commit.
+  void setupBreakerCoordination(telematicsBreaker).catch((err) => {
+    logger.warn({ err }, "[CRON] telematics breaker coordination init failed");
+  });
 
   for (const def of JOB_DEFINITIONS) {
     try {

@@ -598,6 +598,7 @@ export default function LegalCaseDetail() {
             linkedClientName={caseData.clientName ?? null}
             perm="legal.cases:update"
             onUpdated={refetch}
+            invalidateKeys={[["legal-case", String(id)], ["legal-cases"]]}
           />
         )}
         {id && <EntityObligations entityType="legal-case" entityId={Number(id)} hideWhenEmpty />}

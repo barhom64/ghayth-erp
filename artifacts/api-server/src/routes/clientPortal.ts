@@ -21,6 +21,8 @@ const router = Router();
 interface PortalAccountStatusRow {
   id: number;
   isActive: boolean;
+  tokenVersion: number;
+  clientDeletedAt: string | null;
 }
 
 interface PortalAccountLoginRow {
@@ -30,6 +32,7 @@ interface PortalAccountLoginRow {
   passwordHash: string;
   isActive: boolean;
   mustChangePassword: boolean;
+  tokenVersion: number;
   clientName: string;
   clientEmail: string | null;
   clientPhone: string | null;
@@ -128,10 +131,18 @@ export interface PortalScope {
   accountId: number;
   clientId: number;
   companyId: number;
+  /**
+   * Snapshot of client_portal_accounts.tokenVersion at the moment the
+   * JWT was signed. The middleware compares this against the current DB
+   * value on every request, so bumping the column (on password change,
+   * forced logout, etc.) invalidates all previously-issued JWTs
+   * immediately instead of waiting for the 7-day expiry.
+   */
+  tokenVersion: number;
   type: string;
 }
 
-function signPortalToken(payload: { accountId: number; clientId: number; companyId: number }) {
+function signPortalToken(payload: { accountId: number; clientId: number; companyId: number; tokenVersion: number }) {
   return jwt.sign({ ...payload, type: "client_portal" }, SECRET!, { expiresIn: "7d" });
 }
 
@@ -153,7 +164,13 @@ async function portalAuthMiddleware(req: Request & { portalScope?: PortalScope }
       return;
     }
     const [account] = await rawQuery<PortalAccountStatusRow>(
-      `SELECT id, "isActive" FROM client_portal_accounts WHERE id = $1 AND "clientId" = $2 AND "companyId" = $3`,
+      `SELECT cpa.id, cpa."isActive", cpa."tokenVersion",
+              c."deletedAt" AS "clientDeletedAt"
+         FROM client_portal_accounts cpa
+         JOIN clients c
+           ON c.id = cpa."clientId"
+          AND c."companyId" = cpa."companyId"
+        WHERE cpa.id = $1 AND cpa."clientId" = $2 AND cpa."companyId" = $3`,
       [payload.accountId, payload.clientId, payload.companyId]
     );
     if (!account) {
@@ -162,6 +179,16 @@ async function portalAuthMiddleware(req: Request & { portalScope?: PortalScope }
     }
     if (!account.isActive) {
       throw new ForbiddenError("الحساب موقوف، يرجى التواصل مع الدعم");
+    }
+    if (account.clientDeletedAt) {
+      throw new ForbiddenError("الحساب موقوف، يرجى التواصل مع الدعم");
+    }
+    // tokenVersion gate: any password change / forced logout bumps the
+    // column, so all previously-issued JWTs whose embedded snapshot is
+    // now stale get a 401 instead of remaining valid for the 7-day expiry.
+    if (Number(account.tokenVersion ?? 0) !== Number(payload.tokenVersion ?? 0)) {
+      res.status(401).json({ error: "الجلسة منتهية، يرجى تسجيل الدخول مجدداً" });
+      return;
     }
     req.portalScope = payload;
     next();
@@ -242,10 +269,14 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
     const { email: rawEmail, password } = body;
     const email = rawEmail.trim().toLowerCase();
     const [account] = await rawQuery<PortalAccountLoginRow>(
-      `SELECT cpa.id, cpa."clientId", cpa."companyId", cpa."passwordHash", cpa."isActive", cpa."mustChangePassword",
+      `SELECT cpa.id, cpa."clientId", cpa."companyId", cpa."passwordHash",
+              cpa."isActive", cpa."mustChangePassword", cpa."tokenVersion",
               c.name AS "clientName", c.email AS "clientEmail", c.phone AS "clientPhone"
        FROM client_portal_accounts cpa
-       JOIN clients c ON c.id = cpa."clientId"
+       JOIN clients c
+         ON c.id = cpa."clientId"
+        AND c."companyId" = cpa."companyId"
+        AND c."deletedAt" IS NULL
        WHERE cpa.email = $1`,
       [email]
     );
@@ -271,6 +302,7 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
       accountId: account.id,
       clientId: account.clientId,
       companyId: account.companyId,
+      tokenVersion: Number(account.tokenVersion ?? 0),
     });
     res.json({
       token,
@@ -318,7 +350,7 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
          (SELECT COUNT(*) FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS tickets,
          (SELECT COUNT(*) FROM projects WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS projects,
          (SELECT COUNT(*) FROM umrah_sub_agents WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "umrahSubAgents",
-         (SELECT COUNT(*) FROM tenants WHERE "clientId" = $1 AND "companyId" = $2)::int AS "tenantLinks",
+         (SELECT COUNT(*) FROM tenants WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "tenantLinks",
          (SELECT COUNT(*) FROM legal_cases WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "legalCases"`,
       params
     );
@@ -651,8 +683,17 @@ protectedRouter.patch("/profile/password", withPortalScope(async (req, res) => {
       return;
     }
     const newHash = await hashPassword(newPassword);
+    // Bump tokenVersion so every JWT issued before this password change
+    // (including the one the user is currently holding — they will be
+    // forced to re-login on the next request) is rejected by the
+    // middleware. This is the recovery path for stolen tokens.
     await portalScopedExecute(req.portalScope,
-      `UPDATE client_portal_accounts SET "passwordHash" = $1, "mustChangePassword" = false, "updatedAt" = NOW() WHERE id = $4 AND "clientId" = $2 AND "companyId" = $3`,
+      `UPDATE client_portal_accounts
+          SET "passwordHash" = $1,
+              "mustChangePassword" = false,
+              "tokenVersion" = COALESCE("tokenVersion", 0) + 1,
+              "updatedAt" = NOW()
+        WHERE id = $4 AND "clientId" = $2 AND "companyId" = $3`,
       [newHash, clientId, companyId, accountId]
     );
     createAuditLog({
@@ -874,7 +915,10 @@ protectedRouter.get("/umrah/invoices", withPortalScope(async (req, res) => {
               si."paidAmount", si.status, si."dueDate", si."pilgrimCount",
               sa.name AS "subAgentName"
          FROM umrah_sales_invoices si
-         JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
+         JOIN umrah_sub_agents sa
+           ON sa.id = si."subAgentId"
+          AND sa."companyId" = si."companyId"
+          AND sa."deletedAt" IS NULL
         WHERE sa."clientId" = $1 AND si."companyId" = $2 AND si."deletedAt" IS NULL
         ORDER BY si."invoiceDate" DESC LIMIT 100`,
       [scope.clientId, scope.companyId]
@@ -892,7 +936,10 @@ protectedRouter.get("/umrah/groups", withPortalScope(async (req, res) => {
       `SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
               g."programDuration", g.status, g."nuskInvoiceNumber", g."createdAt"
          FROM umrah_groups g
-         JOIN umrah_sub_agents sa ON sa.id = g."subAgentId"
+         JOIN umrah_sub_agents sa
+           ON sa.id = g."subAgentId"
+          AND sa."companyId" = g."companyId"
+          AND sa."deletedAt" IS NULL
         WHERE sa."clientId" = $1 AND g."companyId" = $2 AND g."deletedAt" IS NULL
         ORDER BY g."createdAt" DESC LIMIT 100`,
       [scope.clientId, scope.companyId]
@@ -910,7 +957,10 @@ protectedRouter.get("/umrah/payments", withPortalScope(async (req, res) => {
       `SELECT p.id, p.ref, p."paymentDate", p.amount, p.currency, p."sarAmount",
               p.method, p."externalReference"
          FROM umrah_payments p
-         JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
+         JOIN umrah_sub_agents sa
+           ON sa.id = p."subAgentId"
+          AND sa."companyId" = p."companyId"
+          AND sa."deletedAt" IS NULL
         WHERE sa."clientId" = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL
         ORDER BY p."paymentDate" DESC LIMIT 100`,
       [scope.clientId, scope.companyId]
@@ -937,8 +987,11 @@ protectedRouter.get("/property/contracts", withPortalScope(async (req, res) => {
               rc."autoRenewal", rc."renewalNoticeDays",
               u."unitNumber", u."buildingName", u.address AS "unitAddress"
          FROM rental_contracts rc
-         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
-         LEFT JOIN property_units u ON u.id = rc."unitId" AND u."companyId" = rc."companyId"
+         JOIN tenants t
+           ON t.id = rc."tenantId"
+          AND t."companyId" = rc."companyId"
+          AND t."deletedAt" IS NULL
+         LEFT JOIN property_units u ON u.id = rc."unitId" AND u."companyId" = rc."companyId" AND u."deletedAt" IS NULL
         WHERE t."clientId" = $1 AND rc."companyId" = $2 AND rc."deletedAt" IS NULL
         ORDER BY rc."startDate" DESC LIMIT 100`,
       [scope.clientId, scope.companyId]
@@ -961,7 +1014,10 @@ protectedRouter.get("/property/rent-payments", withPortalScope(async (req, res) 
               (CURRENT_DATE - rp."dueDate") AS "daysPastDue"
          FROM rent_payments rp
          JOIN rental_contracts rc ON rc.id = rp."contractId" AND rc."deletedAt" IS NULL
-         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+         JOIN tenants t
+           ON t.id = rc."tenantId"
+          AND t."companyId" = rc."companyId"
+          AND t."deletedAt" IS NULL
         WHERE t."clientId" = $1 AND rc."companyId" = $2
         ORDER BY rp."dueDate" DESC LIMIT 200`,
       [scope.clientId, scope.companyId]
@@ -982,7 +1038,10 @@ protectedRouter.get("/property/maintenance-requests", withPortalScope(async (req
               u."unitNumber", u."buildingName"
          FROM maintenance_requests mr
          JOIN rental_contracts rc ON rc.id = mr."contractId" AND rc."deletedAt" IS NULL
-         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+         JOIN tenants t
+           ON t.id = rc."tenantId"
+          AND t."companyId" = rc."companyId"
+          AND t."deletedAt" IS NULL
          LEFT JOIN property_units u ON u.id = mr."unitId" AND u."companyId" = mr."companyId"
         WHERE t."clientId" = $1 AND mr."companyId" = $2
         ORDER BY mr."createdAt" DESC LIMIT 100`,
