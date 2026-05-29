@@ -29,6 +29,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { AllocationHealthCard } from "@/components/shared/allocation-health-card";
 
 /**
  * Finance Dashboard — R.1.5 of the Reference UI/UX phase.
@@ -279,6 +280,43 @@ export default function FinanceDashboard() {
         </div>
       }
     >
+      {/* ── Allocation engine health — surfaced at the top of finance so the
+           enforce flag + coverage % + bypass count are always visible from
+           the home page, not buried in settings (integration polish). ── */}
+      <AllocationHealthCard />
+
+      {/* ── Hero workflows row — quick access to the most-used integrative pages ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 mb-4">
+        <Link href="/finance/workflows-hub" className="border rounded p-2 text-center hover:bg-status-info-surface transition group">
+          <div className="text-[11px] text-muted-foreground">سير العمل</div>
+          <div className="text-xs font-semibold">مركز الـ 50+</div>
+        </Link>
+        <Link href="/finance/cfo-cockpit" className="border rounded p-2 text-center hover:bg-muted/30 transition">
+          <div className="text-[11px] text-muted-foreground">CFO</div>
+          <div className="text-xs font-semibold">Cockpit</div>
+        </Link>
+        <Link href="/finance/daily-close-checklist" className="border rounded p-2 text-center hover:bg-muted/30 transition">
+          <div className="text-[11px] text-muted-foreground">روتين يومي</div>
+          <div className="text-xs font-semibold">فحص الإغلاق</div>
+        </Link>
+        <Link href="/finance/monthly-close-pack" className="border rounded p-2 text-center hover:bg-muted/30 transition">
+          <div className="text-[11px] text-muted-foreground">إقفال شهري</div>
+          <div className="text-xs font-semibold">حزمة الإقفال</div>
+        </Link>
+        <Link href="/finance/customer-360-sheet" className="border rounded p-2 text-center hover:bg-muted/30 transition">
+          <div className="text-[11px] text-muted-foreground">ملف 360°</div>
+          <div className="text-xs font-semibold">عميل</div>
+        </Link>
+        <Link href="/finance/vendor-360-sheet" className="border rounded p-2 text-center hover:bg-muted/30 transition">
+          <div className="text-[11px] text-muted-foreground">ملف 360°</div>
+          <div className="text-xs font-semibold">مورد</div>
+        </Link>
+        <Link href="/finance/cash-position-calculator" className="border rounded p-2 text-center hover:bg-muted/30 transition">
+          <div className="text-[11px] text-muted-foreground">سيولة</div>
+          <div className="text-xs font-semibold">حاسبة النقد</div>
+        </Link>
+      </div>
+
       {/* ── KPI row ── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiTile

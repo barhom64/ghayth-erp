@@ -34,6 +34,7 @@ const Marketing = lazy(() => import("@/pages/marketing"));
 const MarketingCreate = lazy(() => import("@/pages/create/marketing-create"));
 const Notifications = lazy(() => import("@/pages/notifications"));
 const Intelligence = lazy(() => import("@/pages/intelligence"));
+const AiWorkbench = lazy(() => import("@/pages/ai-workbench"));
 const Insights = lazy(() => import("@/pages/insights"));
 const Automation = lazy(() => import("@/pages/automation"));
 const ActivityLog = lazy(() => import("@/pages/activity-log"));
@@ -48,6 +49,8 @@ const MyLoans = lazy(() => import("@/pages/my-loans"));
 const MyOvertime = lazy(() => import("@/pages/my-overtime"));
 const ActionCenter = lazy(() => import("@/pages/action-center"));
 const ManagerBoard = lazy(() => import("@/pages/manager-board"));
+const Workspace = lazy(() => import("@/pages/workspace"));
+const ManagerWorkspace = lazy(() => import("@/pages/manager-workspace"));
 const ReprintApprovals = lazy(() => import("@/pages/manager-board/reprint-approvals"));
 const ModuleDashboards = lazy(() => import("@/pages/module-dashboards"));
 const OperationsCenter = lazy(() => import("@/pages/operations-center"));
@@ -73,6 +76,8 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/my-loans", component: MyLoans },
   { path: "/my-overtime", component: MyOvertime },
   { path: "/action-center", component: ActionCenter },
+  { path: "/workspace", component: Workspace },
+  { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 40 },
   { path: "/obligations", component: Obligations, module: "operations" },
   { path: "/calendar", component: CalendarPage },
   { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 60 },
@@ -121,6 +126,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/tasks", component: Tasks, module: "operations" },
   { path: "/notifications", component: Notifications },
   { path: "/intelligence", component: Intelligence, module: "bi" },
+  { path: "/intelligence/ai-workbench", component: AiWorkbench, module: "bi" },
   { path: "/insights", component: Insights, module: "bi" },
   { path: "/automation", component: Automation, module: "admin" },
   { path: "/activity-log", component: ActivityLog },

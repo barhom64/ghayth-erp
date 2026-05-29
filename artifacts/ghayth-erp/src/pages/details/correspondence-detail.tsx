@@ -5,8 +5,9 @@
  * مع إجراءات التعديل والطباعة والتذييل المسبق لمذكرة الرد.
  */
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useRoute } from "wouter";
+import { z } from "zod";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -15,17 +16,19 @@ import {
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Paperclip, Eye, Inbox, SendHorizonal, Mail } from "lucide-react";
+import { Edit, Paperclip, Eye, Inbox, SendHorizonal, Mail, Send, Reply } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import {
-  useDetailEditDelete,
-  DetailActionButtons,
-  InlineEditCard,
-} from "@/components/shared/detail-edit-delete-actions";
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+} from "@workspace/ui-core";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -75,12 +78,24 @@ function statusTone(status: string) {
   return "default" as const;
 }
 
+const correspondenceEditSchema = z.object({
+  subject: z.string().min(1, "الموضوع مطلوب"),
+  content: z.string().optional().default(""),
+  senderName: z.string().optional().default(""),
+  senderOrg: z.string().optional().default(""),
+  recipientName: z.string().optional().default(""),
+  recipientOrg: z.string().optional().default(""),
+  channel: z.enum(["internal", "email", "courier", "fax", "hand_delivery", "post"]),
+  notes: z.string().optional().default(""),
+});
+type CorrespondenceEditForm = z.infer<typeof correspondenceEditSchema>;
+
 export default function CorrespondenceDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/correspondence/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("correspondence", id ?? 0);
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["correspondence-detail", String(id)],
@@ -90,20 +105,23 @@ export default function CorrespondenceDetail() {
 
   const item = data;
 
-  const editDelete = useDetailEditDelete({
-    entityLabel: "المراسلة",
-    patchPath: `/correspondence/${id}`,
-    listPath: "/comms/correspondence",
-    initialValues: item,
-    fields: [
-      { key: "subject", label: "الموضوع" },
-      { key: "summary", label: "الملخص" },
-      { key: "status", label: "الحالة" },
-      { key: "notes", label: "ملاحظات" },
-    ],
-    invalidateKeys: [["correspondence-detail", String(id)], ["correspondence"]],
-    onSaved: () => refetch(),
-  });
+  // Outbound drafts get "Send"; received items get "Respond". Both hit
+  // their own POST endpoint and flip the correspondence status — the
+  // list page already exposes them per-row but the detail view didn't,
+  // so an operator opening a draft to review had to bounce back to the
+  // list to fire it.
+  const sendMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/correspondence/${b.id}/send`,
+    "POST",
+    [["correspondence-detail", String(id)], ["correspondence"]],
+    { successMessage: "تم الإرسال" },
+  );
+  const respondMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/correspondence/${b.id}/respond`,
+    "POST",
+    [["correspondence-detail", String(id)], ["correspondence"]],
+    { successMessage: "تم تسجيل الرد" },
+  );
 
   const attachments: Array<{ name: string; url?: string; id?: number; mimeType?: string; size?: number }> = useMemo(() => {
     if (!item?.attachments) return [];
@@ -140,16 +158,10 @@ export default function CorrespondenceDetail() {
   }, [item]);
 
 
-  const handleEdit = () => {
-    setLocation(`/correspondence/${id}/edit`);
-  };
-
   const DirectionIcon = item?.direction === "outgoing" ? SendHorizonal : Inbox;
   const directionTone = item?.direction === "outgoing" ? "bg-status-info-surface text-status-info-foreground border-status-info-surface" : "bg-emerald-50 text-emerald-700 border-emerald-200";
 
   const overview = (
-    <div className="space-y-4">
-      <InlineEditCard hook={editDelete} />
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
@@ -298,7 +310,6 @@ export default function CorrespondenceDetail() {
       {id && <EntityComments entityType="correspondence" entityId={id} />}
       {id && <EntityTags entityType="correspondence" entityId={id} />}
     </div>
-    </div>
   );
 
   return (
@@ -333,19 +344,86 @@ export default function CorrespondenceDetail() {
                 formats={["a4"]}/>
             )}
             <GuardedButton
-              perm="comms:update"
+              perm="communications:create"
               variant="outline"
               size="sm"
-              onClick={handleEdit}
+              onClick={() => setEditOpen(true)}
               disabled={!item || item.status !== "draft"}
+              title={item && item.status !== "draft" ? "التعديل متاح للمسودات فقط" : undefined}
             >
               <Edit className="h-4 w-4 ms-1" />
               تعديل
             </GuardedButton>
-            <DetailActionButtons hook={editDelete} editPerm="comms:update" />
+            {item && id && item.direction === "outgoing" && item.status === "draft" && (
+              <GuardedButton
+                perm="communications:create"
+                variant="default"
+                size="sm"
+                onClick={() => sendMut.mutate({ id })}
+                disabled={sendMut.isPending}
+              >
+                <Send className="h-4 w-4 ms-1" />
+                إرسال
+              </GuardedButton>
+            )}
+            {item && id && item.direction === "incoming" && item.status !== "archived" && !item.responseRef && (
+              <GuardedButton
+                perm="communications:create"
+                variant="outline"
+                size="sm"
+                onClick={() => respondMut.mutate({ id })}
+                disabled={respondMut.isPending}
+              >
+                <Reply className="h-4 w-4 ms-1" />
+                تسجيل رد
+              </GuardedButton>
+            )}
           </>
         }
       />
+      {item && id && (
+        <EntityEditDialog<CorrespondenceEditForm>
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          title="تعديل المراسلة"
+          schema={correspondenceEditSchema}
+          defaultValues={{
+            subject: item.subject ?? "",
+            content: item.content ?? "",
+            senderName: item.senderName ?? "",
+            senderOrg: item.senderOrg ?? "",
+            recipientName: item.recipientName ?? "",
+            recipientOrg: item.recipientOrg ?? "",
+            channel: (item.channel ?? "internal") as CorrespondenceEditForm["channel"],
+            notes: item.notes ?? "",
+          }}
+          endpoint={`/correspondence/${id}`}
+          invalidateKeys={[["correspondence-detail", String(id)], ["correspondence"]]}
+          onSaved={() => refetch()}
+        >
+          <FormGrid cols={2}>
+            <FormTextField name="subject" label="الموضوع" required className="md:col-span-2" />
+            <FormSelectField
+              name="channel"
+              label="القناة"
+              options={[
+                { value: "internal", label: "داخلي" },
+                { value: "email", label: "بريد إلكتروني" },
+                { value: "courier", label: "مراسل" },
+                { value: "fax", label: "فاكس" },
+                { value: "hand_delivery", label: "استلام يدوي" },
+                { value: "post", label: "بريد" },
+              ]}
+            />
+            <FormTextField name="senderName" label="اسم المرسل" />
+            <FormTextField name="senderOrg" label="جهة المرسل" />
+            <FormTextField name="recipientName" label="اسم المستلم" />
+            <FormTextField name="recipientOrg" label="جهة المستلم" />
+            <FormTextareaField name="content" label="المحتوى" className="md:col-span-2" />
+            <FormTextareaField name="notes" label="ملاحظات داخلية" className="md:col-span-2" />
+          </FormGrid>
+        </EntityEditDialog>
+      )}
       <AttachmentPreview
         attachment={previewAttachment}
         open={!!previewAttachment}

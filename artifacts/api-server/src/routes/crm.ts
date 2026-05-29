@@ -738,11 +738,31 @@ async function handleDealWon(scope: RequestScope, opp: CrmOpportunityRow, dealVa
         if (existing.length > 0) {
           clientId = existing[0].id;
         } else {
+          // G10 fix (Issue #1141 coverage report 2026-05-27) — when
+          // converting a CRM opportunity to a client, issue a real
+          // `code` through the numbering center instead of leaving the
+          // column NULL. The scheme is `crm.client_code` (seeded by
+          // migration 215). issueNumber joins this outer withTransaction
+          // via SAVEPOINT so issue + INSERT + link-back are atomic.
+          const issuedClient = await issueNumber({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            moduleKey: "crm",
+            entityKey: "client_code",
+            entityTable: "clients",
+            actorId: scope.userId,
+            metadata: { sourceOpportunityId: opp.id },
+            expectedTiming: "on_draft",
+          });
           const { rows: [newRow] } = await txClient.query(
-            `INSERT INTO clients ("companyId",name,phone,email,source,classification) VALUES ($1,$2,$3,$4,'crm','regular') RETURNING id`,
-            [scope.companyId, opp.contactName, opp.contactPhone || null, opp.contactEmail || null]
+            `INSERT INTO clients ("companyId",name,phone,email,source,classification,code) VALUES ($1,$2,$3,$4,'crm','regular',$5) RETURNING id`,
+            [scope.companyId, opp.contactName, opp.contactPhone || null, opp.contactEmail || null, issuedClient.number]
           );
           clientId = newRow.id;
+          await txClient.query(
+            `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+            [clientId, issuedClient.assignmentId]
+          );
         }
         await txClient.query(`UPDATE crm_opportunities SET "clientId"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [clientId, opp.id, scope.companyId]);
       });
@@ -761,6 +781,7 @@ async function handleDealWon(scope: RequestScope, opp: CrmOpportunityRow, dealVa
         entityTable: "legal_contracts",
         actorId: scope.userId,
         metadata: { sourceOpportunityId: opp.id },
+        expectedTiming: "on_draft",
       });
       const { crmEngine } = await import("../lib/engines/index.js");
       crmEngine.requestLegalContractCreation(

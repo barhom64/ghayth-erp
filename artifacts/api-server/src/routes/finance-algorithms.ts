@@ -1310,6 +1310,10 @@ financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "fi
   }
 });
 
+// Audit F5 — DOC. Defensive endpoint with no frontend caller (UI uses
+// `/rounding-differences/auto-clear`). Kept because
+// `financeVendorsReportsSmoke.test.ts` asserts its existence as part
+// of the algorithms-router smoke contract.
 financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;

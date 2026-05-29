@@ -243,7 +243,7 @@ export default function PurchaseRequestsPage() {
         { label: "طلبات الشراء" },
       ]}
       actions={
-        <Link href="/finance/purchase-requests/create">
+        <Link href="/finance/purchase-orders/create">
           <GuardedButton perm="finance:create">
             <Plus className="h-4 w-4 me-1" /> طلب جديد
           </GuardedButton>

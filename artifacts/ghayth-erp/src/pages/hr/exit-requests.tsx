@@ -40,15 +40,19 @@ export default function ExitRequestsPage() {
   const items = data?.data || [];
   const stats = data?.stats || {};
 
-  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-exit"]], {
-    successMessage: "تم اعتماد الطلب",
-  });
+  // Factory URL — see exit-detail commit for the body.__url rationale.
+  const approveMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/hr/exit/${b.id}/approve`,
+    "PATCH",
+    [["hr-exit"]],
+    { successMessage: "تم اعتماد الطلب" },
+  );
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
   const handleApprove = async (id: number) => {
-    await approveMut.mutateAsync({ __url: `/hr/exit/${id}/approve` } as any);
+    await approveMut.mutateAsync({ id });
     queryClient.invalidateQueries({ queryKey: ["hr-exit"] });
   };
 

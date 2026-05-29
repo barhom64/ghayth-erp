@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Phone, Mail, AlertTriangle, ChevronDown, ChevronRight, Search,
   ExternalLink, Download, Users, FileText, Clock, Send,
@@ -216,6 +217,25 @@ export default function ArCollectionWorkbenchPage() {
               <Download className="w-4 h-4 ml-1" />
               CSV
             </Button>
+            <PrintButton
+              entityType="report_ar_collection_plan"
+              entityId={today}
+              payload={{
+                entity: {
+                  title: "خطة التحصيل (الذمم المدينة)",
+                  asOfDate: today,
+                  totalOverdue,
+                  totalAccounts: totalCollectionAccounts,
+                },
+                items: filtered.map((c) => ({
+                  "العميل": c.clientName ?? "",
+                  "هاتف": c.clientPhone ?? "",
+                  "إجمالي مستحق": Number(c.total ?? 0),
+                  "متأخر": Number((c.total ?? 0) - (c.current ?? 0)),
+                  "+90 يوم": Number(c.over90 ?? 0),
+                })),
+              }}
+            />
           </div>
         </CardContent>
       </Card>
@@ -416,16 +436,16 @@ export default function ArCollectionWorkbenchPage() {
                           </tbody>
                         </table>
                         <div className="flex justify-end gap-2 mt-3 border-t pt-3">
-                          <Link href={`/finance/receivables/receipt?clientId=${c.clientId}`}>
-                            <Button size="sm" variant="outline">
-                              <FileText className="w-4 h-4 ml-1" />
-                              تسجيل دفعة
-                            </Button>
-                          </Link>
-                          <Link href={`/finance/entity-360?type=client&id=${c.clientId}`}>
+                          <Link href={`/finance/customer-360-sheet?clientId=${c.clientId}`}>
                             <Button size="sm" variant="outline">
                               <Users className="w-4 h-4 ml-1" />
-                              ملف العميل
+                              ملف العميل 360°
+                            </Button>
+                          </Link>
+                          <Link href={`/finance/customer-statement-print?clientId=${c.clientId}`}>
+                            <Button size="sm" variant="outline">
+                              <FileText className="w-4 h-4 ml-1" />
+                              كشف الحساب
                             </Button>
                           </Link>
                         </div>

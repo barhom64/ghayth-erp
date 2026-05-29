@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Grid3x3, Download, TrendingUp, TrendingDown, AlertTriangle, Info,
 } from "lucide-react";
@@ -142,6 +144,28 @@ export default function BudgetHeatmapPage() {
     <PageShell
       title="خريطة حرارية للميزانية"
       subtitle="استخدام الميزانية شهرياً × بنداً — ألوان فورية تكشف نقاط الانفجار"
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/reports/is-vs-budget">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <TrendingUp className="h-3.5 w-3.5 ml-1" />
+              P&L vs Budget
+            </Button>
+          </Link>
+          <Link href="/finance/budget-variance">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <TrendingDown className="h-3.5 w-3.5 ml-1" />
+              انحرافات الميزانية
+            </Button>
+          </Link>
+          <Link href="/finance/budget-approvals">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <AlertTriangle className="h-3.5 w-3.5 ml-1" />
+              اعتماد الميزانية
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
@@ -165,6 +189,28 @@ export default function BudgetHeatmapPage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_budget_heatmap"
+            entityId={String(year)}
+            payload={{
+              entity: {
+                title: "خريطة حرارية للموازنة",
+                year: String(year),
+                accountCount: accountMap.length,
+                totalBudget,
+                totalActual,
+                overrunCount,
+              },
+              items: accountMap.map((a) => ({
+                "الحساب": a.code,
+                "اسم الحساب": a.name,
+                "إجمالي الموازنة": a.totalBudget,
+                "إجمالي الفعلي": a.totalActual,
+                "الفارق": a.totalBudget - a.totalActual,
+                "% الاستخدام": a.totalBudget > 0 ? Math.round((a.totalActual / a.totalBudget) * 100) : 0,
+              })),
+            }}
+          />
         </CardContent>
       </Card>
 

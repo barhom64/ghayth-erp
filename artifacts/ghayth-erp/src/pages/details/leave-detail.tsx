@@ -1,19 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
 import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
-import {
-  useDetailEditDelete,
-  DetailActionButtons,
-} from "@/components/shared/detail-edit-delete-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { Edit, CalendarDays, XCircle } from "lucide-react";
+import { Edit, CalendarDays, XCircle, ChevronsUp, Trash2 } from "lucide-react";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
@@ -60,6 +56,8 @@ export default function LeaveDetail() {
   const [, params] = useRoute("/hr/leaves/:id");
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();
+  const [cancelling, setCancelling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["leave", String(id)],
@@ -69,51 +67,6 @@ export default function LeaveDetail() {
 
   const leave = data;
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("leave_request", id ?? 0);
-
-  const queryClient = useQueryClient();
-
-  // DELETE /hr/leave-requests/:id — soft-delete. Backend refuses on
-  // approved/cancelled leaves; the Edit/Delete buttons hide when the
-  // status enters a terminal state.
-  const editDelete = useDetailEditDelete({
-    entityLabel: "طلب الإجازة",
-    patchPath: `/hr/leave-requests/${id}`,
-    deletePath: `/hr/leave-requests/${id}`,
-    listPath: "/hr/leaves",
-    initialValues: leave,
-    fields: [
-      { key: "reason", label: "السبب" },
-      { key: "notes", label: "ملاحظات" },
-    ],
-    invalidateKeys: [["leave", String(id)], ["hr-leaves"]],
-    onSaved: () => refetch(),
-  });
-
-  const handleCancel = async () => {
-    // POST /hr/leave-requests/:id/cancel — requires reason; backend
-    // gates this to either the leave owner or HR.
-    const reason = window.prompt("سبب الإلغاء:");
-    if (reason === null) return;
-    if (!reason.trim()) {
-      toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
-      return;
-    }
-    try {
-      await apiFetch(`/hr/leave-requests/${id}/cancel`, {
-        method: "POST",
-        body: JSON.stringify({ reason: reason.trim() }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["leave", String(id)] });
-      toast({ title: "تم إلغاء الإجازة" });
-      refetch();
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "تعذر إلغاء الإجازة",
-        description: err.message || "حدث خطأ",
-      });
-    }
-  };
 
   const duration = useMemo(() => {
     if (leave?.duration) return leave.duration;
@@ -135,6 +88,40 @@ export default function LeaveDetail() {
     return out;
   }, [leave]);
 
+
+  const handleEscalate = async () => {
+    if (!id) return;
+    if (!window.confirm("سيتم تصعيد الطلب للمرحلة التالية إذا انقضت مهلة 48 ساعة. متابعة؟")) return;
+    try {
+      await apiFetch(`/hr/leave-requests/${id}/escalate`, {
+        method: "PATCH",
+        body: JSON.stringify({}),
+      });
+      toast({ title: "تم تصعيد الطلب" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التصعيد", description: err.message });
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!id) return;
+    const reason = window.prompt("سبب إلغاء الإجازة:", "");
+    if (reason == null) return;
+    setCancelling(true);
+    try {
+      await apiFetch(`/hr/leave-requests/${id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason || undefined }),
+      });
+      toast({ title: "تم إلغاء الإجازة" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر الإلغاء", description: err.message });
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const handleEdit = () => {
     setLocation(`/hr/leaves/${id}/edit`);
@@ -217,15 +204,12 @@ export default function LeaveDetail() {
                 approveEndpoint={`/hr/leave-requests/${id}/approve`}
                 rejectEndpoint={`/hr/leave-requests/${id}/approve`}
                 returnEndpoint={`/hr/leave-requests/${id}/approve`}
-                escalateEndpoint={`/hr/leave-requests/${id}/escalate`}
                 approveMethod="PATCH"
                 rejectMethod="PATCH"
                 returnMethod="PATCH"
-                escalateMethod="PATCH"
                 approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
                 rejectBody={(notes) => ({ approved: false, reason: notes })}
                 returnBody={(notes) => ({ approved: "returned", reason: notes })}
-                escalateBody={(notes) => ({ notes: notes || undefined })}
                 pendingStatuses={["pending", "returned"]}
                 invalidateKeys={[["leaves"], ["leave-requests"], ["leave-balance"], ["leave-stats"]]}
                 onDone={() => {
@@ -254,6 +238,7 @@ export default function LeaveDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={leave?.ref ? `إجازة ${leave.ref}` : "تفاصيل الإجازة"}
       subtitle={
@@ -310,16 +295,53 @@ export default function LeaveDetail() {
             perm="hr:update"
             variant="outline"
             size="sm"
+            className="text-status-error-foreground"
             onClick={handleCancel}
-            disabled={!leave || !["pending", "approved"].includes(leave?.status)}
-            rateLimitAware
+            disabled={!leave || leave.status !== "approved" || cancelling}
+            title={leave && leave.status !== "approved" ? "الإلغاء متاح للإجازات المعتمدة فقط" : undefined}
           >
             <XCircle className="h-4 w-4 ms-1" />
             إلغاء الإجازة
           </GuardedButton>
-          <DetailActionButtons hook={editDelete} editPerm="hr:update" deletePerm="hr:delete" />
+          {leave && leave.status === "pending" && (
+            <GuardedButton
+              perm="hr:update"
+              variant="outline"
+              size="sm"
+              onClick={handleEscalate}
+              title="يصبح متاحاً بعد 48 ساعة من بدء المرحلة الحالية"
+            >
+              <ChevronsUp className="h-4 w-4 ms-1" />
+              تصعيد
+            </GuardedButton>
+          )}
+          {leave && leave.status === "pending" && (
+            <GuardedButton
+              perm="hr:delete"
+              variant="outline"
+              size="sm"
+              className="text-status-error-foreground"
+              onClick={() => setDeleting(true)}
+              title="حذف الطلب — متاح للطلبات المعلقة فقط"
+            >
+              <Trash2 className="h-4 w-4 ms-1" />
+              حذف
+            </GuardedButton>
+          )}
         </>
       }
     />
+    {deleting && leave && id && (
+      <ConfirmDeleteDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        entity={{ type: "leave-request", id, name: `طلب إجازة #${id}` }}
+        deletePath={`/hr/leave-requests/${id}`}
+        invalidateKeys={[["leave", String(id)], ["leaves"], ["leave-requests"]]}
+        successMessage="تم حذف طلب الإجازة"
+        onDeleted={() => setLocation("/hr/leaves")}
+      />
+    )}
+    </>
   );
 }

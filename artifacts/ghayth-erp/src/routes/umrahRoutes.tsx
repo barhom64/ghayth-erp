@@ -6,6 +6,7 @@ const UmrahPilgrims = lazy(() => import("@/pages/umrah/pilgrims"));
 const UmrahAgents = lazy(() => import("@/pages/umrah/agents"));
 const UmrahSeasons = lazy(() => import("@/pages/umrah/seasons"));
 const UmrahPenalties = lazy(() => import("@/pages/umrah/penalties"));
+const UmrahPayments = lazy(() => import("@/pages/umrah/payments"));
 const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
 const UmrahImport = lazy(() => import("@/pages/umrah/import"));
 const UmrahImportWizard = lazy(() => import("@/pages/umrah/import-wizard"));
@@ -45,6 +46,11 @@ const UmrahGroups = lazy(() => import("@/pages/umrah/groups"));
 // via the embedded UmrahAttachmentsPanel; this page is read-only.
 const UmrahAttachments = lazy(() => import("@/pages/umrah/attachments"));
 
+// Sister page to /umrah/commission-plans — surfaces the historical
+// calculations and exposes POST /commission-plans/:id/calculate as a
+// dialog so a payroll admin can re-run for a given month/year.
+const UmrahCommissionCalculations = lazy(() => import("@/pages/umrah/commission-calculations"));
+
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
   { path: "/umrah/pilgrims", component: UmrahPilgrims, module: "operations" },
@@ -70,6 +76,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/pricing", component: UmrahPricing, module: "operations" },
   { path: "/umrah/sales-wizard", component: UmrahSalesWizard, module: "operations" },
   { path: "/umrah/commission-plans", component: UmrahCommissionPlans, module: "operations" },
+  { path: "/umrah/commission-calculations", component: UmrahCommissionCalculations, module: "operations" },
   { path: "/umrah/commission-plans/new", component: UmrahCommissionPlanEditor, module: "operations" },
   { path: "/umrah/commission-plans/:id/edit", component: UmrahCommissionPlanEditor, module: "operations" },
   { path: "/umrah/violations", component: UmrahViolations, module: "operations" },
@@ -78,6 +85,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/import", component: UmrahImportWizard, module: "operations" },
   { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
+  { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },
   { path: "/umrah/attachments", component: UmrahAttachments, module: "operations" },
 ];

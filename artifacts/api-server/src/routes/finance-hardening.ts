@@ -33,6 +33,7 @@ import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logger } from "../lib/logger.js";
 
 export const financeHardeningRouter = Router();
@@ -215,64 +216,26 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature:
     const periodId = parseId(req.params.id, "id");
     const { notes } = zodParse(closeFiscalPeriodSchema.safeParse(req.body ?? {}));
 
-    // Pre-flight: refuse close when the period still has unposted manual
-    // journals. The business rule lives here (not in applyTransition) so we
-    // can surface a ConflictError with structured `pendingCount` meta.
-    const [period] = await rawQuery<Record<string, unknown>>(
-      `SELECT id, name, "startDate", "endDate" FROM financial_periods WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [periodId, scope.companyId]
-    );
-    if (!period) throw new NotFoundError("الفترة غير موجودة");
-
-    // Count, don't sample. The UI renders meta.pendingCount as the actual
-    // number of blocking entries — a LIMIT 5 here would cap the message at
-    // "5 قيد يدوي" even for periods with 50+ blockers, which misleads the
-    // user about the scope of their cleanup.
-    const [pendingRow] = await rawQuery<{ pendingCount: string }>(
-      `SELECT COUNT(*)::text AS "pendingCount" FROM journal_entries
-       WHERE "companyId"=$1 AND "deletedAt" IS NULL
-         AND "createdAt"::date BETWEEN $2 AND $3
-         AND ("approvalStatus" IS NULL OR "approvalStatus" IN ('draft','pending_review'))
-         AND "isManual" = TRUE`,
-      [scope.companyId, period.startDate, period.endDate]
-    );
-    const pendingCount = Number(pendingRow?.pendingCount ?? 0);
-    if (pendingCount > 0) {
-      throw new ConflictError(
-        `لا يمكن إقفال الفترة: يوجد ${pendingCount} قيد يدوي لم يُرحّل بعد`,
-        {
-          field: "journalEntries",
-          fix: "ارحّل أو احذف القيود اليدوية المعلّقة قبل إقفال الفترة",
-          meta: { pendingCount },
-        },
-      );
-    }
-
-    // Central lifecycle engine: validates fromStates=['open'], writes
-    // status='closed' + audit trail + event_logs + eventBus emission
-    // atomically. Any attempt to close an already-closed period is rejected
-    // by the engine's fromStates check, not by a hand-written guard.
-    const updated = await applyTransition<Record<string, unknown>>({
-      entity: "financial_periods",
-      id: periodId,
-      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
-      action: "fiscal_period.closed",
-      fromStates: ["open"],
-      toState: "closed",
-      reason: notes ?? undefined,
-      extraWhere: `"deletedAt" IS NULL`,
-      setExtras: {
-        closedAt: { raw: "NOW()" },
-        closedBy: scope.activeAssignmentId,
-        ...(notes ? { notes } : {}),
+    // F3 — Delegated to the canonical helper. The helper performs the
+    // pending-JE guard, the lifecycle transition, the audit log, the
+    // event_logs row, and the eventBus emission inside a single
+    // transaction. The same helper is invoked by the year-end-close
+    // force path so the two close routes never diverge.
+    const closed = await closeFiscalPeriodCanonical({
+      periodId,
+      scope: {
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        userId: scope.userId,
+        activeAssignmentId: scope.activeAssignmentId,
       },
-      after: { name: period.name, notes: notes ?? null },
+      reason: notes,
     });
 
     res.json({
-      message: `تم إقفال الفترة المالية "${period.name}" بنجاح`,
+      message: `تم إقفال الفترة المالية "${closed.name}" بنجاح`,
       periodId,
-      status: updated.status,
+      status: closed.status,
       event: "fiscal_period.closed",
     });
   } catch (err) {
@@ -940,6 +903,7 @@ financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.ha
         entityKey: "bank_guarantee",
         entityTable: "bank_guarantees",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       ref = issuedBg.number;
     }
@@ -1469,6 +1433,7 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
         entityKey: "project",
         entityTable: "projects",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       projectRef = issuedProj.number;
     }

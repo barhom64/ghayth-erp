@@ -61,7 +61,11 @@ export default function JournalManualPage() {
   const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const [statusFilter, setStatusFilter] = useState("");
+  // Seed status from ?status=… so deep-links from CFO Cockpit land
+  // pre-filtered (e.g. /finance/journal-manual?status=pending_review).
+  const [statusFilter, setStatusFilter] = useState(() =>
+    new URLSearchParams(window.location.search).get("status") || "",
+  );
   const [actionModal, setActionModal] = useState<ActionModal | null>(null);
   const [actionNotes, setActionNotes] = useState("");
 
@@ -165,6 +169,7 @@ export default function JournalManualPage() {
         ]}
         queryKey={queryKey}
         endpoint={endpoint}
+        printEntityType="journal_entry"
         columns={columns}
         rowKey={(row) => String(row.id)}
         onRowClick={(row) => navigate(`/finance/journal-manual/${row.id}`)}

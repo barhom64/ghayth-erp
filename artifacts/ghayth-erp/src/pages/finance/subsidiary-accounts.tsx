@@ -143,7 +143,6 @@ export default function SubsidiaryAccountsPage() {
 
   const { data, isLoading, error, refetch } =
     entityFilter.type && entityFilter.id ? entityQ : listQ;
-
   const rows: SubsidiaryAccountRow[] = data?.data ?? [];
   const [filters, setFilters] = useFilters();
   const [creating, setCreating] = useState(false);
@@ -283,7 +282,6 @@ export default function SubsidiaryAccountsPage() {
           )}
         </CardContent>
       </Card>
-
       <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()}>
         <AdvancedFilters values={filters} onChange={setFilters} />
         <DataTable

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import {
@@ -307,10 +308,22 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
 
 
 
+// Multiple routes (/settings/branches, /settings/departments, ...) share this
+// component. Without this seed, every routed URL would land on the "general"
+// tab — same broken-tab pattern fixed on bi / governance / legal.
+const SETTINGS_PATH_TAB: Record<string, string> = {
+  "/settings/branches": "branches",
+  "/settings/departments": "departments",
+  "/settings/companies": "companies",
+  "/settings/audit-log": "audit",
+};
+
 export default function SettingsPage() {
+  const [location] = useLocation();
+  const initialTab = SETTINGS_PATH_TAB[location] ?? "general";
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="general" dir="rtl">
+      <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="flex flex-wrap gap-1">
           <TabsTrigger value="general">عام</TabsTrigger>
           <TabsTrigger value="branches">الفروع</TabsTrigger>

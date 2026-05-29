@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
-  FileText, Printer, TrendingUp, TrendingDown, AlertTriangle,
+  FileText, TrendingUp, TrendingDown, AlertTriangle,
   Banknote, Building2, Users, Clock, ChevronRight, Calendar,
 } from "lucide-react";
 import {
@@ -126,8 +126,6 @@ export default function MonthlyClosePackPage() {
     return ap.data.byVendor.slice().sort((a, b) => b.amount - a.amount).slice(0, 5);
   }, [ap.data]);
 
-  const print = () => window.print();
-
   return (
     <PageShell
       title="حزمة الإقفال الشهري"
@@ -163,10 +161,16 @@ export default function MonthlyClosePackPage() {
             </select>
           </div>
           <div className="flex-1" />
-          <Button variant="outline" size="sm" onClick={print}>
-            <Printer className="w-4 h-4 ml-1" />
-            طباعة
-          </Button>
+          <Link href="/finance/daily-close-checklist">
+            <Button variant="outline" size="sm">
+              فحص اليوم
+            </Button>
+          </Link>
+          <Link href="/finance/period-close-preflight">
+            <Button variant="outline" size="sm">
+              فحص الإقفال
+            </Button>
+          </Link>
         </CardContent>
       </Card>
 

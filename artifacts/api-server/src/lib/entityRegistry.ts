@@ -171,6 +171,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve", "hr:self"],
     notifications: ["leave_submitted", "leave_approved", "leave_rejected"],
     reports: ["leave_balance", "leave_summary"],
+    print: { hasTemplate: true, templateKey: "leave_request", formats: ["a4"], defaultFormat: "a4", permission: "print:leave_request:create" },
   },
   {
     id: "attendance",
@@ -188,6 +189,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:self"],
     notifications: ["late_arrival", "early_departure", "absence"],
     reports: ["attendance_daily", "attendance_monthly", "attendance_anomalies"],
+    print: { hasTemplate: true, templateKey: "attendance", formats: ["a4"], defaultFormat: "a4", permission: "print:attendance:create" },
   },
   {
     id: "overtime_request",
@@ -218,6 +220,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve", "hr:self"],
     notifications: ["overtime_submitted", "overtime_approved", "overtime_rejected"],
     reports: ["overtime_summary"],
+    print: { hasTemplate: true, templateKey: "overtime_request", formats: ["a4"], defaultFormat: "a4", permission: "print:overtime_request:create" },
   },
   {
     id: "official_letter",
@@ -278,6 +281,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve", "hr:self"],
     notifications: ["loan_submitted", "loan_approved", "loan_rejected"],
     reports: ["active_loans", "loan_deductions"],
+    print: { hasTemplate: true, templateKey: "loan_request", formats: ["a4"], defaultFormat: "a4", permission: "print:loan_request:create" },
   },
   {
     id: "exit_request",
@@ -308,6 +312,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve"],
     notifications: ["exit_submitted", "exit_approved", "exit_completed"],
     reports: ["exit_summary", "turnover_report"],
+    print: { hasTemplate: true, templateKey: "exit_request", formats: ["a4"], defaultFormat: "a4", permission: "print:exit_request:create" },
   },
   {
     id: "transfer",
@@ -337,6 +342,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve"],
     notifications: ["transfer_approved"],
     reports: [],
+    print: { hasTemplate: true, templateKey: "transfer", formats: ["a4"], defaultFormat: "a4", permission: "print:transfer:create" },
   },
   {
     id: "excuse_request",
@@ -366,6 +372,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve", "hr:self"],
     notifications: ["excuse_submitted", "excuse_approved", "excuse_rejected"],
     reports: [],
+    print: { hasTemplate: true, templateKey: "excuse_request", formats: ["a4"], defaultFormat: "a4", permission: "print:excuse_request:create" },
   },
   {
     id: "discipline_memo",
@@ -443,6 +450,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:update"],
     notifications: [],
     reports: [],
+    print: { hasTemplate: true, templateKey: "shift", formats: ["a4"], defaultFormat: "a4", permission: "print:shift:create" },
   },
   {
     id: "evaluation_cycle",
@@ -459,6 +467,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:update"],
     notifications: ["evaluation_due", "evaluation_completed"],
     reports: ["performance_summary"],
+    print: { hasTemplate: true, templateKey: "evaluation_cycle", formats: ["a4"], defaultFormat: "a4", permission: "print:evaluation_cycle:create" },
   },
   {
     id: "training_program",
@@ -475,6 +484,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read"],
     notifications: ["training_enrollment", "training_reminder"],
     reports: ["training_summary"],
+    print: { hasTemplate: true, templateKey: "training_program", formats: ["a4"], defaultFormat: "a4", permission: "print:training_program:create" },
   },
   {
     id: "job_posting",
@@ -556,6 +566,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: [],
     reports: ["trial_balance", "general_ledger"],
+    print: { hasTemplate: true, templateKey: "journal_entry", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:journal_entry:create" },
   },
   {
     id: "purchase_request",
@@ -584,6 +595,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: ["purchase_request_approved"],
     reports: [],
+    print: { hasTemplate: true, templateKey: "purchase_request", formats: ["a4"], defaultFormat: "a4", permission: "print:purchase_request:create" },
   },
   {
     id: "purchase_order",
@@ -644,6 +656,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: ["expense_approved", "expense_rejected"],
     reports: ["expense_by_category", "expense_by_department"],
+    print: { hasTemplate: true, templateKey: "expense_claim", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:expense_claim:create" },
   },
   {
     id: "budget",
@@ -672,6 +685,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: ["budget_approved", "budget_overrun"],
     reports: ["budget_vs_actual", "budget_utilization"],
+    print: { hasTemplate: true, templateKey: "budget", formats: ["a4"], defaultFormat: "a4", permission: "print:budget:create" },
   },
   {
     id: "custody",
@@ -702,6 +716,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: ["custody_approved", "custody_aging"],
     reports: ["custody_aging_report"],
+    print: { hasTemplate: true, templateKey: "custody", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:custody:create" },
   },
   {
     id: "salary_advance",
@@ -732,6 +747,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve", "hr:self"],
     notifications: ["advance_approved", "advance_rejected"],
     reports: [],
+    print: { hasTemplate: true, templateKey: "salary_advance", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:salary_advance:create" },
   },
   {
     id: "payment_voucher",
@@ -772,6 +788,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:update"],
     notifications: [],
     reports: ["vendor_list", "vendor_payments"],
+    print: { hasTemplate: true, templateKey: "vendor", formats: ["a4"], defaultFormat: "a4", permission: "print:vendor:create" },
   },
   {
     id: "chart_of_account",
@@ -788,6 +805,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:update"],
     notifications: [],
     reports: ["chart_of_accounts"],
+    print: { hasTemplate: true, templateKey: "chart_of_account", formats: ["a4"], defaultFormat: "a4", permission: "print:chart_of_account:create" },
   },
   {
     id: "recurring_journal",
@@ -804,6 +822,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read"],
     notifications: ["recurring_journal_failed"],
     reports: [],
+    print: { hasTemplate: true, templateKey: "journal_entry", formats: ["a4"], defaultFormat: "a4", permission: "print:recurring_journal:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -818,13 +837,14 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     type: "master",
     owner: "fleet",
     origin: ["/fleet/vehicles/create"],
-    relatedEntities: ["fleet_trip", "fleet_maintenance", "fuel_log", "insurance_policy"],
+    relatedEntities: ["fleet_trip", "fleet_maintenance", "fuel_log", "insurance_policy", "traffic_violation"],
     routes: { list: "/fleet", create: "/fleet/vehicles/create", detail: "/fleet/:id" },
     attachments: { supported: true },
     events: ["fleet.vehicle.created", "fleet.vehicle.status_changed"],
     permissions: ["fleet:create", "fleet:read", "fleet:update"],
     notifications: ["vehicle_maintenance_due", "insurance_expiry", "license_expiry"],
     reports: ["vehicle_list", "vehicle_utilization"],
+    print: { hasTemplate: true, templateKey: "vehicle", formats: ["a4"], defaultFormat: "a4", permission: "print:vehicle:create" },
   },
   {
     id: "fleet_trip",
@@ -835,7 +855,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     owner: "fleet",
     origin: ["/fleet/trips/create"],
     parentEntity: "vehicle",
-    relatedEntities: ["vehicle"],
+    relatedEntities: ["vehicle", "fleet_driver"],
     routes: { list: "/fleet/trips", create: "/fleet/trips/create", detail: "/fleet/trips/:id" },
     lifecycle: {
       statusColumn: "status",
@@ -844,10 +864,16 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
       terminalStates: ["completed", "cancelled"],
     },
     attachments: { supported: false },
+    // fleetEngine.postTripCompletionGL / postTripGL ship cost-revenue
+    // journal entries on trip completion — declare it so the
+    // entity-action-matrix and gap audits stop flagging fleet_trip as
+    // GL-orphan.
+    financialImpact: { hasGLImpact: true, journalType: "trip_revenue", sourceKey: "fleet_trip" },
     events: ["fleet.trip.created", "fleet.trip.started", "fleet.trip.completed"],
     permissions: ["fleet:create", "fleet:read", "fleet:update"],
     notifications: ["trip_started", "trip_completed"],
     reports: ["trip_summary"],
+    print: { hasTemplate: true, templateKey: "fleet_trip", formats: ["a4"], defaultFormat: "a4", permission: "print:fleet_trip:create" },
   },
   {
     id: "fleet_maintenance",
@@ -872,6 +898,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["fleet:create", "fleet:read", "fleet:update"],
     notifications: ["maintenance_due", "maintenance_completed"],
     reports: ["maintenance_history", "maintenance_costs"],
+    print: { hasTemplate: true, templateKey: "fleet_maintenance", formats: ["a4"], defaultFormat: "a4", permission: "print:fleet_maintenance:create" },
   },
   {
     id: "fuel_log",
@@ -882,7 +909,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     owner: "fleet",
     origin: ["/fleet/fuel/create"],
     parentEntity: "vehicle",
-    relatedEntities: ["vehicle"],
+    relatedEntities: ["vehicle", "fleet_driver"],
     routes: { list: "/fleet/fuel", create: "/fleet/fuel/create", detail: "/fleet/fuel/:id" },
     attachments: { supported: true },
     financialImpact: { hasGLImpact: true, journalType: "expense", sourceKey: "fuel" },
@@ -890,6 +917,53 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["fleet:create", "fleet:read"],
     notifications: [],
     reports: ["fuel_consumption"],
+    print: { hasTemplate: true, templateKey: "fuel_log", formats: ["a4"], defaultFormat: "a4", permission: "print:fuel_log:create" },
+  },
+  {
+    id: "fleet_driver",
+    label: "سائق",
+    domain: "fleet",
+    table: "fleet_drivers",
+    type: "master",
+    owner: "fleet",
+    origin: ["/fleet/drivers/create"],
+    relatedEntities: ["vehicle", "fleet_trip", "traffic_violation", "employee"],
+    routes: { list: "/fleet/drivers", create: "/fleet/drivers/create", detail: "/fleet/drivers/:id" },
+    attachments: { supported: true },
+    events: ["fleet.driver.created", "fleet.driver.assigned"],
+    permissions: ["fleet:create", "fleet:read", "fleet:update"],
+    notifications: ["license_expiry"],
+    reports: ["driver_list", "driver_performance"],
+    print: { hasTemplate: true, templateKey: "fleet_driver", formats: ["a4"], defaultFormat: "a4", permission: "print:fleet_driver:create" },
+  },
+  {
+    id: "traffic_violation",
+    label: "مخالفة مرورية",
+    domain: "fleet",
+    table: "fleet_traffic_violations",
+    type: "transaction",
+    owner: "fleet",
+    origin: ["/fleet/traffic-violations/create"],
+    parentEntity: "vehicle",
+    relatedEntities: ["vehicle", "fleet_driver"],
+    routes: { list: "/fleet/traffic-violations", create: "/fleet/traffic-violations/create", detail: "/fleet/traffic-violations/:id" },
+    lifecycle: {
+      statusColumn: "status",
+      states: ["pending", "paid", "contested", "waived"],
+      initialState: "pending",
+      terminalStates: ["paid", "waived"],
+    },
+    attachments: { supported: true },
+    // fleetEngine.postTrafficViolationGL fires on company-borne fines;
+    // postViolationPaymentGL closes the loop. Cross-domain: driver-borne
+    // fines emit fleet.violation.deduction_requested → hrEngine creates
+    // payroll_deductions row (see eventListeners).
+    financialImpact: { hasGLImpact: true, journalType: "expense", sourceKey: "traffic_violation" },
+    events: ["fleet.violation.created", "fleet.violation.paid", "fleet.violation.deduction_requested"],
+    permissions: ["fleet:create", "fleet:read", "fleet:update"],
+    notifications: ["violation_recorded", "violation_payment_due"],
+    reports: ["violations_register", "violations_by_driver"],
+    print: { hasTemplate: true, templateKey: "traffic_violation", formats: ["a4"], defaultFormat: "a4", permission: "print:traffic_violation:create" },
   },
   {
     id: "insurance_policy",
@@ -914,6 +988,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["fleet:create", "fleet:read", "fleet:update"],
     notifications: ["insurance_expiry_reminder"],
     reports: ["insurance_coverage"],
+    print: { hasTemplate: true, templateKey: "insurance_policy", formats: ["a4"], defaultFormat: "a4", permission: "print:insurance_policy:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -935,6 +1010,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["property:create", "property:read", "property:update"],
     notifications: [],
     reports: ["property_portfolio"],
+    print: { hasTemplate: true, templateKey: "building", formats: ["a4"], defaultFormat: "a4", permission: "print:building:create" },
   },
   {
     id: "property_unit",
@@ -952,6 +1028,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["property:create", "property:read", "property:update"],
     notifications: [],
     reports: ["unit_occupancy"],
+    print: { hasTemplate: true, templateKey: "property_unit", formats: ["a4"], defaultFormat: "a4", permission: "print:property_unit:create" },
   },
   {
     id: "rental_contract",
@@ -1005,6 +1082,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["property:create", "property:read", "property:update"],
     notifications: ["maintenance_assigned", "maintenance_completed"],
     reports: ["maintenance_summary"],
+    print: { hasTemplate: true, templateKey: "maintenance_request", formats: ["a4"], defaultFormat: "a4", permission: "print:maintenance_request:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1033,6 +1111,65 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["legal:create", "legal:read", "legal:update"],
     notifications: ["hearing_reminder", "case_update"],
     reports: ["case_summary", "case_status"],
+    // main #1305 added requiresApprovalForReprint for case files —
+    // accepted on the merge since legal documents already carry the
+    // approval-for-reprint discipline elsewhere.
+    print: { hasTemplate: true, templateKey: "legal_case", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:legal_case:create" },
+  },
+  {
+    id: "legal_session",
+    label: "جلسة قضائية",
+    domain: "legal",
+    table: "legal_sessions",
+    type: "transaction",
+    owner: "legal",
+    origin: ["/legal/cases/:id"],
+    parentEntity: "legal_case",
+    relatedEntities: ["legal_case"],
+    routes: { list: "/legal/sessions", detail: "/legal/sessions/:id" },
+    attachments: { supported: true },
+    events: ["legal.session.scheduled", "legal.session.completed"],
+    permissions: ["legal:create", "legal:read", "legal:update"],
+    notifications: ["hearing_reminder"],
+    reports: ["upcoming_sessions"],
+    print: { hasTemplate: true, templateKey: "legal_session", formats: ["a4"], defaultFormat: "a4", permission: "print:legal_session:create" },
+  },
+  {
+    id: "legal_judgment",
+    label: "حكم قضائي",
+    domain: "legal",
+    table: "legal_judgments",
+    type: "document",
+    owner: "legal",
+    origin: ["/legal/cases/:id"],
+    parentEntity: "legal_case",
+    relatedEntities: ["legal_case"],
+    routes: { list: "/legal/judgments", detail: "/legal/judgments/:id" },
+    attachments: { supported: true },
+    financialImpact: { hasGLImpact: true, journalType: "legal_provision", sourceKey: "legal_judgment" },
+    events: ["legal.judgment.recorded", "legal.judgment.paid"],
+    permissions: ["legal:create", "legal:read", "legal:update"],
+    notifications: ["judgment_recorded"],
+    reports: ["judgments_financial"],
+    print: { hasTemplate: true, templateKey: "legal_judgment", formats: ["a4"], defaultFormat: "a4", permission: "print:legal_judgment:create" },
+  },
+  {
+    id: "legal_correspondence",
+    label: "مراسلة قانونية",
+    domain: "legal",
+    table: "legal_correspondence",
+    type: "document",
+    owner: "legal",
+    origin: ["/legal/cases/:id"],
+    parentEntity: "legal_case",
+    relatedEntities: ["legal_case"],
+    routes: { list: "/legal/correspondence", detail: "/legal/correspondence/:id" },
+    attachments: { supported: true },
+    events: ["legal.correspondence.sent", "legal.correspondence.received"],
+    permissions: ["legal:create", "legal:read", "legal:update"],
+    notifications: [],
+    reports: [],
+    print: { hasTemplate: true, templateKey: "legal_correspondence", formats: ["a4"], defaultFormat: "a4", permission: "print:legal_correspondence:create" },
   },
   {
     id: "legal_contract",
@@ -1077,6 +1214,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["crm:create", "crm:read", "crm:update", "crm:delete"],
     notifications: [],
     reports: ["client_list", "client_revenue"],
+    print: { hasTemplate: true, templateKey: "client", formats: ["a4"], defaultFormat: "a4", permission: "print:client:create" },
   },
   {
     id: "crm_opportunity",
@@ -1100,6 +1238,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["crm:create", "crm:read", "crm:update"],
     notifications: ["deal_stale", "deal_won"],
     reports: ["sales_pipeline", "conversion_rate"],
+    print: { hasTemplate: true, templateKey: "crm_opportunity", formats: ["a4"], defaultFormat: "a4", permission: "print:crm_opportunity:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1127,6 +1266,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["support:create", "support:read", "support:update"],
     notifications: ["ticket_assigned", "ticket_resolved", "sla_breach"],
     reports: ["ticket_summary", "sla_compliance"],
+    print: { hasTemplate: true, templateKey: "support_ticket", formats: ["a4"], defaultFormat: "a4", permission: "print:support_ticket:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1148,6 +1288,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["warehouse:create", "warehouse:read", "warehouse:update"],
     notifications: ["low_stock_alert", "expiry_alert"],
     reports: ["stock_levels", "stock_movement"],
+    print: { hasTemplate: true, templateKey: "warehouse_product", formats: ["a4"], defaultFormat: "a4", permission: "print:warehouse_product:create" },
   },
   {
     id: "inventory_count",
@@ -1176,6 +1317,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["warehouse:create", "warehouse:read", "warehouse:approve"],
     notifications: ["inventory_count_ready", "inventory_count_approved"],
     reports: ["inventory_count_report"],
+    print: { hasTemplate: true, templateKey: "inventory_count", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:inventory_count:create" },
   },
   {
     id: "item_barcode_label",
@@ -1221,6 +1363,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["store:read", "store:write"],
     notifications: ["order_placed", "order_fulfilled"],
     reports: ["order_summary"],
+    print: { hasTemplate: true, templateKey: "store_order", formats: ["a4"], defaultFormat: "a4", permission: "print:store_order:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1243,6 +1386,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["projects:create", "projects:read", "projects:update"],
     notifications: ["milestone_reminder", "budget_overrun"],
     reports: ["project_status", "project_costing"],
+    print: { hasTemplate: true, templateKey: "project", formats: ["a4"], defaultFormat: "a4", permission: "print:project:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1257,13 +1401,66 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     type: "master",
     owner: "umrah",
     origin: ["/umrah/pilgrims/create"],
-    relatedEntities: ["umrah_sales_invoice"],
+    relatedEntities: ["umrah_sales_invoice", "umrah_group", "umrah_package"],
     routes: { list: "/umrah/pilgrims", create: "/umrah/pilgrims/create", detail: "/umrah/pilgrims/:id" },
     attachments: { supported: true },
     events: ["umrah.pilgrim.created"],
     permissions: ["umrah:read", "umrah:write"],
     notifications: [],
     reports: ["pilgrim_list"],
+    print: { hasTemplate: true, templateKey: "umrah_pilgrim", formats: ["a4"], defaultFormat: "a4", permission: "print:umrah_pilgrim:create" },
+  },
+  {
+    id: "umrah_group",
+    label: "مجموعة عمرة",
+    domain: "umrah",
+    table: "umrah_groups",
+    type: "master",
+    owner: "umrah",
+    origin: ["/umrah/groups"],
+    relatedEntities: ["umrah_pilgrim", "umrah_agent", "umrah_sub_agent", "umrah_season"],
+    routes: { list: "/umrah/groups", detail: "/umrah/groups/:id" },
+    attachments: { supported: true },
+    events: ["umrah.group.imported", "umrah.group.completed"],
+    permissions: ["umrah:read", "umrah:write"],
+    notifications: [],
+    reports: ["group_manifest"],
+    print: { hasTemplate: true, templateKey: "umrah_group", formats: ["a4"], defaultFormat: "a4", permission: "print:umrah_group:create" },
+  },
+  {
+    id: "umrah_agent",
+    label: "وكيل عمرة",
+    domain: "umrah",
+    table: "umrah_agents",
+    type: "master",
+    owner: "umrah",
+    origin: ["/umrah/agents"],
+    relatedEntities: ["umrah_sub_agent", "umrah_agent_invoice", "umrah_pilgrim"],
+    routes: { list: "/umrah/agents", detail: "/umrah/agents/:id" },
+    attachments: { supported: true },
+    events: ["umrah.agent.created", "umrah.agent.contract_signed"],
+    permissions: ["umrah:read", "umrah:write"],
+    notifications: [],
+    reports: ["agent_register"],
+    print: { hasTemplate: true, templateKey: "umrah_agent", formats: ["a4"], defaultFormat: "a4", permission: "print:umrah_agent:create" },
+  },
+  {
+    id: "umrah_sub_agent",
+    label: "وكيل فرعي",
+    domain: "umrah",
+    table: "umrah_sub_agents",
+    type: "master",
+    owner: "umrah",
+    parentEntity: "umrah_agent",
+    origin: ["/umrah/sub-agents"],
+    relatedEntities: ["umrah_agent", "umrah_sales_invoice"],
+    routes: { list: "/umrah/sub-agents", detail: "/umrah/sub-agents/:id" },
+    attachments: { supported: true },
+    events: ["umrah.sub_agent.created"],
+    permissions: ["umrah:read", "umrah:write"],
+    notifications: [],
+    reports: ["sub_agent_register"],
+    print: { hasTemplate: true, templateKey: "umrah_sub_agent", formats: ["a4"], defaultFormat: "a4", permission: "print:umrah_sub_agent:create" },
   },
   {
     id: "umrah_sales_invoice",
@@ -1273,7 +1470,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     type: "transaction",
     owner: "umrah",
     origin: ["/umrah/invoices"],
-    relatedEntities: ["umrah_pilgrim", "umrah_agent"],
+    relatedEntities: ["umrah_pilgrim", "umrah_agent", "umrah_sub_agent"],
     routes: { list: "/umrah/invoices", detail: "/umrah/invoices/:id" },
     lifecycle: {
       statusColumn: "status",
@@ -1287,6 +1484,65 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["umrah:read", "umrah:write"],
     notifications: ["umrah_invoice_paid"],
     reports: ["umrah_revenue"],
+    // main #1305 widened formats to a4 + thermal_80 + excel and uses
+    // templateKey "umrah_invoice". Our dataLoader dispatch (after the
+    // 9ab2603c merge) routes both umrah_invoice + umrah_sales_invoice
+    // cases to loadUmrahSalesInvoice, so this richer print profile
+    // applies cleanly.
+    print: { hasTemplate: true, templateKey: "umrah_invoice", formats: ["a4", "thermal_80", "excel"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:umrah_invoice:create" },
+  },
+  {
+    id: "umrah_agent_invoice",
+    label: "فاتورة وكيل عمرة",
+    domain: "umrah",
+    table: "umrah_agent_invoices",
+    type: "transaction",
+    owner: "umrah",
+    parentEntity: "umrah_agent",
+    origin: ["/umrah/invoices"],
+    relatedEntities: ["umrah_agent", "umrah_season"],
+    routes: { list: "/umrah/invoices", detail: "/umrah/invoices/agent/:id" },
+    lifecycle: {
+      statusColumn: "status",
+      states: ["draft", "approved", "sent", "paid", "cancelled"],
+      initialState: "draft",
+      terminalStates: ["paid", "cancelled"],
+    },
+    attachments: { supported: true },
+    // umrahEngine.postAgentInvoiceGL fires on approval — books the
+    // agent receivable + commission revenue split.
+    financialImpact: { hasGLImpact: true, journalType: "umrah_agent_receivable", sourceKey: "umrah_agent_invoice" },
+    events: ["umrah.agent_invoice.created", "umrah.agent_invoice.approved"],
+    permissions: ["umrah:read", "umrah:write"],
+    notifications: ["agent_invoice_overdue"],
+    reports: ["agent_invoice_register"],
+    print: { hasTemplate: true, templateKey: "umrah_agent_invoice", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:umrah_agent_invoice:create" },
+  },
+  {
+    id: "umrah_penalty",
+    label: "غرامة عمرة",
+    domain: "umrah",
+    table: "umrah_penalties",
+    type: "transaction",
+    owner: "umrah",
+    origin: ["/umrah/penalties"],
+    relatedEntities: ["umrah_pilgrim", "umrah_agent", "umrah_season"],
+    routes: { list: "/umrah/penalties", detail: "/umrah/penalties/:id" },
+    lifecycle: {
+      statusColumn: "status",
+      states: ["pending", "invoiced", "paid", "waived", "cancelled"],
+      initialState: "pending",
+      terminalStates: ["paid", "waived", "cancelled"],
+    },
+    attachments: { supported: true },
+    // umrahEngine.postPenaltyGL + postPenaltyWaiverGL — closed loop on
+    // overstay/violation cost recovery.
+    financialImpact: { hasGLImpact: true, journalType: "umrah_penalty", sourceKey: "umrah_penalty" },
+    events: ["umrah.penalty.recorded", "umrah.penalty.waived", "umrah.penalty.invoiced"],
+    permissions: ["umrah:read", "umrah:write"],
+    notifications: [],
+    reports: ["penalties_register"],
+    print: { hasTemplate: true, templateKey: "umrah_penalty", formats: ["a4"], defaultFormat: "a4", permission: "print:umrah_penalty:create" },
   },
   {
     id: "umrah_season",
@@ -1296,13 +1552,14 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     type: "config",
     owner: "umrah",
     origin: ["/umrah/seasons"],
-    relatedEntities: ["umrah_package"],
+    relatedEntities: ["umrah_package", "umrah_group"],
     routes: { list: "/umrah/seasons", detail: "/umrah/seasons/:id" },
     attachments: { supported: false },
     events: ["umrah.season.created", "umrah.season.closed"],
     permissions: ["umrah:read", "umrah:write"],
     notifications: [],
     reports: ["season_summary"],
+    print: { hasTemplate: true, templateKey: "umrah_season", formats: ["a4"], defaultFormat: "a4", permission: "print:umrah_season:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1330,6 +1587,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["governance:read", "governance:write"],
     notifications: ["policy_review_due"],
     reports: ["policy_register"],
+    print: { hasTemplate: true, templateKey: "governance_policy", formats: ["a4"], defaultFormat: "a4", permission: "print:governance_policy:create" },
   },
 ];
 

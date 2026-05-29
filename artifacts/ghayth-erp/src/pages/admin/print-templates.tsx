@@ -531,16 +531,15 @@ function TemplateEditor(props: {
 
   async function previewLive() {
     try {
-      // /preview accepts a payload override — render the in-flight form
-      // without saving so the user can iterate fast.
+      // /preview now accepts an in-flight `htmlContent` so the user sees
+      // their unsaved edits before committing. When provided, the engine
+      // builds an in-memory template wrapping that markup — no DB hit.
+      // If the form has no htmlContent yet (e.g. user opened a preset and
+      // hasn't customised) we fall back to entity defaults + payload only.
       const w = window.open("", "_blank");
       if (w) {
         w.document.write("<!doctype html><html><body>جارٍ التحضير…</body></html>");
       }
-      // Save-as-draft isn't required for preview; we POST a synthetic
-      // template via the preview endpoint with `payload` overriding the
-      // dataLoader. Note: /preview expects templateId for stored templates;
-      // for unsaved drafts we use the entity defaults + cssOverrides only.
       const resp = await fetch(`/api/print/preview`, {
         method: "POST",
         headers: {
@@ -550,6 +549,11 @@ function TemplateEditor(props: {
         credentials: "include",
         body: JSON.stringify({
           entityType: form.entityType,
+          ...(form.htmlContent ? {
+            htmlContent: form.htmlContent,
+            presetKey: form.presetKey ?? undefined,
+            paperSize: form.paperSize ?? "A4",
+          } : {}),
           payload: {
             entity: {
               id: "preview",
@@ -570,7 +574,18 @@ function TemplateEditor(props: {
           },
         }),
       });
-      if (!resp.ok) throw new Error(`preview ${resp.status}`);
+      if (!resp.ok) {
+        // Surface the actual server-side error instead of a bare status code
+        // so the user knows what went wrong (permission, schema, syntax).
+        const text = await resp.text().catch(() => "");
+        let detail = `preview ${resp.status}`;
+        try {
+          const j = JSON.parse(text);
+          if (j?.message) detail = j.message;
+          else if (j?.error) detail = typeof j.error === "string" ? j.error : detail;
+        } catch { /* not JSON */ }
+        throw new Error(detail);
+      }
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       if (w) {

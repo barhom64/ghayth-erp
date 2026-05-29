@@ -199,17 +199,14 @@ const RULES = [
     // Excel, or printable HTML document be rendered server-side by
     // /api/print/render — the SPA must never generate documents itself.
     regex: /\bwindow\.print\(|\bjsPDF\b|\bhtml2pdf\b|\bhtml2canvas\b|\bpdfMake\b|\bpdfmake\b|\bnew\s+jsPDF|\bfrom\s+["']jspdf["']|\bfrom\s+["']html2pdf[^"']*["']|\bfrom\s+["']pdfmake[^"']*["']/,
-    // Ratchet: 9 pre-existing pages still call window.print() directly
-    // (BI dashboards, finance reports, my-payslip). New violations are
-    // blocked; existing ones drop the baseline as they migrate to
-    // <PrintButton entityType="..." entityId={...} />.
-    // Baseline 7 — current live count after this branch's merge of main:
-    // bi-admin-reports, bi-operations, vendor-statement-print, customer-
-    // statement-print, monthly-close-pack, finance/reports, account-
-    // statement (window.print()). Was 9 before Phase D, dropped to 6
-    // during the work, then bumped to 7 to absorb main's two new print
-    // pages. Tighten when those pages migrate to PrintButton.
-    countBaseline: 7,
+    // Ratchet: 0 pre-existing violations after issue #1286 PR 1/4 (#1289)
+    // migrated the last 7 pages to <PrintButton>. Locked at 0 so any
+    // future regression — a new page calling window.print() or importing
+    // jsPDF / html2pdf / pdfmake — fails CI immediately. To add a
+    // legitimately allowed call site, add the file to the `skip` list
+    // above with a comment explaining why it's the architecturally
+    // sanctioned entry point.
+    countBaseline: 0,
     message:
       "Direct PDF/print generation in the SPA is forbidden (Ghaith Print Platform, " +
       "Phase 0 architecture lock). Document generation must go through the server: " +
@@ -289,6 +286,38 @@ const RULES = [
       "`numbering_assignments` with a real per-branch counter. If you need " +
       "an internal correlation id (e.g. for an outbound webhook), move the " +
       "code into a lib/ helper outside routes/.",
+  },
+  {
+    id: "inline-date-now-as-ref",
+    scan: [ROUTES_DIR],
+    // The 2026-05-27 coverage report exposed `ORD-${Date.now()}` in
+    // store.ts:262 — same anti-pattern as generateTimeRef but written
+    // inline so the previous rule didn't catch it. Catch any template
+    // literal that splices Date.now() into a refish prefix string.
+    // Shape: `XXX-${Date.now()}` or `XXX${Date.now()}` or with extra
+    // segments. The `[A-Z]{2,}` requires a SHOUTY prefix so we don't
+    // false-positive on date strings like `${Date.now()}.json`.
+    //
+    // Hard rule (baseline 0) — every inline-Date.now-as-ref offender
+    // detected by the second-round audit has been closed:
+    //   • routes/communications.ts  → internalTechRef("CALL") for the
+    //     PBX correlation fallback (lib/internalRef — tech-only ref)
+    //   • routes/finance-invoices.ts → issueNumber({ entityKey:
+    //     "customer_advance" }) via migration 231
+    //   • routes/finance-purchase.ts → issueNumber({ entityKey:
+    //     "payment_run" }) via migration 227 (PR #1340)
+    //   • routes/properties.ts → issueNumber({ entityKey: "case" })
+    //     for the auto-created collection case
+    //   • routes/store.ts → issueNumber({ entityKey: "store_order" })
+    //     via migration 228 (PR #1345)
+    // No baseline = any future inline-Date.now ref fails CI immediately.
+    regex: /`[A-Z]{2,}[^`]*\$\{\s*Date\.now\s*\(\s*\)/,
+    message:
+      "Inline `${Date.now()}` inside a refish string is the same anti-pattern " +
+      "as generateTimeRef(...) — it bypasses the numbering center (Issue " +
+      "#1141). Call `numberingService.issueNumber(...)` instead. If this is " +
+      "genuinely an internal tech correlation id (not a customer-visible " +
+      "document number), move it to a lib/ helper (e.g. internalTechRef).",
   },
   {
     id: "random-as-ref-fallback",

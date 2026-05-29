@@ -59,6 +59,11 @@ interface JournalTemplate {
   activityType: string | null;
   isActive: boolean;
   lineCount?: number;
+  // The list endpoint joins template lines onto each row, so the
+  // edit dialog can hydrate from `initial.lines` directly without a
+  // second GET /journal-templates/:id round-trip (the backend doesn't
+  // expose that detail route — only PUT and DELETE on /:id).
+  lines?: JournalTemplateLine[];
 }
 
 interface JournalTemplateLine {

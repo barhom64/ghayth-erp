@@ -1,6 +1,10 @@
-import { useLocation, useRoute } from "wouter";
+import { useState } from "react";
+import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, EntityComments } from "@workspace/entity-kit";
+import { FormGrid, FormTextField, FormTextareaField, FormNumberField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
@@ -34,10 +38,21 @@ function statusTone(status?: string | null) {
   return "default" as const;
 }
 
+const supplierEditSchema = z.object({
+  name: z.string().min(1, "اسم المورد مطلوب"),
+  contactPerson: z.string().optional().default(""),
+  phone: z.string().optional().default(""),
+  email: z.string().optional().default(""),
+  address: z.string().optional().default(""),
+  taxNumber: z.string().optional().default(""),
+  paymentTerms: z.coerce.number().optional().default(0),
+});
+type SupplierEditForm = z.infer<typeof supplierEditSchema>;
+
 export default function WarehouseSupplierDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/warehouse/suppliers/:id");
   const id = params?.id ? Number(params.id) : null;
+  const [editOpen, setEditOpen] = useState(false);
   const { extraTabs, hideTabs } = useRegistryTabs("warehouse-supplier", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -70,10 +85,6 @@ export default function WarehouseSupplierDetail() {
   const totalPurchased = Number(supplier?.totalPurchased ?? 0);
   const rating = Number(supplier?.rating ?? 0);
 
-
-  const handleEdit = () => {
-    setLocation(`/warehouse/suppliers/${id}/edit`);
-  };
 
   const ratingStars = (
     <div className="flex items-center gap-0.5">
@@ -186,6 +197,7 @@ export default function WarehouseSupplierDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={supplier?.name ? supplier.name : "تفاصيل المورد"}
       subtitle={supplier?.contactPerson ? supplier.contactPerson : undefined}
@@ -215,13 +227,43 @@ export default function WarehouseSupplierDetail() {
               entityId={id ?? 0}
               formats={["a4"]}/>
           )}
-          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!supplier}>
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
+          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={!supplier}>
+            <Edit className="h-4 w-4 ms-1" /> تعديل
           </GuardedButton>
           <DetailActionButtons hook={editDelete} editPerm="warehouse:update" deletePerm="warehouse:delete" />
         </>
       }
     />
+    {supplier && id && (
+      <EntityEditDialog<SupplierEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل المورد"
+        schema={supplierEditSchema}
+        defaultValues={{
+          name: supplier.name ?? "",
+          contactPerson: supplier.contactPerson ?? "",
+          phone: supplier.phone ?? "",
+          email: supplier.email ?? "",
+          address: supplier.address ?? "",
+          taxNumber: supplier.taxNumber ?? "",
+          paymentTerms: Number(supplier.paymentTerms ?? 0),
+        }}
+        endpoint={`/warehouse/suppliers/${id}`}
+        invalidateKeys={[["warehouse-supplier", String(id)], ["warehouse-suppliers"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="name" label="اسم المورد" required className="md:col-span-2" />
+          <FormTextField name="contactPerson" label="جهة الاتصال" />
+          <FormTextField name="phone" label="الهاتف" />
+          <FormTextField name="email" label="البريد الإلكتروني" />
+          <FormTextField name="taxNumber" label="الرقم الضريبي" />
+          <FormNumberField name="paymentTerms" label="مدة السداد (يوم)" />
+          <FormTextareaField name="address" label="العنوان" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

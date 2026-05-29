@@ -3,12 +3,8 @@ import { z } from "zod";
 import { useLocation } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 // Phase A — HR official letters on unified primitives.
 import {
@@ -25,8 +21,12 @@ import {
   FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
-import { Plus, FileText, FileSignature, Send } from "lucide-react";
+import { Plus, FileText, FileSignature, Send, Pencil, Trash2 } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
@@ -60,16 +60,19 @@ const LETTER_TYPE_OPTIONS = Object.entries(LETTER_TYPES).map(([value, label]) =>
 export default function OfficialLettersPage() {
   const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
-  const [viewId, setViewId] = useState<number | null>(null);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
-  // GET /hr/official-letters/:id — full body fetched lazily for the
-  // "تفاصيل" preview. The list endpoint only returns summaries.
-  const letterDetailQ = useApiQuery<any>(
-    ["official-letter-detail", String(viewId ?? 0)],
-    viewId ? `/hr/official-letters/${viewId}` : null,
-    { enabled: viewId !== null },
-  );
   const items = data?.data || [];
+  const [editing, setEditing] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
+  const updateMut = useApiMutation<unknown, { id: number; subject: string; content: string; type: string }>(
+    (b) => `/hr/official-letters/${b.id}`,
+    "PATCH",
+    [["official-letters"]],
+    {
+      successMessage: "تم تعديل الخطاب",
+      onSuccess: () => setEditing(null),
+    },
+  );
   // HR-U4 — successMessage بدل buildErrorToast اليدوي.
   const createMut = useApiMutation<unknown, Record<string, unknown>>(
     "/hr/official-letters",
@@ -82,48 +85,6 @@ export default function OfficialLettersPage() {
   const { roleLevel } = useAppContext();
   const canApprove = roleLevel >= 70;
   const [advFilters, setAdvFilters] = useFilters();
-
-  // Inline edit + delete for letters. The backend's PATCH/DELETE on
-  // /hr/official-letters/:id refuses edits/deletes on letters past the
-  // draft state — the row actions are still shown but the server is
-  // authoritative.
-  const {
-    editingId, deletingId, editForm, setEditForm,
-    startEdit, startDelete, cancelEdit, cancelDelete,
-    isPending, handleSave, handleDelete,
-  } = useInlineActions({
-    endpoint: "/hr/official-letters",
-    queryKeys: [["official-letters"]],
-    onSuccess: () => refetch(),
-  });
-
-  // GET /umrah/letters/:id/pdf — letters typed as `umrah_*` use the
-  // umrah-print pipeline (different letterhead, multilingual). Opens
-  // in a new tab for download/print.
-  const handleUmrahPdf = (letter: any) => {
-    if (!letter?.id) return;
-    window.open(`/api/umrah/letters/${letter.id}/pdf`, "_blank");
-  };
-  // POST /umrah/letters/:id/dispatch — records that the operator
-  // handed the printed letter to the consul/dispatched it externally.
-  // `dispatchedVia` enum: print | email | whatsapp | courier | hand_delivery.
-  const dispatchUmrahLetterMut = useApiMutation<unknown, {
-    id: number;
-    dispatchedVia: "print" | "email" | "whatsapp" | "courier" | "hand_delivery";
-    recipient?: string;
-    notes?: string;
-  }>(
-    (b) => `/umrah/letters/${b.id}/dispatch`,
-    "POST",
-    [["official-letters"]],
-    { successMessage: "تم تسجيل التسليم" },
-  );
-
-  const letterEditFields = [
-    { key: "subject", label: "الموضوع" },
-    { key: "body", label: "النص" },
-    { key: "notes", label: "ملاحظات" },
-  ];
 
   const filtered = applyFilters(items, advFilters, {
     searchFields: ["subject", "employeeName"] as any,
@@ -140,57 +101,41 @@ export default function OfficialLettersPage() {
     {
       key: "actions",
       header: "إجراءات",
-      render: (l) => {
-        const isUmrahLetter = typeof l.type === "string" && l.type.startsWith("umrah");
-        return (
-          <div className="flex gap-1 items-center">
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setViewId(l.id)}>
-              تفاصيل
-            </Button>
-            {isUmrahLetter ? (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => handleUmrahPdf(l)}
-                  title="PDF (مسار العمرة)"
-                >
-                  PDF
-                </Button>
-                <GuardedButton
-                  perm="umrah:update"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => dispatchUmrahLetterMut.mutate({ id: l.id, dispatchedVia: "hand_delivery" })}
-                  disabled={dispatchUmrahLetterMut.isPending || l.status !== "approved"}
-                  rateLimitAware
-                  title="تسليم الخطاب (تسجيل في السجل)"
-                >
-                  تسليم
-                </GuardedButton>
-              </>
-            ) : (
-              <PrintButton
-                entityType="official_letter"
-                entityId={l.id}
-                formats={["a4"]}
-                label=""
-                variant="ghost"
-                size="sm"
-              />
-            )}
-            <RowActions
-              onEdit={() => startEdit(l.id, { subject: l.subject, body: l.body, notes: l.notes })}
-              onDelete={() => startDelete(l.id)}
-              canEdit={["draft", "rejected"].includes(l.status)}
-              canDelete={["draft", "rejected"].includes(l.status)}
-              deletePerm="hr:delete"
-            />
-          </div>
-        );
-      },
+      render: (l) => (
+        <div className="flex gap-1">
+          <PrintButton
+            entityType="official_letter"
+            entityId={l.id}
+            formats={["a4"]}
+            label=""
+            variant="ghost"
+            size="sm"
+          />
+          {/* Edit + delete are HR-only on the backend; the GuardedButton
+              hides them for non-HR roles, the PATCH also enforces the
+              draft-only constraint at request time. */}
+          <GuardedButton
+            perm="hr:update"
+            variant="ghost"
+            size="sm"
+            onClick={() => setEditing(l)}
+            disabled={l.status !== "draft"}
+            title={l.status !== "draft" ? "التعديل متاح للمسودات فقط" : "تعديل"}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </GuardedButton>
+          <GuardedButton
+            perm="hr:delete"
+            variant="ghost"
+            size="sm"
+            className="text-status-error-foreground"
+            onClick={() => setDeleting({ id: l.id, name: l.subject || `خطاب #${l.id}` })}
+            title="حذف"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </GuardedButton>
+        </div>
+      ),
     },
     {
       key: "approval",
@@ -301,58 +246,57 @@ export default function OfficialLettersPage() {
 
       />
 
-      {editingId !== null && (
-        <InlineEditForm
-          fields={letterEditFields}
-          initialValues={editForm}
-          onSave={(values) => handleSave(editingId, values)}
-          onCancel={cancelEdit}
-          isPending={isPending}
+      {editing && (
+        <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>تعديل الخطاب</DialogTitle>
+            </DialogHeader>
+            <FormShell
+              key={editing.id}
+              schema={letterFormSchema.pick({ type: true, subject: true, content: true })}
+              defaultValues={{
+                type: editing.type ?? "general",
+                subject: editing.subject ?? "",
+                content: editing.content ?? "",
+              }}
+              submitLabel={updateMut.isPending ? "جاري الحفظ…" : "حفظ"}
+              onSubmit={async (values) => {
+                await updateMut.mutateAsync({
+                  id: editing.id,
+                  subject: values.subject,
+                  content: values.content,
+                  type: values.type,
+                });
+              }}
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setEditing(null)}>
+                  إلغاء
+                </Button>
+              }
+            >
+              <FormGrid cols={2}>
+                <FormSelectField name="type" label="النوع" options={LETTER_TYPE_OPTIONS} />
+                <FormTextField name="subject" label="الموضوع" required />
+                <FormTextareaField name="content" label="المحتوى" rows={6} className="md:col-span-2" />
+              </FormGrid>
+            </FormShell>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {deleting && (
+        <ConfirmDeleteDialog
+          open={!!deleting}
+          onOpenChange={(o) => { if (!o) setDeleting(null); }}
+          entity={{ type: "official-letter", id: deleting.id, name: deleting.name }}
+          deletePath={`/hr/official-letters/${deleting.id}`}
+          invalidateKeys={[["official-letters"]]}
+          successMessage="تم حذف الخطاب"
+          onDeleted={() => setDeleting(null)}
         />
       )}
 
-      {deletingId !== null && (
-        <InlineDeleteConfirm
-          onConfirm={() => handleDelete(deletingId)}
-          onCancel={cancelDelete}
-          isPending={isPending}
-        />
-      )}
-
-      <Dialog open={viewId !== null} onOpenChange={(o) => !o && setViewId(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{letterDetailQ.data?.subject ?? "تفاصيل الخطاب"}</DialogTitle>
-          </DialogHeader>
-          <div className="py-2 space-y-2 text-sm">
-            {letterDetailQ.isLoading ? (
-              <p className="text-muted-foreground">جاري التحميل...</p>
-            ) : letterDetailQ.data ? (
-              <>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div><span className="text-muted-foreground">النوع:</span> {LETTER_TYPES[letterDetailQ.data.type] ?? letterDetailQ.data.type}</div>
-                  <div><span className="text-muted-foreground">الحالة:</span> <PageStatusBadge status={letterDetailQ.data.status} /></div>
-                  <div><span className="text-muted-foreground">الموظف:</span> {letterDetailQ.data.employeeName ?? "-"}</div>
-                  <div><span className="text-muted-foreground">التاريخ:</span> {letterDetailQ.data.createdAt ? formatDateAr(letterDetailQ.data.createdAt) : "-"}</div>
-                </div>
-                {letterDetailQ.data.body && (
-                  <div className="border rounded p-3 bg-muted/30 whitespace-pre-wrap text-sm leading-relaxed">
-                    {letterDetailQ.data.body}
-                  </div>
-                )}
-                {letterDetailQ.data.notes && (
-                  <p className="text-xs text-muted-foreground">ملاحظات: {letterDetailQ.data.notes}</p>
-                )}
-              </>
-            ) : (
-              <p className="text-muted-foreground">لا توجد بيانات</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewId(null)}>إغلاق</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </PageShell>
   );
 }

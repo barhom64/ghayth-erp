@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, todayLocal, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import { Download, ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 
@@ -122,43 +123,43 @@ export default function ProfitabilityPage({ entityType }: Props) {
   );
   const [endDate, setEndDate] = useState(todayLocal());
 
-  // Static dispatch over the 4 entity types so the wiring scanner can
-  // see each endpoint URL by name. Earlier shape was a single dynamic
-  // ${config.endpointSegment}/${id} string which the audit normalised
-  // to `/:param/:param` and couldn't match against
-  // /finance/reports/profitability/vehicle/:vehicleId (etc.).
-  const qs = `?startDate=${startDate}&endDate=${endDate}`;
-  const isVehicle = !!id && entityType === "vehicle";
-  const isProperty = !!id && entityType === "property";
-  const isProject = !!id && entityType === "project";
-  const isUmrahAgent = !!id && entityType === "umrah-agent";
-  // Each query uses an inline array literal as its first arg so the
-  // wiring scanner can advance past the queryKey and pick up the URL.
+  // Four explicit endpoints — one per entity type. The earlier
+  // `/${config.endpointSegment}/${id}` template normalised to
+  // `/:param/:param` and the wiring audit could not credit any of the
+  // four sibling backend routes from a single dynamic segment. By
+  // calling each route literally with `enabled` gating only the active
+  // tab, every URL becomes statically visible to the scanner. The
+  // disabled queries don't fire — useApiQuery's `enabled` flag short-
+  // circuits the fetch — so this stays a one-request-at-a-time page.
+  const qs = `startDate=${startDate}&endDate=${endDate}`;
+  const enabledFor = (t: ProfitabilityType) => !!id && entityType === t;
   const vehicleQ = useApiQuery<ProfitabilityResponse>(
     ["profitability-vehicle", id, startDate, endDate],
-    isVehicle ? `/finance/reports/profitability/vehicle/${id}${qs}` : null,
-    { enabled: isVehicle },
+    `/finance/reports/profitability/vehicle/${id}?${qs}`,
+    enabledFor("vehicle"),
   );
   const propertyQ = useApiQuery<ProfitabilityResponse>(
     ["profitability-property", id, startDate, endDate],
-    isProperty ? `/finance/reports/profitability/property/${id}${qs}` : null,
-    { enabled: isProperty },
+    `/finance/reports/profitability/property/${id}?${qs}`,
+    enabledFor("property"),
   );
   const projectQ = useApiQuery<ProfitabilityResponse>(
     ["profitability-project", id, startDate, endDate],
-    isProject ? `/finance/reports/profitability/project/${id}${qs}` : null,
-    { enabled: isProject },
+    `/finance/reports/profitability/project/${id}?${qs}`,
+    enabledFor("project"),
   );
   const umrahAgentQ = useApiQuery<ProfitabilityResponse>(
     ["profitability-umrah-agent", id, startDate, endDate],
-    isUmrahAgent ? `/finance/reports/profitability/umrah-agent/${id}${qs}` : null,
-    { enabled: isUmrahAgent },
+    `/finance/reports/profitability/umrah-agent/${id}?${qs}`,
+    enabledFor("umrah-agent"),
   );
-  const { data, isLoading, isError, refetch } =
+
+  const activeQ =
     entityType === "vehicle" ? vehicleQ
     : entityType === "property" ? propertyQ
     : entityType === "project" ? projectQ
     : umrahAgentQ;
+  const { data, isLoading, isError, refetch } = activeQ;
 
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data) return <ErrorState />;
@@ -210,6 +211,14 @@ export default function ProfitabilityPage({ entityType }: Props) {
           >
             <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
           </GuardedButton>
+          <PrintButton
+            entityType="report_profitability"
+            entityId="all"
+            payload={{
+              entity: { title: `تحليل الربحية — ${config.label}`, summary: data.summary },
+              items: data.accounts ?? [],
+            }}
+          />
         </div>
       }
     >

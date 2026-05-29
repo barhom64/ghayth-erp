@@ -1,28 +1,35 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useRoute, useLocation } from "wouter";
+import { useApiQuery, useApiMutation } from "@/lib/api";
+import { z } from "zod";
 import {
   DetailPageLayout,
   type RelatedEntity,
 } from "@workspace/entity-kit";
+import {
+  FormGrid,
+  FormTextareaField,
+} from "@workspace/ui-core";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
-import {
-  useDetailEditDelete,
-  DetailActionButtons,
-  InlineEditCard,
-} from "@/components/shared/detail-edit-delete-actions";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 
-import { Edit, Paperclip, Eye, Receipt } from "lucide-react";
+import { Edit, Paperclip, Eye, Receipt, Trash2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
+
+const voucherEditSchema = z.object({
+  description: z.string().min(1, "الوصف مطلوب"),
+});
+type VoucherEditForm = z.infer<typeof voucherEditSchema>;
 
 /**
  * VoucherDetail — unified detail page for a single finance voucher.
@@ -57,12 +64,14 @@ function statusTone(status?: string | null) {
 }
 
 export default function VoucherDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/vouchers/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("voucher", id ?? 0);
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["voucher", String(id)],
@@ -71,22 +80,10 @@ export default function VoucherDetail() {
   );
 
   const voucher = data;
-
-  // PATCH /finance/vouchers/:id — accepts `description` only; backend
-  // refuses edits on terminal states (approved/paid/posted/cancelled/
-  // rejected/reversed). DELETE soft-deletes drafts.
-  const editDelete = useDetailEditDelete({
-    entityLabel: "السند",
-    patchPath: `/finance/vouchers/${id}`,
-    deletePath: `/finance/vouchers/${id}`,
-    listPath: "/finance/vouchers",
-    initialValues: voucher,
-    fields: [
-      { key: "description", label: "الوصف" },
-    ],
-    invalidateKeys: [["voucher", String(id)], ["vouchers"]],
-    onSaved: () => refetch(),
-  });
+  // Both PATCH and DELETE are restricted to draft/pending/returned states
+  // on the backend — terminal states require a reversing entry instead.
+  const isEditable = voucher && ["draft", "pending_approval", "returned"].includes(voucher.status);
+  const isDeletable = voucher && voucher.status === "draft";
 
   const amount = useMemo(() => {
     return Number(voucher?.amount ?? 0);
@@ -145,13 +142,7 @@ export default function VoucherDetail() {
     : null;
 
 
-  const handleEdit = () => {
-    setLocation(`/finance/vouchers/${id}/edit`);
-  };
-
   const overview = (
-    <div className="space-y-4">
-      <InlineEditCard hook={editDelete} />
     <div className="grid gap-4 md:grid-cols-3">
       {/* Primary info — big amount + core metadata */}
       <Card className="md:col-span-2">
@@ -292,7 +283,6 @@ export default function VoucherDetail() {
       </div>
 
     </div>
-    </div>
   );
 
   return (
@@ -333,15 +323,23 @@ export default function VoucherDetail() {
               perm="finance:update"
               variant="outline"
               size="sm"
-              onClick={handleEdit}
-              disabled={
-                !voucher || ["posted", "paid", "rejected", "cancelled"].includes(voucher.status)
-              }
+              onClick={() => setEditOpen(true)}
+              disabled={!isEditable}
+              title={!isEditable && voucher ? "السند المعتمد/المرحَّل يُصحَّح بقيد عاكس" : undefined}
             >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
+              <Edit className="h-4 w-4 ms-1" />تعديل الوصف
             </GuardedButton>
-            <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
+            <GuardedButton
+              perm="finance:delete"
+              variant="outline"
+              size="sm"
+              className="text-status-error-foreground"
+              onClick={() => setDeleteOpen(true)}
+              disabled={!isDeletable}
+              title={!isDeletable && voucher ? "الحذف متاح للمسودات فقط" : undefined}
+            >
+              <Trash2 className="h-4 w-4 ms-1" />حذف
+            </GuardedButton>
           </>
         }
       />
@@ -350,6 +348,37 @@ export default function VoucherDetail() {
         open={!!previewAttachment}
         onOpenChange={(o) => !o && setPreviewAttachment(null)}
       />
+      {voucher && id && (
+        <EntityEditDialog<VoucherEditForm>
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          title="تعديل وصف السند"
+          schema={voucherEditSchema}
+          defaultValues={{ description: voucher.description ?? "" }}
+          endpoint={`/finance/vouchers/${id}`}
+          invalidateKeys={[["voucher", String(id)], ["vouchers"]]}
+          onSaved={() => refetch()}
+        >
+          <FormGrid cols={1}>
+            <FormTextareaField
+              name="description"
+              label="الوصف"
+              rows={3}
+            />
+          </FormGrid>
+        </EntityEditDialog>
+      )}
+      {voucher && id && (
+        <ConfirmDeleteDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          entity={{ type: "voucher", id, name: voucher.ref || `سند #${id}` }}
+          deletePath={`/finance/vouchers/${id}`}
+          invalidateKeys={[["voucher", String(id)], ["vouchers"]]}
+          successMessage="تم حذف السند"
+          onDeleted={() => setLocation("/finance/vouchers")}
+        />
+      )}
     </>
   );
 }

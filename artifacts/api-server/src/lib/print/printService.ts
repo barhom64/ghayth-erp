@@ -60,6 +60,11 @@ export interface PrintScope {
   userId: number;
   role: string;
   isOwner?: boolean;
+  /** Branches this user is allowed to see. Empty array = no restriction
+   *  (full company access). Used by loaders that span multiple branches
+   *  (customer/vendor statements, GL movements) to filter out data the
+   *  user shouldn't see. */
+  allowedBranches?: number[];
 }
 
 export async function renderPrint(
@@ -142,10 +147,19 @@ export async function renderPrint(
   }
 
   // 4. Data
+  //
+  // Thread the user's branch scope into the loader so multi-branch entities
+  // (customer/vendor statements, ledger movements, warehouse moves) can
+  // filter out data the user isn't entitled to see. Loaders inspect
+  // `allowedBranches` + `isOwner` to decide whether to apply a branch
+  // filter — bypassing it would leak cross-branch movements.
   const data = req.previewPayload ?? (await loadEntityData({
     companyId: scope.companyId,
     entityType: req.entityType,
     entityId: req.entityId,
+    allowedBranches: scope.allowedBranches ?? null,
+    branchId: scope.branchId,
+    isOwner: scope.isOwner,
   }));
 
   // 5. Letterhead

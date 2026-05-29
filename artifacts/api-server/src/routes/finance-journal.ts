@@ -36,6 +36,8 @@ import {
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
+import { logAllocationOverride } from "../lib/accountingAllocation.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -90,6 +92,24 @@ const createExpenseSchema = z.object({
   invoiceTypeCode: z.string().optional(),
   taxCategoryCode: z.string().optional(),
   exemptionReason: z.string().optional(),
+  // Audit item #2 — operator-supplied per-line allocation overrides.
+  // Mirrors the LineAllocationPanel schema in the frontend. Fields here
+  // override the auto-resolved allocation (rule-driven) on the expense
+  // JE line. `manualOverrideReason` is required when overriding any
+  // resolved dimension and gets logged via logAllocationOverride().
+  lineAllocation: z.object({
+    accountCode: z.string().optional(),
+    costCenterId: z.coerce.number().optional(),
+    activityType: z.string().optional(),
+    projectId: z.coerce.number().optional(),
+    vehicleId: z.coerce.number().optional(),
+    propertyId: z.coerce.number().optional(),
+    unitId: z.coerce.number().optional(),
+    assetId: z.coerce.number().optional(),
+    contractId: z.coerce.number().optional(),
+    umrahAgentId: z.coerce.number().optional(),
+    manualOverrideReason: z.string().optional(),
+  }).optional(),
 });
 
 const updateDescriptionSchema = z.object({
@@ -393,6 +413,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       attachmentUrl, attachmentType, operationType,
       autoDescription, projectId, taxCategory,
       govSyncEnabled, govIntegrationId, govEntityType, govEntityId,
+      lineAllocation,
     } = b;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
@@ -501,8 +522,29 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     if (projectId) entityLink.projectId = Number(projectId);
     if (costCenter) entityLink.costCenter = costCenter;
 
+    // Audit item #2 — apply operator-supplied allocation overrides on top
+    // of the auto-derived entityLink. Each field that the operator pinned
+    // through the LineAllocationPanel wins over the rule-resolved value.
+    // The override gets logged via logAllocationOverride() INSIDE the
+    // withTransaction block below (after the JE id is known) so the
+    // allocation_override_log row rolls back with the JE on failure.
+    let overrideAccountCode = accountCode;
+    if (lineAllocation) {
+      if (lineAllocation.accountCode) overrideAccountCode = lineAllocation.accountCode;
+      if (lineAllocation.costCenterId != null) entityLink.costCenterId = lineAllocation.costCenterId;
+      if (lineAllocation.activityType) entityLink.activityType = lineAllocation.activityType;
+      if (lineAllocation.projectId != null) entityLink.projectId = lineAllocation.projectId;
+      if (lineAllocation.vehicleId != null) entityLink.vehicleId = lineAllocation.vehicleId;
+      if (lineAllocation.propertyId != null) entityLink.propertyId = lineAllocation.propertyId;
+      if (lineAllocation.unitId != null) entityLink.unitId = lineAllocation.unitId;
+      if (lineAllocation.assetId != null) entityLink.assetId = lineAllocation.assetId;
+      if (lineAllocation.contractId != null) entityLink.contractId = lineAllocation.contractId;
+      if (lineAllocation.umrahAgentId != null) entityLink.umrahAgentId = lineAllocation.umrahAgentId;
+      if (lineAllocation.manualOverrideReason) entityLink.manualOverrideReason = lineAllocation.manualOverrideReason;
+    }
+
     const { financialEngine } = await import("../lib/engines/index.js");
-    const journalLines: any[] = [{ accountCode: accountCode ?? "5000", debit: baseAmount, credit: 0, ...entityLink }];
+    const journalLines: any[] = [{ accountCode: overrideAccountCode ?? "5000", debit: baseAmount, credit: 0, ...entityLink }];
     if (computedVat > 0) {
       const inputVatCode = await financialEngine.resolveAccountCode(effectiveCompanyId, "vat_input", "debit", "1400");
       journalLines.push({ accountCode: inputVatCode, debit: computedVat, credit: 0 });
@@ -540,6 +582,39 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
               [effectiveCompanyId, Number(govIntegrationId), govEntityType, Number(govEntityId), ref]
             );
           }).catch((e) => logger.error(e, "finance-journal background task failed"));
+        }
+      }
+
+      // Item #2 follow-through — actually log the override (the previous
+      // comment claimed this would happen "downstream in the resolver
+      // pipeline" but no downstream code fires for the expense path).
+      // Fires only when the operator pinned BOTH an override reason AND
+      // at least one dimension/accountCode — otherwise the operator is
+      // accepting the auto-derived allocation and no override exists.
+      if (lineAllocation?.manualOverrideReason) {
+        const blockers: string[] = [];
+        if (lineAllocation.accountCode) blockers.push(`account:${lineAllocation.accountCode}`);
+        if (lineAllocation.costCenterId != null) blockers.push(`costCenter:${lineAllocation.costCenterId}`);
+        if (lineAllocation.activityType) blockers.push(`activityType:${lineAllocation.activityType}`);
+        if (lineAllocation.projectId != null) blockers.push(`project:${lineAllocation.projectId}`);
+        if (lineAllocation.vehicleId != null) blockers.push(`vehicle:${lineAllocation.vehicleId}`);
+        if (lineAllocation.propertyId != null) blockers.push(`property:${lineAllocation.propertyId}`);
+        if (lineAllocation.unitId != null) blockers.push(`unit:${lineAllocation.unitId}`);
+        if (lineAllocation.assetId != null) blockers.push(`asset:${lineAllocation.assetId}`);
+        if (lineAllocation.contractId != null) blockers.push(`contract:${lineAllocation.contractId}`);
+        if (lineAllocation.umrahAgentId != null) blockers.push(`umrahAgent:${lineAllocation.umrahAgentId}`);
+        if (blockers.length > 0) {
+          await logAllocationOverride({
+            companyId: effectiveCompanyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            actorAssignmentId: scope.activeAssignmentId ?? null,
+            actorUserId: scope.userId,
+            documentType: "expense",
+            documentId: posted.journalId,
+            sourceTable: "journal_lines",
+            blockers,
+            overrideReason: lineAllocation.manualOverrideReason,
+          });
         }
       }
 
@@ -594,6 +669,10 @@ journalRouter.patch("/expenses/:id", authorize({ feature: "finance.journal", act
   }
 });
 
+// Audit F5 — DOC. Defensive endpoint with maintained guards. The UI
+// uses the soft-status `void` flow, but `financeGoldenPath.test.ts:358`
+// validates the "budget reservation release" behaviour on hard delete —
+// the route exists to keep that safety net green.
 journalRouter.delete("/expenses/:id", authorize({ feature: "finance.journal", action: "delete", resource: { table: "expenses", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1124,6 +1203,12 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
   }
 });
 
+// Audit F5 — DOC. Defensive endpoint with the **VL-1 guard contract**
+// (ref-prefix filter, terminal-state rejection, period gate). The UI
+// uses approve/reject flows, but `financeGoldenPath.test.ts:316+`
+// validates each VL-1 guard on this exact route — deleting would lose
+// the contract that protects against silent rewrites of approved
+// vouchers.
 journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1185,6 +1270,10 @@ journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", act
   }
 });
 
+// Audit F5 — DOC. Defensive sibling to the VL-1-guarded PATCH.
+// `financeGoldenPath.test.ts:141` asserts existence; the handler only
+// deletes drafts so the audit invariant of "approved JE is immutable"
+// stays intact.
 journalRouter.delete("/vouchers/:id", authorize({ feature: "finance.journal", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1198,6 +1287,16 @@ journalRouter.delete("/vouchers/:id", authorize({ feature: "finance.journal", ac
   }
 });
 
+// Audit F2 — Intentional split, not duplication.
+// /finance/salary-advances posts a one-shot advance against
+// salary_advance_receivable (default 1410) with no installment plan,
+// no employee_loans row, no monthly amortization. Approval flows through
+// the finance "advances" chain. Idempotency: SALARY-ADV-<token>.
+// hr-loans (loanType='salary_advance') posts to staff_loans (default 1400),
+// creates an employee_loans row with deductMonths, schedules payroll
+// auto-deductions, and flows through the HR loan-approval chain.
+// Idempotency: LOAN-<id>. Different account, different table, different
+// workflow — keep both.
 journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1463,6 +1562,7 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
       entityKey: "journal_entry",
       entityTable: "journal_entries",
       actorId: scope.userId,
+      expectedTiming: "on_draft",
     });
     const ref = issued.number;
     const idempotencyToken = requestIdempotencyToken(req);
@@ -1686,8 +1786,28 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         );
       }
 
+      // Carry the FULL dimensional payload onto the reversal entry so
+      // every drilldown (vehicle/property/contract/umrah-agent/asset/
+      // activity-type) reverses cleanly. The previous SELECT pulled only
+      // 4 of ~18 dim columns, so per-vehicle profitability reports
+      // showed the original posting but not the reversal — silently
+      // double-counting the cost. Audit-trail dims (sourceLineTable/Id,
+      // activityType) propagate too so the reversal links back to the
+      // same source row.
+      //
+      // NOTE: `branchId` on the journal_line is intentionally NOT carried
+      // here because the JournalEntryLine interface in businessHelpers
+      // omits it — branchId lives on the journal_entries header. PR #1304
+      // adds it to the line shape; once merged, this SELECT + map can
+      // grow to include "branchId" too.
       const { rows: originalLines } = await client.query(
-        `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
+        `SELECT "accountCode", debit, credit, description,
+                "costCenter", "departmentId", "projectId", "employeeId",
+                "costCenterId", "vehicleId", "propertyId",
+                "unitId", "assetId", "contractId",
+                "umrahSeasonId", "umrahAgentId", "activityType",
+                "productId", "clientId", "vendorId", "driverId",
+                "sourceLineTable", "sourceLineId"
          FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
         [id]
       );
@@ -1704,6 +1824,21 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         departmentId: l.departmentId as number | undefined,
         projectId: l.projectId as number | undefined,
         employeeId: l.employeeId as number | undefined,
+        costCenterId: l.costCenterId as number | undefined,
+        vehicleId: l.vehicleId as number | undefined,
+        propertyId: l.propertyId as number | undefined,
+        unitId: l.unitId as number | undefined,
+        assetId: l.assetId as number | undefined,
+        contractId: l.contractId as number | undefined,
+        umrahSeasonId: l.umrahSeasonId as number | undefined,
+        umrahAgentId: l.umrahAgentId as number | undefined,
+        activityType: l.activityType as string | undefined,
+        productId: l.productId as number | undefined,
+        clientId: l.clientId as number | undefined,
+        vendorId: l.vendorId as number | undefined,
+        driverId: l.driverId as number | undefined,
+        sourceLineTable: l.sourceLineTable as string | undefined,
+        sourceLineId: l.sourceLineId as number | undefined,
       }));
 
       const newRef = `REV-${original.ref}`;
@@ -1979,19 +2114,39 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature
     }
 
     if (force && missing.length > 0) {
+      // F3 — Force-close path. Previously this block ran its own raw
+      // UPDATE that bypassed the pending-JE guard, the lifecycle engine,
+      // the audit log, and the event bus — so a year-end on a year with
+      // unposted manual journals would silently close the periods and
+      // post the YE entry without those journals. The fix: for any
+      // missing period that already exists in `financial_periods`,
+      // close it through `closeFiscalPeriodCanonical` (the same helper
+      // /fiscal-periods-v2/:id/close uses). Periods that don't exist
+      // at all are created on-the-fly already-closed (this is a backfill
+      // case for historic data — by definition no journals were ever
+      // posted into a period the system didn't know about, so there are
+      // no pending JEs to guard).
       await withTransaction(async (client: any) => {
         for (const p of missing) {
           const startDate = `${p}-01`;
           const endDate = toDateISO(new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0));
           const { rows: [existing] } = await client.query(
-            `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
+            `SELECT id, status FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
             [scope.companyId, p]
           );
           if (existing) {
-            await client.query(
-              `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status = 'open' AND "deletedAt" IS NULL`,
-              [scope.activeAssignmentId, existing.id, scope.companyId]
-            );
+            if (existing.status !== "open") continue;
+            await closeFiscalPeriodCanonical({
+              periodId: Number(existing.id),
+              scope: {
+                companyId: scope.companyId,
+                branchId: scope.branchId ?? null,
+                userId: scope.userId,
+                activeAssignmentId: scope.activeAssignmentId,
+              },
+              reason: `إقفال تلقائي عبر إقفال السنة المالية ${year}`,
+              client,
+            });
           } else {
             await client.query(
               `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,"closedAt","closedBy")

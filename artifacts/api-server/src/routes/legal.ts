@@ -107,6 +107,11 @@ const updateCaseSchema = z.object({
   lawyerName: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   court: z.string().optional().nullable(),
+  // clientId — link the case to a CRM client so the client's portal
+  // shows their own legal/cases + legal/sessions/upcoming tabs.
+  // Column added in migration 230. Nullable: existing cases stay
+  // un-linked until an operator (legal manager) sets it explicitly.
+  clientId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const updateJudgmentSchema = z.object({
@@ -232,6 +237,7 @@ router.post("/contracts", authorize({ feature: "legal.contracts", action: "creat
         entityKey: "contract",
         entityTable: "legal_contracts",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       contractRef = issuedContract.number;
     }
@@ -670,6 +676,7 @@ router.post("/cases", authorize({ feature: "legal.cases", action: "create" }), a
         entityKey: "case",
         entityTable: "legal_cases",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       caseNumber = issuedCase.number;
     }
@@ -724,7 +731,16 @@ router.get("/cases/:id", authorize({ feature: "legal.cases", action: "view", res
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    // LEFT JOIN clients to resolve the portal-linked client's name in
+    // one round-trip — same pattern as tenant-detail. Migration 230
+    // added the clientId column; un-linked cases just carry NULL.
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT lc.*, c.name AS "clientName"
+         FROM legal_cases lc
+         LEFT JOIN clients c ON c.id = lc."clientId" AND c."companyId" = lc."companyId" AND c."deletedAt" IS NULL
+        WHERE lc.id = $1 AND lc."companyId" = $2 AND lc."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!row) throw new NotFoundError("القضية غير موجودة");
 
     const sessions = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [row.id]);
@@ -769,6 +785,21 @@ router.patch("/cases/:id", authorize({ feature: "legal.cases", action: "update" 
     if (b.lawyerName !== undefined) { params.push(b.lawyerName); sets.push(`"lawyerName"=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.court !== undefined) { params.push(b.court); sets.push(`court=$${params.length}`); }
+    // Portal link — validate the client exists in this company before
+    // wiring it. Null unlinks. Column added in migration 230.
+    if (b.clientId !== undefined) {
+      if (b.clientId !== null) {
+        const [client] = await rawQuery<{ id: number }>(
+          `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [b.clientId, scope.companyId],
+        );
+        if (!client) {
+          throw new ValidationError("العميل غير موجود في هذه الشركة", { field: "clientId" });
+        }
+      }
+      params.push(b.clientId);
+      sets.push(`"clientId"=$${params.length}`);
+    }
     if (sets.length <= 1 && params.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE legal_cases SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
@@ -1315,6 +1346,10 @@ router.patch("/cases/:caseId/judgments/:id", authorize({ feature: "legal.cases",
       }
     }
 
+    // Snapshot prior paidAmount to compute the GL delta — partial payments
+    // produce one journal entry per increment, not per absolute total.
+    const priorPaid = Number(existingJ.paidAmount || 0);
+
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: unknown[] = [];
     if (b.paidAmount !== undefined) { params.push(b.paidAmount); sets.push(`"paidAmount"=$${params.length}`); }
@@ -1325,6 +1360,19 @@ router.patch("/cases/:caseId/judgments/:id", authorize({ feature: "legal.cases",
     const { affectedRows } = await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (!affectedRows) throw new NotFoundError("الحكم غير موجود");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    // GL: post the payment delta. postSettlementGL recorded the liability /
+    // receivable when the judgment was first created; we now clear it on
+    // each payment increment so the books match cash reality.
+    const newPaid = row ? Number(row.paidAmount || 0) : priorPaid;
+    if (newPaid > priorPaid) {
+      const { legalEngine } = await import("../lib/engines/index.js");
+      const isInFavor = existingJ.verdict === "in_favor" || existingJ.verdict === "لصالح الشركة";
+      legalEngine.postJudgmentPaymentGL(
+        { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+        { caseId, judgmentId: id, priorPaid, newPaid, isInFavor },
+      ).catch((e: unknown) => logger.error(e, "Legal judgment payment GL error:"));
+    }
 
     // Mark payment obligation met if fully paid
     if (row && Number(row.paidAmount || 0) >= Number(row.amount || 0) && Number(row.amount || 0) > 0) {

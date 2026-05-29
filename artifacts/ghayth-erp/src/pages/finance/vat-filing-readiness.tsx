@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   FileCheck2, Download, ArrowDownCircle, ArrowUpCircle, Equal,
-  AlertTriangle, CheckCircle2, Calendar, ExternalLink,
+  AlertTriangle, CheckCircle2, Calendar, ExternalLink, Building2, Receipt,
 } from "lucide-react";
 import {
   formatCurrency, formatDateAr, currentYearRiyadh,
@@ -138,6 +139,28 @@ export default function VatFilingReadinessPage() {
     <PageShell
       title="جاهزية إقرار ZATCA"
       subtitle={`${periodLabel} — تجميع ضرائب القيمة المضافة الفصلية للإقرار`}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/tax-filing-calendar">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Calendar className="h-3.5 w-3.5 ml-1" />
+              تقويم الإقرارات
+            </Button>
+          </Link>
+          <Link href="/finance/reports/zatca">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Building2 className="h-3.5 w-3.5 ml-1" />
+              تقارير ZATCA
+            </Button>
+          </Link>
+          <Link href="/finance/wht-filing-workbench">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Receipt className="h-3.5 w-3.5 ml-1" />
+              منضدة WHT
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
@@ -172,7 +195,7 @@ export default function VatFilingReadinessPage() {
             </div>
           </div>
           <div className="flex-1" />
-          <Link href="/finance/zatca-reports-hub">
+          <Link href="/finance/reports/zatca">
             <Button variant="outline" size="sm">
               <FileCheck2 className="w-4 h-4 ml-1" />
               مركز تقارير ZATCA
@@ -182,6 +205,14 @@ export default function VatFilingReadinessPage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_vat_filing_readiness"
+            entityId="all"
+            payload={{
+              entity: { title: "جاهزية إقرار ضريبة القيمة المضافة" },
+              items: [],
+            }}
+          />
         </CardContent>
       </Card>
 
@@ -351,7 +382,7 @@ export default function VatFilingReadinessPage() {
                 <ChecklistItem label="راجع كل المصاريف المدخلة — input VAT يطابق فواتير ضريبية" href="/finance/expenses" />
                 <ChecklistItem label="راجع إشعارات الدائن والمدين — تخفض/تزيد VAT المخرجات بشكل صحيح" href="/finance/invoices" />
                 <ChecklistItem label="عدّل الفترة المحاسبية إن لزم قبل التقديم النهائي" href="/finance/fiscal-periods-v2" />
-                <ChecklistItem label="اطبع قائمة الفواتير وأرفقها مع الإقرار" href="/finance/zatca-reports-hub" />
+                <ChecklistItem label="اطبع قائمة الفواتير وأرفقها مع الإقرار" href="/finance/reports/zatca" />
               </div>
             </CardContent>
           </Card>

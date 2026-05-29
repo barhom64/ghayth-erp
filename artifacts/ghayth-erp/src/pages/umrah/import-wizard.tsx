@@ -170,7 +170,6 @@ export default function UmrahImportWizard() {
         fileName,
         rows: parsedRows,
       };
-      // Cash-box + account override (gaps #2 + #3) only apply to vouchers.
       if (fileType === "vouchers") {
         if (treasuryId) body.treasuryId = Number(treasuryId);
         if (purchaseAccountCode) body.purchaseAccountCode = purchaseAccountCode;

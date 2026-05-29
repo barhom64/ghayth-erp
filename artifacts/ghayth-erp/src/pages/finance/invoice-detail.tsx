@@ -37,6 +37,7 @@ import {
   type DetailStatus,
 } from "@workspace/entity-kit";
 import { EntityObligations } from "@/components/shared/entity-obligations";
+import { LineAllocationStatusBanner } from "@/components/shared/line-allocation-status-banner";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
   useDetailEditDelete,
@@ -220,7 +221,7 @@ export default function InvoiceDetailPage() {
       { key: "notes", label: "ملاحظات" },
       { key: "dueDate", label: "تاريخ الاستحقاق" },
     ],
-    invalidateKeys: [["invoice", String(id)], ["invoices"]],
+    invalidateKeys: [["invoice-detail", String(id)], ["invoices"]],
     onSaved: () => refetch(),
   });
 
@@ -304,6 +305,10 @@ export default function InvoiceDetailPage() {
   const overview = invoice ? (
     <div className="space-y-4">
       <InlineEditCard hook={editDelete} />
+      <LineAllocationStatusBanner
+        lines={(invoice as any).lines}
+        documentType="invoice"
+      />
       {/* Visible payment lifecycle strip */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">
@@ -334,7 +339,13 @@ export default function InvoiceDetailPage() {
 
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-2 mb-3 text-muted-foreground"><User className="h-4 w-4" /><span className="text-sm">العميل</span></div>
-          <p className="font-bold text-lg">{invoice.clientName || "-"}</p>
+          {(invoice as any).clientId ? (
+            <Link href={`/finance/customer-360-sheet?clientId=${(invoice as any).clientId}`}>
+              <p className="font-bold text-lg hover:underline cursor-pointer">{invoice.clientName || "-"}</p>
+            </Link>
+          ) : (
+            <p className="font-bold text-lg">{invoice.clientName || "-"}</p>
+          )}
           {invoice.clientPhone && <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><Phone className="h-3 w-3" />{invoice.clientPhone}</p>}
           {invoice.clientEmail && <p className="text-sm text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" />{invoice.clientEmail}</p>}
         </CardContent></Card>
@@ -583,6 +594,33 @@ export default function InvoiceDetailPage() {
             </CardContent>
           </Card>
         </>
+      )}
+
+      {invoice.status === "approved" && (
+        <Card className="border-status-info-surface">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between gap-2">
+              <span>الترحيل المحاسبي</span>
+              <GuardedButton
+                perm="finance:approve"
+                onClick={() => {
+                  if (window.confirm("سيتم ترحيل الفاتورة وإنشاء قيد المحاسبة. متابعة؟")) {
+                    postMut.mutate({});
+                  }
+                }}
+                disabled={postMut.isPending}
+                rateLimitAware
+              >
+                ترحيل
+              </GuardedButton>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              الفاتورة معتمدة. اضغط <strong>ترحيل</strong> لإنشاء قيد المحاسبة وقفل الفاتورة عن أي تعديل.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       <Card>

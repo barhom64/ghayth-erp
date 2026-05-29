@@ -280,16 +280,32 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     getAccountCodeFromMapping(scope.companyId, "umrah_invoice_revenue", "credit", "4200"),
     getAccountCodeFromMapping(scope.companyId, "umrah_penalty_revenue", "credit", "4210"),
   ]);
-  const glLines: Array<{ accountCode: string; debit: number; credit: number; description: string }> = [
-    { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}` },
-    { accountCode: revCode, debit: 0, credit: subtotal, description: `إيراد خدمات عمرة — ${ref}` },
+  // Every GL line on an Umrah sales invoice carries the agent + season
+  // dimensions so revenue/AR drill by agent-season is preserved end-to-
+  // end in the books (financial-integrity audit gap #5). `subAgent.agentId`
+  // and `seasonId` are guaranteed available here — we read them before
+  // any insert so they're never silently dropped.
+  const umrahDims = {
+    umrahAgentId: (subAgent.agentId as number | null) ?? undefined,
+    umrahSeasonId: (seasonId as number | null) ?? undefined,
+  };
+  const glLines: Array<{
+    accountCode: string;
+    debit: number;
+    credit: number;
+    description: string;
+    umrahAgentId?: number;
+    umrahSeasonId?: number;
+  }> = [
+    { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}`, ...umrahDims },
+    { accountCode: revCode, debit: 0, credit: subtotal, description: `إيراد خدمات عمرة — ${ref}`, ...umrahDims },
   ];
   if (penaltiesTotal > 0) {
-    glLines.push({ accountCode: penaltyRevCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}` });
+    glLines.push({ accountCode: penaltyRevCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}`, ...umrahDims });
   }
   if (vatAmount > 0) {
     const vatPayableCode = await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2160");
-    glLines.push({ accountCode: vatPayableCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${ref}` });
+    glLines.push({ accountCode: vatPayableCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${ref}`, ...umrahDims });
   }
   await createGuardedJournalEntry({
     companyId: scope.companyId,
@@ -354,7 +370,7 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
   if (!sarAmount || sarAmount <= 0) throw new ValidationError("المبلغ بالريال مطلوب");
 
   const [subAgent] = await rawQuery<Record<string, unknown>>(
-    `SELECT id, "clientId" FROM umrah_sub_agents WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    `SELECT id, "clientId", "agentId" FROM umrah_sub_agents WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
     [subAgentId, scope.companyId]
   );
   if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
@@ -445,6 +461,12 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
     getAccountCodeFromMapping(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
     getAccountCodeFromMapping(scope.companyId, "invoice_payment_ar", "credit", "1200"),
   ]);
+  // Carry umrahAgentId on both legs so AR aging by agent stays drillable
+  // from the GL (financial-integrity audit gap #5). umrahSeasonId is not
+  // included here because a single payment may settle invoices from
+  // multiple seasons; reliable per-season attribution lives on the
+  // payment-to-invoice allocations table, not on the cash JE itself.
+  const umrahAgentId = (subAgent.agentId as number | null) ?? undefined;
   await createGuardedJournalEntry({
     companyId: scope.companyId,
     branchId: scope.branchId || 0,
@@ -455,8 +477,8 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
     sourceType: "umrah_payments",
     sourceId: paymentId,
     lines: [
-      { accountCode: cashCode, debit: sarAmount, credit: 0 },
-      { accountCode: arPayCode, debit: 0, credit: sarAmount },
+      { accountCode: cashCode, debit: sarAmount, credit: 0, umrahAgentId },
+      { accountCode: arPayCode, debit: 0, credit: sarAmount, umrahAgentId },
     ],
   }, { table: "umrah_payments", id: paymentId });
 

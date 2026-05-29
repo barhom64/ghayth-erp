@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { z } from "zod";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   PageShell,
   PageStatusBadge,
@@ -11,6 +11,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,12 +85,21 @@ function CategoryBadge({ category }: { category: string }) {
 }
 
 
+const documentEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  category: z.string().optional().default(""),
+});
+type DocumentEditForm = z.infer<typeof documentEditSchema>;
+
 function DocumentsList() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [deleting, setDeleting] = useState<{ id: number; title: string } | null>(null);
+  const [editing, setEditing] = useState<any | null>(null);
 
   const queryParams = new URLSearchParams();
   if (categoryFilter && categoryFilter !== "all") queryParams.set("category", categoryFilter);
@@ -312,6 +322,31 @@ function DocumentsList() {
                           <XCircle className="h-3.5 w-3.5" /> إلغاء
                         </GuardedButton>
                       )}
+                      {d.storageKey && (
+                        // Direct anchor — GET /documents/:id/preview returns
+                        // an inline-renderable file (the backend sets the
+                        // right Content-Type and X-Frame-Options). Opens in
+                        // a new tab so the user keeps their list context.
+                        <a
+                          href={`/api/documents/${d.id}/preview`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs h-8 px-2 hover:bg-accent rounded"
+                          title="معاينة"
+                        >
+                          <Eye className="h-3.5 w-3.5" /> معاينة
+                        </a>
+                      )}
+                      <GuardedButton
+                        perm="documents:delete"
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 text-xs text-status-error-foreground"
+                        onClick={() => setDeleting({ id: d.id, title: d.title || d.fileName })}
+                        title="حذف نهائياً"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </GuardedButton>
                       {d.status === "cancelled" && (
                         <>
                           <Button variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground" onClick={() => handleStatusChange(d.id, "draft")}>
@@ -626,6 +661,8 @@ function TemplatesTab() {
 }
 
 export default function DocumentsPage() {
+  const [location] = useLocation();
+  const initialTab = location === "/documents/folders" ? "folders" : "documents";
   const { data: stats, isLoading, isError } = useApiQuery<any>(["doc-stats"], "/documents/stats");
 
   if (isLoading) return <LoadingSpinner />;
@@ -653,7 +690,7 @@ export default function DocumentsPage() {
           </Card>
         ))}
       </div>
-      <Tabs defaultValue="documents" dir="rtl">
+      <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="documents">المستندات</TabsTrigger>
           <TabsTrigger value="folders">المجلدات</TabsTrigger>

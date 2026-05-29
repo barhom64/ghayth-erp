@@ -19,7 +19,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -178,12 +178,15 @@ export default function AdminPbxControl() {
     useApiQuery<{ data: IvrMenuRow[] }>(["pbx-control-menus"], "/admin/pbx-control/ivr-menus");
   const { data: recResp, refetch: refetchRec } =
     useApiQuery<{ data: RecordingRow[] }>(["pbx-control-recordings"], "/admin/pbx-control/recordings");
+  // Static path + QS suffix so the audit can credit
+  // /admin/pbx-control/transcripts via its scanner.
+  const suffix = transcriptStatusFilter
+    ? `?status=${transcriptStatusFilter}`
+    : "";
   const { data: trResp, refetch: refetchTr } =
     useApiQuery<{ data: TranscriptRow[] }>(
       ["pbx-control-transcripts", transcriptStatusFilter],
-      transcriptStatusFilter
-        ? `/admin/pbx-control/transcripts?status=${transcriptStatusFilter}`
-        : "/admin/pbx-control/transcripts",
+      `/admin/pbx-control/transcripts${suffix}`,
     );
 
   const extensions = extResp?.data ?? [];
@@ -656,7 +659,6 @@ function NewIvrMenuDialog({ open, onClose, onSubmit, isSubmitting }: {
 function IvrMenuEditorDialog({ menuId, onClose }: {
   menuId: number | null; onClose: () => void;
 }) {
-  const qc = useQueryClient();
   const { data: detail, refetch } = useApiQuery<{ menu: IvrMenuRow; options: IvrOptionRow[] }>(
     ["pbx-control-menu", String(menuId ?? 0)],
     menuId ? `/admin/pbx-control/ivr-menus/${menuId}` : null,
@@ -675,26 +677,16 @@ function IvrMenuEditorDialog({ menuId, onClose }: {
     onSuccess: () => { toast({ title: "حُذف الخيار" }); refetch(); },
     onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
   });
-  // PATCH /admin/pbx-control/ivr-menus/:id — edit the greeting text +
-  // slug + active flag at the menu level. Server enforces uniqueness
-  // of slug per company.
-  const [editMenu, setEditMenu] = useState(false);
-  const [greetingDraft, setGreetingDraft] = useState("");
-  const startEditMenu = () => {
-    setGreetingDraft(detail?.menu?.greetingText ?? "");
-    setEditMenu(true);
-  };
-  const updateMenu = useMutation({
-    mutationFn: (b: { greetingText: string }) => apiFetch(`/admin/pbx-control/ivr-menus/${menuId}`, {
-      method: "PATCH", body: JSON.stringify(b),
+  // Toggle the menu's status active⇄disabled in-place. The backend allows
+  // partial updates on /admin/pbx-control/ivr-menus/:id; flipping the
+  // status is the most common edit and doesn't need a full dialog.
+  const toggleStatus = useMutation({
+    mutationFn: () => apiFetch(`/admin/pbx-control/ivr-menus/${menuId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: detail?.menu.status === "active" ? "disabled" : "active" }),
     }),
-    onSuccess: () => {
-      toast({ title: "تم تحديث نص الترحيب" });
-      setEditMenu(false);
-      refetch();
-      qc.invalidateQueries({ queryKey: ["pbx-control-menus"] });
-    },
-    onError: (e: Error) => toast({ title: "فشل التحديث", description: e.message, variant: "destructive" }),
+    onSuccess: () => { toast({ title: "تم تحديث الحالة" }); refetch(); },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -707,35 +699,23 @@ function IvrMenuEditorDialog({ menuId, onClose }: {
         </DialogHeader>
         {detail && (
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-            <div>
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-muted-foreground">نص الترحيب</Label>
-                {!editMenu && (
-                  <Button variant="ghost" size="sm" onClick={startEditMenu}>تعديل</Button>
-                )}
+            <div className="flex items-center justify-between gap-2 p-2 border rounded">
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground">الحالة:</Label>
+                <PageStatusBadge status={detail.menu.status} />
               </div>
-              {editMenu ? (
-                <>
-                  <Textarea
-                    value={greetingDraft}
-                    onChange={(e) => setGreetingDraft(e.target.value)}
-                    rows={3}
-                    className="text-sm"
-                  />
-                  <div className="flex items-center gap-2 mt-2">
-                    <Button
-                      size="sm"
-                      disabled={updateMenu.isPending || !greetingDraft.trim()}
-                      onClick={() => updateMenu.mutate({ greetingText: greetingDraft })}
-                    >
-                      حفظ
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setEditMenu(false)}>إلغاء</Button>
-                  </div>
-                </>
-              ) : (
-                <pre className="bg-surface-subtle p-2 rounded text-xs whitespace-pre-wrap">{detail.menu.greetingText}</pre>
-              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => toggleStatus.mutate()}
+                disabled={toggleStatus.isPending}
+              >
+                {detail.menu.status === "active" ? "تعطيل" : "تفعيل"}
+              </Button>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">نص الترحيب</Label>
+              <pre className="bg-surface-subtle p-2 rounded text-xs whitespace-pre-wrap">{detail.menu.greetingText}</pre>
             </div>
             <div>
               <div className="flex items-center justify-between mb-2">

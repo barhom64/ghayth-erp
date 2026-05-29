@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   TrendingDown, TrendingUp, Flame, Calendar, AlertTriangle,
   Banknote, Clock, Download, BarChart3,
@@ -152,6 +154,28 @@ export default function ExpenseBurnRatePage() {
     <PageShell
       title="معدل الحرق وفترة البقاء"
       subtitle="6 أشهر من معدل صافي الحرق + توقع فترة البقاء بناءً على السيولة الحالية"
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/cash-position-calculator">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Banknote className="h-3.5 w-3.5 ml-1" />
+              مركز السيولة
+            </Button>
+          </Link>
+          <Link href="/finance/cash-13week">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Calendar className="h-3.5 w-3.5 ml-1" />
+              توقع 13 أسبوع
+            </Button>
+          </Link>
+          <Link href="/finance/expense-bulk-approvals">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <BarChart3 className="h-3.5 w-3.5 ml-1" />
+              اعتماد المصاريف
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
@@ -186,6 +210,11 @@ export default function ExpenseBurnRatePage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_expense_burn_rate"
+            entityId="all"
+            payload={{ entity: { title: "معدل حرق المصاريف" }, items: [] }}
+          />
         </CardContent>
       </Card>
 

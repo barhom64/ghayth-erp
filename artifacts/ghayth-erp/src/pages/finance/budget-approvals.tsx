@@ -20,8 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock, Plus } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock, Target, Grid3x3, TrendingUp } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 interface BudgetApprovalRequest {
@@ -74,86 +73,6 @@ export default function BudgetApprovalsPage() {
     "POST",
     [["budget-approvals"]],
   );
-
-  // POST /finance/budget/approval-requests — operator requests an
-  // increase / variance approval. Auto-routes server-side based on
-  // resulting utilisation (≤80% = auto, ≤99% = CFO, else GM).
-  const createRequestMut = useApiMutation<unknown, {
-    accountCode: string;
-    period: string;
-    requestedAmount: number;
-    reason?: string;
-  }>(
-    "/finance/budget/approval-requests",
-    "POST",
-    [["budget-approvals"]],
-    { successMessage: "تم إرسال طلب الاعتماد" },
-  );
-
-  // POST /finance/budget/validate — preflight check that tells the
-  // operator whether this amount would auto-approve, need CFO, or be
-  // outright blocked. We surface the result inline before they submit.
-  type ValidateBudgetResp = {
-    status: string;
-    message?: string;
-    canProceed?: boolean;
-    utilization?: number;
-    requiresApproval?: boolean;
-    approvalLevel?: string;
-  };
-  const [validationResult, setValidationResult] = useState<ValidateBudgetResp | null>(null);
-  const validateMut = useApiMutation<ValidateBudgetResp, {
-    accountCode: string;
-    period: string;
-    amount: number;
-  }>(
-    "/finance/budget/validate",
-    "POST",
-    [],
-    { successMessage: false },
-  );
-
-  // Inline new-request dialog
-  const [requestOpen, setRequestOpen] = useState(false);
-  const [reqAccount, setReqAccount] = useState("");
-  const [reqPeriod, setReqPeriod] = useState("");
-  const [reqAmount, setReqAmount] = useState("");
-  const [reqReason, setReqReason] = useState("");
-  const handleSubmitRequest = () => {
-    const amt = Number(reqAmount);
-    if (!reqAccount.trim() || !reqPeriod.trim() || !Number.isFinite(amt) || amt <= 0) {
-      toast({ variant: "destructive", title: "الحقول الإلزامية ناقصة" });
-      return;
-    }
-    createRequestMut.mutate(
-      {
-        accountCode: reqAccount.trim(),
-        period: reqPeriod.trim(),
-        requestedAmount: amt,
-        reason: reqReason.trim() || undefined,
-      },
-      {
-        onSuccess: () => {
-          setRequestOpen(false);
-          setReqAccount(""); setReqPeriod(""); setReqAmount(""); setReqReason("");
-          setValidationResult(null);
-        },
-      },
-    );
-  };
-
-  const handleValidate = () => {
-    const amt = Number(reqAmount);
-    if (!reqAccount.trim() || !reqPeriod.trim() || !Number.isFinite(amt) || amt <= 0) {
-      toast({ variant: "destructive", title: "الحقول الإلزامية ناقصة للفحص" });
-      return;
-    }
-    setValidationResult(null);
-    validateMut.mutate(
-      { accountCode: reqAccount.trim(), period: reqPeriod.trim(), amount: amt },
-      { onSuccess: (r) => setValidationResult(r) },
-    );
-  };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -331,10 +250,26 @@ export default function BudgetApprovalsPage() {
         { label: "اعتمادات التجاوز" },
       ]}
       actions={
-        <GuardedButton perm="finance:create" size="sm" onClick={() => setRequestOpen(true)} rateLimitAware>
-          <Plus className="h-4 w-4 me-1" />
-          طلب اعتماد
-        </GuardedButton>
+        <div className="flex gap-2">
+          <Link href="/finance/budget-variance">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Target className="h-3.5 w-3.5 ml-1" />
+              انحرافات الميزانية
+            </Button>
+          </Link>
+          <Link href="/finance/budget-heatmap">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Grid3x3 className="h-3.5 w-3.5 ml-1" />
+              خريطة الميزانية
+            </Button>
+          </Link>
+          <Link href="/finance/reports/is-vs-budget">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <TrendingUp className="h-3.5 w-3.5 ml-1" />
+              P&L vs Budget
+            </Button>
+          </Link>
+        </div>
       }
     >
       <FinanceTabsNav />
@@ -413,67 +348,6 @@ export default function BudgetApprovalsPage() {
           />
         </CardContent>
       </Card>
-      <AlertDialog open={requestOpen} onOpenChange={setRequestOpen}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle>طلب اعتماد تجاوز</AlertDialogTitle>
-          </AlertDialogHeader>
-          <div className="space-y-2 py-2">
-            <div>
-              <Label className="text-xs">رمز الحساب *</Label>
-              <Input value={reqAccount} onChange={(e) => setReqAccount(e.target.value)} dir="ltr" className="font-mono" />
-            </div>
-            <div>
-              <Label className="text-xs">الفترة *</Label>
-              <Input value={reqPeriod} onChange={(e) => setReqPeriod(e.target.value)} placeholder="2026-05" dir="ltr" className="font-mono" />
-            </div>
-            <div>
-              <Label className="text-xs">المبلغ المطلوب *</Label>
-              <Input type="number" value={reqAmount} onChange={(e) => setReqAmount(e.target.value)} dir="ltr" />
-            </div>
-            <div>
-              <Label className="text-xs">سبب الطلب</Label>
-              <Textarea value={reqReason} onChange={(e) => setReqReason(e.target.value)} rows={2} />
-            </div>
-            {validationResult && (
-              <div className={
-                `text-xs rounded border p-2 ${
-                  validationResult.status === "rejected"
-                    ? "bg-red-50 border-red-200 text-status-error-foreground"
-                    : validationResult.status === "blocked_gm"
-                      ? "bg-amber-50 border-amber-200 text-status-warning-foreground"
-                      : validationResult.status === "warning_cfo"
-                        ? "bg-amber-50 border-amber-200 text-status-warning-foreground"
-                        : "bg-emerald-50 border-emerald-200 text-emerald-800"
-                }`
-              }>
-                <p className="font-semibold">
-                  {validationResult.status === "rejected" ? "محظور — يتجاوز السقف" :
-                   validationResult.status === "blocked_gm" ? "يتطلب موافقة المدير العام" :
-                   validationResult.status === "warning_cfo" ? "يتطلب موافقة المدير المالي" :
-                   validationResult.status === "no_budget" ? "لا توجد ميزانية محددة" :
-                   "ضمن السقف — اعتماد تلقائي"}
-                </p>
-                {validationResult.message && <p className="mt-1">{validationResult.message}</p>}
-                {validationResult.utilization !== undefined && (
-                  <p className="mt-1 font-mono">% الاستخدام: {Number(validationResult.utilization).toFixed(1)}%</p>
-                )}
-              </div>
-            )}
-          </div>
-          <AlertDialogFooter className="flex-wrap gap-2">
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <Button
-              variant="outline"
-              onClick={handleValidate}
-              disabled={validateMut.isPending}
-            >
-              فحص الميزانية
-            </Button>
-            <AlertDialogAction onClick={handleSubmitRequest} disabled={createRequestMut.isPending}>إرسال الطلب</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </PageShell>
   );
 }

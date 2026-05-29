@@ -12,6 +12,7 @@ import {
   Clock, ArrowRight, Banknote, ReceiptText, FileText, Calendar,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { AllocationHealthCard } from "@/components/shared/allocation-health-card";
 
 /**
  * CFO Daily Cockpit — single-pane-of-glass for the CFO's morning review.
@@ -154,14 +155,48 @@ export default function CfoCockpitPage() {
         { label: "لوحة CFO" },
       ]}
       actions={
-        <Link href="/finance/reports">
-          <Button variant="outline" size="sm">
-            <FileText className="h-4 w-4 me-1" /> التقارير الكاملة
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/finance/daily-close-checklist">
+            <Button variant="outline" size="sm">
+              فحص اليوم
+            </Button>
+          </Link>
+          <Link href="/finance/monthly-close-pack">
+            <Button variant="outline" size="sm">
+              إقفال الشهر
+            </Button>
+          </Link>
+          <Link href="/finance/workflows-hub">
+            <Button variant="outline" size="sm">
+              كل سير العمل
+            </Button>
+          </Link>
+          <Link href="/finance/reports">
+            <Button variant="outline" size="sm">
+              <FileText className="h-4 w-4 me-1" /> التقارير الكاملة
+            </Button>
+          </Link>
+        </div>
       }
     >
       <FinanceTabsNav />
+
+      {/* ── Allocation engine health: enforce flag + coverage + bypass count
+           up here on the CFO cockpit so financial-integrity status is one
+           glance away from cash + AR + budget. ── */}
+      <AllocationHealthCard />
+
+      {/* ── Quick links bar — jump to any 360° or workflow ─────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 mb-4">
+        <Link href="/finance/customer-360-sheet" className="border rounded p-2 text-center text-xs hover:bg-muted/30">عميل 360°</Link>
+        <Link href="/finance/vendor-360-sheet" className="border rounded p-2 text-center text-xs hover:bg-muted/30">مورد 360°</Link>
+        <Link href="/finance/cash-position-calculator" className="border rounded p-2 text-center text-xs hover:bg-muted/30">حاسبة النقد</Link>
+        <Link href="/finance/bank-accounts-watch" className="border rounded p-2 text-center text-xs hover:bg-muted/30">مراقبة البنوك</Link>
+        <Link href="/finance/ar-collection-workbench" className="border rounded p-2 text-center text-xs hover:bg-muted/30">منضدة التحصيل</Link>
+        <Link href="/finance/vendor-settlement-workbench" className="border rounded p-2 text-center text-xs hover:bg-muted/30">منضدة الموردين</Link>
+        <Link href="/finance/budget-heatmap" className="border rounded p-2 text-center text-xs hover:bg-muted/30">خريطة الميزانية</Link>
+        <Link href="/finance/expense-burn-rate" className="border rounded p-2 text-center text-xs hover:bg-muted/30">معدل الحرق</Link>
+      </div>
 
       {/* ── Headline KPIs ───────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">

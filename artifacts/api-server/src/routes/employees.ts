@@ -24,6 +24,7 @@ import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { hashPassword } from "../lib/auth.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
@@ -483,6 +484,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         entityKey: "employee_code",
         entityTable: "employees",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       preIssuedEmpNumber = preIssued.number;
     }
@@ -606,12 +608,31 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
 
       // ── Step 6: Create employment contract + probation period ──
+      // G11 fix (Issue #1141 coverage report 2026-05-27 §3 G11) —
+      // issue a real contract ref through the numbering center so the
+      // onboarding-created contract has the same audit trail as the
+      // manual creation path in hr-contracts.ts. Scheme:
+      // `hr.employee_contract` (seeded by migration 213).
       const probEnd = new Date(effectiveHireDate);
       probEnd.setDate(probEnd.getDate() + Number(probationDays));
+      const issuedContract = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "hr",
+        entityKey: "employee_contract",
+        entityTable: "employee_contracts",
+        actorId: scope.userId,
+        metadata: { onboardingEmployeeId: empId },
+        expectedTiming: "on_draft",
+      });
+      const contractRes = await client.query(
+        `INSERT INTO employee_contracts ("companyId","employeeId","assignmentId","contractType","startDate","probationEndDate","probationStatus",status,ref)
+         VALUES ($1,$2,$3,$4,$5,$6,'active','active',$7) RETURNING id`,
+        [scope.companyId, empId, assignmentId, contractType, effectiveHireDate, toDateISO(probEnd), issuedContract.number]
+      );
       await client.query(
-        `INSERT INTO employee_contracts ("companyId","employeeId","assignmentId","contractType","startDate","probationEndDate","probationStatus",status)
-         VALUES ($1,$2,$3,$4,$5,$6,'active','active')`,
-        [scope.companyId, empId, assignmentId, contractType, effectiveHireDate, toDateISO(probEnd)]
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [contractRes.rows[0].id, issuedContract.assignmentId]
       );
 
       // ── Step 7: Create 4 onboarding tasks ──
@@ -714,22 +735,34 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       priority: "normal", refType: "employee", refId: empId,
     }).catch((e) => logger.error(e, "employees background task failed"));
     if (email) {
-      rawExecute(
-        `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"createdAt","refType","refId")
-         VALUES ($1,$2,$3,$4,$5,'pending',NOW(),'employee',$6)`,
-        [scope.companyId, email, name, `مرحباً في فريق العمل - ${finalEmpNumber}`,
-          `أهلاً ${name}،\n\nرقمك الوظيفي: ${finalEmpNumber}\nالمسمى الوظيفي: ${jobTitle}\nتاريخ الالتحاق: ${effectiveHireDate}\nفترة التجربة: ${probationDays} يوم\n\nيسعدنا انضمامك إلى الفريق.`,
-          empId]
-      ).catch((e) => logger.error(e, "employees background task failed"));
+      void sendMessage({
+        channel: "email",
+        recipient: email,
+        recipientName: name,
+        subject: `مرحباً في فريق العمل - ${finalEmpNumber}`,
+        body: `أهلاً ${name}،\n\nرقمك الوظيفي: ${finalEmpNumber}\nالمسمى الوظيفي: ${jobTitle}\nتاريخ الالتحاق: ${effectiveHireDate}\nفترة التجربة: ${probationDays} يوم\n\nيسعدنا انضمامك إلى الفريق.`,
+        companyId: scope.companyId,
+        userId: scope.userId,
+        relatedType: "employee",
+        relatedId: empId,
+        templateKey: "employee.welcome",
+      }).catch((e) => logger.error(e, "employees background task failed"));
     }
     if (email && tempPassword) {
-      rawExecute(
-        `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"createdAt","refType","refId")
-         VALUES ($1,$2,$3,$4,$5,'pending',NOW(),'user',$6)`,
-        [scope.companyId, email, name, `بيانات الدخول إلى النظام - ${finalEmpNumber}`,
-          `أهلاً ${name}،\n\nتم إنشاء حساب لك في نظام غيث ERP.\n\nالبريد الإلكتروني: ${email}\nكلمة المرور المؤقتة: ${tempPassword}\n\nيرجى تغيير كلمة المرور فور تسجيل الدخول الأول.\n\nهذه الرسالة تلقائية، يرجى عدم الرد عليها.`,
-          empId]
-      ).catch((e) => logger.error(e, "employees background task failed"));
+      // dlpExempt: credentials send (see admin.ts for full reasoning).
+      void sendMessage({
+        channel: "email",
+        recipient: email,
+        recipientName: name,
+        subject: `بيانات الدخول إلى النظام - ${finalEmpNumber}`,
+        body: `أهلاً ${name}،\n\nتم إنشاء حساب لك في نظام غيث ERP.\n\nالبريد الإلكتروني: ${email}\nكلمة المرور المؤقتة: ${tempPassword}\n\nيرجى تغيير كلمة المرور فور تسجيل الدخول الأول.\n\nهذه الرسالة تلقائية، يرجى عدم الرد عليها.`,
+        companyId: scope.companyId,
+        userId: scope.userId,
+        relatedType: "user",
+        relatedId: empId,
+        dlpExempt: true,
+        templateKey: "employee.credentials.welcome",
+      }).catch((e) => logger.error(e, "employees background task failed"));
     }
 
     // ── Step 10: Event log ──

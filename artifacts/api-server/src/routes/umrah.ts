@@ -1433,6 +1433,7 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
       seasonId,
       actorId: scope.userId,
       metadata: { agentId },
+      expectedTiming: "on_draft",
     });
     const ref = issuedInv.number;
     let invoiceRow: any;

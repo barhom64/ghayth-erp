@@ -7,14 +7,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   useDetailEditDelete,
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   MapPin,
   User,
@@ -46,9 +46,8 @@ export default function TripDetailPage() {
     !!id
   );
 
-  // PATCH /fleet/trips/:id allows editing non-lifecycle fields; status
-  // transitions to completed/cancelled must go through /complete /cancel.
-  // DELETE is soft-delete and gated on the backend.
+  // PATCH + DELETE wired through the shared edit/delete hook. Backend
+  // accepts fromLocation/toLocation/destination/status/notes/cost.
   const editDelete = useDetailEditDelete({
     entityLabel: "الرحلة",
     patchPath: `/fleet/trips/${id}`,
@@ -56,12 +55,13 @@ export default function TripDetailPage() {
     listPath: "/fleet/trips",
     initialValues: trip,
     fields: [
-      { key: "fromLocation", label: "من" },
-      { key: "toLocation", label: "إلى" },
+      { key: "fromLocation", label: "نقطة الانطلاق" },
+      { key: "toLocation", label: "الوجهة" },
+      { key: "destination", label: "موقع آخر" },
       { key: "notes", label: "ملاحظات" },
       { key: "cost", label: "التكلفة", type: "number" },
     ],
-    invalidateKeys: [["fleet-trip", id], ["fleet-trips"]],
+    invalidateKeys: [["fleet-trip", id], ["trips"]],
     onSaved: () => refetch(),
   });
 
@@ -151,48 +151,6 @@ export default function TripDetailPage() {
         title: "تعذر إكمال الرحلة",
         description: err.message || "حدث خطأ",
       });
-    }
-  };
-
-  // POST /fleet/trips/:id/waypoints — manual GPS point capture for
-  // drivers without a connected app (operator pastes lat/lon from a
-  // dispatcher report or grabs the browser geolocation). Server
-  // refuses unless the trip is in_progress.
-  const addWaypoint = async () => {
-    const useBrowser = window.confirm("استخدام موقع المتصفح؟ اضغط 'إلغاء' لإدخال الإحداثيات يدوياً.");
-    let lat: number | null = null;
-    let lon: number | null = null;
-    if (useBrowser && "geolocation" in navigator) {
-      try {
-        const pos: GeolocationPosition = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 });
-        });
-        lat = pos.coords.latitude;
-        lon = pos.coords.longitude;
-      } catch {
-        toast({ variant: "destructive", title: "تعذّر الحصول على الموقع من المتصفح" });
-        return;
-      }
-    } else {
-      const raw = window.prompt("أدخل الإحداثيات: lat,lon  مثال: 24.7136,46.6753");
-      if (!raw) return;
-      const parts = raw.split(",").map((s) => Number(s.trim()));
-      if (parts.length !== 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) {
-        toast({ variant: "destructive", title: "الإحداثيات غير صالحة" });
-        return;
-      }
-      lat = parts[0]!;
-      lon = parts[1]!;
-    }
-    try {
-      await apiFetch(`/fleet/trips/${id}/waypoints`, {
-        method: "POST",
-        body: JSON.stringify({ lat, lon }),
-      });
-      toast({ title: "أُضيفت نقطة GPS" });
-      refetch();
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "فشل التسجيل", description: err.message || "خطأ" });
     }
   };
 
@@ -317,19 +275,8 @@ export default function TripDetailPage() {
         <XCircle className="h-4 w-4" />
         إلغاء
       </GuardedButton>
-      {trip?.status === "in_progress" && (
-        <GuardedButton
-          perm="fleet:update"
-          size="sm"
-          variant="outline"
-          onClick={addWaypoint}
-          className="gap-1"
-        >
-          + نقطة GPS
-        </GuardedButton>
-      )}
       <EntityPrintButton entityType="fleet_trip" entityId={id ?? ""} formats={["a4"]} />
-      <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
+      <DetailActionButtons hook={editDelete} editPerm="fleet:create" deletePerm="fleet:delete" />
     </div>
   );
 

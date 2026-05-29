@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -32,7 +32,6 @@ function statusTone(status: string) {
 }
 
 export default function SalaryAdvanceDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/salary-advances/:id");
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();
@@ -223,16 +222,6 @@ export default function SalaryAdvanceDetail() {
             entityType="loan_request"
             entityId={item?.id ?? id}
             formats={["a4"]}/>
-          <GuardedButton
-            perm="finance:update"
-            variant="outline"
-            size="sm"
-            onClick={() => setLocation("/finance/salary-advances")}
-            disabled={!item || ["repaid", "rejected", "cancelled"].includes(item.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

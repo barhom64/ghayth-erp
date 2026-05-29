@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import { Button } from "@/components/ui/button";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { CheckCircle2, AlertTriangle, Download, FileWarning } from "lucide-react";
@@ -173,14 +174,43 @@ export default function GlIntegrityGapsPage() {
         { label: "فجوات سلامة GL" },
       ]}
       actions={
-        nonEmptySections.length > 0 ? (
-          <GuardedButton
-            perm="finance:export" variant="outline" size="sm"
-            onClick={() => exportCSV(sections, `gl-integrity-gaps-${todayLocal()}.csv`)}
-          >
-            <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
-          </GuardedButton>
-        ) : null
+        <div className="flex gap-2">
+          <Link href="/finance/gl-health">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <CheckCircle2 className="h-3.5 w-3.5 me-1" />صحة النظام
+            </Button>
+          </Link>
+          <Link href="/finance/gl-anomaly-detector">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <AlertTriangle className="h-3.5 w-3.5 me-1" />كاشف الشذوذ
+            </Button>
+          </Link>
+          {nonEmptySections.length > 0 ? (
+            <GuardedButton
+              perm="finance:export" variant="outline" size="sm"
+              onClick={() => exportCSV(sections, `gl-integrity-gaps-${todayLocal()}.csv`)}
+            >
+              <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+            </GuardedButton>
+          ) : null}
+          {nonEmptySections.length > 0 && (
+            <PrintButton
+              entityType="report_gl_integrity_gaps"
+              entityId={todayLocal()}
+              payload={{
+                entity: {
+                  title: "فجوات تكامل دفتر الأستاذ العام (GL)",
+                  asOfDate: todayLocal(),
+                  sectionCount: nonEmptySections.length,
+                },
+                items: sections.flatMap((s: any) => (s.items ?? []).map((it: any) => ({
+                  "القسم": s.label ?? s.key,
+                  ...it,
+                }))),
+              }}
+            />
+          )}
+        </div>
       }
     >
       {/* Hero state */}

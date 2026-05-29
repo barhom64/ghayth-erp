@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, asList, useApiMutation } from "@/lib/api";
-import { todayLocal } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -84,18 +83,16 @@ export default function PreventivePlansPage() {
     },
   );
 
-  // PATCH /fleet/preventive-plans/:id — quick "mark serviced" action
-  // resets lastServiceDate to today + advances nextServiceDate by
-  // intervalDays (server handles the recompute). Saves the operator
-  // from opening the full edit form for the common case.
-  const markServicedMut = useApiMutation<unknown, { id: number; lastServiceDate: string }>(
-    (b) => `/fleet/preventive-plans/${b.id}`,
+  // Quick status transitions per the backend's enforced lifecycle:
+  // pending → in_progress / cancelled ; in_progress → completed / cancelled.
+  // PATCH /fleet/preventive-plans/:id was unused even though the page
+  // displays the status column — operators had no way to advance a row
+  // without re-opening the create flow.
+  const statusMut = useApiMutation<unknown, { id: number; status: string }>(
+    (body) => `/fleet/preventive-plans/${body.id}`,
     "PATCH",
     [["preventive-plans"]],
-    {
-      successMessage: "تم تسجيل الصيانة",
-      onSuccess: () => refetch(),
-    },
+    { successMessage: "تم تحديث حالة الخطة" },
   );
 
   const handleSave = async (values: PlanForm) => {
@@ -188,31 +185,48 @@ export default function PreventivePlansPage() {
       },
     },
     {
+      key: "actions",
+      header: "إجراء",
+      render: (row) => {
+        const status = row.status || "pending";
+        if (status === "completed" || status === "cancelled") {
+          return <Badge variant="outline">{status === "completed" ? "مكتمل" : "ملغى"}</Badge>;
+        }
+        // pending → in_progress; in_progress → completed
+        const nextStatus = status === "pending" ? "in_progress" : "completed";
+        const nextLabel = nextStatus === "in_progress" ? "بدء" : "إكمال";
+        return (
+          <div className="flex items-center gap-1">
+            <GuardedButton
+              perm="fleet:update"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={(e: any) => { e.stopPropagation(); statusMut.mutate({ id: row.id, status: nextStatus }); }}
+              disabled={statusMut.isPending}
+            >
+              {nextLabel}
+            </GuardedButton>
+            <GuardedButton
+              perm="fleet:update"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-status-error-foreground"
+              onClick={(e: any) => { e.stopPropagation(); statusMut.mutate({ id: row.id, status: "cancelled" }); }}
+              disabled={statusMut.isPending}
+            >
+              إلغاء
+            </GuardedButton>
+          </div>
+        );
+      },
+    },
+    {
       key: "estimatedCost",
       header: "التكلفة التقديرية",
       sortable: true,
       align: "end",
       render: (row) => row.estimatedCost > 0 ? `${row.estimatedCost} ر.س` : "-",
-    },
-    {
-      key: "_serviced",
-      header: "",
-      render: (row) => (
-        <GuardedButton
-          perm="fleet:update"
-          size="sm"
-          variant="ghost"
-          className="h-7 text-xs"
-          onClick={() => markServicedMut.mutate({
-            id: row.id,
-            lastServiceDate: todayLocal(),
-          })}
-          disabled={markServicedMut.isPending}
-          rateLimitAware
-        >
-          تم الصيانة
-        </GuardedButton>
-      ),
     },
   ];
 

@@ -12,9 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatNumber } from "@/lib/formatters";
-import { Plus, Workflow, AlertTriangle, Pencil } from "lucide-react";
+import { Plus, Workflow, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 
 interface AllocationRule {
   id: number;
@@ -70,6 +71,10 @@ const STRATEGY_LABEL: Record<string, string> = {
 export default function AllocationRulesPage() {
   const [docTypeFilter, setDocTypeFilter] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("");
+  // ConfirmDeleteDialog fires DELETE /finance/allocation-rules/:id
+  // itself (audit scanner picks up the deletePath prop). No separate
+  // mutation needed here — the dialog owns the call.
+  const [deleting, setDeleting] = useState<AllocationRule | null>(null);
 
   const params = new URLSearchParams();
   if (docTypeFilter) params.set("documentType", docTypeFilter);
@@ -176,6 +181,7 @@ export default function AllocationRulesPage() {
       }
     >
       <FinanceTabsNav />
+      <AllocationTabsNav />
 
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">

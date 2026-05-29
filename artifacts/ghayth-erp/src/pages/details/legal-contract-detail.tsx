@@ -1,20 +1,22 @@
-import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useRoute } from "wouter";
+import { z } from "zod";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
 } from "@workspace/entity-kit";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 // ApprovalActions removed — contracts use direct status PATCH, no approval flow.
-import { Edit, FileText, RotateCcw, XCircle } from "lucide-react";
+import { Edit, FileText, RefreshCw, XCircle } from "lucide-react";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal, currentYearRiyadh } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
 
@@ -46,10 +48,23 @@ function statusTone(status?: string | null) {
   return "default" as const;
 }
 
+const contractEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  partyName: z.string().min(1, "اسم الطرف الآخر مطلوب"),
+  partyContact: z.string().optional().default(""),
+  contractType: z.string().optional().default(""),
+  value: z.coerce.number().optional().default(0),
+  startDate: z.string().optional().default(""),
+  endDate: z.string().optional().default(""),
+  status: z.enum(["draft", "active", "pending_renewal"]),
+  notes: z.string().optional().default(""),
+});
+type ContractEditForm = z.infer<typeof contractEditSchema>;
+
 export default function LegalContractDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/legal/contracts/:id");
   const id = params?.id ? Number(params.id) : null;
+  const [editOpen, setEditOpen] = useState(false);
 
   const { toast } = useToast();
 
@@ -60,6 +75,47 @@ export default function LegalContractDetail() {
   );
 
   const contract = data;
+
+  // Renew + Terminate wire the dedicated /:id/renew and /:id/terminate
+  // endpoints (applyTransition pipelines). Both prompt for the minimum
+  // required field; the full overrides are documented on the backend
+  // schemas (newValue/notes for renew, effectiveDate for terminate).
+  const renewMut = useApiMutation<any, { id: number; newEndDate: string }>(
+    (b) => `/legal/contracts/${b.id}/renew`,
+    "POST",
+    [["legal-contract", String(id)], ["legal-contracts"]],
+    { successMessage: "تم تجديد العقد" },
+  );
+  const terminateMut = useApiMutation<any, { id: number; reason: string }>(
+    (b) => `/legal/contracts/${b.id}/terminate`,
+    "POST",
+    [["legal-contract", String(id)], ["legal-contracts"]],
+    { successMessage: "تم إنهاء العقد" },
+  );
+
+  const handleRenew = () => {
+    if (!id) return;
+    // Default-suggest "today + 1y" using Riyadh wall-clock components
+    // (Task #433 — finance-period-drift forbids raw `new Date()` year math).
+    const year = currentYearRiyadh() + 1;
+    const today = todayLocal();          // "YYYY-MM-DD" in Riyadh wall-clock
+    const defaultEnd = `${year}-${today.slice(5)}`;
+    const newEndDate = window.prompt("تاريخ نهاية التجديد (YYYY-MM-DD):", defaultEnd);
+    if (!newEndDate) return;
+    renewMut.mutate({ id, newEndDate });
+  };
+
+  const handleTerminate = () => {
+    if (!id) return;
+    const reason = window.prompt("سبب إنهاء العقد:");
+    if (!reason || !reason.trim()) {
+      if (reason !== null) {
+        toast({ variant: "destructive", title: "سبب الإنهاء مطلوب" });
+      }
+      return;
+    }
+    terminateMut.mutate({ id, reason: reason.trim() });
+  };
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -96,65 +152,6 @@ export default function LegalContractDetail() {
 
 
   const { extraTabs, hideTabs } = useRegistryTabs("legal_contract", id ?? 0);
-
-  const handleEdit = () => {
-    setLocation(`/legal/contracts/${id}/edit`);
-  };
-
-  const queryClient = useQueryClient();
-
-  const handleRenew = async () => {
-    // POST /legal/contracts/:id/renew — server validates that the new
-    // end date is after the current one, bumps renewalCount, and runs
-    // the audited applyTransition. Body: { newEndDate, newValue?, notes? }.
-    const currentEnd = contract?.endDate || todayLocal();
-    const suggested = new Date(currentEnd);
-    suggested.setFullYear(suggested.getFullYear() + 1);
-    const defaultEnd = suggested.toISOString().split("T")[0];
-    const newEndDate = window.prompt("تاريخ نهاية التجديد (YYYY-MM-DD):", defaultEnd);
-    if (!newEndDate) return;
-    try {
-      await apiFetch(`/legal/contracts/${id}/renew`, {
-        method: "POST",
-        body: JSON.stringify({ newEndDate }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["legal-contract", String(id)] });
-      toast({ title: "تم تجديد العقد بنجاح" });
-      refetch();
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "تعذر تجديد العقد",
-        description: err.message || "حدث خطأ أثناء تجديد العقد",
-      });
-    }
-  };
-
-  const handleTerminate = async () => {
-    // POST /legal/contracts/:id/terminate — requires a non-empty reason
-    // and runs through applyTransition (events + audit + DLQ-safe).
-    const reason = window.prompt("سبب إنهاء العقد:");
-    if (reason === null) return;
-    if (!reason.trim()) {
-      toast({ variant: "destructive", title: "سبب الإنهاء مطلوب" });
-      return;
-    }
-    try {
-      await apiFetch(`/legal/contracts/${id}/terminate`, {
-        method: "POST",
-        body: JSON.stringify({ reason: reason.trim(), effectiveDate: todayLocal() }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["legal-contract", String(id)] });
-      toast({ title: "تم إنهاء العقد بنجاح" });
-      refetch();
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "تعذر إنهاء العقد",
-        description: err.message || "حدث خطأ أثناء إنهاء العقد",
-      });
-    }
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -270,6 +267,7 @@ export default function LegalContractDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={contract?.title || "تفاصيل العقد"}
       subtitle={contract?.type ? CONTRACT_TYPE_LABELS[contract.type] || contract.type : undefined}
@@ -305,30 +303,29 @@ export default function LegalContractDetail() {
             perm="legal:update"
             variant="outline"
             size="sm"
-            onClick={handleEdit}
-            disabled={!contract || ["terminated", "expired"].includes(contract?.status)}
+            onClick={() => setEditOpen(true)}
+            disabled={!contract || ["terminated", "renewed", "expired"].includes(contract?.status)}
           >
             <Edit className="h-4 w-4 ms-1" />
             تعديل
           </GuardedButton>
           <GuardedButton
-            perm="legal:update"
+            perm="legal:create"
             variant="outline"
             size="sm"
             onClick={handleRenew}
-            disabled={!contract || !["active", "expired"].includes(contract?.status)}
-            rateLimitAware
+            disabled={!contract || renewMut.isPending || ["terminated", "renewed", "expired"].includes(contract?.status)}
           >
-            <RotateCcw className="h-4 w-4 ms-1" />
+            <RefreshCw className="h-4 w-4 ms-1" />
             تجديد
           </GuardedButton>
           <GuardedButton
-            perm="legal:update"
+            perm="legal:create"
             variant="outline"
             size="sm"
+            className="text-status-error-foreground"
             onClick={handleTerminate}
-            disabled={!contract || contract?.status !== "active"}
-            rateLimitAware
+            disabled={!contract || terminateMut.isPending || ["terminated", "renewed", "expired"].includes(contract?.status)}
           >
             <XCircle className="h-4 w-4 ms-1" />
             إنهاء
@@ -336,5 +333,48 @@ export default function LegalContractDetail() {
         </>
       }
     />
+    {contract && id && (
+      <EntityEditDialog<ContractEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل العقد"
+        schema={contractEditSchema}
+        defaultValues={{
+          title: contract.title ?? "",
+          partyName: contract.partyName ?? "",
+          partyContact: contract.partyContact ?? "",
+          contractType: contract.contractType ?? "",
+          value: Number(contract.value ?? 0),
+          startDate: contract.startDate ?? "",
+          endDate: contract.endDate ?? "",
+          status: (contract.status === "active" || contract.status === "pending_renewal" ? contract.status : "draft") as ContractEditForm["status"],
+          notes: contract.notes ?? "",
+        }}
+        endpoint={`/legal/contracts/${id}`}
+        invalidateKeys={[["legal-contract", String(id)], ["legal-contracts"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="عنوان العقد" required className="md:col-span-2" />
+          <FormTextField name="partyName" label="الطرف الآخر" required />
+          <FormTextField name="partyContact" label="جهة الاتصال" />
+          <FormTextField name="contractType" label="نوع العقد" />
+          <FormNumberField name="value" label="القيمة" />
+          <FormTextField name="startDate" label="تاريخ البداية" type="date" />
+          <FormTextField name="endDate" label="تاريخ النهاية" type="date" />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "draft", label: "مسودة" },
+              { value: "active", label: "ساري" },
+              { value: "pending_renewal", label: "بانتظار التجديد" },
+            ]}
+          />
+          <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

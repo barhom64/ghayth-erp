@@ -45,15 +45,23 @@ export default function LoansPage() {
   const stats = data?.stats || {};
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
-  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-loans"]], {
-    successMessage: "تم اعتماد السلفة بنجاح",
-  });
-  const rejectMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-loans"]], {
-    successMessage: "تم رفض السلفة",
-  });
+  // Factory URLs with the literal paths inline — see exit-detail
+  // commit for the rationale (static scanner can't resolve body.__url).
+  const approveMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/hr/loans/${b.id}/approve`,
+    "PATCH",
+    [["hr-loans"]],
+    { successMessage: "تم اعتماد السلفة بنجاح" },
+  );
+  const rejectMut = useApiMutation<unknown, { id: number; reason: string }>(
+    (b) => `/hr/loans/${b.id}/reject`,
+    "PATCH",
+    [["hr-loans"]],
+    { successMessage: "تم رفض السلفة" },
+  );
 
   const handleApprove = async (id: number) => {
-    await approveMut.mutateAsync({ __url: `/hr/loans/${id}/approve` } as any);
+    await approveMut.mutateAsync({ id });
     queryClient.invalidateQueries({ queryKey: ["hr-loans"] });
   };
   const handleReject = (id: number) => setRejectingId(id);
@@ -62,7 +70,7 @@ export default function LoansPage() {
     if (rejectingId === null) return;
     const id = rejectingId;
     setRejectingId(null);
-    await rejectMut.mutateAsync({ __url: `/hr/loans/${id}/reject`, reason } as any);
+    await rejectMut.mutateAsync({ id, reason });
     queryClient.invalidateQueries({ queryKey: ["hr-loans"] });
   };
 

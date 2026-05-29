@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -119,6 +120,20 @@ export default function BadDebtProvisionPage() {
     <PageShell
       title="مخصص ديون مشكوك فيها"
       subtitle={`ورقة عمل الإقفال الشهري — نسب قابلة للتعديل لكل سطل عمر`}
+      actions={
+        <div className="flex items-center gap-2">
+          <Link href="/finance/ar-collection-workbench">
+            <Button variant="outline" size="sm">
+              منضدة التحصيل
+            </Button>
+          </Link>
+          <Link href="/finance/customer-risk">
+            <Button variant="outline" size="sm">
+              مخاطر العملاء
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 

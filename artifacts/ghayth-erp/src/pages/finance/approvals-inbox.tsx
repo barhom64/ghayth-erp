@@ -164,6 +164,20 @@ export default function ApprovalsInboxPage() {
         { href: "/finance", label: "المالية" },
         { label: "صندوق الموافقات" },
       ]}
+      actions={
+        <div className="flex items-center gap-2">
+          <Link href="/finance/expense-bulk-approvals">
+            <Button variant="outline" size="sm">
+              اعتماد المصاريف بالجملة
+            </Button>
+          </Link>
+          <Link href="/finance/daily-close-checklist">
+            <Button variant="outline" size="sm">
+              فحص اليوم
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 

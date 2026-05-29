@@ -12,7 +12,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { issueNumber } from "../lib/numberingService.js";
+import { issueNumber, voidNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -1181,6 +1181,7 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
       entityTable: "fleet_trips",
       actorId: scope.userId,
       metadata: { sourceKey, vehicleId: selectedVehicleId },
+      expectedTiming: "on_draft",
     });
     let alreadyExists = false;
     const insertId = await withTransaction(async (client) => {
@@ -1202,16 +1203,22 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
         // Race: a concurrent POST with the same key won the INSERT.
         // Fetch the existing row and short-circuit — the driver/vehicle
         // UPDATEs already ran on the winning side. Void the issued
-        // number so it doesn't burn a counter slot on a no-op.
+        // number through the service (not a direct UPDATE) so the
+        // lifecycle gate runs and the audit log records the void.
+        // voidNumber opens its own withTransaction which joins ours
+        // via SAVEPOINT.
         const { rows: existingRows } = await client.query(
           `SELECT id FROM fleet_trips WHERE "companyId" = $1 AND "sourceKey" = $2 LIMIT 1`,
           [scope.companyId, sourceKey]
         );
         tripId = existingRows[0]?.id;
-        await client.query(
-          `UPDATE numbering_assignments SET status='voided',"voidReason"=$1 WHERE id=$2`,
-          ['fleet trip de-duplicated by sourceKey', issuedTrip.assignmentId]
-        );
+        await voidNumber({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          assignmentId: issuedTrip.assignmentId,
+          actorId: scope.userId,
+          reason: 'fleet trip de-duplicated by sourceKey',
+        });
         alreadyExists = true;
         return tripId;
       }

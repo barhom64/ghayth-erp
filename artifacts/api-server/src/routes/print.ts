@@ -20,7 +20,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError, zodParse } from "../lib/errorHandler.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import {
   renderPrint,
@@ -32,6 +32,7 @@ import {
 import { listTemplates } from "../lib/print/templateResolver.js";
 import { fetchPrintArtifact } from "../lib/print/printStorage.js";
 import { logger } from "../lib/logger.js";
+import { todayISO } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -85,6 +86,7 @@ function scopeFromReq(req: Request): PrintScope {
     userId: s.userId,
     role: s.role,
     isOwner: s.isOwner,
+    allowedBranches: s.allowedBranches ?? [],
   };
 }
 
@@ -211,12 +213,23 @@ const previewBody = z.object({
   templateId: z.number().int().positive().optional(),
   format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel"]).optional(),
   payload: z.record(z.any()).optional(),
+  /** In-flight HTML draft from the template editor. When supplied (without
+   *  templateId) the engine renders this exact markup, so the user sees
+   *  their unsaved edits before committing. Capped at 200KB to prevent
+   *  a malicious client from blowing past the rate limit with a huge body. */
+  htmlContent: z.string().max(200_000).optional(),
+  presetKey: z.string().max(100).optional(),
+  paperSize: z.enum(["A4", "A5", "THERMAL_80", "THERMAL_58", "LABEL_50x30", "LABEL_100x50"]).optional(),
 });
 
 router.post(
   "/preview",
   previewLimiter,
-  requirePermission("templates:read"),
+  // Granular gate (issue #1286): preview without audit row. Backward-compat
+  // via requireAnyPermission — existing "templates:read" still works for
+  // template authors, plus a dedicated "print:preview" lets owners grant
+  // preview access without granting full template editing.
+  requireAnyPermission("templates:read", "print:preview:create"),
   async (req: Request, res: Response) => {
     try {
       const body = zodParse(previewBody.safeParse(req.body));
@@ -229,6 +242,27 @@ router.post(
         );
         if (!t) throw new NotFoundError("template");
         overrideTemplate = t as never;
+      } else if (body.htmlContent) {
+        // In-flight HTML preview: build an in-memory template that wraps
+        // the user's draft markup. Skips the DB entirely so editing a
+        // template without saving still produces a faithful preview.
+        overrideTemplate = {
+          id: -999,
+          name: "draft-preview",
+          entityType: body.entityType,
+          branchId: null,
+          companyId: null,
+          paperSize: body.paperSize ?? "A4",
+          mode: "html",
+          presetKey: body.presetKey ?? "draft",
+          htmlContent: body.htmlContent,
+          layoutJson: null,
+          cssOverrides: null,
+          headerOverride: null,
+          footerOverride: null,
+          isThermal: body.paperSize === "THERMAL_80" || body.paperSize === "THERMAL_58",
+          version: 1,
+        } as never;
       }
       const result = await renderPrint(
         scope,
@@ -487,7 +521,7 @@ router.delete(
 
 // ─── Print jobs (log) ───────────────────────────────────────────────────────
 
-router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, res: Response) => {
+router.get("/jobs", requireAnyPermission("print_jobs:read", "print:diagnostics:read"), async (req: Request, res: Response) => {
   try {
     const scope = scopeFromReq(req);
     const branchId = req.query.branchId ? Number(req.query.branchId) : null;
@@ -495,10 +529,28 @@ router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, r
     const userId = req.query.userId ? Number(req.query.userId) : null;
     const from = (req.query.from as string | undefined) ?? null;
     const to = (req.query.to as string | undefined) ?? null;
-    const limit = Math.min(Number(req.query.limit ?? 100), 500);
+    // status filter — accepts a single value or a comma-separated list so
+    // ops can query e.g. ?status=failed to triage broken prints, or
+    // ?status=success,failed to exclude pending. Whitelisted to known
+    // values to keep the SQL clause well-defined.
+    const statusRaw = (req.query.status as string | undefined) ?? null;
+    const statusValues = statusRaw
+      ? statusRaw.split(",")
+          .map((s) => s.trim())
+          .filter((s) => ["success", "failed", "pending", "queued"].includes(s))
+      : null;
+    const limit = Math.min(Math.max(Number(req.query.limit ?? 100), 1), 500);
+    const offset = Math.max(Number(req.query.offset ?? 0), 0);
 
     const params: unknown[] = [scope.companyId];
     const where: string[] = [`pj."companyId" = $1`];
+    // Non-owners are also branch-scoped: even with print_jobs:read, a
+    // user limited to Branch A shouldn't see Branch B's print history.
+    // Owners pass through unrestricted (allowedBranches is empty for them).
+    if (!scope.isOwner && scope.allowedBranches && scope.allowedBranches.length > 0) {
+      params.push(scope.allowedBranches);
+      where.push(`(pj."branchId" IS NULL OR pj."branchId" = ANY($${params.length}::int[]))`);
+    }
     if (branchId) {
       params.push(branchId);
       where.push(`pj."branchId" = $${params.length}`);
@@ -519,11 +571,24 @@ router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, r
       params.push(to);
       where.push(`pj."createdAt" <= $${params.length}`);
     }
+    if (statusValues && statusValues.length > 0) {
+      params.push(statusValues);
+      where.push(`pj."status" = ANY($${params.length}::text[])`);
+    }
+    // Total count under the same filters — drives the pager. We run this
+     // before adding LIMIT/OFFSET params so the where clause is reused.
+    const countRows = await rawQuery<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM print_jobs pj WHERE ${where.join(" AND ")}`,
+      params
+    );
+    const total = Number(countRows[0]?.total ?? 0);
+
     params.push(limit);
+    params.push(offset);
     const rows = await rawQuery(
       `SELECT pj.id, pj."jobId", pj."entityType", pj."entityId", pj."format", pj."paperSize",
               pj."copyNumber", pj."isReprint", pj."watermark", pj."status", pj."createdAt",
-              pj."pdfStorageKey", pj."approvedBy",
+              pj."pdfStorageKey", pj."approvedBy", pj."errorMessage",
               pj."branchId", b.name AS "branchName",
               pj."userId", u.email AS "userEmail",
               e.name AS "userName"
@@ -533,10 +598,114 @@ router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, r
        LEFT JOIN employees e ON e.id = u."employeeId"
        WHERE ${where.join(" AND ")}
        ORDER BY pj."createdAt" DESC
-       LIMIT $${params.length}`,
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
-    res.json({ items: rows });
+    res.json({ items: rows, total, limit, offset });
+  } catch (err) {
+    return handleRouteError(err, res, "print");
+  }
+});
+
+// CSV export of the print log under the same filters as GET /jobs. Capped
+// at 10k rows because the UI offers no progress indicator — a larger
+// export should be a server-side scheduled job, not an HTTP request.
+router.get("/jobs.csv", requireAnyPermission("print_jobs:read", "print:diagnostics:read"), async (req: Request, res: Response) => {
+  try {
+    const scope = scopeFromReq(req);
+    const branchId = req.query.branchId ? Number(req.query.branchId) : null;
+    const entityType = (req.query.entityType as string | undefined) ?? null;
+    const userId = req.query.userId ? Number(req.query.userId) : null;
+    const from = (req.query.from as string | undefined) ?? null;
+    const to = (req.query.to as string | undefined) ?? null;
+    const statusRaw = (req.query.status as string | undefined) ?? null;
+    const statusValues = statusRaw
+      ? statusRaw.split(",")
+          .map((s) => s.trim())
+          .filter((s) => ["success", "failed", "pending", "queued"].includes(s))
+      : null;
+
+    const params: unknown[] = [scope.companyId];
+    const where: string[] = [`pj."companyId" = $1`];
+    if (!scope.isOwner && scope.allowedBranches && scope.allowedBranches.length > 0) {
+      params.push(scope.allowedBranches);
+      where.push(`(pj."branchId" IS NULL OR pj."branchId" = ANY($${params.length}::int[]))`);
+    }
+    if (branchId) {
+      params.push(branchId);
+      where.push(`pj."branchId" = $${params.length}`);
+    }
+    if (entityType) {
+      params.push(entityType);
+      where.push(`pj."entityType" = $${params.length}`);
+    }
+    if (userId) {
+      params.push(userId);
+      where.push(`pj."userId" = $${params.length}`);
+    }
+    if (from) {
+      params.push(from);
+      where.push(`pj."createdAt" >= $${params.length}`);
+    }
+    if (to) {
+      params.push(to);
+      where.push(`pj."createdAt" <= $${params.length}`);
+    }
+    if (statusValues && statusValues.length > 0) {
+      params.push(statusValues);
+      where.push(`pj."status" = ANY($${params.length}::text[])`);
+    }
+
+    const rows = await rawQuery<{
+      createdAt: string;
+      userName: string | null;
+      userEmail: string | null;
+      branchName: string | null;
+      entityType: string;
+      entityId: string;
+      format: string;
+      copyNumber: number;
+      isReprint: boolean;
+      status: string;
+      errorMessage: string | null;
+    }>(
+      `SELECT pj."createdAt", pj."entityType", pj."entityId", pj."format",
+              pj."copyNumber", pj."isReprint", pj."status", pj."errorMessage",
+              b.name AS "branchName", u.email AS "userEmail", e.name AS "userName"
+       FROM print_jobs pj
+       LEFT JOIN branches b ON b.id = pj."branchId"
+       LEFT JOIN users u ON u.id = pj."userId"
+       LEFT JOIN employees e ON e.id = u."employeeId"
+       WHERE ${where.join(" AND ")}
+       ORDER BY pj."createdAt" DESC
+       LIMIT 10000`,
+      params
+    );
+
+    // CSV-quote a cell: wrap in double-quotes and double any embedded quote.
+    // Also strip CR/LF so a malicious field can't inject new rows.
+    const q = (v: unknown): string => {
+      if (v === null || v === undefined) return "";
+      const s = String(v).replace(/[\r\n]+/g, " ");
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+
+    const header = [
+      "createdAt", "user", "userEmail", "branch", "entityType",
+      "entityId", "format", "copyNumber", "isReprint", "status", "errorMessage",
+    ].join(",");
+
+    const body = rows.map((r) => [
+      q(r.createdAt), q(r.userName), q(r.userEmail), q(r.branchName),
+      q(r.entityType), q(r.entityId), q(r.format), q(r.copyNumber),
+      q(r.isReprint), q(r.status), q(r.errorMessage),
+    ].join(",")).join("\n");
+
+    // BOM so Excel detects UTF-8 (Arabic names render correctly).
+    const csv = "﻿" + header + "\n" + body + "\n";
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="print-log-${todayISO()}.csv"`);
+    res.send(csv);
   } catch (err) {
     return handleRouteError(err, res, "print");
   }
@@ -544,7 +713,10 @@ router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, r
 
 router.get(
   "/jobs/:jobId/download",
-  requirePermission("print_jobs:read"),
+  // Bytes of a previously-archived job. "print_jobs:read" is the legacy gate;
+  // "print:download" is the granular gate from issue #1286 so owners can mint
+  // a download-only role (downloads but cannot list other jobs).
+  requireAnyPermission("print_jobs:read", "print:download"),
   async (req: Request, res: Response) => {
     try {
       const scope = scopeFromReq(req);
@@ -560,12 +732,25 @@ router.get(
         pdfStorageKey: string | null;
         entityType: string;
         entityId: string;
+        branchId: number | null;
       }>(
-        `SELECT format, "pdfStorageKey", "entityType", "entityId"
+        `SELECT format, "pdfStorageKey", "entityType", "entityId", "branchId"
          FROM print_jobs WHERE "jobId" = $1 AND "companyId" = $2 LIMIT 1`,
         [jobId, scope.companyId]
       );
       if (!rows[0]) throw new NotFoundError("print_job");
+      // Branch scoping: even with print_jobs:read, a user limited to
+      // certain branches must not download artifacts from branches
+      // they can't see. Owners + null-branch (company-wide) prints
+      // pass through.
+      if (
+        !scope.isOwner
+        && scope.allowedBranches && scope.allowedBranches.length > 0
+        && rows[0].branchId !== null
+        && !scope.allowedBranches.includes(rows[0].branchId)
+      ) {
+        throw new PrintPermissionError("هذه الوثيقة لا تخص الفرع المسموح لك بالوصول إليه");
+      }
       const key = rows[0].pdfStorageKey;
       if (!key) {
         return res
@@ -721,7 +906,10 @@ router.post(
 // pages so users see the printed copy alongside their uploads.
 router.get(
   "/archive/:entityType/:entityId",
-  requirePermission("print_jobs:read"),
+  // Admin view of archived jobs for a specific entity. Legacy +
+  // granular gate per issue #1286 so an audit-only role can be limited
+  // to archive lookups without seeing the entire print log.
+  requireAnyPermission("print_jobs:read", "print:verify:read"),
   async (req: Request, res: Response) => {
     try {
       const scope = scopeFromReq(req);
@@ -873,6 +1061,48 @@ router.post(
       });
       if (!result.ok) return res.status(503).json({ error: result.error });
       res.json(result.result);
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+// ─── Retention — prune old PDFs from object storage ──────────────────────
+//
+// Audit rows in print_jobs are never deleted (regulatory). Only the
+// rendered bytes are evicted from object storage and the pdfStorageKey
+// column is cleared so re-runs don't re-scan the same rows.
+//
+// Gated by `print_jobs:read` (read-level access to the print log + manual
+// cleanup of one's own company's artifacts). Owners + GMs are the
+// expected callers via an admin button; a future cron can call this
+// helper directly without going through HTTP.
+router.post(
+  "/jobs/prune",
+  // Destructive — drops blob from object storage. "print_jobs:read" is the
+  // legacy gate; "print:archive:manage" is the granular gate from issue
+  // #1286 so owners can mint an "archive admin" role without granting read
+  // access to the full print log.
+  requireAnyPermission("print_jobs:read", "print:archive:delete"),
+  async (req: Request, res: Response) => {
+    try {
+      const scope = scopeFromReq(req);
+      const body = zodParse(z.object({
+        daysToKeep: z.number().int().min(1).max(3650).default(90),
+        maxPerRun: z.number().int().min(1).max(10_000).optional(),
+        dryRun: z.boolean().optional(),
+      }).safeParse(req.body));
+      const { prunePrintArtifacts } = await import("../lib/print/retention.js");
+      const result = await prunePrintArtifacts({
+        daysToKeep: body.daysToKeep,
+        maxPerRun: body.maxPerRun,
+        dryRun: body.dryRun,
+        // Non-owners are scoped to their own company; owners across
+        // the whole platform would still see only their currentCompany
+        // because scopeFromReq populates it from the JWT.
+        companyId: scope.companyId,
+      });
+      res.json(result);
     } catch (err) {
       return handleRouteError(err, res, "print");
     }

@@ -132,6 +132,10 @@ app.use("/api/communications/whatsapp/webhook", captureRawBody);
 app.use("/api/communications/pbx/incoming", captureRawBody);
 app.use("/api/communications/pbx/completed", captureRawBody);
 app.use("/api/communications/pbx/status", captureRawBody);
+// #1354 — Telematics webhook from CMSV6. Anonymous (HMAC-signed), raw
+// body captured so the HMAC compares against the exact bytes the vendor
+// signed (express.json would normalise whitespace and break the digest).
+app.use("/api/webhooks/cmsv6", captureRawBody);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 

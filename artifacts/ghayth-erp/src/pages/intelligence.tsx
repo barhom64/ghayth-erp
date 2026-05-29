@@ -11,29 +11,35 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { Brain, Users, Car, Building, FolderKanban, Headphones, TrendingUp, AlertTriangle, Search, Radar, Check, Loader2 } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
+import { Brain, Users, Car, Building, FolderKanban, Headphones, TrendingUp, TrendingDown, AlertTriangle, Search, Radar, Check, Loader2, Target, Activity } from "lucide-react";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { Badge } from "@/components/ui/badge";
+
+interface KpiSnapshot {
+  id: number;
+  employeeId: number | null;
+  snapshotDate: string;
+  metricName: string;
+  metricValue: string | number | null;
+  metricTarget: string | number | null;
+  createdAt: string;
+}
 
 export default function Intelligence() {
   const { data: overview, isLoading: loadingOverview, isError: overviewError } = useApiQuery(["intelligence-overview"], "/intelligence/overview");
   const { data: alertsResp, isLoading: loadingAlerts } = useApiQuery<any>(["intelligence-alerts"], "/intelligence/alerts");
   const alerts = asList(alertsResp);
   const { data: schedule } = useApiQuery<any>(["daily-schedule"], "/intelligence/daily-schedule");
-
-  // Additional aggregate roll-ups — intelligence engine exposes a
-  // few cuts of the same data: company-wide KPIs, per-employee KPI
-  // breakdowns, and activity stats. The overview endpoint above
-  // returns a summary; these add the underlying detail.
-  const { data: kpisResp } = useApiQuery<any>(["intelligence-kpis"], "/intelligence/kpis");
-  const { data: companyKpisResp } = useApiQuery<any>(["intelligence-company-kpis"], "/intelligence/company-kpis");
-  const { data: activityStatsResp } = useApiQuery<any>(["intelligence-activity-stats"], "/intelligence/activity/stats");
-  const kpisData = kpisResp?.data ?? kpisResp;
-  const companyKpis = companyKpisResp?.data ?? companyKpisResp;
-  const activityStats = activityStatsResp?.data ?? activityStatsResp;
+  const { data: kpisResp, isLoading: loadingKpis } = useApiQuery<{ data: KpiSnapshot[] }>(
+    ["intelligence-kpis"],
+    "/intelligence/kpis",
+  );
+  const kpiSnapshots = asList<KpiSnapshot>(kpisResp?.data ?? kpisResp);
   const [alertSearch, setAlertSearch] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
   const [attendSearch, setAttendSearch] = useState("");
+  const [kpiSearch, setKpiSearch] = useState("");
 
   const filteredAlerts = alerts.filter((a: any) => {
     if (!alertSearch) return true;
@@ -92,58 +98,6 @@ export default function Intelligence() {
         )}
       </div>
 
-      {(companyKpis || activityStats || kpisData) && (
-        <div className="grid gap-3 md:grid-cols-3">
-          {companyKpis && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xs">مؤشرات الشركة</CardTitle>
-              </CardHeader>
-              <CardContent className="text-xs space-y-1">
-                {Object.entries(companyKpis as Record<string, any>).slice(0, 6).map(([k, v]) => (
-                  <div key={k} className="flex justify-between">
-                    <span className="text-muted-foreground">{k}</span>
-                    <span className="font-mono font-semibold">{String(v)}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-          {activityStats && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xs">إحصاءات النشاط</CardTitle>
-              </CardHeader>
-              <CardContent className="text-xs space-y-1">
-                {Object.entries(activityStats as Record<string, any>).slice(0, 6).map(([k, v]) => (
-                  <div key={k} className="flex justify-between">
-                    <span className="text-muted-foreground">{k}</span>
-                    <span className="font-mono font-semibold">
-                      {typeof v === "object" ? Object.keys(v ?? {}).length : String(v)}
-                    </span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-          {kpisData && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xs">مؤشرات الأداء (الفترة)</CardTitle>
-              </CardHeader>
-              <CardContent className="text-xs space-y-1">
-                {Object.entries(kpisData as Record<string, any>).slice(0, 6).map(([k, v]) => (
-                  <div key={k} className="flex justify-between">
-                    <span className="text-muted-foreground">{k}</span>
-                    <span className="font-mono font-semibold">{String(v)}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
@@ -190,6 +144,72 @@ export default function Intelligence() {
                 </div>
               ))}
             </div>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Target className="h-5 w-5" />مؤشرات الأداء (KPIs)</CardTitle></CardHeader>
+          <CardContent>
+            <div className="relative mb-3">
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+              <Input
+                className="ps-8 h-8 text-xs"
+                placeholder="بحث باسم المقياس..."
+                value={kpiSearch}
+                onChange={(e) => setKpiSearch(e.target.value)}
+              />
+            </div>
+            {loadingKpis ? (
+              <Skeleton className="h-32 w-full" />
+            ) : kpiSnapshots.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8 text-sm">لا توجد لقطات KPI بعد — الـcron الشهري يكتبها أو يتم احتسابها يدوياً للموظفين</p>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {kpiSnapshots
+                  .filter((k) => !kpiSearch || (k.metricName?.toLowerCase().includes(kpiSearch.toLowerCase())))
+                  .slice(0, 30)
+                  .map((k) => {
+                    const value = Number(k.metricValue || 0);
+                    const target = Number(k.metricTarget || 0);
+                    const hasTarget = target > 0;
+                    const pct = hasTarget ? (value / target) * 100 : 0;
+                    const meetingTarget = hasTarget && value >= target;
+                    return (
+                      <div key={k.id} className="p-2 rounded-md border bg-card">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium flex items-center gap-1.5 truncate">
+                            <Activity className="h-3 w-3 text-muted-foreground shrink-0" />
+                            {k.metricName}
+                            {k.employeeId && (
+                              <Badge variant="outline" className="text-[10px] h-4 px-1">موظف #{k.employeeId}</Badge>
+                            )}
+                          </span>
+                          <span className="text-xs text-muted-foreground shrink-0">{formatDateAr(k.snapshotDate)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <span className="text-sm font-bold">
+                            {value.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                            {hasTarget && (
+                              <span className="text-xs text-muted-foreground font-normal mx-1">
+                                / {target.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                              </span>
+                            )}
+                          </span>
+                          {hasTarget && (
+                            <Badge className={meetingTarget
+                              ? "bg-status-success-surface text-status-success-foreground border-status-success-surface"
+                              : "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface"
+                            }>
+                              {meetingTarget ? <TrendingUp className="h-3 w-3 ml-1" /> : <TrendingDown className="h-3 w-3 ml-1" />}
+                              {pct.toFixed(0)}%
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </CardContent>
         </Card>
 

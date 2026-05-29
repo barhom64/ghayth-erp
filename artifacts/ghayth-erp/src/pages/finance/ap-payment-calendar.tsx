@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Calendar, Download, AlertTriangle, ChevronRight, TrendingDown,
   Banknote, Users, ExternalLink,
@@ -226,6 +227,25 @@ export default function ApPaymentCalendarPage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_ap_payment_calendar"
+            entityId={today}
+            payload={{
+              entity: {
+                title: "تقويم مواعيد الدفع للموردين",
+                asOfDate: today,
+                totalDue: Number(data?.totalDue ?? 0),
+                vendorCount: data?.byVendor?.length ?? 0,
+                poCount: data?.data?.length ?? 0,
+              },
+              items: (data?.data ?? []).map((po: any) => ({
+                "أمر الشراء": po.ref ?? "",
+                "المورد": po.supplierName ?? "",
+                "المبلغ": Number(po.totalAmount ?? 0),
+                "تاريخ التسليم المتوقع": po.expectedDelivery ?? "",
+              })),
+            }}
+          />
         </CardContent>
       </Card>
 
@@ -376,7 +396,11 @@ export default function ApPaymentCalendarPage() {
                   <tbody>
                     {(data?.byVendor ?? []).slice().sort((a, b) => b.amount - a.amount).slice(0, 15).map(v => (
                       <tr key={v.supplierId} className="border-b hover:bg-muted/30">
-                        <td className="py-2 px-2">{v.supplierName}</td>
+                        <td className="py-2 px-2">
+                          <Link href={`/finance/vendor-360-sheet?vendorId=${v.supplierId}`}>
+                            <span className="hover:underline cursor-pointer">{v.supplierName}</span>
+                          </Link>
+                        </td>
                         <td className="py-2 px-2 text-end tabular-nums">{v.count}</td>
                         <td className="py-2 px-2 text-end tabular-nums font-semibold">{formatCurrency(v.amount)}</td>
                         <td className="py-2 px-2 text-end tabular-nums text-muted-foreground">

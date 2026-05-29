@@ -120,7 +120,6 @@ export function GovIntegrationsTab() {
       toast({ variant: "destructive", title: "تعذّر الحذف", description: getErrorMessage(err) });
     }
   };
-
   const handleSave = async (id: number, enabled: boolean, values: IntegrationForm) => {
     try {
       await apiFetch(`/gov-integrations/${id}`, {

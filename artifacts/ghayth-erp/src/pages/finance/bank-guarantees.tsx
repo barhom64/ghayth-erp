@@ -35,6 +35,8 @@ import {
   ShieldCheck,
   XCircle,
   Undo2,
+  Landmark,
+  KeyRound,
 } from "lucide-react";
 import {
   DataTable,
@@ -458,10 +460,22 @@ export default function BankGuaranteesPage() {
         ]}
         loading={isLoading}
         actions={
-          <GuardedButton perm="finance:create" size="sm" onClick={openNew}>
-            <Plus className="h-4 w-4 me-1" />
-            ضمان جديد
-          </GuardedButton>
+          <>
+            <Link href="/finance/bank-accounts-watch">
+              <Button variant="outline" size="sm">
+                <Landmark className="h-4 w-4 me-2" />مراقبة البنوك
+              </Button>
+            </Link>
+            <Link href="/finance/custodies">
+              <Button variant="outline" size="sm">
+                <KeyRound className="h-4 w-4 me-2" />العهد
+              </Button>
+            </Link>
+            <GuardedButton perm="finance:create" size="sm" onClick={openNew}>
+              <Plus className="h-4 w-4 me-1" />
+              ضمان جديد
+            </GuardedButton>
+          </>
         }
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

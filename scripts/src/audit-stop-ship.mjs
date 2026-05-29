@@ -76,6 +76,12 @@ const ALLOWLIST = new Map([
   ["auth.ts", "anonymous login/register/refresh endpoints — pre-auth by design"],
   ["careersPortal.ts", "uses its own careersPortalJwt middleware, not authorize()"],
   ["clientPortal.ts", "uses its own clientPortalJwt middleware, not authorize()"],
+  ["fleet-telematics-webhook.ts", "anonymous HMAC-signed CMSV6 push (#1354) — audit + events fire inside the shared persist* helpers in fleet-telematics.ts; webhook itself only orchestrates"],
+  ["print.ts", "every print creates a row in print_jobs (its own audit table) with operator + template + payload — emitEvent would be redundant duplication"],
+  ["wiring-stubs.ts", "test scaffolding for the wiring audit — no production traffic, no business writes"],
+  ["rbacV2.ts", "every role/sod/grant mutation writes a row to rbac_role_history (parallel audit table) via recordHistory() — RBAC has its own first-class audit surface that compliance reads directly"],
+  ["numbering.ts", "numbering scheme writes are CAS-style schema state; the numberingService emits its own *.scheme.created/.updated events on every issue() call — see lib/numberingService.ts"],
+  ["import.ts", "every confirmed import writes a row to import_batches (its own audit table) with operator + entity + rowCount + fileName — same pattern as print_jobs and rbac_role_history"],
 ]);
 
 // Accepted RBAC patterns. The newer RBAC-v2 layer uses authorize();
@@ -86,11 +92,28 @@ const ALLOWLIST = new Map([
 const RBAC_PATTERNS = [
   /\bauthorize\s*\(/,
   /\brequirePermission\s*\(/,
+  /\brequireAnyPermission\s*\(/,
   /\brequireMinLevel\s*\(/,
   /\brequireRole\s*\(/,
   // verify*(Signature|Hmac|Webhook|Token) — matches verifyPbxSignature,
   // verifyHmac, verifyWebhookSignature, etc.
   /\bverify[A-Za-z]*(?:Signature|Hmac|Webhook|Token)\s*\(/,
+];
+
+// Accepted audit-write patterns. `createAuditLog` is the generic helper
+// most routes use; subsystem-specific orchestrators count too when their
+// public contract guarantees an audit row. For the print platform,
+// `renderPrint()` is documented (printService.ts header, step 8) to call
+// `writePrintJob()` internally — so any route calling renderPrint IS
+// auditing, just through one level of indirection. `auditMutation` is a
+// thin wrapper around createAuditLog in businessHelpers.ts that pulls
+// scope from `req` and forwards — counts identically. Add new entries
+// as new audit pipelines land.
+const AUDIT_PATTERNS = [
+  /\bcreateAuditLog\s*\(/,
+  /\bauditMutation\s*\(/,
+  /\brenderPrint\s*\(/,
+  /\bwritePrintJob\s*\(/,
 ];
 
 const WRITE_METHODS = ["post", "patch", "put", "delete"];
@@ -172,9 +195,10 @@ async function scanFile(absPath) {
   const base = absPath.split("/").pop();
 
   // File-level signals — set once per file rather than per route.
-  // A route file is "audited" if it imports createAuditLog OR uses
-  // the audit middleware. Same logic for events.
-  const fileHasCreateAuditLog = /\bcreateAuditLog\s*\(/.test(clean);
+  // A route file is "audited" if it imports createAuditLog OR a
+  // subsystem-specific audit writer (see AUDIT_PATTERNS). Same logic
+  // for events.
+  const fileHasCreateAuditLog = AUDIT_PATTERNS.some((re) => re.test(clean));
   const fileHasEmitEvent = /\bemitEvent\s*\(/.test(clean);
   // RBAC: routes can either call authorize() per-route or be mounted
   // behind requireMinLevel/requireModule at the router level — we

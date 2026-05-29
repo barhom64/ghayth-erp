@@ -14,6 +14,7 @@ import {
   ChevronRight, Target, TrendingUp,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 
 /**
  * Allocation Coverage Audit
@@ -187,6 +188,7 @@ export default function AllocationCoveragePage() {
       ]}
     >
       <FinanceTabsNav />
+      <AllocationTabsNav />
 
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">
@@ -355,7 +357,7 @@ export default function AllocationCoveragePage() {
             <CardTitle className="text-sm">إجراءات لتحسين التغطية</CardTitle>
           </CardHeader>
           <CardContent className="p-3 space-y-2">
-            <Link href="/finance/unmapped-lines">
+            <Link href="/finance/reports/unmapped-lines">
               <Button variant="outline" size="sm" className="w-full justify-between">
                 <span className="text-xs">معالجة البنود غير الموجَّهة</span>
                 <ChevronRight className="h-3 w-3" />

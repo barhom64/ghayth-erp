@@ -1,14 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { Edit, ArrowLeftRight, CheckCircle, XCircle } from "lucide-react";
+import { Edit, ArrowLeftRight, UserCheck, UserX } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلق",
+  pending_receiving_manager: "بانتظار استلام الفرع",
   approved: "معتمد",
   rejected: "مرفوض",
   completed: "مكتمل",
@@ -49,6 +51,30 @@ export default function TransferDetail() {
 
   const transfer = data;
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("transfer", id ?? 0);
+  const [receiving, setReceiving] = useState(false);
+
+  const handleReceive = async (confirmed: boolean) => {
+    if (!id) return;
+    const notes = window.prompt(confirmed ? "ملاحظات على استقبال الموظف (اختياري):" : "سبب رفض الاستقبال:", "");
+    if (notes === null) return;
+    if (!confirmed && !notes.trim()) {
+      toast({ variant: "destructive", title: "سبب الرفض مطلوب" });
+      return;
+    }
+    setReceiving(true);
+    try {
+      await apiFetch(`/hr/transfers/${id}/receive`, {
+        method: "PATCH",
+        body: JSON.stringify({ confirmed, notes: notes || undefined }),
+      });
+      toast({ title: confirmed ? "تم استقبال الموظف" : "تم رفض الاستقبال" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التنفيذ", description: err.message });
+    } finally {
+      setReceiving(false);
+    }
+  };
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -68,31 +94,6 @@ export default function TransferDetail() {
 
   const handleEdit = () => {
     setLocation(`/hr/transfers/${id}/edit`);
-  };
-
-  // PATCH /hr/transfers/:id/receive — final step where the receiving
-  // branch manager confirms (or rejects) the transferred employee. Backend
-  // gates this on PR_APPROVAL_ROLES (branch manager / GM).
-  const receiveMut = useApiMutation<unknown, { confirmed: boolean; notes?: string }>(
-    `/hr/transfers/${id}/receive`,
-    "PATCH",
-    [["hr-transfer", String(id)], ["transfers"]],
-    {
-      successMessage: "تم استقبال الموظف",
-      onSuccess: () => refetch(),
-    },
-  );
-
-  const handleReceive = (confirmed: boolean) => {
-    if (!id) return;
-    const notes = confirmed
-      ? undefined
-      : window.prompt("سبب الرفض:") ?? undefined;
-    if (!confirmed && (!notes || !notes.trim())) {
-      toast({ variant: "destructive", title: "سبب الرفض مطلوب" });
-      return;
-    }
-    receiveMut.mutate({ confirmed, notes: notes?.trim() });
   };
 
   const overview = (
@@ -192,6 +193,44 @@ export default function TransferDetail() {
           </Card>
         )}
 
+        {/* Receiving-branch confirmation — Stage 2 of the transfer
+            flow. The destination branch manager must accept the
+            employee before the transfer becomes complete. */}
+        {id && transfer && transfer.status === "pending_receiving_manager" && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">استقبال الفرع المستلم</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                يتطلب تأكيد مدير الفرع المستلم لإتمام النقل.
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="gap-1"
+                  disabled={receiving}
+                  onClick={() => handleReceive(true)}
+                >
+                  <UserCheck className="h-4 w-4" />
+                  تأكيد الاستقبال
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 text-status-error-foreground"
+                  disabled={receiving}
+                  onClick={() => handleReceive(false)}
+                >
+                  <UserX className="h-4 w-4" />
+                  رفض الاستقبال
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Action history */}
         {id && (
           <Card>
@@ -243,34 +282,6 @@ export default function TransferDetail() {
               entityType="transfer"
               entityId={id ?? 0}
               formats={["a4"]}/>
-          )}
-          {transfer?.status === "approved" && (
-            <>
-              <GuardedButton
-                perm="hr:update"
-                variant="outline"
-                size="sm"
-                onClick={() => handleReceive(true)}
-                disabled={receiveMut.isPending}
-                rateLimitAware
-                className="text-status-success-foreground"
-              >
-                <CheckCircle className="h-4 w-4 ms-1" />
-                استقبال
-              </GuardedButton>
-              <GuardedButton
-                perm="hr:update"
-                variant="outline"
-                size="sm"
-                onClick={() => handleReceive(false)}
-                disabled={receiveMut.isPending}
-                rateLimitAware
-                className="text-status-error-foreground"
-              >
-                <XCircle className="h-4 w-4 ms-1" />
-                رفض الاستقبال
-              </GuardedButton>
-            </>
           )}
           <GuardedButton
             perm="hr:update"

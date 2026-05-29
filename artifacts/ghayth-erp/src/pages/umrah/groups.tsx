@@ -1,10 +1,5 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import {
-  useInlineActions,
-  RowActions,
-  InlineDeleteConfirm,
-} from "@/components/inline-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,26 +57,7 @@ interface Pilgrim {
 
 export default function UmrahGroups() {
   const { toast } = useToast();
-  const { data: resp, isLoading, isError, refetch } = useApiQuery<{ data: Group[] }>(["umrah-groups"], "/umrah/groups");
-  // GET /umrah/groups/:id — full detail (per-pilgrim assignments,
-  // assigned transport, room blocks). Fetched lazily when the operator
-  // clicks "تفاصيل" on a row.
-  const [detailGroupId, setDetailGroupId] = useState<number | null>(null);
-  const groupDetailQ = useApiQuery<any>(
-    ["umrah-group-detail", String(detailGroupId ?? 0)],
-    detailGroupId ? `/umrah/groups/${detailGroupId}` : null,
-    { enabled: detailGroupId !== null },
-  );
-
-  // PATCH /umrah/groups/:id + DELETE /umrah/groups/:id wired via the
-  // shared inline-actions hook. Edit fields are minimal (name +
-  // mutamerCount + programDuration) — the larger column set is set
-  // up at create time.
-  const groupActions = useInlineActions({
-    endpoint: "/umrah/groups",
-    queryKeys: [["umrah-groups"]],
-    onSuccess: () => refetch(),
-  });
+  const { data: resp, isLoading, isError } = useApiQuery<{ data: Group[] }>(["umrah-groups"], "/umrah/groups");
   const items = resp?.data ?? [];
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -105,45 +81,6 @@ export default function UmrahGroups() {
     { successMessage: false } as any,
   );
 
-  // Create state — POST /umrah/groups. Numbering centre stamps the
-  // ref / internalRef; the dialog only needs name + agentId +
-  // seasonId + mutamerCount.
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({
-    name: "",
-    agentId: "",
-    seasonId: "",
-    mutamerCount: "",
-    programDuration: "",
-    nuskGroupNumber: "",
-  });
-  const createGroupMut = useApiMutation<unknown, Record<string, unknown>>(
-    "/umrah/groups",
-    "POST",
-    [["umrah-groups"]],
-    {
-      successMessage: "تم إنشاء المجموعة",
-      onSuccess: () => {
-        setCreateOpen(false);
-        setCreateForm({ name: "", agentId: "", seasonId: "", mutamerCount: "", programDuration: "", nuskGroupNumber: "" });
-      },
-    },
-  );
-  const handleCreateGroup = () => {
-    if (!createForm.seasonId || !createForm.mutamerCount) {
-      toast({ variant: "destructive", title: "الموسم وعدد المعتمرين مطلوبان" });
-      return;
-    }
-    createGroupMut.mutate({
-      name: createForm.name.trim() || undefined,
-      nuskGroupNumber: createForm.nuskGroupNumber.trim() || undefined,
-      agentId: createForm.agentId ? Number(createForm.agentId) : undefined,
-      seasonId: Number(createForm.seasonId),
-      mutamerCount: Number(createForm.mutamerCount),
-      programDuration: createForm.programDuration ? Number(createForm.programDuration) : undefined,
-    });
-  };
-
   // Merge state
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<string>("");
@@ -155,6 +92,46 @@ export default function UmrahGroups() {
     "POST",
     [["umrah-groups"]],
     { successMessage: false } as any,
+  );
+
+  // Direct CRUD on /umrah/groups — the page already wraps split + merge
+  // (which compose multiple PATCH/INSERT calls under one transaction)
+  // but the bare create + delete were missing, so operators couldn't
+  // open a brand-new empty group (a common case while planning a
+  // future season) or remove an abandoned draft.
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [deletingGroup, setDeletingGroup] = useState<Group | null>(null);
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [editName, setEditName] = useState("");
+  const createGroupMut = useApiMutation<unknown, { name: string }>(
+    "/umrah/groups",
+    "POST",
+    [["umrah-groups"]],
+    {
+      successMessage: "تم إنشاء المجموعة",
+      onSuccess: () => { setCreateOpen(false); setNewGroupName(""); },
+    },
+  );
+  const deleteGroupMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/umrah/groups/${b.id}`,
+    "DELETE",
+    [["umrah-groups"]],
+    {
+      successMessage: "تم حذف المجموعة",
+      onSuccess: () => setDeletingGroup(null),
+    },
+  );
+  // Rename group via PATCH /umrah/groups/:id. The backend accepts a partial
+  // payload — we only send fields the user edited (name for now).
+  const updateGroupMut = useApiMutation<unknown, { id: number; name: string }>(
+    (b) => `/umrah/groups/${b.id}`,
+    "PATCH",
+    [["umrah-groups"]],
+    {
+      successMessage: "تم تحديث المجموعة",
+      onSuccess: () => { setEditingGroup(null); setEditName(""); },
+    },
   );
 
   if (isLoading) return <LoadingSpinner />;
@@ -225,26 +202,36 @@ export default function UmrahGroups() {
             variant="ghost"
             size="sm"
             className="gap-1"
+            onClick={() => { setEditingGroup(g); setEditName(g.name ?? ""); }}
+            disabled={!!g.salesInvoiceId}
+            rateLimitAware
+          >
+            تعديل
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1"
             onClick={() => handleOpenSplit(g)}
             disabled={!!g.salesInvoiceId}
             rateLimitAware
           >
             <Split className="h-3.5 w-3.5" /> تقسيم
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1"
-            onClick={() => setDetailGroupId(g.id)}
-          >
-            تفاصيل
-          </Button>
-          <RowActions
-            onDelete={() => groupActions.startDelete(g.id)}
-            canEdit={false}
-            canDelete={!g.salesInvoiceId}
-            deletePerm="umrah:delete"
-          />
+          {/* Only allow delete when the group has no pilgrims and no
+              invoice — the backend would refuse a non-empty/invoiced
+              group anyway, this just hides the unusable button. */}
+          {g.mutamerCount === 0 && !g.salesInvoiceId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-status-error-foreground"
+              onClick={() => setDeletingGroup(g)}
+              rateLimitAware
+            >
+              حذف
+            </Button>
+          )}
         </div>
       ),
     },
@@ -262,14 +249,14 @@ export default function UmrahGroups() {
           <h1 className="text-2xl font-bold">المجموعات</h1>
           <p className="text-sm text-muted-foreground">إدارة مجموعات العمرة — تقسيم ودمج</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex gap-2">
           {selectedIds.length >= 1 && (
             <GuardedButton perm="umrah:approve" onClick={() => setMergeOpen(true)} className="gap-2" rateLimitAware>
               <Merge className="h-4 w-4" />
               دمج المحدد ({selectedIds.length})
             </GuardedButton>
           )}
-          <GuardedButton perm="umrah:create" onClick={() => setCreateOpen(true)} className="gap-2" rateLimitAware>
+          <GuardedButton perm="umrah:create" onClick={() => setCreateOpen(true)} className="gap-2" variant="outline" rateLimitAware>
             <Users className="h-4 w-4" />
             مجموعة جديدة
           </GuardedButton>
@@ -393,86 +380,100 @@ export default function UmrahGroups() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {groupActions.deletingId !== null && (
-        <InlineDeleteConfirm
-          onConfirm={() => groupActions.handleDelete(groupActions.deletingId!)}
-          onCancel={groupActions.cancelDelete}
-          isPending={groupActions.isPending}
-        />
-      )}
-
-      <AlertDialog open={createOpen} onOpenChange={setCreateOpen}>
-        <AlertDialogContent className="max-w-lg">
+      {/* Create-new-group dialog. The backend infers nuskGroupNumber +
+          seasonId from defaults; a custom name is optional. */}
+      <AlertDialog open={createOpen} onOpenChange={(o) => { if (!o) { setCreateOpen(false); setNewGroupName(""); } }}>
+        <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>مجموعة جديدة</AlertDialogTitle>
-            <AlertDialogDescription>الموسم وعدد المعتمرين مطلوبان. مركز الترقيم يصدر الرقم الداخلي.</AlertDialogDescription>
+            <AlertDialogDescription>
+              مجموعة فارغة جاهزة لإضافة المعتمرين. اسم المجموعة اختياري — يُولَّد رقم نسك تلقائياً.
+            </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="grid grid-cols-2 gap-3 py-2">
-            <div className="col-span-2">
-              <Label className="text-xs">الاسم</Label>
-              <Input value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-xs">رقم نُسك (اختياري)</Label>
-              <Input value={createForm.nuskGroupNumber} onChange={(e) => setCreateForm({ ...createForm, nuskGroupNumber: e.target.value })} dir="ltr" className="font-mono" />
-            </div>
-            <div>
-              <Label className="text-xs">معرّف الوكيل</Label>
-              <Input type="number" value={createForm.agentId} onChange={(e) => setCreateForm({ ...createForm, agentId: e.target.value })} dir="ltr" />
-            </div>
-            <div>
-              <Label className="text-xs">الموسم *</Label>
-              <Input type="number" value={createForm.seasonId} onChange={(e) => setCreateForm({ ...createForm, seasonId: e.target.value })} dir="ltr" />
-            </div>
-            <div>
-              <Label className="text-xs">عدد المعتمرين *</Label>
-              <Input type="number" value={createForm.mutamerCount} onChange={(e) => setCreateForm({ ...createForm, mutamerCount: e.target.value })} dir="ltr" />
-            </div>
-            <div>
-              <Label className="text-xs">مدة البرنامج (يوم)</Label>
-              <Input type="number" value={createForm.programDuration} onChange={(e) => setCreateForm({ ...createForm, programDuration: e.target.value })} dir="ltr" />
-            </div>
+          <div className="py-2 space-y-2">
+            <Label htmlFor="new-group-name">اسم المجموعة (اختياري)</Label>
+            <Input
+              id="new-group-name"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              placeholder="مثال: مجموعة شعبان 1"
+            />
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCreateGroup} disabled={createGroupMut.isPending}>إنشاء</AlertDialogAction>
+            <GuardedButton
+              perm="umrah:create"
+              onClick={() => createGroupMut.mutate({ name: newGroupName })}
+              disabled={createGroupMut.isPending}
+              rateLimitAware
+            >
+              {createGroupMut.isPending ? "جاري الإنشاء…" : "إنشاء"}
+            </GuardedButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={detailGroupId !== null} onOpenChange={(o) => !o && setDetailGroupId(null)}>
-        <AlertDialogContent className="max-w-lg" dir="rtl">
+      {/* Rename group dialog — wires PATCH /umrah/groups/:id which was
+          previously unwired. We only expose name for now; the backend
+          accepts the full {agentId,subAgentId,mutamerCount,programDuration,
+          status} too but those are populated elsewhere (split / merge /
+          season assignment). */}
+      <AlertDialog
+        open={!!editingGroup}
+        onOpenChange={(o) => { if (!o) { setEditingGroup(null); setEditName(""); } }}
+      >
+        <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>تفاصيل المجموعة #{detailGroupId}</AlertDialogTitle>
+            <AlertDialogTitle>تعديل المجموعة</AlertDialogTitle>
+            <AlertDialogDescription>
+              {editingGroup?.nuskGroupNumber ? `رقم نسك: ${editingGroup.nuskGroupNumber}` : ""}
+            </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-2 text-sm space-y-2">
-            {groupDetailQ.isLoading ? (
-              <p className="text-muted-foreground">جاري التحميل...</p>
-            ) : groupDetailQ.data ? (
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div><span className="text-muted-foreground">الاسم:</span> {groupDetailQ.data.name ?? "—"}</div>
-                <div><span className="text-muted-foreground">رقم نُسك:</span> {groupDetailQ.data.nuskGroupNumber ?? "—"}</div>
-                <div><span className="text-muted-foreground">الموسم:</span> {groupDetailQ.data.seasonTitle ?? groupDetailQ.data.seasonId ?? "—"}</div>
-                <div><span className="text-muted-foreground">الوكيل:</span> {groupDetailQ.data.agentName ?? "—"}</div>
-                <div><span className="text-muted-foreground">عدد المعتمرين:</span> {groupDetailQ.data.mutamerCount ?? "—"}</div>
-                <div><span className="text-muted-foreground">مدة البرنامج:</span> {groupDetailQ.data.programDuration ?? "—"} يوم</div>
-                {Array.isArray(groupDetailQ.data.pilgrims) && (
-                  <div className="col-span-2">
-                    <p className="text-muted-foreground mb-1">المعتمرون ({groupDetailQ.data.pilgrims.length})</p>
-                    <ul className="text-xs space-y-0.5 max-h-32 overflow-y-auto">
-                      {groupDetailQ.data.pilgrims.slice(0, 20).map((p: any) => (
-                        <li key={p.id}>{p.fullName ?? p.name ?? `#${p.id}`}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-muted-foreground">لا توجد بيانات</p>
-            )}
+          <div className="py-2 space-y-2">
+            <Label htmlFor="edit-group-name">اسم المجموعة</Label>
+            <Input
+              id="edit-group-name"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="اسم المجموعة"
+            />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDetailGroupId(null)}>إغلاق</AlertDialogCancel>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <GuardedButton
+              perm="umrah:update"
+              onClick={() => editingGroup && updateGroupMut.mutate({ id: editingGroup.id, name: editName })}
+              disabled={updateGroupMut.isPending || !editingGroup}
+              rateLimitAware
+            >
+              {updateGroupMut.isPending ? "جاري الحفظ…" : "حفظ"}
+            </GuardedButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Per-row delete confirm. Only reachable for empty/un-invoiced
+          rows — the action button is hidden for the rest, but the
+          server still enforces the same rule (this is just UX). */}
+      <AlertDialog open={!!deletingGroup} onOpenChange={(o) => { if (!o) setDeletingGroup(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف المجموعة</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingGroup ? `سيتم حذف المجموعة "${deletingGroup.name ?? deletingGroup.nuskGroupNumber}". الإجراء غير قابل للتراجع.` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <GuardedButton
+              perm="umrah:delete"
+              variant="destructive"
+              onClick={() => deletingGroup && deleteGroupMut.mutate({ id: deletingGroup.id })}
+              disabled={deleteGroupMut.isPending}
+              rateLimitAware
+            >
+              {deleteGroupMut.isPending ? "جاري الحذف…" : "تأكيد الحذف"}
+            </GuardedButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -510,9 +510,14 @@ describe("phase-6 — 9 priority-2 routes migrated to numberingService", () => {
     expect(LGL).toContain('entityKey: "contract"');
     expect(LGL).toContain('entityKey: "case"');
   });
-  it("fleet.ts issues fleet.fleet_trip and voids on sourceKey dedupe", () => {
+  it("fleet.ts issues fleet.fleet_trip and voids on sourceKey dedupe through the service", () => {
     expect(FLT).toContain('entityKey: "fleet_trip"');
-    expect(FLT).toContain("status='voided'");
+    // After G8 fix: void goes through voidNumber({...}) instead of a
+    // direct UPDATE numbering_assignments SET status='voided'.
+    expect(FLT).toContain("voidNumber(");
+    expect(FLT).toContain("fleet trip de-duplicated by sourceKey");
+    // Inverse: the direct-UPDATE pattern must NOT come back.
+    expect(FLT).not.toMatch(/UPDATE\s+numbering_assignments\s+SET\s+status='voided'/);
   });
   it("communications.ts issues real refs for derived tickets + requests", () => {
     expect(CMC).toMatch(/entityKey:\s*"support_ticket"/);
@@ -521,6 +526,213 @@ describe("phase-6 — 9 priority-2 routes migrated to numberingService", () => {
   it("umrah-entities.ts issues client_code + umrah_group internalRef", () => {
     expect(UME).toContain('entityKey: "client_code"');
     expect(UME).toContain('entityKey: "umrah_group"');
+  });
+});
+
+describe("phase-7 real-closure (#1141)", () => {
+  const SVC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/numberingService.ts"), "utf8");
+  const MIG218 = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/migrations/218_drop_legacy_numbering_sequences.sql"),
+    "utf8",
+  );
+  const REQ = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/requests.ts"), "utf8");
+  const REPORT = readFileSync(
+    join(REPO_ROOT, "scripts/src/numbering-backfill-report.mjs"),
+    "utf8",
+  );
+  const AUDIT = readFileSync(
+    join(REPO_ROOT, "scripts/src/audit-numbering-coverage.mjs"),
+    "utf8",
+  );
+
+  it("migration 218 drops every legacy numbering sequence", () => {
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.request_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.contract_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.correspondence_outgoing_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.correspondence_incoming_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.letter_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.invoice_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.journal_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.pr_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.po_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.employee_number_seq");
+  });
+
+  it("readEntityStatus discovers status column via information_schema (lifecycle gate fix)", () => {
+    expect(SVC).toContain("STATUS_COLUMN_CANDIDATES");
+    expect(SVC).toContain("approvalStatus");
+    expect(SVC).toContain("information_schema.columns");
+    // Most-specific column wins — order matters.
+    expect(SVC).toContain('"approvalStatus",');
+  });
+
+  it("requests.ts atomic flow — issue + INSERT + linkback all inside ONE withTransaction", () => {
+    // The previous flow: issueNumber → INSERT → UPDATE.catch(...)
+    // The new flow: withTransaction(async () => { issue; INSERT; UPDATE })
+    // SAVEPOINT reentrancy in rawdb.ts makes issueNumber's own
+    // withTransaction join the outer tx as a savepoint. If link-back
+    // fails, the whole document rolls back.
+    expect(REQ).toContain("await withTransaction(async () => {");
+    // Critically: no .catch on the UPDATE link-back (the lawyer's
+    // point #2 — failure of the link must NOT be swallowed).
+    const updateIdx = REQ.indexOf('UPDATE numbering_assignments SET "entityId"');
+    expect(updateIdx).toBeGreaterThan(-1);
+    const surroundings = REQ.slice(updateIdx, updateIdx + 400);
+    expect(surroundings).not.toMatch(/\.catch\(/);
+  });
+
+  it("backfill report script exists + uses previewBackfill query shape", () => {
+    expect(REPORT.toLowerCase()).toContain("backfillscheme");
+    expect(REPORT).toContain("legacy refs unimported");
+    expect(REPORT).toContain("information_schema.columns");
+  });
+
+  it("audit-numbering-coverage proves zero legacy patterns survive", () => {
+    expect(AUDIT).toContain("LEGACY_PATTERNS");
+    expect(AUDIT).toContain("zero legacy patterns remain");
+  });
+
+  it("issueTiming enforcement — service refuses on mismatch (lawyer's nit #6)", () => {
+    // The service must hard-throw when the route's expectedTiming
+    // disagrees with scheme.issueTiming. Without this check the timing
+    // field in the settings UI is decorative — flip it to on_posting
+    // and routes still issue silently at draft time.
+    expect(SVC).toMatch(/scheme\.issueTiming\s*!==\s*params\.expectedTiming/);
+    expect(SVC).toContain("توقيت الإصدار");
+  });
+
+  it("issueTiming enforcement — IssueParams requires expectedTiming", () => {
+    // Type-level enforcement: omitting expectedTiming should fail
+    // typecheck. We check that the param is declared without `?`
+    // (i.e. required) inside the IssueParams interface.
+    const ifaceIdx = SVC.indexOf("export interface IssueParams");
+    expect(ifaceIdx).toBeGreaterThan(-1);
+    const ifaceBlock = SVC.slice(ifaceIdx, ifaceIdx + 2500);
+    expect(ifaceBlock).toMatch(/expectedTiming:\s*IssueTiming;/);
+    expect(ifaceBlock).not.toMatch(/expectedTiming\?:/);
+  });
+
+  it("issueTiming enforcement — all 35 route callsites pass expectedTiming", () => {
+    // Walk all route files that contain `issueNumber({` and verify each
+    // call object literal contains an `expectedTiming` field. Catches
+    // the case where someone adds a new route but forgets the timing
+    // (which would now also fail typecheck, but a fast unit test is
+    // friendlier in PR review).
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = require("node:path") as typeof import("node:path");
+    const routesDir = join(REPO_ROOT, "artifacts/api-server/src/routes");
+    const files = fs.readdirSync(routesDir).filter((f: string) => f.endsWith(".ts"));
+    const missingFields: string[] = [];
+    for (const f of files) {
+      const src = fs.readFileSync(path.join(routesDir, f), "utf8");
+      let i = 0;
+      while (true) {
+        const idx = src.indexOf("issueNumber({", i);
+        if (idx === -1) break;
+        // Find matching `})`
+        let depth = 1;
+        let j = idx + "issueNumber({".length;
+        while (j < src.length && depth > 0) {
+          const ch = src[j];
+          if (ch === "{") depth++;
+          else if (ch === "}") depth--;
+          j++;
+        }
+        const block = src.slice(idx, j);
+        if (!/expectedTiming\s*:/.test(block)) {
+          // Compute line number
+          const lineNo = src.slice(0, idx).split("\n").length;
+          missingFields.push(`${f}:${lineNo}`);
+        }
+        i = j;
+      }
+    }
+    expect(missingFields, `routes missing expectedTiming: ${missingFields.join(", ")}`).toEqual([]);
+  });
+
+  it("coverage report 2026-05-27 exists and documents all 15 known gaps", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = join(REPO_ROOT, "docs/architecture/numbering-coverage-report-2026-05-27.md");
+    expect(fs.existsSync(path)).toBe(true);
+    const md = fs.readFileSync(path, "utf8");
+    // Each gap MUST be enumerated by its G-code so the file can't be
+    // silently truncated/edited to hide gaps. Updated to 15 after the
+    // second-round audit (audit-numbering-service-bypass +
+    // audit-numbering-schemes-vs-callers + per-table check).
+    for (const id of ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "G13", "G14", "G15"]) {
+      expect(md, `coverage report missing ${id}`).toMatch(new RegExp(`G${id.slice(1)}\\.|^\\|\\s*${id}\\s*\\|`, "m"));
+    }
+    // The report must explicitly refuse to claim full closure — the
+    // lawyer's standard from 2026-05-27.
+    expect(md).toMatch(/لا يدّعي الاكتمال|لا تُغلق|ثغر(ة|ات)/);
+    expect(md).toContain("15 ثغرة");
+  });
+
+  it("audit-numbering-service-bypass script exists and gates direct numbering_* writes", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = join(REPO_ROOT, "scripts/src/audit-numbering-service-bypass.mjs");
+    expect(fs.existsSync(path)).toBe(true);
+    const src = fs.readFileSync(path, "utf8");
+    expect(src).toContain("NUMBERING_TABLES");
+    expect(src).toContain("LEGITIMATE_WRITERS");
+    expect(src).toContain("ALLOWED_LINKBACK_RE");
+    // Must scan the entire src/ tree, not just routes/.
+    expect(src).toContain("artifacts/api-server/src");
+    // Sequence reinvention check must look for COUNT(*) + 1.
+    expect(src).toContain("COUNT\\s*\\(\\s*\\*\\s*\\)");
+  });
+
+  it("audit-numbering-schemes-vs-callers script exists and cross-checks seed vs runtime", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = join(REPO_ROOT, "scripts/src/audit-numbering-schemes-vs-callers.mjs");
+    expect(fs.existsSync(path)).toBe(true);
+    const src = fs.readFileSync(path, "utf8");
+    expect(src).toContain("extractSeededSchemes");
+    expect(src).toContain("extractCalledSchemes");
+    // Must fail CI when a called (moduleKey,entityKey) has no seed.
+    expect(src).toContain('process.exit(1)');
+  });
+
+  it("audit-numbering-coverage enforces per-table coverage with documented exemptions", () => {
+    // The stronger check catches files that issue for SOME tables but
+    // INSERT into OTHER tables without issuing. After G10-G14 closures
+    // the PER_TABLE_EXEMPTIONS map is now empty; the test just locks
+    // the structure (map exists + helper exists + closure comment cites
+    // the G-codes so the audit script still documents the journey).
+    expect(AUDIT).toContain("PER_TABLE_EXEMPTIONS");
+    expect(AUDIT).toContain("tablesIssuedFor");
+    expect(AUDIT).toMatch(/G10[–-]G14|G1[0-5]/);
+  });
+
+  it("audit-numbering-coverage extends scan to lib/engines + cron + disciplineEngine", () => {
+    // The 2026-05-27 review demanded the audit reach beyond routes/.
+    // This test locks the broader scan in place so a future commit
+    // can't silently revert it.
+    expect(AUDIT).toContain("NON_ROUTE_SCAN_PATHS");
+    expect(AUDIT).toContain("engines");
+    expect(AUDIT).toContain("cronScheduler.ts");
+    expect(AUDIT).toContain("disciplineEngine.ts");
+    expect(AUDIT).toContain("NON_ROUTE_EXCEPTIONS");
+    // Each non-route exception MUST cite either a covering caller or
+    // the open gap in the coverage report — no silent exemptions.
+    expect(AUDIT).toMatch(/coverage report.*G[1-9]|caller MUST issue/);
+  });
+
+  it("inline-date-now-as-ref lint rule is now a hard rule (no baseline)", () => {
+    const LINT = readFileSync(join(REPO_ROOT, "scripts/src/lint-patterns.mjs"), "utf8");
+    expect(LINT).toContain('id: "inline-date-now-as-ref"');
+    // After every offender closed, the rule is hard — zero baseline.
+    // Any new inline-Date.now ref fails CI immediately.
+    const ruleStart = LINT.indexOf('id: "inline-date-now-as-ref"');
+    const ruleSection = LINT.slice(ruleStart, ruleStart + 1500);
+    expect(ruleSection).not.toMatch(/countBaseline:\s*[1-9]/);
+    // The comment must document every closure so a future reader knows
+    // which fixes closed which offenders without running git blame.
+    // `s` flag makes `.` cross newlines so the closure-list comment
+    // can span multiple lines naturally.
+    expect(LINT).toMatch(/communications\.ts[\s\S]{0,200}internalTechRef/);
+    expect(LINT).toMatch(/finance-invoices\.ts[\s\S]{0,200}customer_advance/);
+    expect(LINT).toMatch(/properties\.ts[\s\S]{0,200}"case"|properties\.ts[\s\S]{0,200}entityKey:\s*"case"/);
   });
 });
 

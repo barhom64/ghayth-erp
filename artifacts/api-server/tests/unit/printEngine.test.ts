@@ -331,4 +331,697 @@ describe("Print Engine v2 — substitute() resilience to bad data", () => {
       substitute({ template: "{{entity.itemsTable}}", data, branch, isThermal: false }),
     ).not.toThrow();
   });
+
+  it("formats numbers with thousand separators + 2 decimals", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.total}}</p><p>{{entity.qty}}</p>",
+      data: { entity: { id: 1, total: 1234567.89, qty: 100000 } },
+      branch,
+      isThermal: false,
+    });
+    expect(html).toContain("1,234,567.89");
+    expect(html).toContain("100,000");
+  });
+
+  it("formats numeric strings from the DB (NUMERIC columns)", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.subtotal}}</p>",
+      data: { entity: { id: 1, subtotal: "15000.5" } },
+      branch,
+      isThermal: false,
+    });
+    expect(html).toContain("15,000.50");
+  });
+
+  it("does NOT mangle SKU / reference strings starting with digits", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.ref}}</p><p>{{entity.sku}}</p>",
+      data: { entity: { id: 1, ref: "INV-2025-001", sku: "300SP-X" } },
+      branch,
+      isThermal: false,
+    });
+    expect(html).toContain("INV-2025-001");
+    expect(html).toContain("300SP-X");
+  });
+
+  it("auto-formats ISO date strings to Arabic locale (consistency)", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.createdAt}}</p><p>{{entity.dueDate}}</p>",
+      data: {
+        entity: {
+          id: 1,
+          createdAt: "2025-06-15T12:34:56.000Z",
+          dueDate: "2025-07-01",
+        },
+      },
+      branch,
+      isThermal: false,
+    });
+    // Should NOT contain the raw ISO timestamp.
+    expect(html).not.toContain("2025-06-15T12:34:56");
+    // The Arabic locale ("ar-SA") renders the year using Arabic-Indic
+    // digits — ٢٠٢٥ instead of 2025. Accept either since some Intl
+    // implementations may differ. Just verify the timestamp was converted
+    // (no longer contains "T" or "Z").
+    expect(html).not.toContain("T12:");
+    expect(html).not.toContain("000Z");
+  });
+
+  it("does NOT mangle date-like refs (year-prefixed strings)", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.ref}}</p>",
+      data: { entity: { id: 1, ref: "2025-INV-001" } },
+      branch,
+      isThermal: false,
+    });
+    // Hyphenated alphanumeric ref → left as-is (doesn't match ISO date shape)
+    expect(html).toContain("2025-INV-001");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Preset contract tests — for every entity registered in BESPOKE_PRESETS,
+// resolve a template and verify it's a real bespoke preset (not the
+// universal "قالب احتياطي" fallback) and that the markup contains the
+// key Arabic identifier the audit expects. Catches "I added a preset to
+// the map but forgot to wire the builder" and "the resolver fell through
+// because of a typo" regressions at test time instead of in production.
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("Print Engine v2 — preset contract (every BESPOKE_PRESETS entry returns a real preset)", () => {
+  it("BESPOKE_PRESETS is non-empty and every key resolves to a non-fallback template", async () => {
+    // Static check by reading the source — same approach as the rest of
+    // this test file. We can't import templateResolver directly without a
+    // DB context, so we parse the BESPOKE_PRESETS map from source.
+    const src = read(join(PRINT_LIB, "templateResolver.ts"));
+    const mapMatch = src.match(/const\s+BESPOKE_PRESETS[^{]*=\s*\{([\s\S]*?)\n\};\s+function\s+buildInvoicePreset/);
+    expect(mapMatch, "BESPOKE_PRESETS const not found").toBeTruthy();
+    const body = mapMatch![1];
+    const keys = Array.from(body.matchAll(/^\s*([a-z_][a-z0-9_]*):\s*\(/gm)).map((m) => m[1]);
+    expect(keys.length, "BESPOKE_PRESETS is empty").toBeGreaterThan(40);
+    // Every key must either:
+    //   (a) point at a buildXxxPreset function actually defined in the file
+    //       (the common pattern), OR
+    //   (b) define its preset inline via `() => ({ ... })` — a few legacy
+    //       entries (official_letter, umrah_statement, umrah_runsheet) do
+    //       this since they predate the makePreset() helper.
+    for (const key of keys) {
+      const namedCall = body.match(new RegExp(`^\\s*${key}:\\s*\\(\\)\\s*=>\\s*(build[A-Za-z0-9_]+)\\(`, "m"));
+      const inlineObj = body.match(new RegExp(`^\\s*${key}:\\s*\\(\\)\\s*=>\\s*\\(\\{`, "m"));
+      expect(namedCall || inlineObj, `BESPOKE_PRESETS["${key}"] has neither a builder call nor an inline ({...}) factory`).toBeTruthy();
+      if (namedCall) {
+        const fnName = namedCall[1];
+        const defRe = new RegExp(`function\\s+${fnName}\\s*\\(`);
+        expect(defRe.test(src), `BESPOKE_PRESETS["${key}"] calls ${fnName}() but no such function is defined`).toBe(true);
+      }
+    }
+  });
+
+  it("covers every business-critical entity (no regression in coverage)", async () => {
+    // Hard list of entities that MUST stay in BESPOKE_PRESETS — these are
+    // the documents users print every day. If anyone removes one, this
+    // test breaks at CI time instead of in production at 3am.
+    const src = read(join(PRINT_LIB, "templateResolver.ts"));
+    const mapMatch = src.match(/const\s+BESPOKE_PRESETS[^{]*=\s*\{([\s\S]*?)\n\};\s+function\s+buildInvoicePreset/);
+    const body = mapMatch![1];
+    const keys = new Set(Array.from(body.matchAll(/^\s*([a-z_][a-z0-9_]*):\s*\(/gm)).map((m) => m[1]));
+    // Conservative list — every entity the operator literally clicks
+    // "طباعة" on in production. account_statement is GL-account-level
+    // (chart_of_account preset covers it); customer_statement /
+    // vendor_statement live in reportLoaders and aren't BESPOKE_PRESETS
+    // keys (they go through universal fallback by design — the data is
+    // tabular).
+    const mustHave = [
+      // Sales-side commercial documents
+      "invoice", "quotation", "sales_order", "delivery_note", "credit_note",
+      "pos_receipt",
+      // Cash-handling
+      "payment_voucher", "receipt_voucher",
+      // Purchases
+      "purchase_order", "purchase_request", "goods_receipt",
+      // GL
+      "journal_entry",
+      // Warehouse
+      "stock_transfer", "stock_adjustment", "inventory_count",
+      "item_barcode_label",
+      // HR
+      "leave_request", "loan_request", "payroll_run", "payslip",
+      "official_letter", "employee_contract", "employee_profile",
+      "overtime_request", "exit_request", "transfer", "attendance",
+      "excuse_request", "discipline_memo",
+      // Fleet
+      "fleet_trip", "fleet_maintenance", "vehicle", "fuel",
+      "insurance_policy", "traffic_violation",
+      // Property / Legal
+      "rental_contract", "property_unit", "legal_contract", "legal_judgment",
+      "maintenance_request", "building",
+      // Recruitment
+      "job_posting",
+      // CRM
+      "client", "crm_opportunity",
+      // Customer/vendor statements
+      "vendor",
+    ];
+    for (const slug of mustHave) {
+      expect(keys.has(slug), `BESPOKE_PRESETS regression — missing ${slug}`).toBe(true);
+    }
+  });
+
+  it("every bespoke preset opens with the standard A4 letterhead scaffold (not universal fallback)", async () => {
+    // The universal fallback has the literal "قالب احتياطي" in its name.
+    // Every bespoke builder must produce markup that DOESN'T include that
+    // string — otherwise a builder accidentally returned `universalFallback`
+    // somewhere.
+    const src = read(join(PRINT_LIB, "templateResolver.ts"));
+    // Find every builder function body and verify none of them embed the
+    // fallback marker. Builders use makePreset({ ..., body: `...` }) so we
+    // grep the body templates rather than running them.
+    const builders = Array.from(src.matchAll(/function\s+(build[A-Za-z0-9_]+)\s*\(\)\s*:\s*PrintTemplate\s*\{([\s\S]*?)\n\}\s*\n/g));
+    expect(builders.length, "no buildXxxPreset() functions found").toBeGreaterThan(40);
+    for (const m of builders) {
+      const name = m[1];
+      const fnBody = m[2];
+      // The universal fallback's marker — bespoke presets MUST NOT include
+      // this. (Cross-check that no builder regressed to returning the
+      // fallback.)
+      expect(fnBody, `${name} appears to return universalFallback()`).not.toContain("قالب احتياطي");
+      // Every bespoke preset must reference {{branch.letterhead}} via
+      // makePreset() OR build its own scaffold (thermal POS, label).
+      // Skip the thermal/label builders by name — they use their own
+      // adapter wrappers.
+      const isThermalOrLabel = /Thermal|PosReceipt|Barcode|Label/i.test(name);
+      if (isThermalOrLabel) continue;
+      // Legacy builders that predate makePreset() open with a direct
+      // PrintTemplate object literal. Both styles are valid — we just
+      // verify the body references {{branch.letterhead}} so the printed
+      // doc carries the standard A4 header.
+      const usesMakePreset = fnBody.includes("makePreset");
+      const usesDirectLetterhead = fnBody.includes("{{branch.letterhead}}");
+      expect(usesMakePreset || usesDirectLetterhead,
+        `${name}: neither makePreset() nor a direct {{branch.letterhead}} token found`,
+      ).toBe(true);
+    }
+  });
+
+  it("ARABIC_TITLES covers every key in BESPOKE_PRESETS (consistency check)", async () => {
+    // When a preset is added, its slug should also appear in ARABIC_TITLES
+    // so the universal-fallback fallback (rare but possible if the
+    // preset throws) still shows a meaningful title instead of the
+    // snake_case slug.
+    const src = read(join(PRINT_LIB, "templateResolver.ts"));
+    const presetMap = src.match(/const\s+BESPOKE_PRESETS[^{]*=\s*\{([\s\S]*?)\n\};\s+function\s+buildInvoicePreset/);
+    const titlesMap = src.match(/const\s+ARABIC_TITLES[^=]*=\s*\{([\s\S]*?)\n\};/);
+    expect(presetMap).toBeTruthy();
+    expect(titlesMap).toBeTruthy();
+    const presetKeys = new Set(Array.from(presetMap![1].matchAll(/^\s*([a-z_][a-z0-9_]*):\s*\(/gm)).map((m) => m[1]));
+    const titleKeys = new Set(Array.from(titlesMap![1].matchAll(/(?:^|\s|,)([a-z_][a-z0-9_]*):\s*"/g)).map((m) => m[1]));
+    // Allowed gaps — aliases that share another preset's Arabic title
+    // (e.g., job → job_posting), or entityRegistry slugs that resolve via
+    // a different ARABIC_TITLES key (payroll_run uses payroll, etc).
+    const aliasOk = new Set([
+      "sales_invoice", "loan", "job", "supplier", "insurance",
+      "umrah_sales_invoice", "store_product",
+      // Registry-vs-loader slug differences. Each of these has an entry in
+      // ARABIC_TITLES under its canonical short form (`payroll`, `evaluation_360`,
+      // `expense`, `legal_judgment`, `fuel`, `chart_of_account`'s entry is
+      // `chart_of_accounts` from the report etc), so the universal fallback
+      // still produces a meaningful title.
+      "payroll_run", "evaluation_cycle", "expense_claim",
+      "fuel_log", "legal_case", "chart_of_account",
+      "inventory_count", "insurance_policy", "crm_opportunity",
+    ]);
+    const missing: string[] = [];
+    for (const k of presetKeys) {
+      if (!titleKeys.has(k) && !aliasOk.has(k)) missing.push(k);
+    }
+    expect(missing, `ARABIC_TITLES missing entries for: ${missing.join(", ")}`).toEqual([]);
+  });
+});
+
+describe("Print Engine v2 — retention legal hold", () => {
+  // These document types are the legal artifact under Saudi tax / commercial
+  // record retention. Dropping any of them silently from the retention list
+  // (e.g. via a future refactor) would let the daily prune job evict PDFs
+  // that ZATCA may demand in an audit. A failing assert here means a
+  // regression in the legal posture — coordinate with finance before
+  // removing a type, not just by changing the source.
+  const MUST_HOLD = [
+    "invoice",
+    "credit_note",
+    "debit_note",
+    "pos_receipt",
+    "receipt_voucher",
+    "payment_voucher",
+    "journal_entry",
+    "delivery_note",
+    "purchase_order",
+    "goods_receipt",
+    "payroll",
+  ];
+
+  it("LEGAL_RETENTION_ENTITY_TYPES covers every Saudi-mandated record type", async () => {
+    const mod = await import("../../src/lib/print/retention.js");
+    const list = (mod as { LEGAL_RETENTION_ENTITY_TYPES: readonly string[] }).LEGAL_RETENTION_ENTITY_TYPES;
+    expect(Array.isArray(list)).toBe(true);
+    for (const t of MUST_HOLD) {
+      expect(list, `LEGAL_RETENTION_ENTITY_TYPES must include ${t} (Saudi tax/commercial record)`).toContain(t);
+    }
+  });
+
+  it("retention SQL excludes legal-hold rows at query time (not in JS)", () => {
+    // Belt-and-braces: ensure both the WHERE clause and the per-row guard
+    // reference the legal-hold list. If a future change removes the SQL
+    // filter, the per-row guard still protects the data; if the per-row
+    // guard is removed, the SQL still does. Both being present is the
+    // invariant — drop either at your peril.
+    const src = readFileSync(join(PRINT_LIB, "retention.ts"), "utf8");
+    expect(src).toMatch(/NOT\s*\(\s*"entityType"\s*=\s*ANY\(\$2::text\[\]\)\s*\)/);
+    expect(src).toMatch(/LEGAL_RETENTION_ENTITY_TYPES\.includes\(row\.entityType\)/);
+  });
+
+  it("PruneResult exposes legalHoldSkipped so ops can audit the runner", () => {
+    const src = readFileSync(join(PRINT_LIB, "retention.ts"), "utf8");
+    expect(src).toMatch(/legalHoldSkipped:\s*number/);
+  });
+});
+
+describe("Print Engine v2 — statement bespoke presets", () => {
+  // PR1 of issue #1286 wired customer-statement-print.tsx and
+  // vendor-statement-print.tsx through <PrintButton entityType="…_statement">.
+  // Without bespoke presets the platform falls back to the universal renderer
+  // which produces a database-dump look. These presets give the printed
+  // statement a proper letterhead, party-info block, totals card, and a
+  // ledger table — close enough to the inline UI that finance users won't
+  // notice the move to server-side rendering.
+  const src = readFileSync(join(PRINT_LIB, "templateResolver.ts"), "utf8");
+
+  it("registers customer_statement and vendor_statement in BESPOKE_PRESETS", () => {
+    expect(src).toMatch(/customer_statement:\s*\(\)\s*=>\s*buildCustomerStatementPreset/);
+    expect(src).toMatch(/vendor_statement:\s*\(\)\s*=>\s*buildVendorStatementPreset/);
+  });
+
+  it("statement presets surface the loader's note field for the not-found path", () => {
+    // When the loader can't find the client/supplier it returns a `note`.
+    // The preset must conditionally render that note instead of an empty
+    // ledger, otherwise "no client" produces a blank page that looks like a
+    // platform bug. The {{#if entity.note}} guard is the contract.
+    expect(src).toMatch(/buildCustomerStatementPreset[\s\S]*?\{\{#if entity\.note\}\}/);
+    expect(src).toMatch(/buildVendorStatementPreset[\s\S]*?\{\{#if entity\.note\}\}/);
+  });
+});
+
+describe("Print platform — Stop-Ship: no parallel print systems", () => {
+  // The print platform is the only path that produces audited, archived,
+  // verifiable documents. A stray `window.print()` in any user-facing page
+  // bypasses the audit row, the QR verification, the retention rules, and
+  // the reprint approvals — i.e. every guarantee the platform exists to
+  // provide. Issue #1286 makes this a Stop-Ship: the merge gate fails the
+  // moment a new call appears, no exceptions. To add a printable page,
+  // wire a server-side data loader + use <PrintButton entityType=... />.
+  //
+  // Allowed locations (the official print module's OWN code may reference
+  // window.print in its template HTML, since the template's auto-print
+  // script IS the one that triggers the browser dialog inside the popup):
+  const ALLOWED_PATTERNS = [
+    /artifacts\/api-server\/src\/lib\/print\//,
+    /artifacts\/ghayth-erp\/src\/components\/shared\/print-button\.tsx$/,
+    /artifacts\/ghayth-erp\/src\/components\/shared\/entity-print\.tsx$/,
+    /artifacts\/ghayth-erp\/src\/lib\/print-client\.ts$/,
+    /artifacts\/ghayth-erp\/src\/pages\/admin\/print-/,
+    /artifacts\/ghayth-erp\/src\/components\/print-layout\.tsx$/,
+    /artifacts\/ghayth-erp\/src\/styles\/print\.css$/,
+    /tests\//,
+    /node_modules\//,
+    /\.test\.[tj]sx?$/,
+    /docs\/architecture\/print-platform/,
+  ];
+
+  function scan(pattern: RegExp): string[] {
+    // Walk the source tree by hand — avoid spawning grep so the test stays
+    // hermetic and predictable in CI environments without GNU grep.
+    const hits: string[] = [];
+    function walk(dir: string) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === "node_modules" || entry.name === "dist" || entry.name === ".next") continue;
+          walk(p);
+        } else if (entry.isFile()) {
+          if (!/\.(tsx?|jsx?|css|scss)$/.test(entry.name)) continue;
+          if (ALLOWED_PATTERNS.some((re) => re.test(p))) continue;
+          const src = readFileSync(p, "utf8");
+          if (pattern.test(src)) hits.push(p);
+        }
+      }
+    }
+    walk(join(REPO_ROOT, "artifacts"));
+    return hits;
+  }
+
+  it("no window.print() outside the official print module", () => {
+    const hits = scan(/\bwindow\.print\s*\(/);
+    expect(
+      hits,
+      `Found window.print() in ${hits.length} file(s). Route printing through <PrintButton entityType=... entityId=... /> instead.\n${hits.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("no third-party PDF generators imported (jspdf, pdfmake, html2canvas, html2pdf, puppeteer, react-to-print)", () => {
+    // Any direct PDF generation in the browser bypasses the platform's
+    // server-side render → archive → audit pipeline. We forbid the imports
+    // at the static level so a regression can't sneak in via a follow-up PR.
+    const banned = ["jspdf", "pdfmake", "html2canvas", "html2pdf", "puppeteer", "react-to-print"];
+    const pattern = new RegExp(`(import|require)\\s*[^;]*['"](${banned.join("|")})['"]`);
+    const hits = scan(pattern);
+    expect(
+      hits,
+      `Banned PDF libs imported in ${hits.length} file(s). Use the official print platform instead.\n${hits.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("Print platform — granular permissions (issue #1286)", () => {
+  // The legacy print perms bundle several capabilities under one key:
+  // `print_jobs:read` lets you list jobs AND prune storage AND see the
+  // archive view AND power the diagnostics page. Issue #1286 demands one
+  // permission per capability so owners can mint narrower roles. The five
+  // perms below are the granular additions — they're wired via
+  // requireAnyPermission so existing roles with the legacy keys keep
+  // working (no migration needed). The test locks down both halves:
+  // (1) the perms exist in the catalogue (so roles can grant them);
+  // (2) the routes accept them as an alternative to the legacy gate.
+  const rbac = readFileSync(RBAC_CATALOG, "utf8");
+  const routes = readFileSync(ROUTES_FILE, "utf8");
+
+  const GRANULAR = [
+    "print:preview:create",
+    "print:download",
+    "print:archive:delete",
+    "print:verify:read",
+    "print:diagnostics:read",
+  ];
+
+  it("declares every granular print permission in the RBAC catalogue", () => {
+    for (const p of GRANULAR) {
+      expect(rbac, `RBAC catalogue missing ${p}`).toContain(`"${p}"`);
+    }
+  });
+
+  it("declares per-entity perms for the two new statement entity types", () => {
+    // customer_statement / vendor_statement were wired in PR1+PR2 but lacked
+    // per-entity perms. Adding them keeps the per-entity catalogue
+    // exhaustive — owners can now revoke statement printing per role.
+    expect(rbac).toContain('"print:customer_statement:create"');
+    expect(rbac).toContain('"print:vendor_statement:create"');
+  });
+
+  it("/preview accepts either templates:read OR print:preview:create", () => {
+    // Match the route handler signature for /preview specifically — the
+    // collapsed-whitespace form lets the test survive multi-line formatting.
+    const collapsed = routes.replace(/\s+/g, " ");
+    expect(collapsed).toMatch(/router\.post\(\s*"\/preview".*?requireAnyPermission\(\s*"templates:read"\s*,\s*"print:preview:create"\s*\)/);
+  });
+
+  it("/jobs/:jobId/download accepts either print_jobs:read OR print:download", () => {
+    const collapsed = routes.replace(/\s+/g, " ");
+    expect(collapsed).toMatch(/router\.get\(\s*"\/jobs\/:jobId\/download".*?requireAnyPermission\(\s*"print_jobs:read"\s*,\s*"print:download"\s*\)/);
+  });
+
+  it("/jobs/prune accepts either print_jobs:read OR print:archive:delete", () => {
+    const collapsed = routes.replace(/\s+/g, " ");
+    expect(collapsed).toMatch(/router\.post\(\s*"\/jobs\/prune".*?requireAnyPermission\(\s*"print_jobs:read"\s*,\s*"print:archive:delete"\s*\)/);
+  });
+
+  it("/archive/:entityType/:entityId accepts either print_jobs:read OR print:verify:read", () => {
+    const collapsed = routes.replace(/\s+/g, " ");
+    expect(collapsed).toMatch(/router\.get\(\s*"\/archive\/:entityType\/:entityId".*?requireAnyPermission\(\s*"print_jobs:read"\s*,\s*"print:verify:read"\s*\)/);
+  });
+
+  it("/jobs and /jobs.csv accept either print_jobs:read OR print:diagnostics:read", () => {
+    expect(routes).toContain('router.get("/jobs", requireAnyPermission("print_jobs:read", "print:diagnostics:read")');
+    expect(routes).toContain('router.get("/jobs.csv", requireAnyPermission("print_jobs:read", "print:diagnostics:read")');
+  });
+});
+
+describe("Print Engine v2 — statement loaders compute opening balance", () => {
+  // Both statement loaders must compute opening balance from movements
+  // BEFORE the start date — without this a partial-period print silently
+  // understates the outstanding balance (started at zero, ignored all
+  // prior activity). The customer loader had this from day one; the
+  // vendor loader was missing it until this fix. Locking both down with
+  // a single test stops a future refactor from regressing either side.
+  const src = readFileSync(join(PRINT_LIB, "reportLoaders.ts"), "utf8");
+
+  it("loadCustomerStatement computes openingBalance and returns it in the entity dict", () => {
+    // Slice the function body so the test only matches inside the right
+    // loader — otherwise vendor's openingBalance assignment would satisfy
+    // the customer assertion too.
+    const fnIdx = src.indexOf("export async function loadCustomerStatement");
+    const endIdx = src.indexOf("export async function loadVendorStatement", fnIdx);
+    expect(fnIdx).toBeGreaterThan(0);
+    expect(endIdx).toBeGreaterThan(fnIdx);
+    const body = src.slice(fnIdx, endIdx);
+    expect(body).toMatch(/const\s+openingBalance\s*=/);
+    expect(body).toMatch(/openingBalance:\s*Math\.round/);
+    expect(body).toMatch(/let\s+running\s*=\s*openingBalance/);
+  });
+
+  it("loadVendorStatement computes openingBalance and returns it in the entity dict", () => {
+    const fnIdx = src.indexOf("export async function loadVendorStatement");
+    expect(fnIdx).toBeGreaterThan(0);
+    const body = src.slice(fnIdx);
+    expect(body).toMatch(/const\s+openingBalance\s*=/);
+    expect(body).toMatch(/openingBalance:\s*Math\.round/);
+    expect(body).toMatch(/let\s+running\s*=\s*openingBalance/);
+  });
+
+  it("vendor opening-balance SQL gracefully handles missing tables (older tenants)", () => {
+    // purchase_orders may not exist on pre-procurement tenants. The
+    // catch-42P01 pattern is what stops the entire statement from
+    // 500-ing in that case — without it, customers without procurement
+    // can't print a vendor statement at all.
+    const fnIdx = src.indexOf("export async function loadVendorStatement");
+    const body = src.slice(fnIdx);
+    expect(body).toMatch(/openingBalance[\s\S]*?42P01/);
+  });
+});
+
+describe("Print platform — CSV-only pages migrated to PrintButton (#1286 Q6)", () => {
+  // Q6 of the deep audit on #1286: six pages had a "Download CSV" button
+  // but no print path through the official platform. The user could pull
+  // the data into Excel but had no audited, archived, QR-verifiable PDF.
+  // This wave wires <PrintButton> + payload bypass onto all six.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/ar-aging.tsx",              entityType: "report_ar_aging" },
+    { path: "pages/finance/ap-aging.tsx",              entityType: "report_ap_aging" },
+    { path: "pages/finance/inventory-valuation.tsx",   entityType: "report_inventory_valuation" },
+    { path: "pages/finance/wht-filing-workbench.tsx",  entityType: "report_wht_filing" },
+    { path: "pages/finance/daily-close-checklist.tsx", entityType: "report_daily_close" },
+    { path: "pages/admin/logs.tsx",                    entityType: "report_audit_logs" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload (client-side rows bypass dataLoader)`).toMatch(/payload=\{/);
+    });
+  }
+});
+
+describe("Print platform — PrintButton.payload contract (#1286 follow-up)", () => {
+  // The payload prop is the bridge that lets report pages route through
+  // the official platform without requiring a server-side dataLoader for
+  // every report type. Adding a backend loader for every report is a
+  // long-running effort; payload bypass is the immediate unification.
+  const printButton = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/components/shared/print-button.tsx"), "utf8");
+
+  it("PrintButton accepts an optional payload prop", () => {
+    expect(printButton).toMatch(/payload\?:\s*Record<string,\s*unknown>/);
+  });
+
+  it("PrintButton forwards payload to /print/render only when provided", () => {
+    // Conditional spread keeps the wire format clean — no `payload: undefined`
+    // ending up in the JSON body for the common no-payload case.
+    expect(printButton).toMatch(/\.\.\.\(payload\s*\?\s*\{\s*payload\s*\}\s*:\s*\{\}\)/);
+  });
+});
+
+describe("Print platform — finance reports wave 5 migrated (#1286 Q4 wave 5)", () => {
+  // Final wave: 4 pages with non-standard CSV anchors (camel-case exportCsv).
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/cash-13week.tsx",                 entityType: "report_cash_13week" },
+    { path: "pages/finance/income-statement-trend.tsx",      entityType: "report_income_trend" },
+    { path: "pages/finance/trial-balance-comparison.tsx",    entityType: "report_trial_balance_comparison" },
+    { path: "pages/finance/cost-center-pnl.tsx",             entityType: "report_cost_center_pnl" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload`).toMatch(/payload=\{/);
+    });
+  }
+});
+
+describe("Print platform — print-log self-print (#1286 closeout)", () => {
+  // The print platform's own audit-log viewer is the last page to migrate.
+  // Compliance reviews routinely want a printed copy of the print log
+  // itself; the meta-print loops back through the platform (audited row
+  // recording who printed which print log + when) — perfect closure on
+  // the unification work.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  it("pages/reports/print-log.tsx mounts <PrintButton entityType=\"report_print_log\" payload={...}>", () => {
+    const src = readFileSync(join(SPA, "pages/reports/print-log.tsx"), "utf8");
+    expect(src).toContain('from "@/components/shared/print-button"');
+    expect(src).toContain("<PrintButton");
+    expect(src).toContain('entityType="report_print_log"');
+    expect(src).toMatch(/payload=\{/);
+  });
+});
+
+describe("Print platform — detail-page entityTypes have a data source (#1286 bug fix)", () => {
+  // User reported: "pressing print produces a unified empty form".
+  // Root cause: 30 entityTypes used by detail pages (expense, leave, ticket,
+  // unit, opportunity, …) had no data source — they fell through to the
+  // bare stub `{ entity: { id } }` because:
+  //   1. They weren't a switch case in dataLoader.ts
+  //   2. They weren't a registered entity in entityRegistry.ts
+  //   3. They weren't in FALLBACK_TABLE_MAP
+  //
+  // This test scans every entityType used in SPA detail pages and asserts
+  // it resolves to ONE of those three sources — so a new detail-page
+  // entityType that doesn't have a backing data source fails CI before
+  // a user clicks Print and sees an empty document.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const registry = readFileSync(ENTITY_REGISTRY, "utf8");
+  const dataLoader = readFileSync(join(PRINT_LIB, "dataLoader.ts"), "utf8");
+
+  function entityTypesFromDetailPages(): string[] {
+    const fs = readdirSync(join(SPA, "pages/details"));
+    const set = new Set<string>();
+    for (const f of fs) {
+      if (!f.endsWith(".tsx")) continue;
+      const src = readFileSync(join(SPA, "pages/details", f), "utf8");
+      for (const m of src.matchAll(/entityType="([a-z_]+)"/g)) {
+        set.add(m[1]);
+      }
+    }
+    return [...set];
+  }
+
+  function isStub(et: string): boolean {
+    if (registry.match(new RegExp(`^\\s+id:\\s*"${et}"\\s*,\\s*$`, "m"))) return false;
+    if (dataLoader.match(new RegExp(`case\\s+"${et}"\\s*:`))) return false;
+    const fbMatch = dataLoader.match(/FALLBACK_TABLE_MAP:[^=]+=\s*\{([\s\S]*?)\n\};/);
+    if (fbMatch && fbMatch[1].match(new RegExp(`^\\s+${et}:`, "m"))) return false;
+    return true;
+  }
+
+  // Known-broken — these pages call endpoints that don't exist on the
+  // backend yet (no table, no route). Track them as documented gaps
+  // until the upstream entity is implemented.
+  const ACCEPTED_STUBS = new Set([
+    "commitment",   // /finance/commitments/:id — endpoint not implemented
+    "receivable",   // /finance/receivables/:id — endpoint not implemented
+  ]);
+
+  it("every entityType used by a SPA detail page resolves to a data source", () => {
+    const types = entityTypesFromDetailPages();
+    const broken: string[] = [];
+    for (const et of types) {
+      if (ACCEPTED_STUBS.has(et)) continue;
+      if (isStub(et)) broken.push(et);
+    }
+    expect(
+      broken,
+      `These entityTypes are used in detail pages but have no data source — ` +
+      `printing them produces an empty document. Wire them via a switch case ` +
+      `in dataLoader.ts, an entityRegistry entry, or FALLBACK_TABLE_MAP.\n${broken.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("Print platform — ListPage opt-in pages (#1286 continuation)", () => {
+  // ListPage component has `printEntityType` prop built-in (auto-emits
+  // PrintButton when set). Pages using <ListPage> can opt in by passing
+  // the entityType — they then get the platform-routed print path for
+  // free. Locking this here so a future refactor doesn't drop the prop.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/fiscal-periods-v2.tsx", entityType: "report_fiscal_periods" },
+    { path: "pages/finance/journal-manual.tsx",    entityType: "journal_entry" },
+  ];
+  for (const { path, entityType } of PAGES) {
+    it(`${path} passes printEntityType="${entityType}" to ListPage`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src).toContain(`printEntityType="${entityType}"`);
+    });
+  }
+});
+
+describe("Print platform — umrah daily runsheet (#1286 final closeout)", () => {
+  // The umrah daily runsheet had its own /api/umrah/reports/daily-runsheet/pdf
+  // endpoint — a parallel PDF generator that bypassed the official platform
+  // entirely. The page now ALSO offers a <PrintButton entityType="umrah_runsheet">
+  // path that goes through the platform (bespoke preset already registered
+  // in BESPOKE_PRESETS). The legacy "تصدير PDF" button stays for backward
+  // compat with any external integration that depends on it.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  it("pages/umrah/daily-runsheet.tsx mounts <PrintButton entityType=\"umrah_runsheet\" payload={...}>", () => {
+    const src = readFileSync(join(SPA, "pages/umrah/daily-runsheet.tsx"), "utf8");
+    expect(src).toContain('from "@/components/shared/print-button"');
+    expect(src).toContain("<PrintButton");
+    expect(src).toContain('entityType="umrah_runsheet"');
+    expect(src).toMatch(/payload=\{/);
+  });
+});
+
+describe("Print platform — finance reports wave 6 migrated (#1286 last sweep)", () => {
+  // 12 more pages discovered in the closeout audit: pages with Blob downloads
+  // but no PrintButton, hidden among the dashboards + workbenches that
+  // earlier waves missed (camel-case wrappers, GuardedButton instead of
+  // Button, no FinanceTabsNav, etc.). This sweep is the literal last batch.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/overrides-report.tsx",          entityType: "report_overrides" },
+    { path: "pages/finance/custody-workbench.tsx",         entityType: "report_custody_workbench" },
+    { path: "pages/finance/vendor-contracts-tracker.tsx",  entityType: "report_vendor_contracts" },
+    { path: "pages/finance/negative-stock.tsx",            entityType: "report_negative_stock" },
+    { path: "pages/finance/vat-filing-readiness.tsx",      entityType: "report_vat_filing_readiness" },
+    { path: "pages/finance/bank-accounts-watch.tsx",       entityType: "report_bank_accounts_watch" },
+    { path: "pages/finance/cash-flow-statement.tsx",       entityType: "report_cash_flow_statement" },
+    { path: "pages/finance/lot-expiry-alerts.tsx",         entityType: "report_lot_expiry_alerts" },
+    { path: "pages/finance/yoy-comparison.tsx",            entityType: "report_yoy_comparison" },
+    { path: "pages/finance/invoice-send-queue.tsx",        entityType: "report_invoice_send_queue" },
+    { path: "pages/finance/expense-burn-rate.tsx",         entityType: "report_expense_burn_rate" },
+    { path: "pages/finance/profitability.tsx",             entityType: "report_profitability" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload`).toMatch(/payload=\{/);
+    });
+  }
 });

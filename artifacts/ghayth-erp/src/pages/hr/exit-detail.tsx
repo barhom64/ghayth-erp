@@ -1,6 +1,5 @@
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { useQueryClient } from "@tanstack/react-query";
 
 const EXIT_LIFECYCLE = [
   { key: "pending",   label: "بانتظار الموافقة" },
@@ -53,45 +53,45 @@ const STATUS_TONE_MAP: Record<string, "default" | "success" | "warning" | "destr
 
 export default function ExitDetail() {
   const { id } = useParams<{ id: string }>();
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError } = useApiQuery<any>(["hr-exit-detail", id], `/hr/exit/${id}`);
   const item = data?.data ?? data;
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("exit_request", id || "");
 
-  // PATCH /hr/exit/:id/approve — direct apiFetch keeps the URL discoverable
-  // in static audits (the `body.__url` indirection used previously hid the
-  // route from the wiring scanner).
+  // Factory form with the literal URL inline so the wiring audit can
+  // credit /hr/exit/:id/approve statically. Previously the URL was
+  // funneled through `body.__url` which the static scanner couldn't
+  // resolve, leaving the endpoint flagged unused.
   const approveMut = useApiMutation<unknown, { approved: boolean }>(
-    `/hr/exit/${id}/approve`,
+    () => `/hr/exit/${id}/approve`,
     "PATCH",
-    [["hr-exit"], ["hr-exit-detail", id]],
+    [["hr-exit"]],
     { successMessage: "تم اعتماد طلب نهاية الخدمة" },
   );
 
   const handleApprove = async () => {
     await approveMut.mutateAsync({ approved: true });
+    queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
   };
 
   // Clearance items and final completion had no UI at all — an exit
   // request froze at `approved` (HR functional audit C6).
-  const clearanceMut = useApiMutation<unknown, { id: number; status: string }>(
-    (body) => `/hr/exit/clearance/${body.id}`,
-    "PATCH",
-    [["hr-exit"], ["hr-exit-detail", id]],
-    { successMessage: "تم تحديث إخلاء الطرف" },
-  );
-  const completeMut = useApiMutation(
-    `/hr/exit/${id}/complete`,
-    "PATCH",
-    [["hr-exit"], ["hr-exit-detail", id]],
-    { successMessage: "تم إتمام نهاية الخدمة" },
-  );
+  const clearanceMut = useApiMutation((body: any) => `/hr/exit/clearance/${body.id}`, "PATCH", [["hr-exit"]], {
+    successMessage: "تم تحديث إخلاء الطرف",
+  });
+  const completeMut = useApiMutation(() => `/hr/exit/${id}/complete`, "PATCH", [["hr-exit"]], {
+    successMessage: "تم إتمام نهاية الخدمة",
+  });
 
   const handleClearItem = async (clearanceItemId: number, status: "cleared" | "rejected") => {
-    await clearanceMut.mutateAsync({ id: clearanceItemId, status });
+    await clearanceMut.mutateAsync({ id: clearanceItemId, status } as any);
+    queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
   };
   const handleComplete = async () => {
     await completeMut.mutateAsync({} as any);
+    queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
   };
 
   const st = EXIT_REQUEST_STATUS[item?.status] ?? { label: item?.status ?? "—", color: "bg-surface-subtle text-muted-foreground" };
@@ -288,42 +288,30 @@ export default function ExitDetail() {
       updatedAt={item?.updatedAt}
       actions={
         <div className="flex items-center gap-2">
-          {item?.employeeId && (
-            <ImpactPreviewButton
-              endpoint="/hr/impact-preview/termination"
-              payload={{
-                employeeId: item.employeeId,
-                terminationDate: item.lastWorkingDay ?? undefined,
-                terminationType: item.exitType ?? undefined,
-              }}
-              label="معاينة أثر نهاية الخدمة"
-            />
-          )}
-          {item?.status === "pending" && (
-            <GuardedButton
-              perm="hr:approve"
-              size="sm"
-              className="bg-green-600 hover:bg-green-700"
-              onClick={handleApprove}
-              disabled={approveMut.isPending}
-              rateLimitAware
-            >
-              <CheckCircle className="h-4 w-4 ml-1" />
-              اعتماد
-            </GuardedButton>
-          )}
-          {item?.status === "approved" && (
-            <GuardedButton
-              perm="hr:update"
-              size="sm"
-              onClick={handleComplete}
-              disabled={completeMut.isPending || !item?.clearanceCompleted}
-              rateLimitAware
-            >
-              <CheckCircle className="h-4 w-4 ml-1" />
-              إتمام نهاية الخدمة
-            </GuardedButton>
-          )}
+          item?.status === "pending" ? (
+          <GuardedButton
+            perm="hr:approve"
+            size="sm"
+            className="bg-green-600 hover:bg-green-700"
+            onClick={handleApprove}
+            disabled={approveMut.isPending}
+            rateLimitAware
+          >
+            <CheckCircle className="h-4 w-4 ml-1" />
+            اعتماد
+          </GuardedButton>
+        ) : item?.status === "approved" ? (
+          <GuardedButton
+            perm="hr:update"
+            size="sm"
+            onClick={handleComplete}
+            disabled={completeMut.isPending || !item?.clearanceCompleted}
+            rateLimitAware
+          >
+            <CheckCircle className="h-4 w-4 ml-1" />
+            إتمام نهاية الخدمة
+          </GuardedButton>
+        ) : undefined
           <PrintButton entityType="exit_request" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
         </div>
       }

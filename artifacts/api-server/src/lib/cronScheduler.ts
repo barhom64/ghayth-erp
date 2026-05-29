@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { randomUUID } from "node:crypto";
 import { rawQuery, rawExecute, pool, withTransaction } from "./rawdb.js";
+import { issueNumber } from "./numberingService.js";
 import { logger } from "./logger.js";
 import { config } from "./config.js";
 import { saveAllCompaniesKPISnapshots } from "./kpiEngine.js";
@@ -21,13 +22,24 @@ import {
   roundTo2,
 } from "./businessHelpers.js";
 import { broadcastAlert, sendNotification } from "./notificationService.js";
+import { syncMailbox } from "./mailboxSync.js";
 import { processFallbackChains } from "./notificationEngine.js";
+import { runPendingTranscription } from "./pbxControl.js";
+import { aiEngine } from "./aiEngine.js";
+import { rawQuery as rawQueryShared, rawExecute as rawExecuteShared } from "./rawdb.js";
 import { checkSlaStatus } from "./workflowEngine.js";
 import { applyTransition } from "./lifecycleEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
 import { eventBus } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
+import {
+  fleetTelematicsRetention,
+  fleetTelematicsHeartbeat,
+  fleetTelematicsPoll,
+} from "./fleet/telematicsCron.js";
+import { telematicsBreaker } from "./fleet/telematicsReliability.js";
+import { setupBreakerCoordination } from "./fleet/telematicsBreakerCoordinator.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
 import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
@@ -1150,12 +1162,38 @@ async function dailyInventoryCheck(): Promise<string> {
         [company.id, `%${p.name}%`]
       );
       if (existing.length === 0) {
-        await rawExecute(
-          `INSERT INTO purchase_orders ("companyId", title, status, "totalAmount", "createdAt")
-           VALUES ($1, $2, 'draft', 0, NOW())`,
-          [company.id, `طلب شراء تلقائي: ${p.name} (المخزون ${p.currentStock}/${p.threshold})`]
-        ).catch((e) => logger.error(e, "[cronScheduler] auto purchase order insert failed"));
-        pos++;
+        // G6 fix (#1141 coverage report §3 G6) — auto-generated POs
+        // from inventory cron now go through the numbering center
+        // (scheme `purchase.purchase_order`) instead of being created
+        // with ref = NULL. Issue + INSERT + linkback wrapped in one
+        // withTransaction so a failure of any step rolls back cleanly
+        // — burning the counter slot was the old failure mode.
+        try {
+          await withTransaction(async (client) => {
+            const issued = await issueNumber({
+              companyId: company.id,
+              branchId: null,
+              moduleKey: "purchase",
+              entityKey: "purchase_order",
+              entityTable: "purchase_orders",
+              actorId: null,
+              metadata: { source: "cron.dailyInventoryCheck", productName: p.name },
+              expectedTiming: "on_draft",
+            });
+            const ins = await client.query(
+              `INSERT INTO purchase_orders ("companyId", title, ref, status, "totalAmount", "createdAt")
+               VALUES ($1, $2, $3, 'draft', 0, NOW()) RETURNING id`,
+              [company.id, `طلب شراء تلقائي: ${p.name} (المخزون ${p.currentStock}/${p.threshold})`, issued.number]
+            );
+            await client.query(
+              `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+              [ins.rows[0].id, issued.assignmentId]
+            );
+          });
+          pos++;
+        } catch (e) {
+          logger.error(e, "[cronScheduler] auto purchase order issue+insert failed");
+        }
       }
     }
   }
@@ -1400,18 +1438,41 @@ async function monthlyRentPenalties(): Promise<string> {
           const responsible = await getLegalResponsible(company.id);
           const lawyerName = responsible?.employeeName ?? null;
 
-          const { insertId: caseId } = await rawExecute(
-            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description)
-             VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6)`,
-            [
-              company.id,
-              `RENT-${p.id}-${Date.now()}`,
-              `تحصيل إيجار — ${p.tenantName}`,
-              p.tenantName,
-              lawyerName,
-              `إيجار متأخر ${lateDays} يوم — مبلغ ${p.amount} ريال`,
-            ]
-          );
+          // G7 fix (#1141 coverage report §3 G7) — auto-generated
+          // collection cases now route through the numbering center
+          // (scheme `legal.case`) instead of building a Date.now()
+          // ref inline. Atomic-tx: issue + INSERT + linkback all
+          // rollback together if any step fails.
+          const caseId = await withTransaction(async (client) => {
+            const issued = await issueNumber({
+              companyId: company.id,
+              branchId: null,
+              moduleKey: "legal",
+              entityKey: "case",
+              entityTable: "legal_cases",
+              actorId: null,
+              metadata: { source: "cron.dailyPropertyCheck", rentPaymentId: p.id },
+              expectedTiming: "on_draft",
+            });
+            const ins = await client.query(
+              `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description)
+               VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6) RETURNING id`,
+              [
+                company.id,
+                issued.number,
+                `تحصيل إيجار — ${p.tenantName}`,
+                p.tenantName,
+                lawyerName,
+                `إيجار متأخر ${lateDays} يوم — مبلغ ${p.amount} ريال`,
+              ]
+            );
+            const newCaseId = ins.rows[0].id;
+            await client.query(
+              `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+              [newCaseId, issued.assignmentId]
+            );
+            return newCaseId;
+          });
           legalHandoffs++;
 
           // Notify the responsible lawyer + emit a lifecycle event so the
@@ -1831,17 +1892,36 @@ async function retryStuckOfficialLetters(): Promise<string> {
   return `Stuck official letters retried: ${retried}`;
 }
 
+// Phase 4 contract slice 6: the standalone mirror helper from slice 4
+// (#1293) is now obsolete — each worker has its own `updateBothXxx`
+// closure that does outbound_queue first + legacy mirror after, using
+// the (legacyId, legacySource) carried on the row it selected. Removed.
+
+
+
 async function processEmailQueue(): Promise<string> {
+  // Phase 4 contract slice 6: read directly from outbound_queue
+  // (channel='email'). All writers landed there via messageSender's
+  // dual-write since slice 3 (#1292), and slice 4 (#1293) mirrored
+  // legacy status updates into outbound_queue so backfilled rows
+  // are in sync. Slice 5 (#1294) migrated every reader off the
+  // legacy queue tables. The legacy email_queue is now status-mirror
+  // only (see updateBothEmail below) for the soak window before the
+  // final DROP.
   const pending = await rawQuery<Record<string, unknown>>(
-    `SELECT eq.*, i.config AS "smtpSettings"
-     FROM email_queue eq
+    `SELECT oq.id, oq."companyId", oq.recipient AS "toEmail",
+            oq."recipientName", oq.subject, oq.body,
+            oq.metadata, oq."legacyId", oq."legacySource",
+            i.config AS "smtpSettings"
+     FROM outbound_queue oq
      LEFT JOIN LATERAL (
        SELECT config FROM integrations
-       WHERE "companyId" = eq."companyId" AND type IN ('smtp', 'email') AND status = 'active'
+       WHERE "companyId" = oq."companyId" AND type IN ('smtp', 'email') AND status = 'active'
        ORDER BY id DESC LIMIT 1
      ) i ON true
-     WHERE eq.status = 'pending'
-     ORDER BY eq."createdAt" ASC
+     WHERE oq.status = 'pending' AND oq.channel = 'email'
+       AND (oq."scheduledAt" IS NULL OR oq."scheduledAt" <= NOW())
+     ORDER BY oq."createdAt" ASC
      LIMIT 50`
   );
 
@@ -1849,15 +1929,45 @@ async function processEmailQueue(): Promise<string> {
 
   let sent = 0, failed = 0;
 
+  // Helper: update outbound_queue + mirror back to the linked legacy
+  // row (email_queue) if there is one. Mirror direction is the
+  // reverse of slice 4's helper, kept inline because we hold the
+  // legacyId on the row we just selected.
+  const updateBothEmail = async (
+    row: Record<string, unknown>,
+    status: "sent" | "failed",
+    errorMessage: string | null,
+  ) => {
+    const id = row.id as number;
+    const legacyId = row.legacyId as number | null;
+    const sentAtClause = status === "sent" ? `, "sentAt" = NOW()` : "";
+    await rawExecute(
+      `UPDATE outbound_queue
+         SET status = $1, "errorMessage" = $2,
+             attempts = COALESCE(attempts, 0) + 1,
+             "updatedAt" = NOW()${sentAtClause}
+       WHERE id = $3`,
+      [status, errorMessage, id],
+    );
+    if (legacyId && row.legacySource === "email_queue") {
+      const legacySentClause = status === "sent" ? `, "sentAt" = NOW()` : "";
+      await rawExecute(
+        `UPDATE email_queue
+           SET status = $1, "errorMessage" = $2,
+               "attemptCount" = COALESCE("attemptCount", 0) + 1,
+               "updatedAt" = NOW()${legacySentClause}
+         WHERE id = $3`,
+        [status, errorMessage, legacyId],
+      ).catch((e) => logger.warn(e, `[cronScheduler] legacy email_queue mirror #${legacyId}`));
+    }
+  };
+
   for (const email of pending) {
     try {
       const smtp = (email.smtpSettings as { host?: string; port?: number; secure?: boolean; user?: string; password?: string; from?: string } | null) ?? null;
 
       if (!smtp || !smtp.host) {
-        await rawExecute(
-          `UPDATE email_queue SET status = 'failed', "errorMessage" = $1, "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $2`,
-          ["No active SMTP integration configured for this company", email.id]
-        );
+        await updateBothEmail(email, "failed", "No active SMTP integration configured for this company");
         failed++;
         continue;
       }
@@ -1886,17 +1996,13 @@ async function processEmailQueue(): Promise<string> {
       }
       await transporter.sendMail(mailOptions);
 
-      await rawExecute(
-        `UPDATE email_queue SET status = 'sent', "sentAt" = NOW(), "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $1`,
-        [email.id]
-      );
+      await updateBothEmail(email, "sent", null);
       sent++;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      await rawExecute(
-        `UPDATE email_queue SET status = 'failed', "errorMessage" = $1, "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $2`,
-        [errMsg, email.id]
-      ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
+      await updateBothEmail(email, "failed", errMsg).catch((e) =>
+        logger.error(e, "[cronScheduler] background task failed"),
+      );
       failed++;
     }
   }
@@ -1921,34 +2027,85 @@ async function hourlyWorkflowSlaCheck(): Promise<string> {
 }
 
 async function processSmsQueue(): Promise<string> {
+  // Phase 4 contract slice 6: read from outbound_queue. See
+  // processEmailQueue for the rationale.
   const pending = await rawQuery<Record<string, unknown>>(
-    `SELECT sq.*, ss_sid.value AS "accountSid", ss_token.value AS "authToken", ss_from.value AS "fromNumber",
+    `SELECT oq.id, oq."companyId", oq.recipient AS "recipientPhone",
+            oq.body AS message, oq.attempts AS "attemptCount",
+            oq."legacyId", oq."legacySource",
+            ss_sid.value AS "accountSid", ss_token.value AS "authToken",
+            ss_from.value AS "fromNumber",
             COALESCE(ss_enabled.value, 'true') AS "channelEnabled"
-     FROM sms_queue sq
-     LEFT JOIN system_settings ss_sid ON ss_sid.key='sms_account_sid' AND ss_sid."companyId"=sq."companyId"
-     LEFT JOIN system_settings ss_token ON ss_token.key='sms_auth_token' AND ss_token."companyId"=sq."companyId"
-     LEFT JOIN system_settings ss_from ON ss_from.key='sms_from_number' AND ss_from."companyId"=sq."companyId"
-     LEFT JOIN system_settings ss_enabled ON ss_enabled.key='sms_enabled' AND ss_enabled."companyId"=sq."companyId"
-     WHERE sq.status='pending' AND COALESCE(sq."attemptCount",0) < 3
-     ORDER BY sq."createdAt" ASC LIMIT 50`
+     FROM outbound_queue oq
+     LEFT JOIN system_settings ss_sid ON ss_sid.key='sms_account_sid' AND ss_sid."companyId"=oq."companyId"
+     LEFT JOIN system_settings ss_token ON ss_token.key='sms_auth_token' AND ss_token."companyId"=oq."companyId"
+     LEFT JOIN system_settings ss_from ON ss_from.key='sms_from_number' AND ss_from."companyId"=oq."companyId"
+     LEFT JOIN system_settings ss_enabled ON ss_enabled.key='sms_enabled' AND ss_enabled."companyId"=oq."companyId"
+     WHERE oq.status='pending' AND oq.channel='sms'
+       AND COALESCE(oq.attempts,0) < 3
+       AND (oq."scheduledAt" IS NULL OR oq."scheduledAt" <= NOW())
+     ORDER BY oq."createdAt" ASC LIMIT 50`
   );
 
   let sent = 0, failed = 0, skipped = 0;
 
+  const updateBothSms = async (
+    row: Record<string, unknown>,
+    fields: { status?: string; errorMessage?: string | null; externalId?: string | null; sentAt?: boolean },
+    bumpAttempts: boolean = true,
+  ) => {
+    const id = row.id as number;
+    const legacyId = row.legacyId as number | null;
+    const setClauses: string[] = [];
+    const params: unknown[] = [];
+    if (fields.status !== undefined) {
+      params.push(fields.status); setClauses.push(`status = $${params.length}`);
+    }
+    if (fields.errorMessage !== undefined) {
+      params.push(fields.errorMessage); setClauses.push(`"errorMessage" = $${params.length}`);
+    }
+    if (fields.externalId !== undefined) {
+      params.push(fields.externalId); setClauses.push(`"externalId" = $${params.length}`);
+    }
+    if (fields.sentAt) setClauses.push(`"sentAt" = NOW()`);
+    if (bumpAttempts) setClauses.push(`attempts = COALESCE(attempts, 0) + 1`);
+    setClauses.push(`"updatedAt" = NOW()`);
+    params.push(id);
+    await rawExecute(
+      `UPDATE outbound_queue SET ${setClauses.join(", ")} WHERE id = $${params.length}`,
+      params,
+    );
+    if (legacyId && row.legacySource === "sms_queue") {
+      const legacyClauses: string[] = [];
+      const legacyParams: unknown[] = [];
+      if (fields.status !== undefined) {
+        legacyParams.push(fields.status); legacyClauses.push(`status = $${legacyParams.length}`);
+      }
+      if (fields.errorMessage !== undefined) {
+        legacyParams.push(fields.errorMessage); legacyClauses.push(`"errorMessage" = $${legacyParams.length}`);
+      }
+      if (fields.externalId !== undefined) {
+        legacyParams.push(fields.externalId); legacyClauses.push(`"externalId" = $${legacyParams.length}`);
+      }
+      if (fields.sentAt) legacyClauses.push(`"sentAt" = NOW()`);
+      if (bumpAttempts) legacyClauses.push(`"attemptCount" = COALESCE("attemptCount", 0) + 1`);
+      legacyClauses.push(`"updatedAt" = NOW()`);
+      legacyParams.push(legacyId);
+      await rawExecute(
+        `UPDATE sms_queue SET ${legacyClauses.join(", ")} WHERE id = $${legacyParams.length}`,
+        legacyParams,
+      ).catch((e) => logger.warn(e, `[cronScheduler] legacy sms_queue mirror #${legacyId}`));
+    }
+  };
+
   for (const sms of pending) {
     if (sms.channelEnabled === "false") {
-      await rawExecute(
-        `UPDATE sms_queue SET "errorMessage"='قناة SMS معطلة — سيتم الإرسال عند التفعيل', "updatedAt"=NOW() WHERE id=$1`,
-        [sms.id]
-      );
+      await updateBothSms(sms, { errorMessage: "قناة SMS معطلة — سيتم الإرسال عند التفعيل" }, false);
       skipped++;
       continue;
     }
     if (!sms.accountSid || !sms.authToken || !sms.fromNumber) {
-      await rawExecute(
-        `UPDATE sms_queue SET "errorMessage"='بيانات Twilio غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات', "updatedAt"=NOW() WHERE id=$1`,
-        [sms.id]
-      );
+      await updateBothSms(sms, { errorMessage: "بيانات Twilio غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات" }, false);
       skipped++;
       continue;
     }
@@ -1973,29 +2130,22 @@ async function processSmsQueue(): Promise<string> {
 
       if (resp.ok) {
         const data = await resp.json() as { sid?: string };
-        await rawExecute(
-          `UPDATE sms_queue SET status='sent', "externalId"=$1, "sentAt"=NOW(), "attemptCount"=COALESCE("attemptCount",0)+1, "updatedAt"=NOW() WHERE id=$2`,
-          [data.sid ?? null, sms.id]
-        );
+        await updateBothSms(sms, {
+          status: "sent", externalId: data.sid ?? null, sentAt: true, errorMessage: null,
+        });
         sent++;
       } else {
         const errText = await resp.text();
         const newCount = (Number(sms.attemptCount) || 0) + 1;
         const newStatus = newCount >= 3 ? "failed" : "pending";
-        await rawExecute(
-          `UPDATE sms_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
-          [newStatus, errText.substring(0, 500), newCount, sms.id]
-        );
+        await updateBothSms(sms, { status: newStatus, errorMessage: errText.substring(0, 500) });
         failed++;
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       const newCount = (Number(sms.attemptCount) || 0) + 1;
       const newStatus = newCount >= 3 ? "failed" : "pending";
-      await rawExecute(
-        `UPDATE sms_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
-        [newStatus, errMsg, newCount, sms.id]
-      );
+      await updateBothSms(sms, { status: newStatus, errorMessage: errMsg });
       failed++;
     }
   }
@@ -2004,33 +2154,70 @@ async function processSmsQueue(): Promise<string> {
 }
 
 async function processWhatsAppQueue(): Promise<string> {
+  // Phase 4 contract slice 6: read from outbound_queue.
   const pending = await rawQuery<Record<string, unknown>>(
-    `SELECT wq.*, ss_token.value AS "accessToken", ss_phone.value AS "phoneNumberId",
+    `SELECT oq.id, oq."companyId", oq.recipient AS phone,
+            oq.body AS message, oq.attempts AS "attemptCount",
+            oq."legacyId", oq."legacySource",
+            ss_token.value AS "accessToken", ss_phone.value AS "phoneNumberId",
             COALESCE(ss_enabled.value, 'true') AS "channelEnabled"
-     FROM whatsapp_queue wq
-     LEFT JOIN system_settings ss_token ON ss_token.key='whatsapp_access_token' AND ss_token."companyId"=wq."companyId"
-     LEFT JOIN system_settings ss_phone ON ss_phone.key='whatsapp_phone_id' AND ss_phone."companyId"=wq."companyId"
-     LEFT JOIN system_settings ss_enabled ON ss_enabled.key='whatsapp_enabled' AND ss_enabled."companyId"=wq."companyId"
-     WHERE wq.status='pending' AND COALESCE(wq."attemptCount",0) < 3
-     ORDER BY wq."createdAt" ASC LIMIT 50`
+     FROM outbound_queue oq
+     LEFT JOIN system_settings ss_token ON ss_token.key='whatsapp_access_token' AND ss_token."companyId"=oq."companyId"
+     LEFT JOIN system_settings ss_phone ON ss_phone.key='whatsapp_phone_id' AND ss_phone."companyId"=oq."companyId"
+     LEFT JOIN system_settings ss_enabled ON ss_enabled.key='whatsapp_enabled' AND ss_enabled."companyId"=oq."companyId"
+     WHERE oq.status='pending' AND oq.channel='whatsapp'
+       AND COALESCE(oq.attempts,0) < 3
+       AND (oq."scheduledAt" IS NULL OR oq."scheduledAt" <= NOW())
+     ORDER BY oq."createdAt" ASC LIMIT 50`
   );
 
   let sent = 0, failed = 0, skipped = 0;
 
+  const updateBothWa = async (
+    row: Record<string, unknown>,
+    fields: { status?: string; errorMessage?: string | null; externalId?: string | null; sentAt?: boolean },
+    bumpAttempts: boolean = true,
+  ) => {
+    const id = row.id as number;
+    const legacyId = row.legacyId as number | null;
+    const set: string[] = [];
+    const params: unknown[] = [];
+    if (fields.status !== undefined) { params.push(fields.status); set.push(`status = $${params.length}`); }
+    if (fields.errorMessage !== undefined) { params.push(fields.errorMessage); set.push(`"errorMessage" = $${params.length}`); }
+    if (fields.externalId !== undefined) { params.push(fields.externalId); set.push(`"externalId" = $${params.length}`); }
+    if (fields.sentAt) set.push(`"sentAt" = NOW()`);
+    if (bumpAttempts) set.push(`attempts = COALESCE(attempts, 0) + 1`);
+    set.push(`"updatedAt" = NOW()`);
+    params.push(id);
+    await rawExecute(
+      `UPDATE outbound_queue SET ${set.join(", ")} WHERE id = $${params.length}`,
+      params,
+    );
+    if (legacyId && row.legacySource === "whatsapp_queue") {
+      const ls: string[] = [];
+      const lp: unknown[] = [];
+      if (fields.status !== undefined) { lp.push(fields.status); ls.push(`status = $${lp.length}`); }
+      if (fields.errorMessage !== undefined) { lp.push(fields.errorMessage); ls.push(`"errorMessage" = $${lp.length}`); }
+      if (fields.externalId !== undefined) { lp.push(fields.externalId); ls.push(`"externalId" = $${lp.length}`); }
+      if (fields.sentAt) ls.push(`"sentAt" = NOW()`);
+      if (bumpAttempts) ls.push(`"attemptCount" = COALESCE("attemptCount", 0) + 1`);
+      ls.push(`"updatedAt" = NOW()`);
+      lp.push(legacyId);
+      await rawExecute(
+        `UPDATE whatsapp_queue SET ${ls.join(", ")} WHERE id = $${lp.length}`,
+        lp,
+      ).catch((e) => logger.warn(e, `[cronScheduler] legacy whatsapp_queue mirror #${legacyId}`));
+    }
+  };
+
   for (const msg of pending) {
     if (msg.channelEnabled === "false") {
-      await rawExecute(
-        `UPDATE whatsapp_queue SET "errorMessage"='قناة واتساب معطلة — سيتم الإرسال عند التفعيل', "updatedAt"=NOW() WHERE id=$1`,
-        [msg.id]
-      );
+      await updateBothWa(msg, { errorMessage: "قناة واتساب معطلة — سيتم الإرسال عند التفعيل" }, false);
       skipped++;
       continue;
     }
     if (!msg.accessToken || !msg.phoneNumberId) {
-      await rawExecute(
-        `UPDATE whatsapp_queue SET "errorMessage"='بيانات Meta API غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات', "updatedAt"=NOW() WHERE id=$1`,
-        [msg.id]
-      );
+      await updateBothWa(msg, { errorMessage: "بيانات Meta API غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات" }, false);
       skipped++;
       continue;
     }
@@ -2056,34 +2243,63 @@ async function processWhatsAppQueue(): Promise<string> {
       if (resp.ok) {
         const data = await resp.json() as { messages?: { id?: string }[] };
         const msgId = data?.messages?.[0]?.id ?? null;
-        await rawExecute(
-          `UPDATE whatsapp_queue SET status='sent', "externalId"=$1, "sentAt"=NOW(), "attemptCount"=COALESCE("attemptCount",0)+1, "updatedAt"=NOW() WHERE id=$2`,
-          [msgId, msg.id]
-        );
+        await updateBothWa(msg, {
+          status: "sent", externalId: msgId, sentAt: true, errorMessage: null,
+        });
         sent++;
       } else {
         const errText = await resp.text();
         const newCount = (Number(msg.attemptCount) || 0) + 1;
         const newStatus = newCount >= 3 ? "failed" : "pending";
-        await rawExecute(
-          `UPDATE whatsapp_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
-          [newStatus, errText.substring(0, 500), newCount, msg.id]
-        );
+        await updateBothWa(msg, { status: newStatus, errorMessage: errText.substring(0, 500) });
         failed++;
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       const newCount = (Number(msg.attemptCount) || 0) + 1;
       const newStatus = newCount >= 3 ? "failed" : "pending";
-      await rawExecute(
-        `UPDATE whatsapp_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
-        [newStatus, errMsg, newCount, msg.id]
-      );
+      await updateBothWa(msg, { status: newStatus, errorMessage: errMsg });
       failed++;
     }
   }
 
   return `WhatsApp queue: ${sent} sent, ${failed} failed, ${skipped} skipped (no config)`;
+}
+
+/**
+ * Phase 2.x live mailbox sync. Iterates over enabled mailbox_accounts
+ * ordered by lastSyncedAt (oldest first → never-synced accounts go to
+ * the head of the queue). Caps the per-tick work at 10 accounts so a
+ * tenant with many mailboxes can't starve the rest. Per-account
+ * sync failures don't abort the loop — mailboxSync.ts updates each
+ * account's lastSyncStatus + lastSyncError.
+ */
+async function processMailboxSync(): Promise<string> {
+  const due = await rawQuery<{ id: number; companyId: number; userId: number }>(
+    `SELECT id, "companyId", "userId"
+       FROM mailbox_accounts
+      WHERE "syncEnabled" = true AND "deletedAt" IS NULL
+      ORDER BY "lastSyncedAt" ASC NULLS FIRST
+      LIMIT 10`,
+  );
+  if (due.length === 0) return "No mailboxes due";
+
+  let okCount = 0, errCount = 0, msgs = 0;
+  for (const account of due) {
+    try {
+      const result = await syncMailbox(account.id, account.companyId, account.userId);
+      if (result.status === "ok") {
+        okCount++;
+        msgs += result.messagesFetched;
+      } else {
+        errCount++;
+      }
+    } catch (err) {
+      errCount++;
+      logger.warn(err, `[cronScheduler] mailbox sync failed for account ${account.id}`);
+    }
+  }
+  return `Mailbox sync: ${okCount} ok (${msgs} msgs), ${errCount} err`;
 }
 
 async function weeklyLogsArchiving(): Promise<string> {
@@ -3563,6 +3779,9 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
+  { name: "fleet_telematics_retention", description: "تنظيف بيانات Telematics القديمة (مواقع + سجلات مزامنة + جلسات بث منتهية)", schedule: "0 3 * * *", handler: fleetTelematicsRetention },
+  { name: "fleet_telematics_heartbeat", description: "كشف الأجهزة غير المتصلة بناءً على آخر موقع", schedule: "*/2 * * * *", handler: fleetTelematicsHeartbeat },
+  { name: "fleet_telematics_poll", description: "Auto-poll للمواقع من CMSV6 لكل تكامل نشط (مع retry + circuit breaker)", schedule: "* * * * *", handler: fleetTelematicsPoll },
   { name: "leave_escalation_check", description: "تصعيد طلبات الإجازة", schedule: "0 7 * * *", handler: leaveEscalationCheck },
   { name: "leave_return_to_work_closure", description: "إغلاق الإجازات المنتهية وتنبيه العودة للعمل", schedule: "5 0 * * *", handler: leaveReturnToWorkClosure },
   { name: "inquiry_memo_escalation", description: "تصعيد محاضر الاستفسار المعلقة 72 ساعة", schedule: "0 */6 * * *", handler: inquiryMemoEscalation },
@@ -3615,6 +3834,11 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "abc_monthly_classification", description: "تصنيف ABC الشهري للمنتجات (Pareto)", schedule: "0 3 1 * *", handler: abcMonthlyClassificationCron },
   { name: "sms_queue_worker", description: "معالجة قائمة انتظار الرسائل النصية", schedule: "* * * * *", handler: processSmsQueue },
   { name: "whatsapp_queue_worker", description: "معالجة قائمة انتظار واتساب", schedule: "* * * * *", handler: processWhatsAppQueue },
+  // Phase 2.x live sync — polls Microsoft 365 / IMAP mailboxes every
+  // 5 minutes for new inbound messages. Frequency was picked to balance
+  // freshness against Graph API rate limits (Microsoft caps delta queries
+  // at ~10k requests / 10 min per app — 10 mailboxes × 12 polls/hr = 120/hr).
+  { name: "mailbox_sync_worker", description: "مزامنة صناديق البريد المتصلة (Microsoft 365 / IMAP)", schedule: "*/5 * * * *", handler: processMailboxSync },
   { name: "weekly_logs_archiving", description: "أرشفة السجلات القديمة أسبوعياً", schedule: "0 3 * * 0", handler: weeklyLogsArchiving },
   { name: "scheduled_reports_runner", description: "إرسال التقارير المجدولة", schedule: "0 * * * *", handler: runScheduledReports },
   { name: "notification_fallback_chains", description: "معالجة سلاسل التصعيد للإشعارات الفاشلة", schedule: "*/2 * * * *", handler: processFallbackChains },
@@ -3630,7 +3854,55 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
   { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },
   { name: "rbac_v2_expired_grants_cleanup", description: "تنظيف منح RBAC v2 منتهية الصلاحية", schedule: "0 3 * * *", handler: rbacV2ExpiredGrantsCleanup },
+  { name: "pbx_stt_queue_drain", description: "تفريغ طابور تحويل التسجيلات إلى نصوص + توليد ملخّص AI", schedule: "*/2 * * * *", handler: pbxSttQueueDrain },
 ];
+
+/**
+ * Drain the PBX transcript queue. Each tick processes up to 5 pending
+ * recordings to keep the cron run bounded; the next tick picks up
+ * anything left. When a transcript completes, this same handler also
+ * generates the AI summary so the operator UI shows both as soon as
+ * possible. STT/summarisation cost flows through recordAiUsage so it
+ * lands in /admin/observability.
+ */
+async function pbxSttQueueDrain(): Promise<string> {
+  const MAX_PER_TICK = 5;
+  let processed = 0;
+  let summarised = 0;
+  for (let i = 0; i < MAX_PER_TICK; i++) {
+    const result = await runPendingTranscription();
+    if (!result) break;
+    processed++;
+    if (result.status !== "completed") continue;
+
+    // Just-completed transcript → auto-summarise. Read the transcript
+    // text + companyId, pipe to the existing aiEngine.summarizerSummarize.
+    const [row] = await rawQueryShared<{ id: number; transcript: string | null; companyId: number }>(
+      `SELECT id, transcript, "companyId" FROM pbx_call_transcripts
+        WHERE "callId" = $1 AND status = 'completed' AND summary IS NULL`,
+      [result.callId],
+    );
+    if (!row || !row.transcript) continue;
+    try {
+      const summary = await aiEngine.summarizerSummarize(
+        row.transcript,
+        300,
+        { companyId: row.companyId, userId: null },
+      );
+      await rawExecuteShared(
+        `UPDATE pbx_call_transcripts
+            SET summary = $1, "summarisedAt" = NOW()
+          WHERE id = $2`,
+        [summary, row.id],
+      );
+      summarised++;
+    } catch {
+      // Summarisation failure is non-fatal — the transcript is
+      // already saved; an operator can retry from the UI.
+    }
+  }
+  return `processed=${processed} summarised=${summarised}`;
+}
 
 async function rbacV2ExpiredGrantsCleanup(): Promise<string> {
   // Drop user-level grants whose expires_at has passed. We delete rather
@@ -3691,6 +3963,13 @@ const scheduledTasks: ReturnType<typeof cron.schedule>[] = [];
 export async function startCronScheduler(): Promise<void> {
   await seedCronJobs();
   registerProactiveEventListeners();
+  // #1354 — wire the telematics breaker into cross-replica Redis pub/sub.
+  // No-ops when REDIS_URL is unset (single-replica deployments behave
+  // exactly as before). When configured, this is the path that closes
+  // Known Limitation #1 from the Phase 2 commit.
+  void setupBreakerCoordination(telematicsBreaker).catch((err) => {
+    logger.warn({ err }, "[CRON] telematics breaker coordination init failed");
+  });
 
   for (const def of JOB_DEFINITIONS) {
     try {

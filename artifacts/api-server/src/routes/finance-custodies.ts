@@ -803,6 +803,10 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
   }
 });
 
+// Audit F5 — DOC. Defensive REST-style variant. The UI uses the
+// body-style POST /custodies/settle; this path variant is kept because
+// `financeBudgetCustodySmoke.test.ts` asserts its existence as part
+// of the custody router smoke contract.
 custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.custodies", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;

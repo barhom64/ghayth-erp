@@ -376,19 +376,43 @@ describe("getDailyWage contracts", () => {
   });
 });
 
-// ─── generateMemoNumber contracts ──────────────────────────────────────────
+// ─── memo number contracts (#1141 G1 closure) ──────────────────────────────
+// The previous generateMemoNumber used SELECT COUNT(*) + 1 — race-prone,
+// no audit, no scheme policy. After G1 closure it routes through
+// numberingService.issueNumber (scheme: hr.inquiry_memo).
 
-describe("generateMemoNumber contracts", () => {
-  it("generates MEMO-{year}-{5-digit seq} format", () => {
-    expect(ENGINE_SRC).toContain('`MEMO-${year}-${String(seq).padStart(5, "0")}`');
+describe("memo number contracts", () => {
+  it("issues memos through the numbering center (scheme hr.inquiry_memo)", () => {
+    const idx = ENGINE_SRC.indexOf("function issueMemoNumber");
+    expect(idx).toBeGreaterThan(-1);
+    const section = ENGINE_SRC.slice(idx, idx + 600);
+    expect(section).toContain('moduleKey: "hr"');
+    expect(section).toContain('entityKey: "inquiry_memo"');
+    expect(section).toContain('entityTable: "hr_inquiry_memos"');
+    expect(section).toContain('expectedTiming: "on_draft"');
   });
 
-  it("counts existing memos in the same year for sequencing", () => {
-    const idx = ENGINE_SRC.indexOf("function generateMemoNumber");
-    const section = ENGINE_SRC.slice(idx, idx + 400);
-    expect(section).toContain("COUNT(*)::int AS cnt");
-    expect(section).toContain("hr_inquiry_memos");
-    expect(section).toContain('EXTRACT(YEAR FROM "createdAt")');
+  it("legacy generateMemoNumber wrapper still exists for back-compat", () => {
+    // Deprecated but kept so external callers don't break. Wraps
+    // issueMemoNumber and returns just the string.
+    expect(ENGINE_SRC).toContain("function generateMemoNumber");
+    expect(ENGINE_SRC).toContain("@deprecated");
+  });
+
+  it("no longer derives seq from a COUNT(*) of the memos table for numbering", () => {
+    // Hard contract: the race-prone COUNT(*) + 1 pattern must never
+    // come back to issue memoNumber. Scope the check to the two memo-
+    // number functions (issueMemoNumber, generateMemoNumber) — counting
+    // memos for OTHER reasons (e.g. computing escalation rank) is fine
+    // and unrelated to numbering.
+    const memoIssuerSpan = (() => {
+      const start = ENGINE_SRC.indexOf("function issueMemoNumber");
+      const wrapEnd = ENGINE_SRC.indexOf("// idempotent memo creator", start);
+      return ENGINE_SRC.slice(start, wrapEnd > 0 ? wrapEnd : start + 1500);
+    })();
+    expect(memoIssuerSpan).not.toMatch(/COUNT\s*\(\s*\*\s*\)/);
+    // The numbering center call must be present in the same span.
+    expect(memoIssuerSpan).toContain("issueNumber(");
   });
 });
 

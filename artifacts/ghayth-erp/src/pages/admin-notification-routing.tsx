@@ -94,6 +94,15 @@ export default function AdminNotificationRouting() {
     onSuccess: () => { toast({ title: "أُضيفت السلسلة" }); setChainOpen(false); refreshAll(); },
     onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
   });
+  const toggleChain = useMutation({
+    mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
+      apiFetch(`/admin/notification-routing/chains/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      }),
+    onSuccess: () => { toast({ title: "تم تحديث السلسلة" }); refreshAll(); },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
 
   const ruleColumns: DataTableColumn<RuleRow>[] = [
     { key: "eventCategory", header: "فئة الحدث", searchable: true, render: (r) => (

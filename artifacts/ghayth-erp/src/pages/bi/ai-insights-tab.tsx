@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import {
-  Brain, CheckCircle2, ArrowUpRight, Lightbulb, ShieldAlert, X,
+  Brain, CheckCircle2, ArrowUpRight, Lightbulb, ShieldAlert, X, Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
@@ -15,6 +15,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 
 export function AIInsightsTab() {
   const [dismissingId, setDismissingId] = useState<number | null>(null);
+  const [readingId, setReadingId] = useState<number | null>(null);
   const { toast } = useToast();
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["bi-ai-insights"], "/bi/ai-insights");
   const alerts = (data?.alerts || []) as any[];
@@ -42,6 +43,7 @@ export function AIInsightsTab() {
     } catch {
       toast({ title: "خطأ", variant: "destructive" });
     }
+    setReadingId(null);
   };
 
   const severityConfig: Record<string, { label: string; color: string; bg: string }> = {

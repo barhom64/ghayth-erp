@@ -314,14 +314,18 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
         [id, scope.companyId]
       ),
       rawQuery<ClientConversationRow>(
-        `SELECT wq.id, wq.phone, wq.message, wq.status, wq."createdAt", 'whatsapp' AS channel
-         FROM whatsapp_queue wq
-         WHERE wq."clientId" = $1 AND wq."companyId" = $2
-         UNION ALL
-         SELECT sq.id, sq."recipientPhone" AS phone, sq.message, sq.status, sq."createdAt", 'sms' AS channel
-         FROM sms_queue sq
-         WHERE sq."companyId" = $2 AND sq."recipientPhone" = (SELECT phone FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1)
-         ORDER BY "createdAt" DESC LIMIT 20`,
+        // Phase 4 contract cleanup: read from outbound_queue (unified)
+        // instead of the per-channel legacy queues. The client's phone
+        // matches outbound_queue.recipient when channel='sms'; for
+        // whatsapp the legacy whatsapp_queue.clientId column has no
+        // analogue here, so we match on recipient = clients.phone too.
+        `SELECT oq.id::int AS id, oq.recipient AS phone, oq.body AS message,
+                oq.status, oq."createdAt", oq.channel
+           FROM outbound_queue oq
+          WHERE oq."companyId" = $2
+            AND oq.channel IN ('whatsapp','sms')
+            AND oq.recipient = (SELECT phone FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1)
+          ORDER BY oq."createdAt" DESC LIMIT 20`,
         [id, scope.companyId]
       ).catch((e) => { logger.error(e, "clients query failed"); return [] as ClientConversationRow[]; }),
       rawQuery<ClientTimelineRow>(
@@ -355,6 +359,45 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
       openTickets: tickets.filter((t) => t.status === 'open' || t.status === 'in_progress'),
     };
 
+    // Customer-portal linkages — populated from clientId columns added
+    // in migration 230 (tenants, legal_cases) and the pre-existing
+    // umrah_sub_agents.clientId. Each list mirrors a section the customer
+    // portal exposes under /portal/me availableSections, so an operator
+    // looking at a CRM client can see at-a-glance every relationship
+    // they hold.
+    const [tenancies, legalCases, umrahSubAgents] = await Promise.all([
+      rawQuery<Record<string, unknown>>(
+        // Drop t.phone + t."nationalId" — the request is authorized
+        // under crm.clients, not properties.tenants. Sales/account
+        // managers viewing a client should not get tenant PII as a
+        // side-effect of the tenancies tab; the link is enough so they
+        // can navigate to /properties/tenants/:id where the proper
+        // properties.tenants:view RBAC + field policy apply.
+        `SELECT t.id, t.name,
+                (SELECT COUNT(*) FROM rental_contracts rc
+                  WHERE rc."tenantId" = t.id AND rc.status = 'active' AND rc."deletedAt" IS NULL)::int AS "activeContracts"
+           FROM tenants t
+          WHERE t."clientId" = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL
+          ORDER BY t.id DESC LIMIT 20`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "clients-tenancies query failed"); return []; }),
+      rawQuery<Record<string, unknown>>(
+        `SELECT id, "caseNumber", title, "caseType", court, status, priority,
+                "financialRisk", "riskLevel", "filingDate"
+           FROM legal_cases
+          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          ORDER BY "createdAt" DESC LIMIT 20`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "clients-legal-cases query failed"); return []; }),
+      rawQuery<Record<string, unknown>>(
+        `SELECT id, "nuskCode", name, country, "paymentTerms", "isActive"
+           FROM umrah_sub_agents
+          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          ORDER BY id DESC LIMIT 20`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "clients-umrah-sub-agents query failed"); return []; }),
+    ]);
+
     res.json(maskFields(req, {
       ...client,
       invoices,
@@ -365,6 +408,11 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
       conversations,
       timeline,
       activeServices,
+      // Customer-type relationships — surface them under their own keys
+      // so the client-detail UI can render dedicated cards per type.
+      tenancies,
+      legalCases,
+      umrahSubAgents,
     }));
   } catch (err) {
     handleRouteError(err, res, "Get client error:");
@@ -424,27 +472,37 @@ router.post("/auto-create", authorize({ feature: "crm.clients", action: "create"
     }
 
     const clientName = name || `عميل ${phone.slice(-4)}`;
-    // Numbering center (Issue #1141) — client code from central authority.
-    const issued = await issueNumber({
-      companyId: scope.companyId,
-      branchId: scope.branchId ?? null,
-      moduleKey: "crm",
-      entityKey: "client_code",
-      entityTable: "clients",
-      actorId: scope.userId,
+    // Numbering center (Issue #1141) — atomic flow: issueNumber +
+    // INSERT + link-back inside one withTransaction. SAVEPOINT
+    // reentrancy in rawdb.ts means the inner issueNumber joins this
+    // outer tx, so the entity INSERT and the assignment link-back
+    // either both commit or both roll back. Replaces the previous
+    // .catch(logger.error) swallow that allowed an orphan client row
+    // with no audit assignment.
+    const atomic = await withTransaction(async () => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "crm",
+        entityKey: "client_code",
+        entityTable: "clients",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      const result = await rawExecute(
+        `INSERT INTO clients (name, phone, classification, source, code, "companyId", "isBlacklisted")
+         VALUES ($1, $2, 'prospect', $3, $4, $5, false)`,
+        [clientName, phone, source, issued.number, scope.companyId]
+      );
+      assertInsert(result.insertId, "clients");
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [result.insertId, issued.assignmentId]
+      );
+      return { insertId: result.insertId, code: issued.number };
     });
-    const code = issued.number;
-
-    const { insertId } = await rawExecute(
-      `INSERT INTO clients (name, phone, classification, source, code, "companyId", "isBlacklisted")
-       VALUES ($1, $2, 'prospect', $3, $4, $5, false)`,
-      [clientName, phone, source, code, scope.companyId]
-    );
-    assertInsert(insertId, "clients");
-    await rawExecute(
-      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
-      [insertId, issued.assignmentId]
-    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to clients row"));
+    const code = atomic.code;
+    const insertId = atomic.insertId;
 
     const [newClient] = await rawQuery<ClientRow>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     if (!newClient) throw new NotFoundError("فشل في استرجاع العميل");
@@ -616,6 +674,16 @@ router.patch("/:id/portal-account", authorize({ feature: "crm.clients", action: 
       sets.push(`"passwordHash" = $${params.length}`);
       params.push(true);
       sets.push(`"mustChangePassword" = $${params.length}`);
+    }
+    // Bump tokenVersion when admin resets the password OR suspends the
+    // account — both are recovery paths that must invalidate any JWT
+    // currently in the user's (or an attacker's) hands. isActive=false
+    // is already blocked by the portal middleware on the next request,
+    // but bumping tokenVersion keeps the security model uniform: any
+    // change to "who can use this account right now" → all old tokens
+    // die.
+    if (password || isActive === false) {
+      sets.push(`"tokenVersion" = COALESCE("tokenVersion", 0) + 1`);
     }
 
     if (sets.length === 0) { res.json({ account }); return; }

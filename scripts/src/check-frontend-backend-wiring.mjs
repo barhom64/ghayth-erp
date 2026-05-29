@@ -793,7 +793,7 @@ function normaliseFrontendUrl(url) {
       // Plain QS variable: scopeSuffix, filterParams, querystring, qs,
       // dateParams (period-close-preflight + finance reports inherit
       // this idiom from main), …
-      /^(scope|filter|date)?(qs|querystring|queryparams|filterparams|dateparams|suffix|query|params)$/i.test(body.trim()) ||
+      /^[a-z]*(qs|querystring|queryparams|filterparams|dateparams|suffix|query|params)$/i.test(body.trim()) ||
       // Already a literal query string inside: `?key=…`
       /\?\s*[\w]+\s*=/.test(body) ||
       // Conditional QS suffix: `X ? "?…" : ""`  or  `X ? \`?${…}\` : ""`

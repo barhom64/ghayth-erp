@@ -102,6 +102,19 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], displayOrder: 142 },
 
+  { key: "hr.payroll.wps", parentKey: "hr.payroll", moduleKey: "hr", labelAr: "نظام حماية الأجور (WPS)",
+    descriptionAr: "توليد ملف WPS من مسير الرواتب المعتمد، تسليمه للبنك، واستلام تأكيد البنك",
+    availableActions: ["view", "list", "create", "update", "submit", "export"],
+    availableScopes: ["branch", "company"],
+    sensitiveFields: ["iban", "iqamaOrId", "amount", "bankRefNumber"],
+    displayOrder: 143 },
+
+  { key: "hr.saudization", parentKey: "hr", moduleKey: "hr", labelAr: "السعودة (نطاقات)",
+    descriptionAr: "متابعة نسبة السعودة وتصنيف الشركة في نطاقات + تاريخ اللقطات الشهرية",
+    availableActions: ["view", "list", "update", "export"],
+    availableScopes: ["company"],
+    displayOrder: 144 },
+
   { key: "hr.discipline", parentKey: "hr", moduleKey: "hr", labelAr: "الانضباط الوظيفي",
     availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES,
     approvableActions: ["approve"], displayOrder: 150 },
@@ -186,6 +199,20 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     systemCritical: true, displayOrder: 240 },
 
+  // Override permission for the enforce_line_allocation gate (migration 223).
+  // When the company setting `finance.enforce_line_allocation` is ON, the
+  // invoice/PO approve handlers refuse to post a JE that contains any
+  // line whose resolver status is 'unmapped'. A user holding this grant
+  // may still approve by supplying a written `overrideReason`, which the
+  // backend persists in allocation_override_log for audit. The grant is
+  // intentionally narrow (action="create" only — the only meaningful
+  // action on an override is "record one") and company-scoped because
+  // financial integrity bypass is a CFO-level concern, not a branch one.
+  { key: "finance.allocation.override", parentKey: "finance.accounts", moduleKey: "finance",
+    labelAr: "تجاوز تخصيص البنود (CFO)",
+    availableActions: ["create"], availableScopes: ["company"],
+    systemCritical: true, displayOrder: 241 },
+
   { key: "finance.budget", parentKey: "finance", moduleKey: "finance", labelAr: "الميزانية",
     availableActions: ALL_ACTIONS, availableScopes: ["department", "branch", "company"],
     approvableActions: ["approve"], displayOrder: 250 },
@@ -240,6 +267,39 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "fleet.maintenance", parentKey: "fleet", moduleKey: "fleet", labelAr: "الصيانة",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], displayOrder: 330 },
+
+  // Telematics surface (#1354 — CMSV6 / AI MDVR / Sensors). Separate feature
+  // keys per concern so the operator can grant "see live map" without
+  // unlocking "open live video" or "edit CMSV6 credentials".
+  { key: "fleet.telematics", parentKey: "fleet", moduleKey: "fleet", labelAr: "التتبع والكاميرات",
+    icon: "Satellite",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 340 },
+  { key: "fleet.telematics.devices", parentKey: "fleet.telematics", moduleKey: "fleet",
+    labelAr: "أجهزة MDVR",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 341 },
+  { key: "fleet.telematics.live", parentKey: "fleet.telematics", moduleKey: "fleet",
+    labelAr: "الخريطة المباشرة",
+    availableActions: ["view", "list"], availableScopes: ["branch", "company"], displayOrder: 342 },
+  { key: "fleet.telematics.sync", parentKey: "fleet.telematics", moduleKey: "fleet",
+    labelAr: "مزامنة CMSV6",
+    availableActions: ["view", "list", "create", "update"], availableScopes: ["company"], displayOrder: 343 },
+  { key: "fleet.telematics.configure", parentKey: "fleet.telematics", moduleKey: "fleet",
+    labelAr: "إعدادات CMSV6",
+    availableActions: ALL_ACTIONS, availableScopes: ["company"],
+    sensitiveFields: ["account", "password", "apiKey", "vendorSecretSlug"],
+    displayOrder: 344 },
+  { key: "fleet.telematics.video", parentKey: "fleet.telematics", moduleKey: "fleet",
+    labelAr: "البث المباشر",
+    availableActions: ["view", "list", "create", "delete"], availableScopes: ["branch", "company"],
+    displayOrder: 345 },
+  { key: "fleet.telematics.sensors", parentKey: "fleet.telematics", moduleKey: "fleet",
+    labelAr: "قراءات الحساسات",
+    availableActions: ["view", "list", "update", "export"], availableScopes: ["branch", "company"],
+    displayOrder: 346 },
+  { key: "fleet.telematics.ai_alerts", parentKey: "fleet.telematics", moduleKey: "fleet",
+    labelAr: "تنبيهات السلامة الذكية",
+    availableActions: ["view", "list", "update", "export"], availableScopes: ["branch", "company"],
+    displayOrder: 347 },
 
   { key: "warehouse", moduleKey: "warehouse", labelAr: "المستودع", icon: "Boxes",
     availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES, displayOrder: 400 },
@@ -430,6 +490,13 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 11 },
   { key: "dashboard.executive", parentKey: "dashboard", moduleKey: "dashboard", labelAr: "لوحة القيادة التنفيذية", icon: "LineChart",
     availableActions: ["view"], availableScopes: ["company", "multi_company", "all"], displayOrder: 12 },
+  // Operational daily command-center — different from my_space (HR personal)
+  // and from action_center (which is approvals-only). Workspace aggregates
+  // today's tasks + unread comms + recent calls + next meetings.
+  { key: "workspace", moduleKey: "dashboard", labelAr: "مساحة العمل", icon: "LayoutGrid",
+    availableActions: ["view"], availableScopes: ["self"], selfService: true, displayOrder: 13 },
+  { key: "workspace.manager", parentKey: "workspace", moduleKey: "dashboard", labelAr: "مساحة المدير", icon: "Users",
+    availableActions: ["view"], availableScopes: ALL_SCOPES, displayOrder: 14 },
 
   // ═══════════════════════════════════════════════════════════════
   // My Space sub-features

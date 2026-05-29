@@ -1,11 +1,17 @@
+import { useState } from "react";
 import { useRoute } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
+import { EmployeeSelect } from "@/components/shared/entity-selects";
 import { Badge } from "@/components/ui/badge";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   PageStatusBadge,
   DataTable,
@@ -18,15 +24,14 @@ import {
 } from "@workspace/entity-kit";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
   GraduationCap, Users, MapPin, User, BookOpen, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PrintButton } from "@/components/shared/print-button";
-import { GuardedButton } from "@/components/shared/permission-gate";
-import { EmployeeSelect } from "@/components/shared/entity-selects";
-import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
 
 const TRAINING_LIFECYCLE = [
   { key: "planned",   label: "مخطط" },
@@ -60,6 +65,11 @@ const STATUS_TONE_MAP: Record<string, "success" | "warning" | "info" | "muted" |
 export default function TrainingDetailPage() {
   const [, params] = useRoute("/hr/training/:id");
   const id = params?.id;
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [enrollEmployeeId, setEnrollEmployeeId] = useState<string>("");
+  const [enrolling, setEnrolling] = useState(false);
 
   const { extraTabs, hideTabs } = useRegistryTabs("training_program", id ?? "");
 
@@ -69,45 +79,31 @@ export default function TrainingDetailPage() {
     { enabled: !!id },
   );
 
-  const { data: enrollmentsData, refetch: refetchEnrollments } = useApiQuery<any>(
+  const { data: enrollmentsData } = useApiQuery<any>(
     ["training-enrollments", id ?? ""],
     `/hr/training/enrollments?programId=${id ?? 0}`,
     { enabled: !!id },
   );
   const enrollments = enrollmentsData?.data || [];
 
-  // GET /hr/training/enrollments/:id — full per-enrollment detail
-  // (attendance log, daily scores, feedback). Fetched lazily when the
-  // operator clicks "تفاصيل" on an enrollment row.
-  const [enrollmentDetailId, setEnrollmentDetailId] = useState<number | null>(null);
-  const enrollmentDetailQ = useApiQuery<any>(
-    ["training-enrollment-detail", String(enrollmentDetailId ?? 0)],
-    enrollmentDetailId ? `/hr/training/enrollments/${enrollmentDetailId}` : null,
-    { enabled: enrollmentDetailId !== null },
-  );
-
-  const { toast } = useToast();
-  const [enrollEmployeeId, setEnrollEmployeeId] = useState<string>("");
-
-  // POST /hr/training/enrollments — server refuses duplicates per
-  // (programId, employeeId). Refetch on success to surface the new row
-  // in the participants table.
-  const enrollMut = useApiMutation<unknown, { programId: number; employeeId: number; status: string }>(
-    "/hr/training/enrollments",
-    "POST",
-    [["training-enrollments", id ?? ""], ["training-program", id ?? ""]],
-    {
-      successMessage: "تم تسجيل الموظف في البرنامج",
-      onSuccess: () => { setEnrollEmployeeId(""); refetchEnrollments(); },
-    },
-  );
-
-  const handleEnroll = () => {
-    if (!id || !enrollEmployeeId) {
-      toast({ variant: "destructive", title: "اختر الموظف" });
-      return;
+  const handleEnroll = async () => {
+    if (!id || !enrollEmployeeId) return;
+    setEnrolling(true);
+    try {
+      await apiFetch("/hr/training/enrollments", {
+        method: "POST",
+        body: JSON.stringify({ programId: Number(id), employeeId: Number(enrollEmployeeId) }),
+      });
+      toast({ title: "تم تسجيل الموظف في البرنامج" });
+      qc.invalidateQueries({ queryKey: ["training-enrollments", id] });
+      qc.invalidateQueries({ queryKey: ["training-program", id] });
+      setEnrollOpen(false);
+      setEnrollEmployeeId("");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التسجيل", description: err.message });
+    } finally {
+      setEnrolling(false);
     }
-    enrollMut.mutate({ programId: Number(id), employeeId: Number(enrollEmployeeId), status: "enrolled" });
   };
 
   const kpis = [
@@ -196,15 +192,6 @@ export default function TrainingDetailPage() {
         </span>
       ),
     },
-    {
-      key: "_view",
-      header: "",
-      render: (e) => (
-        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEnrollmentDetailId(e.id)}>
-          تفاصيل
-        </Button>
-      ),
-    },
   ];
 
   const overview = program ? (
@@ -273,28 +260,20 @@ export default function TrainingDetailPage() {
 
       <Card className="border-0 shadow-sm">
         <CardContent className="p-6">
-          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-4 flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            المشاركون ({enrollments.length})
-          </h3>
-          <div className="flex items-end gap-2 mb-4">
-            <div className="flex-1 max-w-md">
-              <EmployeeSelect
-                value={enrollEmployeeId}
-                onChange={(v) => setEnrollEmployeeId(v)}
-                label="إضافة موظف للبرنامج"
-              />
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-status-neutral-foreground flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              المشاركون ({enrollments.length})
+            </h3>
             <GuardedButton
               perm="hr:create"
               size="sm"
-              onClick={handleEnroll}
-              disabled={!enrollEmployeeId || enrollMut.isPending}
-              rateLimitAware
-              className="gap-1"
+              variant="outline"
+              onClick={() => setEnrollOpen(true)}
+              disabled={program.status === "completed" || program.status === "cancelled"}
             >
-              <UserPlus className="h-4 w-4" />
-              تسجيل
+              <UserPlus className="h-4 w-4 me-1" />
+              تسجيل موظف
             </GuardedButton>
           </div>
           <DataTable
@@ -304,33 +283,6 @@ export default function TrainingDetailPage() {
             emptyMessage="لا يوجد مشاركون في هذا البرنامج"
             pageSize={20}
           />
-          {enrollmentDetailId !== null && (
-            <Card className="mt-3 border-status-info-surface bg-status-info-surface/30">
-              <CardContent className="p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">تفاصيل تسجيل #{enrollmentDetailId}</p>
-                  <Button variant="ghost" size="sm" onClick={() => setEnrollmentDetailId(null)}>إغلاق</Button>
-                </div>
-                {enrollmentDetailQ.isLoading ? (
-                  <p className="text-xs text-muted-foreground">جاري التحميل...</p>
-                ) : enrollmentDetailQ.data ? (
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div><span className="text-muted-foreground">الموظف:</span> {enrollmentDetailQ.data.employeeName ?? "—"}</div>
-                    <div><span className="text-muted-foreground">الحالة:</span> {enrollmentDetailQ.data.status ?? "—"}</div>
-                    <div><span className="text-muted-foreground">الدرجة:</span> {enrollmentDetailQ.data.score ?? "—"}</div>
-                    <div><span className="text-muted-foreground">الحضور:</span> {enrollmentDetailQ.data.attendanceRate ?? enrollmentDetailQ.data.attendance ?? "—"}</div>
-                    {enrollmentDetailQ.data.feedback && (
-                      <div className="col-span-2 whitespace-pre-wrap text-muted-foreground">
-                        {enrollmentDetailQ.data.feedback}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">لا توجد بيانات</p>
-                )}
-              </CardContent>
-            </Card>
-          )}
         </CardContent>
       </Card>
 
@@ -353,6 +305,7 @@ export default function TrainingDetailPage() {
   ) : null;
 
   return (
+    <>
     <DetailPageLayout
       actions={<PrintButton entityType="training" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
       title={program?.title || "تفاصيل البرنامج التدريبي"}
@@ -371,5 +324,30 @@ export default function TrainingDetailPage() {
       createdAt={program?.createdAt}
       updatedAt={program?.updatedAt}
     />
+    <Dialog open={enrollOpen} onOpenChange={(o) => { if (!o) { setEnrollOpen(false); setEnrollEmployeeId(""); } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>تسجيل موظف في البرنامج</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <EmployeeSelect
+            value={enrollEmployeeId}
+            onChange={(v) => setEnrollEmployeeId(v)}
+            label="الموظف"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setEnrollOpen(false)}>إلغاء</Button>
+          <Button
+            disabled={!enrollEmployeeId || enrolling}
+            onClick={handleEnroll}
+            rateLimitAware
+          >
+            {enrolling ? "جاري التسجيل…" : "تسجيل"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

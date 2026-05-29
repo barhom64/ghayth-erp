@@ -22,7 +22,7 @@ export default function RisksCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const createMut = useApiMutation("/governance/risks", "POST", [["governance-risks"]]);
+  const createMut = useApiMutation("/governance/risks", "POST", [["gov-risks"]]);
   const { data: employeesData, isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);

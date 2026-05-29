@@ -135,7 +135,7 @@ export default function DriverDetail() {
       { key: "licenseNumber", label: "رقم الرخصة" },
       { key: "address", label: "العنوان" },
     ],
-    invalidateKeys: [["driver", String(id)], ["drivers"]],
+    invalidateKeys: [["driver-detail", String(id)], ["fleet-drivers"], ["drivers"]],
     onSaved: () => refetch(),
   });
 

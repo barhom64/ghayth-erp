@@ -5,7 +5,6 @@ import {
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
-import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   PageStatusBadge,
@@ -56,11 +55,16 @@ export default function ViolationDetail() {
   const { id } = useParams<{ id: string }>();
   const { extraTabs, hideTabs } = useRegistryTabs("violation", id ?? "");
 
-  const { data, isLoading, isError, refetch } = useApiQuery<any>(["hr-violation-detail", id], id ? `/hr/violations/${id}` : null);
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(
+    ["hr-violation-detail", id],
+    `/hr/violations/${id}`,
+    !!id,
+  );
   const item = data?.data ?? data;
 
   // PATCH /hr/violations/:id — backend gates this on HR_APPROVAL_ROLES
-  // so the Edit button is permission-gated to match.
+  // so the Edit button is also permission-gated. Fields the backend
+  // accepts: type, severity, deduction, period, description, notes.
   // DELETE /hr/violations/:id is soft-delete, gated on HR_ROLES.
   const editDelete = useDetailEditDelete({
     entityLabel: "المخالفة",
@@ -177,21 +181,7 @@ export default function ViolationDetail() {
       {/* إجراءات الاعتماد */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center justify-between gap-2">
-            <span>إجراءات الاعتماد</span>
-            {item?.employeeId && (
-              <ImpactPreviewButton
-                endpoint="/hr/impact-preview/violation"
-                payload={{
-                  employeeId: item.employeeId,
-                  deduction: Number(item.deduction || 0),
-                  severity: item.severity,
-                  type: item.type,
-                }}
-                label="معاينة أثر المخالفة"
-              />
-            )}
-          </CardTitle>
+          <CardTitle className="text-base">إجراءات الاعتماد</CardTitle>
         </CardHeader>
         <CardContent>
           <ApprovalActions

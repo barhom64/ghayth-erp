@@ -2,6 +2,35 @@ import { rawQuery, rawExecute } from "./rawdb.js";
 import { sendPushToCompany } from "./pushService.js";
 import crypto from "node:crypto";
 import { logger } from "./logger.js";
+import { applyDlp, type Channel as DlpChannel } from "./communicationControl.js";
+
+/**
+ * Run the message body through the DLP scanner before queuing it. The
+ * result may redact sensitive substrings, block the send entirely, or
+ * pass through unchanged with informational flags. Never throws — DLP
+ * failures fall closed (block) for safety on unexpected errors.
+ *
+ * Returns { body, blocked }: caller skips the queue insert when blocked.
+ */
+async function dlpGate(
+  body: string,
+  channel: DlpChannel,
+  companyId: number,
+): Promise<{ body: string; blocked: boolean; reason?: string }> {
+  try {
+    const r = await applyDlp(body, channel, companyId);
+    if (r.matches.length > 0) {
+      logger.warn(
+        { channel, companyId, matches: r.matches.map((m) => m.ruleName), blocked: r.blocked },
+        "[NotifEngine] DLP rule fired on outbound",
+      );
+    }
+    return { body: r.body, blocked: r.blocked, reason: r.reason ?? undefined };
+  } catch (err) {
+    logger.error(err, "[NotifEngine] DLP scan failed — failing closed");
+    return { body, blocked: true, reason: "DLP_SCAN_ERROR" };
+  }
+}
 
 export type EngineChannel = "in_app" | "email" | "sms" | "whatsapp" | "push" | "webhook";
 
@@ -427,43 +456,97 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
         }
 
       } else if (channel === "email" && payload.recipientEmail) {
-        await rawExecute(
-          `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
-           VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
-          [companyId, payload.recipientEmail, payload.recipientName ?? "", title, body, payload.refType ?? null, payload.refId ?? null]
-        );
-        const dlId = await insertDeliveryLog({
-          companyId, channel: "email",
-          recipient: payload.recipientEmail,
-          templateKey: payload.templateKey,
-          subject: title, body, status: "queued",
-          fallbackChainId: fallbackChainId ?? undefined,
-          metadata: payload.metadata,
-        });
-        deliveryIds.push(dlId);
+        const dlp = await dlpGate(body, "email", companyId);
+        if (dlp.blocked) {
+          logger.warn({ companyId, channel: "email", reason: dlp.reason }, "[NotifEngine] email blocked by DLP");
+          const dlId = await insertDeliveryLog({
+            companyId, channel: "email",
+            recipient: payload.recipientEmail,
+            templateKey: payload.templateKey,
+            subject: title, body, status: "blocked_dlp",
+            fallbackChainId: fallbackChainId ?? undefined,
+            metadata: { ...(payload.metadata ?? {}), dlpReason: dlp.reason },
+          });
+          deliveryIds.push(dlId);
+        } else {
+          // Phase 4 contract slice 8: dual-write to outbound_queue alongside
+          // the legacy email_queue so the worker (slice 6 → outbound_queue
+          // primary) picks it up. Once the legacy queue is dropped, this
+          // legacy INSERT can be removed; the outbound_queue insert below
+          // is the canonical path.
+          await rawExecute(
+            `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
+             VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
+            [companyId, payload.recipientEmail, payload.recipientName ?? "", title, dlp.body, payload.refType ?? null, payload.refId ?? null]
+          );
+          await rawExecute(
+            `INSERT INTO outbound_queue
+               ("companyId", channel, recipient, "recipientName", subject, body,
+                status, "refType", "refId", "createdAt", "updatedAt")
+             VALUES ($1, 'email', $2, $3, $4, $5, 'pending', $6, $7, NOW(), NOW())`,
+            [companyId, payload.recipientEmail, payload.recipientName ?? null, title, dlp.body, payload.refType ?? null, payload.refId ?? null]
+          ).catch((e) => logger.warn(e, "[notificationEngine] outbound_queue dual-write failed"));
+          const dlId = await insertDeliveryLog({
+            companyId, channel: "email",
+            recipient: payload.recipientEmail,
+            templateKey: payload.templateKey,
+            subject: title, body: dlp.body, status: "queued",
+            fallbackChainId: fallbackChainId ?? undefined,
+            metadata: payload.metadata,
+          });
+          deliveryIds.push(dlId);
+        }
 
       } else if (channel === "sms" && payload.recipientPhone) {
-        await rawExecute(
-          `INSERT INTO sms_queue ("companyId", "recipientPhone", message, status, "createdAt")
-           VALUES ($1, $2, $3, 'pending', NOW())`,
-          [companyId, payload.recipientPhone, `${title}: ${body}`]
-        );
-        const dlId = await insertDeliveryLog({
-          companyId, channel: "sms",
-          recipient: payload.recipientPhone,
-          templateKey: payload.templateKey,
-          subject: title, body, status: "queued",
-          fallbackChainId: fallbackChainId ?? undefined,
-          metadata: payload.metadata,
-        });
-        deliveryIds.push(dlId);
+        const dlp = await dlpGate(body, "sms", companyId);
+        if (dlp.blocked) {
+          logger.warn({ companyId, channel: "sms", reason: dlp.reason }, "[NotifEngine] sms blocked by DLP");
+          const dlId = await insertDeliveryLog({
+            companyId, channel: "sms",
+            recipient: payload.recipientPhone,
+            templateKey: payload.templateKey,
+            subject: title, body, status: "blocked_dlp",
+            fallbackChainId: fallbackChainId ?? undefined,
+            metadata: { ...(payload.metadata ?? {}), dlpReason: dlp.reason },
+          });
+          deliveryIds.push(dlId);
+        } else {
+          await rawExecute(
+            `INSERT INTO sms_queue ("companyId", "recipientPhone", message, status, "createdAt")
+             VALUES ($1, $2, $3, 'pending', NOW())`,
+            [companyId, payload.recipientPhone, `${title}: ${dlp.body}`]
+          );
+          const dlId = await insertDeliveryLog({
+            companyId, channel: "sms",
+            recipient: payload.recipientPhone,
+            templateKey: payload.templateKey,
+            subject: title, body: dlp.body, status: "queued",
+            fallbackChainId: fallbackChainId ?? undefined,
+            metadata: payload.metadata,
+          });
+          deliveryIds.push(dlId);
+        }
 
       } else if (channel === "whatsapp" && (payload.recipientWhatsApp || payload.recipientPhone)) {
         const phone = payload.recipientWhatsApp ?? payload.recipientPhone ?? "";
+        const dlp = await dlpGate(body, "whatsapp", companyId);
+        if (dlp.blocked) {
+          logger.warn({ companyId, channel: "whatsapp", reason: dlp.reason }, "[NotifEngine] whatsapp blocked by DLP");
+          const dlId = await insertDeliveryLog({
+            companyId, channel: "whatsapp",
+            recipient: phone,
+            templateKey: payload.templateKey,
+            subject: title, body, status: "blocked_dlp",
+            fallbackChainId: fallbackChainId ?? undefined,
+            metadata: { ...(payload.metadata ?? {}), dlpReason: dlp.reason },
+          });
+          deliveryIds.push(dlId);
+          continue;
+        }
         await rawExecute(
           `INSERT INTO whatsapp_queue ("companyId", phone, "recipientName", "clientId", "assignmentId", message, status, "createdAt")
            VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())`,
-          [companyId, phone, payload.recipientName ?? "", payload.clientId ?? null, payload.assignmentId ?? null, `${title}: ${body}`]
+          [companyId, phone, payload.recipientName ?? "", payload.clientId ?? null, payload.assignmentId ?? null, `${title}: ${dlp.body}`]
         );
         const dlId = await insertDeliveryLog({
           companyId, channel: "whatsapp",

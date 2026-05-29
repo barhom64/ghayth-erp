@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -228,6 +229,22 @@ export default function IncomeStatementTrendPage() {
           <Button variant="outline" size="sm" onClick={exportCsv} disabled={!allLoaded}>
             <Download className="h-4 w-4 me-1" /> CSV
           </Button>
+          <PrintButton
+            entityType="report_income_trend"
+            entityId={`${buckets[0]?.key ?? ""}..${buckets[buckets.length - 1]?.key ?? ""}`}
+            payload={{
+              entity: {
+                title: "اتجاه قائمة الدخل (شهري)",
+                from: buckets[0]?.label,
+                to: buckets[buckets.length - 1]?.label,
+                monthCount: buckets.length,
+              },
+              items: [
+                ...revenueRows.map((r) => ({ "النوع": "إيراد", "الكود": r.code, "اسم الحساب": r.name, ...Object.fromEntries(buckets.map((b, i) => [b.label, Number(r.amounts[i] ?? 0)])) })),
+                ...expenseRows.map((r) => ({ "النوع": "مصروف", "الكود": r.code, "اسم الحساب": r.name, ...Object.fromEntries(buckets.map((b, i) => [b.label, Number(r.amounts[i] ?? 0)])) })),
+              ],
+            }}
+          />
         </div>
       }
     >

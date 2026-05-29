@@ -12,7 +12,8 @@ import {
   exportToCSV,
   PageShell,
 } from "@workspace/ui-core";
-import { Plus, Percent, Trash2, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Plus, Percent, Trash2, Pencil, Layers, Receipt } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
@@ -168,12 +169,24 @@ export default function TaxCodesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "رموز الضريبة" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="finance:create" size="sm" asChild>
-          <Link href="/finance/tax-codes/create">
-            <Plus className="h-4 w-4 me-1" />
-            إضافة رمز ضريبة
+        <>
+          <Link href="/finance/wht-categories">
+            <Button variant="outline" size="sm">
+              <Layers className="h-4 w-4 me-1" />فئات WHT
+            </Button>
           </Link>
-        </GuardedButton>
+          <Link href="/finance/vat-filing-readiness">
+            <Button variant="outline" size="sm">
+              <Receipt className="h-4 w-4 me-1" />جاهزية VAT
+            </Button>
+          </Link>
+          <GuardedButton perm="finance:create" size="sm" asChild>
+            <Link href="/finance/tax-codes/create">
+              <Plus className="h-4 w-4 me-1" />
+              إضافة رمز ضريبة
+            </Link>
+          </GuardedButton>
+        </>
       }
     >
       <FinanceTabsNav />

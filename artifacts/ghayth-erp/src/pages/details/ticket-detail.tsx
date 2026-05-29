@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
-import { useApiQuery, useApiMutation, apiFetch, getErrorMessage } from "@/lib/api";
+import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { formatDateAr, formatTimeAr } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -8,14 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import { GuardedButton } from "@/components/shared/permission-gate";
-import { Headphones, User, MessageSquare, Send, Trash2, Clock, MapPin, Star, Timer } from "lucide-react";
+import { Headphones, User, MessageSquare, Send, Trash2, Clock, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   DetailPageLayout,
   EntityComments,
@@ -56,59 +51,12 @@ export default function TicketDetail() {
   const [newReply, setNewReply] = useState("");
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [csatScore, setCsatScore] = useState<number>(0);
+  const [csatComment, setCsatComment] = useState("");
+  const [csatSubmitting, setCsatSubmitting] = useState(false);
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("support_ticket", id ?? 0);
 
   const { data: ticket, isLoading, isError, error, refetch } = useApiQuery<any>(["ticket-detail", id || ""], `/support/tickets/${id}`, !!id);
-
-  // POST /support/tickets/:id/field-visit — schedule a technician visit.
-  const fieldVisitMut = useApiMutation<unknown, {
-    scheduledAt: string;
-    technicianId?: number;
-    notes?: string;
-  }>(
-    () => `/support/tickets/${id}/field-visit`,
-    "POST",
-    [["ticket-detail", id || ""], ["tickets"]],
-    { successMessage: "تم جدولة الزيارة الميدانية" },
-  );
-  // POST /support/tickets/:id/csat — submit customer satisfaction rating.
-  const csatMut = useApiMutation<unknown, { rating: number; comment?: string }>(
-    () => `/support/tickets/${id}/csat`,
-    "POST",
-    [["ticket-detail", id || ""]],
-    { successMessage: "تم تسجيل التقييم — شكراً لك" },
-  );
-  // POST /support/tickets/check-sla — runs the SLA recompute job
-  // server-side and refreshes the breached flag.
-  const checkSlaMut = useApiMutation<unknown, Record<string, never>>(
-    "/support/tickets/check-sla",
-    "POST",
-    [["ticket-detail", id || ""], ["tickets"]],
-    { successMessage: "تم إعادة فحص اتفاقية الخدمة" },
-  );
-  const [fvOpen, setFvOpen] = useState(false);
-  const [fvScheduled, setFvScheduled] = useState("");
-  const [fvNotes, setFvNotes] = useState("");
-  const [csatOpen, setCsatOpen] = useState(false);
-  const [csatRating, setCsatRating] = useState(5);
-  const [csatComment, setCsatComment] = useState("");
-  const submitFieldVisit = () => {
-    if (!fvScheduled) {
-      toast({ variant: "destructive", title: "موعد الزيارة مطلوب" });
-      return;
-    }
-    fieldVisitMut.mutate(
-      { scheduledAt: fvScheduled, notes: fvNotes.trim() || undefined },
-      { onSuccess: () => { setFvOpen(false); setFvNotes(""); setFvScheduled(""); refetch(); } },
-    );
-  };
-  const submitCsat = () => {
-    if (csatRating < 1 || csatRating > 5) return;
-    csatMut.mutate(
-      { rating: csatRating, comment: csatComment.trim() || undefined },
-      { onSuccess: () => { setCsatOpen(false); setCsatComment(""); setCsatRating(5); refetch(); } },
-    );
-  };
 
   const priorityMap: Record<string, { label: string; color: string }> = {
     critical: { label: "حرجة", color: "bg-red-200 text-status-error-foreground" },
@@ -165,6 +113,28 @@ export default function TicketDetail() {
       navigate("/support");
     } catch (err) {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  // CSAT — only accepted on resolved/closed tickets per the backend's
+  // 409 guard. The widget reads csatScore from the loaded ticket payload
+  // (if already rated) or shows the entry form.
+  const handleSubmitCsat = async () => {
+    if (csatScore < 1 || csatScore > 5) return;
+    setCsatSubmitting(true);
+    try {
+      await apiFetch(`/support/tickets/${id}/csat`, {
+        method: "POST",
+        body: JSON.stringify({ score: csatScore, comment: csatComment || undefined }),
+      });
+      toast({ title: "تم إرسال التقييم — شكراً لك" });
+      qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
+      setCsatScore(0);
+      setCsatComment("");
+    } catch (err) {
+      toast({ variant: "destructive", title: "تعذر إرسال التقييم", description: getErrorMessage(err) });
+    } finally {
+      setCsatSubmitting(false);
     }
   };
 
@@ -268,6 +238,81 @@ export default function TicketDetail() {
         )}
 
         {id && <ApprovalTimeline entityType="ticket" entityId={id} />}
+
+        {/* CSAT — backend only accepts ratings on resolved/closed
+            tickets (409 otherwise). Show as a form when the ticket
+            qualifies and there's no existing rating, or as a read-only
+            score badge once submitted. */}
+        {(ticket.status === "resolved" || ticket.status === "closed") && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Star className="w-4 h-4 text-amber-500" />
+                تقييم خدمة العملاء (CSAT)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {ticket.csatScore ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        className={cn(
+                          "w-4 h-4",
+                          n <= Number(ticket.csatScore) ? "fill-amber-400 text-amber-400" : "text-gray-300",
+                        )}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {ticket.csatScore}/5
+                  </span>
+                  {ticket.csatComment && (
+                    <p className="text-xs text-muted-foreground border-s ps-2 ms-2">
+                      {ticket.csatComment}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setCsatScore(n)}
+                        className="p-1"
+                        aria-label={`${n} نجوم`}
+                      >
+                        <Star
+                          className={cn(
+                            "w-6 h-6 transition-colors",
+                            n <= csatScore ? "fill-amber-400 text-amber-400" : "text-gray-300 hover:text-amber-300",
+                          )}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  <Textarea
+                    placeholder="تعليقك على الخدمة (اختياري)"
+                    value={csatComment}
+                    onChange={(e) => setCsatComment(e.target.value)}
+                    className="min-h-[60px] text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSubmitCsat}
+                    disabled={csatScore < 1 || csatSubmitting}
+                    rateLimitAware
+                  >
+                    إرسال التقييم
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {id && <EntityComments entityType="ticket" entityId={id} />}
@@ -293,35 +338,7 @@ export default function TicketDetail() {
       hideTabs={registryHideTabs}
       overview={overview}
       actions={
-        <div className="flex items-center gap-2 flex-wrap">
-          <GuardedButton
-            perm="support:update"
-            variant="outline"
-            size="sm"
-            onClick={() => setFvOpen(true)}
-            disabled={!ticket}
-          >
-            <MapPin className="h-4 w-4 me-1" /> زيارة ميدانية
-          </GuardedButton>
-          <GuardedButton
-            perm="support:create"
-            variant="outline"
-            size="sm"
-            onClick={() => setCsatOpen(true)}
-            disabled={!ticket || (ticket?.status !== "resolved" && ticket?.status !== "closed")}
-          >
-            <Star className="h-4 w-4 me-1" /> تقييم العميل
-          </GuardedButton>
-          <GuardedButton
-            perm="support:update"
-            variant="outline"
-            size="sm"
-            onClick={() => checkSlaMut.mutate({})}
-            disabled={checkSlaMut.isPending || !ticket}
-            rateLimitAware
-          >
-            <Timer className="h-4 w-4 me-1" /> فحص SLA
-          </GuardedButton>
+        <div className="flex items-center gap-2">
           <PrintButton entityType="support_ticket" entityId={id ?? 0} formats={["a4"]} label="طباعة" />
           {deleting ? (
             <div className="flex gap-2">
@@ -331,66 +348,6 @@ export default function TicketDetail() {
           ) : (
             <Button variant="outline" size="sm" className="text-status-error-foreground" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
           )}
-
-          <Dialog open={fvOpen} onOpenChange={setFvOpen}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>جدولة زيارة ميدانية</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-3 py-2">
-                <div>
-                  <Label className="text-xs">موعد الزيارة *</Label>
-                  <Input type="datetime-local" value={fvScheduled} onChange={(e) => setFvScheduled(e.target.value)} dir="ltr" />
-                </div>
-                <div>
-                  <Label className="text-xs">ملاحظات</Label>
-                  <Textarea value={fvNotes} onChange={(e) => setFvNotes(e.target.value)} rows={2} />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setFvOpen(false)}>إلغاء</Button>
-                <Button onClick={submitFieldVisit} disabled={fieldVisitMut.isPending}>
-                  جدولة
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={csatOpen} onOpenChange={setCsatOpen}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>تقييم رضا العميل</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-3 py-2">
-                <div>
-                  <Label className="text-xs">التقييم</Label>
-                  <div className="flex items-center gap-1 mt-1">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        className={n <= csatRating ? "text-amber-500" : "text-muted-foreground"}
-                        onClick={() => setCsatRating(n)}
-                      >
-                        <Star className="h-6 w-6" fill={n <= csatRating ? "currentColor" : "none"} />
-                      </button>
-                    ))}
-                    <span className="text-sm text-muted-foreground ms-2">{csatRating}/5</span>
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">تعليق (اختياري)</Label>
-                  <Textarea value={csatComment} onChange={(e) => setCsatComment(e.target.value)} rows={2} />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setCsatOpen(false)}>إلغاء</Button>
-                <Button onClick={submitCsat} disabled={csatMut.isPending}>
-                  إرسال التقييم
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
       }
     />

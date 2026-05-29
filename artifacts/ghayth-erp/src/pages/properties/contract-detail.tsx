@@ -4,8 +4,14 @@ import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   DetailPageLayout,
@@ -16,11 +22,6 @@ import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
-import {
-  useDetailEditDelete,
-  DetailActionButtons,
-  InlineEditCard,
-} from "@/components/shared/detail-edit-delete-actions";
 import {
   FileText,
   User,
@@ -53,12 +54,12 @@ export default function ContractDetailPage() {
     !!id
   );
 
-  // PATCH /properties/contracts/:id — backend refuses status changes through
-  // here (must use /renew or /terminate) and refuses edits on terminated/
-  // expired/cancelled/renewed contracts. The hook is permission-gated so the
-  // Edit button only appears for properties:update.
-  // DELETE is soft-delete and the backend refuses when status='active'
-  // (must terminate first).
+  // PATCH /properties/contracts/:id is blocked by the backend once the
+  // contract leaves the active lifecycle (terminated/expired/etc.) — the
+  // hook hides the Edit button below in those cases via the disabled
+  // check on the contract status; the server still enforces the same
+  // rule even if a privileged user bypasses the UI.
+  const isContractLocked = !!contract && ["terminated", "expired", "cancelled", "renewed"].includes(contract.status as string);
   const editDelete = useDetailEditDelete({
     entityLabel: "العقد",
     patchPath: `/properties/contracts/${id}`,
@@ -67,10 +68,11 @@ export default function ContractDetailPage() {
     initialValues: contract,
     fields: [
       { key: "tenantName", label: "اسم المستأجر" },
-      { key: "tenantPhone", label: "هاتف المستأجر" },
-      { key: "tenantEmail", label: "بريد المستأجر" },
+      { key: "tenantPhone", label: "الهاتف" },
+      { key: "tenantEmail", label: "البريد" },
       { key: "monthlyRent", label: "الإيجار الشهري", type: "number" },
-      { key: "paymentDay", label: "يوم الاستحقاق", type: "number" },
+      { key: "depositAmount", label: "مبلغ التأمين", type: "number" },
+      { key: "paymentDay", label: "يوم السداد", type: "number" },
       { key: "notes", label: "ملاحظات" },
     ],
     invalidateKeys: [["properties-contract", id], ["properties-contracts"]],
@@ -138,31 +140,27 @@ export default function ContractDetailPage() {
   );
 
   const handleRenew = async () => {
-    // POST /contracts/:id/renew — server runs applyTransition, regenerates
-    // the payment schedule, cancels old renewal/expiry obligations and
-    // registers new ones, then emits property.contract.renewed. The old
-    // "create a fresh contract via POST /contracts" workaround duplicated
-    // the row and broke the audit trail.
-    const defaultMonths = Number(contract?.renewalPeriodMonths || 12);
-    const monthsStr = window.prompt(
-      "مدة التجديد بالشهور:",
-      String(defaultMonths),
-    );
-    if (monthsStr === null) return;
-    const renewalPeriodMonths = Number(monthsStr);
-    if (!Number.isFinite(renewalPeriodMonths) || renewalPeriodMonths <= 0) {
-      toast({ variant: "destructive", title: "مدة التجديد يجب أن تكون رقماً موجباً" });
-      return;
-    }
+    // Use the dedicated /renew endpoint — it runs the audited
+    // applyTransition, generates the new installments and resets
+    // obligations correctly. The previous code cloned the row via raw
+    // POST /properties/contracts which skipped all that side-effect.
+    // Empty body → backend defaults to the contract's existing
+    // renewalPeriodMonths (or 12) and the current endDate as the new
+    // start. Frontend can later prompt for overrides if needed.
     try {
-      await apiFetch(`/properties/contracts/${id}/renew`, {
+      const result = await apiFetch<any>(`/properties/contracts/${id}/renew`, {
         method: "POST",
-        body: JSON.stringify({ renewalPeriodMonths }),
+        body: JSON.stringify({}),
       });
       queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });
-      queryClient.invalidateQueries({ queryKey: ["contract-detail-schedule", id] });
+      queryClient.invalidateQueries({ queryKey: ["properties-contracts"] });
       toast({ title: "تم تجديد العقد بنجاح" });
-      refetch();
+      // The endpoint returns the updated contract (or a new id if the
+      // backend chose to chain a successor row). Navigate accordingly.
+      const newId = result?.id || result?.data?.id;
+      if (newId && newId !== Number(id)) {
+        navigate(`/properties/contracts/${newId}`);
+      }
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -289,7 +287,9 @@ export default function ContractDetailPage() {
         إنهاء
       </GuardedButton>
       <EntityPrintButton entityType="rental_contract" entityId={id ?? ""} formats={["a4"]} />
-      <DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" />
+      {!isContractLocked && (
+        <DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" />
+      )}
     </div>
   );
 

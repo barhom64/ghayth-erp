@@ -1,21 +1,29 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useRoute } from "wouter";
+import { z } from "zod";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
+  type ExtraTab,
   EntityComments,
 } from "@workspace/entity-kit";
+import {
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+  FormDateField,
+  FormShell,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
-import { Edit, FileText, Link2, ShieldCheck, Plus } from "lucide-react";
+import { Edit, FileText, ListChecks, Link2, Plus, X } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -36,11 +44,180 @@ function statusTone(status?: string | null) {
   return "default" as const;
 }
 
+const policyEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  category: z.string().optional().default(""),
+  status: z.enum(["draft", "active", "archived", "under_review"]),
+  effectiveDate: z.string().optional().default(""),
+  expiryDate: z.string().optional().default(""),
+});
+type PolicyEditForm = z.infer<typeof policyEditSchema>;
+
+const complianceActionSchema = z.object({
+  action: z.string().min(1, "وصف الإجراء مطلوب"),
+  status: z.enum(["open", "in_progress", "done", "overdue"]),
+  responsiblePerson: z.string(),
+  dueDate: z.string(),
+  notes: z.string(),
+});
+type ComplianceActionForm = z.infer<typeof complianceActionSchema>;
+const defaultComplianceActionForm: ComplianceActionForm = {
+  action: "", status: "open", responsiblePerson: "", dueDate: "", notes: "",
+};
+
+function AddComplianceActionForm({ policyId, onSuccess }: { policyId: number; onSuccess: () => void }) {
+  const saveMut = useApiMutation<unknown, ComplianceActionForm>(
+    `/governance/policies/${policyId}/compliance-actions`,
+    "POST",
+    [["policy-compliance-actions", String(policyId)]],
+    { successMessage: "تمت إضافة الإجراء", onSuccess },
+  );
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-4">
+        <h4 className="font-semibold mb-3 text-sm">إجراء امتثال جديد</h4>
+        <FormShell
+          schema={complianceActionSchema}
+          defaultValues={defaultComplianceActionForm}
+          submitLabel="حفظ الإجراء"
+          onSubmit={async (values, ctx) => {
+            await saveMut.mutateAsync(values);
+            ctx.reset();
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormTextField name="action" label="الإجراء" required className="md:col-span-2" />
+            <FormSelectField
+              name="status"
+              label="الحالة"
+              options={[
+                { value: "open", label: "مفتوح" },
+                { value: "in_progress", label: "قيد التنفيذ" },
+                { value: "done", label: "منجز" },
+                { value: "overdue", label: "متأخر" },
+              ]}
+            />
+            <FormDateField name="dueDate" label="الموعد المستهدف" />
+            <FormTextField name="responsiblePerson" label="المسؤول" />
+            <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+          </FormGrid>
+        </FormShell>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PolicyDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/policies/:id");
   const id = params?.id ? Number(params.id) : null;
-  const { extraTabs, hideTabs } = useRegistryTabs("policy", id ?? 0);
+  const { extraTabs: registryExtraTabs, hideTabs } = useRegistryTabs("policy", id ?? 0);
+  const [editOpen, setEditOpen] = useState(false);
+  const [showAddAction, setShowAddAction] = useState(false);
+
+  // Sub-resource fetches for the new Compliance Actions + Module Links tabs.
+  const { data: actionsResp, refetch: refetchActions } = useApiQuery<{ data: any[] }>(
+    ["policy-compliance-actions", String(id)],
+    `/governance/policies/${id}/compliance-actions`,
+    !!id,
+  );
+  const { data: linksResp } = useApiQuery<{ data: any[] }>(
+    ["policy-module-links", String(id)],
+    `/governance/policies/${id}/module-links`,
+    !!id,
+  );
+  const complianceActions = asList(actionsResp?.data ?? actionsResp);
+  const moduleLinks = asList(linksResp?.data ?? linksResp);
+
+  const ACTION_STATUS_LABELS: Record<string, string> = {
+    open: "مفتوح",
+    in_progress: "قيد التنفيذ",
+    done: "منجز",
+    overdue: "متأخر",
+  };
+
+  const handleActionAdded = () => {
+    setShowAddAction(false);
+    refetchActions();
+  };
+
+  const customTabs: ExtraTab[] = [
+    {
+      key: "compliance-actions",
+      label: "إجراءات الامتثال",
+      icon: ListChecks,
+      badge: complianceActions.length || undefined,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">إجراءات الامتثال للسياسة</h3>
+            <GuardedButton perm="governance:create" size="sm" onClick={() => setShowAddAction(!showAddAction)}>
+              {showAddAction ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إجراء جديد</>}
+            </GuardedButton>
+          </div>
+          {showAddAction && id && <AddComplianceActionForm policyId={id} onSuccess={handleActionAdded} />}
+          {complianceActions.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <ListChecks className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">لا توجد إجراءات امتثال مسجلة</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "title", header: "الإجراء", render: (a) => <span className="text-sm">{a.title || a.action}</span> },
+                { key: "status", header: "الحالة", sortable: true, render: (a) => (
+                  <Badge variant="outline">{ACTION_STATUS_LABELS[a.status] || a.status || "—"}</Badge>
+                )},
+                { key: "owner", header: "المسؤول", render: (a) => a.owner || a.responsiblePerson || "—" },
+                { key: "dueDate", header: "الموعد", render: (a) => a.dueDate ? formatDateAr(a.dueDate) : "—" },
+                { key: "createdAt", header: "التاريخ", render: (a) => formatDateAr(a.createdAt) },
+              ] as DataTableColumn<any>[]}
+              data={complianceActions}
+              noToolbar
+              pageSize={10}
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "module-links",
+      label: "ارتباطات الوحدات",
+      icon: Link2,
+      badge: moduleLinks.length || undefined,
+      content: (
+        <div className="space-y-4">
+          <h3 className="font-semibold text-sm">الوحدات المرتبطة بالسياسة</h3>
+          {moduleLinks.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <Link2 className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">لا توجد ارتباطات بوحدات النظام</p>
+                <p className="text-xs mt-1">
+                  يتم إنشاء الروابط تلقائياً عند تطبيق السياسة على وحدة معينة.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "module", header: "الوحدة", render: (l) => <span className="font-mono text-xs">{l.module || l.moduleKey || "—"}</span> },
+                { key: "scope", header: "النطاق", render: (l) => l.scope || "—" },
+                { key: "createdAt", header: "التاريخ", render: (l) => l.createdAt ? formatDateAr(l.createdAt) : "—" },
+              ] as DataTableColumn<any>[]}
+              data={moduleLinks}
+              noToolbar
+              pageSize={10}
+            />
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const extraTabs = [...customTabs, ...registryExtraTabs];
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["policy", String(id)],
@@ -49,55 +226,6 @@ export default function PolicyDetail() {
   );
 
   const policy = data;
-  const { toast } = useToast();
-
-  // GET /governance/policies/:id/module-links — which app modules
-  // declare a dependency on this policy (e.g. finance.invoices must
-  // adhere to "Purchase Approval Policy"). Used by auditors to walk
-  // from policy → enforcement points.
-  const moduleLinksQ = useApiQuery<any>(
-    ["policy-module-links", String(id)],
-    id ? `/governance/policies/${id}/module-links` : null,
-    { enabled: !!id },
-  );
-  // GET /governance/policies/:id/compliance-actions — list of remedial
-  // actions opened against the policy (e.g. "training plan for new
-  // staff"). POST adds a new action.
-  const complianceActionsQ = useApiQuery<any>(
-    ["policy-compliance-actions", String(id)],
-    id ? `/governance/policies/${id}/compliance-actions` : null,
-    { enabled: !!id },
-  );
-  const addActionMut = useApiMutation<any, { actionType: string; description?: string; dueDate?: string }>(
-    () => `/governance/policies/${id}/compliance-actions`,
-    "POST",
-    [["policy-compliance-actions", String(id)]],
-    { successMessage: "تمت إضافة إجراء الامتثال" },
-  );
-  const [actionType, setActionType] = useState("");
-  const [actionDesc, setActionDesc] = useState("");
-  const [actionDue, setActionDue] = useState("");
-  const submitAction = () => {
-    if (!actionType.trim()) {
-      toast({ variant: "destructive", title: "نوع الإجراء مطلوب" });
-      return;
-    }
-    addActionMut.mutate(
-      {
-        actionType: actionType.trim(),
-        description: actionDesc.trim() || undefined,
-        dueDate: actionDue || undefined,
-      },
-      {
-        onSuccess: () => {
-          setActionType(""); setActionDesc(""); setActionDue("");
-        },
-      },
-    );
-  };
-
-  const moduleLinks: any[] = moduleLinksQ.data?.data ?? moduleLinksQ.data?.modules ?? [];
-  const complianceActions: any[] = complianceActionsQ.data?.data ?? complianceActionsQ.data?.actions ?? [];
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -122,10 +250,6 @@ export default function PolicyDetail() {
     return out;
   }, [policy]);
 
-
-  const handleEdit = () => {
-    setLocation(`/governance/policies/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -223,86 +347,13 @@ export default function PolicyDetail() {
         </Card>
       </div>
 
-      {/* Module links — which features declare a dependency on this policy */}
-      {moduleLinks.length > 0 && (
-        <Card className="md:col-span-3">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Link2 className="h-4 w-4 text-muted-foreground" />
-              ارتباط الوحدات
-              <Badge variant="outline" className="text-[10px]">{moduleLinks.length}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {moduleLinks.map((m: any, i: number) => (
-                <Badge key={m.id ?? i} variant="secondary" className="text-xs">
-                  {m.moduleLabel ?? m.module ?? m.feature ?? m.name ?? "—"}
-                  {m.action && <span className="ms-1 text-muted-foreground">/{m.action}</span>}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Compliance actions — remedial work tied to this policy */}
-      <Card className="md:col-span-3">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-            إجراءات الامتثال
-            <Badge variant="outline" className="text-[10px]">{complianceActions.length}</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {complianceActions.length === 0 && (
-            <p className="text-xs text-muted-foreground">لا توجد إجراءات بعد — أضِف إجراءً جديداً أدناه.</p>
-          )}
-          {complianceActions.map((a: any) => (
-            <div key={a.id} className="text-xs border rounded p-2 bg-muted/30">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">{a.actionType ?? a.type}</span>
-                {a.status && <Badge variant="outline" className="text-[10px]">{a.status}</Badge>}
-              </div>
-              {a.description && <p className="text-muted-foreground mt-1">{a.description}</p>}
-              {a.dueDate && <p className="text-[10px] text-muted-foreground mt-1">الاستحقاق: {formatDateAr(a.dueDate)}</p>}
-            </div>
-          ))}
-          <div className="border-t pt-2 mt-2 grid grid-cols-1 md:grid-cols-4 gap-2">
-            <div>
-              <Label className="text-xs">نوع الإجراء *</Label>
-              <Input value={actionType} onChange={(e) => setActionType(e.target.value)} className="text-sm" placeholder="تدريب / تدقيق / ..." />
-            </div>
-            <div className="md:col-span-2">
-              <Label className="text-xs">الوصف</Label>
-              <Textarea value={actionDesc} onChange={(e) => setActionDesc(e.target.value)} rows={1} className="text-sm" />
-            </div>
-            <div>
-              <Label className="text-xs">الاستحقاق</Label>
-              <Input type="date" value={actionDue} onChange={(e) => setActionDue(e.target.value)} className="text-sm" dir="ltr" />
-            </div>
-            <div className="md:col-span-4">
-              <GuardedButton
-                perm="governance:update"
-                size="sm"
-                onClick={submitAction}
-                disabled={addActionMut.isPending}
-                rateLimitAware
-              >
-                <Plus className="h-3 w-3 me-1" /> إضافة إجراء
-              </GuardedButton>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {id && <EntityComments entityType="policy" entityId={id} />}
       {id && <EntityTags entityType="policy" entityId={id} />}
     </div>
   );
 
   return (
+    <>
     <DetailPageLayout
       title={policy?.title || "تفاصيل السياسة"}
       subtitle={policy?.category}
@@ -339,8 +390,8 @@ export default function PolicyDetail() {
             perm="governance:update"
             variant="outline"
             size="sm"
-            onClick={handleEdit}
-            disabled={!policy || ["archived"].includes(policy?.status)}
+            onClick={() => setEditOpen(true)}
+            disabled={!policy || policy?.status === "archived"}
           >
             <Edit className="h-4 w-4 ms-1" />
             تعديل
@@ -348,5 +399,43 @@ export default function PolicyDetail() {
         </>
       }
     />
+    {policy && id && (
+      <EntityEditDialog<PolicyEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل السياسة"
+        schema={policyEditSchema}
+        defaultValues={{
+          title: policy.title ?? "",
+          description: policy.description ?? "",
+          category: policy.category ?? "",
+          status: (policy.status ?? "draft") as PolicyEditForm["status"],
+          effectiveDate: policy.effectiveDate ?? "",
+          expiryDate: policy.expiryDate ?? "",
+        }}
+        endpoint={`/governance/policies/${id}`}
+        invalidateKeys={[["policy", String(id)], ["gov-policies"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="العنوان" required className="md:col-span-2" />
+          <FormTextField name="category" label="الفئة" />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "draft", label: "مسودة" },
+              { value: "active", label: "ساري" },
+              { value: "under_review", label: "قيد المراجعة" },
+              { value: "archived", label: "مؤرشف" },
+            ]}
+          />
+          <FormTextField name="effectiveDate" label="تاريخ السريان" type="date" />
+          <FormTextField name="expiryDate" label="تاريخ الانتهاء" type="date" />
+          <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

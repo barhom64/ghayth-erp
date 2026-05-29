@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
@@ -222,11 +222,22 @@ const router = Router();
 
 async function logCommunication(companyId: number, direction: string, subject: string, body: string, relatedType: string, relatedId: number) {
   try {
+    // Phase 4 contract slice 9: dual-write to message_log. The new
+    // channel='internal' value is accepted by the relaxed constraint
+    // shipped in migration 224.
     await rawExecute(
       `INSERT INTO communications_log ("companyId", channel, direction, "fromNumber", "toNumber", subject, body, status, "relatedType", "relatedId")
        VALUES ($1, 'internal', $2, 'system', 'system', $3, $4, $5, $6, $7)`,
       [companyId, direction, subject, body, direction === 'inbound' ? 'received' : 'sent', relatedType, relatedId]
     );
+    await rawExecute(
+      `INSERT INTO message_log
+         ("companyId", channel, direction, "fromAddress", "toAddress",
+          subject, body, status, folder, "relatedType", "relatedId", "createdAt")
+       VALUES ($1, 'internal', $2, 'system', 'system', $3, $4, $5,
+               CASE WHEN $2 = 'inbound' THEN 'inbox' ELSE 'sent' END, $6, $7, NOW())`,
+      [companyId, direction, subject, body, direction === 'inbound' ? 'received' : 'sent', relatedType, relatedId]
+    ).catch((e) => logger.warn(e, "[requests] message_log dual-write failed"));
   } catch (e) {
     logger.error(e, "Failed to log communication:");
   }
@@ -296,30 +307,35 @@ router.post("/", authorize({ feature: "requests.my", action: "create" }), async 
         return !!obj && typeof obj.name === "string" && typeof obj.size === "number" && obj.size <= 5 * 1024 * 1024;
       }).map((a) => ({ name: a.name!, size: a.size!, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
-    // Numbering center (Issue #1141) — every official request number
-    // comes from the central authority. No more `request_number_seq` +
-    // random fallback: if numbering fails, the request creation fails
-    // too. The route surfaces the typed error to the caller.
-    const issued = await issueNumber({
-      companyId: scope.companyId,
-      branchId: scope.branchId ?? null,
-      moduleKey: "requests",
-      entityKey: "general_request",
-      entityTable: "requests",
-      actorId: scope.userId,
+    // Numbering center (Issue #1141 closure) — atomic flow:
+    //   issueNumber  → uses our outer tx via SAVEPOINT reentrancy
+    //   INSERT request
+    //   UPDATE numbering_assignments.entityId
+    // All three commit/rollback together. If the assignment link-back
+    // fails the whole tx rolls back, so we never end up with a request
+    // row whose ref has no audit trail (the previous .catch() pattern
+    // silently allowed exactly that).
+    const r = await withTransaction(async () => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "requests",
+        entityKey: "general_request",
+        entityTable: "requests",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      const insertRes = await rawExecute(
+        `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, ref, "requestDate", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12)`,
+        [typeId ? Number(typeId) : null, enforcedRequesterId, resolvedRequesterName ?? null, String(title).trim(), String(description).trim(), "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments), issued.number, scope.branchId || null]
+      );
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertRes.insertId, issued.assignmentId]
+      );
+      return { insertId: insertRes.insertId, ref: issued.number };
     });
-    const ref = issued.number;
-
-    const r = await rawExecute(
-      `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, ref, "requestDate", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12)`,
-      [typeId ? Number(typeId) : null, enforcedRequesterId, resolvedRequesterName ?? null, String(title).trim(), String(description).trim(), "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments), ref, scope.branchId || null]
-    );
-    // Link the issued numbering assignment to the new request id so the
-    // audit trail can drill back from `numbering_assignments` to the row.
-    await rawExecute(
-      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
-      [r.insertId, issued.assignmentId]
-    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to requests row"));
+    const ref = r.ref;
     await logCommunication(
       scope.companyId, 'inbound',
       `طلب جديد: ${title} (${ref})`,
@@ -894,29 +910,81 @@ router.post("/:id/convert", authorize({ feature: "requests", action: "create" })
       },
       after: { convertedType: targetType },
       onApply: async (_row, client) => {
+        // G3+G4+G5 fix (#1141 coverage report §3 G3/G4/G5) — every
+        // request-conversion path now issues a real ref through the
+        // numbering center and links the assignment back, all inside
+        // the same withTransaction that applyTransition holds.
+        // issueNumber's inner withTransaction joins via SAVEPOINT
+        // (rawdb.ts:99-124) so issue + INSERT + linkback are atomic.
         if (targetType === "maintenance") {
           const { supportEngine } = await import("../lib/engines/index.js");
+          // G4 — support ticket from request: issue a real ref instead
+          // of leaving support_tickets.ref NULL.
+          const issued = await issueNumber({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            moduleKey: "support",
+            entityKey: "support_ticket",
+            entityTable: "support_tickets",
+            actorId: scope.userId,
+            metadata: { sourceRequestId: id, conversion: "maintenance" },
+            expectedTiming: "on_draft",
+          });
           const { insertId } = await supportEngine.createTicket({
             companyId: scope.companyId,
             title: `صيانة: ${request.title}`,
             description: request.description || request.title,
             priority: request.priority || "medium",
+            ref: issued.number,
           });
+          await client.query(
+            `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+            [insertId, issued.assignmentId]
+          );
           createdId = insertId;
           targetEndpoint = `/support/${insertId}`;
         } else if (targetType === "purchase") {
           const { financialEngine } = await import("../lib/engines/index.js");
+          // G3 — purchase order from request: replace the legacy
+          // `PO-REQ-${id}` inline construction with a real PO number
+          // from the numbering center.
+          const issued = await issueNumber({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            moduleKey: "purchase",
+            entityKey: "purchase_order",
+            entityTable: "purchase_orders",
+            actorId: scope.userId,
+            metadata: { sourceRequestId: id, conversion: "purchase" },
+            expectedTiming: "on_draft",
+          });
           const { insertId } = await financialEngine.createPurchaseOrder({
             companyId: scope.companyId,
-            ref: `PO-REQ-${id}`,
+            ref: issued.number,
             description: request.title + (request.description ? `: ${request.description}` : ""),
             requestedBy: scope.userId,
           });
+          await client.query(
+            `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+            [insertId, issued.assignmentId]
+          );
           createdId = insertId;
           targetEndpoint = `/finance/purchase-orders/${insertId}`;
         } else if (targetType === "case") {
           const legalResp = await getLegalResponsible(scope.companyId);
           const { legalEngine } = await import("../lib/engines/index.js");
+          // G5 — legal case from request: issue a caseNumber instead
+          // of leaving legal_cases.caseNumber NULL.
+          const issued = await issueNumber({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            moduleKey: "legal",
+            entityKey: "case",
+            entityTable: "legal_cases",
+            actorId: scope.userId,
+            metadata: { sourceRequestId: id, conversion: "case" },
+            expectedTiming: "on_draft",
+          });
           const { insertId } = await legalEngine.createCase({
             companyId: scope.companyId,
             title: `قضية: ${request.title}`,
@@ -924,7 +992,12 @@ router.post("/:id/convert", authorize({ feature: "requests", action: "create" })
             priority: request.priority || "medium",
             caseType: "civil",
             lawyerName: legalResp?.employeeName ?? null,
+            caseNumber: issued.number,
           });
+          await client.query(
+            `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+            [insertId, issued.assignmentId]
+          );
           createdId = insertId;
           targetEndpoint = `/legal/cases/${insertId}`;
           if (legalResp?.assignmentId) {

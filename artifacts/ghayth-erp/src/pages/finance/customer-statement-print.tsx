@@ -9,8 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { ClientSelect } from "@/components/shared/entity-selects";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
-  Printer, Download, ChevronRight, ExternalLink, FileText,
+  Download, ChevronRight, ExternalLink, FileText,
   Building2, Mail, Phone, AlertTriangle,
 } from "lucide-react";
 import {
@@ -71,7 +72,10 @@ function daysInMonth(year: number, month: number): number {
 }
 
 export default function CustomerStatementPrintPage() {
-  const [clientId, setClientId] = useState<string>("");
+  const initialClientId = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("clientId") ?? ""
+    : "";
+  const [clientId, setClientId] = useState<string>(initialClientId);
   const [year, setYear] = useState(currentYearRiyadh());
   const [month, setMonth] = useState(currentMonthPaddedRiyadh());
   const [scope, setScope] = useState<"month" | "ytd" | "all">("month");
@@ -91,7 +95,9 @@ export default function CustomerStatementPrintPage() {
     clientId ? `/finance/reports/customer-statement/${clientId}?${queryParam}` : null,
   );
 
-  const print = () => window.print();
+  // entityId encodes the date range so the server-side loader can re-fetch
+  // exactly the same window — matches parseEntityId() in reportLoaders.ts.
+  const printEntityId = clientId ? `${clientId}:${startDate}..${endDate}` : "";
 
   const exportCSV = () => {
     if (!data) return;
@@ -176,14 +182,25 @@ export default function CustomerStatementPrintPage() {
             </div>
           </div>
           <div className="flex gap-2 mt-3 justify-end">
+            {clientId && (
+              <Link href={`/finance/customer-360-sheet?clientId=${clientId}`}>
+                <Button variant="outline" size="sm">
+                  <FileText className="w-4 h-4 ml-1" />
+                  ملف العميل 360°
+                </Button>
+              </Link>
+            )}
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={!data}>
               <Download className="w-4 h-4 ml-1" />
               CSV
             </Button>
-            <Button size="sm" onClick={print} disabled={!data}>
-              <Printer className="w-4 h-4 ml-1" />
-              طباعة
-            </Button>
+            <PrintButton
+              entityType="customer_statement"
+              entityId={printEntityId}
+              variant="default"
+              size="sm"
+              label="طباعة"
+            />
           </div>
         </CardContent>
       </Card>

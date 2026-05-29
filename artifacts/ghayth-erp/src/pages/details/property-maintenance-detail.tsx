@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useRoute } from "wouter";
+import { z } from "zod";
+import { useApiQuery } from "@/lib/api";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -10,15 +13,10 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Wrench, CheckCircle, User } from "lucide-react";
+import { Edit, Wrench } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import {
-  useDetailEditDelete,
-  DetailActionButtons,
-} from "@/components/shared/detail-edit-delete-actions";
-import { useToast } from "@/hooks/use-toast";
 
 const STATUS_LABELS: Record<string, string> = {
   open: "مفتوح",
@@ -52,10 +50,21 @@ function statusTone(status: string) {
   return "default" as const;
 }
 
+const maintenanceEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  category: z.string().optional().default(""),
+  priority: z.enum(["low", "medium", "high", "urgent"]),
+  status: z.enum(["pending", "in_progress", "completed", "cancelled"]),
+  estimatedCost: z.coerce.number().optional().default(0),
+  scheduledDate: z.string().optional().default(""),
+});
+type MaintenanceEditForm = z.infer<typeof maintenanceEditSchema>;
+
 export default function PropertyMaintenanceDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/properties/maintenance/:id");
   const id = params?.id ? Number(params.id) : null;
+  const [editOpen, setEditOpen] = useState(false);
   const { extraTabs, hideTabs } = useRegistryTabs("property-maintenance", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -63,61 +72,6 @@ export default function PropertyMaintenanceDetail() {
     `/properties/maintenance/${id}`,
     !!id,
   );
-
-  const { toast } = useToast();
-
-  // PATCH /properties/maintenance-requests/:id — quick-edit for the
-  // description / category / priority. The /properties/maintenance/:id
-  // GET endpoint returns the same row; only the write path is
-  // /maintenance-requests/.
-  const editDelete = useDetailEditDelete({
-    entityLabel: "طلب الصيانة",
-    patchPath: `/properties/maintenance-requests/${id}`,
-    listPath: "/properties/maintenance",
-    initialValues: data,
-    fields: [
-      { key: "description", label: "الوصف" },
-      { key: "category", label: "الفئة" },
-      { key: "priority", label: "الأولوية" },
-    ],
-    invalidateKeys: [["property-maintenance", String(id)], ["properties-maintenance"]],
-    onSaved: () => refetch(),
-  });
-
-  // POST /properties/maintenance-requests/:id/complete — closes the
-  // ticket with the final cost and resolution notes; backend transitions
-  // the request to "completed" and stamps completedAt.
-  const completeMut = useApiMutation<unknown, { cost?: number; resolutionNotes?: string }>(
-    `/properties/maintenance-requests/${id}/complete`,
-    "POST",
-    [["property-maintenance", String(id)], ["properties-maintenance"]],
-    {
-      successMessage: "تم إغلاق طلب الصيانة",
-      onSuccess: () => refetch(),
-    },
-  );
-
-  const handleComplete = () => {
-    const costStr = window.prompt("التكلفة النهائية (اختياري):", "0");
-    if (costStr === null) return;
-    const cost = Number(costStr);
-    const notes = window.prompt("ملاحظات الإنجاز (اختياري):", "");
-    if (notes === null) return;
-    completeMut.mutate({
-      cost: Number.isFinite(cost) && cost > 0 ? cost : undefined,
-      resolutionNotes: notes.trim() || undefined,
-    });
-  };
-
-  // GET /properties/technicians — list the technicians that can be
-  // assigned; rendered as a quick-pick under the actions when the
-  // request is open or in-progress.
-  const { data: techResp } = useApiQuery<{ data: any[] }>(
-    ["properties-technicians"],
-    "/properties/technicians",
-  );
-  const technicians = techResp?.data ?? [];
-  const [showTechs, setShowTechs] = useState(false);
 
   const item = data;
 
@@ -156,31 +110,6 @@ export default function PropertyMaintenanceDetail() {
 
 
   const overview = (
-    <div className="space-y-4">
-      {showTechs && technicians.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              الفنيون المتاحون ({technicians.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              {technicians.map((t: any) => (
-                <div key={t.id} className="flex items-center gap-2 p-2 border rounded text-sm">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{t.name}</p>
-                    {t.specialty && <p className="text-xs text-muted-foreground">{t.specialty}</p>}
-                    {t.phone && <p className="text-xs font-mono text-muted-foreground">{t.phone}</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
@@ -269,10 +198,10 @@ export default function PropertyMaintenanceDetail() {
       {id && <EntityComments entityType="property-maintenance" entityId={id} />}
       {id && <EntityTags entityType="property-maintenance" entityId={id} />}
     </div>
-    </div>
   );
 
   return (
+    <>
     <DetailPageLayout
       title={item?.title || "تفاصيل طلب الصيانة"}
       subtitle={item?.type ? TYPE_LABELS[item.type] || item.type : undefined}
@@ -298,45 +227,67 @@ export default function PropertyMaintenanceDetail() {
             entityType="maintenance_request"
             entityId={id ?? 0}
             formats={["a4"]}/>
-          {item && !["completed", "cancelled"].includes(item.status) && (
-            <GuardedButton
-              perm="properties:update"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowTechs((v) => !v)}
-              title="عرض الفنيين"
-            >
-              <User className="h-4 w-4 ms-1" />
-              الفنيون ({technicians.length})
-            </GuardedButton>
-          )}
-          {item && !["completed", "cancelled"].includes(item.status) && (
-            <GuardedButton
-              perm="properties:update"
-              variant="outline"
-              size="sm"
-              onClick={handleComplete}
-              disabled={completeMut.isPending}
-              rateLimitAware
-              className="text-status-success-foreground"
-            >
-              <CheckCircle className="h-4 w-4 ms-1" />
-              إنجاز
-            </GuardedButton>
-          )}
           <GuardedButton
             perm="properties:update"
             variant="outline"
             size="sm"
-            onClick={() => setLocation("/properties/maintenance")}
-            disabled={!item || item.status === "completed"}
+            onClick={() => setEditOpen(true)}
+            disabled={!item || item?.status === "completed"}
           >
             <Edit className="h-4 w-4 ms-1" />
             تعديل
           </GuardedButton>
-          <DetailActionButtons hook={editDelete} editPerm="properties:update" />
         </>
       }
     />
+    {item && id && (
+      <EntityEditDialog<MaintenanceEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل طلب الصيانة"
+        schema={maintenanceEditSchema}
+        defaultValues={{
+          title: item.title ?? "",
+          description: item.description ?? "",
+          category: item.category ?? "",
+          priority: (item.priority ?? "medium") as MaintenanceEditForm["priority"],
+          status: (item.status ?? "pending") as MaintenanceEditForm["status"],
+          estimatedCost: Number(item.estimatedCost ?? 0),
+          scheduledDate: item.scheduledDate ?? "",
+        }}
+        endpoint={`/properties/maintenance-requests/${id}`}
+        invalidateKeys={[["property-maintenance", String(id)], ["maintenance-requests"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="العنوان" required className="md:col-span-2" />
+          <FormSelectField
+            name="priority"
+            label="الأولوية"
+            options={[
+              { value: "low", label: "منخفضة" },
+              { value: "medium", label: "متوسطة" },
+              { value: "high", label: "عالية" },
+              { value: "urgent", label: "عاجلة" },
+            ]}
+          />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "pending", label: "معلقة" },
+              { value: "in_progress", label: "قيد التنفيذ" },
+              { value: "completed", label: "مكتملة" },
+              { value: "cancelled", label: "ملغاة" },
+            ]}
+          />
+          <FormTextField name="category" label="الفئة" />
+          <FormNumberField name="estimatedCost" label="التكلفة التقديرية" />
+          <FormTextField name="scheduledDate" label="التاريخ المجدول" type="date" />
+          <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

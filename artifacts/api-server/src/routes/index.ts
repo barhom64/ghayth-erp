@@ -23,6 +23,8 @@ import { zatcaRouter } from "./finance-zatca.js";
 import notificationsRouter from "./notifications.js";
 import tasksRouter from "./tasks.js";
 import fleetRouter from "./fleet.js";
+import fleetTelematicsRouter from "./fleet-telematics.js";
+import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import warehouseRouter from "./warehouse.js";
 import propertiesRouter from "./properties.js";
 import legalRouter from "./legal.js";
@@ -32,6 +34,8 @@ import crmRouter from "./crm.js";
 import intelligenceRouter from "./intelligence.js";
 import automationRouter from "./automation.js";
 import communicationsRouter from "./communications.js";
+import inboxRouter from "./inbox.js";
+import mailboxesRouter from "./mailboxes.js";
 import governanceRouter from "./governance.js";
 import biRouter from "./bi.js";
 import storeRouter from "./store.js";
@@ -50,6 +54,7 @@ import adminCommControlRouter from "./admin-communication-control.js";
 import adminPbxControlRouter from "./admin-pbx-control.js";
 import adminMasterPlanRouter from "./admin-master-plan.js";
 import adminNotificationRoutingRouter from "./admin-notification-routing.js";
+import adminVendorSettingsRouter from "./admin-vendor-settings.js";
 import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
@@ -62,6 +67,7 @@ import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
 import actionCenterRouter from "./actionCenter.js";
+import workspaceRouter from "./workspace.js";
 import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
@@ -70,6 +76,14 @@ import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
 import operationsCenterRouter from "./operationsCenter.js";
+import {
+  warehouseStubsRouter,
+  documentsStubsRouter,
+  hrStubsRouter,
+  financeStubsRouter,
+  adminStubsRouter,
+  wiringScopeErrorHandler,
+} from "./wiring-stubs.js";
 import notificationEngineRouter from "./notification-engine.js";
 import printRouter from "./print.js";
 import printVerifyRouter from "./printVerify.js";
@@ -98,6 +112,8 @@ import disciplineRouter from "./hr-discipline.js";
 import loansRouter from "./hr-loans.js";
 import overtimeRouter from "./hr-overtime.js";
 import exitRouter from "./hr-exit.js";
+import wpsRouter from "./hr-wps.js";
+import complianceRouter from "./hr-compliance.js";
 import digitalSignatureRouter from "./digital-signature.js";
 import { eventsRouter } from "./events.js";
 import { execDashboardRouter } from "./execDashboard.js";
@@ -161,6 +177,11 @@ router.use("/print/verify", printVerifyRouter);
 // Limiters live inside pdpl.ts: per-IP on /privacy-notice, per-user
 // (pdplUserLimiter) on the authenticated routes.
 router.use("/pdpl", pdplRouter);
+// #1354 — CMSV6 telematics webhook. Anonymous surface, HMAC-signed via
+// the integration's webhookSecret. Mounted BEFORE authMiddleware so the
+// vendor doesn't need an ERP JWT. The router enforces per-IP rate limit,
+// timestamp window, and timing-safe signature compare inside.
+router.use("/webhooks/cmsv6", fleetTelematicsWebhookRouter);
 
 router.get("/settings/display", async (req, res) => {
   try {
@@ -299,6 +320,8 @@ router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
 router.use("/hr", requireModule("hr"), loansRouter);
 router.use("/hr", requireModule("hr"), overtimeRouter);
 router.use("/hr", requireModule("hr"), exitRouter);
+router.use("/hr", requireModule("hr"), wpsRouter);
+router.use("/hr", requireModule("hr"), complianceRouter);
 router.use("/hr/training", requireModule("hr"), trainingRouter);
 router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
 // Per-user finance limiter — mounted once on /finance so the dozen+
@@ -328,6 +351,10 @@ router.use("/notifications", notificationsRouter);
 router.use("/tasks", requireModule("operations"), tasksRouter);
 router.use("/fleet", fleetUserLimiter);
 router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRouter);
+// Telematics surface (#1354). Mounted under /fleet so it inherits the same
+// module + financial guard + per-user limiter as the rest of the fleet
+// module, and so URLs stay /fleet/telematics/* in the SPA.
+router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetTelematicsRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);
@@ -339,6 +366,11 @@ router.use("/crm", requireModule("crm"), crmRouter);
 router.use("/intelligence", requireModule("bi"), intelligenceRouter);
 router.use("/automation", requireModule("automation"), automationRouter);
 router.use("/communications", requireModule("comms"), communicationsRouter);
+// User-facing inbox: compose/send + thread view + call log. Lives next
+// to /communications (read-only logs) so the SPA can navigate between
+// them without crossing module boundaries.
+router.use("/inbox", requireModule("comms"), inboxRouter);
+router.use("/mailboxes", requireModule("comms"), mailboxesRouter);
 router.use("/governance", requireModule("governance"), governanceRouter);
 router.use("/bi", requireModule("bi"), biRouter);
 router.use("/store", requireModule("store"), requireGuards("financial"), storeRouter);
@@ -374,6 +406,9 @@ router.use("/admin/master-plan", requireModule("admin"), requireMinLevel(90), ad
 // Notification Routing rules + fallback chains UI (existing tables;
 // new admin surface to fulfil #1139 §6 "كل شيء قابل للتحكم من الواجهة").
 router.use("/admin/notification-routing", requireModule("admin"), requireMinLevel(90), adminNotificationRoutingRouter);
+// Vendor Settings hub — every external integration (PBX webhook, WhatsApp,
+// SMTP, VAPID, SIEM, ZATCA) editable from the UI, secrets encrypted at rest.
+router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90), adminVendorSettingsRouter);
 // FND-004 — RBAC administration surfaces. permissions.ts is fully
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap
@@ -388,6 +423,7 @@ router.use("/workflows", workflowsRouter);
 router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
 router.use("/action-center", actionCenterRouter);
+router.use("/workspace", workspaceRouter);
 router.use("/entity-meta", entityMetaRouter);
 // Mount the umrah limiter once on the /umrah prefix so it runs exactly once per
 // request, regardless of which sub-router (umrahRouter / umrahEntitiesRouter)
@@ -397,6 +433,15 @@ router.use("/umrah", umrahUserLimiter);
 router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahRouter);
 router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahEntitiesRouter);
 router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
+// Wiring stubs — fills the 42 frontend↔backend orphans surfaced by
+// scripts/src/check-frontend-backend-wiring.mjs. Mounted at /api root because
+// the routes carry their full domain prefix internally.
+router.use("/warehouse", requireModule("warehouse"), warehouseStubsRouter);
+router.use("/documents", requireModule("documents"), documentsStubsRouter);
+router.use("/hr", requireModule("hr"), hrStubsRouter);
+router.use("/finance", requireModule("finance"), financeStubsRouter);
+router.use("/admin", requireModule("admin"), requireMinLevel(90), adminStubsRouter);
+router.use(wiringScopeErrorHandler);
 router.use("/export", requireMinLevel(30), exportRouter);
 router.use("/import", requireMinLevel(50), importRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);

@@ -157,6 +157,7 @@ export default function Automation() {
           <TabsTrigger value="automation-log" className="gap-2"><Activity className="h-4 w-4" /> سجل الأتمتة</TabsTrigger>
           <TabsTrigger value="cron" className="gap-2"><Cog className="h-4 w-4" /> المهام المجدولة</TabsTrigger>
           <TabsTrigger value="cron-log" className="gap-2"><Clock className="h-4 w-4" /> سجل التشغيل</TabsTrigger>
+          <TabsTrigger value="event-log" className="gap-2"><Activity className="h-4 w-4" /> سجل الأحداث</TabsTrigger>
         </TabsList>
 
         <TabsContent value="proactive">
@@ -295,6 +296,10 @@ export default function Automation() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="event-log">
+          <EventLogsTab />
+        </TabsContent>
       </Tabs>
 
       {eventLogs.length > 0 && (
@@ -315,5 +320,67 @@ export default function Automation() {
         </Card>
       )}
     </PageShell>
+  );
+}
+
+function EventLogsTab() {
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
+  const { data, isLoading, isError, error, refetch } = useApiQuery<{
+    data: Array<{
+      id: number;
+      action: string;
+      entity: string | null;
+      entityId: number | null;
+      userId: number | null;
+      details: string | null;
+      createdAt: string;
+    }>;
+    total: number;
+  }>(
+    ["event-logs", String(page)],
+    `/automation/event-logs?limit=${pageSize}&offset=${page * pageSize}`,
+  );
+  const events = data?.data ?? [];
+  const total = data?.total ?? 0;
+
+  const cols: DataTableColumn<any>[] = [
+    { key: "createdAt", header: "الوقت", render: (r) => <span className="text-xs">{formatDateAr(r.createdAt)}</span> },
+    { key: "action", header: "الحدث", render: (r) => <span className="font-mono text-xs">{r.action}</span> },
+    { key: "entity", header: "الكيان", render: (r) => <span className="text-xs">{r.entity || "—"}</span> },
+    { key: "entityId", header: "المعرف", render: (r) => <span className="font-mono text-xs">{r.entityId ?? "—"}</span> },
+    { key: "userId", header: "المستخدم", render: (r) => <span className="text-xs">{r.userId ?? "—"}</span> },
+    { key: "details", header: "التفاصيل", render: (r) => (
+      <span className="text-xs max-w-[400px] truncate block" title={r.details ?? ""}>
+        {r.details || "—"}
+      </span>
+    )},
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Activity className="h-5 w-5" /> سجل أحداث الإيفنت باص
+          {total > 0 && <Badge variant="outline" className="text-xs ms-2">{total.toLocaleString("en-US")}</Badge>}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <DataTable
+          columns={cols}
+          data={events}
+          isLoading={isLoading}
+          isError={isError}
+          error={error as Error | null}
+          onRetry={() => refetch()}
+          noToolbar
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          emptyMessage="لا توجد أحداث مسجلة"
+        />
+      </CardContent>
+    </Card>
   );
 }

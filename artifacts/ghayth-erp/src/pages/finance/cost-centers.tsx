@@ -1,11 +1,5 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
-import {
-  useInlineActions,
-  RowActions,
-  InlineEditForm,
-  InlineDeleteConfirm,
-} from "@/components/inline-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   PageShell,
@@ -24,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { Layers, Plus, Building, Car, User, Briefcase, MapPin, Info } from "lucide-react";
+import { Layers, Plus, Building, Car, User, Briefcase, MapPin, Pencil, Trash2 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 interface CostCenter {
@@ -61,34 +55,32 @@ export default function CostCentersPage() {
   const { toast } = useToast();
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
-  const [detailId, setDetailId] = useState<number | null>(null);
 
   const { data, isLoading, isError } = useApiQuery<{ data: CostCenter[] }>(
     ["cost-centers"],
     `/finance/cost-centers`,
   );
 
-  // GET /finance/cost-centers/:id — fetched lazily when the user clicks
-  // the info icon. Returns full details (children, related, allocations).
-  const detailQ = useApiQuery<any>(
-    ["cost-center-detail", String(detailId ?? 0)],
-    detailId ? `/finance/cost-centers/${detailId}` : null,
-    { enabled: detailId !== null },
-  );
+  const [editing, setEditing] = useState<CostCenter | null>(null);
+  const [deleting, setDeleting] = useState<CostCenter | null>(null);
 
   const createMut = useApiMutation("/finance/cost-centers", "POST", [["cost-centers"]]);
-
-  const ccActions = useInlineActions({
-    endpoint: "/finance/cost-centers",
-    queryKeys: [["cost-centers"]],
-  });
-
-  const ccEditFields = [
-    { key: "code", label: "الرمز" },
-    { key: "name", label: "الاسم" },
-    { key: "type", label: "النوع" },
-    { key: "allocatedAmount", label: "المخصص", type: "number" as const },
-  ];
+  // PATCH + DELETE for /finance/cost-centers/:id — backend already
+  // supports both; the previous code-comment noted them as "follow-up
+  // PR" but the UI never landed. Inline edit dialog + delete confirm
+  // below.
+  const updateMut = useApiMutation<unknown, { id: number; name: string; code: string | null; allocatedAmount: number | null; status: string }>(
+    (b) => `/finance/cost-centers/${b.id}`,
+    "PATCH",
+    [["cost-centers"]],
+    { successMessage: "تم تحديث مركز التكلفة", onSuccess: () => setEditing(null) },
+  );
+  const deleteMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/finance/cost-centers/${b.id}`,
+    "DELETE",
+    [["cost-centers"]],
+    { successMessage: "تم حذف مركز التكلفة", onSuccess: () => setDeleting(null) },
+  );
 
   const [form, setForm] = useState({
     code: "",
@@ -189,29 +181,28 @@ export default function CostCentersPage() {
         : <Badge variant="outline" className="text-xs">{r.status}</Badge>,
     },
     {
-      key: "_actions" as any,
-      header: "",
+      key: "__actions",
+      header: "إجراءات",
       render: (r) => (
-        <div className="inline-flex items-center gap-1">
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 p-0"
-            title="تفاصيل"
-            onClick={() => setDetailId(r.id)}
+            onClick={() => setEditing(r)}
+            title="تعديل"
           >
-            <Info className="h-3.5 w-3.5" />
+            <Pencil className="h-3.5 w-3.5" />
           </Button>
-          <RowActions
-            onEdit={() => ccActions.startEdit(r.id, {
-              code: r.code ?? "",
-              name: r.name,
-              type: r.type ?? "",
-              allocatedAmount: r.allocatedAmount ? String(r.allocatedAmount) : "",
-            })}
-            onDelete={() => ccActions.startDelete(r.id)}
-            deletePerm="finance:delete"
-          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDeleting(r)}
+            title="حذف"
+            className="text-status-error-foreground"
+            disabled={deleteMut.isPending}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       ),
     },
@@ -358,88 +349,98 @@ export default function CostCentersPage() {
         </CardContent>
       </Card>
 
-      {ccActions.editingId !== null && (
-        <InlineEditForm
-          fields={ccEditFields}
-          initialValues={ccActions.editForm}
-          onSave={(values) => ccActions.handleSave(ccActions.editingId!, values)}
-          onCancel={ccActions.cancelEdit}
-          isPending={ccActions.isPending}
-        />
-      )}
-
-      {ccActions.deletingId !== null && (
-        <InlineDeleteConfirm
-          onConfirm={() => ccActions.handleDelete(ccActions.deletingId!)}
-          onCancel={ccActions.cancelDelete}
-          isPending={ccActions.isPending}
-        />
-      )}
-
-      <Dialog open={detailId !== null} onOpenChange={(o) => !o && setDetailId(null)}>
-        <DialogContent className="max-w-lg">
+      {/* Inline edit dialog — wires PATCH /finance/cost-centers/:id. */}
+      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+        <DialogContent dir="rtl" className="max-w-md">
           <DialogHeader>
-            <DialogTitle>تفاصيل مركز التكلفة #{detailId}</DialogTitle>
+            <DialogTitle>تعديل مركز التكلفة</DialogTitle>
           </DialogHeader>
-          <div className="py-2">
-            {detailQ.isLoading ? (
-              <div className="text-center py-6 text-sm text-muted-foreground">جاري التحميل...</div>
-            ) : detailQ.data ? (
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground">الاسم</p>
-                  <p className="font-medium">{detailQ.data.name ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">الرمز</p>
-                  <p className="font-mono">{detailQ.data.code ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">النوع</p>
-                  <p>{detailQ.data.type ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">الحالة</p>
-                  <p>{detailQ.data.status ?? "—"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">الميزانية المخصصة</p>
-                  <p className="font-mono">{formatCurrency(Number(detailQ.data.allocatedAmount ?? 0))}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">المصروف الفعلي</p>
-                  <p className="font-mono">{formatCurrency(Number(detailQ.data.actualAmount ?? detailQ.data.spent ?? 0))}</p>
-                </div>
-                {detailQ.data.relatedEntityName && (
-                  <div className="col-span-2">
-                    <p className="text-xs text-muted-foreground">الكيان المرتبط</p>
-                    <p className="font-medium">
-                      {ENTITY_TYPE_LABEL[detailQ.data.relatedEntityType ?? ""] ?? detailQ.data.relatedEntityType}
-                      {" — "}
-                      {detailQ.data.relatedEntityName}
-                    </p>
-                  </div>
-                )}
-                {Array.isArray(detailQ.data.children) && detailQ.data.children.length > 0 && (
-                  <div className="col-span-2">
-                    <p className="text-xs text-muted-foreground mb-1">المراكز الفرعية</p>
-                    <ul className="text-xs space-y-0.5">
-                      {detailQ.data.children.slice(0, 8).map((c: any) => (
-                        <li key={c.id} className="flex items-center justify-between">
-                          <span>{c.name}</span>
-                          <span className="font-mono text-muted-foreground">{c.code ?? ""}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+          {editing && (
+            <div className="space-y-3 py-2">
+              <div className="space-y-1">
+                <Label htmlFor="edit-cc-code">الرمز</Label>
+                <Input
+                  id="edit-cc-code"
+                  defaultValue={editing.code ?? ""}
+                  onChange={(e) => { editing.code = e.target.value; }}
+                />
               </div>
-            ) : (
-              <div className="text-center py-6 text-sm text-muted-foreground">لا توجد بيانات</div>
-            )}
-          </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-cc-name">الاسم</Label>
+                <Input
+                  id="edit-cc-name"
+                  defaultValue={editing.name}
+                  onChange={(e) => { editing.name = e.target.value; }}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-cc-amount">المبلغ المخصص</Label>
+                <Input
+                  id="edit-cc-amount"
+                  type="number"
+                  defaultValue={editing.allocatedAmount?.toString() ?? ""}
+                  onChange={(e) => { editing.allocatedAmount = e.target.value as any; }}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-cc-status">الحالة</Label>
+                <Select
+                  defaultValue={editing.status}
+                  onValueChange={(v) => { editing.status = v; }}
+                >
+                  <SelectTrigger id="edit-cc-status"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">نشط</SelectItem>
+                    <SelectItem value="inactive">معطّل</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailId(null)}>إغلاق</Button>
+            <Button variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>
+            <GuardedButton
+              perm="finance:update"
+              onClick={() => {
+                if (!editing) return;
+                updateMut.mutate({
+                  id: editing.id,
+                  name: editing.name,
+                  code: editing.code,
+                  allocatedAmount: editing.allocatedAmount != null && editing.allocatedAmount !== ""
+                    ? Number(editing.allocatedAmount)
+                    : null,
+                  status: editing.status,
+                });
+              }}
+              disabled={updateMut.isPending}
+            >
+              {updateMut.isPending ? "جاري الحفظ…" : "حفظ"}
+            </GuardedButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm — wires DELETE /finance/cost-centers/:id. */}
+      <Dialog open={!!deleting} onOpenChange={(o) => { if (!o) setDeleting(null); }}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>حذف مركز التكلفة</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            هل تريد بالتأكيد حذف <span className="font-semibold text-status-neutral-foreground">{deleting?.name}</span>؟
+            هذا الإجراء لا يمكن التراجع عنه.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleting(null)}>إلغاء</Button>
+            <GuardedButton
+              perm="finance:delete"
+              variant="destructive"
+              onClick={() => deleting && deleteMut.mutate({ id: deleting.id })}
+              disabled={deleteMut.isPending}
+            >
+              {deleteMut.isPending ? "جاري الحذف…" : "حذف"}
+            </GuardedButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

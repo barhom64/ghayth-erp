@@ -57,8 +57,15 @@ import { PageStatusBadge } from "@/components/page-status-badge";
  *     actions={<GuardedButton perm="finance:update">تعديل</GuardedButton>}
  *     overview={<InvoiceOverview invoice={invoice} />}
  *     printable
- *     onPrint={() => window.print()}
+ *     onPrint={() => {}}
  *   />
+ *
+ * NOTE: Never wire `onPrint` to the browser's native print dialog — that
+ * bypasses the print platform's audit/archive/verification. The official path
+ * is to render a `<PrintButton entityType=... entityId=... />` next to the
+ * rest of the page actions; the legacy `printable` prop here is kept only
+ * because some pages still use the inline header button as a hook to
+ * scroll-to-print.
  */
 
 export type DetailStatus = {

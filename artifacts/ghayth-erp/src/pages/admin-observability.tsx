@@ -19,11 +19,15 @@ import {
   PageStatusBadge,
   type DataTableColumn,
 } from "@workspace/ui-core";
-import { useApiQuery } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { apiFetch, useApiQuery } from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -144,6 +148,17 @@ function fmtMs(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+interface DlqEntry {
+  id: number;
+  type: string;
+  eventName: string | null;
+  companyId: number | null;
+  error: string | null;
+  retryCount: number;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
 export default function AdminObservability() {
   const { data, isLoading, error, refetch } = useApiQuery<Overview>(
     ["admin-observability-overview"],
@@ -167,6 +182,52 @@ export default function AdminObservability() {
     },
     retry: false,
   });
+
+  // Per-event DLQ list, separate from the topByType summary in `overview`
+  // so the operator can replay or resolve a specific failed event row.
+  const { data: dlqList, refetch: refetchDlq } = useApiQuery<{ entries: DlqEntry[]; total: number }>(
+    ["admin-dlq-list"],
+    "/admin/governance/event-dlq?unresolved=true",
+  );
+
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const refreshDlq = () => {
+    refetchDlq();
+    qc.invalidateQueries({ queryKey: ["admin-observability-overview"] });
+    refetch();
+  };
+
+  const replayEntry = async (id: number) => {
+    setBusyId(id);
+    try {
+      const res = await apiFetch<{ eventName?: string }>(`/admin/governance/event-dlq/${id}/replay`, { method: "POST" });
+      toast({ title: "تم إعادة المحاولة", description: res.eventName ? `الحدث: ${res.eventName}` : undefined });
+      refreshDlq();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر إعادة المحاولة", description: err.message });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const resolveEntry = async (id: number) => {
+    if (!window.confirm("تأكيد إزالة الحدث من قائمة الفشل بدون إعادة محاولة؟")) return;
+    setBusyId(id);
+    try {
+      await apiFetch(`/admin/governance/event-dlq/${id}`, { method: "DELETE" });
+      toast({ title: "تم تعليم الحدث كمحلول" });
+      refreshDlq();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التنفيذ", description: err.message });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const dlqEntries = dlqList?.entries ?? [];
 
   const anomalies = data?.anomalies ?? [];
   const queues = data?.queues?.eventBus;
@@ -481,6 +542,68 @@ export default function AdminObservability() {
               )}
             </CardContent>
           </Card>
+
+          {/* ── 3.5 Individual DLQ entries — per-event replay/resolve ── */}
+          {dlqEntries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Inbox className="w-4 h-4" />
+                  الأحداث الفاشلة — قائمة كاملة ({dlqEntries.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <DataTable
+                  columns={[
+                    { key: "eventName", header: "الحدث", searchable: true, render: (r) => (
+                      <span className="font-mono text-xs">{r.eventName ?? "—"}</span>
+                    )},
+                    { key: "type", header: "النوع", render: (r) => (
+                      <span className="text-xs text-muted-foreground">{r.type}</span>
+                    )},
+                    { key: "error", header: "الخطأ", render: (r) => (
+                      <span className="text-xs max-w-[400px] truncate block" title={r.error ?? ""}>{r.error ?? "—"}</span>
+                    )},
+                    { key: "retryCount", header: "محاولات", render: (r) => (
+                      <span className="font-mono text-xs">{r.retryCount}</span>
+                    )},
+                    { key: "createdAt", header: "وقت الفشل", render: (r) => (
+                      <span className="text-xs text-muted-foreground">{formatDateAr(r.createdAt)}</span>
+                    )},
+                    { key: "actions", header: "", render: (r) => (
+                      <div className="flex items-center gap-1">
+                        <GuardedButton
+                          perm="admin:update"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => replayEntry(r.id)}
+                          disabled={busyId === r.id || !r.eventName}
+                          title={r.eventName ? "إعادة المحاولة" : "اسم الحدث مفقود"}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                        </GuardedButton>
+                        <GuardedButton
+                          perm="admin:update"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-status-error-foreground"
+                          onClick={() => resolveEntry(r.id)}
+                          disabled={busyId === r.id}
+                          title="إزالة من القائمة"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </GuardedButton>
+                      </div>
+                    )},
+                  ] as DataTableColumn<DlqEntry>[]}
+                  data={dlqEntries}
+                  noToolbar
+                  pageSize={20}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* ── 4. Providers ─────────────────────────────────────────── */}
           <Card>

@@ -1,8 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 import {
   useDetailEditDelete,
   DetailActionButtons,
@@ -21,6 +19,7 @@ import { Edit, Wrench, Car, User, CheckCircle2, XCircle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_LABELS: Record<string, string> = {
   scheduled: "مجدول",
@@ -52,12 +51,55 @@ export default function MaintenanceDetail() {
   const [, params] = useRoute("/fleet/maintenance/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("maintenance_request", id ?? 0);
+  const { toast } = useToast();
+  const [actionBusy, setActionBusy] = useState(false);
 
   const { data: maintenance, isLoading, error, refetch } = useApiQuery<any>(
     ["maintenance-detail", String(id)],
     `/fleet/maintenance/${id}`,
     !!id
   );
+
+  // Lifecycle transitions — backend has dedicated POST endpoints (not
+  // the bare PATCH /:id) so the side-effects fire: complete bumps the
+  // vehicle's lastServiceDate + odometer; cancel releases the workshop
+  // booking. Buttons are status-gated to match the backend's 409 guard.
+  const handleComplete = async () => {
+    if (!id) return;
+    const odometer = window.prompt("قراءة عداد المركبة عند إكمال الصيانة (اختياري):", "");
+    if (odometer === null) return;
+    setActionBusy(true);
+    try {
+      await apiFetch(`/fleet/maintenance/${id}/complete`, {
+        method: "POST",
+        body: JSON.stringify(odometer ? { odometer: Number(odometer) } : {}),
+      });
+      toast({ title: "تم إكمال الصيانة" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر الإكمال", description: err.message });
+    } finally {
+      setActionBusy(false);
+    }
+  };
+  const handleCancel = async () => {
+    if (!id) return;
+    const reason = window.prompt("سبب إلغاء الصيانة:", "");
+    if (reason == null) return;
+    setActionBusy(true);
+    try {
+      await apiFetch(`/fleet/maintenance/${id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason || undefined }),
+      });
+      toast({ title: "تم إلغاء الصيانة" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر الإلغاء", description: err.message });
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -106,66 +148,9 @@ export default function MaintenanceDetail() {
       { key: "odometer", label: "العداد", type: "number" },
       { key: "notes", label: "ملاحظات" },
     ],
-    invalidateKeys: [["maintenance", String(id)], ["maintenance"]],
+    invalidateKeys: [["maintenance-detail", String(id)], ["fleet-maintenance"]],
     onSaved: () => refetch(),
   });
-
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  const handleComplete = async () => {
-    // POST /fleet/maintenance/:id/complete — finalCost defaults to existing
-    // cost; server runs applyTransition, releases the vehicle, and emits
-    // the JE-FLEET journal entry when cost > 0.
-    const defaultCost = String(maintenance?.cost || 0);
-    const costStr = window.prompt("التكلفة النهائية:", defaultCost);
-    if (costStr === null) return;
-    const cost = Number(costStr);
-    if (!Number.isFinite(cost) || cost < 0) {
-      toast({ variant: "destructive", title: "أدخل تكلفة صحيحة" });
-      return;
-    }
-    try {
-      await apiFetch(`/fleet/maintenance/${id}/complete`, {
-        method: "POST",
-        body: JSON.stringify({ cost }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["maintenance-detail", String(id)] });
-      toast({ title: "تم إكمال الصيانة" });
-      refetch();
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "تعذر إكمال الصيانة",
-        description: err.message || "حدث خطأ",
-      });
-    }
-  };
-
-  const handleCancel = async () => {
-    // POST /fleet/maintenance/:id/cancel — requires a non-empty reason.
-    const reason = window.prompt("سبب الإلغاء:");
-    if (reason === null) return;
-    if (!reason.trim()) {
-      toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
-      return;
-    }
-    try {
-      await apiFetch(`/fleet/maintenance/${id}/cancel`, {
-        method: "POST",
-        body: JSON.stringify({ reason: reason.trim() }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["maintenance-detail", String(id)] });
-      toast({ title: "تم إلغاء الصيانة" });
-      refetch();
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "تعذر إلغاء الصيانة",
-        description: err.message || "حدث خطأ",
-      });
-    }
-  };
 
   const cost = maintenance?.cost || maintenance?.amount || 0;
 
@@ -329,28 +314,32 @@ export default function MaintenanceDetail() {
               entityId={maintenance.id ?? id}
               formats={["a4"]}/>
           )}
-          <GuardedButton
-            perm="fleet:update"
-            variant="outline"
-            size="sm"
-            onClick={handleComplete}
-            disabled={!maintenance || maintenance.status === "completed" || maintenance.status === "cancelled"}
-            rateLimitAware
-          >
-            <CheckCircle2 className="h-4 w-4 ms-1" />
-            إكمال
-          </GuardedButton>
-          <GuardedButton
-            perm="fleet:update"
-            variant="outline"
-            size="sm"
-            onClick={handleCancel}
-            disabled={!maintenance || maintenance.status === "completed" || maintenance.status === "cancelled"}
-            rateLimitAware
-          >
-            <XCircle className="h-4 w-4 ms-1" />
-            إلغاء
-          </GuardedButton>
+          {maintenance && !["completed", "cancelled"].includes(maintenance.status) && (
+            <>
+              <GuardedButton
+                perm="fleet:update"
+                variant="outline"
+                size="sm"
+                className="text-status-success-foreground"
+                onClick={handleComplete}
+                disabled={actionBusy}
+              >
+                <CheckCircle2 className="h-4 w-4 ms-1" />
+                إكمال
+              </GuardedButton>
+              <GuardedButton
+                perm="fleet:update"
+                variant="outline"
+                size="sm"
+                className="text-status-error-foreground"
+                onClick={handleCancel}
+                disabled={actionBusy}
+              >
+                <XCircle className="h-4 w-4 ms-1" />
+                إلغاء
+              </GuardedButton>
+            </>
+          )}
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
       }

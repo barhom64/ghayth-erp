@@ -22,6 +22,7 @@ import {
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
+import { ClientPortalLinkCard } from "@/components/shared/client-portal-link-card";
 import {
   Users2, Phone, Mail, CreditCard, FileText,
   Banknote, AlertTriangle, Home, Clock, BookOpen
@@ -156,6 +157,19 @@ export default function TenantDetail() {
             />
           </CardContent>
         </Card>
+      )}
+
+      {id && (
+        <ClientPortalLinkCard
+          entityType="tenant"
+          entityId={Number(id)}
+          patchPath={`/properties/tenants/${id}`}
+          linkedClientId={tenant?.clientId ?? null}
+          linkedClientName={tenant?.clientName ?? null}
+          perm="properties.tenants:update"
+          onUpdated={refetch}
+          invalidateKeys={[["tenant-detail", id || ""], ["tenants"]]}
+        />
       )}
 
       {id && <EntityComments entityType="tenant" entityId={id} />}
@@ -336,7 +350,7 @@ function TenantLettersTab({ tenantId }: { tenantId: string }) {
     <Card className="border-0 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base flex items-center gap-2"><Mail className="h-4 w-4" /> المراسلات ({letters.length})</CardTitle>
-        <Link href={`/communications/letters/create?relatedType=tenant&relatedId=${tenantId}`}>
+        <Link href={`/correspondence/create?relatedType=tenant&relatedId=${tenantId}`}>
           <Button size="sm" className="gap-1"><Mail className="h-3 w-3" /> خطاب جديد</Button>
         </Link>
       </CardHeader>

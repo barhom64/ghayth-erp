@@ -15,7 +15,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Target, Plus, BookOpen, TrendingUp, CheckCircle } from "lucide-react";
+import { Target, Plus, BookOpen, TrendingUp, CheckCircle, Trash2 } from "lucide-react";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import {
   PageShell,
   DataTable,
@@ -51,6 +52,7 @@ const STATUS_OPTIONS = Object.entries(IDP_STATUS).map(([value, { label }]) => ({
 export default function IDPPage() {
   const [showForm, setShowForm] = useState(false);
   const [filters, setFilters] = useFilters();
+  const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
 
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["idp"], "/hr/idp");
   const plans = asList(data?.data || data);

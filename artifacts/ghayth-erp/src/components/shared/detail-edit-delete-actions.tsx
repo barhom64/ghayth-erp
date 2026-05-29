@@ -23,9 +23,9 @@ export type EditFieldDef = {
 export interface DetailEditDeleteOptions {
   entityLabel: string;
   patchPath: string;
-  // Optional: pages whose backend has no soft-delete route (e.g. umrah
-  // seasons) opt out by omitting this. DetailActionButtons hides the
-  // delete button when the hook reports no deletePath.
+  /** Omit when the backend doesn't expose a DELETE endpoint for the
+   *  entity (e.g. /umrah/seasons — only GET + PATCH). The InlineEditCard
+   *  reads this to hide the Trash button. */
   deletePath?: string;
   listPath: string;
   initialValues: Record<string, any> | null | undefined;
@@ -123,10 +123,10 @@ export function useDetailEditDelete(opts: DetailEditDeleteOptions) {
     cancelDelete,
     submitEdit,
     confirmDelete,
+    hasDelete: !!opts.deletePath,
     fields: opts.fields,
     entityLabel: opts.entityLabel,
     initialValues: opts.initialValues,
-    hasDelete: !!opts.deletePath,
   };
 }
 
@@ -146,7 +146,10 @@ export function DetailActionButtons({
   const canEdit = usePermission(editPerm ?? "");
   const canDelete = usePermission(deletePerm ?? "");
   const showEdit = editPerm ? canEdit : true;
-  const showDelete = deletePerm ? canDelete : true;
+  // Hide the Trash button when the entity has no DELETE endpoint
+  // (umrah-season-detail and similar) — the hook signals this via
+  // `hasDelete`.
+  const showDelete = hook.hasDelete && (deletePerm ? canDelete : true);
 
   return (
     <div className="flex items-center gap-2 flex-wrap">

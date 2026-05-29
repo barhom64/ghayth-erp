@@ -4,13 +4,10 @@ import { useParams } from "wouter";
 import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import { ClientPortalLinkCard } from "@/components/shared/client-portal-link-card";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -21,14 +18,19 @@ import {
   FormShell,
   FormTextField,
   FormDateField,
+  FormNumberField,
+  FormSelectField,
+  FormTextareaField,
   FormGrid,
+  DataTable,
+  type DataTableColumn,
 } from "@workspace/ui-core";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {
   Gavel, Calendar, FileText, AlertTriangle, Clock,
   CheckCircle2, User, MapPin, TrendingUp, Activity,
-  Plus, ChevronRight, Info, X, Mail, Scale, DollarSign, Edit
+  Plus, ChevronRight, Info, X, Scale, Mail, DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
@@ -126,6 +128,163 @@ function CaseTimeline({ sessions }: { sessions: any[] }) {
         })}
       </div>
     </div>
+  );
+}
+
+// ─── Schemas for the case sub-resource forms ──────────────────────────────
+// Each schema mirrors the backend's create*Schema in routes/legal.ts.
+
+const judgmentSchema = z.object({
+  judgmentDate: z.string().min(1, "تاريخ الحكم مطلوب"),
+  verdict: z.string().min(1, "نص الحكم مطلوب"),
+  judgmentType: z.string().trim(),
+  amount: z.coerce.number(),
+  paidAmount: z.coerce.number(),
+  dueDate: z.string(),
+  notes: z.string().trim(),
+});
+type JudgmentForm = z.infer<typeof judgmentSchema>;
+const defaultJudgmentForm: JudgmentForm = {
+  judgmentDate: "", verdict: "", judgmentType: "", amount: 0, paidAmount: 0, dueDate: "", notes: "",
+};
+
+const correspondenceSchema = z.object({
+  direction: z.enum(["outgoing", "incoming"]),
+  subject: z.string().min(1, "الموضوع مطلوب"),
+  parties: z.string().trim(),
+  correspondenceDate: z.string(),
+  documentRef: z.string().trim(),
+  notes: z.string().trim(),
+});
+type CorrespondenceForm = z.infer<typeof correspondenceSchema>;
+const defaultCorrespondenceForm: CorrespondenceForm = {
+  direction: "outgoing", subject: "", parties: "", correspondenceDate: "", documentRef: "", notes: "",
+};
+
+const caseCostSchema = z.object({
+  amount: z.coerce.number().positive("المبلغ مطلوب وأكبر من صفر"),
+  type: z.string().min(1, "نوع التكلفة مطلوب"),
+  notes: z.string().trim(),
+});
+type CaseCostForm = z.infer<typeof caseCostSchema>;
+const defaultCaseCostForm: CaseCostForm = {
+  amount: 0, type: "", notes: "",
+};
+
+function AddJudgmentForm({ caseId, onSuccess }: { caseId: number; onSuccess: () => void }) {
+  const saveMut = useApiMutation<unknown, JudgmentForm>(
+    `/legal/cases/${caseId}/judgments`,
+    "POST",
+    [["legal-case", String(caseId)], ["legal-case-judgments", String(caseId)]],
+    { successMessage: "تم تسجيل الحكم", onSuccess },
+  );
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-4">
+        <h4 className="font-semibold mb-3 text-sm">إضافة حكم جديد</h4>
+        <FormShell
+          schema={judgmentSchema}
+          defaultValues={defaultJudgmentForm}
+          submitLabel="حفظ الحكم"
+          onSubmit={async (values, ctx) => {
+            await saveMut.mutateAsync(values);
+            ctx.reset();
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormDateField name="judgmentDate" label="تاريخ الحكم" required />
+            <FormTextField name="judgmentType" label="نوع الحكم" placeholder="ابتدائي / استئنافي / تنفيذ" />
+            <FormTextareaField name="verdict" label="نص الحكم" required className="md:col-span-2" />
+            <FormNumberField name="amount" label="قيمة الحكم" />
+            <FormNumberField name="paidAmount" label="المسدد" />
+            <FormDateField name="dueDate" label="تاريخ الاستحقاق" />
+            <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+          </FormGrid>
+        </FormShell>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AddCorrespondenceForm({ caseId, onSuccess }: { caseId: number; onSuccess: () => void }) {
+  const saveMut = useApiMutation<unknown, CorrespondenceForm>(
+    `/legal/cases/${caseId}/correspondence`,
+    "POST",
+    [["legal-case", String(caseId)], ["legal-case-correspondence", String(caseId)]],
+    { successMessage: "تم تسجيل المراسلة", onSuccess },
+  );
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-4">
+        <h4 className="font-semibold mb-3 text-sm">إضافة مراسلة جديدة</h4>
+        <FormShell
+          schema={correspondenceSchema}
+          defaultValues={defaultCorrespondenceForm}
+          submitLabel="حفظ المراسلة"
+          onSubmit={async (values, ctx) => {
+            await saveMut.mutateAsync(values);
+            ctx.reset();
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormSelectField
+              name="direction"
+              label="الاتجاه"
+              options={[
+                { value: "outgoing", label: "صادرة" },
+                { value: "incoming", label: "واردة" },
+              ]}
+            />
+            <FormDateField name="correspondenceDate" label="تاريخ المراسلة" />
+            <FormTextField name="subject" label="الموضوع" required className="md:col-span-2" />
+            <FormTextField name="parties" label="الأطراف" />
+            <FormTextField name="documentRef" label="مرجع المستند" />
+            <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+          </FormGrid>
+        </FormShell>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AddCostForm({ caseId, onSuccess }: { caseId: number; onSuccess: () => void }) {
+  const saveMut = useApiMutation<unknown, CaseCostForm>(
+    `/legal/cases/${caseId}/costs`,
+    "POST",
+    [["legal-case", String(caseId)]],
+    { successMessage: "تم تسجيل التكلفة", onSuccess },
+  );
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-4">
+        <h4 className="font-semibold mb-3 text-sm">إضافة تكلفة جديدة</h4>
+        <FormShell
+          schema={caseCostSchema}
+          defaultValues={defaultCaseCostForm}
+          submitLabel="حفظ التكلفة"
+          onSubmit={async (values, ctx) => {
+            await saveMut.mutateAsync(values);
+            ctx.reset();
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormSelectField
+              name="type"
+              label="نوع التكلفة"
+              options={[
+                { value: "lawyer_fee", label: "أتعاب محامي" },
+                { value: "court_fee", label: "رسوم محكمة" },
+                { value: "expert_fee", label: "أتعاب خبير" },
+                { value: "translation", label: "ترجمة" },
+                { value: "other", label: "أخرى" },
+              ]}
+            />
+            <FormNumberField name="amount" label="المبلغ" />
+            <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+          </FormGrid>
+        </FormShell>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -240,19 +399,29 @@ export default function LegalCaseDetail() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showAddSession, setShowAddSession] = useState(false);
+  const [showAddJudgment, setShowAddJudgment] = useState(false);
+  const [showAddCorrespondence, setShowAddCorrespondence] = useState(false);
+  const [showAddCost, setShowAddCost] = useState(false);
 
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("legal_case", Number(id));
 
   const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], `/legal/cases/${id}`);
-  // GET /legal/cases/:caseId/sessions — dedicated session index that
-  // includes audit metadata (createdBy, decisionType, hearingType) the
-  // bundled `caseData.sessions` doesn't carry. Falls back to the bundle
-  // until the dedicated endpoint loads.
-  const sessionsQ = useApiQuery<any>(
-    ["legal-case-sessions", id],
-    id ? `/legal/cases/${id}/sessions` : null,
-    { enabled: !!id },
+
+  // Sub-resource fetches — each endpoint is dedicated and case-scoped.
+  // Kept independent from the main caseData payload so adding a judgment
+  // or correspondence row doesn't have to refetch the whole case header.
+  const { data: judgmentsResp, refetch: refetchJudgments } = useApiQuery<any>(
+    ["legal-case-judgments", id],
+    `/legal/cases/${id}/judgments`,
+    !!id,
   );
+  const { data: correspondenceResp, refetch: refetchCorrespondence } = useApiQuery<any>(
+    ["legal-case-correspondence", id],
+    `/legal/cases/${id}/correspondence`,
+    !!id,
+  );
+  const judgments: any[] = asList(judgmentsResp?.data ?? judgmentsResp);
+  const correspondence: any[] = asList(correspondenceResp?.data ?? correspondenceResp);
 
   const transitionMut = useApiMutation<any, { status: string }>(
     () => `/legal/cases/${id}`,
@@ -266,7 +435,17 @@ export default function LegalCaseDetail() {
     }
   );
 
-  const sessions = sessionsQ.data?.data ?? sessionsQ.data?.sessions ?? caseData?.sessions ?? [];
+  // Dedicated /close endpoint (vs. the generic status PATCH) so the
+  // backend can run lifecycle side-effects (lawyer notification, risk
+  // closure, audit row) that wouldn't fire on a plain status change.
+  const closeMut = useApiMutation<any, { reason?: string }>(
+    `/legal/cases/${id}/close`,
+    "POST",
+    [["legal-case", String(id)], ["legal-cases"]],
+    { successMessage: "تم إغلاق القضية", onSuccess: () => refetch() },
+  );
+
+  const sessions = caseData?.sessions || [];
 
   const handleSessionAdded = () => {
     setShowAddSession(false);
@@ -275,59 +454,30 @@ export default function LegalCaseDetail() {
     qc.invalidateQueries({ queryKey: ["legal-stats"] });
   };
 
+  const handleJudgmentAdded = () => {
+    setShowAddJudgment(false);
+    refetchJudgments();
+    refetch();
+  };
+  const handleCorrespondenceAdded = () => {
+    setShowAddCorrespondence(false);
+    refetchCorrespondence();
+  };
+  const handleCostAdded = () => {
+    setShowAddCost(false);
+    refetch();
+  };
+
+  const handleClose = () => {
+    if (!window.confirm("سيتم إغلاق القضية. متابعة؟")) return;
+    closeMut.mutate({});
+  };
+
   const handleTransition = (newStatus: string) => {
     transitionMut.mutate({ status: newStatus });
   };
 
-  // POST /legal/cases/:id/close — dedicated transition (cancels all
-  // open obligations on the case, runs through applyTransition for
-  // proper audit). The PATCH route above accepts status='closed' too
-  // but skips the obligation cancellation step.
-  const closeMut = useApiMutation<any, { closureReason: string; outcome?: string }>(
-    `/legal/cases/${id}/close`,
-    "POST",
-    [["legal-case", String(id)], ["legal-cases"]],
-    {
-      successMessage: "تم إغلاق القضية",
-      onSuccess: () => { refetch(); qc.invalidateQueries({ queryKey: ["legal-stats"] }); },
-    },
-  );
-
-  // PATCH /legal/cases/:id/financial-risk — admin-only update to the
-  // expected liability / risk band on a case. Surfaced as a tiny
-  // edit button in the actions row.
-  const updateRiskMut = useApiMutation<any, { expectedLiability?: number; riskBand?: string; notes?: string }>(
-    `/legal/cases/${id}/financial-risk`,
-    "PATCH",
-    [["legal-case", String(id)]],
-    { successMessage: "تم تحديث المخاطر المالية" },
-  );
-
-  const handleCloseCase = () => {
-    const reason = window.prompt("سبب الإغلاق:");
-    if (reason === null) return;
-    if (!reason.trim()) {
-      toast({ variant: "destructive", title: "سبب الإغلاق مطلوب" });
-      return;
-    }
-    const outcome = window.prompt("نتيجة القضية (اختياري):") ?? "";
-    closeMut.mutate({ closureReason: reason.trim(), outcome: outcome.trim() || undefined });
-  };
-
-  const handleUpdateRisk = () => {
-    const liabStr = window.prompt("الالتزام المتوقع (ر.س):", String(caseData?.expectedLiability ?? ""));
-    if (liabStr === null) return;
-    const liab = Number(liabStr);
-    if (!Number.isFinite(liab)) {
-      toast({ variant: "destructive", title: "أدخل رقماً صحيحاً" });
-      return;
-    }
-    const notes = window.prompt("ملاحظات (اختياري):") ?? "";
-    updateRiskMut.mutate({ expectedLiability: liab, notes: notes.trim() || undefined });
-  };
-
   const allowedTransitions: string[] = caseData?.allowedTransitions || [];
-  const canClose = caseData && ["open", "in_progress", "on_hold", "judgment", "execution"].includes(caseData.status);
 
   // --- Status mapping for DetailPageLayout ---
   const statusToneMap: Record<string, "default" | "success" | "warning" | "destructive" | "info" | "muted"> = {
@@ -358,31 +508,20 @@ export default function LegalCaseDetail() {
           {resolveStatus(t, "legal_case")?.label || t}
         </GuardedButton>
       ))}
-      {canClose && (
+      {caseData && caseData.status !== "closed" && (
         <GuardedButton
-          perm="legal:create"
+          perm="legal:update"
           size="sm"
           variant="outline"
-          className="text-xs gap-1 text-status-error-foreground border-status-error-surface"
-          onClick={handleCloseCase}
+          className="text-xs gap-1 text-status-error-foreground"
+          onClick={handleClose}
           disabled={closeMut.isPending}
-          rateLimitAware
+          title="إغلاق نهائي للقضية (يفعل side-effects: إشعار المحامي، إغلاق المخاطر)"
         >
-          إغلاق نهائي
+          <X className="h-3 w-3" />
+          إغلاق القضية
         </GuardedButton>
       )}
-      <GuardedButton
-        perm="legal:update"
-        size="sm"
-        variant="ghost"
-        className="text-xs"
-        onClick={handleUpdateRisk}
-        disabled={updateRiskMut.isPending}
-        rateLimitAware
-        title="تعديل المخاطر المالية"
-      >
-        تحديث المخاطر
-      </GuardedButton>
       <EntityPrintButton entityType="legal_judgment" entityId={id ?? ""} formats={["a4"]} />
     </div>
   );
@@ -450,6 +589,18 @@ export default function LegalCaseDetail() {
       <div className="space-y-4">
         <StepImpactPanel caseStatus={caseData.status} />
         <RiskPanel caseData={caseData} sessions={sessions} />
+        {id && (
+          <ClientPortalLinkCard
+            entityType="legal_case"
+            entityId={Number(id)}
+            patchPath={`/legal/cases/${id}`}
+            linkedClientId={caseData.clientId ?? null}
+            linkedClientName={caseData.clientName ?? null}
+            perm="legal.cases:update"
+            onUpdated={refetch}
+            invalidateKeys={[["legal-case", String(id)], ["legal-cases"]]}
+          />
+        )}
         {id && <EntityObligations entityType="legal-case" entityId={Number(id)} hideWhenEmpty />}
       </div>
     </div>
@@ -521,28 +672,116 @@ export default function LegalCaseDetail() {
       ),
     },
     {
-      key: "case-documents",
-      label: "مستندات القضية",
-      icon: FileText,
-      content: () => <DocumentsSection caseId={Number(id)} caseTitle={caseData?.title || ""} />,
+      key: "judgments",
+      label: "الأحكام",
+      icon: Scale,
+      badge: judgments.length || undefined,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">أحكام القضية</h3>
+            <GuardedButton perm="legal:create" size="sm" onClick={() => setShowAddJudgment(!showAddJudgment)}>
+              {showAddJudgment ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />حكم جديد</>}
+            </GuardedButton>
+          </div>
+          {showAddJudgment && <AddJudgmentForm caseId={Number(id)} onSuccess={handleJudgmentAdded} />}
+          {judgments.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <Scale className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">لا توجد أحكام مسجلة</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "judgmentDate", header: "تاريخ الحكم", sortable: true, render: (j) => formatDateAr(j.judgmentDate) },
+                { key: "judgmentType", header: "النوع", render: (j) => j.judgmentType || "—" },
+                { key: "verdict", header: "نص الحكم", render: (j) => <span className="text-xs">{j.verdict}</span> },
+                { key: "amount", header: "القيمة", sortable: true, render: (j) => j.amount ? formatCurrency(Number(j.amount)) : "—" },
+                { key: "paidAmount", header: "المسدد", render: (j) => j.paidAmount ? formatCurrency(Number(j.paidAmount)) : "—" },
+                { key: "dueDate", header: "الاستحقاق", render: (j) => j.dueDate ? formatDateAr(j.dueDate) : "—" },
+              ] as DataTableColumn<any>[]}
+              data={judgments}
+              noToolbar
+              pageSize={10}
+            />
+          )}
+        </div>
+      ),
     },
     {
       key: "correspondence",
       label: "المراسلات",
       icon: Mail,
-      content: () => <CaseCorrespondenceTab caseId={Number(id)} />,
-    },
-    {
-      key: "judgments",
-      label: "الأحكام",
-      icon: Scale,
-      content: () => <CaseJudgmentsTab caseId={Number(id)} />,
+      badge: correspondence.length || undefined,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">مراسلات القضية</h3>
+            <GuardedButton perm="legal:create" size="sm" onClick={() => setShowAddCorrespondence(!showAddCorrespondence)}>
+              {showAddCorrespondence ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />مراسلة جديدة</>}
+            </GuardedButton>
+          </div>
+          {showAddCorrespondence && <AddCorrespondenceForm caseId={Number(id)} onSuccess={handleCorrespondenceAdded} />}
+          {correspondence.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <Mail className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">لا توجد مراسلات مسجلة</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "correspondenceDate", header: "التاريخ", sortable: true, render: (c) => formatDateAr(c.correspondenceDate) },
+                { key: "direction", header: "الاتجاه", render: (c) => (
+                  <Badge variant="outline">{c.direction === "outgoing" ? "صادرة" : "واردة"}</Badge>
+                )},
+                { key: "subject", header: "الموضوع", render: (c) => <span className="text-xs">{c.subject}</span> },
+                { key: "parties", header: "الأطراف", render: (c) => c.parties || "—" },
+                { key: "documentRef", header: "المرجع", render: (c) => c.documentRef ? <span className="font-mono text-xs">{c.documentRef}</span> : "—" },
+              ] as DataTableColumn<any>[]}
+              data={correspondence}
+              noToolbar
+              pageSize={10}
+            />
+          )}
+        </div>
+      ),
     },
     {
       key: "costs",
       label: "التكاليف",
       icon: DollarSign,
-      content: () => <CaseCostsTab caseId={Number(id)} />,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">تكاليف القضية</h3>
+            <GuardedButton perm="legal:create" size="sm" onClick={() => setShowAddCost(!showAddCost)}>
+              {showAddCost ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />تكلفة جديدة</>}
+            </GuardedButton>
+          </div>
+          {showAddCost && <AddCostForm caseId={Number(id)} onSuccess={handleCostAdded} />}
+          <Card>
+            <CardContent className="p-4 text-sm text-muted-foreground">
+              مجموع المخاطر المالية المتراكم على القضية:
+              <span className="font-bold text-status-error-foreground ms-2">
+                {formatCurrency(Number(caseData?.financialRisk || 0))}
+              </span>
+              <p className="text-xs text-muted-foreground mt-2">
+                إضافة تكلفة جديدة تُراكم القيمة على financialRisk الإجمالي للقضية.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      ),
+    },
+    {
+      key: "case-documents",
+      label: "مستندات القضية",
+      icon: FileText,
+      content: () => <DocumentsSection caseId={Number(id)} caseTitle={caseData?.title || ""} />,
     },
   ];
 
@@ -650,311 +889,5 @@ function DocumentsSection({ caseId, caseTitle }: { caseId: number; caseTitle: st
         ))
       )}
     </div>
-  );
-}
-
-function CaseCorrespondenceTab({ caseId }: { caseId: number }) {
-  const { toast } = useToast();
-  const { data, refetch } = useApiQuery<{ data: any[] }>(
-    ["legal-case-correspondence", String(caseId)],
-    `/legal/cases/${caseId}/correspondence`,
-    !!caseId,
-  );
-  const rows = data?.data ?? [];
-  const addMut = useApiMutation<any, { direction: string; subject: string; summary?: string }>(
-    `/legal/cases/${caseId}/correspondence`,
-    "POST",
-    [["legal-case-correspondence", String(caseId)]],
-    { successMessage: "تمت إضافة المراسلة", onSuccess: () => { refetch(); setSubject(""); setSummary(""); } },
-  );
-  const [direction, setDirection] = useState("outgoing");
-  const [subject, setSubject] = useState("");
-  const [summary, setSummary] = useState("");
-  // GET /legal/correspondence/:id — full detail fetched lazily when
-  // a row's "تفاصيل" button is clicked. Returns body, attachments, etc.
-  const [previewId, setPreviewId] = useState<number | null>(null);
-  const previewQ = useApiQuery<any>(
-    ["legal-correspondence-detail", String(previewId ?? 0)],
-    previewId ? `/legal/correspondence/${previewId}` : null,
-    { enabled: previewId !== null },
-  );
-
-  return (
-    <div className="space-y-3">
-      <Card className="border-dashed">
-        <CardContent className="p-4 space-y-2">
-          <h4 className="text-sm font-semibold">إضافة مراسلة</h4>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs">الاتجاه</Label>
-              <select className="w-full border rounded px-2 py-1 text-sm" value={direction} onChange={(e) => setDirection(e.target.value)}>
-                <option value="outgoing">صادر</option>
-                <option value="incoming">وارد</option>
-              </select>
-            </div>
-            <div>
-              <Label className="text-xs">الموضوع</Label>
-              <Input value={subject} onChange={(e) => setSubject(e.target.value)} className="text-sm" />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">ملخص</Label>
-            <Input value={summary} onChange={(e) => setSummary(e.target.value)} className="text-sm" />
-          </div>
-          <GuardedButton
-            perm="legal:create"
-            size="sm"
-            onClick={() => {
-              if (!subject.trim()) { toast({ variant: "destructive", title: "الموضوع مطلوب" }); return; }
-              addMut.mutate({ direction, subject: subject.trim(), summary: summary.trim() || undefined });
-            }}
-            disabled={addMut.isPending}
-            rateLimitAware
-          >
-            <Plus className="h-3 w-3 me-1" /> إضافة
-          </GuardedButton>
-        </CardContent>
-      </Card>
-      {rows.length === 0 ? (
-        <p className="text-center text-sm text-muted-foreground py-6">لا توجد مراسلات</p>
-      ) : (
-        rows.map((r: any) => (
-          <Card key={r.id}>
-            <CardContent className="p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">{r.direction === "outgoing" ? "صادر" : "وارد"}</Badge>
-                    <span className="text-sm font-medium">{r.subject}</span>
-                  </div>
-                  {r.summary && <p className="text-xs text-muted-foreground mt-1">{r.summary}</p>}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setPreviewId(r.id)}>
-                    تفاصيل
-                  </Button>
-                  <span className="text-xs text-muted-foreground">{formatDateAr(r.createdAt)}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))
-      )}
-
-      <AlertDialog open={previewId !== null} onOpenChange={(o) => !o && setPreviewId(null)}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle>تفاصيل المراسلة #{previewId}</AlertDialogTitle>
-          </AlertDialogHeader>
-          <div className="py-2 text-sm space-y-2">
-            {previewQ.isLoading ? (
-              <p className="text-muted-foreground">جاري التحميل...</p>
-            ) : previewQ.data ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{previewQ.data.direction === "outgoing" ? "صادر" : "وارد"}</Badge>
-                  <span className="font-medium">{previewQ.data.subject}</span>
-                </div>
-                {previewQ.data.body && (
-                  <div className="border rounded p-2 bg-muted/30 whitespace-pre-wrap text-xs">{previewQ.data.body}</div>
-                )}
-                {previewQ.data.summary && (
-                  <p className="text-xs text-muted-foreground">{previewQ.data.summary}</p>
-                )}
-                <p className="text-xs text-muted-foreground">{formatDateAr(previewQ.data.createdAt)}</p>
-              </>
-            ) : (
-              <p className="text-muted-foreground">لا توجد بيانات</p>
-            )}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPreviewId(null)}>إغلاق</AlertDialogCancel>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-
-function CaseJudgmentsTab({ caseId }: { caseId: number }) {
-  const { toast } = useToast();
-  const { data, refetch } = useApiQuery<{ data: any[] }>(
-    ["legal-case-judgments", String(caseId)],
-    `/legal/cases/${caseId}/judgments`,
-    !!caseId,
-  );
-  const rows = data?.data ?? [];
-  const addMut = useApiMutation<any, { rulingDate: string; outcome: string; amount?: number; notes?: string }>(
-    `/legal/cases/${caseId}/judgments`,
-    "POST",
-    [["legal-case-judgments", String(caseId)]],
-    { successMessage: "تم تسجيل الحكم", onSuccess: () => { refetch(); setOutcome(""); setAmount(""); } },
-  );
-  // PATCH /legal/cases/:caseId/judgments/:id — edit a recorded ruling
-  // (e.g. correct an amount or update the outcome wording).
-  const editMut = useApiMutation<any, { id: number; outcome?: string; amount?: number; notes?: string }>(
-    (b) => `/legal/cases/${caseId}/judgments/${b.id}`,
-    "PATCH",
-    [["legal-case-judgments", String(caseId)]],
-    { successMessage: "تم تعديل الحكم", onSuccess: () => refetch() },
-  );
-  const [rulingDate, setRulingDate] = useState("");
-  const [outcome, setOutcome] = useState("");
-  const [amount, setAmount] = useState<string>("");
-  const [editId, setEditId] = useState<number | null>(null);
-  const [editOutcome, setEditOutcome] = useState("");
-  const [editAmount, setEditAmount] = useState("");
-
-  return (
-    <div className="space-y-3">
-      <Card className="border-dashed">
-        <CardContent className="p-4 space-y-2">
-          <h4 className="text-sm font-semibold">تسجيل حكم</h4>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs">تاريخ الحكم</Label>
-              <Input type="date" value={rulingDate} onChange={(e) => setRulingDate(e.target.value)} className="text-sm" />
-            </div>
-            <div>
-              <Label className="text-xs">المبلغ (اختياري)</Label>
-              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-sm" dir="ltr" />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">النتيجة</Label>
-            <Input value={outcome} onChange={(e) => setOutcome(e.target.value)} className="text-sm" placeholder="مثال: حكم بالدفع 50,000 ريال" />
-          </div>
-          <GuardedButton
-            perm="legal:create"
-            size="sm"
-            onClick={() => {
-              if (!rulingDate || !outcome.trim()) { toast({ variant: "destructive", title: "تاريخ الحكم والنتيجة مطلوبان" }); return; }
-              const a = Number(amount);
-              addMut.mutate({ rulingDate, outcome: outcome.trim(), amount: Number.isFinite(a) && a > 0 ? a : undefined });
-            }}
-            disabled={addMut.isPending}
-            rateLimitAware
-          >
-            <Plus className="h-3 w-3 me-1" /> تسجيل
-          </GuardedButton>
-        </CardContent>
-      </Card>
-      {rows.length === 0 ? (
-        <p className="text-center text-sm text-muted-foreground py-6">لا توجد أحكام مسجلة</p>
-      ) : (
-        rows.map((r: any) => (
-          <Card key={r.id}>
-            <CardContent className="p-3">
-              {editId === r.id ? (
-                <div className="space-y-2">
-                  <div>
-                    <Label className="text-xs">النتيجة</Label>
-                    <Input value={editOutcome} onChange={(e) => setEditOutcome(e.target.value)} className="text-sm" />
-                  </div>
-                  <div>
-                    <Label className="text-xs">المبلغ</Label>
-                    <Input type="number" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="text-sm" dir="ltr" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <GuardedButton
-                      perm="legal:update"
-                      size="sm"
-                      disabled={editMut.isPending}
-                      onClick={() => {
-                        if (!editOutcome.trim()) { toast({ variant: "destructive", title: "النتيجة مطلوبة" }); return; }
-                        const a = Number(editAmount);
-                        editMut.mutate(
-                          { id: r.id, outcome: editOutcome.trim(), amount: Number.isFinite(a) && a > 0 ? a : undefined },
-                          { onSuccess: () => setEditId(null) },
-                        );
-                      }}
-                      rateLimitAware
-                    >
-                      حفظ
-                    </GuardedButton>
-                    <Button variant="ghost" size="sm" onClick={() => setEditId(null)}>إلغاء</Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">{r.outcome}</p>
-                    <p className="text-xs text-muted-foreground">{formatDateAr(r.rulingDate)}</p>
-                    {r.amount > 0 && <p className="text-xs font-mono text-status-error-foreground mt-1">{formatCurrency(Number(r.amount))}</p>}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <GuardedButton
-                      perm="legal:update"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0"
-                      onClick={() => {
-                        setEditId(r.id);
-                        setEditOutcome(r.outcome ?? "");
-                        setEditAmount(r.amount ? String(r.amount) : "");
-                      }}
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                    </GuardedButton>
-                    <Scale className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))
-      )}
-    </div>
-  );
-}
-
-function CaseCostsTab({ caseId }: { caseId: number }) {
-  const { toast } = useToast();
-  const addMut = useApiMutation<any, { costType: string; amount: number; description?: string; incurredAt?: string }>(
-    `/legal/cases/${caseId}/costs`,
-    "POST",
-    [["legal-case", String(caseId)]],
-    { successMessage: "تم تسجيل التكلفة", onSuccess: () => { setCostType(""); setAmount(""); setDescription(""); } },
-  );
-  const [costType, setCostType] = useState("");
-  const [amount, setAmount] = useState<string>("");
-  const [description, setDescription] = useState("");
-
-  return (
-    <Card className="border-dashed">
-      <CardContent className="p-4 space-y-2">
-        <h4 className="text-sm font-semibold">تسجيل تكلفة على القضية</h4>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <Label className="text-xs">نوع التكلفة</Label>
-            <Input value={costType} onChange={(e) => setCostType(e.target.value)} className="text-sm" placeholder="رسوم محامي / محكمة / ..." />
-          </div>
-          <div>
-            <Label className="text-xs">المبلغ</Label>
-            <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="text-sm" dir="ltr" />
-          </div>
-        </div>
-        <div>
-          <Label className="text-xs">الوصف</Label>
-          <Input value={description} onChange={(e) => setDescription(e.target.value)} className="text-sm" />
-        </div>
-        <GuardedButton
-          perm="legal:create"
-          size="sm"
-          onClick={() => {
-            const a = Number(amount);
-            if (!costType.trim() || !Number.isFinite(a) || a <= 0) {
-              toast({ variant: "destructive", title: "نوع التكلفة والمبلغ مطلوبان" });
-              return;
-            }
-            addMut.mutate({ costType: costType.trim(), amount: a, description: description.trim() || undefined });
-          }}
-          disabled={addMut.isPending}
-          rateLimitAware
-        >
-          <Plus className="h-3 w-3 me-1" /> تسجيل تكلفة
-        </GuardedButton>
-      </CardContent>
-    </Card>
   );
 }

@@ -117,6 +117,23 @@ const EnvSchema = z.object({
   // -- events --------------------------------------------------------------
   PERSIST_ALL_EVENTS: boolEnv(false),
 
+  // -- fleet telematics (#1354) -------------------------------------------
+  // Production deployments reject http(s://) CMSV6 base URLs by default.
+  // Lab/dev environments can opt out via this flag; the SSRF guard is
+  // unaffected (private IPs are still rejected regardless of scheme).
+  FLEET_TELEMATICS_ALLOW_HTTP: boolEnv(false),
+  // Default TTL (seconds) for the signed proxy token issued at video
+  // session open. Clamped 15..300 below. The client must redeem the
+  // token within this window; expired tokens return 401 from the proxy.
+  FLEET_TELEMATICS_PROXY_TTL_SEC: intEnv(60),
+  // Per-IP rate limit on the anonymous webhook endpoint (requests/minute).
+  // Default 3000/min comfortably covers 100+ vehicles each pushing ~20
+  // events/min with headroom for retries — vendors that push more should
+  // be tested then this raised explicitly via env. Operators can lower
+  // it for hostile-traffic protection. Clamped 100..60000 to stop a
+  // typo from disabling the cap entirely.
+  FLEET_TELEMATICS_WEBHOOK_RATE_LIMIT: intEnv(3000),
+
   // -- object storage ------------------------------------------------------
   PUBLIC_OBJECT_SEARCH_PATHS: optStr(),
   PRIVATE_OBJECT_DIR: optStr(),
@@ -149,6 +166,12 @@ const EnvSchema = z.object({
   WHATSAPP_PHONE_ID: optStr(),
   WHATSAPP_APP_SECRET: optStr(),
   PBX_WEBHOOK_SECRET: optStr(),
+
+  // -- microsoft 365 (graph) ----------------------------------------------
+  // Azure AD app registration credentials for mailbox OAuth.
+  MICROSOFT365_CLIENT_ID: optStr(),
+  MICROSOFT365_CLIENT_SECRET: optStr(),
+  MICROSOFT365_REDIRECT_URI: optStr(),
 
   // -- zatca / e-invoice ---------------------------------------------------
   EINVOICE_DEFAULT_PROVIDER: optStr(),
@@ -240,6 +263,16 @@ export interface AppConfig {
   readonly seedDemoData: boolean;
   readonly persistAllEvents: boolean;
 
+  /** Fleet telematics — #1354 production hardening flags. */
+  readonly fleetTelematics: {
+    /** When false (default in production), reject `http://` CMSV6 URLs. */
+    readonly allowHttp: boolean;
+    /** Video proxy token TTL — clamped 15..300 seconds. */
+    readonly proxyTtlSec: number;
+    /** Per-IP webhook rate limit (req/min). Clamped 100..60000. */
+    readonly webhookRateLimit: number;
+  };
+
   readonly admin: {
     readonly email: string | undefined;
     readonly password: string | undefined;
@@ -295,6 +328,13 @@ export interface AppConfig {
 
   readonly pbx: {
     readonly webhookSecret: string | undefined;
+  };
+
+  readonly microsoft365: {
+    readonly clientId: string | undefined;
+    readonly clientSecret: string | undefined;
+    readonly redirectUri: string | undefined;
+    readonly configured: boolean;
   };
 
   readonly zatca: {
@@ -396,6 +436,11 @@ function buildConfig(env: RawEnv): AppConfig {
 
     seedDemoData: env.SEED_DEMO_DATA,
     persistAllEvents: env.PERSIST_ALL_EVENTS,
+    fleetTelematics: {
+      allowHttp: env.FLEET_TELEMATICS_ALLOW_HTTP,
+      proxyTtlSec: Math.min(300, Math.max(15, env.FLEET_TELEMATICS_PROXY_TTL_SEC)),
+      webhookRateLimit: Math.min(60000, Math.max(100, env.FLEET_TELEMATICS_WEBHOOK_RATE_LIMIT)),
+    },
 
     admin: {
       email: env.ADMIN_EMAIL,
@@ -447,6 +492,13 @@ function buildConfig(env: RawEnv): AppConfig {
 
     pbx: {
       webhookSecret: env.PBX_WEBHOOK_SECRET,
+    },
+
+    microsoft365: {
+      clientId: env.MICROSOFT365_CLIENT_ID,
+      clientSecret: env.MICROSOFT365_CLIENT_SECRET,
+      redirectUri: env.MICROSOFT365_REDIRECT_URI,
+      configured: Boolean(env.MICROSOFT365_CLIENT_ID && env.MICROSOFT365_CLIENT_SECRET),
     },
 
     zatca: {

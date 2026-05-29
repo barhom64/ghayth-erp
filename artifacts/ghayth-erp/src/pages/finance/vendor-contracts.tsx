@@ -27,8 +27,9 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { Handshake, Plus, AlertTriangle, CalendarCheck, CalendarX } from "lucide-react";
+import { Handshake, Plus, AlertTriangle, CalendarCheck, CalendarX, FileText, Users, Pencil, Trash2 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 interface VendorContract {
   id: number;
@@ -71,6 +72,8 @@ export default function VendorContractsPage() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<VendorContract | null>(null);
+  const [deleting, setDeleting] = useState<VendorContract | null>(null);
 
   const params = new URLSearchParams();
   if (statusFilter) params.set("status", statusFilter);
@@ -94,6 +97,15 @@ export default function VendorContractsPage() {
   const detail = detailResp?.data ?? detailResp;
 
   const createMut = useApiMutation("/finance/contracts", "POST", [["vendor-contracts"]]);
+  const updateMut = useApiMutation<unknown, { id: number; patch: Partial<VendorContract> }>(
+    (body) => `/finance/contracts/${body.id}`,
+    "PATCH",
+    [["vendor-contracts"]],
+    {
+      successMessage: "تم تعديل العقد",
+      onSuccess: () => setEditing(null),
+    },
+  );
 
   // Inline edit + delete on rows. Backend's PATCH /finance/contracts/:id
   // accepts the typical column set; DELETE soft-deletes.
@@ -267,6 +279,17 @@ export default function VendorContractsPage() {
         { label: "العقود" },
       ]}
       actions={
+        <>
+          <Link href="/finance/vendor-contracts-tracker">
+            <Button variant="outline" size="sm">
+              <FileText className="h-4 w-4 me-2" />متابعة العقود
+            </Button>
+          </Link>
+          <Link href="/finance/vendors">
+            <Button variant="outline" size="sm">
+              <Users className="h-4 w-4 me-2" />الموردون
+            </Button>
+          </Link>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <GuardedButton perm="finance:create">
@@ -334,6 +357,7 @@ export default function VendorContractsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </>
       }
     >
       <FinanceTabsNav />

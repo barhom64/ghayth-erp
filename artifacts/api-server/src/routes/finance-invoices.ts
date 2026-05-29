@@ -14,6 +14,7 @@ import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { checkAccess } from "../lib/rbac/authzEngine.js";
 import type { JournalEntryLine } from "../lib/businessHelpers.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
@@ -617,6 +618,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       entityKey: "sales_invoice",
       entityTable: "invoices",
       actorId: scope.userId,
+      expectedTiming: "on_draft",
     });
     const ref = issued.number;
 
@@ -947,7 +949,13 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       // operator's pin always wins. Lines with no rule match fall
       // through to the generic invoice_revenue account (legacy
       // backwards-compat).
-      const { resolveLineAllocation, writeAllocationResult } = await import("../lib/accountingAllocation.js");
+      const {
+        resolveLineAllocation,
+        writeAllocationResult,
+        validateAllocationCompleteness,
+        getEnforceLineAllocation,
+        logAllocationOverride,
+      } = await import("../lib/accountingAllocation.js");
       const lineResolutions = await Promise.all(
         dimLines.rows.map((ln) =>
           resolveLineAllocation({
@@ -978,6 +986,53 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         )
       );
 
+      // ── Enforce gate (migration 223 / finance.enforce_line_allocation).
+      // When the company has enforce_line_allocation=ON, refuse to post a
+      // JE that contains any line the resolver flagged as 'unmapped' or
+      // 'failed'. A user holding finance.allocation.override may still
+      // approve by supplying req.body.overrideReason; the bypass is
+      // recorded on allocation_override_log for audit. With the flag
+      // OFF (default) the code falls through to the legacy fallback-to-
+      // generic-account behavior below, exactly as before — opt-in.
+      const enforce = await getEnforceLineAllocation({ companyId: scope.companyId, branchId: scope.branchId });
+      if (enforce) {
+        const { ok, blockers } = validateAllocationCompleteness(lineResolutions);
+        if (!ok) {
+          const overrideReason = String(req.body?.overrideReason ?? "").trim();
+          if (overrideReason.length < 10) {
+            throw new ValidationError(
+              "لا يمكن اعتماد فاتورة تحتوي على بنود بدون تخصيص محاسبي",
+              {
+                field: "lines",
+                fix: "حدد الحساب ومركز التكلفة لكل بند، أو زوّد سببًا مكتوبًا (overrideReason ≥ 10 حرف) إن كان لديك صلاحية finance.allocation.override.",
+                meta: { blockers, unmappedLineCount: lineResolutions.filter((r) => r.status === "unmapped" || r.status === "failed").length },
+              } as any,
+            );
+          }
+          const overrideAllowed = (await checkAccess(scope, {
+            feature: "finance.allocation.override",
+            action: "create",
+          })).allowed;
+          if (!overrideAllowed) {
+            throw new ForbiddenError(
+              "تجاوز تخصيص البنود يحتاج صلاحية finance.allocation.override",
+              { fix: "اطلب من المدير المالي اعتماد هذه الفاتورة، أو خصّص البنود قبل الاعتماد.", meta: { blockers } } as any,
+            );
+          }
+          await logAllocationOverride({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            actorAssignmentId: scope.activeAssignmentId ?? null,
+            actorUserId: scope.userId,
+            documentType: "invoice",
+            documentId: id,
+            sourceTable: "invoice_lines",
+            blockers,
+            overrideReason,
+          });
+        }
+      }
+
       const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
       const revenueLines: JournalEntryLine[] = [];
 
@@ -997,6 +1052,10 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           driverId: number | null;
           contractId: number | null;
           productId: number | null;
+          unitId: number | null;
+          assetId: number | null;
+          umrahSeasonId: number | null;
+          umrahAgentId: number | null;
         }>();
         let postedNet = 0;
         for (let i = 0; i < dimLines.rows.length; i++) {
@@ -1022,6 +1081,10 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
             dims.driverId ?? "",
             dims.contractId ?? "",
             dims.productId ?? "",
+            dims.unitId ?? "",
+            dims.assetId ?? "",
+            dims.umrahSeasonId ?? "",
+            dims.umrahAgentId ?? "",
           ].join("|");
           const amt = roundTo2(Number(ln.lineTotal));
           postedNet += amt;
@@ -1041,6 +1104,10 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
               driverId: dims.driverId,
               contractId: dims.contractId,
               productId: dims.productId,
+              unitId: dims.unitId,
+              assetId: dims.assetId,
+              umrahSeasonId: dims.umrahSeasonId,
+              umrahAgentId: dims.umrahAgentId,
             });
           }
         }
@@ -1051,7 +1118,11 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         // balances against the AR debit.
         const diff = roundTo2(totalNet - postedNet);
         if (Math.abs(diff) >= 0.005) {
-          const fallbackKey = `${invRevenueCode}|||||||||`;
+          // Bucket key has 14 dimension slots after `acct` — keep them
+          // all empty (13 pipes for 14 empty slots after acct) for the
+          // fallback bucket so it doesn't collide with any resolved
+          // bucket that happens to use invRevenueCode.
+          const fallbackKey = `${invRevenueCode}|||||||||||||`;
           const prev = buckets.get(fallbackKey);
           if (prev) {
             prev.amount = roundTo2(prev.amount + diff);
@@ -1061,6 +1132,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
               costCenter: null, activityType: null, projectId: null,
               vehicleId: null, propertyId: null, employeeId: null,
               driverId: null, contractId: null, productId: null,
+              unitId: null, assetId: null,
+              umrahSeasonId: null, umrahAgentId: null,
             });
           }
         }
@@ -1078,6 +1151,10 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
             driverId: b.driverId ?? undefined,
             contractId: b.contractId ?? undefined,
             productId: b.productId ?? undefined,
+            unitId: b.unitId ?? undefined,
+            assetId: b.assetId ?? undefined,
+            umrahSeasonId: b.umrahSeasonId ?? undefined,
+            umrahAgentId: b.umrahAgentId ?? undefined,
             clientId: invoice.clientId as number | undefined,
           } as any);
         }
@@ -1649,6 +1726,11 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
   }
 });
 
+// Audit F5 — DOC. Defensive endpoint. Posting happens inside the
+// approve flow (PATCH /invoices/:id/approve); this explicit /post
+// variant is kept because `cogsPostingPreviewSmoke.test.ts` and
+// `financeGoldenPath.test.ts:27` validate the posting flow via this
+// path — deleting would lose the behavioural smoke contract.
 invoicesRouter.post("/invoices/:id/post", authorize({ feature: "finance.invoices", action: "approve" }), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -2488,11 +2570,27 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
         : creditAmount;
       vat = roundTo2(creditAmount - net);
 
+      // G12 fix (Issue #1141 coverage report 2026-05-27 §3 G12) —
+      // issue a real credit_memo ref through the numbering center
+      // (scheme `finance.credit_memo`, seeded by migration 213). The
+      // previous code created the row with ref = NULL. issueNumber's
+      // inner withTransaction joins this outer one via SAVEPOINT.
+      const issuedMemo = await issueNumber({
+        companyId: scope.companyId,
+        branchId: invoice.branchId,
+        moduleKey: "finance",
+        entityKey: "credit_memo",
+        entityTable: "credit_memos",
+        actorId: scope.userId,
+        metadata: { sourceInvoiceId: id },
+        expectedTiming: "on_draft",
+      });
+
       try {
         const ins = await client.query(
-          `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-          [scope.companyId, invoice.branchId, id, invoice.clientId, creditAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+          `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy",ref)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+          [scope.companyId, invoice.branchId, id, invoice.clientId, creditAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId, issuedMemo.number]
         );
         memoId = ins.rows[0].id;
       } catch (e: any) {
@@ -2512,19 +2610,24 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
                "memoDate" DATE NOT NULL,
                "journalId" INTEGER,
                "createdBy" INTEGER,
+               ref TEXT,
                "createdAt" TIMESTAMP DEFAULT NOW()
              )`
           );
           const ins2 = await client.query(
-            `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-            [scope.companyId, invoice.branchId, id, invoice.clientId, creditAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+            `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy",ref)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+            [scope.companyId, invoice.branchId, id, invoice.clientId, creditAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId, issuedMemo.number]
           );
           memoId = ins2.rows[0].id;
         } else {
           throw e;
         }
       }
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [memoId, issuedMemo.assignmentId]
+      );
 
       // Reduce invoice effective total via paidAmount adjustment (treat memo as
       // virtual payment so aging / collection logic treats it as settled).
@@ -2829,11 +2932,24 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
     // duplicate memo row (no idempotency on debit_memos INSERT) AND
     // double-count the counters.
     await withTransaction(async (client) => {
+      // G13 fix (Issue #1141 coverage report 2026-05-27 §3 G13) —
+      // issue a real debit_memo ref through the numbering center
+      // (scheme `finance.debit_memo`, seeded by migration 213).
+      const issuedMemo = await issueNumber({
+        companyId: scope.companyId,
+        branchId: (invoice.branchId as number | null) ?? null,
+        moduleKey: "finance",
+        entityKey: "debit_memo",
+        entityTable: "debit_memos",
+        actorId: scope.userId,
+        metadata: { sourceInvoiceId: id },
+        expectedTiming: "on_draft",
+      });
       try {
         const ins = await client.query(
-          `INSERT INTO debit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-          [scope.companyId, invoice.branchId, id, invoice.clientId, chargeAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+          `INSERT INTO debit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy",ref)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+          [scope.companyId, invoice.branchId, id, invoice.clientId, chargeAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId, issuedMemo.number]
         );
         memoId = ins.rows[0].id;
       } catch (e: any) {
@@ -2852,19 +2968,24 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
                "memoDate" DATE NOT NULL,
                "journalId" INTEGER,
                "createdBy" INTEGER,
+               ref TEXT,
                "createdAt" TIMESTAMP DEFAULT NOW()
              )`
           );
           const ins2 = await client.query(
-            `INSERT INTO debit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-            [scope.companyId, invoice.branchId, id, invoice.clientId, chargeAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+            `INSERT INTO debit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy",ref)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+            [scope.companyId, invoice.branchId, id, invoice.clientId, chargeAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId, issuedMemo.number]
           );
           memoId = ins2.rows[0].id;
         } else {
           throw e;
         }
       }
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [memoId, issuedMemo.assignmentId]
+      );
 
       // Increase invoice subtotal + VAT + total to reflect the additional
       // charge. Missing subtotal here broke the `subtotal = total - vatAmount`
@@ -3176,7 +3297,26 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     const amt = roundTo2(Number(amount));
 
     let advanceId: number | null = null;
-    const advRef = reference || `ADV-${Date.now()}`;
+    // #1141 cleanup — customer_advance ref through the numbering center
+    // (scheme `finance.customer_advance`, seeded by migration 231).
+    // The `reference` query-param is still honoured for legacy imports.
+    let advRef: string;
+    let issuedAdv: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    if (reference) {
+      advRef = reference;
+    } else {
+      issuedAdv = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "finance",
+        entityKey: "customer_advance",
+        entityTable: "customer_advances",
+        actorId: scope.userId,
+        metadata: { clientId },
+        expectedTiming: "on_draft",
+      });
+      advRef = issuedAdv.number;
+    }
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -3214,6 +3354,12 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
         } else {
           throw e;
         }
+      }
+      if (issuedAdv && advanceId) {
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [advanceId, issuedAdv.assignmentId]
+        );
       }
     });
 

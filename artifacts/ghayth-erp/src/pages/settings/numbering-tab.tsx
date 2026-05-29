@@ -703,7 +703,7 @@ function SchemeEditor({
               </div>
               <div>
                 <Label className="text-xs">توقيت إصدار الرقم</Label>
-                <Select value={scheme.issueTiming} onValueChange={() => { /* fixed by scheme creator */ }}>
+                <Select value={scheme.issueTiming} disabled onValueChange={() => { /* enforced by route — see note */ }}>
                   <SelectTrigger><SelectValue placeholder={TIMING_LABELS[scheme.issueTiming]} /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(TIMING_LABELS).map(([k, v]) => (
@@ -711,6 +711,9 @@ function SchemeEditor({
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+                  هذا التوقيت مربوط بكود المسار — تغييره بدون تعديل المسار سيمنع إصدار الأرقام الجديدة (خطأ بالعربية يبيّن السبب).
+                </p>
               </div>
               <div>
                 <Label className="text-xs">آخر تعديل</Label>
@@ -950,6 +953,59 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
     () => Array.from(new Set(schemes.map((s) => s.moduleKey))).sort(),
     [schemes],
   );
+  const { toast } = useToast();
+  // Override + void are admin-only repair operations — wrap each in an
+  // inline prompt-and-fire helper instead of building a dialog. Both
+  // POST to /numbering/assignments/:id/{override,void} with a {reason}
+  // body; void also takes {newNumber} when overriding. Backend enforces
+  // settings.numbering.override authorize, so the prompt is mostly UX
+  // (operator confirmation + reason capture).
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const overrideAssignment = async (a: Assignment) => {
+    const newNumber = window.prompt("الرقم الجديد للمعاملة", a.number);
+    if (!newNumber || !newNumber.trim()) return;
+    const reason = window.prompt("سبب التعديل (3 أحرف على الأقل):", "");
+    if (!reason || reason.trim().length < 3) {
+      toast({ variant: "destructive", title: "سبب التعديل مطلوب" });
+      return;
+    }
+    try {
+      setBusyId(a.id);
+      await apiFetch(`/numbering/assignments/${a.id}/override`, {
+        method: "POST",
+        body: JSON.stringify({ newNumber: newNumber.trim(), reason: reason.trim() }),
+      });
+      toast({ title: "تم تعديل الرقم" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التعديل", description: err.message });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const voidAssignment = async (a: Assignment) => {
+    const reason = window.prompt(`سبب إلغاء الرقم ${a.number} (3 أحرف على الأقل):`, "");
+    if (!reason || reason.trim().length < 3) {
+      toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
+      return;
+    }
+    if (!window.confirm(`سيتم إلغاء الرقم ${a.number} نهائياً. متابعة؟`)) return;
+    try {
+      setBusyId(a.id);
+      await apiFetch(`/numbering/assignments/${a.id}/void`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      toast({ title: "تم إلغاء الرقم" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر الإلغاء", description: err.message });
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   // POST /numbering/assignments/:id/override — manually rewrite the
   // issued number (e.g. correct a typo before the document is delivered).

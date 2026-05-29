@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable } from "@workspace/ui-core";
-import { BellOff } from "lucide-react";
+import { BellOff, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -15,9 +16,11 @@ export function AlertFatigueTab() {
   const { data: dcData, isLoading, isError } = useApiQuery<any>(["alert-daily-count"], "/bi/alert-fatigue/daily-count");
   const { data: settingsData } = useApiQuery<any>(["alert-fatigue-settings"], "/bi/alert-fatigue/settings");
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [muteType, setMuteType] = useState("");
   const [muteHours, setMuteHours] = useState("24");
   const [loading, setLoading] = useState(false);
+  const [unmuting, setUnmuting] = useState<string | null>(null);
 
   const handleMute = async () => {
     if (!muteType.trim()) { toast({ title: "أدخل نوع التنبيه", variant: "destructive" }); return; }
@@ -26,11 +29,24 @@ export function AlertFatigueTab() {
       const muteUntil = new Date(Date.now() + Number(muteHours) * 3600000).toISOString();
       await apiFetch("/bi/alert-fatigue/mute", { method: "POST", body: JSON.stringify({ alertType: muteType, muteUntil }) });
       toast({ title: "تم كتم التنبيهات", description: `سيتم كتم "${muteType}" لمدة ${muteHours} ساعة` });
+      qc.invalidateQueries({ queryKey: ["alert-fatigue-settings"] });
       setMuteType("");
     } catch {
       toast({ title: "خطأ", variant: "destructive" });
     }
     setLoading(false);
+  };
+
+  const handleUnmute = async (alertType: string) => {
+    setUnmuting(alertType);
+    try {
+      await apiFetch(`/bi/alert-fatigue/mute/${encodeURIComponent(alertType)}`, { method: "DELETE" });
+      toast({ title: "تم إلغاء الكتم", description: `سيعود "${alertType}" للتنبيه فوراً` });
+      qc.invalidateQueries({ queryKey: ["alert-fatigue-settings"] });
+    } catch {
+      toast({ title: "تعذر إلغاء الكتم", variant: "destructive" });
+    }
+    setUnmuting(null);
   };
 
   const dc = dcData || {};

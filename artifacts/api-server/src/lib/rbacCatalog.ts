@@ -186,6 +186,73 @@ export const PERMISSIONS = [
   "print:fleet_trips:create",
   "print:umrah_invoice:create",
   "print:umrah_statement:create",
+  "print:customer_statement:create",
+  "print:vendor_statement:create",
+  // Per-entity perms for the entity-registry sync (issue #1286 follow-up).
+  // Every entity that has a BESPOKE_PRESET now also has its print profile
+  // declared in entityRegistry.ts → getEntityPrintProfile returns a real
+  // per-entity permission instead of falling through to the generic
+  // print:create gate. These entries make `isKnownPermission` accept the
+  // perm so role bindings can grant/revoke per document type.
+  "print:attendance:create",
+  "print:budget:create",
+  "print:building:create",
+  "print:chart_of_account:create",
+  "print:client:create",
+  "print:crm_opportunity:create",
+  "print:custody:create",
+  "print:evaluation_cycle:create",
+  "print:excuse_request:create",
+  "print:exit_request:create",
+  "print:expense_claim:create",
+  "print:fleet_driver:create",
+  "print:fleet_maintenance:create",
+  "print:fleet_trip:create",
+  "print:fuel_log:create",
+  "print:governance_policy:create",
+  "print:insurance_policy:create",
+  "print:inventory_count:create",
+  "print:legal_case:create",
+  "print:legal_correspondence:create",
+  "print:legal_judgment:create",
+  "print:legal_session:create",
+  "print:overtime_request:create",
+  "print:project:create",
+  "print:property_unit:create",
+  "print:recurring_journal:create",
+  "print:salary_advance:create",
+  "print:shift:create",
+  "print:store_order:create",
+  "print:support_ticket:create",
+  "print:traffic_violation:create",
+  "print:training_program:create",
+  "print:transfer:create",
+  "print:umrah_agent:create",
+  "print:umrah_agent_invoice:create",
+  "print:umrah_group:create",
+  "print:umrah_penalty:create",
+  "print:umrah_pilgrim:create",
+  "print:umrah_season:create",
+  "print:umrah_sub_agent:create",
+  "print:vehicle:create",
+  "print:vendor:create",
+  "print:warehouse_product:create",
+  // Granular print platform actions (issue #1286). Each gates a distinct
+  // capability that today is bundled under `print:create` / `print_jobs:read`.
+  // Wiring uses requireAnyPermission so existing roles keep working —
+  // these are additive, not replacements. Splitting them lets owners build
+  // narrower roles (e.g. a "finance reader" who can preview templates but
+  // can't prune storage, or an "audit user" who can verify a doc by its
+  // ID but can't see the rest of the print log). Verbs (last segment)
+  // follow rbacConsistency's allowlist — preview becomes :create because
+  // it produces an ephemeral document; archive prune is :delete because
+  // it permanently removes the blob; verify-admin and diagnostics are
+  // :read because they're lookup-only.
+  "print:preview:create",
+  "print:download",
+  "print:archive:delete",
+  "print:verify:read",
+  "print:diagnostics:read",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
