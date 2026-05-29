@@ -1374,7 +1374,11 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
 
     const advanceLines = [
       { accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined },
-      { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
+      // Cash CR carries employeeId so per-employee advance-receivable
+      // aging stays in sync with the cashflow drilldown (without this,
+      // the DR ties to the employee but the matching cash outflow is
+      // unattributed in per-employee treasury reports).
+      { accountCode: sourceAcct, debit: 0, credit: Number(amount), employeeId: employeeId ? Number(employeeId) : undefined },
     ];
     const advanceDescription = description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`;
 

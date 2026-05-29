@@ -984,8 +984,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
         sourceId: asset.id as number,
         sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
         lines: [
-          { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}` },
-          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}` },
+          { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}`, assetId: asset.id as number },
+          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}`, assetId: asset.id as number },
         ],
       });
       journalId = posted.journalId;
@@ -1085,8 +1085,8 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
           sourceId: asset.id as number,
           sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
           lines: [
-            { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0 },
-            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount },
+            { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, assetId: asset.id as number },
+            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, assetId: asset.id as number },
           ],
         });
 
