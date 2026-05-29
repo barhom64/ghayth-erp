@@ -31,6 +31,11 @@ class WarehouseEngineImpl implements DomainEngine {
       totalValue: number;
       productName?: string;
       ref?: string;
+      /** Product FK on the JE line so per-product COGS / variance /
+       *  inventory-on-hand drilldowns work from the GL. The route
+       *  already has productId in scope (warehouse.ts:279 used to
+       *  drop it on the floor); migration 201 added the column. */
+      productId?: number;
     }
   ) {
     const productLabel = movement.productName ? ` — ${movement.productName}` : "";
@@ -115,8 +120,8 @@ class WarehouseEngineImpl implements DomainEngine {
       guardTable: "warehouse_movements",
       guardId: movement.id,
       lines: [
-        { accountCode: drCode, debit: movement.totalValue, credit: 0 },
-        { accountCode: crCode, debit: 0, credit: movement.totalValue },
+        { accountCode: drCode, debit: movement.totalValue, credit: 0, productId: movement.productId },
+        { accountCode: crCode, debit: 0, credit: movement.totalValue, productId: movement.productId },
       ],
     });
   }
