@@ -73,11 +73,10 @@ export default function FleetTelematicsScorecard() {
   const qs = new URLSearchParams();
   if (from) qs.set("from", new Date(from).toISOString());
   if (to) qs.set("to", new Date(to).toISOString());
-  const path = `/fleet/telematics/drivers/scorecard-leaderboard${qs.toString() ? `?${qs.toString()}` : ""}`;
 
   const { data, isLoading, isError, refetch } = useApiQuery<LeaderboardResponse>(
     ["fleet-telematics-scorecard-leaderboard", from, to],
-    path,
+    `/fleet/telematics/drivers/scorecard-leaderboard?${qs.toString()}`,
   );
   const rows = asList(data) as LeaderboardRow[];
   const meta = data?.meta;
