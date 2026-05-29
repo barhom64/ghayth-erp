@@ -473,6 +473,16 @@ router.post(
     try {
       const scope = req.scope!;
       const body = zodParse(upsertIntegrationSchema.safeParse(req.body));
+      // Wialon + Teltonika are stub enum values — buildAdapter only knows
+      // CMSV6, so picking them would silently fall back to "no adapter"
+      // and every sync/test endpoint would 4xx with a confusing message.
+      // Reject at the integration-create boundary so the operator sees
+      // an immediate, actionable error instead of a downstream mystery.
+      if (body.provider === "wialon" || body.provider === "teltonika") {
+        throw new ValidationError(
+          `مزود ${body.provider} غير مدعوم حاليًا — استخدم CMSV6 أو "يدوي"`,
+        );
+      }
       const err = await validateCmsv6BaseUrl(body.baseUrl);
       if (err) throw new ValidationError(err);
 
@@ -545,6 +555,15 @@ router.patch(
 
       const existing = await loadIntegration(scope.companyId, id);
       if (!existing) throw new NotFoundError("التكامل غير موجود");
+
+      // See POST guard above — keep the unsupported-provider rejection
+      // on the PATCH path too so an existing integration can't be
+      // sidestepped into a stub provider.
+      if (body.provider === "wialon" || body.provider === "teltonika") {
+        throw new ValidationError(
+          `مزود ${body.provider} غير مدعوم حاليًا — استخدم CMSV6 أو "يدوي"`,
+        );
+      }
 
       if (body.baseUrl) {
         const err = await validateCmsv6BaseUrl(body.baseUrl);
