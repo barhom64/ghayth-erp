@@ -1781,6 +1781,22 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     const id = parseId(req.params.id, "id");
     const { amount, method = "bank_transfer" } = zodParse(createPaymentSchema.safeParse(req.body));
 
+    // FIN-AUD-07 — payment recording into a closed period would post
+    // DR Cash / CR AR onto the GL inside that period, moving balances
+    // after close. The downstream postJournalEntry would reject it,
+    // but the invoice's paidAmount UPDATE runs in a separate transaction
+    // BEFORE the GL post — so a closed-period payment used to leave
+    // invoices.paidAmount bumped while the GL had no matching entry
+    // (silent AR overstatement). Gate the whole flow up front.
+    const paymentDate = todayISO();
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, paymentDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسجيل دفعة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "date", meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
     const { financialEngine } = await import("../lib/engines/index.js");
     const [cashAccountCode, arAccountCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),

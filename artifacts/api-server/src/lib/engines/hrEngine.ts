@@ -103,12 +103,17 @@ class HREngineImpl implements DomainEngine {
 
   async postLoanDisbursementGL(
     ctx: HRGLContext,
-    loan: { id: number; employeeId: number; amount: number }
+    loan: { id: number; employeeId: number; amount: number; departmentId?: number | null }
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_receivable", "debit", "1400"),
       financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_disbursement", "credit", "1100"),
     ]);
+
+    // departmentId carries the employee's home cost-centre so per-dept
+    // labour-cost roll-ups capture loan accruals alongside payroll. The
+    // caller (hr-loans.ts:approve) pulls it from employee_assignments.
+    const departmentId = loan.departmentId ?? undefined;
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -123,8 +128,8 @@ class HREngineImpl implements DomainEngine {
       guardTable: "hr_loans",
       guardId: loan.id,
       lines: [
-        { accountCode: debitCode, debit: loan.amount, credit: 0, description: "ذمم سلف موظفين", employeeId: loan.employeeId },
-        { accountCode: creditCode, debit: 0, credit: loan.amount, description: "صرف سلفة", employeeId: loan.employeeId },
+        { accountCode: debitCode, debit: loan.amount, credit: 0, description: "ذمم سلف موظفين", employeeId: loan.employeeId, departmentId },
+        { accountCode: creditCode, debit: 0, credit: loan.amount, description: "صرف سلفة", employeeId: loan.employeeId, departmentId },
       ],
     });
   }
@@ -137,6 +142,7 @@ class HREngineImpl implements DomainEngine {
       eosAmount: number;
       remainingLeaveAmount: number;
       totalSettlement: number;
+      departmentId?: number | null;
     }
   ) {
     const [eosExpense, leaveExpense, settlementPayable] = await Promise.all([
@@ -146,6 +152,11 @@ class HREngineImpl implements DomainEngine {
     ]);
 
     const lines = [];
+    // departmentId — employee's home department lets per-dept labour
+    // cost roll-ups capture EOS / leave settlement expense in the same
+    // bucket as monthly payroll. Caller (hr-exit.ts:complete) reads
+    // from employee_assignments at exit time.
+    const departmentId = exit.departmentId ?? undefined;
 
     if (exit.eosAmount > 0) {
       lines.push({
@@ -154,6 +165,7 @@ class HREngineImpl implements DomainEngine {
         credit: 0,
         description: `مكافأة نهاية خدمة — موظف #${exit.employeeId}`,
         employeeId: exit.employeeId,
+        departmentId,
       });
     }
 
@@ -164,6 +176,7 @@ class HREngineImpl implements DomainEngine {
         credit: 0,
         description: `بدل إجازات — موظف #${exit.employeeId}`,
         employeeId: exit.employeeId,
+        departmentId,
       });
     }
 
@@ -173,6 +186,7 @@ class HREngineImpl implements DomainEngine {
       credit: exit.totalSettlement,
       description: `تسوية نهاية خدمة — موظف #${exit.employeeId}`,
       employeeId: exit.employeeId,
+      departmentId,
     });
 
     return financialEngine.postJournalEntry({

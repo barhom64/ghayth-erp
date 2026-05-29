@@ -2140,6 +2140,24 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
 
     const isMatched = poVariancePct <= 5 && prVariancePct <= 5 && grVariancePct <= 5;
 
+    // FIN-AUD-08 — 3-way match posts DR GRNI / CR AP when matched, so
+    // matching an invoice into a closed period would land AP recognition
+    // inside that period. Other AP entry points (GRN receipt, vendor
+    // payment, payment run) all gate their post on checkFinancialPeriodOpen;
+    // the match handler was the lone gap. Reject the match up front so the
+    // PO status doesn't get transitioned to invoice_matched without the GL
+    // entry. Note: we always check, even for mismatches, because rejecting
+    // the match in a closed period preserves the operator's chance to fix
+    // the period and retry once the gate is clean.
+    const matchDateForPeriod = (invoicedDate as string | undefined) ?? todayISO();
+    const matchPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, matchDateForPeriod);
+    if (!matchPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن مطابقة فاتورة في فترة مُقفلة: ${matchPeriodCheck.periodName ?? ""}`,
+        { field: "invoicedDate", meta: { periodName: matchPeriodCheck.periodName } },
+      );
+    }
+
     const matchStatus = isMatched ? "invoice_matched" : "invoice_mismatch";
     const matchNote = ` | مطابقة ثلاثية: فاتورة=${invAmount} طلب=${prTotal} أمر=${poTotal} استلام=${receivedTotal}`;
     const mismatchNotifications = !isMatched
