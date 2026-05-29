@@ -1658,7 +1658,7 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
         const { umrahEngine } = await import("../lib/engines/index.js");
         await umrahEngine.postTransportExpenseGL(
           { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-          { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined }
+          { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined, umrahSeasonId: b.seasonId || null }
         );
       } catch (glErr) {
         logger.error(glErr, "Transport GL posting failed:");

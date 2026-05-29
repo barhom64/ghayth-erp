@@ -80,12 +80,18 @@ class UmrahEngineImpl implements DomainEngine {
       toLocation: string;
       vehicleId?: number;
       driverId?: number;
+      /** Season cost-centre — without this, per-season transport-cost
+       *  breakdowns at season close had to JOIN umrah_transport back
+       *  to the JE; now the GL line carries it directly. */
+      umrahSeasonId?: number | null;
     }
   ) {
     const [expenseCode, payableCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_transport_expense", "debit", "5300"),
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_transport_payable", "credit", "2100"),
     ]);
+
+    const umrahSeasonId = transport.umrahSeasonId ?? undefined;
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -100,8 +106,8 @@ class UmrahEngineImpl implements DomainEngine {
       guardTable: "umrah_transport",
       guardId: transport.id,
       lines: [
-        { accountCode: expenseCode, debit: transport.cost, credit: 0, description: `مصروف نقل — ${transport.fromLocation} → ${transport.toLocation}`, vehicleId: transport.vehicleId, driverId: transport.driverId },
-        { accountCode: payableCode, debit: 0, credit: transport.cost, description: `مستحقات نقل عمرة`, vehicleId: transport.vehicleId, driverId: transport.driverId },
+        { accountCode: expenseCode, debit: transport.cost, credit: 0, description: `مصروف نقل — ${transport.fromLocation} → ${transport.toLocation}`, vehicleId: transport.vehicleId, driverId: transport.driverId, umrahSeasonId },
+        { accountCode: payableCode, debit: 0, credit: transport.cost, description: `مستحقات نقل عمرة`, vehicleId: transport.vehicleId, driverId: transport.driverId, umrahSeasonId },
       ],
     });
   }
