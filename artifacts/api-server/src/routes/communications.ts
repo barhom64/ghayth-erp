@@ -291,11 +291,19 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
 
       const sender = await matchSenderToEntity(from, companyId);
 
+      // Phase 4 sweep: dual-write inbound WhatsApp webhook to message_log.
       await rawExecute(
         `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId","createdAt")
          VALUES ($1,'whatsapp','inbound',$2,'',$3,$4,'received',$5,$6,NOW())`,
         [companyId, from, `WhatsApp from ${sender.name}`, msgText, sender.type !== "unknown" ? sender.type : null, sender.id]
       );
+      await rawExecute(
+        `INSERT INTO message_log
+           ("companyId", channel, direction, "fromAddress", "toAddress",
+            subject, body, status, folder, "relatedType", "relatedId", "createdAt")
+         VALUES ($1, 'whatsapp', 'inbound', $2, '', $3, $4, 'received', 'inbox', $5, $6, NOW())`,
+        [companyId, from, `WhatsApp from ${sender.name}`, msgText, sender.type !== "unknown" ? sender.type : null, sender.id]
+      ).catch((e) => logger.warn(e, "[whatsapp webhook] message_log dual-write failed"));
 
       const categorized = await aiEngine.receptionCategorize(msgText, `Sender: ${sender.name} (${sender.type})`, { companyId });
 
@@ -325,11 +333,19 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
       const ackMessage = `مرحباً ${sender.name !== from ? sender.name : ""}، شكراً لتواصلك معنا. سنقوم بالرد عليك في أقرب وقت ممكن. رقم طلبك: WA-${msgId.substring(0, 8)}`;
       await sendWhatsAppMessage(from, ackMessage);
 
+      // Phase 4 sweep: dual-write ack to outbound_queue.
       await rawExecute(
         `INSERT INTO whatsapp_queue ("companyId",phone,"recipientName","clientId","assignmentId",message,status,"createdAt")
          VALUES ($1,$2,$3,$4,NULL,$5,'sent',NOW())`,
         [companyId, from, sender.name, sender.type === "client" ? sender.id : null, ackMessage]
       );
+      await rawExecute(
+        `INSERT INTO outbound_queue
+           ("companyId", channel, recipient, "recipientName", body, status,
+            "sentAt", "createdAt", "updatedAt")
+         VALUES ($1, 'whatsapp', $2, $3, $4, 'sent', NOW(), NOW(), NOW())`,
+        [companyId, from, sender.name, ackMessage]
+      ).catch((e) => logger.warn(e, "[whatsapp webhook ack] outbound_queue dual-write failed"));
 
       if (relatedType && relatedId) {
         await sendNotification({
@@ -410,6 +426,14 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
          VALUES ($1,'pbx',$2,$3,$4,$5,$6,'received','pbx_call',$7,NOW())`,
         [companyId, direction, callerNumber, calledNumber, `PBX Call from ${sender.name}`, `Incoming call from ${callerNumber} identified as ${sender.name} (${sender.type})`, pbxId]
       );
+      // Phase 4 sweep: dual-write PBX incoming-call mirror to message_log.
+      await client.query(
+        `INSERT INTO message_log
+           ("companyId", channel, direction, "fromAddress", "toAddress",
+            subject, body, status, folder, "relatedType", "relatedId", "createdAt")
+         VALUES ($1, 'pbx', $2, $3, $4, $5, $6, 'received', 'inbox', 'pbx_call', $7, NOW())`,
+        [companyId, direction, callerNumber, calledNumber, `PBX Call from ${sender.name}`, `Incoming call from ${callerNumber} identified as ${sender.name} (${sender.type})`, pbxId]
+      ).catch((e: unknown) => logger.warn({ err: e }, "[pbx webhook] message_log dual-write failed"));
     });
 
     await sendNotification({
