@@ -181,6 +181,35 @@ export function WorkflowDefinitionsTab() {
     }
   };
 
+  // POST /workflows/submit — kicks off a brand-new workflow instance
+  // from any caller. Exposed here as a test/probe panel so admins can
+  // verify a definition behaves correctly without going through the
+  // domain-specific create form.
+  const submitWorkflowMut = async (payload: any) => {
+    try {
+      await apiFetch("/workflows/submit", {
+        method: "POST", body: JSON.stringify(payload),
+      });
+      toast({ title: "أُرسل سير العمل" });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "فشل الإرسال", description: e?.message });
+    }
+  };
+  const handleTestSubmit = async (definition: any) => {
+    const refIdStr = window.prompt(`اختبار سير العمل "${definition.name ?? definition.requestType}" — أدخل رقم الكيان المرجعي:`);
+    if (!refIdStr) return;
+    const refId = Number(refIdStr);
+    if (!Number.isFinite(refId)) return;
+    await submitWorkflowMut({
+      requestType: definition.requestType,
+      refTable: definition.refTable ?? definition.requestType,
+      refId,
+      title: `اختبار: ${definition.name ?? definition.requestType}`,
+      data: {},
+    });
+  };
+
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -287,6 +316,9 @@ export function WorkflowDefinitionsTab() {
                   {def.enableEscalation && <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700">تصعيد</Badge>}
                 </div>
                 <div className="flex gap-1">
+                  <GuardedButton perm="settings:create" variant="ghost" size="sm" className="text-xs h-7" onClick={() => handleTestSubmit(def)} rateLimitAware>
+                    اختبار
+                  </GuardedButton>
                   <Button variant="ghost" size="sm" onClick={() => handleEdit(def)}><Pencil className="h-4 w-4" /></Button>
                   <GuardedButton perm="settings:create" variant="ghost" size="sm" className="text-status-error" onClick={() => setDeletingDef({ id: def.id, label: def.requestTypeLabel || def.requestType || "—" })}><Trash2 className="h-4 w-4" /></GuardedButton>
                 </div>

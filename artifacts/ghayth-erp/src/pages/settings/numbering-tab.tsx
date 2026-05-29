@@ -185,20 +185,56 @@ export function NumberingTab() {
     ["numbering-schemes"], "/numbering/schemes",
   );
   const schemes = asList<Scheme>(data);
+  const { toast } = useToast();
+
+  // POST /numbering/backfill-all — runs the backfill across every
+  // scheme that has legacy refs lingering in the assignments table.
+  // The per-scheme button still exists; this is the "do them all" shortcut.
+  const backfillAllMut = useApiMutation<unknown, Record<string, never>>(
+    "/numbering/backfill-all",
+    "POST",
+    [["numbering-assignments"], ["numbering-schemes"]],
+    { successMessage: "تم تشغيل الجرد على كل السياسات" },
+  );
+  const [backfillOpen, setBackfillOpen] = useState(false);
+
+  // GET /numbering/scheme-lookup?moduleKey=X&entityKey=Y — server
+  // resolves the active scheme for a given (module, entity) pair.
+  // Useful for verifying which policy will issue the next code for a
+  // module before triggering a backfill or override.
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupModule, setLookupModule] = useState("");
+  const [lookupEntity, setLookupEntity] = useState("");
+  const lookupReady = lookupModule.trim().length > 0 && lookupEntity.trim().length > 0;
+  const lookupQ = useApiQuery<any>(
+    ["numbering-scheme-lookup", lookupModule.trim(), lookupEntity.trim()],
+    lookupReady
+      ? `/numbering/scheme-lookup?moduleKey=${encodeURIComponent(lookupModule.trim())}&entityKey=${encodeURIComponent(lookupEntity.trim())}`
+      : null,
+    { enabled: lookupOpen && lookupReady },
+  );
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Hash className="w-5 h-5 text-status-info" />
           إعدادات الترقيم الموحد
         </h3>
-        <Badge variant="outline" className="text-xs">
-          {schemes.length} نوع معاملة
-        </Badge>
+        <div className="flex items-center gap-2">
+          <GuardedButton perm="admin:update" variant="outline" size="sm" onClick={() => setLookupOpen(true)}>
+            بحث عن رقم
+          </GuardedButton>
+          <GuardedButton perm="admin:update" variant="outline" size="sm" onClick={() => setBackfillOpen(true)}>
+            جرد شامل
+          </GuardedButton>
+          <Badge variant="outline" className="text-xs">
+            {schemes.length} نوع معاملة
+          </Badge>
+        </div>
       </div>
 
       <p className="text-sm text-muted-foreground">
@@ -225,6 +261,74 @@ export function NumberingTab() {
           <AuditPanel />
         </TabsContent>
       </Tabs>
+
+      {backfillOpen && (
+        <Card className="border-amber-200 bg-amber-50/30">
+          <CardContent className="p-4 space-y-2">
+            <p className="text-sm font-semibold">جرد ترقيم شامل</p>
+            <p className="text-xs text-muted-foreground">
+              سيتم جرد جميع المعاملات السابقة عبر كل السياسات. قد تستغرق العملية وقتاً
+              على القواعد الكبيرة.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setBackfillOpen(false)}>إلغاء</Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  backfillAllMut.mutate({}, { onSuccess: () => { setBackfillOpen(false); refetch(); } });
+                }}
+                disabled={backfillAllMut.isPending}
+              >
+                {backfillAllMut.isPending ? "جارٍ التشغيل..." : "تشغيل الجرد"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {lookupOpen && (
+        <Card className="border-status-info-surface bg-status-info-surface/30">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">بحث عن سياسة الترقيم</p>
+              <Button variant="ghost" size="sm" onClick={() => { setLookupOpen(false); setLookupModule(""); setLookupEntity(""); }}>
+                إغلاق
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">moduleKey</Label>
+                <Input
+                  value={lookupModule}
+                  onChange={(e) => setLookupModule(e.target.value)}
+                  placeholder="finance"
+                  dir="ltr"
+                  className="font-mono h-8 text-xs"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">entityKey</Label>
+                <Input
+                  value={lookupEntity}
+                  onChange={(e) => setLookupEntity(e.target.value)}
+                  placeholder="invoice"
+                  dir="ltr"
+                  className="font-mono h-8 text-xs"
+                />
+              </div>
+            </div>
+            {lookupQ.isLoading && <p className="text-xs text-muted-foreground">جاري البحث...</p>}
+            {lookupQ.isError && <p className="text-xs text-muted-foreground">لم يُعثر على سياسة بهذه المفاتيح.</p>}
+            {lookupQ.data && (
+              <div className="border rounded p-2 text-xs space-y-1 bg-white">
+                <p><span className="text-muted-foreground">الاسم:</span> {lookupQ.data.name ?? "—"}</p>
+                <p><span className="text-muted-foreground">القالب:</span> <span className="font-mono">{lookupQ.data.template ?? lookupQ.data.format ?? "—"}</span></p>
+                <p><span className="text-muted-foreground">التتابع الحالي:</span> {lookupQ.data.currentSequence ?? lookupQ.data.lastSequence ?? "—"}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -840,10 +944,9 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
     if (filters.q) u.set("q", filters.q);
     return u.toString();
   }, [filters]);
-  const suffix = query ? `?${query}` : "";
   const { data, isLoading, refetch } = useApiQuery<{ data: Assignment[] }>(
     ["numbering-assignments", query],
-    `/numbering/assignments${suffix}`,
+    `/numbering/assignments${query ? `?${query}` : ""}`,
   );
   const rows = (data?.data || []) as Assignment[];
   const moduleKeys = useMemo(
@@ -904,6 +1007,49 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
     }
   };
 
+  // POST /numbering/assignments/:id/override — manually rewrite the
+  // issued number (e.g. correct a typo before the document is delivered).
+  // POST /numbering/assignments/:id/void — invalidate an issued number
+  // and free the position for the next request. Both audited.
+  const overrideMut = useApiMutation<unknown, { id: number; newNumber: string; reason: string }>(
+    (b) => `/numbering/assignments/${b.id}/override`,
+    "POST",
+    [["numbering-assignments"]],
+    { successMessage: "تم تعديل الرقم", onSuccess: () => refetch() },
+  );
+  const voidMut = useApiMutation<unknown, { id: number; reason: string }>(
+    (b) => `/numbering/assignments/${b.id}/void`,
+    "POST",
+    [["numbering-assignments"]],
+    { successMessage: "تم إلغاء الرقم", onSuccess: () => refetch() },
+  );
+  const [overrideRow, setOverrideRow] = useState<Assignment | null>(null);
+  const [newNumber, setNewNumber] = useState("");
+  const [reason, setReason] = useState("");
+  const submitOverride = () => {
+    if (!overrideRow) return;
+    const r = reason.trim();
+    if (!newNumber.trim()) return;
+    // Server requires reason min 3 chars — surface the constraint
+    // before the request goes out.
+    if (r.length < 3) return;
+    overrideMut.mutate(
+      { id: overrideRow.id, newNumber: newNumber.trim(), reason: r },
+      { onSuccess: () => { setOverrideRow(null); setNewNumber(""); setReason(""); } },
+    );
+  };
+  const [voidRow, setVoidRow] = useState<Assignment | null>(null);
+  const [voidReason, setVoidReason] = useState("");
+  const submitVoid = () => {
+    if (!voidRow) return;
+    const r = voidReason.trim();
+    if (r.length < 3) return;
+    voidMut.mutate(
+      { id: voidRow.id, reason: r },
+      { onSuccess: () => { setVoidRow(null); setVoidReason(""); } },
+    );
+  };
+
   return (
     <div className="space-y-3">
       <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -952,7 +1098,7 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
                 <th className="p-3 text-start">المعرف</th>
                 <th className="p-3 text-start">الحالة</th>
                 <th className="p-3 text-start">تاريخ الإصدار</th>
-                <th className="p-3 text-start"></th>
+                <th className="p-3 text-start">إجراءات</th>
               </tr>
             </thead>
             <tbody>
@@ -968,31 +1114,21 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
                     </Badge>
                   </td>
                   <td className="p-3 text-xs text-muted-foreground">{formatDateAr(r.issuedAt)}</td>
-                  <td className="p-3 whitespace-nowrap">
+                  <td className="p-3">
                     {r.status !== "voided" && (
                       <div className="flex items-center gap-1">
-                        <GuardedButton
-                          perm="settings:update"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => overrideAssignment(r)}
-                          disabled={busyId === r.id}
-                          title="تعديل الرقم"
+                        <Button
+                          variant="ghost" size="sm" className="h-7 text-xs"
+                          onClick={() => { setOverrideRow(r); setNewNumber(r.number); setReason(""); }}
                         >
-                          <Edit className="h-3 w-3" />
-                        </GuardedButton>
-                        <GuardedButton
-                          perm="settings:update"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-xs text-status-error-foreground"
-                          onClick={() => voidAssignment(r)}
-                          disabled={busyId === r.id}
-                          title="إلغاء الرقم"
+                          تعديل
+                        </Button>
+                        <Button
+                          variant="ghost" size="sm" className="h-7 text-xs text-status-error-foreground"
+                          onClick={() => { setVoidRow(r); setVoidReason(""); }}
                         >
-                          <X className="h-3 w-3" />
-                        </GuardedButton>
+                          إلغاء
+                        </Button>
                       </div>
                     )}
                   </td>
@@ -1007,6 +1143,70 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
           </table>
         </CardContent></Card>
       )}
+
+      {overrideRow && (
+        <Card className="border-status-info-surface bg-status-info-surface/30">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">تعديل رقم #{overrideRow.id}</p>
+              <Button variant="ghost" size="sm" onClick={() => setOverrideRow(null)}>إغلاق</Button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">الرقم الحالي</Label>
+                <Input value={overrideRow.number} disabled dir="ltr" className="font-mono" />
+              </div>
+              <div>
+                <Label className="text-xs">الرقم الجديد *</Label>
+                <Input value={newNumber} onChange={(e) => setNewNumber(e.target.value)} dir="ltr" className="font-mono" />
+              </div>
+              <div>
+                <Label className="text-xs">السبب * (3 أحرف على الأقل)</Label>
+                <Input value={reason} onChange={(e) => setReason(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={submitOverride}
+                disabled={overrideMut.isPending || !newNumber.trim() || reason.trim().length < 3}
+                size="sm"
+                rateLimitAware
+              >
+                حفظ التعديل
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setOverrideRow(null)}>إلغاء</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {voidRow && (
+        <Card className="border-status-error-surface bg-status-error-surface/30">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">إلغاء رقم #{voidRow.id} ({voidRow.number})</p>
+              <Button variant="ghost" size="sm" onClick={() => setVoidRow(null)}>إغلاق</Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              سيتم تعليم الرقم كـ voided، ولن يُستخدم بعد ذلك. الإجراء قابل للتدقيق.
+            </p>
+            <Label className="text-xs">السبب * (3 أحرف على الأقل)</Label>
+            <Input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={submitVoid}
+                disabled={voidMut.isPending || voidReason.trim().length < 3}
+                rateLimitAware
+              >
+                تأكيد الإلغاء
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setVoidRow(null)}>تراجع</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1016,6 +1216,17 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
 function AuditPanel() {
   const { data, isLoading } = useApiQuery<{ data: AuditRow[] }>(["numbering-audit"], "/numbering/audit");
   const rows = (data?.data || []) as AuditRow[];
+
+  // GET /numbering/health — gaps, duplicates, locked counters across
+  // all schemes. Surfaced as a banner above the audit log so any
+  // discrepancy is visible before the operator drills into individual
+  // rows.
+  const { data: healthResp } = useApiQuery<any>(
+    ["numbering-health"],
+    "/numbering/health",
+  );
+  const health = healthResp?.data ?? healthResp;
+  const healthIssues = Number(health?.totalIssues ?? health?.issues ?? 0);
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -1036,6 +1247,23 @@ function AuditPanel() {
   };
 
   return (
+    <div className="space-y-3">
+      {health && (
+        <Card className={healthIssues > 0 ? "border-status-warning-surface bg-status-warning-surface/30" : "border-status-success-surface bg-status-success-surface/30"}>
+          <CardContent className="p-3 text-sm">
+            {healthIssues > 0 ? (
+              <p className="text-status-warning-foreground">
+                <strong>{healthIssues}</strong> مسألة تتطلب المراجعة في مركز الترقيم.
+                {health?.gaps != null && <span className="ms-3 text-xs">فجوات: {String(health.gaps)}</span>}
+                {health?.duplicates != null && <span className="ms-3 text-xs">تكرارات: {String(health.duplicates)}</span>}
+                {health?.lockedCounters != null && <span className="ms-3 text-xs">عدادات مقفلة: {String(health.lockedCounters)}</span>}
+              </p>
+            ) : (
+              <p className="text-status-success-foreground">سلامة الترقيم: لا توجد مسائل مكتشفة.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     <Card><CardContent className="p-0 overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
@@ -1075,5 +1303,6 @@ function AuditPanel() {
         </tbody>
       </table>
     </CardContent></Card>
+    </div>
   );
 }

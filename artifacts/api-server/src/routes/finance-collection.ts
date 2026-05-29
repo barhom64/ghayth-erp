@@ -86,7 +86,7 @@ collectionRouter.get("/collection", authorize({ feature: "finance.collection", a
               CURRENT_DATE - i."dueDate" AS "daysOverdue",
               ics.stage AS "currentStage", ics."stageName" AS "currentStageName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        LEFT JOIN LATERAL (
          SELECT stage, "stageName"
          FROM invoice_collection_stages

@@ -52,6 +52,11 @@ export default function Automation() {
   const autoLogs = asList(autoLogsResp);
   const autoLogsTotal = autoLogsResp?.total || autoLogs.length;
   const { data: autoStats } = useApiQuery<any>(["automation-stats"], "/automation/automation-stats");
+  // GET /automation/event-logs — raw event stream (what fired, when,
+  // what payload). Distinct from /automation-logs which records rule
+  // *outcomes*. Surfaced as a small "آخر الأحداث" tail under the page.
+  const { data: eventLogsResp } = useApiQuery<any>(["automation-event-logs"], "/automation/event-logs?limit=20");
+  const eventLogs: any[] = eventLogsResp?.data ?? eventLogsResp?.events ?? [];
 
   const toggleJobMut = useApiMutation<any, { id: number }>(
     (body) => `/automation/cron-jobs/${body.id}/toggle`,
@@ -296,6 +301,24 @@ export default function Automation() {
           <EventLogsTab />
         </TabsContent>
       </Tabs>
+
+      {eventLogs.length > 0 && (
+        <Card className="mt-4 border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">آخر الأحداث ({eventLogs.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y text-xs">
+              {eventLogs.slice(0, 10).map((e: any, i: number) => (
+                <div key={e.id ?? i} className="px-3 py-2 flex items-center justify-between">
+                  <span className="font-mono">{e.eventName ?? e.action ?? "—"}</span>
+                  <span className="text-muted-foreground">{e.createdAt ? new Date(e.createdAt).toLocaleString("ar-SA") : ""}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </PageShell>
   );
 }

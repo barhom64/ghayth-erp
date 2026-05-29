@@ -31,6 +31,15 @@ export default function UmrahPilgrims() {
   const items = resp?.data || [];
   const total = resp?.total || 0;
 
+  // GET /umrah/unassigned — pilgrims without an agent. Shows up as an
+  // alert banner so the operator can spot them and run the bulk-assign
+  // flow below.
+  const { data: unassignedResp } = useApiQuery<{ data: any[] }>(
+    ["umrah-pilgrims-unassigned"],
+    "/umrah/unassigned",
+  );
+  const unassignedCount = unassignedResp?.data?.length ?? 0;
+
   // UMR-BULK — POST /umrah/assign-bulk takes {pilgrimIds, agentId} and
   // sets the agent on every selected pilgrim. The endpoint had no UI;
   // wired here as a multi-select + agent picker that appears once at
@@ -146,6 +155,12 @@ export default function UmrahPilgrims() {
           <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
         </Link>
       </div>
+
+      {unassignedCount > 0 && (
+        <div className="rounded-md border border-status-warning-surface bg-status-warning-surface/30 p-3 text-sm text-status-warning-foreground">
+          <strong>{unassignedCount}</strong> معتمر بدون وكيل — اختر الصفوف ثم استخدم زر "تعيين دفعة" أسفل لتعيين وكيل.
+        </div>
+      )}
 
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {kpiCards.map((c) => (

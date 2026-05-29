@@ -113,13 +113,12 @@ export default function AdminCommunicationControl() {
   const { data: overview, isLoading: ovLoading, error: ovError, refetch: refetchOverview } =
     useApiQuery<Overview>(["comm-control-overview"], "/admin/communication-control/overview");
 
-  // Channel filter as a QS suffix so the audit can credit the route
-  // from a static literal (the conditional URL form above hid it).
-  const suffix = inboxChannel === "all" ? "" : `?channel=${inboxChannel}`;
   const { data: inboxResp, isLoading: ibLoading, refetch: refetchInbox } =
     useApiQuery<{ data: InboxRow[] }>(
       ["comm-control-inbox", inboxChannel],
-      `/admin/communication-control/inbox${suffix}`,
+      inboxChannel === "all"
+        ? "/admin/communication-control/inbox"
+        : `/admin/communication-control/inbox?channel=${inboxChannel}`,
     );
 
   const { data: providersResp, refetch: refetchProviders } =

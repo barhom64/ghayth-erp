@@ -253,6 +253,13 @@ interface DependencyNode {
 
 export default function AdminMonitoring() {
   const { data: health, isLoading, error, refetch } = useApiQuery<any>(["system-health"], "/admin/system-health");
+  // Lower-level operational endpoints under /health/* — schema integrity,
+  // raw Prometheus counters, environment-config dump, system tuning.
+  // Rendered as a tabbed "snapshot" panel for SRE-level debugging.
+  const healthSchemaQ = useApiQuery<any>(["health-schema"], "/health/schema");
+  const healthMetricsQ = useApiQuery<any>(["health-metrics"], "/health/metrics");
+  const healthConfigQ = useApiQuery<any>(["health-config"], "/health/config");
+  const healthSystemQ = useApiQuery<any>(["health-system"], "/health/system");
 
   // Per-check health detail — granular alternative to the rolled-up
   // /system-health response. Surfaces individual checks (database,
@@ -346,6 +353,43 @@ export default function AdminMonitoring() {
     >
       <PageStateWrapper isLoading={isLoading && !health} error={error} onRetry={refetch}>
       <div className="space-y-6">
+
+      {/* Low-level health probes — these are SRE-facing snapshots. */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+        <div className="rounded border p-2 bg-muted/30">
+          <p className="text-muted-foreground">حالة المخطط</p>
+          <p className={`font-mono ${
+            healthSchemaQ.isError || healthSchemaQ.data?.status === "critical"
+              ? "text-status-error-foreground"
+              : "text-status-success-foreground"
+          }`}>
+            {healthSchemaQ.isError ? "غير متاح" : (healthSchemaQ.data?.status ?? "—")}
+          </p>
+        </div>
+        <div className="rounded border p-2 bg-muted/30">
+          <p className="text-muted-foreground">عدد الـ counters</p>
+          <p className="font-mono">
+            {healthMetricsQ.data?.counters
+              ? Object.keys(healthMetricsQ.data.counters).length
+              : healthMetricsQ.isError ? "—" : healthMetricsQ.isLoading ? "…" : "0"}
+          </p>
+        </div>
+        <div className="rounded border p-2 bg-muted/30">
+          <p className="text-muted-foreground">إعدادات البيئة</p>
+          <p className="font-mono">
+            {healthConfigQ.data?.nodeEnv ?? (healthConfigQ.isError ? "—" : "?")}
+          </p>
+        </div>
+        <div className="rounded border p-2 bg-muted/30">
+          <p className="text-muted-foreground">معلومات الجهاز</p>
+          <p className="font-mono">
+            {healthSystemQ.data?.liveness?.uptimeSec != null
+              ? `${Math.round(Number(healthSystemQ.data.liveness.uptimeSec) / 3600)} ساعة`
+              : healthSystemQ.isError ? "—" : "…"}
+          </p>
+        </div>
+      </div>
+
       {/* Rate-limit backend banner — surfaces the silent fallback to per-process
           MemoryStore so an operator can investigate before the cap actually
           gets bypassed across replicas. See artifacts/api-server/src/lib/rateLimitStore.ts. */}

@@ -2362,7 +2362,7 @@ reportsRouter.get(
                    (COALESCE(il."cogsAmount", 0) - COALESCE(il."cogsReversedAmount", 0)))::float8 AS profit
            FROM invoice_lines il
            JOIN invoices i ON i.id = il."invoiceId" AND i."deletedAt" IS NULL
-           LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+           LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
            LEFT JOIN warehouse_products p ON p.id = il."productId" AND p."deletedAt" IS NULL
           WHERE i."companyId" = $1
             AND COALESCE(il."cogsAmount", 0) > 0
