@@ -118,7 +118,10 @@ export default function AdminDataImportPage() {
 
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const batchDetailQ = useApiQuery<any>(
-    ["import-batch-detail", String(selectedBatchId ?? 0)],
+    // Use a sentinel "none" rather than "0" so the cache key never
+    // collides with a real batch #0 (the server uses serial PKs that
+    // start at 1, but better not to assume).
+    ["import-batch-detail", selectedBatchId == null ? "none" : String(selectedBatchId)],
     selectedBatchId ? `/import/batches/${selectedBatchId}` : null,
     { enabled: selectedBatchId !== null },
   );

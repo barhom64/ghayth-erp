@@ -544,14 +544,15 @@ function ManualSendPanel({ onSent }: { onSent: () => void }) {
             className="h-8 text-xs border rounded px-2 md:col-span-2"
           />
         </div>
-        <button
-          type="button"
-          className="text-xs h-7 px-3 rounded bg-status-info-foreground text-white"
+        <GuardedButton
+          perm="communications:create"
+          size="sm"
+          rateLimitAware
           disabled={!to.trim() || !body.trim() || sendMut.isPending}
           onClick={() => sendMut.mutate({ channel, to: to.trim(), body: body.trim() }, { onSuccess: () => { setTo(""); setBody(""); onSent(); } })}
         >
           إرسال
-        </button>
+        </GuardedButton>
       </CardContent>
     </Card>
   );

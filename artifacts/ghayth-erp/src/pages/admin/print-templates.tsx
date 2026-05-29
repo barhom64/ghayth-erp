@@ -23,6 +23,7 @@ import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -164,6 +165,7 @@ export default function PrintTemplatesPage() {
   const [newAssignBranch, setNewAssignBranch] = useState("");
   const [newAssignEntity, setNewAssignEntity] = useState("invoice");
   const [newAssignTemplate, setNewAssignTemplate] = useState("");
+  const [newAssignIsDefault, setNewAssignIsDefault] = useState(true);
   const handleCreateAssignment = async () => {
     if (!newAssignTemplate.trim()) {
       toast({ variant: "destructive", title: "اختر القالب" });
@@ -176,11 +178,13 @@ export default function PrintTemplatesPage() {
           branchId: newAssignBranch ? Number(newAssignBranch) : null,
           entityType: newAssignEntity,
           templateId: Number(newAssignTemplate),
-          isDefault: false,
+          // Mirror the server-side default (true) — the operator can flip
+          // it later via the templates table if needed.
+          isDefault: newAssignIsDefault,
         }),
       });
       toast({ title: "أُنشئ التعيين" });
-      setNewAssignBranch(""); setNewAssignTemplate("");
+      setNewAssignBranch(""); setNewAssignTemplate(""); setNewAssignIsDefault(true);
       assignmentsQ.refetch();
     } catch (err: any) {
       toast({ variant: "destructive", title: "فشل الإنشاء", description: err?.message });
@@ -386,7 +390,11 @@ export default function PrintTemplatesPage() {
               <label className="text-[10px] text-muted-foreground">رقم القالب</label>
               <input value={newAssignTemplate} onChange={(e) => setNewAssignTemplate(e.target.value)} dir="ltr" className="w-full h-7 px-2 border rounded text-xs" />
             </div>
-            <Button size="sm" onClick={handleCreateAssignment} rateLimitAware>إنشاء تعيين</Button>
+            <GuardedButton perm="templates:write" size="sm" onClick={handleCreateAssignment} rateLimitAware>إنشاء تعيين</GuardedButton>
+            <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
+              <input type="checkbox" checked={newAssignIsDefault} onChange={(e) => setNewAssignIsDefault(e.target.checked)} />
+              تعيين افتراضي
+            </label>
           </div>
         </CardContent>
       </Card>
@@ -417,7 +425,7 @@ export default function PrintTemplatesPage() {
             <label className="text-[10px] text-muted-foreground">المستلم</label>
             <input value={deliverRecipient} onChange={(e) => setDeliverRecipient(e.target.value)} dir="ltr" className="w-full h-7 px-2 border rounded" />
           </div>
-          <Button size="sm" onClick={handleDeliver} rateLimitAware>تسليم</Button>
+          <GuardedButton perm="print:create" size="sm" onClick={handleDeliver} rateLimitAware>تسليم</GuardedButton>
         </CardContent>
       </Card>
 
@@ -438,8 +446,8 @@ export default function PrintTemplatesPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={callAiSuggest} rateLimitAware>اقتراح قالب</Button>
-            <Button size="sm" variant="outline" onClick={callAiDraftLetter} rateLimitAware>توليد خطاب</Button>
+            <GuardedButton perm="templates:write" size="sm" variant="outline" onClick={callAiSuggest} rateLimitAware>اقتراح قالب</GuardedButton>
+            <GuardedButton perm="templates:write" size="sm" variant="outline" onClick={callAiDraftLetter} rateLimitAware>توليد خطاب</GuardedButton>
           </div>
           {aiResult && (
             <pre className="bg-surface-subtle p-2 rounded max-h-40 overflow-y-auto text-[10px]">

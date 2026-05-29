@@ -41,11 +41,12 @@ export default function PurchaseOrdersCreate() {
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
   const createMut = useApiMutation("/finance/purchase-requests", "POST", [["purchase-orders"], ["purchase-requests"]]);
-  // POST /finance/purchase-orders — bypass the request → approval →
-  // PO workflow and create a PO directly. Available to operators with
-  // the `finance:purchase:direct-po` permission (server enforces); used
-  // for emergency procurement where waiting for the request loop would
-  // block operations.
+  // POST /finance/purchase-orders — alternate path that creates a PO
+  // directly without going through the purchase-request approval loop.
+  // Same permission as the standard flow (`finance.purchase:create`);
+  // use sparingly — the bypass skips multi-step approvals so it should
+  // be reserved for cases that don't need them (single-line emergency
+  // procurement, manager-direct issuance, etc).
   const createDirectMut = useApiMutation("/finance/purchase-orders", "POST", [["purchase-orders"]]);
   const [createMode, setCreateMode] = useState<"request" | "direct">("request");
   const { data: productsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
@@ -129,11 +130,21 @@ export default function PurchaseOrdersCreate() {
         })),
       });
       clearDraft();
-      toast({ title: "تم إنشاء طلب الشراء بنجاح" });
+      toast({
+        title: createMode === "direct"
+          ? "تم إنشاء أمر الشراء مباشرةً"
+          : "تم إنشاء طلب الشراء بنجاح",
+      });
       setLocation("/finance/purchase-orders");
     } catch (err: any) {
       setApiError(err);
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء طلب الشراء", description: err?.fix ?? err?.message });
+      toast({
+        variant: "destructive",
+        title: createMode === "direct"
+          ? "حدث خطأ أثناء إنشاء أمر الشراء"
+          : "حدث خطأ أثناء إنشاء طلب الشراء",
+        description: err?.fix ?? err?.message,
+      });
     }
   };
 

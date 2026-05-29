@@ -464,23 +464,26 @@ function ResolvedSettingsTab() {
                   placeholder="value (JSON أو نص)"
                 />
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="text-xs h-7 px-3 rounded bg-status-info-foreground text-white"
+                  <GuardedButton
+                    perm="settings:update"
+                    size="sm"
+                    rateLimitAware
                     disabled={!putKey.trim() || putMut.isPending}
                     onClick={() => putMut.mutate({ key: putKey.trim(), value: putValue })}
                   >
                     حفظ
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs h-7 px-3 rounded border border-status-error-surface text-status-error-foreground"
+                  </GuardedButton>
+                  <GuardedButton
+                    perm="settings:update"
+                    size="sm"
+                    variant="destructive"
+                    rateLimitAware
                     disabled={!putKey.trim() || delMut.isPending}
-                    onClick={() => delMut.mutate({ key: putKey.trim() })}
+                    onClick={() => delMut.mutate({ key: putKey.trim() }, { onSuccess: () => { setPutKey(""); setPutValue(""); } })}
                     title="حذف الإعداد (لا يمكن التراجع)"
                   >
                     حذف
-                  </button>
+                  </GuardedButton>
                 </div>
               </div>
             </div>

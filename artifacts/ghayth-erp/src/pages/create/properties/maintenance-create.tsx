@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,16 @@ import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/share
 export default function PropertyMaintenanceCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  // POST /properties/maintenance-requests — full request entering the
+  // approval workflow.
   const createMut = useApiMutation("/properties/maintenance-requests", "POST", [["maintenance-requests"]]);
+  // POST /properties/maintenance — lightweight "log only" variant that
+  // skips the approval workflow. Used when the operator is recording a
+  // maintenance event that's already been handled (e.g., emergency
+  // repair the tenant did themselves) so it shows up in the unit's
+  // history without sitting in someone's inbox.
+  const createSimpleMut = useApiMutation("/properties/maintenance", "POST", [["maintenance-requests"]]);
+  const [simpleMode, setSimpleMode] = useState(false);
   const { data: unitsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["property-units"], "/properties/units");
   const units = unitsData?.data || [];
 
@@ -37,7 +47,8 @@ export default function PropertyMaintenanceCreate() {
       return;
     }
     try {
-      await createMut.mutateAsync({
+      const targetMut = simpleMode ? createSimpleMut : createMut;
+      await targetMut.mutateAsync({
         unitId: Number(form.unitId),
         category: form.category || undefined,
         description: form.description,
@@ -106,11 +117,21 @@ export default function PropertyMaintenanceCreate() {
         <TextAreaField label="الوصف" required value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} rows={3} error={fieldErrors.description} className="md:col-span-2" />
         <NumberField label="التكلفة" value={form.cost} onChange={(v) => setForm((f) => ({ ...f, cost: v }))} placeholder="0" step={0.01} min={0} error={fieldErrors.cost} />
       </div>
-      <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation("/properties/maintenance")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
-          {createMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
-        </Button>
+      <div className="flex items-center justify-between gap-3 pt-6">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={simpleMode}
+            onChange={(e) => setSimpleMode(e.target.checked)}
+          />
+          تسجيل فقط (تخطّي مسار الموافقة)
+        </label>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => setLocation("/properties/maintenance")}>إلغاء</Button>
+          <Button onClick={handleSubmit} disabled={createMut.isPending || createSimpleMut.isPending} rateLimitAware>
+            {(createMut.isPending || createSimpleMut.isPending) ? "جاري الإرسال..." : (simpleMode ? "تسجيل" : "إرسال الطلب")}
+          </Button>
+        </div>
       </div>
     </CreatePageLayout>
   );

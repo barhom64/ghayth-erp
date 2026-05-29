@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KeyRound, CheckCircle, Shield, Plus, X } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
@@ -119,17 +120,12 @@ export default function AdminRolesPage() {
       toast({ variant: "destructive", title: "فشل الإضافة", description: err?.message });
     }
   };
-  const handleDeletePerm = async (id: number) => {
-    try {
-      await apiFetch(`/admin/role-permissions/${id}`, { method: "DELETE" });
-      toast({ title: "حُذفت الصلاحية" });
-      rolePermsQ.refetch();
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "فشل الحذف", description: err?.message });
-    }
-  };
+  // Delete uses ConfirmDeleteDialog (R.1.4) — no native confirm() and
+  // gives the user an "are you sure" moment before destroying ACL data.
+  const [deletingPermId, setDeletingPermId] = useState<number | null>(null);
   const [bulkRole, setBulkRole] = useState("");
   const [bulkPerms, setBulkPerms] = useState("");
+  const [bulkPreview, setBulkPreview] = useState(false);
   const handleBulkReplace = async () => {
     if (!bulkRole.trim()) return;
     const perms = bulkPerms
@@ -466,13 +462,15 @@ export default function AdminRolesPage() {
                   <span className="font-mono text-[10px]">
                     {p.role} <span className="text-muted-foreground">→</span> {p.permission}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => handleDeletePerm(p.id)}
-                    className="text-[10px] text-status-error-foreground"
+                  <GuardedButton
+                    perm="admin:update"
+                    variant="ghost"
+                    size="sm"
+                    className="text-[10px] h-6 text-status-error-foreground"
+                    onClick={() => setDeletingPermId(p.id)}
                   >
                     حذف
-                  </button>
+                  </GuardedButton>
                 </div>
               ))}
               {rolePermsRows.length === 0 && (
@@ -480,6 +478,21 @@ export default function AdminRolesPage() {
               )}
             </div>
           </div>
+          <ConfirmDeleteDialog
+            open={deletingPermId !== null}
+            onOpenChange={(o) => !o && setDeletingPermId(null)}
+            entity={{
+              type: "role_permission",
+              id: deletingPermId ?? 0,
+              name: (() => {
+                const row = rolePermsRows.find((p: any) => p.id === deletingPermId);
+                return row ? `${row.role} → ${row.permission}` : `صلاحية #${deletingPermId ?? "?"}`;
+              })(),
+            }}
+            deletePath={deletingPermId !== null ? `/admin/role-permissions/${deletingPermId}` : ""}
+            invalidateKeys={[["admin-role-permissions"]]}
+            onDeleted={() => { setDeletingPermId(null); rolePermsQ.refetch(); }}
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="p-3 border rounded bg-surface-subtle/30 space-y-2">
@@ -498,13 +511,15 @@ export default function AdminRolesPage() {
                 dir="ltr"
                 className="w-full h-7 px-2 border rounded text-xs"
               />
-              <button
-                type="button"
-                className="text-xs h-7 px-3 rounded bg-status-info-foreground text-white"
+              <GuardedButton
+                perm="admin:update"
+                size="sm"
+                rateLimitAware
                 onClick={handleAddPerm}
+                disabled={!newPermRole.trim() || !newPerm.trim()}
               >
                 إضافة
-              </button>
+              </GuardedButton>
             </div>
             <div className="p-3 border rounded bg-surface-subtle/30 space-y-2">
               <p className="text-xs font-semibold">استبدال جماعي لدور</p>
@@ -522,13 +537,31 @@ export default function AdminRolesPage() {
                 dir="ltr"
                 className="w-full h-16 px-2 py-1 border rounded text-xs font-mono"
               />
-              <button
-                type="button"
-                className="text-xs h-7 px-3 rounded bg-status-warning-foreground text-white"
-                onClick={handleBulkReplace}
+              <GuardedButton
+                perm="admin:update"
+                size="sm"
+                variant="destructive"
+                rateLimitAware
+                onClick={() => setBulkPreview(true)}
+                disabled={!bulkRole.trim()}
               >
-                استبدال
-              </button>
+                استبدال (مدمّر)
+              </GuardedButton>
+              {bulkPreview && (
+                <div className="mt-2 p-2 border border-status-warning-surface bg-status-warning-surface/30 rounded text-xs space-y-1">
+                  <p className="font-semibold text-status-warning-foreground">تأكيد الاستبدال الجماعي</p>
+                  <p>
+                    سيُحذف جميع صلاحيات الدور <span className="font-mono">"{bulkRole.trim()}"</span> الحاليّة وتُستبدل بـ{" "}
+                    <span className="font-mono">{bulkPerms.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean).length}</span> صلاحية جديدة.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <GuardedButton perm="admin:update" size="sm" variant="destructive" rateLimitAware onClick={() => { handleBulkReplace(); setBulkPreview(false); }}>
+                      نعم، استبدال
+                    </GuardedButton>
+                    <Button size="sm" variant="outline" onClick={() => setBulkPreview(false)}>إلغاء</Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </CardContent>

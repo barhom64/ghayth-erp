@@ -49,9 +49,9 @@ function ProbePanel({
       const body = JSON.parse(bodyJson || "{}");
       const res = await onRun(body);
       setResult(res);
-      toast({ title: `${title} ✓` });
+      toast({ title: `${title} — نجح` });
     } catch (err: any) {
-      toast({ variant: "destructive", title: `${title} ✗`, description: err?.message || "" });
+      toast({ variant: "destructive", title: `${title} — فشل`, description: err?.message || "" });
     } finally {
       setRunning(false);
     }
