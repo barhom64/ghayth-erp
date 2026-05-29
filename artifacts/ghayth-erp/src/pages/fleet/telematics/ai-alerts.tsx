@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   Sparkles,
   CheckCircle,
+  XCircle,
 } from "lucide-react";
 import {
   DataTable,
@@ -111,6 +112,12 @@ export default function FleetTelematicsAiAlerts() {
     "POST",
     [["fleet-telematics-ai-alerts"]],
     { successMessage: "تم تأكيد حل التنبيه" },
+  );
+  const dismissMut = useApiMutation<unknown, { id: number }>(
+    (body) => `/fleet/telematics/ai-alerts/${body.id}/dismiss`,
+    "POST",
+    [["fleet-telematics-ai-alerts"]],
+    { successMessage: "تم تجاهل التنبيه" },
   );
 
   const kpi = {
@@ -222,8 +229,21 @@ export default function FleetTelematicsAiAlerts() {
               size="sm"
               onClick={() => resolveMut.mutate({ id: a.id })}
               disabled={resolveMut.isPending}
+              title="حل التنبيه"
             >
               <CheckCircle className="h-4 w-4 text-status-success-foreground" />
+            </GuardedButton>
+          )}
+          {(a.status === "open" || a.status === "acknowledged") && (
+            <GuardedButton
+              perm="fleet.telematics.ai_alerts:update"
+              variant="ghost"
+              size="sm"
+              onClick={() => dismissMut.mutate({ id: a.id })}
+              disabled={dismissMut.isPending}
+              title="تجاهل (false positive)"
+            >
+              <XCircle className="h-4 w-4 text-muted-foreground" />
             </GuardedButton>
           )}
         </div>
