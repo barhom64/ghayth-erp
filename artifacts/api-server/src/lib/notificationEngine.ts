@@ -469,23 +469,13 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
           });
           deliveryIds.push(dlId);
         } else {
-          // Phase 4 contract slice 8: dual-write to outbound_queue alongside
-          // the legacy email_queue so the worker (slice 6 → outbound_queue
-          // primary) picks it up. Once the legacy queue is dropped, this
-          // legacy INSERT can be removed; the outbound_queue insert below
-          // is the canonical path.
-          await rawExecute(
-            `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
-             VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
-            [companyId, payload.recipientEmail, payload.recipientName ?? "", title, dlp.body, payload.refType ?? null, payload.refId ?? null]
-          );
           await rawExecute(
             `INSERT INTO outbound_queue
                ("companyId", channel, recipient, "recipientName", subject, body,
                 status, "refType", "refId", "createdAt", "updatedAt")
              VALUES ($1, 'email', $2, $3, $4, $5, 'pending', $6, $7, NOW(), NOW())`,
             [companyId, payload.recipientEmail, payload.recipientName ?? null, title, dlp.body, payload.refType ?? null, payload.refId ?? null]
-          ).catch((e) => logger.warn(e, "[notificationEngine] outbound_queue dual-write failed"));
+          );
           const dlId = await insertDeliveryLog({
             companyId, channel: "email",
             recipient: payload.recipientEmail,
@@ -511,18 +501,12 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
           });
           deliveryIds.push(dlId);
         } else {
-          // Phase 4 sweep: dual-write to outbound_queue.
-          await rawExecute(
-            `INSERT INTO sms_queue ("companyId", "recipientPhone", message, status, "createdAt")
-             VALUES ($1, $2, $3, 'pending', NOW())`,
-            [companyId, payload.recipientPhone, `${title}: ${dlp.body}`]
-          );
           await rawExecute(
             `INSERT INTO outbound_queue
                ("companyId", channel, recipient, body, status, "createdAt", "updatedAt")
              VALUES ($1, 'sms', $2, $3, 'pending', NOW(), NOW())`,
             [companyId, payload.recipientPhone, `${title}: ${dlp.body}`]
-          ).catch((e) => logger.warn(e, "[notificationEngine] outbound_queue sms dual-write failed"));
+          );
           const dlId = await insertDeliveryLog({
             companyId, channel: "sms",
             recipient: payload.recipientPhone,
@@ -550,18 +534,12 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
           deliveryIds.push(dlId);
           continue;
         }
-        // Phase 4 sweep: dual-write to outbound_queue.
-        await rawExecute(
-          `INSERT INTO whatsapp_queue ("companyId", phone, "recipientName", "clientId", "assignmentId", message, status, "createdAt")
-           VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())`,
-          [companyId, phone, payload.recipientName ?? "", payload.clientId ?? null, payload.assignmentId ?? null, `${title}: ${dlp.body}`]
-        );
         await rawExecute(
           `INSERT INTO outbound_queue
              ("companyId", channel, recipient, "recipientName", body, status, "createdAt", "updatedAt")
            VALUES ($1, 'whatsapp', $2, $3, $4, 'pending', NOW(), NOW())`,
           [companyId, phone, payload.recipientName ?? null, `${title}: ${dlp.body}`]
-        ).catch((e) => logger.warn(e, "[notificationEngine] outbound_queue whatsapp dual-write failed"));
+        );
         const dlId = await insertDeliveryLog({
           companyId, channel: "whatsapp",
           recipient: phone,
@@ -591,15 +569,10 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
   }
 
   try {
-    await rawExecute(
-      `INSERT INTO notification_log ("companyId", channel, recipient, subject, body, status, "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-      [companyId, channels.join(","), payload.recipientEmail ?? payload.recipientPhone ?? `role:${payload.targetRole ?? "all"}`,
-       payload.title, payload.body, "sent"]
-    );
-    // Phase 4 sweep: mirror to message_log. notification_log.channel
-    // here is a comma-joined string; pick the first real channel that
-    // matches message_log's constraint.
+    // Phase 4 final contract: write only to message_log. The
+    // notification_log table is dropped post-soak. channels is a
+    // multi-channel array; pick the first message-shaped channel
+    // for the unified row.
     const firstChannel = channels.find((c) =>
       ['email','sms','whatsapp','push','in_app','internal','pbx'].includes(c)
     ) ?? 'in_app';
@@ -611,7 +584,7 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
       [companyId, firstChannel,
        payload.recipientEmail ?? payload.recipientPhone ?? `role:${payload.targetRole ?? "all"}`,
        payload.title, payload.body]
-    ).catch(() => { /* non-critical */ });
+    );
   } catch (_: unknown) { /* non-critical */ }
 
   return { deliveryIds };
@@ -663,42 +636,26 @@ export async function processFallbackChains(): Promise<string> {
     const meta: Record<string, unknown> = delivery.metadata ? JSON.parse(delivery.metadata) : {};
 
     if (nextChannel === "sms" && delivery.recipient) {
-      // Phase 4 sweep: dual-write to outbound_queue (fallback path).
-      await rawExecute(
-        `INSERT INTO sms_queue ("companyId", "recipientPhone", message, status, "createdAt")
-         VALUES ($1, $2, $3, 'pending', NOW())`,
-        [delivery.companyId, delivery.recipient, delivery.body]
-      );
       await rawExecute(
         `INSERT INTO outbound_queue
            ("companyId", channel, recipient, body, status, "createdAt", "updatedAt")
          VALUES ($1, 'sms', $2, $3, 'pending', NOW(), NOW())`,
         [delivery.companyId, delivery.recipient, delivery.body]
-      ).catch((e) => logger.warn(e, "[notificationEngine fallback] outbound_queue sms dual-write failed"));
-    } else if (nextChannel === "whatsapp" && delivery.recipient) {
-      await rawExecute(
-        `INSERT INTO whatsapp_queue ("companyId", phone, message, status, "createdAt")
-         VALUES ($1, $2, $3, 'pending', NOW())`,
-        [delivery.companyId, delivery.recipient, delivery.body]
       );
+    } else if (nextChannel === "whatsapp" && delivery.recipient) {
       await rawExecute(
         `INSERT INTO outbound_queue
            ("companyId", channel, recipient, body, status, "createdAt", "updatedAt")
          VALUES ($1, 'whatsapp', $2, $3, 'pending', NOW(), NOW())`,
         [delivery.companyId, delivery.recipient, delivery.body]
-      ).catch((e) => logger.warn(e, "[notificationEngine fallback] outbound_queue whatsapp dual-write failed"));
-    } else if (nextChannel === "email" && delivery.recipient) {
-      await rawExecute(
-        `INSERT INTO email_queue ("companyId", "toEmail", subject, body, status, "createdAt")
-         VALUES ($1, $2, $3, $4, 'pending', NOW())`,
-        [delivery.companyId, delivery.recipient, delivery.subject ?? "", delivery.body]
       );
+    } else if (nextChannel === "email" && delivery.recipient) {
       await rawExecute(
         `INSERT INTO outbound_queue
            ("companyId", channel, recipient, subject, body, status, "createdAt", "updatedAt")
          VALUES ($1, 'email', $2, $3, $4, 'pending', NOW(), NOW())`,
         [delivery.companyId, delivery.recipient, delivery.subject ?? null, delivery.body]
-      ).catch((e) => logger.warn(e, "[notificationEngine fallback] outbound_queue email dual-write failed"));
+      );
     }
 
     await insertDeliveryLog({
