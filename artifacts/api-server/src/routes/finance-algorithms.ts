@@ -1946,7 +1946,21 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
       contract: 'jl."contractId"',
       department: 'jl."departmentId"',
       client: 'jl."clientId"',
-      supplier: 'jl."supplierId"',
+      // journal_lines uses `vendorId` for the supplier dimension —
+      // "supplier" stays as the entityType alias for backwards compat
+      // with frontend pages that label it as "supplier", but the SQL
+      // column is `vendorId`. Pre-fix the mapping pointed at a
+      // non-existent `supplierId` column, so this endpoint threw a
+      // "column not found" SQL error for entityType=supplier silently.
+      supplier: 'jl."vendorId"',
+      vendor: 'jl."vendorId"',
+      asset: 'jl."assetId"',
+      unit: 'jl."unitId"',
+      umrahAgent: 'jl."umrahAgentId"',
+      umrahSeason: 'jl."umrahSeasonId"',
+      driver: 'jl."driverId"',
+      product: 'jl."productId"',
+      costCenter: 'jl."costCenterId"',
     };
     const safeCol = safeColumns[entityType];
 
