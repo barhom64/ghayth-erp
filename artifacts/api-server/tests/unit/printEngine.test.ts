@@ -303,6 +303,7 @@ describe("Print Engine v2 — variable substitution", () => {
       branchNameEn: null, companyNameEn: null, fullAddress: null,
     } as Parameters<typeof substitute>[0]["branch"];
     const cases: Array<[unknown, string]> = [
+      // Lifecycle / payment statuses
       ["active", "نشط"],
       ["draft", "مسودة"],
       ["posted", "مُرحَّل"],
@@ -315,6 +316,39 @@ describe("Print Engine v2 — variable substitution", () => {
       [false, "لا"],
       ["YES", "نعم"],
       ["NEW", "جديد"],
+      // Finance type maps — mirrored from finance-type-maps.ts so the
+      // printed PDF agrees with the on-screen badge. Regression-test the
+      // categories with the highest cross-domain reuse so the next
+      // contributor knows the SPA → print parity is a contract.
+      ["cash", "نقدي"],
+      ["bank_transfer", "تحويل بنكي"],
+      ["credit_card", "بطاقة ائتمان"],
+      ["standard", "فاتورة عادية"],
+      ["asset", "أصول"],
+      ["revenue", "إيرادات"],
+      // HR labels (leave types, exit reasons, doc types)
+      ["annual", "سنوية"],
+      ["resignation", "استقالة"],
+      ["iqama", "إقامة"],
+      // Fleet labels
+      ["preventive", "وقائية"],
+      ["diesel", "ديزل"],
+      ["delivery", "توصيل"],
+      ["comprehensive", "شامل"],
+      // CRM activity types
+      ["call", "مكالمة"],
+      ["meeting", "اجتماع"],
+      // Currency codes — Saudi convention renders the Arabic symbol next
+      // to amounts instead of the ISO triplet.
+      ["SAR", "ر.س"],
+      ["USD", "$"],
+      ["AED", "د.إ"],
+      // Generic fallbacks the SPA also uses
+      ["other", "أخرى"],
+      ["unknown", "غير محدد"],
+      // Priority labels
+      ["high", "عالية"],
+      ["urgent", "عاجلة"],
     ];
     for (const [input, expected] of cases) {
       const out = substitute({

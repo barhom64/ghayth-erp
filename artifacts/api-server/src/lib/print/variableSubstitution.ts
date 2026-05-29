@@ -94,6 +94,157 @@ const ENUM_AR: Record<string, string> = {
   outgoing: "صادر",
   internal: "داخلي",
   external: "خارجي",
+  // ── Finance type maps ─ mirrored from
+  // artifacts/ghayth-erp/src/lib/finance-type-maps.ts so the printed PDF
+  // reads the same Arabic label as the SPA badge for the same value.
+  // Payment methods
+  cash: "نقدي",
+  bank_transfer: "تحويل بنكي",
+  bank: "تحويل بنكي",
+  check: "شيك",
+  cheque: "شيك",
+  credit_card: "بطاقة ائتمان",
+  card: "بطاقة ائتمان",
+  custody: "من العهدة",
+  // Voucher operations (when used as `type` on a voucher row)
+  rent: "تحصيل إيجار",
+  invoice_payment: "سداد فاتورة عميل",
+  deposit: "إيداع ضمان",
+  refund: "استرداد",
+  vendor_invoice: "سداد فاتورة مورد",
+  salary: "صرف راتب",
+  advance: "سلفة موظف",
+  legal_fee: "أتعاب قانونية",
+  purchase: "مشتريات",
+  insurance: "سداد تأمين",
+  maintenance: "صيانة",
+  // Invoice types
+  standard: "فاتورة عادية",
+  simplified: "فاتورة مبسطة",
+  credit_memo: "إشعار دائن",
+  debit_memo: "إشعار مدين",
+  credit_note: "إشعار دائن",
+  debit_note: "إشعار مدين",
+  // Depreciation methods
+  straight_line: "القسط الثابت",
+  declining_balance: "القسط المتناقص",
+  // Account types
+  asset: "أصول",
+  liability: "التزامات",
+  equity: "حقوق ملكية",
+  revenue: "إيرادات",
+  expense: "مصروفات",
+  contra: "حساب مقابل",
+  // Expense categories
+  operational: "تشغيلية",
+  administrative: "إدارية",
+  marketing: "تسويقية",
+  travel: "سفر",
+  utilities: "مرافق",
+  salaries: "رواتب",
+  // Priority labels (priority-labels.ts)
+  high: "عالية",
+  medium: "متوسطة",
+  low: "منخفضة",
+  urgent: "عاجلة",
+  critical: "حرجة",
+  // ── HR type maps ─ from hr-type-maps.ts
+  // Leave types
+  annual: "سنوية",
+  sick: "مرضية",
+  personal: "شخصية",
+  maternity: "أمومة",
+  paternity: "أبوة",
+  emergency: "طارئة",
+  // Discipline reasons
+  late: "تأخر",
+  early_leave: "مغادرة مبكرة",
+  absence: "غياب",
+  behavior: "سلوك",
+  organization: "تنظيم",
+  gps_out_of_range: "خروج عن النطاق",
+  // Document types
+  employment_certificate: "شهادة عمل",
+  salary_certificate: "شهادة راتب",
+  experience_letter: "شهادة خبرة",
+  warning_letter: "خطاب إنذار",
+  termination_letter: "خطاب إنهاء خدمة",
+  work_permit: "تصريح عمل",
+  iqama: "إقامة",
+  passport: "جواز سفر",
+  contract: "عقد عمل",
+  driving_license: "رخصة قيادة",
+  vehicle_registration: "رخصة سير",
+  vehicle_insurance: "تأمين مركبة",
+  vehicle_inspection: "فحص دوري",
+  commercial_registration: "سجل تجاري",
+  // Exit / termination reasons
+  resignation: "استقالة",
+  termination: "فصل",
+  end_of_service: "إنهاء خدمة",
+  contract_end: "انتهاء عقد",
+  retirement: "تقاعد",
+  mutual: "اتفاق متبادل",
+  // Loan / advance types
+  salary_advance: "سلفة راتب",
+  housing: "سكن",
+  education: "تعليمية",
+  // Salary component types
+  fixed: "ثابت",
+  percentage: "نسبة",
+  variable: "متغير",
+  formula: "معادلة",
+  allowance: "بدل",
+  // ── Fleet type maps ─ from fleet-type-maps.ts
+  preventive: "وقائية",
+  corrective: "تصحيحية",
+  inspection: "فحص دوري",
+  // Fuel types
+  gasoline_91: "بنزين 91",
+  gasoline_95: "بنزين 95",
+  diesel: "ديزل",
+  electric: "كهربائي",
+  hybrid: "هجين",
+  // Trip types
+  delivery: "توصيل",
+  pickup: "استلام",
+  transfer: "نقل",
+  client_visit: "زيارة عميل",
+  // Insurance / coverage
+  comprehensive: "شامل",
+  third_party: "ضد الغير",
+  extended: "موسع",
+  // Traffic violation types
+  speeding: "تجاوز السرعة",
+  parking: "مخالفة وقوف",
+  signal: "قطع إشارة",
+  lane: "مخالفة مسار",
+  license: "رخصة منتهية",
+  phone: "استخدام الهاتف",
+  seatbelt: "عدم ربط الحزام",
+  // ── CRM type maps ─ from crm-type-maps.ts
+  call: "مكالمة",
+  email: "بريد إلكتروني",
+  meeting: "اجتماع",
+  note: "ملاحظة",
+  // ── Currency codes ─ Saudi convention prints the Arabic symbol next to
+  // amounts (not the ISO triplet). Leaving the three-letter code in the
+  // doc looked like a typo to non-technical readers.
+  sar: "ر.س",
+  usd: "$",
+  eur: "€",
+  aed: "د.إ",
+  kwd: "د.ك",
+  bhd: "د.ب",
+  qar: "ر.ق",
+  omr: "ر.ع",
+  egp: "ج.م",
+  jod: "د.أ",
+  // ── Generic fallbacks
+  other: "أخرى",
+  unknown: "غير محدد",
+  none: "لا يوجد",
+  custom: "مخصّص",
 };
 
 function formatValue(v: unknown): string {
