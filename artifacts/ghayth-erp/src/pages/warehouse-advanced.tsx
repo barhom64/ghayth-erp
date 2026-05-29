@@ -17,6 +17,7 @@
 
 import { useState } from "react";
 import { PageShell } from "@workspace/ui-core";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,7 @@ export default function WarehouseAdvancedPage() {
       subtitle="الجرد الدوري، الدفعات (lots)، التسلسلات، تصنيف ABC، تقارير"
       breadcrumbs={[{ label: "المستودع" }, { label: "متقدّم" }]}
     >
+      <WarehouseTabsNav />
       <Tabs defaultValue="cycle-counts">
         <TabsList>
           <TabsTrigger value="cycle-counts"><Calculator className="h-3.5 w-3.5 me-1" />الجرد الدوري</TabsTrigger>
