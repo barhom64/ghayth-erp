@@ -89,10 +89,13 @@ export default function AdminPdplPage() {
               <div className="text-sm space-y-2">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">v{privacyQ.data?.version ?? "—"}</Badge>
-                  {privacyQ.data?.effectiveDate && (
-                    <span className="text-xs text-muted-foreground">سارٍ منذ {formatDateAr(privacyQ.data.effectiveDate)}</span>
+                  {privacyQ.data?.lastUpdated && (
+                    <span className="text-xs text-muted-foreground">آخر تحديث {formatDateAr(privacyQ.data.lastUpdated)}</span>
                   )}
                 </div>
+                {privacyQ.data?.title && (
+                  <p className="text-sm font-medium">{privacyQ.data.title}</p>
+                )}
                 {privacyQ.data?.summary && (
                   <p className="text-xs text-muted-foreground">{privacyQ.data.summary}</p>
                 )}
@@ -116,11 +119,12 @@ export default function AdminPdplPage() {
                 retentionPolicies.slice(0, 30).map((p: any, i: number) => (
                   <div key={p.id ?? i} className="px-3 py-2 flex items-center justify-between">
                     <div>
-                      <p className="font-mono text-xs">{p.dataCategory ?? p.entity ?? "—"}</p>
-                      <p className="text-muted-foreground text-[10px]">{p.legalBasis ?? p.basis ?? ""}</p>
+                      <p className="font-mono text-xs">{p.dataType ?? "—"}</p>
+                      <p className="text-muted-foreground text-[10px]">{p.legalBasis ?? ""}</p>
                     </div>
                     <Badge variant="outline" className="text-[10px]">
-                      {p.retentionDays ?? p.days ?? "—"} يوم
+                      {p.retentionDays ?? "—"} يوم
+                      {p.isDefault && <span className="ms-1">(افتراضي)</span>}
                     </Badge>
                   </div>
                 ))
