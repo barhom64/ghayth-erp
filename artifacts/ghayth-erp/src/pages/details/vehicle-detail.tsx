@@ -21,7 +21,8 @@ import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
-import { CheckSquare } from "lucide-react";
+import { CheckSquare, Video } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   DetailPageLayout,
   EntityComments,
@@ -38,6 +39,7 @@ const TABS = [
   { key: "maintenance", label: "الصيانة", icon: Wrench },
   { key: "fuel", label: "الوقود", icon: Fuel },
   { key: "insurance", label: "التأمين", icon: Shield },
+  { key: "telematics", label: "التتبّع", icon: MapPin },
   { key: "tasks", label: "المهام", icon: CheckSquare },
   { key: "finance", label: "المالية", icon: BookOpen },
 ] as const;
@@ -82,6 +84,28 @@ export default function VehicleDetail() {
 
   const { data: vehicle, isLoading, isError, error, refetch } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
   const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
+  // Per-vehicle telematics rollups — populate the "تتبّع" tab. Each is a
+  // dedicated endpoint so a chatty UI doesn't block on the slowest one.
+  const { data: telematicsPosition } = useApiQuery<any>(
+    ["vehicle-telematics-position", id || ""],
+    id ? `/fleet/telematics/vehicles/${id}/position` : null,
+    !!id,
+  );
+  const { data: telematicsLive } = useApiQuery<any>(
+    ["vehicle-telematics-live", id || ""],
+    id ? `/fleet/telematics/vehicles/${id}/live` : null,
+    !!id,
+  );
+  const { data: telematicsEvents } = useApiQuery<{ data: any[] }>(
+    ["vehicle-telematics-events", id || ""],
+    id ? `/fleet/telematics/vehicles/${id}/events` : null,
+    !!id,
+  );
+  const { data: telematicsAlerts } = useApiQuery<{ data: any[] }>(
+    ["vehicle-telematics-alerts", id || ""],
+    id ? `/fleet/telematics/vehicles/${id}/ai-alerts` : null,
+    !!id,
+  );
   const { hideTabs: registryHideTabs } = useRegistryTabs("vehicle", id || "");
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
@@ -701,6 +725,16 @@ export default function VehicleDetail() {
         </Card>
       )}
 
+      {activeTab === "telematics" && id && (
+        <VehicleTelematicsTab
+          vehicleId={id}
+          position={telematicsPosition}
+          live={telematicsLive}
+          events={telematicsEvents?.data ?? []}
+          alerts={telematicsAlerts?.data ?? []}
+        />
+      )}
+
       {activeTab === "tasks" && id && (
         <LinkedTasks entityType="vehicle" entityId={id} />
       )}
@@ -837,4 +871,131 @@ function maintenanceTypeLabel(type: string): string {
     scheduled: "صيانة دورية", repair: "إصلاح", inspection: "فحص",
   };
   return labels[type] || type || "-";
+}
+
+function VehicleTelematicsTab({
+  vehicleId,
+  position,
+  live,
+  events,
+  alerts,
+}: {
+  vehicleId: string;
+  position: any;
+  live: any;
+  events: any[];
+  alerts: any[];
+}) {
+  const { toast } = useToast();
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  // POST /fleet/telematics/video/session — kicks off a live video session
+  // and returns the stream URL. Used by the "بدء بث الفيديو" action.
+  const handleStartVideo = async () => {
+    try {
+      const resp = await apiFetch<{ url?: string; sessionId?: string }>(
+        "/fleet/telematics/video/session",
+        { method: "POST", body: JSON.stringify({ vehicleId: Number(vehicleId) }) },
+      );
+      if (resp?.url) {
+        setVideoUrl(resp.url);
+        toast({ title: "بدأ بث الفيديو" });
+      } else {
+        toast({ title: "تم تجهيز الجلسة", description: resp?.sessionId ?? "" });
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر بدء البث", description: getErrorMessage(err) });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">الموقع الأخير</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs space-y-1">
+            {position ? (
+              <>
+                <p className="text-muted-foreground">خط العرض: <span className="font-mono">{position.lat ?? position.latitude ?? "—"}</span></p>
+                <p className="text-muted-foreground">خط الطول: <span className="font-mono">{position.lng ?? position.longitude ?? "—"}</span></p>
+                <p className="text-muted-foreground">السرعة: <span className="font-mono">{position.speed ?? "—"} كم/س</span></p>
+                <p className="text-muted-foreground">آخر تحديث: <span className="font-mono">{position.timestamp ?? position.updatedAt ?? "—"}</span></p>
+              </>
+            ) : <p className="text-muted-foreground">لا توجد بيانات موقع.</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">الحالة المباشرة</CardTitle>
+            <GuardedButton perm="fleet:update" size="sm" rateLimitAware onClick={handleStartVideo}>
+              <Video className="h-3.5 w-3.5 me-1" />بث فيديو
+            </GuardedButton>
+          </CardHeader>
+          <CardContent className="text-xs">
+            {live ? (
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(live).filter(([, v]) => typeof v !== "object").slice(0, 8).map(([k, v]) => (
+                  <div key={k} className="border rounded p-1.5">
+                    <p className="text-muted-foreground text-[10px]">{k}</p>
+                    <p className="font-mono">{v == null ? "—" : String(v)}</p>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-muted-foreground">لا توجد بيانات حية.</p>}
+            {videoUrl && (
+              <p className="mt-2 text-status-info-foreground">
+                رابط البث: <a href={videoUrl} className="underline font-mono" target="_blank" rel="noopener noreferrer">{videoUrl}</a>
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">الأحداث الأخيرة ({events.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {events.length === 0 ? (
+              <p className="p-3 text-muted-foreground text-center text-xs">لا توجد أحداث.</p>
+            ) : (
+              <div className="divide-y text-xs max-h-64 overflow-y-auto">
+                {events.slice(0, 30).map((e: any, i: number) => (
+                  <div key={e.id ?? i} className="px-3 py-1.5 flex justify-between">
+                    <span>{e.type ?? e.eventType ?? "—"}</span>
+                    <span className="text-muted-foreground">{e.timestamp ? formatDateAr(e.timestamp) : ""}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">تنبيهات AI ({alerts.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {alerts.length === 0 ? (
+              <p className="p-3 text-muted-foreground text-center text-xs">لا توجد تنبيهات.</p>
+            ) : (
+              <div className="divide-y text-xs max-h-64 overflow-y-auto">
+                {alerts.slice(0, 30).map((a: any, i: number) => (
+                  <div key={a.id ?? i} className="px-3 py-1.5 flex justify-between">
+                    <span>
+                      <Badge variant={a.severity === "critical" ? "destructive" : "outline"} className="text-[10px] me-1">{a.severity ?? "—"}</Badge>
+                      {a.title ?? a.category ?? "—"}
+                    </span>
+                    <span className="text-muted-foreground">{a.createdAt ? formatDateAr(a.createdAt) : ""}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 }

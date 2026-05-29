@@ -154,6 +154,27 @@ export default function TripDetailPage() {
     }
   };
 
+  // POST /fleet/trips/:id/waypoints — append an intermediate waypoint
+  // (location + timestamp + optional notes) to a planned/active trip.
+  // Used by the dispatcher when a driver phones in an unplanned stop.
+  const handleAddWaypoint = async () => {
+    const label = window.prompt("اسم النقطة (مثل: محطة وقود الراجحي):");
+    if (!label?.trim()) return;
+    try {
+      await apiFetch(`/fleet/trips/${id}/waypoints`, {
+        method: "POST",
+        body: JSON.stringify({
+          label: label.trim(),
+          recordedAt: new Date().toISOString(),
+        }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
+      toast({ title: "تمت إضافة النقطة" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر إضافة النقطة", description: err.message });
+    }
+  };
+
   const handleCancel = async () => {
     // FLT-001: /cancel frees the vehicle + driver and requires a reason.
     const reason = window.prompt("سبب إلغاء الرحلة:");
@@ -274,6 +295,16 @@ export default function TripDetailPage() {
       >
         <XCircle className="h-4 w-4" />
         إلغاء
+      </GuardedButton>
+      <GuardedButton
+        perm="fleet:update"
+        size="sm"
+        variant="outline"
+        onClick={handleAddWaypoint}
+        disabled={trip?.status === "completed" || trip?.status === "cancelled"}
+        rateLimitAware
+      >
+        + نقطة
       </GuardedButton>
       <EntityPrintButton entityType="fleet_trip" entityId={id ?? ""} formats={["a4"]} />
       <DetailActionButtons hook={editDelete} editPerm="fleet:create" deletePerm="fleet:delete" />
