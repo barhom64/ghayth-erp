@@ -1929,7 +1929,7 @@ financeAlgorithmsRouter.post("/cip/:id/costs", authorize({ feature: "finance.alg
         companyId: scope.companyId,
         branchId: (cip.branchId as number | null) ?? scope.branchId,
         createdBy: scope.activeAssignmentId ?? scope.userId,
-        ref: `CIP-COST-${cip.code ?? cip.id}-${Date.now()}`,
+        ref: internalTechRef(`CIP-COST-${cip.code ?? cip.id}`),
         description: `تكلفة CIP: ${cip.name} — ${b.description}`,
         type: "cip_cost",
         sourceType: "cip_cost",

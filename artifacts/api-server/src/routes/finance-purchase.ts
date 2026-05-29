@@ -33,6 +33,7 @@ import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
+import { internalTechRef } from "../lib/internalRef.js";
 import { z } from "zod";
 
 export const purchaseRouter = Router();
@@ -2479,7 +2480,7 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
     }
 
     const amt = roundTo2(Number(amount));
-    const advRef = reference || `VENDOR-ADV-${supplierId}-${Date.now()}`;
+    const advRef = reference || internalTechRef(`VENDOR-ADV-${supplierId}`);
     const advSourceKey = `finance:vendor_advance:${supplierId}:${recvDate}:${requestIdempotencyToken(req)}`;
 
     // Idempotency: short-circuit on retry.
@@ -2703,7 +2704,7 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     const vatAmount = roundTo2(vatIncluded ? totalAmt - subtotal : totalAmt * vatRate);
     const fullAmount = vatIncluded ? totalAmt : roundTo2(totalAmt + vatAmount);
 
-    const creditRef = `VCM-${supplierId}-${Date.now()}`;
+    const creditRef = internalTechRef(`VCM-${supplierId}`);
     const creditSourceKey = `finance:vendor_credit:${supplierId}:${memoDateStr}:${requestIdempotencyToken(req)}`;
 
     let memoId: number | null = null;
