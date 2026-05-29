@@ -2420,11 +2420,13 @@ async function monthlyAutoDepreciation(): Promise<string> {
               accountCode: (asset.depreciationAccountCode as string | undefined) ?? "6100",
               debit: depAmount,
               credit: 0,
+              assetId: Number(asset.id),
             },
             {
               accountCode: (asset.accDepreciationAccountCode as string | undefined) ?? "1590",
               debit: 0,
               credit: depAmount,
+              assetId: Number(asset.id),
             },
           ],
           status: "posted",
