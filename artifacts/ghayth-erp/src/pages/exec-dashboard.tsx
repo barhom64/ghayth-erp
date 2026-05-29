@@ -285,11 +285,11 @@ export default function ExecDashboard() {
                 {overdueInvoices.slice(0, 6).map((inv: any) => (
                   <div key={inv.id} className="flex items-center justify-between text-xs border-b pb-1">
                     <span className="truncate max-w-[55%]">
-                      <span className="font-mono me-2">#{inv.ref ?? inv.id}</span>
+                      <span className="font-mono me-2">#{inv.invoiceNumber ?? inv.ref ?? inv.id}</span>
                       {inv.clientName ?? "—"}
                     </span>
                     <span className="font-mono text-status-error-foreground whitespace-nowrap">
-                      {formatCurrency(Number(inv.amount ?? inv.totalAmount ?? 0))} — {inv.daysPastDue ?? "?"}ي
+                      {formatCurrency(Number(inv.outstanding ?? inv.total ?? 0))} — {inv.daysPastDue ?? "?"}ي
                     </span>
                   </div>
                 ))}
@@ -308,9 +308,14 @@ export default function ExecDashboard() {
               <div className="space-y-1">
                 {criticalObligations.slice(0, 6).map((o: any) => (
                   <div key={o.id} className="flex items-center justify-between text-xs border-b pb-1">
-                    <span className="truncate max-w-[60%]">{o.title ?? "—"}</span>
+                    <span className="truncate max-w-[60%]">
+                      {o.title ?? "—"}
+                      {o.escalationLevel > 0 && (
+                        <span className="text-status-error-foreground ms-1">(تصعيد L{o.escalationLevel})</span>
+                      )}
+                    </span>
                     <Badge variant="outline" className="text-[10px]">
-                      {o.dueAt ? new Date(o.dueAt).toLocaleDateString("ar-SA") : o.daysUntilDue ?? "—"}
+                      {o.dueAt ? new Date(o.dueAt).toLocaleDateString("ar-SA") : "—"}
                     </Badge>
                   </div>
                 ))}

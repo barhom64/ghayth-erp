@@ -209,20 +209,25 @@ function OpportunitiesTab() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               <div>
-                <p className="text-muted-foreground">نسبة التحويل</p>
-                <p className="font-mono font-bold">{(Number(analytics.conversionRate ?? 0) * 100).toFixed(1)}%</p>
-              </div>
-              <div>
                 <p className="text-muted-foreground">متوسط دورة الإغلاق</p>
-                <p className="font-mono font-bold">{analytics.avgCycleDays ?? "—"} يوم</p>
+                <p className="font-mono font-bold">{analytics.avgDealDays ?? "—"} يوم</p>
               </div>
               <div>
-                <p className="text-muted-foreground">قيمة الصفقات هذا الشهر</p>
-                <p className="font-mono font-bold">{formatCurrency(Number(analytics.mtdValue ?? 0))}</p>
+                <p className="text-muted-foreground">إيرادات الصفقات المكسوبة</p>
+                <p className="font-mono font-bold">{formatCurrency(Number(analytics.wonRevenue ?? 0))}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">صفقات قيد التفاوض</p>
-                <p className="font-mono font-bold">{analytics.inNegotiation ?? "—"}</p>
+                <p className="text-muted-foreground">القيمة المتوقعة (Pipeline)</p>
+                <p className="font-mono font-bold">{formatCurrency(Number(analytics.forecastRevenue ?? 0))}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">صفقات خاسرة</p>
+                <p className="font-mono font-bold">
+                  {analytics.lostCount ?? 0}
+                  <span className="text-muted-foreground text-[10px] ms-1">
+                    ({formatCurrency(Number(analytics.lostValue ?? 0))})
+                  </span>
+                </p>
               </div>
             </div>
           </CardContent>

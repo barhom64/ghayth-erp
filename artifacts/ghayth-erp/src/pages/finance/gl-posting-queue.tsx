@@ -43,7 +43,7 @@ import {
   PageStatusBadge,
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { toast } from "@/hooks/use-toast";
 
 interface MudadPendingRow {
@@ -182,8 +182,15 @@ export default function GLPostingQueuePage() {
   // POST /finance/gl-helpers/realized-fx/:invoiceId — operator-triggered
   // FX realization. Unlike the other helpers, there's no "pending" queue
   // because realization fires at invoice-settlement time. We expose a
-  // manual one-off trigger here for the rare back-fill case.
-  const postRealizedFx = useApiMutation<PostOutcome, { invoiceId: number }>(
+  // manual one-off trigger here for the rare back-fill case. Server
+  // requires `settlementRate` + `paymentDate`; optional `paymentAmount`
+  // for partial settlements.
+  const postRealizedFx = useApiMutation<PostOutcome, {
+    invoiceId: number;
+    settlementRate: number;
+    paymentDate: string;
+    paymentAmount?: number;
+  }>(
     (body) => `/finance/gl-helpers/realized-fx/${body.invoiceId}`,
     "POST",
     [["gl-helpers", "realized-fx", "history"]],
@@ -193,6 +200,9 @@ export default function GLPostingQueuePage() {
     },
   );
   const [realizedInvoiceId, setRealizedInvoiceId] = useState("");
+  const [realizedRate, setRealizedRate] = useState("");
+  const [realizedDate, setRealizedDate] = useState(todayLocal());
+  const [realizedAmount, setRealizedAmount] = useState("");
 
   if (
     mudad.isLoading || lots.isLoading || fx.isLoading ||
@@ -635,9 +645,9 @@ export default function GLPostingQueuePage() {
           <div className="mb-2 text-xs text-muted-foreground">
             سجل آخر 200 عملية تحقيق FX. التحقيق يُرحَّل تلقائياً من شاشة تسوية الفاتورة — استخدم الحقل أدناه للتشغيل اليدوي على فاتورة محددة.
           </div>
-          <div className="mb-3 flex items-end gap-2 flex-wrap p-3 border rounded bg-muted/30">
-            <div className="flex-1 min-w-[200px]">
-              <label className="text-xs text-muted-foreground mb-1 block">رقم الفاتورة</label>
+          <div className="mb-3 grid grid-cols-1 md:grid-cols-5 gap-2 p-3 border rounded bg-muted/30">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">رقم الفاتورة *</label>
               <input
                 type="number"
                 value={realizedInvoiceId}
@@ -646,16 +656,65 @@ export default function GLPostingQueuePage() {
                 className="w-full h-8 px-2 text-xs border rounded bg-white"
               />
             </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">سعر التسوية *</label>
+              <input
+                type="number"
+                step="0.0001"
+                value={realizedRate}
+                onChange={(e) => setRealizedRate(e.target.value)}
+                dir="ltr"
+                className="w-full h-8 px-2 text-xs border rounded bg-white"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">تاريخ الدفع *</label>
+              <input
+                type="date"
+                value={realizedDate}
+                onChange={(e) => setRealizedDate(e.target.value)}
+                dir="ltr"
+                className="w-full h-8 px-2 text-xs border rounded bg-white"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">المبلغ المدفوع (للجزئي)</label>
+              <input
+                type="number"
+                value={realizedAmount}
+                onChange={(e) => setRealizedAmount(e.target.value)}
+                dir="ltr"
+                className="w-full h-8 px-2 text-xs border rounded bg-white"
+              />
+            </div>
             <Button
               size="sm"
-              disabled={postRealizedFx.isPending || !realizedInvoiceId.trim()}
+              rateLimitAware
+              disabled={postRealizedFx.isPending || !realizedInvoiceId.trim() || !realizedRate.trim() || !realizedDate}
               onClick={() => {
-                const n = Number(realizedInvoiceId);
-                if (!Number.isFinite(n) || n <= 0) return;
-                postRealizedFx.mutate({ invoiceId: n }, { onSuccess: () => setRealizedInvoiceId("") });
+                const id = Number(realizedInvoiceId);
+                const rate = Number(realizedRate);
+                if (!Number.isFinite(id) || id <= 0) return;
+                if (!Number.isFinite(rate) || rate <= 0) return;
+                const amt = Number(realizedAmount);
+                postRealizedFx.mutate(
+                  {
+                    invoiceId: id,
+                    settlementRate: rate,
+                    paymentDate: realizedDate,
+                    paymentAmount: Number.isFinite(amt) && amt > 0 ? amt : undefined,
+                  },
+                  {
+                    onSuccess: () => {
+                      setRealizedInvoiceId("");
+                      setRealizedRate("");
+                      setRealizedAmount("");
+                    },
+                  },
+                );
               }}
             >
-              ترحيل تحقيق FX يدوياً
+              ترحيل
             </Button>
           </div>
           <DataTable
