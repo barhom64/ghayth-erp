@@ -367,7 +367,13 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
     // they hold.
     const [tenancies, legalCases, umrahSubAgents] = await Promise.all([
       rawQuery<Record<string, unknown>>(
-        `SELECT t.id, t.name, t.phone, t."nationalId",
+        // Drop t.phone + t."nationalId" — the request is authorized
+        // under crm.clients, not properties.tenants. Sales/account
+        // managers viewing a client should not get tenant PII as a
+        // side-effect of the tenancies tab; the link is enough so they
+        // can navigate to /properties/tenants/:id where the proper
+        // properties.tenants:view RBAC + field policy apply.
+        `SELECT t.id, t.name,
                 (SELECT COUNT(*) FROM rental_contracts rc
                   WHERE rc."tenantId" = t.id AND rc.status = 'active' AND rc."deletedAt" IS NULL)::int AS "activeContracts"
            FROM tenants t
