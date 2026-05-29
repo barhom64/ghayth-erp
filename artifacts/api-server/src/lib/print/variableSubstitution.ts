@@ -36,8 +36,69 @@ function get(obj: unknown, path: string): unknown {
   return cur;
 }
 
+/** Canonical English DB enum value → Arabic display label, used by
+ *  formatValue() so `{{entity.status}}` renders "نشط" instead of "active"
+ *  in every printed doc. Covers the 27 distinct status values found in
+ *  db/schema_pre.sql plus common type/workflow synonyms. Keep this in sync
+ *  with the SPA's per-page STATUS_LABELS maps so the on-screen badge and
+ *  the printed-doc text never disagree. */
+const ENUM_AR: Record<string, string> = {
+  // Lifecycle statuses
+  draft: "مسودة",
+  pending: "قيد المراجعة",
+  pending_approval: "بانتظار الاعتماد",
+  approved: "معتمد",
+  rejected: "مرفوض",
+  active: "نشط",
+  inactive: "غير نشط",
+  posted: "مُرحَّل",
+  completed: "مكتمل",
+  cancelled: "ملغى",
+  void: "ملغى",
+  closed: "مغلق",
+  open: "مفتوح",
+  new: "جديد",
+  in_progress: "قيد التنفيذ",
+  scheduled: "مجدول",
+  on_hold: "معلَّق",
+  suspended: "موقوف",
+  blocked: "محظور",
+  expired: "منتهٍ",
+  overdue: "متأخر",
+  // Payment / settlement statuses
+  paid: "مدفوع",
+  unpaid: "غير مدفوع",
+  partial: "جزئي",
+  partially_paid: "مدفوع جزئياً",
+  invoiced: "مُفوتر",
+  disputed: "متنازع عليه",
+  // Inventory / logistics
+  delivered: "مُسلَّم",
+  received: "مُستلَم",
+  shipped: "مشحون",
+  returned: "مُرتجع",
+  fulfilled: "مُلبَّى",
+  // Voucher / journal types
+  receipt: "سند قبض",
+  payment: "سند صرف",
+  // Boolean stringifications a few loaders produce
+  true: "نعم",
+  false: "لا",
+  yes: "نعم",
+  no: "لا",
+  // Gender (one of the few enums printed unchanged today)
+  male: "ذكر",
+  female: "أنثى",
+  // Common direction / channel words
+  incoming: "وارد",
+  outgoing: "صادر",
+  internal: "داخلي",
+  external: "خارجي",
+};
+
 function formatValue(v: unknown): string {
   if (v === null || v === undefined) return "";
+  if (typeof v === "boolean") return v ? "نعم" : "لا";
   if (typeof v === "number") {
     if (!Number.isFinite(v)) return "";
     return v.toLocaleString("en-US", {
@@ -47,6 +108,11 @@ function formatValue(v: unknown): string {
   }
   if (typeof v === "string") {
     const trimmed = v.trim();
+    // Enum lookup BEFORE date/numeric checks so values like "open" / "new"
+    // don't fall through to the raw-string return. Case-insensitive to
+    // handle "Active" / "ACTIVE" variants some loaders pass through.
+    const enumAr = ENUM_AR[trimmed.toLowerCase()];
+    if (enumAr !== undefined) return enumAr;
     // ISO date / timestamp detection — formats like "2025-06-15" or
     // "2025-06-15T12:34:56.000Z" come back from PG date/timestamp columns
     // as strings. Convert to Arabic locale date so {{entity.createdAt}}

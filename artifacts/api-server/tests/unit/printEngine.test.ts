@@ -285,6 +285,56 @@ describe("Print Engine v2 — variable substitution", () => {
   it("renders the duplicate watermark when present", () => {
     expect(src).toContain('class="watermark"');
   });
+
+  it("translates English DB enum values to Arabic so printed docs are in the system language", async () => {
+    // formatValue() now looks up ENUM_AR before falling through to the raw
+    // string. Without it, `{{entity.status}} === "active"` printed the
+    // English word — inconsistent with the SPA badge that already shows
+    // "نشط" and a violation of the system-language guarantee the user asked
+    // for. Test the common cases through the public substitute() entry
+    // point so the full pipeline order (autoTokens → expandIf → expandEach
+    // → token replace) is exercised end-to-end.
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = {
+      companyName: "ش", branchName: "ف",
+      address: null, phone: null, email: null,
+      logoUrl: null, footerText: null, taxNumber: null,
+      crNumber: null, vatNumber: null,
+      branchNameEn: null, companyNameEn: null, fullAddress: null,
+    } as Parameters<typeof substitute>[0]["branch"];
+    const cases: Array<[unknown, string]> = [
+      ["active", "نشط"],
+      ["draft", "مسودة"],
+      ["posted", "مُرحَّل"],
+      ["cancelled", "ملغى"],
+      ["paid", "مدفوع"],
+      ["overdue", "متأخر"],
+      ["receipt", "سند قبض"],
+      ["male", "ذكر"],
+      [true, "نعم"],
+      [false, "لا"],
+      ["YES", "نعم"],
+      ["NEW", "جديد"],
+    ];
+    for (const [input, expected] of cases) {
+      const out = substitute({
+        template: "[{{entity.status}}]",
+        data: { entity: { status: input } },
+        branch,
+        isThermal: false,
+      });
+      expect(out, `enum "${String(input)}" → "${expected}"`).toContain(`[${expected}]`);
+    }
+    // Unknown enum values pass through unchanged — the engine must not
+    // silently swallow free-form text that the SPA may use.
+    const passthrough = substitute({
+      template: "[{{entity.code}}]",
+      data: { entity: { code: "300SP-X" } },
+      branch,
+      isThermal: false,
+    });
+    expect(passthrough).toContain("[300SP-X]");
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────
