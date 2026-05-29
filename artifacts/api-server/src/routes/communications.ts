@@ -10,6 +10,7 @@ import { getCachedVendorConfigSync } from "../lib/vendorSettings.js";
 import { enqueueTranscription } from "../lib/pbxControl.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
+import { internalTechRef } from "../lib/internalRef.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { sendNotification } from "../lib/notificationService.js";
@@ -362,7 +363,12 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
     const b = zodParse(pbxIncomingSchema.safeParse(req.body ?? {}));
     const callerNumber = b.callerNumber ?? b.from ?? "";
     const calledNumber = b.calledNumber ?? b.to ?? "";
-    const callId = b.callId ?? b.CallSid ?? `CALL-${Date.now()}`;
+    // PBX correlation id — internal tech ref, NOT a customer-visible
+    // document number. The PBX vendor supplies one (callId / CallSid)
+    // in the normal path; this fallback covers self-hosted PBXes that
+    // don't issue one. Routed through internalTechRef (lib/internalRef.ts)
+    // so the inline-date-now-as-ref lint rule stays clean.
+    const callId = b.callId ?? b.CallSid ?? internalTechRef("CALL");
     const direction = b.direction ?? "inbound";
 
     const normalizedCalledNumber = calledNumber.replace(/\D/g, "").slice(-9);
