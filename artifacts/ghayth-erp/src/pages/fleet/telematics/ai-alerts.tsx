@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -89,6 +89,14 @@ export default function FleetTelematicsAiAlerts() {
     ["fleet-telematics-ai-alerts", status, category],
     `/fleet/telematics/ai-alerts?${qs.toString()}`,
   );
+  // Alerts are pushed by the CMSV6 device in seconds, batched into the
+  // DB by the webhook + poller. A one-minute auto-refresh strikes a
+  // balance between freshness and SQL load (the list query touches the
+  // hot fleet_ai_alerts table).
+  useEffect(() => {
+    const t = setInterval(() => refetch(), 60_000);
+    return () => clearInterval(t);
+  }, [refetch]);
   const rows = asList(data) as AiAlertRow[];
 
   const ackMut = useApiMutation<unknown, { id: number }>(
