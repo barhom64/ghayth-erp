@@ -3340,7 +3340,7 @@ function buildUmrahPackagePreset(): PrintTemplate {
 <div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
 <div class="meta-grid">
   <div><strong>اسم الباقة:</strong> {{entity.name}}</div>
-  <div><strong>الموسم:</strong> #{{entity.seasonId}}</div>
+  <div><strong>الموسم:</strong> {{entity.seasonName}}</div>
   <div><strong>سعر التكلفة:</strong> {{entity.costPrice}}</div>
   <div><strong>سعر البيع:</strong> {{entity.sellPrice}}</div>
   <div><strong>المدة:</strong> {{entity.duration}} يوم</div>
@@ -3400,9 +3400,9 @@ function buildUmrahTransportPreset(): PrintTemplate {
   <div><strong>تاريخ الرحلة:</strong> {{entity.tripDate}}</div>
   <div><strong>من:</strong> {{entity.fromLocation}}</div>
   <div><strong>إلى:</strong> {{entity.toLocation}}</div>
-  <div><strong>الموسم:</strong> #{{entity.seasonId}}</div>
-  <div><strong>المركبة:</strong> #{{entity.vehicleId}}</div>
-  <div><strong>السائق:</strong> #{{entity.driverId}}</div>
+  <div><strong>الموسم:</strong> {{entity.seasonName}}</div>
+  <div><strong>المركبة:</strong> <span dir="ltr">{{entity.plateNumber}}</span> — {{entity.vehicleMake}} {{entity.vehicleModel}}</div>
+  <div><strong>السائق:</strong> {{entity.driverName}} — <span dir="ltr">{{entity.driverLicense}}</span></div>
   <div><strong>السعة:</strong> {{entity.capacity}}</div>
   <div><strong>عدد المعتمرين:</strong> {{entity.pilgrimCount}}</div>
   <div><strong>التكلفة:</strong> {{entity.cost}}</div>
@@ -3429,13 +3429,13 @@ function buildUmrahViolationPreset(): PrintTemplate {
   <div><strong>نوع المخالفة:</strong> {{entity.type}}</div>
   <div><strong>نوع المرجع:</strong> {{entity.referenceType}}</div>
   <div><strong>الرقم المرجعي:</strong> <span dir="ltr">{{entity.referenceNumber}}</span></div>
-  <div><strong>المعتمر:</strong> #{{entity.mutamerId}}</div>
-  <div><strong>المجموعة:</strong> #{{entity.groupId}}</div>
-  <div><strong>الوكيل الفرعي:</strong> #{{entity.subAgentId}}</div>
-  <div><strong>الوكيل:</strong> #{{entity.agentId}}</div>
+  <div><strong>المعتمر:</strong> {{entity.pilgrimName}} — <span dir="ltr">{{entity.pilgrimNuskNumber}}</span></div>
+  <div><strong>المجموعة:</strong> {{entity.groupName}}</div>
+  <div><strong>الوكيل الفرعي:</strong> {{entity.subAgentName}} — <span dir="ltr">{{entity.subAgentNuskCode}}</span></div>
+  <div><strong>الوكيل:</strong> {{entity.agentName}} — <span dir="ltr">{{entity.agentNuskNumber}}</span></div>
   <div><strong>قيمة الغرامة:</strong> {{entity.penaltyAmount}}</div>
   <div><strong>الحالة:</strong> {{entity.status}}</div>
-  <div><strong>الفاتورة المرتبطة:</strong> #{{entity.linkedInvoiceId}}</div>
+  <div><strong>الفاتورة المرتبطة:</strong> <span dir="ltr">{{entity.linkedInvoiceRef}}</span></div>
   <div><strong>تاريخ الرصد:</strong> {{entity.detectedAt}}</div>
   <div><strong>تاريخ التسجيل:</strong> {{entity.createdAt}}</div>
 </div>

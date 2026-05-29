@@ -260,6 +260,12 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadUmrahAgentInvoice(companyId, entityId);
     case "umrah_penalty":
       return await loadUmrahPenalty(companyId, entityId);
+    case "umrah_violation":
+      return await loadUmrahViolation(companyId, entityId);
+    case "umrah_transport":
+      return await loadUmrahTransportTrip(companyId, entityId);
+    case "umrah_package":
+      return await loadUmrahPackage(companyId, entityId);
     case "salary_advance":
       return await loadSalaryAdvance(companyId, entityId);
     case "training_program":
@@ -1303,6 +1309,66 @@ async function loadUmrahPenalty(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   return { entity: penalty ?? { id } };
+}
+
+// Like loadUmrahPenalty above, but for the umrah_violations table — the
+// closing-sweep preset references FK columns (mutamerId, agentId, etc.)
+// and without these joins the printed doc shows bare numeric IDs. Joining
+// pilgrim/sub-agent/agent/group/invoice surfaces the human-readable names.
+async function loadUmrahViolation(companyId: number, id: string) {
+  const [violation] = await rawQuery<Record<string, unknown>>(
+    `SELECT v.*,
+            p."fullName" AS "pilgrimName", p."passportNumber" AS "pilgrimPassport",
+            p."nuskNumber" AS "pilgrimNuskNumber",
+            sa.name AS "subAgentName", sa."nuskCode" AS "subAgentNuskCode",
+            a.name AS "agentName", a."nuskAgentNumber" AS "agentNuskNumber",
+            g.name AS "groupName",
+            inv.ref AS "linkedInvoiceRef"
+       FROM umrah_violations v
+       LEFT JOIN umrah_pilgrims p ON p.id = v."mutamerId" AND p."companyId" = $2
+       LEFT JOIN umrah_sub_agents sa ON sa.id = v."subAgentId" AND sa."companyId" = $2
+       LEFT JOIN umrah_agents a ON a.id = v."agentId" AND a."companyId" = $2
+       LEFT JOIN umrah_groups g ON g.id = v."groupId" AND g."companyId" = $2
+       LEFT JOIN umrah_sales_invoices inv ON inv.id = v."linkedInvoiceId" AND inv."companyId" = $2
+      WHERE v.id = $1 AND v."companyId" = $2 AND v."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId],
+  ).catch(() => [null]);
+  return { entity: violation ?? { id } };
+}
+
+// Joins season + vehicle + driver so the umrah_transport preset renders
+// readable names instead of "#42 / #7". Same pattern as loadFleetTrip.
+async function loadUmrahTransportTrip(companyId: number, id: string) {
+  const [trip] = await rawQuery<Record<string, unknown>>(
+    `SELECT t.*,
+            s.name AS "seasonName",
+            v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel",
+            d.name AS "driverName", d."licenseNumber" AS "driverLicense"
+       FROM umrah_transport t
+       LEFT JOIN umrah_seasons s ON s.id = t."seasonId" AND s."companyId" = $2
+       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId" AND v."companyId" = $2
+       LEFT JOIN fleet_drivers d ON d.id = t."driverId" AND d."companyId" = $2
+      WHERE t.id = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId],
+  ).catch(() => [null]);
+  return { entity: trip ?? { id } };
+}
+
+// Surface season name on the package card — the preset uses #{{entity.seasonId}}
+// as fallback, but seeing the season's Arabic name is far more useful for the
+// operator printing the brochure.
+async function loadUmrahPackage(companyId: number, id: string) {
+  const [pkg] = await rawQuery<Record<string, unknown>>(
+    `SELECT p.*, s.name AS "seasonName"
+       FROM umrah_packages p
+       LEFT JOIN umrah_seasons s ON s.id = p."seasonId" AND s."companyId" = $2
+      WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId],
+  ).catch(() => [null]);
+  return { entity: pkg ?? { id } };
 }
 
 // ─── Master cards + transactions with JOINs (from main) ─────────────────
