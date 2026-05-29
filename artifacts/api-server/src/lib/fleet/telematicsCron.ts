@@ -167,12 +167,20 @@ export async function fleetTelematicsHeartbeat(): Promise<string> {
   let flipped = 0;
   for (const row of stale) {
     try {
-      await rawExecute(
+      // Only increment the metric if THIS replica actually flipped the
+      // row. Without the affectedRows guard, two replicas racing the
+      // same heartbeat tick would both report "flipped" — inaccurate
+      // observability when the operator looks at the run summary. The
+      // UPDATE itself is idempotent (status = 'online' guard), but the
+      // emitEvent must also be gated so we don't fire a duplicate
+      // device.offline broadcast per device.
+      const upd = await rawExecute(
         `UPDATE fleet_telematics_devices
             SET status = 'offline', "lastOfflineAt" = NOW(), "updatedAt" = NOW()
           WHERE id = $1 AND status = 'online'`,
         [row.id],
       );
+      if ((upd.affectedRows ?? 0) === 0) continue;
       flipped++;
       await emitEvent({
         companyId: row.companyId,
