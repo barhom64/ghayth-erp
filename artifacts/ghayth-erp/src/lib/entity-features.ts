@@ -77,9 +77,10 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   document:           {},
 
   umrah_sales_invoice:{ financialImpact: true },
-  umrah_pilgrim:      {},
-  umrah_season:       { attachments: false },
-  "umrah-season":     { attachments: false },
+  umrah_pilgrim:      { financialImpact: true, financialEntityType: "client" },
+  umrah_season:       { attachments: false, financialImpact: true, financialEntityType: "umrahSeason" },
+  "umrah-season":     { attachments: false, financialImpact: true, financialEntityType: "umrahSeason" },
+  umrah_agent:        { financialImpact: true, financialEntityType: "umrahAgent" },
   governance_policy:  {},
 
   crm_lead:           {},
@@ -105,9 +106,13 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   receivable:         { financialImpact: true },
   request:            { approval: true },
   risk:               {},
-  tenant:             { financialImpact: true },
+  // Tenants are tracked as clients in the GL — clientId on every
+  // rent revenue, VAT, and installment-payment JE (after the
+  // engine fixes in this PR). So the tenant detail page's financial
+  // profile uses entityType="client" to pull all per-tenant GL rows.
+  tenant:             { financialImpact: true, financialEntityType: "client" },
   "traffic-violation":{ financialImpact: true },
-  "umrah-agent":      {},
+  "umrah-agent":      { financialImpact: true, financialEntityType: "umrahAgent" },
   "umrah-invoice":    { financialImpact: true },
   "umrah-package":    {},
   "umrah-penalty":    { financialImpact: true },
