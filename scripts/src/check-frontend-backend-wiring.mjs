@@ -477,9 +477,11 @@ function extractFrontendCalls() {
       while (i < src.length && /\s/.test(src[i])) i++;
       // Skip an inline `<cond> ? "..." : "..."` conditional — common
       // when the dialog is rendered with a maybe-null target row. Move
-      // past the condition to the first quoted string.
+      // past the condition to the first quoted string. Allow common
+      // operators (`!==`, `==`, `&&`, etc.) and parens inside the
+      // condition so things like `id !== null ? "/x/${id}" : ""` work.
       const savedI = i;
-      const condRe = /^[\w.$?\s]+\?/;
+      const condRe = /^[\w.$?!=&|<>()\s]+\?/;
       const rest = src.slice(i, i + 200);
       if (condRe.test(rest) && !/^[\s]*[`"']/.test(rest)) {
         while (i < src.length && src[i] !== "?") i++;

@@ -117,12 +117,13 @@ export default function AdminDataImportPage() {
   const batches: any[] = batchesQ.data?.data ?? [];
 
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
+  // URL kept as a non-conditional template literal so the wiring audit
+  // can pattern-match it to /import/batches/:id. The fetch is gated by
+  // `enabled` instead — when there's no selection, the URL is built
+  // against the placeholder 0 but the query stays idle.
   const batchDetailQ = useApiQuery<any>(
-    // Use a sentinel "none" rather than "0" so the cache key never
-    // collides with a real batch #0 (the server uses serial PKs that
-    // start at 1, but better not to assume).
     ["import-batch-detail", selectedBatchId == null ? "none" : String(selectedBatchId)],
-    selectedBatchId ? `/import/batches/${selectedBatchId}` : null,
+    `/import/batches/${selectedBatchId ?? 0}`,
     { enabled: selectedBatchId !== null },
   );
 
