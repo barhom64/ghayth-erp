@@ -195,7 +195,7 @@ router.get("/tickets", authorize({ feature: "support.tickets", action: "list" })
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (priority) { where += ` AND t.priority = $${paramIdx}`; params.push(priority); paramIdx++; }
     const rows = await rawQuery<SupportTicketRow & { clientName?: string | null; assigneeName?: string | null }>(
-      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=t."assigneeId" AND e."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
+      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."companyId"=t."companyId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=t."assigneeId" AND e."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -407,7 +407,7 @@ router.get("/tickets/:id", authorize({ feature: "support.tickets", action: "view
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [ticket] = await rawQuery<SupportTicketRow & { clientName?: string | null }>(
-      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL WHERE t.id=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL`,
+      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."companyId"=t."companyId" AND cl."deletedAt" IS NULL WHERE t.id=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
