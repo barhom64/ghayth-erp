@@ -29,7 +29,10 @@ describe("umrah route — /import/preview wired through the engine", () => {
   });
 
   it("delegates by fileType: vouchers → previewVouchersImport, default → previewMutamersImport", () => {
-    expect(ROUTE).toMatch(/fileType\s*===\s*"vouchers"\s*\?\s*[\r\n\s]*await previewVouchersImport/);
+    // The discriminator variable may be the raw `fileType` or the
+    // normalized union literal — what matters is voucher rows take the
+    // voucher-preview branch.
+    expect(ROUTE).toMatch(/(?:fileType|normalizedFileType)\s*===\s*"vouchers"\s*\?\s*[\r\n\s]*await previewVouchersImport/);
     expect(ROUTE).toMatch(/:\s*[\r\n\s]*await previewMutamersImport\(importScope,/);
   });
 
