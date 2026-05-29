@@ -433,7 +433,7 @@ export default function RiskDetail() {
             <EntityPrintButton
               entityType="risk"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton
             perm="governance:update"

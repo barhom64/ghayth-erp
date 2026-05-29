@@ -450,7 +450,7 @@ export default function JournalManualDetailPage() {
         actions={
         <div className="flex items-center gap-2">
           {actions}
-          <PrintButton entityType="journal_entry" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="journal_entry" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
       />

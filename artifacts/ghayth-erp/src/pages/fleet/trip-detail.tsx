@@ -275,7 +275,7 @@ export default function TripDetailPage() {
         <XCircle className="h-4 w-4" />
         إلغاء
       </GuardedButton>
-      <EntityPrintButton entityType="fleet_trip" entityId={id ?? ""} formats={["a4"]} />
+      <EntityPrintButton entityType="fleet_trip" entityId={id ?? ""} />
       <DetailActionButtons hook={editDelete} editPerm="fleet:create" deletePerm="fleet:delete" />
     </div>
   );

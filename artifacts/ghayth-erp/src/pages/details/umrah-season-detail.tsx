@@ -210,7 +210,7 @@ export default function UmrahSeasonDetail() {
             <EntityPrintButton
               entityType="umrah_season"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           }
         />
       }

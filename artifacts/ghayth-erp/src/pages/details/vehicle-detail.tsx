@@ -809,7 +809,7 @@ export default function VehicleDetail() {
               <TrendingUp className="h-4 w-4" /> الربحية
             </Button>
           </Link>
-          <PrintButton entityType="vehicle" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="vehicle" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
       hideTabs={[...registryHideTabs, "tasks"]}

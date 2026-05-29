@@ -522,7 +522,7 @@ export default function LegalCaseDetail() {
           إغلاق القضية
         </GuardedButton>
       )}
-      <EntityPrintButton entityType="legal_judgment" entityId={id ?? ""} formats={["a4"]} />
+      <EntityPrintButton entityType="legal_judgment" entityId={id ?? ""} />
     </div>
   );
 

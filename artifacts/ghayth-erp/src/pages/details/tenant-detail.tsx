@@ -307,7 +307,7 @@ export default function TenantDetail() {
       actions={
         <div className="flex items-center gap-2">
           <DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" extra={tenantActionsExtra} />
-          <PrintButton entityType="tenant" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="tenant" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
       extraTabs={extraTabs}

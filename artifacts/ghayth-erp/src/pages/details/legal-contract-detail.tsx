@@ -297,7 +297,7 @@ export default function LegalContractDetail() {
             <EntityPrintButton
               entityType="legal_contract"
               entityId={contract.id ?? id}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton
             perm="legal:update"

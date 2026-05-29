@@ -15,7 +15,7 @@ import { logger } from "../logger.js";
 import { config } from "../config.js";
 import { userHasPermission } from "../../middlewares/permissionMiddleware.js";
 import { getEntityPrintProfile } from "../entityRegistry.js";
-import { resolveTemplate } from "./templateResolver.js";
+import { resolveTemplate, ARABIC_TITLES } from "./templateResolver.js";
 import { loadEntityData } from "./dataLoader.js";
 import { buildLetterhead } from "./branchContext.js";
 import { getAdapter } from "./adapters/index.js";
@@ -161,6 +161,21 @@ export async function renderPrint(
     branchId: scope.branchId,
     isOwner: scope.isOwner,
   }));
+
+  // Default `entity.title` so universalFallback's `{{entity.title}}` token
+  // always resolves. Without this, 37 report types whose entityType has no
+  // ARABIC_TITLES entry (report_print_log, report_ar_aging, …) printed
+  // an empty H2 because the SPA didn't pass entity.title for those.
+  const entityBag = (data as { entity?: Record<string, unknown> }).entity;
+  if (entityBag && typeof entityBag === "object") {
+    if (entityBag.title === undefined || entityBag.title === null || entityBag.title === "") {
+      entityBag.title = ARABIC_TITLES[req.entityType] ?? req.entityType;
+    }
+  } else if (typeof data === "object" && data !== null) {
+    (data as { entity?: Record<string, unknown> }).entity = {
+      title: ARABIC_TITLES[req.entityType] ?? req.entityType,
+    };
+  }
 
   // 5. Letterhead
   const { branch, companyRow } = await buildLetterhead(scope.companyId, scope.branchId);

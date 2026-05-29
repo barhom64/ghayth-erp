@@ -350,7 +350,7 @@ export default function CustodyDetailPage() {
             <ArrowLeftRight className="h-4 w-4 ms-1" />
             تسوية
           </GuardedButton>
-          <PrintButton entityType="custody" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="custody" entityId={(params?.id ?? id ?? 0) as any} label="طباعة" />
         </div>
       }
       title={data?.ref ? `عهدة ${data.ref}` : "العهدة"}
