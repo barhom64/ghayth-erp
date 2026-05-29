@@ -4,9 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Award, Trophy, AlertCircle, ShieldAlert, Sparkles,
-  AlertOctagon, Bot, Calendar, User, TrendingDown,
+  AlertOctagon, Bot, Calendar, User, TrendingDown, Search,
 } from "lucide-react";
 import {
   DataTable,
@@ -69,6 +73,7 @@ function defaultWindowTo(): string {
 export default function FleetTelematicsScorecard() {
   const [from, setFrom] = useState<string>(defaultWindowFrom());
   const [to, setTo] = useState<string>(defaultWindowTo());
+  const [drillDriverId, setDrillDriverId] = useState<number | null>(null);
 
   const qs = new URLSearchParams();
   if (from) qs.set("from", new Date(from).toISOString());
@@ -80,6 +85,22 @@ export default function FleetTelematicsScorecard() {
   );
   const rows = asList(data) as LeaderboardRow[];
   const meta = data?.meta;
+
+  const drillQs = new URLSearchParams();
+  if (from) drillQs.set("from", new Date(from).toISOString());
+  if (to) drillQs.set("to", new Date(to).toISOString());
+  const { data: drillData } = useApiQuery<{ data: {
+    driver: { id: number; name: string; licenseNumber: string | null };
+    aggregate: { totalAlerts: number; safetyScore: number; rawPenalty: number;
+      adasCount: number; dmsCount: number; bsdCount: number;
+      infoCount: number; lowCount: number; mediumCount: number; highCount: number; criticalCount: number };
+    topAlertTypes: Array<{ alertType: string; category: string; count: number }>;
+  } }>(
+    ["fleet-telematics-driver-scorecard", String(drillDriverId ?? 0), from, to],
+    `/fleet/telematics/drivers/${drillDriverId}/scorecard?${drillQs.toString()}`,
+    drillDriverId !== null,
+  );
+  const drill = drillData?.data;
 
   const driversWithAlerts = rows.filter((r) => r.totalAlerts > 0);
   const avgScore = driversWithAlerts.length > 0
@@ -119,12 +140,19 @@ export default function FleetTelematicsScorecard() {
       sortable: true,
       searchable: true,
       render: (r) => (
-        <div className="flex flex-col">
-          <span className="font-medium">{r.driverName}</span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setDrillDriverId(r.driverId); }}
+          className="flex flex-col items-start text-start hover:underline"
+        >
+          <span className="font-medium inline-flex items-center gap-1">
+            <Search className="h-3 w-3 opacity-60" />
+            {r.driverName}
+          </span>
           {r.licenseNumber && (
             <span className="text-xs text-muted-foreground">{r.licenseNumber}</span>
           )}
-        </div>
+        </button>
       ),
     },
     {
@@ -296,6 +324,61 @@ export default function FleetTelematicsScorecard() {
           />
         </CardContent>
       </Card>
+
+      <Dialog open={drillDriverId !== null} onOpenChange={(o) => !o && setDrillDriverId(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              {drill?.driver.name || "تفاصيل السائق"}
+            </DialogTitle>
+          </DialogHeader>
+          {!drill ? (
+            <p className="text-center text-muted-foreground py-8">جاري التحميل…</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-md border p-3 text-center">
+                  <p className="text-xs text-muted-foreground">النقاط</p>
+                  <Badge variant="outline" className={`${scoreTone(drill.aggregate.safetyScore)} text-base font-bold mt-1`}>
+                    {drill.aggregate.safetyScore} / 100
+                  </Badge>
+                </div>
+                <div className="rounded-md border p-3 text-center">
+                  <p className="text-xs text-muted-foreground">الإجمالي</p>
+                  <p className="text-lg font-bold">{drill.aggregate.totalAlerts}</p>
+                </div>
+                <div className="rounded-md border p-3 text-center">
+                  <p className="text-xs text-muted-foreground">ADAS / DMS / BSD</p>
+                  <p className="text-sm font-mono">{drill.aggregate.adasCount} · {drill.aggregate.dmsCount} · {drill.aggregate.bsdCount}</p>
+                </div>
+                <div className="rounded-md border p-3 text-center">
+                  <p className="text-xs text-muted-foreground">حادة (high/crit)</p>
+                  <p className="text-lg font-bold text-rose-700">{drill.aggregate.highCount + drill.aggregate.criticalCount}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-2">أكثر أنواع التنبيهات</p>
+                {drill.topAlertTypes.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">لا تنبيهات في النطاق المحدد</p>
+                ) : (
+                  <div className="space-y-1">
+                    {drill.topAlertTypes.map((t, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm border-b py-1">
+                        <span><Badge variant="outline" className="me-2">{t.category}</Badge>{t.alertType}</span>
+                        <span className="font-mono">{t.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDrillDriverId(null)}>إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }
