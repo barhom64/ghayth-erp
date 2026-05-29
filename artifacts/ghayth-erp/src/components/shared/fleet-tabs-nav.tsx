@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   Car, Users, Navigation, Wrench, Fuel, Shield, Bell,
-  BarChart3, Calendar, AlertTriangle,
+  BarChart3, Calendar, AlertTriangle, Satellite,
 } from "lucide-react";
 
 const TABS = [
@@ -15,6 +15,8 @@ const TABS = [
   { href: "/fleet/preventive-plans", label: "الصيانة الوقائية", icon: Calendar, match: ["/fleet/preventive-plans"] },
   { href: "/fleet/traffic-violations", label: "المخالفات", icon: AlertTriangle, match: ["/fleet/traffic-violations"] },
   { href: "/fleet/alerts", label: "التنبيهات", icon: Bell, match: ["/fleet/alerts"] },
+  { href: "/fleet/telematics/live-map", label: "التتبع المباشر", icon: Satellite,
+    match: ["/fleet/telematics"] },
   { href: "/fleet/reports", label: "التقارير", icon: BarChart3, match: ["/fleet/reports", "/fleet/tco"] },
 ];
 

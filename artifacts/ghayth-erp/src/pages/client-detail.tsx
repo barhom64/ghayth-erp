@@ -666,9 +666,8 @@ export default function ClientDetail() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-medium">{t.name}</div>
-                <div className="text-xs text-muted-foreground space-x-2 space-x-reverse">
-                  {t.phone && <span><Phone className="inline h-3 w-3 ml-1" />{t.phone}</span>}
-                  {t.nationalId && <span>هوية: {t.nationalId}</span>}
+                <div className="text-xs text-muted-foreground">
+                  افتح ملف المستأجر لرؤية تفاصيله
                 </div>
               </div>
               <Badge variant={Number(t.activeContracts) > 0 ? "default" : "outline"}>

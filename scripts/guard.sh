@@ -54,6 +54,11 @@ run_step "typecheck"          pnpm -s run typecheck
 run_step "lint:patterns:tests" node scripts/src/lint-patterns.test.mjs
 run_step "lint:patterns"      pnpm -s run lint:patterns
 run_step "audit:routes"       node scripts/src/audit-routes.mjs
+# URL-doubling guard introduced after #1354 — catches the bug class
+# where a router is mounted at "/foo" and internally declares
+# "/foo/..." paths, producing /api/foo/foo/.... See scripts/src/
+# audit-route-doubling.mjs header for the canonical example.
+run_step "audit:route-doubling" node scripts/src/audit-route-doubling.mjs
 # Pure-logic fixtures for the wiring audit's string-literal reader,
 # URL normaliser, and segment matcher — runs before the audit itself
 # so a broken heuristic fails with a precise diff rather than a

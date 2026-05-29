@@ -298,15 +298,19 @@ const RULES = [
     // segments. The `[A-Z]{2,}` requires a SHOUTY prefix so we don't
     // false-positive on date strings like `${Date.now()}.json`.
     //
-    // Soft ratchet — baseline 3 after G2 + G14 fixes dropped two
-    // offenders. Each fix drops by 1; new additions fail CI. Drop to
-    // 0 once every offender is fixed:
-    //   • routes/communications.ts:365  CALL-${Date.now()}          — PBX call id (tech)
-    //   • routes/finance-invoices.ts:3246  ADV-${Date.now()}        — customer advance
-    //   • routes/properties.ts:2054  RENT-${payment.id}-${Date.now()} — legal case
-    // (finance-purchase.ts G14 closed in PR #1340)
-    // (store.ts G2 closed in this PR)
-    countBaseline: 3,
+    // Hard rule (baseline 0) — every inline-Date.now-as-ref offender
+    // detected by the second-round audit has been closed:
+    //   • routes/communications.ts  → internalTechRef("CALL") for the
+    //     PBX correlation fallback (lib/internalRef — tech-only ref)
+    //   • routes/finance-invoices.ts → issueNumber({ entityKey:
+    //     "customer_advance" }) via migration 231
+    //   • routes/finance-purchase.ts → issueNumber({ entityKey:
+    //     "payment_run" }) via migration 227 (PR #1340)
+    //   • routes/properties.ts → issueNumber({ entityKey: "case" })
+    //     for the auto-created collection case
+    //   • routes/store.ts → issueNumber({ entityKey: "store_order" })
+    //     via migration 228 (PR #1345)
+    // No baseline = any future inline-Date.now ref fails CI immediately.
     regex: /`[A-Z]{2,}[^`]*\$\{\s*Date\.now\s*\(\s*\)/,
     message:
       "Inline `${Date.now()}` inside a refish string is the same anti-pattern " +
