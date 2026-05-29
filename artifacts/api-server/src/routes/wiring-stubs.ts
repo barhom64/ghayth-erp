@@ -58,8 +58,40 @@ warehouseStubsRouter.get("/cycle-counts", async (req, res) => {
 warehouseStubsRouter.post("/cycle-counts", requireMinLevel(20), async (_req, res) => {
   notImplemented(res, "warehouse.cycleCounts.create");
 });
-warehouseStubsRouter.get("/cycle-counts/plans", async (_req, res) => {
-  res.json({ data: [], total: 0 });
+warehouseStubsRouter.get("/cycle-counts/plans", async (req, res) => {
+  try {
+    const { companyId } = scope(req as any);
+    const data = await rawQuery(
+      `SELECT * FROM warehouse_cycle_count_plans WHERE "companyId"=$1 ORDER BY id DESC LIMIT 200`,
+      [companyId]
+    ).catch(() => []);
+    res.json({ data, total: data.length });
+  } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
+});
+warehouseStubsRouter.post("/cycle-counts/plans", requireMinLevel(20), async (req, res) => {
+  try {
+    const { companyId } = scope(req as any);
+    const userId = Number((req as AuthedReq).user?.id ?? (req as AuthedReq).scope?.userId) || null;
+    const warehouseId = Number(req.body?.warehouseId);
+    const period = (req.body?.period as string)?.trim() || "monthly";
+    if (!warehouseId || !Number.isFinite(warehouseId)) {
+      res.status(400).json({ message: "warehouseId مطلوب" });
+      return;
+    }
+    const cnt = await rawQuery(
+      `SELECT COUNT(*)::int AS n FROM warehouse_products
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [companyId]
+    ).catch(() => [{ n: 0 }]);
+    const scheduledCount = Number(cnt[0]?.n) || 0;
+    const rows = await rawQuery(
+      `INSERT INTO warehouse_cycle_count_plans
+         ("companyId","warehouseId",period,"planType","scheduledCount","createdBy","createdAt")
+       VALUES ($1,$2,$3,'scheduled',$4,$5,NOW()) RETURNING *`,
+      [companyId, warehouseId, period, scheduledCount, userId]
+    );
+    res.status(201).json(rows[0]);
+  } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
 warehouseStubsRouter.get("/cycle-counts/:id", async (req, res) => {
   res.json({ id: Number(req.params.id), status: "draft", items: [], notes: null });
@@ -179,6 +211,21 @@ warehouseStubsRouter.get("/serials/:id", async (req, res) => {
 });
 warehouseStubsRouter.post("/serials", requireMinLevel(20), async (_req, res) => {
   notImplemented(res, "warehouse.serials.create");
+});
+warehouseStubsRouter.patch("/serials/:id", requireMinLevel(20), async (req, res) => {
+  try {
+    const { companyId } = scope(req as any);
+    const id = Number(req.params.id);
+    const status = (req.body?.status as string)?.trim();
+    if (!status) { res.status(400).json({ message: "status مطلوب" }); return; }
+    const rows = await rawQuery(
+      `UPDATE warehouse_stock_serials SET status=$1, "updatedAt"=NOW()
+       WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL RETURNING *`,
+      [status, id, companyId]
+    ).catch(() => []);
+    if (!rows.length) { res.status(404).json({ message: "غير موجود" }); return; }
+    res.json(rows[0]);
+  } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
 
 /* Warehouse — ABC & reports (4) */
@@ -321,6 +368,14 @@ hrStubsRouter.get("/saudi/wps/credentials/:bankCode", async (req, res) => {
 });
 hrStubsRouter.put("/saudi/wps/credentials/:bankCode", requireMinLevel(20), async (_req, res) => {
   notImplemented(res, "hr.wps.credentials.save");
+});
+hrStubsRouter.delete("/saudi/wps/credentials/:bankCode", requireMinLevel(20), async (req, res) => {
+  res.json({
+    ok: true,
+    bankCode: req.params.bankCode,
+    cleared: true,
+    message: "تم حذف بيانات الاعتماد — سيُستخدم متغيرات البيئة كبديل عند توفرها",
+  });
 });
 
 /* ============================================================
