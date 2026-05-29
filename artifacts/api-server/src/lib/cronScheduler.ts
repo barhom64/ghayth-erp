@@ -2450,6 +2450,27 @@ async function monthlyAutoDepreciation(): Promise<string> {
           );
         });
 
+        // Explicit audit log so cron-driven depreciation is distinguishable
+        // from manual operator depreciation in audit_logs. Previously the
+        // sourceKey + system userId were the only trace, so auditors
+        // couldn't filter on "automated nightly run" vs "ad-hoc manual"
+        // when reviewing depreciation entries.
+        await createAuditLog({
+          companyId: Number(company.id),
+          branchId: Number(asset.branchId ?? branchId),
+          userId: Number(createdBy),
+          action: "fixed_asset.depreciate.cron",
+          entity: "fixed_assets",
+          entityId: Number(asset.id),
+          after: {
+            period,
+            depreciationAmount: depAmount,
+            bookValueAfter: newBookValue,
+            journalEntryId: journalId,
+            source: "cron",
+          },
+        }).catch((e) => logger.error(e, "[CRON] depreciation audit log failed"));
+
         processed++;
         totalDepreciated += depAmount;
       } catch (err) {

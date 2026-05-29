@@ -2130,14 +2130,23 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
       if (prRow) prTotal = Number(prRow.totalAmount);
     }
 
+    // Read received total from goods_receipts (the source of truth for GRN
+    // amounts) instead of warehouse_movements. The previous shape joined
+    // by `warehouse_movements.reference = 'GR-' + po.ref`, which silently
+    // fell back to poTotal when the WMS hadn't synced — masking the
+    // mismatch and letting the 3-way match pass on a stale receipt total.
+    // goods_receipts.totalAmount is set inside the same transaction as
+    // the GRN JE, so it's always consistent with the GL.
     let receivedTotal = poTotal;
-    const grMovements = await rawQuery<Record<string, unknown>>(
-      `SELECT COALESCE(SUM(quantity * "unitCost"), 0) AS total
-       FROM warehouse_movements
-       WHERE "companyId" = $1 AND reference = $2 AND type = 'in'`,
-      [scope.companyId, `GR-${po.ref}`]
+    const grnRows = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM("totalAmount"), 0) AS total
+         FROM goods_receipts
+        WHERE "companyId" = $1 AND "poId" = $2 AND "deletedAt" IS NULL`,
+      [scope.companyId, id]
     );
-    if (grMovements[0]?.total) receivedTotal = Number(grMovements[0].total);
+    if (grnRows[0]?.total && Number(grnRows[0].total) > 0) {
+      receivedTotal = Number(grnRows[0].total);
+    }
 
     const poVariance = Math.abs(poTotal - invAmount);
     const poVariancePct = poTotal > 0 ? (poVariance / poTotal) * 100 : 0;
