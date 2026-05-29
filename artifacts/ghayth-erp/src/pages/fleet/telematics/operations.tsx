@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -85,6 +85,13 @@ export default function FleetTelematicsOperations() {
     refetchSync();
     refetchBreaker();
   };
+
+  const syncMut = useApiMutation<unknown, Record<string, never>>(
+    "/fleet/telematics/sync/events",
+    "POST",
+    [["fleet-telematics-sync-logs"], ["fleet-telematics-breaker-state"]],
+    { successMessage: "تم تشغيل المزامنة" },
+  );
 
   const syncStats = {
     success: syncRows.filter((r) => r.status === "success").length,
@@ -206,13 +213,23 @@ export default function FleetTelematicsOperations() {
         { label: "لوحة التشغيل" },
       ]}
       actions={
-        <button
-          onClick={refresh}
-          className="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-md border hover:bg-surface-subtle"
-        >
-          <RefreshCw className="h-4 w-4" />
-          تحديث
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => syncMut.mutate({})}
+            disabled={syncMut.isPending}
+            className="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-md bg-status-info-surface text-status-info-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            <Network className="h-4 w-4" />
+            {syncMut.isPending ? "جاري المزامنة…" : "مزامنة الآن"}
+          </button>
+          <button
+            onClick={refresh}
+            className="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-md border hover:bg-surface-subtle"
+          >
+            <RefreshCw className="h-4 w-4" />
+            تحديث
+          </button>
+        </div>
       }
     >
       <FleetTabsNav />
