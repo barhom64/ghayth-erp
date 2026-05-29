@@ -225,7 +225,7 @@ class PropertiesEngineImpl implements DomainEngine {
       guardId: building.id,
       lines: [
         { accountCode: assetCode, debit: building.purchasePrice, credit: 0, propertyId: building.id },
-        { accountCode: cashCode, debit: 0, credit: building.purchasePrice },
+        { accountCode: cashCode, debit: 0, credit: building.purchasePrice, propertyId: building.id },
       ],
     });
   }

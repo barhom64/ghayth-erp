@@ -1227,7 +1227,11 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         lines: [
           { accountCode: invArCode, debit: Number(invoice.total), credit: 0, clientId: invoice.clientId as number | undefined } as any,
           ...revenueLines,
-          { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
+          // VAT payable carries clientId so per-customer VAT analysis (and
+          // VAT-collected-by-customer reports) tie out from the GL. Without
+          // this, the AR shows the gross-up against the customer but the
+          // VAT obligation is unattributed.
+          { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0), clientId: invoice.clientId as number | undefined } as any,
           ...cogsPlan.journalLines,
         ],
         guardTable: "invoices",

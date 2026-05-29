@@ -544,12 +544,19 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     }
 
     const { financialEngine } = await import("../lib/engines/index.js");
+    // Carry the full entityLink on EVERY leg of the expense JE — expense DR,
+    // VAT input DR, and cash CR. Without this the VAT obligation + cash
+    // movement are dim-less even though the expense line is fully tagged.
+    // Per-vendor cash outflow + per-property VAT input reports were
+    // silently broken (the expense DR ties to the property/vehicle but
+    // the cash CR didn't tie to anything, so cashflow-by-dim summed
+    // only half the picture).
     const journalLines: any[] = [{ accountCode: overrideAccountCode ?? "5000", debit: baseAmount, credit: 0, ...entityLink }];
     if (computedVat > 0) {
       const inputVatCode = await financialEngine.resolveAccountCode(effectiveCompanyId, "vat_input", "debit", "1400");
-      journalLines.push({ accountCode: inputVatCode, debit: computedVat, credit: 0 });
+      journalLines.push({ accountCode: inputVatCode, debit: computedVat, credit: 0, ...entityLink });
     }
-    journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat });
+    journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat, ...entityLink });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
 
     // C3 — the journal entry, its header metadata and the approval chain are
