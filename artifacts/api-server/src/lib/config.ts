@@ -117,6 +117,23 @@ const EnvSchema = z.object({
   // -- events --------------------------------------------------------------
   PERSIST_ALL_EVENTS: boolEnv(false),
 
+  // -- fleet telematics (#1354) -------------------------------------------
+  // Production deployments reject http(s://) CMSV6 base URLs by default.
+  // Lab/dev environments can opt out via this flag; the SSRF guard is
+  // unaffected (private IPs are still rejected regardless of scheme).
+  FLEET_TELEMATICS_ALLOW_HTTP: boolEnv(false),
+  // Default TTL (seconds) for the signed proxy token issued at video
+  // session open. Clamped 15..300 below. The client must redeem the
+  // token within this window; expired tokens return 401 from the proxy.
+  FLEET_TELEMATICS_PROXY_TTL_SEC: intEnv(60),
+  // Per-IP rate limit on the anonymous webhook endpoint (requests/minute).
+  // Default 3000/min comfortably covers 100+ vehicles each pushing ~20
+  // events/min with headroom for retries — vendors that push more should
+  // be tested then this raised explicitly via env. Operators can lower
+  // it for hostile-traffic protection. Clamped 100..60000 to stop a
+  // typo from disabling the cap entirely.
+  FLEET_TELEMATICS_WEBHOOK_RATE_LIMIT: intEnv(3000),
+
   // -- object storage ------------------------------------------------------
   PUBLIC_OBJECT_SEARCH_PATHS: optStr(),
   PRIVATE_OBJECT_DIR: optStr(),
@@ -245,6 +262,16 @@ export interface AppConfig {
 
   readonly seedDemoData: boolean;
   readonly persistAllEvents: boolean;
+
+  /** Fleet telematics — #1354 production hardening flags. */
+  readonly fleetTelematics: {
+    /** When false (default in production), reject `http://` CMSV6 URLs. */
+    readonly allowHttp: boolean;
+    /** Video proxy token TTL — clamped 15..300 seconds. */
+    readonly proxyTtlSec: number;
+    /** Per-IP webhook rate limit (req/min). Clamped 100..60000. */
+    readonly webhookRateLimit: number;
+  };
 
   readonly admin: {
     readonly email: string | undefined;
@@ -409,6 +436,11 @@ function buildConfig(env: RawEnv): AppConfig {
 
     seedDemoData: env.SEED_DEMO_DATA,
     persistAllEvents: env.PERSIST_ALL_EVENTS,
+    fleetTelematics: {
+      allowHttp: env.FLEET_TELEMATICS_ALLOW_HTTP,
+      proxyTtlSec: Math.min(300, Math.max(15, env.FLEET_TELEMATICS_PROXY_TTL_SEC)),
+      webhookRateLimit: Math.min(60000, Math.max(100, env.FLEET_TELEMATICS_WEBHOOK_RATE_LIMIT)),
+    },
 
     admin: {
       email: env.ADMIN_EMAIL,
