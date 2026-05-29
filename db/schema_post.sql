@@ -777,6 +777,34 @@ ALTER TABLE ONLY public.fixed_assets ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
+-- Name: fleet_ai_alerts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_ai_alerts ALTER COLUMN id SET DEFAULT nextval('public.fleet_ai_alerts_id_seq'::regclass);
+
+
+--
+-- Name: fleet_device_events id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_events ALTER COLUMN id SET DEFAULT nextval('public.fleet_device_events_id_seq'::regclass);
+
+
+--
+-- Name: fleet_device_positions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_positions ALTER COLUMN id SET DEFAULT nextval('public.fleet_device_positions_id_seq'::regclass);
+
+
+--
+-- Name: fleet_device_sync_logs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_sync_logs ALTER COLUMN id SET DEFAULT nextval('public.fleet_device_sync_logs_id_seq'::regclass);
+
+
+--
 -- Name: fleet_drivers id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -812,10 +840,38 @@ ALTER TABLE ONLY public.fleet_maintenance ALTER COLUMN id SET DEFAULT nextval('p
 
 
 --
+-- Name: fleet_media_evidence id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_media_evidence ALTER COLUMN id SET DEFAULT nextval('public.fleet_media_evidence_id_seq'::regclass);
+
+
+--
 -- Name: fleet_preventive_plans id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.fleet_preventive_plans ALTER COLUMN id SET DEFAULT nextval('public.fleet_preventive_plans_id_seq'::regclass);
+
+
+--
+-- Name: fleet_sensor_readings id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_sensor_readings ALTER COLUMN id SET DEFAULT nextval('public.fleet_sensor_readings_id_seq'::regclass);
+
+
+--
+-- Name: fleet_telematics_devices id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_telematics_devices ALTER COLUMN id SET DEFAULT nextval('public.fleet_telematics_devices_id_seq'::regclass);
+
+
+--
+-- Name: fleet_telematics_integrations id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_telematics_integrations ALTER COLUMN id SET DEFAULT nextval('public.fleet_telematics_integrations_id_seq'::regclass);
 
 
 --
@@ -837,6 +893,27 @@ ALTER TABLE ONLY public.fleet_trips ALTER COLUMN id SET DEFAULT nextval('public.
 --
 
 ALTER TABLE ONLY public.fleet_vehicles ALTER COLUMN id SET DEFAULT nextval('public.fleet_vehicles_id_seq'::regclass);
+
+
+--
+-- Name: fleet_video_access_logs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_access_logs ALTER COLUMN id SET DEFAULT nextval('public.fleet_video_access_logs_id_seq'::regclass);
+
+
+--
+-- Name: fleet_video_channels id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_channels ALTER COLUMN id SET DEFAULT nextval('public.fleet_video_channels_id_seq'::regclass);
+
+
+--
+-- Name: fleet_video_sessions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_sessions ALTER COLUMN id SET DEFAULT nextval('public.fleet_video_sessions_id_seq'::regclass);
 
 
 --
@@ -3529,6 +3606,38 @@ ALTER TABLE ONLY public.fixed_assets
 
 
 --
+-- Name: fleet_ai_alerts fleet_ai_alerts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_ai_alerts
+    ADD CONSTRAINT fleet_ai_alerts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_device_events fleet_device_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_events
+    ADD CONSTRAINT fleet_device_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_device_positions fleet_device_positions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_positions
+    ADD CONSTRAINT fleet_device_positions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_device_sync_logs fleet_device_sync_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_sync_logs
+    ADD CONSTRAINT fleet_device_sync_logs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: fleet_drivers fleet_drivers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3569,11 +3678,43 @@ ALTER TABLE ONLY public.fleet_maintenance
 
 
 --
+-- Name: fleet_media_evidence fleet_media_evidence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_media_evidence
+    ADD CONSTRAINT fleet_media_evidence_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: fleet_preventive_plans fleet_preventive_plans_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.fleet_preventive_plans
     ADD CONSTRAINT fleet_preventive_plans_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_sensor_readings fleet_sensor_readings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_sensor_readings
+    ADD CONSTRAINT fleet_sensor_readings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_telematics_devices fleet_telematics_devices_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_telematics_devices
+    ADD CONSTRAINT fleet_telematics_devices_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_telematics_integrations fleet_telematics_integrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_telematics_integrations
+    ADD CONSTRAINT fleet_telematics_integrations_pkey PRIMARY KEY (id);
 
 
 --
@@ -3598,6 +3739,30 @@ ALTER TABLE ONLY public.fleet_trips
 
 ALTER TABLE ONLY public.fleet_vehicles
     ADD CONSTRAINT fleet_vehicles_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_video_access_logs fleet_video_access_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_access_logs
+    ADD CONSTRAINT fleet_video_access_logs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_video_channels fleet_video_channels_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_channels
+    ADD CONSTRAINT fleet_video_channels_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_video_sessions fleet_video_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_sessions
+    ADD CONSTRAINT fleet_video_sessions_pkey PRIMARY KEY (id);
 
 
 --
@@ -7580,6 +7745,83 @@ CREATE INDEX idx_fixed_assets_company ON public.fixed_assets USING btree ("compa
 
 
 --
+-- Name: idx_fleet_ai_alerts_company_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_ai_alerts_company_time ON public.fleet_ai_alerts USING btree ("companyId", "occurredAt" DESC);
+
+
+--
+-- Name: idx_fleet_ai_alerts_vehicle_category; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_ai_alerts_vehicle_category ON public.fleet_ai_alerts USING btree ("vehicleId", category, "occurredAt" DESC);
+
+
+--
+-- Name: idx_fleet_device_events_company_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_device_events_company_time ON public.fleet_device_events USING btree ("companyId", "occurredAt" DESC);
+
+
+--
+-- Name: idx_fleet_device_events_vehicle_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_device_events_vehicle_type ON public.fleet_device_events USING btree ("vehicleId", "eventType");
+
+
+--
+-- Name: idx_fleet_device_sync_logs_company_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_device_sync_logs_company_started ON public.fleet_device_sync_logs USING btree ("companyId", "startedAt" DESC);
+
+
+--
+-- Name: idx_fleet_device_sync_logs_integration; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_device_sync_logs_integration ON public.fleet_device_sync_logs USING btree ("integrationId", "startedAt" DESC);
+
+
+--
+-- Name: idx_fleet_media_evidence_alert; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_media_evidence_alert ON public.fleet_media_evidence USING btree ("alertId");
+
+
+--
+-- Name: idx_fleet_media_evidence_company_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_media_evidence_company_time ON public.fleet_media_evidence USING btree ("companyId", "uploadedAt" DESC);
+
+
+--
+-- Name: idx_fleet_positions_company_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_positions_company_time ON public.fleet_device_positions USING btree ("companyId", "occurredAt" DESC);
+
+
+--
+-- Name: idx_fleet_positions_device_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_positions_device_time ON public.fleet_device_positions USING btree ("deviceId", "occurredAt" DESC);
+
+
+--
+-- Name: idx_fleet_positions_vehicle_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_positions_vehicle_time ON public.fleet_device_positions USING btree ("vehicleId", "occurredAt" DESC);
+
+
+--
 -- Name: idx_fleet_preventive_plans_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7591,6 +7833,41 @@ CREATE INDEX idx_fleet_preventive_plans_companyid ON public.fleet_preventive_pla
 --
 
 CREATE INDEX idx_fleet_preventive_plans_deletedat ON public.fleet_preventive_plans USING btree ("deletedAt");
+
+
+--
+-- Name: idx_fleet_sensor_readings_device_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_sensor_readings_device_time ON public.fleet_sensor_readings USING btree ("deviceId", "sensorType", "occurredAt" DESC);
+
+
+--
+-- Name: idx_fleet_sensor_readings_vehicle_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_sensor_readings_vehicle_time ON public.fleet_sensor_readings USING btree ("vehicleId", "occurredAt" DESC);
+
+
+--
+-- Name: idx_fleet_telematics_devices_company_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_telematics_devices_company_status ON public.fleet_telematics_devices USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: idx_fleet_telematics_devices_vehicle; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_telematics_devices_vehicle ON public.fleet_telematics_devices USING btree ("vehicleId") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: idx_fleet_telematics_integrations_company; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_telematics_integrations_company ON public.fleet_telematics_integrations USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
 
 
 --
@@ -7612,6 +7889,62 @@ CREATE INDEX idx_fleet_traffic_violations_deletedat ON public.fleet_traffic_viol
 --
 
 CREATE INDEX idx_fleet_trips_client ON public.fleet_trips USING btree ("clientId");
+
+
+--
+-- Name: idx_fleet_trips_vehicle_status_starttime; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_trips_vehicle_status_starttime ON public.fleet_trips USING btree ("vehicleId", "startTime" DESC) WHERE ((status)::text = 'in_progress'::text);
+
+
+--
+-- Name: idx_fleet_video_access_logs_company_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_video_access_logs_company_time ON public.fleet_video_access_logs USING btree ("companyId", "accessedAt" DESC);
+
+
+--
+-- Name: idx_fleet_video_access_logs_session_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_video_access_logs_session_time ON public.fleet_video_access_logs USING btree ("sessionId", "accessedAt" DESC);
+
+
+--
+-- Name: idx_fleet_video_access_logs_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_video_access_logs_user ON public.fleet_video_access_logs USING btree ("accessedBy", "accessedAt" DESC);
+
+
+--
+-- Name: idx_fleet_video_sessions_company_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_video_sessions_company_started ON public.fleet_video_sessions USING btree ("companyId", "startedAt" DESC);
+
+
+--
+-- Name: idx_fleet_video_sessions_device_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_video_sessions_device_status ON public.fleet_video_sessions USING btree ("deviceId", status);
+
+
+--
+-- Name: idx_fleet_video_sessions_external_session; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_video_sessions_external_session ON public.fleet_video_sessions USING btree ("externalSessionId") WHERE ("externalSessionId" IS NOT NULL);
+
+
+--
+-- Name: idx_fleet_video_sessions_proxy_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_video_sessions_proxy_token ON public.fleet_video_sessions USING btree ("streamProxyToken") WHERE ("streamProxyToken" IS NOT NULL);
 
 
 --
@@ -10912,6 +11245,41 @@ CREATE UNIQUE INDEX uq_allocation_results_source_line ON public.accounting_alloc
 
 
 --
+-- Name: uq_fleet_ai_alerts_dedup; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_fleet_ai_alerts_dedup ON public.fleet_ai_alerts USING btree ("deviceId", "externalAlertId") WHERE ("externalAlertId" IS NOT NULL);
+
+
+--
+-- Name: uq_fleet_device_events_dedup; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_fleet_device_events_dedup ON public.fleet_device_events USING btree ("deviceId", "externalEventId") WHERE ("externalEventId" IS NOT NULL);
+
+
+--
+-- Name: uq_fleet_sensor_readings_dedup; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_fleet_sensor_readings_dedup ON public.fleet_sensor_readings USING btree ("deviceId", "externalReadingId") WHERE ("externalReadingId" IS NOT NULL);
+
+
+--
+-- Name: uq_fleet_telematics_devices_company_deviceno; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_fleet_telematics_devices_company_deviceno ON public.fleet_telematics_devices USING btree ("companyId", "cmsv6DeviceNo") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: uq_fleet_video_channels_device_channel; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_fleet_video_channels_device_channel ON public.fleet_video_channels USING btree ("deviceId", "channelNo");
+
+
+--
 -- Name: uq_fx_rates_company_pair_date; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -12020,6 +12388,110 @@ ALTER TABLE ONLY public.fixed_assets
 
 
 --
+-- Name: fleet_ai_alerts fleet_ai_alerts_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_ai_alerts
+    ADD CONSTRAINT "fleet_ai_alerts_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fleet_ai_alerts fleet_ai_alerts_deviceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_ai_alerts
+    ADD CONSTRAINT "fleet_ai_alerts_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES public.fleet_telematics_devices(id);
+
+
+--
+-- Name: fleet_ai_alerts fleet_ai_alerts_driverId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_ai_alerts
+    ADD CONSTRAINT "fleet_ai_alerts_driverId_fkey" FOREIGN KEY ("driverId") REFERENCES public.fleet_drivers(id);
+
+
+--
+-- Name: fleet_ai_alerts fleet_ai_alerts_vehicleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_ai_alerts
+    ADD CONSTRAINT "fleet_ai_alerts_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES public.fleet_vehicles(id);
+
+
+--
+-- Name: fleet_device_events fleet_device_events_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_events
+    ADD CONSTRAINT "fleet_device_events_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fleet_device_events fleet_device_events_deviceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_events
+    ADD CONSTRAINT "fleet_device_events_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES public.fleet_telematics_devices(id);
+
+
+--
+-- Name: fleet_device_events fleet_device_events_vehicleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_events
+    ADD CONSTRAINT "fleet_device_events_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES public.fleet_vehicles(id);
+
+
+--
+-- Name: fleet_device_positions fleet_device_positions_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_positions
+    ADD CONSTRAINT "fleet_device_positions_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fleet_device_positions fleet_device_positions_deviceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_positions
+    ADD CONSTRAINT "fleet_device_positions_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES public.fleet_telematics_devices(id);
+
+
+--
+-- Name: fleet_device_positions fleet_device_positions_vehicleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_positions
+    ADD CONSTRAINT "fleet_device_positions_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES public.fleet_vehicles(id);
+
+
+--
+-- Name: fleet_device_sync_logs fleet_device_sync_logs_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_sync_logs
+    ADD CONSTRAINT "fleet_device_sync_logs_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fleet_device_sync_logs fleet_device_sync_logs_deviceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_sync_logs
+    ADD CONSTRAINT "fleet_device_sync_logs_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES public.fleet_telematics_devices(id);
+
+
+--
+-- Name: fleet_device_sync_logs fleet_device_sync_logs_integrationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_device_sync_logs
+    ADD CONSTRAINT "fleet_device_sync_logs_integrationId_fkey" FOREIGN KEY ("integrationId") REFERENCES public.fleet_telematics_integrations(id);
+
+
+--
 -- Name: fleet_fuel_logs fleet_fuel_logs_vehicleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12052,6 +12524,94 @@ ALTER TABLE ONLY public.fleet_maintenance
 
 
 --
+-- Name: fleet_media_evidence fleet_media_evidence_alertId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_media_evidence
+    ADD CONSTRAINT "fleet_media_evidence_alertId_fkey" FOREIGN KEY ("alertId") REFERENCES public.fleet_ai_alerts(id);
+
+
+--
+-- Name: fleet_media_evidence fleet_media_evidence_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_media_evidence
+    ADD CONSTRAINT "fleet_media_evidence_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fleet_media_evidence fleet_media_evidence_deviceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_media_evidence
+    ADD CONSTRAINT "fleet_media_evidence_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES public.fleet_telematics_devices(id);
+
+
+--
+-- Name: fleet_media_evidence fleet_media_evidence_vehicleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_media_evidence
+    ADD CONSTRAINT "fleet_media_evidence_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES public.fleet_vehicles(id);
+
+
+--
+-- Name: fleet_sensor_readings fleet_sensor_readings_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_sensor_readings
+    ADD CONSTRAINT "fleet_sensor_readings_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fleet_sensor_readings fleet_sensor_readings_deviceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_sensor_readings
+    ADD CONSTRAINT "fleet_sensor_readings_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES public.fleet_telematics_devices(id);
+
+
+--
+-- Name: fleet_sensor_readings fleet_sensor_readings_vehicleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_sensor_readings
+    ADD CONSTRAINT "fleet_sensor_readings_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES public.fleet_vehicles(id);
+
+
+--
+-- Name: fleet_telematics_devices fleet_telematics_devices_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_telematics_devices
+    ADD CONSTRAINT "fleet_telematics_devices_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fleet_telematics_devices fleet_telematics_devices_integrationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_telematics_devices
+    ADD CONSTRAINT "fleet_telematics_devices_integrationId_fkey" FOREIGN KEY ("integrationId") REFERENCES public.fleet_telematics_integrations(id);
+
+
+--
+-- Name: fleet_telematics_devices fleet_telematics_devices_vehicleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_telematics_devices
+    ADD CONSTRAINT "fleet_telematics_devices_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES public.fleet_vehicles(id);
+
+
+--
+-- Name: fleet_telematics_integrations fleet_telematics_integrations_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_telematics_integrations
+    ADD CONSTRAINT "fleet_telematics_integrations_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
 -- Name: fleet_trips fleet_trips_driverId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12065,6 +12625,62 @@ ALTER TABLE ONLY public.fleet_trips
 
 ALTER TABLE ONLY public.fleet_trips
     ADD CONSTRAINT "fleet_trips_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES public.fleet_vehicles(id);
+
+
+--
+-- Name: fleet_video_access_logs fleet_video_access_logs_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_access_logs
+    ADD CONSTRAINT "fleet_video_access_logs_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fleet_video_access_logs fleet_video_access_logs_sessionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_access_logs
+    ADD CONSTRAINT "fleet_video_access_logs_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES public.fleet_video_sessions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fleet_video_channels fleet_video_channels_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_channels
+    ADD CONSTRAINT "fleet_video_channels_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fleet_video_channels fleet_video_channels_deviceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_channels
+    ADD CONSTRAINT "fleet_video_channels_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES public.fleet_telematics_devices(id);
+
+
+--
+-- Name: fleet_video_sessions fleet_video_sessions_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_sessions
+    ADD CONSTRAINT "fleet_video_sessions_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fleet_video_sessions fleet_video_sessions_deviceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_sessions
+    ADD CONSTRAINT "fleet_video_sessions_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES public.fleet_telematics_devices(id);
+
+
+--
+-- Name: fleet_video_sessions fleet_video_sessions_vehicleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_video_sessions
+    ADD CONSTRAINT "fleet_video_sessions_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES public.fleet_vehicles(id);
 
 
 --
