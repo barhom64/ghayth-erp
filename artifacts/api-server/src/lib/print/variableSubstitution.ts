@@ -296,7 +296,7 @@ function formatValue(v: unknown): string {
 
 function buildLetterheadA4(branch: BranchLetterhead): string {
   const logo = branch.logoUrl
-    ? `<img src="${escapeHtml(branch.logoUrl)}" alt="logo" style="max-height:64px"/>`
+    ? `<img src="${escapeHtml(branch.logoUrl)}" alt="شعار الشركة" style="max-height:64px"/>`
     : "";
   return `<header class="branch-letterhead" style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #334155;padding-bottom:8px;margin-bottom:12px">
   <div>${logo}</div>
