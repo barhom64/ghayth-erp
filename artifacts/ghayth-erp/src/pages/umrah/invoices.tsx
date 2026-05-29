@@ -10,7 +10,9 @@ import {
   type DataTableColumn,
   AdvancedFilters,
   useFilters,
+  PageShell,
 } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,8 +36,11 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 export default function UmrahInvoices() {
   const [tab, setTab] = useState("agents");
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">فواتير العمرة</h1>
+    <PageShell
+      title="فواتير العمرة"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "فواتير العمرة" }]}
+    >
+      <UmrahTabsNav />
       <Tabs value={tab} onValueChange={setTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="agents" className="gap-2"><Receipt className="h-4 w-4" /> فواتير الوكلاء</TabsTrigger>
@@ -46,7 +51,7 @@ export default function UmrahInvoices() {
         <TabsContent value="sales" className="mt-6"><SalesInvoicesTab /></TabsContent>
         <TabsContent value="nusk" className="mt-6"><NuskInvoicesTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 

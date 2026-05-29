@@ -16,7 +16,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Users, Split, Merge, ChevronRight } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -251,12 +252,11 @@ export default function UmrahGroups() {
   const sourcePilgrims = sourcePilgrimsQ.data?.data ?? [];
 
   return (
-    <div dir="rtl" lang="ar" className="space-y-6 p-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">المجموعات</h1>
-          <p className="text-sm text-muted-foreground">إدارة مجموعات العمرة — تقسيم ودمج</p>
-        </div>
+    <PageShell
+      title="المجموعات"
+      subtitle="إدارة مجموعات العمرة — تقسيم ودمج"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المجموعات" }]}
+      actions={
         <div className="flex gap-2">
           {selectedIds.length >= 1 && (
             <GuardedButton perm="umrah:approve" onClick={() => setMergeOpen(true)} className="gap-2" rateLimitAware>
@@ -269,7 +269,9 @@ export default function UmrahGroups() {
             مجموعة جديدة
           </GuardedButton>
         </div>
-      </header>
+      }
+    >
+      <UmrahTabsNav />
 
       <Card>
         <CardContent className="p-4 flex items-center gap-3">
@@ -493,6 +495,6 @@ export default function UmrahGroups() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

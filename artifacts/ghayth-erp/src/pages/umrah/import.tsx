@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { PageShell } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,10 +129,11 @@ export default function UmrahImport() {
   if (isError) return <ErrorState />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">استيراد المعتمرين</h1>
-      </div>
+    <PageShell
+      title="استيراد المعتمرين"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "استيراد" }]}
+    >
+      <UmrahTabsNav />
 
       <Card>
         <CardHeader><CardTitle className="text-base">رفع ملف إكسل</CardTitle></CardHeader>
@@ -255,6 +258,6 @@ export default function UmrahImport() {
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

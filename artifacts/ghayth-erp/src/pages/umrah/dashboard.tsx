@@ -1,4 +1,6 @@
 import React from "react";
+import { PageShell } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { formatDateAr, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,17 +54,18 @@ export default function UmrahDashboard() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">لوحة تشغيل العمرة</h1>
-          {activeSeason && <p className="text-sm text-muted-foreground mt-1">الموسم النشط: {activeSeason.title}</p>}
-        </div>
+    <PageShell
+      title="لوحة تشغيل العمرة"
+      subtitle={activeSeason ? `الموسم النشط: ${activeSeason.title}` : undefined}
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "لوحة التشغيل" }]}
+      actions={
         <div className="flex gap-2">
           <GuardedButton perm="umrah:create" variant="outline" onClick={runDaily} className="gap-2"><Play className="h-4 w-4" />تحديث الحالات</GuardedButton>
           <GuardedButton perm="umrah:create" variant="outline" onClick={runPenalties} className="gap-2"><Zap className="h-4 w-4" />تشغيل الغرامات</GuardedButton>
         </div>
-      </div>
+      }
+    >
+      <UmrahTabsNav />
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <Card className="border-0 shadow-sm">
@@ -168,6 +171,6 @@ export default function UmrahDashboard() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }
