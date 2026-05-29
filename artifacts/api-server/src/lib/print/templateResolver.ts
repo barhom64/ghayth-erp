@@ -3464,9 +3464,9 @@ function buildAccountStatementPreset(): PrintTemplate {
   <div><strong>العملة:</strong> {{entity.currency}}</div>
   <div><strong>الرصيد الحالي:</strong> {{entity.currentBalance}}</div>
   <div><strong>الفرع:</strong> {{branch.branchName}}</div>
-  <div><strong>تاريخ الطباعة:</strong> {{system.now}}</div>
+  <div><strong>تاريخ الطباعة:</strong> {{date.now}}</div>
 </div>
-{{entity.itemsTable}}
+{{entity.movementsTable}}
 <div style="margin-top:18px;font-size:10pt;color:#475569">
   كشف حساب آلي صادر عن نظام غيث.
 </div>`,

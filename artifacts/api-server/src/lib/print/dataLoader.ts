@@ -584,7 +584,25 @@ async function loadAccountStatement(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   if (!account) return { entity: { id } };
-  return { entity: { ...account, accountName: account.name }, movements: [] };
+  // Last 100 posted movements on this account, newest first. Bounded so the
+  // print doesn't paginate forever on a heavily-used account — operators who
+  // need the full history go through the dedicated GL ledger report.
+  const movements = await rawQuery<Record<string, unknown>>(
+    `SELECT je.date AS "التاريخ",
+            je.ref  AS "المرجع",
+            je.description AS "البيان",
+            COALESCE(jl.debit,  0)::numeric AS "مدين",
+            COALESCE(jl.credit, 0)::numeric AS "دائن"
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId"
+      WHERE jl."accountId" = $1
+        AND je."companyId" = $2
+        AND je.status = 'posted'
+      ORDER BY je.date DESC, je.id DESC
+      LIMIT 100`,
+    [id, companyId],
+  ).catch(() => []);
+  return { entity: { ...account, accountName: account.name }, movements };
 }
 
 async function loadStockTransfer(companyId: number, id: string) {
