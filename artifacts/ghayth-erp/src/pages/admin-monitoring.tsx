@@ -120,8 +120,12 @@ export default function AdminMonitoring() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
         <div className="rounded border p-2 bg-muted/30">
           <p className="text-muted-foreground">حالة المخطط</p>
-          <p className={`font-mono ${healthSchemaQ.isError ? "text-status-error-foreground" : "text-status-success-foreground"}`}>
-            {healthSchemaQ.isError ? "غير متاح" : healthSchemaQ.data?.status ?? healthSchemaQ.data?.ok ? "OK" : "—"}
+          <p className={`font-mono ${
+            healthSchemaQ.isError || healthSchemaQ.data?.status === "critical"
+              ? "text-status-error-foreground"
+              : "text-status-success-foreground"
+          }`}>
+            {healthSchemaQ.isError ? "غير متاح" : (healthSchemaQ.data?.status ?? "—")}
           </p>
         </div>
         <div className="rounded border p-2 bg-muted/30">
@@ -135,13 +139,15 @@ export default function AdminMonitoring() {
         <div className="rounded border p-2 bg-muted/30">
           <p className="text-muted-foreground">إعدادات البيئة</p>
           <p className="font-mono">
-            {healthConfigQ.data?.environment ?? healthConfigQ.data?.env ?? (healthConfigQ.isError ? "—" : "?")}
+            {healthConfigQ.data?.nodeEnv ?? (healthConfigQ.isError ? "—" : "?")}
           </p>
         </div>
         <div className="rounded border p-2 bg-muted/30">
           <p className="text-muted-foreground">معلومات الجهاز</p>
           <p className="font-mono">
-            {healthSystemQ.data?.uptime != null ? `${Math.round(Number(healthSystemQ.data.uptime) / 3600)} ساعة` : healthSystemQ.isError ? "—" : "…"}
+            {healthSystemQ.data?.liveness?.uptimeSec != null
+              ? `${Math.round(Number(healthSystemQ.data.liveness.uptimeSec) / 3600)} ساعة`
+              : healthSystemQ.isError ? "—" : "…"}
           </p>
         </div>
       </div>
