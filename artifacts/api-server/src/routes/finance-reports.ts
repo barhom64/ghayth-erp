@@ -567,7 +567,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     const from = startDate || "1900-01-01";
 
     const [client] = await rawQuery<Record<string, unknown>>(
-      `SELECT id, name, phone, email, "vatNumber" FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT id, name, phone, email, "taxNumber", "taxNumber" AS "vatNumber" FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
     if (!client) { throw new NotFoundError("العميل غير موجود"); return; }
