@@ -65,17 +65,14 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الأثر**: تعديل letterhead = ZATCA QR placement = totals layout كل ذلك صامت. **ثغرة compliance**.
 **الإصلاح**: إضافة `createAuditLog({entity:"document_templates", ...})` + `emitEvent({action:"print.template.updated"})` على كل mutation.
 
-### M4. Document Access Log غير موجود
+### M4. Document Access Log غير موجود ✅ FIXED in PR #1410
 **الموقع**: `routes/documents.ts` — endpoints الـdownload/preview
-**الوصف**: 
-- لا `document_access_log` table
-- downloads/previews لا تُسجَّل في audit
-- لا per-document ACL — فقط feature-level RBAC
-**الأثر**: شخص بصلاحية `documents:list` يقدر يحمّل كل مستندات الشركة بدون أي أثر. لـbig 4 audit هذا غير مقبول.
-**الإصلاح**:
-1. migration ينشئ `document_access_log` table
-2. كل GET على document content يكتب row
-3. retention policy column على documents
+**الإصلاح المنفذ**: 
+- migration 234 أنشأ `document_access_log` table مع indexes
+- `/documents/:id/download` يكتب row بـaccessType='download'
+- `/documents/:id/preview` يكتب row بـaccessType='preview'
+- endpoint جديد `GET /documents/:id/access-log` للمراجعة
+**الأثر بعد الإصلاح**: كل وصول لمستند يُسجَّل (compliance-ready).
 
 ### M5. Document Retention Policy غير موجودة
 **الموقع**: `documents.ts` 
@@ -126,10 +123,9 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الوصف**: 3 حقول فقط (name، nameEn، manager). لا parent-department، لا cost-center binding.
 **الإصلاح**: tab dedicated بنمط BranchesTab.
 
-### N2. RBAC v2 mutations لا تظهر في `/admin/logs`
-**الموقع**: `rbacV2.ts:128`
-**الوصف**: يكتب فقط لـ`rbac_role_history`، لا `createAuditLog` للـunified feed.
-**الإصلاح**: إضافة `createAuditLog` بجانب `recordHistory`.
+### N2. RBAC v2 mutations لا تظهر في `/admin/logs` ✅ FIXED in PR #1410
+**الموقع**: `rbacV2.ts:128, 180, 209`
+**الإصلاح المنفذ**: إضافة `createAuditLog` + `emitEvent` بجانب `recordHistory` على create/update/delete.
 
 ### N3. Numbering لا يُصدر events
 **الموقع**: `numbering.ts:170-184`
@@ -161,10 +157,9 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الوصف**: `tenantId` على الـJE فقط، لا UPDATE لـ`clients.lastPaymentAt`.
 **الإصلاح**: listener `rent_payment.received` يحدث `clients.lastPaymentAt`.
 
-### N9. Legal Session → Tasks (لا task row)
-**الموقع**: `routes/legal.ts:961-980`
-**الوصف**: يُنشئ notification + obligation لكن لا task.
-**الإصلاح**: إضافة `INSERT INTO tasks` بجانب notification.
+### N9. Legal Session → Tasks (لا task row) ✅ FIXED in PR #1410
+**الموقع**: `routes/legal.ts:1079`
+**الإصلاح المنفذ**: `INSERT INTO tasks` للجلسات المستقبلية مع linkedEntityType='legal_sessions'، priority حسب priority القضية.
 
 ### N10. Inbox Auto-Classify → Task محدود
 **الموقع**: `communications.ts:502`
