@@ -47,13 +47,15 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الإصلاح**: provider حقيقي لـFatoora API (Phase 2 invoicing).
 **Severity**: 🚨 BLOCKER إن كان المالك يصدر فواتير B2B.
 
-### M2. HR End-of-Service GL لا يُسجَّل
-**الموقع**: `hrEngine.ts:132` (engine موجود) vs `routes/hr-exit.ts` (لا يستدعيه)
+### M2. HR End-of-Service GL — Non-Blocking خارج الـTransaction
+**الموقع**: `hr-exit.ts:650-656`
 **الوصف**: 
-- `postExitSettlementGL` كامل ومحكم: DR eos_expense + leave_settlement_expense / CR settlement_payable
-- لكن `routes/hr-exit.ts processExit` يـemit event ولا يستدعي الـengine
-**الأثر**: إنهاء خدمة موظف **لا يُنشئ JE المكافأة المالية**. المحاسب يحتاج إدخالها يدوياً → ثغرة dual-entry.
-**الإصلاح**: في `hr-exit.ts:processExit`، استدعاء `hrEngine.postExitSettlementGL(...)` داخل `withTransaction` قبل emit.
+- `postExitSettlementGL` **مستدعى فعلاً** في الـroute (السطر 652)
+- لكن مع `.catch(...)` non-blocking، **خارج** الـtransaction، **بعد** نقل lifecycle
+- إذا فشل GL post: lifecycle جرى، assignment تم terminated، لكن لا JE
+**الأثر**: نافذة سباق (race window) — إنهاء خدمة بدون JE المكافأة. ثغرة dual-entry في حال GL crash.
+**الإصلاح**: نقل `postExitSettlementGL` داخل الـ`withTransaction` block + جعله blocking مع rollback عند الفشل.
+**تصحيح**: التقييم الأصلي كان "engine غير مستدعى". الواقع: مستدعى لكن fire-and-forget.
 
 ### M3. Print Templates بدون Audit Log
 **الموقع**: `routes/print.ts:328+` — كامل الملف

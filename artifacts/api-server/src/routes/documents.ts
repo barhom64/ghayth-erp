@@ -266,7 +266,13 @@ router.post("/upload", authorize({ feature: "documents", action: "create" }), as
     const scope = req.scope!;
     const { title, description, fileName, fileSize, mimeType, category, storageKey, entityLinks } = body;
 
-    const ALLOWED_ENTITY_TYPES = ["employee", "client", "project", "invoice", "vehicle"];
+    const ALLOWED_ENTITY_TYPES = [
+      "employee", "client", "project", "invoice", "vehicle",
+      "legal_case", "legal_contract",
+      "rental_contract", "property_building", "property_unit",
+      "umrah_pilgrim", "umrah_invoice",
+      "purchase_order", "expense",
+    ];
     if (entityLinks && Array.isArray(entityLinks)) {
       for (const link of entityLinks) {
         if (!link.entityType || !ALLOWED_ENTITY_TYPES.includes(link.entityType) || !Number.isInteger(Number(link.entityId))) {
