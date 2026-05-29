@@ -371,7 +371,7 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
                 (SELECT COUNT(*) FROM rental_contracts rc
                   WHERE rc."tenantId" = t.id AND rc.status = 'active' AND rc."deletedAt" IS NULL)::int AS "activeContracts"
            FROM tenants t
-          WHERE t."clientId" = $1 AND t."companyId" = $2
+          WHERE t."clientId" = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL
           ORDER BY t.id DESC LIMIT 20`,
         [id, scope.companyId]
       ).catch((e) => { logger.error(e, "clients-tenancies query failed"); return []; }),
