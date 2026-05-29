@@ -514,9 +514,7 @@ export default function WhtFilingWorkbenchPage() {
                                       </td>
                                       <td className="py-1 px-2">
                                         <Link href={`/finance/journal/${r.journalEntryId}`}>
-                                          <Button variant="ghost" size="icon" className="h-6 w-6">
-                                            <ExternalLink className="w-3 h-3" />
-                                          </Button>
+                                          <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><ExternalLink className="w-3 h-3" /></Button>
                                         </Link>
                                       </td>
                                     </tr>

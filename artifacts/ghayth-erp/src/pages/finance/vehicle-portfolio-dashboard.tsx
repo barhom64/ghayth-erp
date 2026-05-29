@@ -350,9 +350,7 @@ export default function VehiclePortfolioDashboardPage() {
                         </td>
                         <td className="py-1.5 px-2">
                           <Link href={`/fleet/${p.id}`}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <ExternalLink className="w-3 h-3" />
-                            </Button>
+                            <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                           </Link>
                         </td>
                       </tr>

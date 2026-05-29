@@ -413,9 +413,7 @@ export default function VendorSettlementWorkbenchPage() {
                                 <td className="py-1.5 px-2">
                                   {o.sourceType === "purchase_order" && (
                                     <Link href={`/finance/purchase-orders/${o.id}`}>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7">
-                                        <ExternalLink className="w-3 h-3" />
-                                      </Button>
+                                      <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                                     </Link>
                                   )}
                                 </td>

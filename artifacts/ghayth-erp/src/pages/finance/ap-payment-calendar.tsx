@@ -408,9 +408,7 @@ export default function ApPaymentCalendarPage() {
                         </td>
                         <td className="py-2 px-2">
                           <Link href={`/finance/vendors/${v.supplierId}`}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <ChevronRight className="w-4 h-4" />
-                            </Button>
+                            <Button variant="ghost" size="icon" title="التالي" className="h-7 w-7"><ChevronRight className="w-4 h-4" /></Button>
                           </Link>
                         </td>
                       </tr>

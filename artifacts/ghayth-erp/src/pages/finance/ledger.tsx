@@ -68,7 +68,7 @@ export default function LedgerPage() {
       actions={
         <>
           <Link href="/finance/accounts">
-            <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
+            <Button variant="ghost" size="icon" title="الانتقال"><ArrowRight className="h-5 w-5" /></Button>
           </Link>
           {account && <Badge variant="outline">{typeMap[account.type] || account.type}</Badge>}
           <DatePicker value={startDate} onChange={setStartDate} className="w-40" placeholder="من" />
