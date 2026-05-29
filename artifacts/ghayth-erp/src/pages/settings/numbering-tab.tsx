@@ -955,13 +955,13 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
   // issued number (e.g. correct a typo before the document is delivered).
   // POST /numbering/assignments/:id/void — invalidate an issued number
   // and free the position for the next request. Both audited.
-  const overrideMut = useApiMutation<unknown, { id: number; newNumber: string; reason?: string }>(
+  const overrideMut = useApiMutation<unknown, { id: number; newNumber: string; reason: string }>(
     (b) => `/numbering/assignments/${b.id}/override`,
     "POST",
     [["numbering-assignments"]],
     { successMessage: "تم تعديل الرقم", onSuccess: () => refetch() },
   );
-  const voidMut = useApiMutation<unknown, { id: number; reason?: string }>(
+  const voidMut = useApiMutation<unknown, { id: number; reason: string }>(
     (b) => `/numbering/assignments/${b.id}/void`,
     "POST",
     [["numbering-assignments"]],
@@ -972,9 +972,13 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
   const [reason, setReason] = useState("");
   const submitOverride = () => {
     if (!overrideRow) return;
+    const r = reason.trim();
     if (!newNumber.trim()) return;
+    // Server requires reason min 3 chars — surface the constraint
+    // before the request goes out.
+    if (r.length < 3) return;
     overrideMut.mutate(
-      { id: overrideRow.id, newNumber: newNumber.trim(), reason: reason.trim() || undefined },
+      { id: overrideRow.id, newNumber: newNumber.trim(), reason: r },
       { onSuccess: () => { setOverrideRow(null); setNewNumber(""); setReason(""); } },
     );
   };
@@ -982,8 +986,10 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
   const [voidReason, setVoidReason] = useState("");
   const submitVoid = () => {
     if (!voidRow) return;
+    const r = voidReason.trim();
+    if (r.length < 3) return;
     voidMut.mutate(
-      { id: voidRow.id, reason: voidReason.trim() || undefined },
+      { id: voidRow.id, reason: r },
       { onSuccess: () => { setVoidRow(null); setVoidReason(""); } },
     );
   };
@@ -1099,12 +1105,17 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
                 <Input value={newNumber} onChange={(e) => setNewNumber(e.target.value)} dir="ltr" className="font-mono" />
               </div>
               <div>
-                <Label className="text-xs">السبب</Label>
+                <Label className="text-xs">السبب * (3 أحرف على الأقل)</Label>
                 <Input value={reason} onChange={(e) => setReason(e.target.value)} />
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button onClick={submitOverride} disabled={overrideMut.isPending || !newNumber.trim()} size="sm">
+              <Button
+                onClick={submitOverride}
+                disabled={overrideMut.isPending || !newNumber.trim() || reason.trim().length < 3}
+                size="sm"
+                rateLimitAware
+              >
                 حفظ التعديل
               </Button>
               <Button variant="outline" size="sm" onClick={() => setOverrideRow(null)}>إلغاء</Button>
@@ -1123,10 +1134,16 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
             <p className="text-xs text-muted-foreground">
               سيتم تعليم الرقم كـ voided، ولن يُستخدم بعد ذلك. الإجراء قابل للتدقيق.
             </p>
-            <Label className="text-xs">السبب</Label>
+            <Label className="text-xs">السبب * (3 أحرف على الأقل)</Label>
             <Input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} />
             <div className="flex items-center gap-2">
-              <Button variant="destructive" size="sm" onClick={submitVoid} disabled={voidMut.isPending}>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={submitVoid}
+                disabled={voidMut.isPending || voidReason.trim().length < 3}
+                rateLimitAware
+              >
                 تأكيد الإلغاء
               </Button>
               <Button variant="outline" size="sm" onClick={() => setVoidRow(null)}>تراجع</Button>
