@@ -17,6 +17,7 @@ import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPerio
 import { internalTechRef } from "../lib/internalRef.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 import { logger } from "../lib/logger.js";
+import { requestIdempotencyToken } from "../lib/requestIdempotency.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -125,6 +126,40 @@ const revalueAssetSchema = z.object({
   // Negative = downward revaluation (DR revaluation loss, CR asset)
   revaluationDelta: z.coerce.number().refine((v) => v !== 0, "قيمة إعادة التقييم لا يمكن أن تكون صفراً"),
   reason: z.string().min(3, "سبب إعادة التقييم مطلوب"),
+});
+
+// CIP (Construction-in-Progress) schemas
+const createCipSchema = z.object({
+  code: z.string().optional(),
+  name: z.string().min(1, "اسم المشروع مطلوب"),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+  expectedCompletionDate: z.string().optional(),
+  cipAccountCode: z.string().optional(),
+  targetAssetCategory: z.string().optional(),
+  targetAssetAccountCode: z.string().optional(),
+  targetDepreciationAccountCode: z.string().optional(),
+  targetAccDepreciationAccountCode: z.string().optional(),
+  targetUsefulLifeYears: z.coerce.number().int().positive().optional(),
+  targetDepreciationMethod: z.string().optional(),
+});
+
+const addCipCostSchema = z.object({
+  costDate: z.string().min(1, "تاريخ التكلفة مطلوب"),
+  description: z.string().min(1, "وصف التكلفة مطلوب"),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+  cashAccountCode: z.string().optional(),
+  sourceType: z.string().optional(),
+  sourceId: z.coerce.number().optional(),
+});
+
+const capitalizeCipSchema = z.object({
+  capitalizationDate: z.string().min(1, "تاريخ الرسملة مطلوب"),
+  assetName: z.string().optional(),
+  assetCode: z.string().optional(),
+  usefulLifeYears: z.coerce.number().int().positive().optional(),
+  depreciationMethod: z.string().optional(),
 });
 
 const roundingDiffSchema = z.object({
@@ -1757,6 +1792,279 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/revalue", authorize({ feature: "
     res.json({ message: "تم إعادة تقييم الأصل", journalEntryId: journalId, newBookValue, revaluationDelta: delta });
   } catch (err) {
     handleRouteError(err, res, "Revalue asset error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTRUCTION-IN-PROGRESS (CIP) — IAS 16 staging for assets under construction
+// Accumulate costs against a CIP account; capitalize to a single Fixed Asset
+// on project completion. Migration 234 defines the tables.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /cip — list active CIP projects.
+financeAlgorithmsRouter.get("/cip", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT cip.*,
+              COALESCE((SELECT COUNT(*) FROM cip_costs cc WHERE cc."cipId" = cip.id AND cc."deletedAt" IS NULL), 0) AS "costEntryCount"
+         FROM construction_in_progress cip
+        WHERE cip."companyId" = $1 AND cip."deletedAt" IS NULL
+        ORDER BY cip.id DESC
+        LIMIT 500`,
+      [scope.companyId]
+    ).catch(() => [] as Record<string, unknown>[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "List CIP error:");
+  }
+});
+
+// GET /cip/:id — detail + cost history
+financeAlgorithmsRouter.get("/cip/:id", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [cip] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM construction_in_progress WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!cip) throw new NotFoundError("مشروع CIP غير موجود");
+    const costs = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM cip_costs WHERE "cipId"=$1 AND "deletedAt" IS NULL ORDER BY "costDate" ASC, id ASC`,
+      [id]
+    );
+    res.json({ ...cip, costs });
+  } catch (err) {
+    handleRouteError(err, res, "Get CIP error:");
+  }
+});
+
+// POST /cip — create a new CIP project (no GL yet — pure register entry)
+financeAlgorithmsRouter.post("/cip", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertFinanceRole(scope);
+    const b = zodParse(createCipSchema.safeParse(req.body ?? {}));
+
+    let insertId: number | null = null;
+    await withTransaction(async (client: any) => {
+      try {
+        const ins = await client.query(
+          `INSERT INTO construction_in_progress
+             ("companyId","branchId",code,name,description,category,"startDate","expectedCompletionDate",
+              "cipAccountCode","targetAssetCategory","targetAssetAccountCode","targetDepreciationAccountCode",
+              "targetAccDepreciationAccountCode","targetUsefulLifeYears","targetDepreciationMethod",
+              "totalCost",status,"createdBy")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,0,'in_progress',$16) RETURNING id`,
+          [scope.companyId, scope.branchId, b.code ?? null, b.name, b.description ?? null,
+           b.category ?? null, b.startDate, b.expectedCompletionDate ?? null,
+           b.cipAccountCode ?? "1530", b.targetAssetCategory ?? null,
+           b.targetAssetAccountCode ?? "1500", b.targetDepreciationAccountCode ?? "6100",
+           b.targetAccDepreciationAccountCode ?? "1590", b.targetUsefulLifeYears ?? null,
+           b.targetDepreciationMethod ?? "straight_line", scope.userId]
+        );
+        insertId = ins.rows[0].id;
+      } catch (e: any) {
+        if (e?.code === "42P01") {
+          throw new Error("جدول CIP غير موجود — قم بترحيل migration 234");
+        }
+        throw e;
+      }
+    });
+
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "cip.create", entity: "construction_in_progress", entityId: insertId!,
+      after: { name: b.name, startDate: b.startDate, targetAssetCategory: b.targetAssetCategory },
+    }).catch((e) => logger.error(e, "cip create audit failed"));
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM construction_in_progress WHERE id=$1 AND "companyId"=$2`,
+      [insertId, scope.companyId]
+    );
+    res.status(201).json(row);
+  } catch (err) {
+    handleRouteError(err, res, "Create CIP error:");
+  }
+});
+
+// POST /cip/:id/costs — add a cost entry to a CIP project.
+//   DR CIP (1530, project-specific assetId)
+//        CR Cash / Payable (1100 or specified)
+financeAlgorithmsRouter.post("/cip/:id/costs", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertFinanceRole(scope);
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(addCipCostSchema.safeParse(req.body ?? {}));
+
+    const [cip] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM construction_in_progress WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!cip) throw new NotFoundError("مشروع CIP غير موجود");
+    if (cip.status !== "in_progress") {
+      throw new ConflictError(`لا يمكن إضافة تكاليف لمشروع بحالة "${cip.status}"`);
+    }
+
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, b.costDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسجيل تكلفة CIP في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "costDate", meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
+    const amt = roundTo2(b.amount);
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const cipCode = (cip.cipAccountCode as string | null) ?? "1530";
+    const cashCode = b.cashAccountCode
+      ?? await financialEngine.resolveAccountCode(scope.companyId, "cip_funding_cash", "credit", "1100");
+
+    let costId: number | null = null;
+    let journalId: number | null = null;
+    await withTransaction(async (client) => {
+      const posted = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: (cip.branchId as number | null) ?? scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `CIP-COST-${cip.code ?? cip.id}-${Date.now()}`,
+        description: `تكلفة CIP: ${cip.name} — ${b.description}`,
+        type: "cip_cost",
+        sourceType: "cip_cost",
+        sourceId: id,
+        sourceKey: `finance:cip_cost:${id}:${b.costDate}:${requestIdempotencyToken(req)}`,
+        lines: [
+          { accountCode: cipCode, debit: amt, credit: 0, description: b.description },
+          { accountCode: cashCode, debit: 0, credit: amt, description: `سداد تكلفة CIP ${cip.name}` },
+        ],
+      });
+      journalId = posted.journalId;
+
+      const costInsRes = await client.query(
+        `INSERT INTO cip_costs ("companyId","cipId","costDate",description,amount,"sourceType","sourceId","journalEntryId","createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [scope.companyId, id, b.costDate, b.description, amt, b.sourceType ?? null, b.sourceId ?? null, journalId, scope.userId]
+      );
+      costId = costInsRes.rows[0].id;
+
+      await client.query(
+        `UPDATE construction_in_progress SET "totalCost" = "totalCost" + $1, "updatedAt"=NOW()
+         WHERE id=$2 AND "companyId"=$3`,
+        [amt, id, scope.companyId]
+      );
+    });
+
+    res.status(201).json({ costId, journalEntryId: journalId, amount: amt, cipId: id });
+  } catch (err) {
+    handleRouteError(err, res, "Add CIP cost error:");
+  }
+});
+
+// POST /cip/:id/capitalize — transfer accumulated CIP cost to a Fixed Asset.
+//   DR Fixed Asset (1500)         ← totalCost
+//        CR CIP (1530)             ← totalCost
+// Marks the CIP row as capitalized and links it to the new asset row.
+financeAlgorithmsRouter.post("/cip/:id/capitalize", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertFinanceRole(scope);
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(capitalizeCipSchema.safeParse(req.body ?? {}));
+
+    const [cip] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM construction_in_progress WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!cip) throw new NotFoundError("مشروع CIP غير موجود");
+    if (cip.status !== "in_progress") {
+      throw new ConflictError(`لا يمكن رسملة مشروع بحالة "${cip.status}"`);
+    }
+    const totalCost = Number(cip.totalCost ?? 0);
+    if (totalCost <= 0) {
+      throw new ValidationError("لا توجد تكاليف متراكمة للرسملة");
+    }
+
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, b.capitalizationDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن رسملة CIP في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "capitalizationDate", meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
+    const usefulYears = b.usefulLifeYears ?? (cip.targetUsefulLifeYears as number | null) ?? 5;
+    const depMethod = b.depreciationMethod ?? (cip.targetDepreciationMethod as string | null) ?? "straight_line";
+    const assetName = b.assetName ?? `${cip.name} (مرسمل)`;
+    const assetCode = b.assetCode ?? (cip.code as string | null) ?? null;
+    const targetAssetCode = (cip.targetAssetAccountCode as string | null) ?? "1500";
+    const targetDepCode = (cip.targetDepreciationAccountCode as string | null) ?? "6100";
+    const targetAccDepCode = (cip.targetAccDepreciationAccountCode as string | null) ?? "1590";
+    const cipCode = (cip.cipAccountCode as string | null) ?? "1530";
+
+    let newAssetId: number | null = null;
+    let journalId: number | null = null;
+    const { financialEngine } = await import("../lib/engines/index.js");
+
+    await withTransaction(async (client) => {
+      // 1. Create the finished fixed-asset row.
+      const assetRes = await client.query(
+        `INSERT INTO fixed_assets (
+           "companyId","branchId",code,name,description,category,
+           "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
+           "depreciationMethod","currentBookValue","accumulatedDepreciation",
+           "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10,$11,0,$12,$13,$14,'active') RETURNING id`,
+        [scope.companyId, (cip.branchId as number | null) ?? scope.branchId,
+         assetCode, assetName, cip.description, cip.targetAssetCategory ?? cip.category,
+         b.capitalizationDate, totalCost, usefulYears, depMethod, totalCost,
+         targetAssetCode, targetDepCode, targetAccDepCode]
+      );
+      newAssetId = assetRes.rows[0].id;
+
+      // 2. Post the GL transfer DR new asset / CR CIP.
+      const posted = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: (cip.branchId as number | null) ?? scope.branchId,
+        createdBy: scope.activeAssignmentId ?? scope.userId,
+        ref: `CIP-CAP-${cip.code ?? cip.id}-${b.capitalizationDate}`,
+        description: `رسملة CIP: ${cip.name} → أصل ثابت #${newAssetId}`,
+        type: "cip_capitalization",
+        sourceType: "cip_capitalization",
+        sourceId: id,
+        sourceKey: `finance:cip_capitalize:${id}`,
+        lines: [
+          { accountCode: targetAssetCode, debit: totalCost, credit: 0, assetId: newAssetId!, description: `رسملة أصل من CIP` },
+          { accountCode: cipCode, debit: 0, credit: totalCost, description: `تصفية CIP` },
+        ],
+      });
+      journalId = posted.journalId;
+
+      // 3. Mark CIP as capitalized + link.
+      await client.query(
+        `UPDATE construction_in_progress
+           SET status='capitalized', "capitalizedAt"=$1, "capitalizedAssetId"=$2,
+               "capitalizationJournalId"=$3, "updatedAt"=NOW()
+         WHERE id=$4 AND "companyId"=$5`,
+        [b.capitalizationDate, newAssetId, journalId, id, scope.companyId]
+      );
+    });
+
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "cip.capitalize", entity: "construction_in_progress", entityId: id,
+      after: { capitalizationDate: b.capitalizationDate, assetId: newAssetId, journalEntryId: journalId, totalCost },
+    }).catch((e) => logger.error(e, "cip capitalize audit failed"));
+
+    res.json({
+      message: "تمت رسملة CIP إلى أصل ثابت",
+      capitalizedAssetId: newAssetId,
+      journalEntryId: journalId,
+      totalCost,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Capitalize CIP error:");
   }
 });
 
