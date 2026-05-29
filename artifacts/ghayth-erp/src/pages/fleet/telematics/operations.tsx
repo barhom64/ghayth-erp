@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +85,16 @@ export default function FleetTelematicsOperations() {
     refetchSync();
     refetchBreaker();
   };
+
+  // Operations dashboard: poll for sync log + breaker churn every 30s
+  // so the operator sees a freshly-opened breaker without F5.
+  useEffect(() => {
+    const t = setInterval(refresh, 30_000);
+    return () => clearInterval(t);
+    // refresh is a stable closure over refetch* refs from useApiQuery
+    // (react-query memoises these), no dep listed intentionally.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const syncMut = useApiMutation<unknown, Record<string, never>>(
     "/fleet/telematics/sync/events",
