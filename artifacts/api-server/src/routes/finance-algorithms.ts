@@ -1946,6 +1946,9 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
       contract: 'jl."contractId"',
       department: 'jl."departmentId"',
       client: 'jl."clientId"',
+      // "customer" is the label used by the voucher / expense forms;
+      // it maps to the same clientId column as "client".
+      customer: 'jl."clientId"',
       // journal_lines uses `vendorId` for the supplier dimension —
       // "supplier" stays as the entityType alias for backwards compat
       // with frontend pages that label it as "supplier", but the SQL
