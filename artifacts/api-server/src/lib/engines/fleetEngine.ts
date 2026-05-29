@@ -43,7 +43,7 @@ class FleetEngineImpl implements DomainEngine {
       guardId: fuelLog.id,
       lines: [
         { accountCode: debitCode, debit: fuelLog.amount, credit: 0, description: "مصروف وقود", vehicleId: fuelLog.vehicleId, driverId: fuelLog.driverId },
-        { accountCode: creditCode, debit: 0, credit: fuelLog.amount, vehicleId: fuelLog.vehicleId },
+        { accountCode: creditCode, debit: 0, credit: fuelLog.amount, vehicleId: fuelLog.vehicleId, driverId: fuelLog.driverId },
       ],
     });
   }

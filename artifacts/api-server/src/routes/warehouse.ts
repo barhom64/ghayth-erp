@@ -276,7 +276,7 @@ async function postInventoryMovementGl(params: {
     const { warehouseEngine } = await import("../lib/engines/index.js");
     const glResult = await warehouseEngine.postMovementGL(
       { companyId: params.companyId, branchId: params.branchId, createdBy: params.createdBy },
-      { id: params.movementId, trigger, totalValue, productName: params.productName, ref }
+      { id: params.movementId, trigger, totalValue, productName: params.productName, productId: params.productId, ref }
     );
     return glResult.journalId;
   } catch (glErr) {

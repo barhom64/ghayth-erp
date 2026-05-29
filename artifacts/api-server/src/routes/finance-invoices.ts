@@ -351,7 +351,7 @@ invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action:
               i."isTaxLinked", i."zatcaStatus",
               c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY i."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -763,7 +763,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch((e) => logger.error(e, "finance-invoices background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "invoices", entityId: insertId, after: { ref, total, vatAmount, clientId: clientId ?? null } }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [invoice] = await rawQuery<Record<string, unknown>>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [invoice] = await rawQuery<Record<string, unknown>>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json({ ...invoice, lines: validatedLines });
   } catch (err) {
     handleRouteError(err, res, "Create invoice error:");
@@ -783,7 +783,7 @@ invoicesRouter.post("/invoices/:id/send", authorize({ feature: "finance.invoices
     const [invoice] = await rawQuery<Record<string, unknown>>(
       `SELECT i.id, i.ref, i.status, i.total, i."vatAmount", i."dueDate",
               c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail"
-       FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -851,7 +851,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
     const id = parseId(req.params.id, "id");
 
     const [invoice] = await rawQuery<Record<string, unknown>>(
-      `SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+      `SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1227,7 +1227,11 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         lines: [
           { accountCode: invArCode, debit: Number(invoice.total), credit: 0, clientId: invoice.clientId as number | undefined } as any,
           ...revenueLines,
-          { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
+          // VAT payable carries clientId so per-customer VAT analysis (and
+          // VAT-collected-by-customer reports) tie out from the GL. Without
+          // this, the AR shows the gross-up against the customer but the
+          // VAT obligation is unattributed.
+          { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0), clientId: invoice.clientId as number | undefined } as any,
           ...cogsPlan.journalLines,
         ],
         guardTable: "invoices",
@@ -1323,7 +1327,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [updated] = await rawQuery<Record<string, unknown>>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [updated] = await rawQuery<Record<string, unknown>>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(updated);
   } catch (err) {
@@ -1369,7 +1373,7 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     const [invoice] = await rawQuery<Record<string, unknown>>(
       `SELECT i.*, c.name AS "clientName"
          FROM invoices i
-         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+         LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
         WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1758,7 +1762,7 @@ invoicesRouter.post("/invoices/:id/post", authorize({ feature: "finance.invoices
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.posted", entity: "invoices", entityId: id }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [updated] = await rawQuery<Record<string, unknown>>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [updated] = await rawQuery<Record<string, unknown>>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(updated);
   } catch (err) {
@@ -1786,14 +1790,16 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     let invoiceRef!: string;
     let newPaid!: number;
     let newStatus!: string;
+    let invoiceClientId: number | undefined;
     await withTransaction(async (client) => {
       const invRes = await client.query(
-        `SELECT id, total, "paidAmount", status, ref FROM invoices
+        `SELECT id, total, "paidAmount", status, ref, "clientId" FROM invoices
          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
         [id, scope.companyId]
       );
       const invoice = invRes.rows[0];
       if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+      invoiceClientId = (invoice.clientId as number | null) ?? undefined;
 
       const lockedStatuses = ["paid", "closed", "cancelled"];
       if (lockedStatuses.includes(invoice.status)) {
@@ -1868,8 +1874,12 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
       sourceId: id,
       sourceKey: `finance:payment:${id}:${paidScaled}`,
       lines: [
-        { accountCode: cashAccountCode, debit: paymentAmount, credit: 0 },
-        { accountCode: arAccountCode, debit: 0, credit: paymentAmount },
+        // Both legs carry clientId so per-customer cash inflow + AR
+        // clearing reports drill cleanly from the GL — without this
+        // the payment was attributable on the invoice header only,
+        // not on the GL line.
+        { accountCode: cashAccountCode, debit: paymentAmount, credit: 0, clientId: invoiceClientId },
+        { accountCode: arAccountCode, debit: 0, credit: paymentAmount, clientId: invoiceClientId },
       ],
       guardTable: "invoices",
       guardId: id,
@@ -1896,7 +1906,7 @@ invoicesRouter.get("/invoices/:id", authorize({ feature: "finance.invoices", act
               b.address AS "branchAddress", b.phone AS "branchPhone", b.email AS "branchEmail",
               b.website AS "branchWebsite", b."taxNumber" AS "branchTaxNumber", b."crNumber" AS "branchCrNumber",
               b."footerText" AS "branchFooterText", b.city AS "branchCity"
-       FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL LEFT JOIN branches b ON b.id = i."branchId"
+       FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -3534,7 +3544,7 @@ invoicesRouter.get("/customer-advances", authorize({ feature: "finance.invoices"
                 ca.method, ca."receivedDate", ca.status, ca."journalId", ca."createdAt",
                 c.name AS "clientName"
            FROM customer_advances ca
-           LEFT JOIN clients c ON c.id = ca."clientId" AND c."deletedAt" IS NULL
+           LEFT JOIN clients c ON c.id = ca."clientId" AND c."companyId" = ca."companyId" AND c."deletedAt" IS NULL
           WHERE ${where}
           ORDER BY ca."receivedDate" DESC, ca.id DESC`,
         params
@@ -3641,7 +3651,7 @@ invoicesRouter.get("/dunning/preview", authorize({ feature: "finance.collection"
               c.name AS "clientName", c.email AS "clientEmail", c.phone AS "clientPhone",
               GREATEST(0, ($1::date - i."dueDate"::date))::int AS "daysPastDue"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$2
          AND i.status NOT IN ('paid','cancelled')
          AND COALESCE(i."deletedAt",NULL) IS NULL
@@ -3722,7 +3732,7 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount", i."clientId",
               c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i.id = ANY($1::int[]) AND i."companyId"=$2
          AND i.status NOT IN ('paid','cancelled')
          AND i."deletedAt" IS NULL`,
@@ -3792,7 +3802,7 @@ invoicesRouter.get("/dunning/history", authorize({ feature: "finance.collection"
       `SELECT dl.*, i.ref AS "invoiceNumber", c.name AS "clientName"
        FROM dunning_letters dl
        LEFT JOIN invoices i ON i.id = dl."invoiceId" AND i."deletedAt" IS NULL
-       LEFT JOIN clients c ON c.id = dl."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = dl."clientId" AND c."companyId" = dl."companyId" AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY dl."sentAt" DESC LIMIT 500`,
       params

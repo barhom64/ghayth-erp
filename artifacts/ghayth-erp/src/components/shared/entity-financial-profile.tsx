@@ -6,7 +6,17 @@ import { BookOpen, TrendingUp, TrendingDown, DollarSign, Calendar, Hash } from "
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 
 interface EntityFinancialProfileProps {
-  entityType: "vehicle" | "employee" | "property" | "project" | "contract" | "product" | "vendor" | "client" | "driver";
+  // Every entityType the backend safeColumns map supports
+  // (routes/finance-algorithms.ts /entity-financial-profile).
+  // Pre-fix the type omitted asset / unit / umrahAgent /
+  // umrahSeason / supplier / customer / costCenter / department —
+  // any host page that passed those values type-errored even though
+  // the backend understood them.
+  entityType:
+    | "vehicle" | "employee" | "property" | "project" | "contract"
+    | "department" | "client" | "customer" | "vendor" | "supplier"
+    | "asset" | "unit" | "umrahAgent" | "umrahSeason" | "driver"
+    | "product" | "costCenter";
   entityId: string | number;
 }
 
