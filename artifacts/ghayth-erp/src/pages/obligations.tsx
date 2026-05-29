@@ -97,7 +97,10 @@ export default function ObligationsPage() {
     setScanning(true);
     try {
       const result: any = await apiFetch("/obligations/scan", { method: "POST" });
-      toast({ title: "اكتمل الفحص", description: `تم تحديث ${result?.breached || 0} التزام متجاوز` });
+      toast({
+        title: "اكتمل الفحص",
+        description: `${result?.breachedCount ?? 0} متجاوز جديد، ${result?.escalatedL1 ?? 0} تصعيد L1، ${result?.escalatedL2 ?? 0} تصعيد L2`,
+      });
       refetch();
       refetchSummary();
     } catch (e: any) {
@@ -118,7 +121,7 @@ export default function ObligationsPage() {
       const result: any = await apiFetch("/employees/obligations/seed", { method: "POST" });
       toast({
         title: "اكتمل الجرد",
-        description: `أُنشئت ${result?.created ?? result?.count ?? 0} التزامات جديدة`,
+        description: `فُحص ${result?.scannedEmployees ?? 0} موظفاً، عُولج ${result?.employeesProcessed ?? 0}`,
       });
       refetch();
       refetchSummary();
@@ -189,7 +192,7 @@ export default function ObligationsPage() {
           obligationType: bulkForm.obligationType || undefined,
         }),
       });
-      toast({ title: "تم تعليم الالتزامات كملباة", description: `${result?.count ?? 0} التزام تم تحديثه` });
+      toast({ title: "تم تعليم الالتزامات كملباة", description: `${result?.marked ?? 0} التزام تم تحديثه` });
       refetch();
       refetchSummary();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
@@ -208,7 +211,7 @@ export default function ObligationsPage() {
           obligationType: bulkForm.obligationType || undefined,
         }),
       });
-      toast({ title: "تم إلغاء الالتزامات", description: `${result?.count ?? 0} التزام تم تحديثه` });
+      toast({ title: "تم إلغاء الالتزامات", description: `${result?.cancelled ?? 0} التزام تم تحديثه` });
       refetch();
       refetchSummary();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }

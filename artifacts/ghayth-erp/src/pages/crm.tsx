@@ -71,26 +71,29 @@ const OPP_STAGE_OPTIONS = [
 
 function FollowupCheckTrigger() {
   // POST /crm/followup-check — runs the followup nag job on demand.
-  // Surfaces a "تم/فشل" toast via the mutation defaults; the result
-  // count is shown inline as a subtitle once it lands.
-  const [result, setResult] = useState<{ created: number } | null>(null);
-  const mut = useApiMutation<{ created?: number }, Record<string, never>>(
+  // Server returns {totalOverdue, escalated, details} where escalated
+  // is the count actually surfaced as follow-up tasks this run.
+  const [result, setResult] = useState<{ totalOverdue: number; escalated: number } | null>(null);
+  const mut = useApiMutation<{ totalOverdue?: number; escalated?: number }, Record<string, never>>(
     "/crm/followup-check",
     "POST",
     [["crm-stats"], ["crm-analytics"]],
     { successMessage: false },
   );
   const run = () => {
-    mut.mutate({}, { onSuccess: (r) => setResult({ created: r?.created ?? 0 }) });
+    mut.mutate({}, { onSuccess: (r) => setResult({
+      totalOverdue: r?.totalOverdue ?? 0,
+      escalated: r?.escalated ?? 0,
+    }) });
   };
   return (
     <div className="flex items-center gap-2 text-xs">
       {result && (
         <span className="text-muted-foreground">
-          نشأت {result.created} مهمة متابعة
+          {result.totalOverdue} متأخر · صُعِّد {result.escalated}
         </span>
       )}
-      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={run} disabled={mut.isPending}>
+      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={run} disabled={mut.isPending} rateLimitAware>
         فحص المتابعات الآن
       </Button>
     </div>
