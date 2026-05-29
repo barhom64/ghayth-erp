@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import {
+  useInlineActions,
+  RowActions,
+  InlineDeleteConfirm,
+} from "@/components/inline-actions";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -64,6 +69,12 @@ export default function IDPPage() {
     [["idp"]],
     { successMessage: "تم تحديث الحالة" },
   );
+
+  const idpActions = useInlineActions({
+    endpoint: "/hr/idp",
+    queryKeys: [["idp"]],
+    onSuccess: () => refetch(),
+  });
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -197,19 +208,16 @@ export default function IDPPage() {
       ),
     },
     {
-      key: "actions",
+      key: "_actions" as any,
       header: "",
       render: (v) => (
-        <GuardedButton
-          perm="hr:delete"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-status-error-foreground"
-          onClick={() => setDeleting({ id: v.id, name: v.title || v.employeeName || `خطة #${v.id}` })}
-          title="حذف"
-        >
-          <Trash2 className="h-3 w-3" />
-        </GuardedButton>
+        <div onClick={(e) => e.stopPropagation()}>
+          <RowActions
+            onDelete={() => idpActions.startDelete(v.id)}
+            canEdit={false}
+            deletePerm="hr:delete"
+          />
+        </div>
       ),
     },
   ];
@@ -300,15 +308,11 @@ export default function IDPPage() {
         </DialogContent>
       </Dialog>
 
-      {deleting && (
-        <ConfirmDeleteDialog
-          open={!!deleting}
-          onOpenChange={(o) => { if (!o) setDeleting(null); }}
-          entity={{ type: "idp", id: deleting.id, name: deleting.name }}
-          deletePath={`/hr/idp/${deleting.id}`}
-          invalidateKeys={[["idp"]]}
-          successMessage="تم حذف الخطة"
-          onDeleted={() => setDeleting(null)}
+      {idpActions.deletingId !== null && (
+        <InlineDeleteConfirm
+          onConfirm={() => idpActions.handleDelete(idpActions.deletingId!)}
+          onCancel={idpActions.cancelDelete}
+          isPending={idpActions.isPending}
         />
       )}
     </PageShell>

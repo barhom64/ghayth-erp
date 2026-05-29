@@ -82,9 +82,19 @@ export default function PrintDiagnosticsPage() {
     `/print/jobs?limit=30`,
   );
 
+  // Diagnostic queue probe — GET /print/queue/0 returns the print
+  // queue's backend / depth / failure rate metadata even when no
+  // specific job is targeted. Useful for the diagnostics page to
+  // show the queue state at a glance.
+  const queueProbe = useApiQuery<any>(
+    ["print-queue-probe"],
+    `/print/queue/0`,
+  );
+
   const tplItems = templates.data?.items ?? [];
   const asnItems = assignments.data?.items ?? [];
   const jobItems = jobs.data?.items ?? [];
+  const queueMeta = queueProbe.data ?? null;
 
   // Flag suspicious templates. Looks for tell-tale signs of "this will
   // render blank" — empty htmlContent, tokens with no matching data
@@ -252,6 +262,24 @@ export default function PrintDiagnosticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {queueMeta && (
+        <Card className="mb-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">حالة طابور الطباعة</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs grid grid-cols-2 md:grid-cols-4 gap-2">
+            {Object.entries(queueMeta as Record<string, any>).slice(0, 8).map(([k, v]) => (
+              <div key={k} className="flex justify-between p-1 border rounded">
+                <span className="text-muted-foreground">{k}</span>
+                <span className="font-mono font-semibold">
+                  {typeof v === "object" ? Object.keys(v ?? {}).length : String(v)}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mb-4">
         <CardHeader className="pb-2">

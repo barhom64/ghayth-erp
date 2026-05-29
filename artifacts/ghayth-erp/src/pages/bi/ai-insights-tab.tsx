@@ -34,15 +34,11 @@ export function AIInsightsTab() {
     setDismissingId(null);
   };
 
-  // PATCH /bi/ai-insights/:id/read marks an alert as read without
-  // dismissing it — keeps it in the list but visually demotes it. Pairs
-  // with /dismiss (hide entirely) so an operator can triage by either
-  // hiding an alert or acknowledging it for later action.
   const handleMarkRead = async (id: number) => {
-    setReadingId(id);
+    // PATCH /bi/ai-insights/:id/read — distinct from dismiss: read
+    // keeps the alert in the inbox but unflagged, dismiss removes it.
     try {
       await apiFetch(`/bi/ai-insights/${id}/read`, { method: "PATCH" });
-      toast({ title: "تم تعليم التنبيه كمقروء" });
       refetch();
     } catch {
       toast({ title: "خطأ", variant: "destructive" });
@@ -114,15 +110,14 @@ export function AIInsightsTab() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    {!alert.isRead && (
+                    {!alert.readAt && (
                       <GuardedButton
                         perm="bi:create"
                         size="sm" variant="ghost"
                         onClick={() => handleMarkRead(alert.id)}
-                        disabled={readingId === alert.id}
                         title="تعليم كمقروء"
                       >
-                        <Eye className="h-4 w-4" />
+                        <CheckCircle2 className="h-4 w-4" />
                       </GuardedButton>
                     )}
                     <GuardedButton

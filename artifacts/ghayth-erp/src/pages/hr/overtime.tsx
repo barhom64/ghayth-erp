@@ -44,6 +44,15 @@ export default function OvertimePage() {
   );
   const items = data?.data || [];
   const stats = data?.stats || {};
+
+  // GET /hr/overtime/summary — aggregate totals (hours, cost, employee
+  // counts) for the current Riyadh period. Surfaced as an extra KPI
+  // row when the endpoint returns data.
+  const { data: summaryResp } = useApiQuery<any>(
+    ["hr-overtime-summary"],
+    "/hr/overtime/summary",
+  );
+  const summary = summaryResp?.data ?? summaryResp ?? null;
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   // Factory URL with the literal path inline so the wiring audit can
@@ -108,6 +117,16 @@ export default function OvertimePage() {
       icon: DollarSign,
       color: "text-status-success-foreground bg-status-success-surface",
     },
+    ...(summary
+      ? [
+          {
+            label: "موظفون لديهم إضافي (الفترة الحالية)",
+            value: Number(summary.employeeCount ?? 0),
+            icon: FileText,
+            color: "text-indigo-600 bg-indigo-50",
+          },
+        ]
+      : []),
   ];
 
   const columns: DataTableColumn<any>[] = [

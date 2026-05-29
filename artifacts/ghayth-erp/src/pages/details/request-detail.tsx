@@ -72,6 +72,15 @@ export default function RequestDetail() {
     id ? `/requests/${id}` : null,
     !!id
   );
+  // GET /requests/:id/actions — chronological action log (approvals,
+  // returns, comments). Falls back to the bundled `request.actions`
+  // if the dedicated index isn't reachable.
+  const actionsQ = useApiQuery<any>(
+    ["request-actions", String(id ?? "")],
+    id ? `/requests/${id}/actions` : null,
+    { enabled: !!id },
+  );
+  const actionsLog: any[] = actionsQ.data?.data ?? actionsQ.data?.actions ?? [];
 
   // Fetch request type metadata for category/workflow context
   const { data: typesResp } = useApiQuery<any>(
@@ -238,6 +247,22 @@ export default function RequestDetail() {
             </CardHeader>
             <CardContent>
               <ActionHistory entityType="request" entityId={id} defaultOpen />
+            </CardContent>
+          </Card>
+        )}
+
+        {actionsLog.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">سجل إجراءات الطلب ({actionsLog.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="text-xs space-y-1 max-h-48 overflow-y-auto">
+              {actionsLog.slice(0, 30).map((a: any, i: number) => (
+                <div key={a.id ?? i} className="flex items-center justify-between border-b pb-1">
+                  <span>{a.action ?? a.kind ?? "—"} {a.actorName ? `· ${a.actorName}` : ""}</span>
+                  <span className="text-muted-foreground">{a.createdAt ? new Date(a.createdAt).toLocaleString("ar-SA") : ""}</span>
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}

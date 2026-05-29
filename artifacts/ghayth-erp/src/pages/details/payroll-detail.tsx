@@ -7,6 +7,7 @@ import {
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import { ExportButton } from "@/components/shared/export-buttons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ActionHistory } from "@workspace/workflow-kit";
@@ -323,10 +324,19 @@ export default function PayrollDetail() {
       onRetry={refetch}
       actions={
         payroll ? (
-          <EntityPrintButton
-            entityType="payroll"
-            entityId={payroll.id ?? id}
-            formats={["a4"]}/>
+          <div className="flex items-center gap-2">
+            <EntityPrintButton
+              entityType="payroll"
+              entityId={payroll.id ?? id}
+              formats={["a4"]}/>
+            <ExportButton
+              endpoint={`/export/pdf/payroll/${payroll.id ?? id}`}
+              filename={`payroll-${payroll.id ?? id}.pdf`}
+              type="pdf"
+              label="PDF"
+              size="sm"
+            />
+          </div>
         ) : undefined
       }
     />

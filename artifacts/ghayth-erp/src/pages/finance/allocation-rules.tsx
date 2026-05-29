@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
-import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import {
+  useInlineActions,
+  RowActions,
+  InlineDeleteConfirm,
+} from "@/components/inline-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,6 +81,11 @@ export default function AllocationRulesPage() {
   if (activeFilter) params.set("isActive", activeFilter);
   const qs = params.toString();
 
+  const ruleActions = useInlineActions({
+    endpoint: "/finance/allocation-rules",
+    queryKeys: [["allocation-rules", docTypeFilter, activeFilter]],
+  });
+
   const { data, isLoading, isError } = useApiQuery<{ data: AllocationRule[]; total: number }>(
     ["allocation-rules", docTypeFilter, activeFilter],
     `/finance/allocation-rules${qs ? `?${qs}` : ""}`,
@@ -145,15 +154,11 @@ export default function AllocationRulesPage() {
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-status-error-foreground"
-            title="حذف القاعدة"
-            onClick={() => setDeleting(r)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          <RowActions
+            onDelete={() => ruleActions.startDelete(r.id)}
+            canEdit={false}
+            deletePerm="finance:delete"
+          />
         </div>
       ) },
   ];
@@ -272,16 +277,11 @@ export default function AllocationRulesPage() {
           />
         </CardContent>
       </Card>
-
-      {deleting && (
-        <ConfirmDeleteDialog
-          open={!!deleting}
-          onOpenChange={(o) => { if (!o) setDeleting(null); }}
-          entity={{ type: "allocation-rule", id: deleting.id, name: deleting.name }}
-          deletePath={`/finance/allocation-rules/${deleting.id}`}
-          invalidateKeys={[["allocation-rules"]]}
-          successMessage="تم حذف القاعدة"
-          onDeleted={() => setDeleting(null)}
+      {ruleActions.deletingId !== null && (
+        <InlineDeleteConfirm
+          onConfirm={() => ruleActions.handleDelete(ruleActions.deletingId!)}
+          onCancel={ruleActions.cancelDelete}
+          isPending={ruleActions.isPending}
         />
       )}
     </PageShell>
