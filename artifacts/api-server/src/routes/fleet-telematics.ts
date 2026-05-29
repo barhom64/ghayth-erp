@@ -341,7 +341,7 @@ router.get(
       const rows = await rawQuery<DeviceRow & { vehiclePlate: string | null }>(
         `SELECT d.*, v."plateNumber" AS "vehiclePlate"
            FROM fleet_telematics_devices d
-           LEFT JOIN vehicles v ON v.id = d."vehicleId"
+           LEFT JOIN fleet_vehicles v ON v.id = d."vehicleId" AND v."deletedAt" IS NULL
           WHERE d."companyId" = ANY($1::int[]) AND d."deletedAt" IS NULL
           ORDER BY d.id DESC
           LIMIT 500`,
@@ -366,7 +366,7 @@ router.post(
       // otherwise a scoped user could link a device to another tenant's
       // vehicle id and read its positions.
       const veh = await rawQuery<{ id: number }>(
-        `SELECT id FROM vehicles
+        `SELECT id FROM fleet_vehicles
           WHERE id = $1 AND "companyId" = ANY($2::int[])`,
         [body.vehicleId, scope.allowedCompanies],
       );
@@ -687,7 +687,7 @@ router.get(
       const rows = await rawQuery(
         `SELECT p.*, d."cmsv6DeviceNo", d."deviceLabel"
            FROM fleet_device_positions p
-           JOIN fleet_telematics_devices d ON d.id = p."deviceId"
+           JOIN fleet_telematics_devices d ON d.id = p."deviceId" AND d."deletedAt" IS NULL
           WHERE p."vehicleId" = $1 AND p."companyId" = ANY($2::int[])
           ORDER BY p."occurredAt" DESC
           LIMIT 1`,
@@ -845,7 +845,7 @@ router.get(
                 p.direction,
                 p."occurredAt" AS "lastPositionAt"
            FROM fleet_telematics_devices d
-           LEFT JOIN vehicles v ON v.id = d."vehicleId"
+           LEFT JOIN fleet_vehicles v ON v.id = d."vehicleId" AND v."deletedAt" IS NULL
            LEFT JOIN last_pos p ON p."deviceId" = d.id
           WHERE d."companyId" = ANY($1::int[]) AND d."deletedAt" IS NULL
           ORDER BY d.id ASC`,
@@ -880,8 +880,8 @@ router.get(
       const rows = await rawQuery(
         `SELECT a.*, v."plateNumber" AS "vehiclePlate", d."deviceLabel"
            FROM fleet_ai_alerts a
-           LEFT JOIN vehicles v ON v.id = a."vehicleId"
-           LEFT JOIN fleet_telematics_devices d ON d.id = a."deviceId"
+           LEFT JOIN fleet_vehicles v ON v.id = a."vehicleId" AND v."deletedAt" IS NULL
+           LEFT JOIN fleet_telematics_devices d ON d.id = a."deviceId" AND d."deletedAt" IS NULL
           WHERE ${conditions.join(" AND ")}
           ORDER BY a."occurredAt" DESC LIMIT 500`,
         params,
@@ -2000,8 +2000,8 @@ router.get(
                 v."plateNumber" AS "vehiclePlate",
                 d."deviceLabel"
            FROM fleet_video_sessions s
-           LEFT JOIN vehicles v ON v.id = s."vehicleId"
-           LEFT JOIN fleet_telematics_devices d ON d.id = s."deviceId"
+           LEFT JOIN fleet_vehicles v ON v.id = s."vehicleId" AND v."deletedAt" IS NULL
+           LEFT JOIN fleet_telematics_devices d ON d.id = s."deviceId" AND d."deletedAt" IS NULL
           WHERE s."companyId" = ANY($1::int[])
           ORDER BY s."startedAt" DESC LIMIT 200`,
         [scope.allowedCompanies],
@@ -2176,8 +2176,8 @@ router.get(
                 d."deviceLabel"
            FROM fleet_media_evidence m
            LEFT JOIN fleet_ai_alerts a ON a.id = m."alertId"
-           LEFT JOIN vehicles v ON v.id = m."vehicleId"
-           LEFT JOIN fleet_telematics_devices d ON d.id = m."deviceId"
+           LEFT JOIN fleet_vehicles v ON v.id = m."vehicleId" AND v."deletedAt" IS NULL
+           LEFT JOIN fleet_telematics_devices d ON d.id = m."deviceId" AND d."deletedAt" IS NULL
           WHERE ${conditions.join(" AND ")}
           ORDER BY m."uploadedAt" DESC, m.id DESC
           LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
@@ -2211,8 +2211,8 @@ router.get(
                 d."deviceLabel"
            FROM fleet_media_evidence m
            LEFT JOIN fleet_ai_alerts a ON a.id = m."alertId"
-           LEFT JOIN vehicles v ON v.id = m."vehicleId"
-           LEFT JOIN fleet_telematics_devices d ON d.id = m."deviceId"
+           LEFT JOIN fleet_vehicles v ON v.id = m."vehicleId" AND v."deletedAt" IS NULL
+           LEFT JOIN fleet_telematics_devices d ON d.id = m."deviceId" AND d."deletedAt" IS NULL
           WHERE m.id = $1 AND m."companyId" = ANY($2::int[])`,
         [id, scope.allowedCompanies],
       );
@@ -2427,7 +2427,7 @@ router.get(
                 COUNT(*) FILTER (WHERE category = 'bsd')::int  AS "bsdCount",
                 COUNT(*) FILTER (WHERE severity IN ('high','critical'))::int AS "severeCount",
                 MAX(a."occurredAt") AS "lastAlertAt"
-           FROM drivers d
+           FROM fleet_drivers d
            LEFT JOIN fleet_ai_alerts a
              ON a."driverId" = d.id
              AND a."companyId" = ANY($1::int[])
@@ -2467,7 +2467,7 @@ router.get(
       // Confirm the driver belongs to a company the caller can see —
       // this is the only place we hand back driver-level breakdowns.
       const [driver] = await rawQuery<{ id: number; name: string; licenseNumber: string | null }>(
-        `SELECT id, name, "licenseNumber" FROM drivers
+        `SELECT id, name, "licenseNumber" FROM fleet_drivers
           WHERE id = $1 AND "companyId" = ANY($2::int[])`,
         [driverId, scope.allowedCompanies],
       );
@@ -2526,7 +2526,7 @@ router.get(
                 a."occurredAt", a.status,
                 v."plateNumber" AS "vehiclePlate"
            FROM fleet_ai_alerts a
-           LEFT JOIN vehicles v ON v.id = a."vehicleId"
+           LEFT JOIN fleet_vehicles v ON v.id = a."vehicleId" AND v."deletedAt" IS NULL
           WHERE a."driverId" = $1
             AND a."companyId" = ANY($2::int[])
             AND a."occurredAt" >= $3
