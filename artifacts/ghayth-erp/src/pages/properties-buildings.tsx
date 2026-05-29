@@ -186,7 +186,7 @@ export default function PropertiesBuildings() {
             </Button>
           </Link>
           {canManage && (
-            <Link href={`/properties/buildings/${b.id}/edit`}>
+            <Link href={`/properties/buildings/${b.id}`}>
               <Button variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs">
                 <Pencil className="h-3 w-3" />
               </Button>

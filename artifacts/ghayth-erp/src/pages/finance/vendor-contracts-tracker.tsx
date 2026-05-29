@@ -330,7 +330,7 @@ export default function VendorContractsTrackerPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            <Link href={`/finance/contracts/${c.id}`}>
+                            <Link href="/finance/contracts">
                               <Button variant="ghost" size="icon" className="h-8 w-8">
                                 <ExternalLink className="w-4 h-4" />
                               </Button>

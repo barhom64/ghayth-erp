@@ -101,7 +101,7 @@ function buildFilings(year: number, vatFrequency: "monthly" | "quarterly"): Fili
       label: "إقرار ضريبة الاستقطاع",
       periodLabel: `${year}-${String(m).padStart(2, "0")}`,
       deadline: fixedDayOfMonth(dlYear, dlMonth, 10),
-      href: "/finance/wht-summary",
+      href: "/finance/reports/wht-summary",
       icon: FileCheck2,
       color: "text-status-warning-foreground",
     });

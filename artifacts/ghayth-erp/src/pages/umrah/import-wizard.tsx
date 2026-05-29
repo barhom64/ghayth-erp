@@ -542,11 +542,6 @@ export default function UmrahImportWizard() {
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-muted-foreground">معرف الدفعة:</span>
                     <Badge variant="outline" className="font-mono">{String(confirmResult.batchId)}</Badge>
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/admin/import-batches/${confirmResult.batchId}`}>
-                        عرض تفاصيل الدفعة
-                      </Link>
-                    </Button>
                   </div>
                 )}
                 <div>

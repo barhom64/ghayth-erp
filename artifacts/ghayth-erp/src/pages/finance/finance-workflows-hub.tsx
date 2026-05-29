@@ -53,9 +53,7 @@ const CATEGORIES: WorkflowCategory[] = [
       { title: "اتجاه قائمة الدخل", description: "P&L trend الشهري", href: "/finance/reports/is-trend", icon: Activity },
       { title: "معدل الحرق وفترة البقاء", description: "كم شهر تبقى لنا بالنقدية؟", href: "/finance/expense-burn-rate", icon: Flame, isNew: true },
       { title: "Cost Center P&L", description: "ربحية كل مركز تكلفة", href: "/finance/cost-center-pnl", icon: Layers },
-      { title: "محفظة المشاريع", description: "P&L كل مشروع نشط", href: "/finance/project-portfolio", icon: Briefcase, isNew: true },
       { title: "محفظة المركبات", description: "ربحية كل مركبة في الأسطول", href: "/finance/vehicle-portfolio", icon: BarChart3, isNew: true },
-      { title: "محفظة العقارات", description: "ربحية + إشغال كل عقار", href: "/finance/property-portfolio", icon: Building2, isNew: true },
     ],
   },
   {

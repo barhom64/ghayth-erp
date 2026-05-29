@@ -423,7 +423,7 @@ export default function Vendor360SheetPage() {
                             {formatCurrency(Number(c.totalValue ?? 0))}
                           </td>
                           <td className="py-1.5 px-2">
-                            <Link href={`/finance/contracts/${c.id}`}>
+                            <Link href="/finance/contracts">
                               <Button variant="ghost" size="icon" className="h-7 w-7">
                                 <ExternalLink className="w-3 h-3" />
                               </Button>

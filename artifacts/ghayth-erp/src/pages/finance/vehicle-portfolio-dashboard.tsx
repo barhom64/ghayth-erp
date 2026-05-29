@@ -349,7 +349,7 @@ export default function VehiclePortfolioDashboardPage() {
                           {p.margin.toFixed(1)}%
                         </td>
                         <td className="py-1.5 px-2">
-                          <Link href={`/fleet/vehicles/${p.id}`}>
+                          <Link href={`/fleet/${p.id}`}>
                             <Button variant="ghost" size="icon" className="h-7 w-7">
                               <ExternalLink className="w-3 h-3" />
                             </Button>
