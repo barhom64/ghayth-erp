@@ -160,12 +160,19 @@ const NON_ROUTE_EXCEPTIONS = new Map([
   // financialEngine.createPurchaseOrder accepts `ref` as a required
   // parameter. The contract is: caller MUST issue via numberingService
   // and pass the result. The audit verifies caller compliance through
-  // the routes-pass; if a caller builds ref inline the new
-  // `inline-date-now-as-ref` lint rule catches it.
+  // the routes-pass; if a caller builds ref inline the
+  // `inline-date-now-as-ref` lint rule catches it. After G3 closure
+  // every caller passes a real numberingService-issued ref.
   ["lib/engines/financialEngine.ts", "ref is a required parameter; caller MUST issue. Caller-side audit covers compliance"],
-  ["lib/engines/legalEngine.ts",     "caseNumber must be issued by caller and passed; gap currently tracked in coverage report §3 (G5)"],
-  ["lib/engines/supportEngine.ts",   "ref must be issued by caller (createPortalTicket) or column left NULL (createTicket — gap tracked in coverage report §3 G4)"],
-  ["lib/cronScheduler.ts",           "auto-generated documents from cron — gap tracked in coverage report §3 G6 and G7. Pending fix."],
+  // legalEngine.createCase + supportEngine.createTicket now accept an
+  // OPTIONAL ref/caseNumber parameter (G4/G5 closure). The conversion
+  // paths in routes/requests.ts pass it; the audit watches that no NEW
+  // caller drops back to the NULL-ref path.
+  ["lib/engines/legalEngine.ts",     "caseNumber is now optional; caller (routes/requests.ts G5) passes a numberingService-issued value. Coverage report §3 G5 closed."],
+  ["lib/engines/supportEngine.ts",   "ref is now optional; callers (routes/requests.ts G4, routes/clientPortal.ts) pass a numberingService-issued value. Coverage report §3 G4 closed."],
+  // lib/cronScheduler.ts G6+G7 closed in PR #1370: both auto-PO and
+  // auto-legal-case paths now route through issueNumber. The audit's
+  // regex detects those calls; no exemption needed.
 ]);
 
 // ─── Regex helpers ──────────────────────────────────────────────────

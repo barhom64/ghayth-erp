@@ -6,6 +6,7 @@ import { useSettings } from "@/contexts/settings-context";
 import {
   LayoutDashboard, Users, Building2, CreditCard, FileText, Truck, Home, Banknote,
   Shield, ChevronDown, ChevronLeft, Clock, Calendar, DollarSign, GraduationCap,
+  Paperclip,
   Target, Network, Receipt, Wallet, Car, Wrench, Fuel, User,
   FileCheck, AlertTriangle, ClipboardCheck, Building, FileSignature, Users2,
   Hammer, TrendingUp, FileBarChart, FolderOpen, Archive, ListTodo, GitBranch,
@@ -189,11 +190,14 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "الانضباط والمخالفات", path: "/hr/violations", icon: Scale, module: "hr", children: [
         { label: "نظرة عامة", path: "/hr/violations", icon: ListChecks, subKey: "violations" },
-        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations" },
+        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
+        { label: "المحاضر التأديبية", path: "/hr/discipline/memos", icon: FileText, subKey: "violations" },
         { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
         { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
         { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
       ]},
+      { label: "صناديق الواردات HR", path: "/hr/approvals", icon: Bell, module: "hr", subKey: "leaves" },
+      { label: "وثائق الموظفين", path: "/hr/documents", icon: FileText, module: "hr", subKey: "employees" },
       { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, module: "hr", subKey: "employees" },
       { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, module: "hr", subKey: "employees" },
       { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, module: "hr", subKey: "employees" },
@@ -212,6 +216,8 @@ const allNavSections: NavSection[] = [
       { label: "الحسابات والقيود", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
         { label: "حسابات فرعية", path: "/finance/subsidiary-accounts", icon: Layers },
+        { label: "مراكز التكلفة", path: "/finance/cost-centers", icon: Network },
+        { label: "كشف الحساب التحليلي", path: "/finance/entity-statements", icon: FileText },
         { label: "القيود اليومية", path: "/finance/journal", icon: ScrollText },
         { label: "ميزان مع تتبّع", path: "/finance/trial-balance-drilldown", icon: Scale },
         { label: "مقارنة ميزان", path: "/finance/trial-balance-comparison", icon: BarChart3 },
@@ -239,6 +245,7 @@ const allNavSections: NavSection[] = [
         { label: "تسجيل دفعة عميل", path: "/finance/receivables/receipt", icon: DollarSign },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
         { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
+        { label: "منضدة الدفعات المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء (PR)", path: "/finance/purchase-requests", icon: ClipboardList },
@@ -277,6 +284,7 @@ const allNavSections: NavSection[] = [
         { label: "إهلاك دفعة واحدة", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
         { label: "العهد", path: "/finance/custodies", icon: KeyRound },
         { label: "منضدة العُهد", path: "/finance/custody-workbench", icon: KeyRound },
+        { label: "تقرير العهد", path: "/finance/custodies/report", icon: FileBarChart },
       ]},
       { label: "الفترات والميزانية", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
@@ -301,6 +309,8 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "الضرائب والتقارير", path: "/finance/tax", icon: Scale, module: "finance", children: [
         { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
+        { label: "رموز الضريبة", path: "/finance/tax-codes", icon: Percent },
+        { label: "فئات WHT", path: "/finance/wht-categories", icon: Percent },
         { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
         { label: "جاهزية ZATCA", path: "/finance/vat-filing-readiness", icon: FileCheck },
         { label: "ZATCA Reports Hub", path: "/finance/reports/zatca", icon: FileCheck },
@@ -350,6 +360,7 @@ const allNavSections: NavSection[] = [
         { label: "متابعة Dunning", path: "/finance/dunning", icon: Bell },
         { label: "مراحل التصعيد", path: "/finance/collection", icon: AlertTriangle },
         { label: "الديون المشكوك بها", path: "/finance/bad-debt-provision", icon: ShieldAlert },
+        { label: "الديون المعدومة", path: "/finance/bad-debt", icon: ShieldAlert },
       ]},
       // F6 (audit) — العملات الأجنبية: rates + revaluation + history في
       // مجموعة واحدة بدلاً من تركها كلها off-sidebar.
@@ -382,6 +393,7 @@ const allNavSections: NavSection[] = [
         { label: "قائمة المشاريع", path: "/projects?tab=list", icon: Target },
         { label: "مخطط غانت", path: "/projects/gantt", icon: BarChart2 },
         { label: "المخاطر", path: "/projects/risks", icon: ShieldAlert },
+        { label: "مهام المشاريع", path: "/projects/tasks", icon: ListTodo },
         { label: "المهام", path: "/tasks", icon: ListTodo },
       ]},
       { label: "إدارة الأسطول", path: "/fleet", icon: Truck, module: "fleet", children: [
@@ -403,6 +415,7 @@ const allNavSections: NavSection[] = [
         { label: "أجهزة MDVR", path: "/fleet/telematics/devices", icon: HardDrive },
         { label: "إعدادات CMSV6", path: "/fleet/telematics/settings", icon: Settings },
         { label: "لوحة التشغيل", path: "/fleet/telematics/operations", icon: ShieldAlert },
+        { label: "تكلفة الملكية (TCO)", path: "/fleet/tco", icon: DollarSign },
         { label: "التقارير", path: "/fleet/reports", icon: FileBarChart },
       ]},
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
@@ -414,6 +427,7 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
         { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard },
+        { label: "المنتجات", path: "/store/products", icon: Package },
         { label: "الطلبات", path: "/store/orders", icon: ShoppingCart },
       ]},
       { label: "إدارة الأملاك", path: "/properties/dashboard", icon: Home, module: "property", children: [
@@ -429,6 +443,7 @@ const allNavSections: NavSection[] = [
         { label: "الفحص والتفتيش", path: "/properties/inspections", icon: ClipboardCheck },
         { label: "ودائع الضمان", path: "/properties/deposits", icon: Banknote },
         { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
+        { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
         { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
       ]},
       { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, children: [
@@ -438,13 +453,21 @@ const allNavSections: NavSection[] = [
         { label: "الوكلاء الفرعيين", path: "/umrah/sub-agents", icon: Users },
         { label: "المواسم", path: "/umrah/seasons", icon: Calendar },
         { label: "الباقات", path: "/umrah/packages", icon: Package },
+        { label: "المجموعات", path: "/umrah/groups", icon: Users2 },
         { label: "التسعير", path: "/umrah/pricing", icon: DollarSign },
         { label: "خطط العمولات", path: "/umrah/commission-plans", icon: TrendingUp },
+        { label: "حساب العمولات", path: "/umrah/commission-calculations", icon: Calculator },
         { label: "الفواتير", path: "/umrah/invoices", icon: Receipt },
+        { label: "المدفوعات", path: "/umrah/payments", icon: Banknote },
+        { label: "معالج المبيعات", path: "/umrah/sales-wizard", icon: Sparkles },
         { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
         { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
         { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
+        { label: "البرنامج اليومي", path: "/umrah/daily-runsheet", icon: Calendar },
+        { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },
+        { label: "المرفقات", path: "/umrah/attachments", icon: Paperclip },
         { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
+        { label: "الاستيراد القديم", path: "/umrah/import/legacy", icon: FileText },
       ]},
     ],
   },
@@ -485,6 +508,7 @@ const allNavSections: NavSection[] = [
         { label: "المجلدات", path: "/documents/folders", icon: FolderOpen },
         { label: "الأرشيف", path: "/documents/archive", icon: Archive },
         { label: "القوالب", path: "/documents/templates", icon: FilePlus },
+        { label: "رفع مستند", path: "/documents/upload", icon: FilePlus },
       ]},
       { label: "التواصل", path: "/inbox", icon: Mail, module: "comms", children: [
         { label: "صندوقي الموحّد", path: "/inbox", icon: Mail },
@@ -499,11 +523,13 @@ const allNavSections: NavSection[] = [
       { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 40, children: [
         { label: "القضايا", path: "/legal/cases", icon: Briefcase },
         { label: "العقود القانونية", path: "/legal/contracts", icon: FileSignature },
+        { label: "الوثائق القانونية", path: "/legal/documents", icon: FileText },
         { label: "الجلسات القادمة", path: "/legal/sessions", icon: Calendar },
         { label: "الأحكام القضائية", path: "/legal/judgments", icon: CheckCircle },
         { label: "المراسلات", path: "/legal/correspondence", icon: Mail },
       ]},
       { label: "الحوكمة والامتثال", path: "/governance/policies", icon: Shield, module: "governance", minRoleLevel: 60, children: [
+        { label: "نظرة عامة", path: "/governance", icon: Shield },
         { label: "السياسات", path: "/governance/policies", icon: FileCheck },
         { label: "المخاطر", path: "/governance/risks", icon: AlertTriangle },
         { label: "التدقيق", path: "/governance/audits", icon: ClipboardCheck },
@@ -525,8 +551,10 @@ const allNavSections: NavSection[] = [
         { label: "التقارير الإدارية", path: "/bi/admin-reports", icon: FileBarChart },
         { label: "مؤشرات الأداء", path: "/bi/kpis", icon: TrendingUp },
         { label: "التقارير التحليلية", path: "/bi/reports", icon: FileBarChart },
+        { label: "لوحات BI", path: "/bi/dashboards", icon: LayoutDashboard },
         { label: "الرؤى الذكية", path: "/insights", icon: Sparkles },
         { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
+        { label: "منصة AI", path: "/intelligence/ai-workbench", icon: Sparkles },
       ]},
       // 17-item "مدير النظام" was one flat list — broke into 4 themed
       // sub-groups so an admin can find a specific tool without scanning
@@ -544,6 +572,21 @@ const allNavSections: NavSection[] = [
           { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
+          { label: "مراقبة الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "مراقبة دورة الحياة", path: "/admin/lifecycle-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "حاكم النظام", path: "/admin/system-governor", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "سجل الكيانات", path: "/admin/system-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "سجل النطاقات", path: "/admin/domain-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
+        ]},
+        { label: "السياسات والحوكمة", path: "/admin/policy-engine", icon: Shield, children: [
+          { label: "محرك السياسات", path: "/admin/policy-engine", icon: Shield, perm: "admin:update" },
+          { label: "تجاوزات الموافقات", path: "/admin/approval-overrides", icon: Bell, perm: "admin:update" },
+        ]},
+        { label: "تشخيص محاسبي وطباعة", path: "/admin/gl-reconciliation", icon: ShieldAlert, children: [
+          { label: "تسوية GL", path: "/admin/gl-reconciliation", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "إخفاقات الترحيل", path: "/admin/posting-failures", icon: AlertTriangle, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "قوالب الطباعة (admin)", path: "/admin/print-templates", icon: Printer, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
         { label: "التكاملات والاتصالات", path: "/admin/integrations", icon: Mail, children: [
           { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail, perm: "admin:update" },
@@ -566,8 +609,10 @@ const allNavSections: NavSection[] = [
         { label: "عام", path: "/settings", icon: Cog },
         { label: "الفروع", path: "/settings/branches", icon: Building, perm: "settings:write" },
         { label: "الشركات", path: "/settings/companies", icon: Building2, perm: "settings:write" },
+        { label: "الأقسام", path: "/settings/departments", icon: Network, perm: "settings:write" },
         { label: "قواعد الأعمال", path: "/settings/rules", icon: Zap, perm: "settings:write" },
         { label: "قوالب الطباعة", path: "/settings/print-templates", icon: Printer, perm: "templates:read" },
+        { label: "سجل المراجعة", path: "/settings/audit-log", icon: ScrollText, perm: ["audit:read", "settings:write"], permMode: "any" },
       ]},
     ],
   },

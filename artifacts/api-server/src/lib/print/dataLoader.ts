@@ -173,11 +173,14 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "job_posting":
       return await loadJobPosting(companyId, entityId);
     case "leave_request":
+    case "leave":
+    case "request":
       return await loadLeaveRequest(companyId, entityId);
     case "loan_request":
     case "loan":
       return await loadLoanRequest(companyId, entityId);
     case "excuse_request":
+    case "excuse":
       return await loadExcuseRequest(companyId, entityId);
     case "transfer":
       return await loadEmployeeTransfer(companyId, entityId);
@@ -191,6 +194,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "insurance":
       return await loadInsurancePolicy(companyId, entityId);
     case "maintenance_request":
+    case "maintenance":
       return await loadMaintenanceRequest(companyId, entityId);
     case "payroll":
     case "payroll_run":
@@ -204,6 +208,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "exit_settlement":
       return await loadExitSettlement(companyId, entityId);
     case "overtime_request":
+    case "overtime":
       return await loadOvertimeRequest(companyId, entityId);
     case "legal_case":
       return await loadLegalCase(companyId, entityId);
@@ -216,26 +221,33 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "vehicle":
       return await loadVehicle(companyId, entityId);
     case "fleet_trip":
+    case "trip":
       return await loadFleetTrip(companyId, entityId);
     case "fuel_log":
       return await loadFuelLog(companyId, entityId);
     case "traffic_violation":
+    case "violation":
       return await loadTrafficViolation(companyId, entityId);
     // ─── Master cards + niche transactions (Batches 5-7 presets) ───────
     case "vendor":
     case "supplier":
       return await loadVendorCard(companyId, entityId);
     case "building":
+    case "property":
       return await loadBuildingCard(companyId, entityId);
     case "project":
       return await loadProjectCard(companyId, entityId);
     case "store_order":
       return await loadStoreOrder(companyId, entityId);
     case "crm_opportunity":
+    case "opportunity":
       return await loadCrmOpportunity(companyId, entityId);
     case "support_ticket":
+    case "ticket":
       return await loadSupportTicket(companyId, entityId);
     case "umrah_pilgrim":
+    case "pilgrim":
+    case "mutamer":
       return await loadUmrahPilgrim(companyId, entityId);
     case "umrah_group":
       return await loadUmrahGroup(companyId, entityId);
@@ -250,8 +262,11 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadSalaryAdvance(companyId, entityId);
     case "training_program":
       return await loadTrainingProgram(companyId, entityId);
+    case "custody":
+      return await loadCustody(companyId, entityId);
     case "warehouse_product":
     case "store_product":
+    case "product":
       return await loadWarehouseProductCard(companyId, entityId);
     case "governance_policy":
       return await loadGovernancePolicy(companyId, entityId);
@@ -260,8 +275,10 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "shift":
       return await loadShiftCard(companyId, entityId);
     case "umrah_season":
+    case "season":
       return await loadUmrahSeason(companyId, entityId);
     case "chart_of_account":
+    case "account":
       return await loadChartOfAccount(companyId, entityId);
     // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
     case "report_trial_balance":
@@ -366,6 +383,52 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   umrah_sub_agent: "umrah_sub_agents",
   umrah_transport: "umrah_transport",
   umrah_violation: "umrah_violations",
+  // Short-name aliases for entityTypes the SPA detail pages actually use
+  // (issue #1286). Each one was returning an empty stub before because the
+  // SPA passes the short name (e.g. "expense") but the registry lists the
+  // long form (e.g. "expense_claim"). Aliasing here makes the bespoke
+  // preset render real data — see the audit in #1286 follow-up.
+  expense: "expense_claims",
+  leave: "hr_leave_requests",
+  excuse: "hr_excuse_requests",
+  maintenance: "maintenance_requests",
+  voucher: "payment_vouchers",
+  season: "umrah_seasons",
+  agent: "umrah_agents",
+  transport: "umrah_transport",
+  violation: "traffic_violations",
+  opportunity: "crm_opportunities",
+  task: "tasks",
+  ticket: "support_tickets",
+  unit: "property_units",
+  contract: "rental_contracts",
+  policy: "insurance_policies",
+  property: "buildings",
+  sub_agent: "umrah_sub_agents",
+  umrah_package: "umrah_packages",
+  performance: "evaluation_cycles",
+  performance_review: "evaluation_cycles",
+  account: "chart_of_accounts",
+  audit: "audit_logs",
+  audit_record: "audit_logs",
+  correspondence: "correspondence",
+  request: "hr_leave_requests",
+  compliance: "governance_compliance",
+  owner: "property_owners",
+  risk: "governance_risks",
+  // Wave 7 — short aliases for entityTypes still passed by detail pages but
+  // not yet covered. Each maps to the real table; presets that need
+  // related-entity joins get a bespoke switch case below. Fallback is fine
+  // when the preset only reads {{entity.*}}.
+  customer: "clients",
+  product: "warehouse_products",
+  trip: "fleet_trips",
+  overtime: "hr_overtime_requests",
+  mutamer: "umrah_pilgrims",
+  pilgrim: "umrah_pilgrims",
+  application: "job_applications",
+  campaign: "marketing_campaigns",
+  umrah_runsheet: "umrah_pilgrims",
 };
 
 // ─── Focused loaders ────────────────────────────────────────────────────────
@@ -1409,6 +1472,66 @@ async function loadShiftCard(companyId: number, id: string) {
     [id, companyId],
   );
   return { entity: row ?? { id } };
+}
+
+// Custody is modeled as journal_entries with ref starting "CUSTODY" (the
+// custody assignment) and "CUSTODY-SETTLE" (the partial/full settlement).
+// The custody preset needs the originating JE plus the running total of
+// settlements plus the holder's employee record. The route handler
+// /api/finance/custodies/:id (finance-custodies.ts) does the same joins;
+// we mirror its query here so prints stay in sync with the detail page.
+async function loadCustody(companyId: number, id: string) {
+  const [c] = await rawQuery<Record<string, unknown>>(
+    `SELECT je.id, je.ref, je.description,
+            je.notes AS purpose,
+            je."createdAt",
+            je.status,
+            COALESCE(SUM(jl.debit), 0)::float8 AS amount,
+            je."dueDate" AS "expectedReturnDate",
+            ea."employeeId" AS "employeeId"
+       FROM journal_entries je
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
+       LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
+      WHERE je.id = $1
+        AND je."companyId" = $2
+        AND je."deletedAt" IS NULL
+        AND je.ref LIKE 'CUSTODY%'
+        AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+      GROUP BY je.id, je.ref, je.description, je.notes, je."createdAt", je.status, je."dueDate", ea."employeeId"
+      LIMIT 1`,
+    [id, companyId],
+  ).catch(() => [null]);
+  if (!c) return { entity: { id } };
+
+  const [settle] = await rawQuery<Record<string, unknown>>(
+    `SELECT COALESCE(SUM(jl.credit), 0)::float8 AS amt
+       FROM journal_entries je2
+       JOIN journal_lines jl ON jl."journalId" = je2.id AND jl.credit > 0
+      WHERE je2."companyId" = $1
+        AND je2."deletedAt" IS NULL
+        AND je2.ref LIKE 'CUSTODY-SETTLE%'
+        AND je2.description = $2`,
+    [companyId, c.ref],
+  ).catch(() => [{ amt: 0 }]);
+
+  const settledAmount = Number(settle?.amt ?? 0);
+  const remainingAmount = Math.max(0, Number(c.amount) - settledAmount);
+
+  const employee = c.employeeId
+    ? (await rawQuery<Record<string, unknown>>(
+        `SELECT id, name, "empNumber" FROM employees WHERE id = $1`,
+        [c.employeeId],
+      ))[0]
+    : null;
+
+  return {
+    entity: {
+      ...c,
+      settledAmount,
+      remainingAmount,
+    },
+    employee,
+  };
 }
 
 async function loadUmrahSeason(companyId: number, id: string) {

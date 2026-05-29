@@ -84,6 +84,32 @@ async function extractSeededSchemes() {
   return seeded;
 }
 
+// Walk migrations again, this time looking for UPDATE statements that
+// DEACTIVATE schemes (e.g. migration 229's "SET isActive = false").
+// A deactivated scheme is exempt from the dead-config warning — the
+// deactivation IS the documented acknowledgement that no caller exists.
+async function extractDeactivatedSchemes() {
+  const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith(".sql"));
+  const deactivated = new Set();
+  for (const f of files) {
+    const src = await readFile(join(MIGRATIONS_DIR, f), "utf8");
+    // Detect a deactivation block: an UPDATE numbering_schemes SET …
+    // isActive = false … paired with a (moduleKey,entityKey) IN (...) clause.
+    const isDeactivation =
+      /UPDATE\s+numbering_schemes/i.test(src) &&
+      /"?isActive"?\s*=\s*false/i.test(src);
+    if (!isDeactivation) continue;
+    // Pull every ('mod','ent') tuple from the IN-clause. Same shape
+    // as the seed regex but with only two tokens.
+    const tupleRe = /\(\s*'([a-z][a-z0-9_]*)'\s*,\s*'([a-z][a-z0-9_]*)'\s*\)/g;
+    let m;
+    while ((m = tupleRe.exec(src)) !== null) {
+      deactivated.add(`${m[1]}.${m[2]}`);
+    }
+  }
+  return deactivated;
+}
+
 // ─── 2. Extract called (moduleKey, entityKey) tuples from source code
 async function walk(dir, acc = []) {
   const entries = await readdir(dir);
@@ -178,10 +204,15 @@ async function main() {
   console.log("Numbering schemes vs callers cross-check — Issue #1141 stronger guard");
   console.log("");
 
-  // Side A: seeded but never called → dead config.
+  // Side A: seeded but never called → dead config. A scheme that has
+  // been DEACTIVATED via migration 229 (UPDATE numbering_schemes SET
+  // "isActive" = false) is allowed to be uncalled — the deactivation
+  // is the explicit acknowledgement that no caller exists, and the UI
+  // surfaces the row as inactive so the operator isn't misled.
+  const deactivated = await extractDeactivatedSchemes();
   const seededOnly = [];
   for (const [key, mig] of seeded.entries()) {
-    if (!called.has(key)) seededOnly.push({ key, mig });
+    if (!called.has(key) && !deactivated.has(key)) seededOnly.push({ key, mig });
   }
 
   // Side B: called but never seeded → runtime throw on fresh tenant.

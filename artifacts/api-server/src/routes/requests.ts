@@ -910,29 +910,81 @@ router.post("/:id/convert", authorize({ feature: "requests", action: "create" })
       },
       after: { convertedType: targetType },
       onApply: async (_row, client) => {
+        // G3+G4+G5 fix (#1141 coverage report §3 G3/G4/G5) — every
+        // request-conversion path now issues a real ref through the
+        // numbering center and links the assignment back, all inside
+        // the same withTransaction that applyTransition holds.
+        // issueNumber's inner withTransaction joins via SAVEPOINT
+        // (rawdb.ts:99-124) so issue + INSERT + linkback are atomic.
         if (targetType === "maintenance") {
           const { supportEngine } = await import("../lib/engines/index.js");
+          // G4 — support ticket from request: issue a real ref instead
+          // of leaving support_tickets.ref NULL.
+          const issued = await issueNumber({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            moduleKey: "support",
+            entityKey: "support_ticket",
+            entityTable: "support_tickets",
+            actorId: scope.userId,
+            metadata: { sourceRequestId: id, conversion: "maintenance" },
+            expectedTiming: "on_draft",
+          });
           const { insertId } = await supportEngine.createTicket({
             companyId: scope.companyId,
             title: `صيانة: ${request.title}`,
             description: request.description || request.title,
             priority: request.priority || "medium",
+            ref: issued.number,
           });
+          await client.query(
+            `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+            [insertId, issued.assignmentId]
+          );
           createdId = insertId;
           targetEndpoint = `/support/${insertId}`;
         } else if (targetType === "purchase") {
           const { financialEngine } = await import("../lib/engines/index.js");
+          // G3 — purchase order from request: replace the legacy
+          // `PO-REQ-${id}` inline construction with a real PO number
+          // from the numbering center.
+          const issued = await issueNumber({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            moduleKey: "purchase",
+            entityKey: "purchase_order",
+            entityTable: "purchase_orders",
+            actorId: scope.userId,
+            metadata: { sourceRequestId: id, conversion: "purchase" },
+            expectedTiming: "on_draft",
+          });
           const { insertId } = await financialEngine.createPurchaseOrder({
             companyId: scope.companyId,
-            ref: `PO-REQ-${id}`,
+            ref: issued.number,
             description: request.title + (request.description ? `: ${request.description}` : ""),
             requestedBy: scope.userId,
           });
+          await client.query(
+            `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+            [insertId, issued.assignmentId]
+          );
           createdId = insertId;
           targetEndpoint = `/finance/purchase-orders/${insertId}`;
         } else if (targetType === "case") {
           const legalResp = await getLegalResponsible(scope.companyId);
           const { legalEngine } = await import("../lib/engines/index.js");
+          // G5 — legal case from request: issue a caseNumber instead
+          // of leaving legal_cases.caseNumber NULL.
+          const issued = await issueNumber({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            moduleKey: "legal",
+            entityKey: "case",
+            entityTable: "legal_cases",
+            actorId: scope.userId,
+            metadata: { sourceRequestId: id, conversion: "case" },
+            expectedTiming: "on_draft",
+          });
           const { insertId } = await legalEngine.createCase({
             companyId: scope.companyId,
             title: `قضية: ${request.title}`,
@@ -940,7 +992,12 @@ router.post("/:id/convert", authorize({ feature: "requests", action: "create" })
             priority: request.priority || "medium",
             caseType: "civil",
             lawyerName: legalResp?.employeeName ?? null,
+            caseNumber: issued.number,
           });
+          await client.query(
+            `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+            [insertId, issued.assignmentId]
+          );
           createdId = insertId;
           targetEndpoint = `/legal/cases/${insertId}`;
           if (legalResp?.assignmentId) {

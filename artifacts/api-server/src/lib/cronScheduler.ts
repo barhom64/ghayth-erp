@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { randomUUID } from "node:crypto";
 import { rawQuery, rawExecute, pool, withTransaction } from "./rawdb.js";
+import { issueNumber } from "./numberingService.js";
 import { logger } from "./logger.js";
 import { config } from "./config.js";
 import { saveAllCompaniesKPISnapshots } from "./kpiEngine.js";
@@ -1161,12 +1162,38 @@ async function dailyInventoryCheck(): Promise<string> {
         [company.id, `%${p.name}%`]
       );
       if (existing.length === 0) {
-        await rawExecute(
-          `INSERT INTO purchase_orders ("companyId", title, status, "totalAmount", "createdAt")
-           VALUES ($1, $2, 'draft', 0, NOW())`,
-          [company.id, `طلب شراء تلقائي: ${p.name} (المخزون ${p.currentStock}/${p.threshold})`]
-        ).catch((e) => logger.error(e, "[cronScheduler] auto purchase order insert failed"));
-        pos++;
+        // G6 fix (#1141 coverage report §3 G6) — auto-generated POs
+        // from inventory cron now go through the numbering center
+        // (scheme `purchase.purchase_order`) instead of being created
+        // with ref = NULL. Issue + INSERT + linkback wrapped in one
+        // withTransaction so a failure of any step rolls back cleanly
+        // — burning the counter slot was the old failure mode.
+        try {
+          await withTransaction(async (client) => {
+            const issued = await issueNumber({
+              companyId: company.id,
+              branchId: null,
+              moduleKey: "purchase",
+              entityKey: "purchase_order",
+              entityTable: "purchase_orders",
+              actorId: null,
+              metadata: { source: "cron.dailyInventoryCheck", productName: p.name },
+              expectedTiming: "on_draft",
+            });
+            const ins = await client.query(
+              `INSERT INTO purchase_orders ("companyId", title, ref, status, "totalAmount", "createdAt")
+               VALUES ($1, $2, $3, 'draft', 0, NOW()) RETURNING id`,
+              [company.id, `طلب شراء تلقائي: ${p.name} (المخزون ${p.currentStock}/${p.threshold})`, issued.number]
+            );
+            await client.query(
+              `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+              [ins.rows[0].id, issued.assignmentId]
+            );
+          });
+          pos++;
+        } catch (e) {
+          logger.error(e, "[cronScheduler] auto purchase order issue+insert failed");
+        }
       }
     }
   }
@@ -1411,18 +1438,41 @@ async function monthlyRentPenalties(): Promise<string> {
           const responsible = await getLegalResponsible(company.id);
           const lawyerName = responsible?.employeeName ?? null;
 
-          const { insertId: caseId } = await rawExecute(
-            `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description)
-             VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6)`,
-            [
-              company.id,
-              `RENT-${p.id}-${Date.now()}`,
-              `تحصيل إيجار — ${p.tenantName}`,
-              p.tenantName,
-              lawyerName,
-              `إيجار متأخر ${lateDays} يوم — مبلغ ${p.amount} ريال`,
-            ]
-          );
+          // G7 fix (#1141 coverage report §3 G7) — auto-generated
+          // collection cases now route through the numbering center
+          // (scheme `legal.case`) instead of building a Date.now()
+          // ref inline. Atomic-tx: issue + INSERT + linkback all
+          // rollback together if any step fails.
+          const caseId = await withTransaction(async (client) => {
+            const issued = await issueNumber({
+              companyId: company.id,
+              branchId: null,
+              moduleKey: "legal",
+              entityKey: "case",
+              entityTable: "legal_cases",
+              actorId: null,
+              metadata: { source: "cron.dailyPropertyCheck", rentPaymentId: p.id },
+              expectedTiming: "on_draft",
+            });
+            const ins = await client.query(
+              `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType","opposingParty","lawyerName",status,priority,description)
+               VALUES ($1,$2,$3,'property_rent',$4,$5,'open','high',$6) RETURNING id`,
+              [
+                company.id,
+                issued.number,
+                `تحصيل إيجار — ${p.tenantName}`,
+                p.tenantName,
+                lawyerName,
+                `إيجار متأخر ${lateDays} يوم — مبلغ ${p.amount} ريال`,
+              ]
+            );
+            const newCaseId = ins.rows[0].id;
+            await client.query(
+              `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+              [newCaseId, issued.assignmentId]
+            );
+            return newCaseId;
+          });
           legalHandoffs++;
 
           // Notify the responsible lawyer + emit a lifecycle event so the

@@ -351,6 +351,39 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   shift: () => buildShiftCardPreset(),
   umrah_season: () => buildUmrahSeasonPreset(),
   chart_of_account: () => buildChartOfAccountPreset(),
+  // Short-name aliases — SPA detail pages pass the short form (`policy`,
+  // `ticket`, `opportunity`) while BESPOKE_PRESETS_KEYS are the long form
+  // (`insurance_policy`, `support_ticket`, `crm_opportunity`). Without these
+  // entries the resolver dropped to universalFallback which renders a
+  // generic key/value grid instead of the bespoke layout. The dataLoader
+  // FALLBACK_TABLE_MAP already routes the short name to the right table —
+  // the template lookup needed the same alias treatment.
+  policy: () => buildInsurancePolicyPreset(),
+  ticket: () => buildSupportTicketPreset(),
+  opportunity: () => buildOpportunityPreset(),
+  season: () => buildUmrahSeasonPreset(),
+  account: () => buildChartOfAccountPreset(),
+  property: () => buildBuildingCardPreset(),
+  unit: () => buildPropertyUnitPreset(),
+  contract: () => buildRentalContractPreset(),
+  product: () => buildWarehouseProductPreset(),
+  pilgrim: () => buildUmrahPilgrimPreset(),
+  mutamer: () => buildUmrahPilgrimPreset(),
+  trip: () => buildFleetTripPreset(),
+  customer: () => buildClientCardPreset(),
+  agent: () => buildUmrahPilgrimPreset(),
+  sub_agent: () => buildUmrahPilgrimPreset(),
+  overtime: () => buildOvertimeRequestPreset(),
+  leave: () => buildLeaveRequestPreset(),
+  excuse: () => buildExcuseRequestPreset(),
+  maintenance: () => buildMaintenanceRequestPreset(),
+  violation: () => buildTrafficViolationPreset(),
+  voucher: () => buildVoucherPreset("receipt"),
+  request: () => buildLeaveRequestPreset(),
+  // Final batch — entityTypes used in detail pages that fell through to
+  // universalFallback. payroll is the high-value one (HR prints these as
+  // salary slips); the rest get the same bespoke render as the long form.
+  payroll: () => buildPayrollRunPreset(),
 };
 
 function buildInvoicePreset(): PrintTemplate {
@@ -1904,7 +1937,6 @@ function buildStockAdjustmentPreset(): PrintTemplate {
   <div><strong>نوع التسوية:</strong> {{entity.adjustmentType}}</div>
   <div><strong>الحالة:</strong> {{entity.status}}</div>
   <div><strong>أنشأ التسوية:</strong> {{entity.createdByName}}</div>
-  <div><strong>اعتمد التسوية:</strong> {{entity.approvedByName}}</div>
 </div>
 <div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
   <div style="font-weight:bold;margin-bottom:4px">سبب التسوية</div>
@@ -2253,23 +2285,12 @@ function buildInsurancePolicyPreset(): PrintTemplate {
   <div><strong>نوع التأمين:</strong> {{entity.policyType}}</div>
   <div><strong>الجهة المؤمَّن لها:</strong> {{entity.insuredEntity}}</div>
   <div><strong>شركة التأمين:</strong> {{entity.insurerName}}</div>
-  <div><strong>الوكيل:</strong> {{entity.agentName}}</div>
   <div><strong>تاريخ البدء:</strong> {{entity.startDate}}</div>
   <div><strong>تاريخ الانتهاء:</strong> {{entity.expiryDate}}</div>
   <div><strong>قيمة التغطية:</strong> {{entity.coverageAmount}}</div>
   <div><strong>قيمة القسط:</strong> {{entity.premiumAmount}}</div>
-  <div><strong>دورية القسط:</strong> {{entity.paymentFrequency}}</div>
-  <div><strong>نسبة التحمل:</strong> {{entity.deductible}}</div>
   <div><strong>الحالة:</strong> {{entity.status}}</div>
   <div><strong>الفرع:</strong> {{branch.branchName}}</div>
-</div>
-<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
-  <div style="font-weight:bold;margin-bottom:4px">التغطية</div>
-  <div style="white-space:pre-wrap">{{entity.coverageDetails}}</div>
-</div>
-<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
-  <div style="font-weight:bold;margin-bottom:4px">الاستثناءات</div>
-  <div style="white-space:pre-wrap">{{entity.exclusions}}</div>
 </div>
 <div class="signatures" style="margin-top:36px">
   <div>الوكيل<br/>____________________</div>
@@ -2586,14 +2607,8 @@ function buildFleetMaintenancePreset(): PrintTemplate {
   <div style="font-weight:bold;margin-bottom:4px">وصف العطل / الطلب</div>
   <div style="white-space:pre-wrap">{{entity.description}}</div>
 </div>
-<div style="margin:14px 0;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px">
-  <div style="font-weight:bold;margin-bottom:4px">الأعمال المنفَّذة</div>
-  <div style="white-space:pre-wrap">{{entity.workPerformed}}</div>
-</div>
 <table style="width:100%;border-collapse:collapse;margin:14px 0">
-  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold;width:50%">تكلفة قطع الغيار</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.partsCost}}</td></tr>
-  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">تكلفة العمالة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.laborCost}}</td></tr>
-  <tr style="background:#fef9c3;font-weight:bold"><td style="border:1px solid #ca8a04;padding:8px">إجمالي التكلفة</td><td style="border:1px solid #ca8a04;padding:8px;text-align:left">{{entity.totalCost}}</td></tr>
+  <tr style="background:#fef9c3;font-weight:bold"><td style="border:1px solid #ca8a04;padding:8px;width:50%">إجمالي التكلفة</td><td style="border:1px solid #ca8a04;padding:8px;text-align:left">{{entity.totalCost}}</td></tr>
 </table>
 <div class="signatures" style="margin-top:36px">
   <div>السائق<br/>____________________</div>
@@ -2955,6 +2970,16 @@ const ARABIC_TITLES: Record<string, string> = {
   support_ticket: "تذكرة دعم", warehouse_category: "تصنيف مستودع",
   owner: "بطاقة مالك", policy_detail: "تفاصيل سياسة",
   client: "بطاقة عميل", crm_lead: "عميل محتمل",
+  // Short-name aliases — match the BESPOKE_PRESETS entries added above.
+  ticket: "تذكرة دعم", opportunity: "فرصة CRM", season: "موسم عمرة",
+  account: "حساب", property: "بطاقة عقار", unit: "وحدة عقارية",
+  contract: "عقد إيجار", product: "بطاقة منتج",
+  pilgrim: "بطاقة معتمر", mutamer: "بطاقة معتمر",
+  trip: "رحلة أسطول", customer: "بطاقة عميل",
+  agent: "وكيل عمرة", sub_agent: "وكيل فرعي",
+  overtime: "طلب وقت إضافي", leave: "طلب إجازة",
+  maintenance: "طلب صيانة", violation: "مخالفة",
+  voucher: "سند",
 };
 
 function universalFallback(entityType: string): PrintTemplate {

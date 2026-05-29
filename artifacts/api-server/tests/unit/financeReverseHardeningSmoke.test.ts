@@ -38,7 +38,9 @@ describe("Fix #5 — reverse handler rejects duplicate reversal", () => {
 
 describe("Fix #16 — invoice.paidAmount rolls back when payment JE is reversed", () => {
   const reverseIdx = JOURNAL.indexOf('"/journal/:id/reverse"');
-  const handler = JOURNAL.slice(reverseIdx, reverseIdx + 9000);
+  // Widened from 9000 → 12000 after the reverse handler grew when the
+  // full dimensional SELECT + map was added (silent dim-loss bug fix).
+  const handler = JOURNAL.slice(reverseIdx, reverseIdx + 12000);
 
   it("detects payment JEs by sourceType + type", () => {
     expect(handler).toMatch(/original\.sourceType === "invoice" && original\.type === "payment"/);

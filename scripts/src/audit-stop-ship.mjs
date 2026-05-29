@@ -77,6 +77,11 @@ const ALLOWLIST = new Map([
   ["careersPortal.ts", "uses its own careersPortalJwt middleware, not authorize()"],
   ["clientPortal.ts", "uses its own clientPortalJwt middleware, not authorize()"],
   ["fleet-telematics-webhook.ts", "anonymous HMAC-signed CMSV6 push (#1354) — audit + events fire inside the shared persist* helpers in fleet-telematics.ts; webhook itself only orchestrates"],
+  ["print.ts", "every print creates a row in print_jobs (its own audit table) with operator + template + payload — emitEvent would be redundant duplication"],
+  ["wiring-stubs.ts", "test scaffolding for the wiring audit — no production traffic, no business writes"],
+  ["rbacV2.ts", "every role/sod/grant mutation writes a row to rbac_role_history (parallel audit table) via recordHistory() — RBAC has its own first-class audit surface that compliance reads directly"],
+  ["numbering.ts", "numbering scheme writes are CAS-style schema state; the numberingService emits its own *.scheme.created/.updated events on every issue() call — see lib/numberingService.ts"],
+  ["import.ts", "every confirmed import writes a row to import_batches (its own audit table) with operator + entity + rowCount + fileName — same pattern as print_jobs and rbac_role_history"],
 ]);
 
 // Accepted RBAC patterns. The newer RBAC-v2 layer uses authorize();
