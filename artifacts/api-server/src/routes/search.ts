@@ -65,7 +65,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         `SELECT i.id, i.ref, i.status, i.total, c.name AS "clientName",
                 'invoice' AS type
          FROM invoices i
-         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+         LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
          WHERE i."companyId" = $1 AND i."deletedAt" IS NULL
            AND (i.ref ILIKE $2 OR c.name ILIKE $2)
          LIMIT 10`,

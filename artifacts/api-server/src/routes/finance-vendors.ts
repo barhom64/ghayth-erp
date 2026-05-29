@@ -308,7 +308,7 @@ vendorsRouter.get("/receivables", authorize({ feature: "finance.vendors", action
               (i.total - COALESCE(i."paidAmount", 0)) AS "remainingAmount",
               c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i."companyId" = $1 AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
        ORDER BY i."dueDate" ASC LIMIT 100`,
@@ -452,7 +452,7 @@ vendorsRouter.get("/receivables/:id", authorize({ feature: "finance.vendors", ac
     const [row] = await rawQuery<ReceivableDetailRow>(
       `SELECT i.*, c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
     );

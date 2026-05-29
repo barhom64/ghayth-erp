@@ -878,7 +878,7 @@ router.post("/templates/:id/generate", authorize({ feature: "documents", action:
       const [inv] = await rawQuery<InvoiceWithClientRow>(`
         SELECT i.*, c.name as "clientName", c.email as "clientEmail", c.phone as "clientPhone"
         FROM invoices i
-        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+        LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
         WHERE i.id=$1 AND i."companyId"=$2 AND i."deletedAt" IS NULL
       `, [Number(entityId), scope.companyId]);
       if (inv) {

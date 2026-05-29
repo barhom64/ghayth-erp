@@ -533,7 +533,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", authorize({ feature: "finance.zatca", 
       `SELECT i.*, c.name AS "clientName", NULL AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $${invoiceScope.nextParamIndex} AND ${invoiceScope.where}`,
       [...invoiceScope.params, id],
@@ -625,7 +625,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", authorize({ feature: "finance.zatc
       `SELECT i.*, c.name AS "clientName", NULL AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]

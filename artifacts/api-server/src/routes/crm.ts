@@ -173,7 +173,7 @@ router.get("/opportunities", authorize({ feature: "crm.opportunities", action: "
     if (dateFrom) { where += ` AND o."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
     if (dateTo) { where += ` AND o."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
     const rows = await rawQuery<CrmOpportunityListRow>(
-      `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
+      `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."companyId"=o."companyId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -879,7 +879,7 @@ router.get("/opportunities/:id", authorize({ feature: "crm.opportunities", actio
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<CrmOpportunityListRow>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<CrmOpportunityListRow>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."companyId"=o."companyId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الفرصة غير موجودة");
 
     const activities = await rawQuery<CrmActivityRow>(
@@ -1033,7 +1033,7 @@ router.get("/opportunities/:id/related", authorize({ feature: "crm.opportunities
     const rows = await rawQuery<CrmOpportunityListRow>(
       `SELECT o.*, cl.name AS "clientName"
          FROM crm_opportunities o
-         LEFT JOIN clients cl ON cl.id = o."clientId" AND cl."deletedAt" IS NULL
+         LEFT JOIN clients cl ON cl.id = o."clientId" AND cl."companyId" = o."companyId" AND cl."deletedAt" IS NULL
         WHERE o."companyId" = $1
           AND o.id <> $2
           AND o."deletedAt" IS NULL
