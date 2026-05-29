@@ -78,7 +78,7 @@ scheduledReportsRouter.get("/", authorize({ feature: "reports", action: "list" }
          COALESCE(e."name", e."nameEn", 'Unknown') AS "createdByName"
        FROM scheduled_reports sr
        LEFT JOIN employee_assignments ea ON ea.id = sr."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE sr."companyId" = $1
        ORDER BY sr."createdAt" DESC LIMIT 200`,
       [scope.companyId]

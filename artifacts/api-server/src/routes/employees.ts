@@ -245,7 +245,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
               (SELECT COUNT(*) FROM gov_integration_links gl WHERE gl."entityType" = 'employee' AND gl."entityId" = e.id AND gl."companyId" = ea."companyId")::int AS "govLinkCount"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
        WHERE ${where} AND e."deletedAt" IS NULL
        ORDER BY e.name ASC
@@ -975,7 +975,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
               mgr.name AS "managerName"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        LEFT JOIN departments d ON d.id = ea."departmentId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
        LEFT JOIN employees mgr ON mgr.id = ea."managerId"

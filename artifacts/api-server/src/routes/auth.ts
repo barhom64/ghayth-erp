@@ -310,7 +310,7 @@ router.post("/login", loginLimiter, async (req, res) => {
               c.name AS "companyName", b.name AS "branchName"
        FROM employee_assignments ea
        LEFT JOIN companies c ON c.id = ea."companyId"
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
        WHERE ea."employeeId" = $1 AND ea.status = 'active'`,
       [user.employeeId]
@@ -531,7 +531,7 @@ router.post("/switch-assignment", authMiddleware, authedUserLimiter, async (req,
     const [assignment] = await rawQuery<AssignmentSwitchRow>(
       `SELECT ea.id, ea."companyId", ea."branchId", ea.role
          FROM employee_assignments ea
-         LEFT JOIN branches b ON b.id = ea."branchId"
+         LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
         WHERE ea.id = $1
           AND ea."companyId" = ANY($2::int[])
           AND ea.status = 'active'
@@ -584,7 +584,7 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
        JOIN employee_assignments ea ON ea."employeeId" = e.id
        JOIN users u ON u."employeeId" = e.id
        LEFT JOIN companies c ON c.id = ea."companyId"
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
        WHERE ea.id = $1 AND e."deletedAt" IS NULL`,
       [scope.activeAssignmentId]

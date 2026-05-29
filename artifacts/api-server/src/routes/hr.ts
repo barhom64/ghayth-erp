@@ -542,7 +542,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
       `SELECT ea."branchId", ea.salary, ea."employeeId", ea."departmentId",
               b.lat AS "branchLat", b.lon AS "branchLon"
        FROM employee_assignments ea
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        WHERE ea.id = $1 AND ea."companyId" = $2`,
       [scope.activeAssignmentId, scope.companyId]
     );
@@ -885,7 +885,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT ea.salary, ea."branchId", ea."employeeId", b.lat AS "branchLat", b.lon AS "branchLon"
        FROM employee_assignments ea
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        WHERE ea.id = $1 AND ea."companyId" = $2`,
       [scope.activeAssignmentId, scope.companyId]
     );
@@ -2263,7 +2263,7 @@ router.get("/leave-requests/:id/stages", authorize({ feature: "hr.leaves", actio
       `SELECT las.*, e.name AS "decidedByName"
        FROM leave_approval_stages las
        LEFT JOIN employee_assignments ea ON ea.id = las."decidedBy" AND ea."companyId" = $2
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE las."leaveRequestId" = $1
        ORDER BY las.stage ASC`,
       [id, scope.companyId]
@@ -2399,7 +2399,7 @@ router.get("/payroll", authorize({ feature: "hr.payroll.runs", action: "view" })
               COUNT(pl.id) AS "employeeCount"
        FROM payroll_runs pr
        LEFT JOIN employee_assignments ea ON ea.id = pr."runBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        LEFT JOIN payroll_lines pl ON pl."runId" = pr.id AND pl."deletedAt" IS NULL
        WHERE pr."companyId" = $1 AND pr."deletedAt" IS NULL
        GROUP BY pr.id, e.name ORDER BY pr."createdAt" DESC LIMIT 500`,
@@ -2425,7 +2425,7 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
               (SELECT COUNT(*) FROM payroll_lines pl WHERE pl."runId" = pr.id AND pl."deletedAt" IS NULL)::int AS "employeeCount"
        FROM payroll_runs pr
        LEFT JOIN employee_assignments ea ON ea.id = pr."runBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea2 ON ea2.id = pr."approvedBy"
        LEFT JOIN employees e2 ON e2.id = ea2."employeeId"
        WHERE pr.id = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL`,
@@ -2437,7 +2437,7 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
       `SELECT pl.*, e.name AS "employeeName"
        FROM payroll_lines pl
        LEFT JOIN employee_assignments ea ON ea.id = pl."assignmentId" AND ea."companyId" = $2
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY pl.id LIMIT 1000`,
       [id, scope.companyId]
     );
@@ -3008,7 +3008,7 @@ router.get("/violations/:id", authorize({ feature: "hr.violations", action: "vie
        FROM employee_violations ev
        JOIN employee_assignments ea ON ea.id = ev."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        WHERE ev.id = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -3580,7 +3580,7 @@ router.get("/approval-requests", authorize({ feature: "hr.organization", action:
       `SELECT ar.*, e.name AS "assignedToName"
        FROM approval_requests ar
        LEFT JOIN employee_assignments ea ON ea.id = ar."assignedTo"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE ar."companyId" = $1 AND ar.status = $2
        ORDER BY ar."createdAt" DESC LIMIT 500`,
       [scope.companyId, statusFilter]
@@ -3780,7 +3780,7 @@ router.get("/payroll-summary", authorize({ feature: "hr.payroll.runs", action: "
        FROM payroll_lines pl
        JOIN employee_assignments ea ON ea.id = pl."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        JOIN payroll_runs pr ON pr.id = pl."runId"
        WHERE pr."companyId" = $1 AND pr.period = $2 AND pr."deletedAt" IS NULL AND pl."deletedAt" IS NULL
        ORDER BY e.name, ea.id LIMIT 1000`,
