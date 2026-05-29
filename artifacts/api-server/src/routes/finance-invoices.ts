@@ -3218,10 +3218,17 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
       d90plus: Number(rates?.d90plus ?? 0.75),
     };
 
+    // Exclude draft + cancelled + paid invoices. Drafts haven't posted a GL
+    // AR DR yet — accruing an allowance for them would credit allowance for
+    // doubtful accounts against a receivable the GL doesn't show, breaking
+    // trial balance reconciliation. Cancelled/paid never accrue allowance.
+    // Status `sent` is treated as the legacy synonym for `approved` (some
+    // older invoices missed the schema update).
     const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT "createdAt", "dueDate", (total - COALESCE("paidAmount",0)) AS outstanding
          FROM invoices
         WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" <= $2
+          AND status NOT IN ('draft','cancelled','paid','rejected','returned')
           AND (total - COALESCE("paidAmount",0)) > 0.01`,
       [scope.companyId, targetDate]
     );
