@@ -20,7 +20,7 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { HardDrive, Plus, Cable, Wifi } from "lucide-react";
+import { HardDrive, Plus, Cable, Wifi, PlayCircle } from "lucide-react";
 import {
   DataTable,
   type DataTableColumn,
@@ -81,6 +81,22 @@ export default function FleetTelematicsDevices() {
     "/fleet/vehicles?limit=500",
   );
   const vehicleList = asList(vehicles) as VehicleOption[];
+
+  const openVideoMut = useApiMutation<
+    { data?: { proxyUrl?: string; id?: number } },
+    { deviceId: number; channelNo: number; streamType?: string }
+  >(
+    "/fleet/telematics/video/session",
+    "POST",
+    [["fleet-telematics-video-sessions"]],
+    {
+      successMessage: "تم فتح جلسة بث مباشر",
+      onSuccess: (resp) => {
+        const url = resp?.data?.proxyUrl;
+        if (url) window.open(url, "_blank", "noopener,noreferrer");
+      },
+    },
+  );
 
   const linkMut = useApiMutation<unknown, typeof form>(
     "/fleet/telematics/devices/link",
@@ -145,6 +161,26 @@ export default function FleetTelematicsDevices() {
       key: "lastOnlineAt",
       header: "آخر اتصال",
       render: (d) => d.lastOnlineAt ? new Date(d.lastOnlineAt).toLocaleString("ar-SA") : "—",
+    },
+    {
+      key: "actions",
+      header: "إجراء",
+      render: (d) => (
+        <GuardedButton
+          perm="fleet.telematics.video:create"
+          size="sm"
+          variant="outline"
+          onClick={(e) => {
+            e.stopPropagation();
+            openVideoMut.mutate({ deviceId: d.id, channelNo: 1, streamType: "hls" });
+          }}
+          disabled={openVideoMut.isPending || d.status !== "active"}
+          title="فتح بث القناة 1 (HLS)"
+        >
+          <PlayCircle className="h-4 w-4 me-1" />
+          بث مباشر
+        </GuardedButton>
+      ),
     },
   ];
 
