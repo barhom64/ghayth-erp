@@ -150,6 +150,39 @@ const schedulePaymentSchema = z.object({
   notes: z.string().optional(),
 });
 
+// Vendor advance / credit-memo — the AP mirror of customer-advance +
+// credit-memo. Previously the only path for a supplier prepayment was
+// "create AR invoice with negative amount" (semantically wrong, broke
+// AP aging). And vendor returns had to be entered as customer credit
+// memos against an AR invoice — corrupting both subledgers.
+const createVendorAdvanceSchema = z.object({
+  supplierId: z.coerce.number({ required_error: "المورد مطلوب" }),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+  method: z.string().optional(),
+  reference: z.string().optional(),
+  notes: z.string().optional(),
+  paidDate: z.string().optional(),
+});
+
+const applyVendorAdvanceSchema = z.object({
+  poId: z.coerce.number({ required_error: "أمر الشراء مطلوب" }),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+});
+
+const createVendorCreditSchema = z.object({
+  supplierId: z.coerce.number({ required_error: "المورد مطلوب" }),
+  poId: z.coerce.number().optional(),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+  reason: z.string().min(3, "سبب الإشعار الدائن مطلوب"),
+  memoDate: z.string().optional(),
+  vatIncluded: z.boolean().optional(),
+});
+
+const applyVendorCreditSchema = z.object({
+  poId: z.coerce.number({ required_error: "أمر الشراء مطلوب" }),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+});
+
 // Impact preview — shows what will happen when the purchase request is created
 purchaseRouter.post("/purchase-requests/impact-preview", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
   try {
@@ -2409,3 +2442,488 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
   }
 });
 
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VENDOR ADVANCES + VENDOR CREDIT MEMOS
+// AP mirror of customer-advances / credit-memos. Same shape, same
+// idempotency model, same atomic GL+counter update pattern. Without
+// these, supplier prepayments had no clean place to land and supplier
+// returns corrupted AR by going through the customer credit-memo path.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// POST /vendor-advances — record a prepayment to a supplier.
+//   DR Vendor advance receivable (1420)
+//        CR Cash (1100)
+purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createVendorAdvanceSchema.safeParse(req.body));
+    const { supplierId, amount, method = "bank_transfer", reference, notes, paidDate } = b;
+
+    const [supplier] = await rawQuery<{ id: number; name: string }>(
+      `SELECT id, name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [supplierId, scope.companyId]
+    );
+    if (!supplier) {
+      throw new ValidationError("المورد غير موجود", { field: "supplierId", fix: "اختر مورداً من قائمة الموردين." });
+    }
+
+    const recvDate = paidDate || todayISO();
+    const advPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, recvDate);
+    if (!advPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسجيل دفعة مقدمة لمورد في فترة مُقفلة: ${advPeriodCheck.periodName ?? ""}`,
+        { field: "paidDate", meta: { periodName: advPeriodCheck.periodName } },
+      );
+    }
+
+    const amt = roundTo2(Number(amount));
+    const advRef = reference || `VENDOR-ADV-${supplierId}-${Date.now()}`;
+    const advSourceKey = `finance:vendor_advance:${supplierId}:${recvDate}:${requestIdempotencyToken(req)}`;
+
+    // Idempotency: short-circuit on retry.
+    const [existingAdv] = await rawQuery<{ id: number; ref: string }>(
+      `SELECT id, ref FROM vendor_advances
+        WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, advSourceKey]
+    ).catch(() => [] as { id: number; ref: string }[]);
+    if (existingAdv) {
+      markIdempotencyReplay(req, res, true);
+      res.status(200).json({ advanceId: existingAdv.id, ref: existingAdv.ref, supplierId, amount: amt, replayed: true });
+      return;
+    }
+
+    let advanceId: number | null = null;
+    await withTransaction(async (client: any) => {
+      try {
+        const ins = await client.query(
+          `INSERT INTO vendor_advances ("companyId","branchId","supplierId",ref,amount,"appliedAmount",method,"paidDate",notes,"createdBy",status,"sourceKey")
+           VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,'open',$10) RETURNING id`,
+          [scope.companyId, scope.branchId, supplierId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId, advSourceKey]
+        );
+        advanceId = ins.rows[0].id;
+      } catch (e: any) {
+        if (e?.code === "42P01") {
+          await client.query(
+            `CREATE TABLE IF NOT EXISTS vendor_advances (
+               id SERIAL PRIMARY KEY,
+               "companyId" INTEGER NOT NULL,
+               "branchId" INTEGER,
+               "supplierId" INTEGER NOT NULL,
+               ref TEXT NOT NULL,
+               amount NUMERIC(18,2) NOT NULL,
+               "appliedAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               method TEXT,
+               "paidDate" DATE NOT NULL,
+               notes TEXT,
+               status TEXT NOT NULL DEFAULT 'open',
+               "journalId" INTEGER,
+               "sourceKey" VARCHAR(128),
+               "createdBy" INTEGER,
+               "createdAt" TIMESTAMP DEFAULT NOW(),
+               "deletedAt" TIMESTAMP
+             );
+             CREATE UNIQUE INDEX IF NOT EXISTS idx_vendor_advances_source_key
+               ON vendor_advances ("companyId", "sourceKey")
+               WHERE "sourceKey" IS NOT NULL;`
+          );
+          const ins2 = await client.query(
+            `INSERT INTO vendor_advances ("companyId","branchId","supplierId",ref,amount,"appliedAmount",method,"paidDate",notes,"createdBy",status,"sourceKey")
+             VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,'open',$10) RETURNING id`,
+            [scope.companyId, scope.branchId, supplierId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId, advSourceKey]
+          );
+          advanceId = ins2.rows[0].id;
+        } else {
+          throw e;
+        }
+      }
+    });
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [advReceivableCode, cashCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "debit", "1420"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_cash", "credit", "1100"),
+    ]);
+
+    let journalId: number | null = null;
+    try {
+      const advResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: advRef,
+        description: `دفعة مقدمة للمورد ${supplier.name} (#${supplierId}): ${amt}`,
+        sourceType: "vendor_advance",
+        sourceId: advanceId ?? 0,
+        sourceKey: `finance:vendor_advance:${advanceId}`,
+        lines: [
+          { accountCode: advReceivableCode, debit: amt, credit: 0, vendorId: supplierId },
+          { accountCode: cashCode, debit: 0, credit: amt, vendorId: supplierId },
+        ],
+        guardTable: "vendor_advances",
+        guardId: advanceId ?? 0,
+      });
+      journalId = advResult.journalId;
+      markIdempotencyReplay(req, res, advResult.alreadyExists);
+      if (journalId && advanceId) {
+        await rawExecute(`UPDATE vendor_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, advanceId, scope.companyId]);
+      }
+    } catch (glErr) {
+      if (advanceId) {
+        await rawExecute(`DELETE FROM vendor_advances WHERE id = $1 AND "companyId" = $2`, [advanceId, scope.companyId]);
+      }
+      throw glErr;
+    }
+
+    res.status(201).json({ advanceId, ref: advRef, supplierId, amount: amt, journalId, status: "open" });
+  } catch (err) {
+    handleRouteError(err, res, "Vendor advance create error:");
+  }
+});
+
+// POST /vendor-advances/:id/apply — apply a vendor advance against an AP open balance.
+//   DR Vendor AP (2100)
+//        CR Vendor advance receivable (1420)
+purchaseRouter.post("/vendor-advances/:id/apply", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const advanceId = parseId(req.params.id, "id");
+    const { poId, amount } = zodParse(applyVendorAdvanceSchema.safeParse(req.body ?? {}));
+    const applyAmt = roundTo2(Number(amount));
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [apCode, advReceivableCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "credit", "1420"),
+    ]);
+
+    let advance: any;
+    let po: any;
+    let applyResult: { journalId: number; alreadyExists: boolean } | null = null;
+    await withTransaction(async (client: any) => {
+      const advRes = await client.query(
+        `SELECT id, "supplierId", amount, "appliedAmount", "branchId", status
+           FROM vendor_advances WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+        [advanceId, scope.companyId]
+      );
+      advance = advRes.rows[0];
+      if (!advance) throw new NotFoundError("الدفعة المقدمة للمورد غير موجودة");
+      const remaining = Number(advance.amount) - Number(advance.appliedAmount);
+      if (applyAmt > remaining + 0.01) {
+        throw new ValidationError(`المبلغ يتجاوز المتبقي من الدفعة المقدمة (${remaining})`);
+      }
+
+      const poRes = await client.query(
+        `SELECT id, ref, "supplierId", "totalAmount", "paidAmount" FROM purchase_orders
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [poId, scope.companyId]
+      );
+      po = poRes.rows[0];
+      if (!po) throw new NotFoundError("أمر الشراء غير موجود");
+      if (po.supplierId !== advance.supplierId) {
+        throw new ValidationError("المورد في أمر الشراء لا يطابق المورد في الدفعة المقدمة");
+      }
+      const poOpen = Number(po.totalAmount) - Number(po.paidAmount ?? 0);
+      if (applyAmt > poOpen + 0.01) {
+        throw new ValidationError(`المبلغ يتجاوز الرصيد المفتوح لأمر الشراء (${poOpen})`);
+      }
+
+      await client.query(
+        `UPDATE vendor_advances SET "appliedAmount" = COALESCE("appliedAmount",0) + $1,
+           status = CASE WHEN COALESCE("appliedAmount",0) + $1 >= amount THEN 'applied' ELSE status END
+         WHERE id = $2`,
+        [applyAmt, advanceId]
+      );
+      await client.query(
+        `UPDATE purchase_orders SET "paidAmount" = COALESCE("paidAmount",0) + $1
+         WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [applyAmt, poId, scope.companyId]
+      );
+
+      applyResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: advance.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `VENDOR-ADV-APPLY-${advanceId}-${poId}`,
+        description: `تطبيق دفعة مقدمة على أمر شراء ${po.ref}`,
+        sourceType: "vendor_advance_application",
+        sourceId: advanceId,
+        sourceKey: `finance:vendor_advance_apply:${advanceId}:${poId}`,
+        lines: [
+          { accountCode: apCode, debit: applyAmt, credit: 0, vendorId: advance.supplierId },
+          { accountCode: advReceivableCode, debit: 0, credit: applyAmt, vendorId: advance.supplierId },
+        ],
+        guardTable: "vendor_advances",
+        guardId: advanceId,
+      });
+    });
+
+    const journalId = applyResult!.journalId;
+    markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+    res.json({ advanceId, poId, amount: applyAmt, journalId });
+  } catch (err) {
+    handleRouteError(err, res, "Apply vendor advance error:");
+  }
+});
+
+// POST /vendor-credits — vendor credit memo (supplier return / pricing
+// adjustment in the buyer's favour).
+//   DR Vendor AP (2100)             ← amount + VAT
+//        CR Sales returns / Inventory (5550 or 1151)
+//        CR VAT input reversal (1400)
+// Net effect: reduces our payable to the supplier.
+purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createVendorCreditSchema.safeParse(req.body));
+    const { supplierId, poId, amount, reason, memoDate, vatIncluded = true } = b;
+
+    const [supplier] = await rawQuery<{ id: number; name: string }>(
+      `SELECT id, name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [supplierId, scope.companyId]
+    );
+    if (!supplier) {
+      throw new ValidationError("المورد غير موجود", { field: "supplierId" });
+    }
+
+    const memoDateStr = memoDate || todayISO();
+    const creditPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
+    if (!creditPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسجيل إشعار دائن مورد في فترة مُقفلة: ${creditPeriodCheck.periodName ?? ""}`,
+        { field: "memoDate", meta: { periodName: creditPeriodCheck.periodName } },
+      );
+    }
+
+    const totalAmt = roundTo2(Number(amount));
+    const vatRate = 0.15;
+    const subtotal = vatIncluded ? roundTo2(totalAmt / (1 + vatRate)) : totalAmt;
+    const vatAmount = roundTo2(vatIncluded ? totalAmt - subtotal : totalAmt * vatRate);
+    const fullAmount = vatIncluded ? totalAmt : roundTo2(totalAmt + vatAmount);
+
+    const creditRef = `VCM-${supplierId}-${Date.now()}`;
+    const creditSourceKey = `finance:vendor_credit:${supplierId}:${memoDateStr}:${requestIdempotencyToken(req)}`;
+
+    let memoId: number | null = null;
+    await withTransaction(async (client: any) => {
+      try {
+        const ins = await client.query(
+          `INSERT INTO vendor_credit_memos ("companyId","branchId","supplierId","poId",ref,amount,"vatAmount","totalAmount","appliedAmount","memoDate",reason,status,"createdBy","sourceKey")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10,'open',$11,$12) RETURNING id`,
+          [scope.companyId, scope.branchId, supplierId, poId ?? null, creditRef, subtotal, vatAmount, fullAmount, memoDateStr, reason, scope.activeAssignmentId, creditSourceKey]
+        );
+        memoId = ins.rows[0].id;
+      } catch (e: any) {
+        if (e?.code === "42P01") {
+          await client.query(
+            `CREATE TABLE IF NOT EXISTS vendor_credit_memos (
+               id SERIAL PRIMARY KEY,
+               "companyId" INTEGER NOT NULL,
+               "branchId" INTEGER,
+               "supplierId" INTEGER NOT NULL,
+               "poId" INTEGER,
+               ref TEXT NOT NULL,
+               amount NUMERIC(18,2) NOT NULL,
+               "vatAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               "totalAmount" NUMERIC(18,2) NOT NULL,
+               "appliedAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               "memoDate" DATE NOT NULL,
+               reason TEXT NOT NULL,
+               status TEXT NOT NULL DEFAULT 'open',
+               "journalId" INTEGER,
+               "sourceKey" VARCHAR(128),
+               "createdBy" INTEGER,
+               "createdAt" TIMESTAMP DEFAULT NOW(),
+               "deletedAt" TIMESTAMP
+             );
+             CREATE UNIQUE INDEX IF NOT EXISTS idx_vendor_credit_memos_source_key
+               ON vendor_credit_memos ("companyId", "sourceKey")
+               WHERE "sourceKey" IS NOT NULL;`
+          );
+          const ins2 = await client.query(
+            `INSERT INTO vendor_credit_memos ("companyId","branchId","supplierId","poId",ref,amount,"vatAmount","totalAmount","appliedAmount","memoDate",reason,status,"createdBy","sourceKey")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10,'open',$11,$12) RETURNING id`,
+            [scope.companyId, scope.branchId, supplierId, poId ?? null, creditRef, subtotal, vatAmount, fullAmount, memoDateStr, reason, scope.activeAssignmentId, creditSourceKey]
+          );
+          memoId = ins2.rows[0].id;
+        } else {
+          throw e;
+        }
+      }
+    });
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [apCode, returnsCode, vatInputCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5550"),
+      financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1400"),
+    ]);
+
+    let journalId: number | null = null;
+    try {
+      const memoResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: creditRef,
+        description: `إشعار دائن من المورد ${supplier.name}: ${reason}`,
+        sourceType: "vendor_credit_memo",
+        sourceId: memoId ?? 0,
+        sourceKey: `finance:vendor_credit_memo:${memoId}`,
+        lines: [
+          { accountCode: apCode, debit: fullAmount, credit: 0, vendorId: supplierId, description: `تخفيض ذمم — إشعار دائن` },
+          { accountCode: returnsCode, debit: 0, credit: subtotal, vendorId: supplierId, description: `مرتجع/تخفيض مشتريات` },
+          ...(vatAmount > 0 ? [{ accountCode: vatInputCode, debit: 0, credit: vatAmount, vendorId: supplierId, description: `عكس ضريبة مدخلات` }] : []),
+        ],
+        guardTable: "vendor_credit_memos",
+        guardId: memoId ?? 0,
+      });
+      journalId = memoResult.journalId;
+      markIdempotencyReplay(req, res, memoResult.alreadyExists);
+      if (journalId && memoId) {
+        await rawExecute(`UPDATE vendor_credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
+      }
+    } catch (glErr) {
+      if (memoId) {
+        await rawExecute(`DELETE FROM vendor_credit_memos WHERE id = $1 AND "companyId" = $2`, [memoId, scope.companyId]);
+      }
+      throw glErr;
+    }
+
+    res.status(201).json({ memoId, ref: creditRef, supplierId, amount: subtotal, vatAmount, totalAmount: fullAmount, journalId, status: "open" });
+  } catch (err) {
+    handleRouteError(err, res, "Vendor credit memo create error:");
+  }
+});
+
+// POST /vendor-credits/:id/apply — apply a vendor credit memo against
+// an open PO. Same shape as advance-apply.
+purchaseRouter.post("/vendor-credits/:id/apply", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const memoId = parseId(req.params.id, "id");
+    const { poId, amount } = zodParse(applyVendorCreditSchema.safeParse(req.body ?? {}));
+    const applyAmt = roundTo2(Number(amount));
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [apCode, creditClearingCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_credit_clearing", "credit", "2110"),
+    ]);
+
+    let memo: any;
+    let po: any;
+    let applyResult: { journalId: number; alreadyExists: boolean } | null = null;
+    await withTransaction(async (client: any) => {
+      const memoRes = await client.query(
+        `SELECT id, "supplierId", "totalAmount", "appliedAmount", "branchId", status
+           FROM vendor_credit_memos WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+        [memoId, scope.companyId]
+      );
+      memo = memoRes.rows[0];
+      if (!memo) throw new NotFoundError("الإشعار الدائن غير موجود");
+      const remaining = Number(memo.totalAmount) - Number(memo.appliedAmount);
+      if (applyAmt > remaining + 0.01) {
+        throw new ValidationError(`المبلغ يتجاوز المتبقي من الإشعار الدائن (${remaining})`);
+      }
+
+      const poRes = await client.query(
+        `SELECT id, ref, "supplierId", "totalAmount", "paidAmount" FROM purchase_orders
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [poId, scope.companyId]
+      );
+      po = poRes.rows[0];
+      if (!po) throw new NotFoundError("أمر الشراء غير موجود");
+      if (po.supplierId !== memo.supplierId) {
+        throw new ValidationError("المورد في أمر الشراء لا يطابق المورد في الإشعار الدائن");
+      }
+
+      await client.query(
+        `UPDATE vendor_credit_memos SET "appliedAmount" = COALESCE("appliedAmount",0) + $1,
+           status = CASE WHEN COALESCE("appliedAmount",0) + $1 >= "totalAmount" THEN 'applied' ELSE status END
+         WHERE id = $2`,
+        [applyAmt, memoId]
+      );
+      await client.query(
+        `UPDATE purchase_orders SET "paidAmount" = COALESCE("paidAmount",0) + $1
+         WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [applyAmt, poId, scope.companyId]
+      );
+
+      applyResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: memo.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `VCM-APPLY-${memoId}-${poId}`,
+        description: `تطبيق إشعار دائن على أمر شراء ${po.ref}`,
+        sourceType: "vendor_credit_application",
+        sourceId: memoId,
+        sourceKey: `finance:vendor_credit_apply:${memoId}:${poId}`,
+        lines: [
+          { accountCode: apCode, debit: applyAmt, credit: 0, vendorId: memo.supplierId },
+          { accountCode: creditClearingCode, debit: 0, credit: applyAmt, vendorId: memo.supplierId },
+        ],
+        guardTable: "vendor_credit_memos",
+        guardId: memoId,
+      });
+    });
+
+    const journalId = applyResult!.journalId;
+    markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+    res.json({ memoId, poId, amount: applyAmt, journalId });
+  } catch (err) {
+    handleRouteError(err, res, "Apply vendor credit error:");
+  }
+});
+
+// GET /vendor-advances — list vendor advances for AP module.
+purchaseRouter.get("/vendor-advances", authorize({ feature: "finance.purchase", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const supplierId = req.query.supplierId ? Number(req.query.supplierId) : undefined;
+    const status = req.query.status as string | undefined;
+    const params: any[] = [scope.companyId];
+    const conds: string[] = [`va."companyId" = $1`, `va."deletedAt" IS NULL`];
+    if (supplierId) { params.push(supplierId); conds.push(`va."supplierId" = $${params.length}`); }
+    if (status) { params.push(status); conds.push(`va.status = $${params.length}`); }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT va.*, s.name AS "supplierName"
+         FROM vendor_advances va
+         LEFT JOIN suppliers s ON s.id = va."supplierId"
+        WHERE ${conds.join(" AND ")}
+        ORDER BY va.id DESC
+        LIMIT 500`,
+      params
+    ).catch(() => [] as Record<string, unknown>[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "List vendor advances error:");
+  }
+});
+
+// GET /vendor-credits — list vendor credit memos.
+purchaseRouter.get("/vendor-credits", authorize({ feature: "finance.purchase", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const supplierId = req.query.supplierId ? Number(req.query.supplierId) : undefined;
+    const status = req.query.status as string | undefined;
+    const params: any[] = [scope.companyId];
+    const conds: string[] = [`vcm."companyId" = $1`, `vcm."deletedAt" IS NULL`];
+    if (supplierId) { params.push(supplierId); conds.push(`vcm."supplierId" = $${params.length}`); }
+    if (status) { params.push(status); conds.push(`vcm.status = $${params.length}`); }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT vcm.*, s.name AS "supplierName"
+         FROM vendor_credit_memos vcm
+         LEFT JOIN suppliers s ON s.id = vcm."supplierId"
+        WHERE ${conds.join(" AND ")}
+        ORDER BY vcm.id DESC
+        LIMIT 500`,
+      params
+    ).catch(() => [] as Record<string, unknown>[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "List vendor credits error:");
+  }
+});
