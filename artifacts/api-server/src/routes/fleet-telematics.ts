@@ -878,10 +878,12 @@ router.get(
         params.push(category);
       }
       const rows = await rawQuery(
-        `SELECT a.*, v."plateNumber" AS "vehiclePlate", d."deviceLabel"
+        `SELECT a.*, v."plateNumber" AS "vehiclePlate", d."deviceLabel",
+                dr.name AS "driverName"
            FROM fleet_ai_alerts a
            LEFT JOIN fleet_vehicles v ON v.id = a."vehicleId" AND v."companyId" = a."companyId" AND v."deletedAt" IS NULL
            LEFT JOIN fleet_telematics_devices d ON d.id = a."deviceId" AND d."companyId" = a."companyId" AND d."deletedAt" IS NULL
+           LEFT JOIN fleet_drivers dr ON dr.id = a."driverId" AND dr."companyId" = a."companyId" AND dr."deletedAt" IS NULL
           WHERE ${conditions.join(" AND ")}
           ORDER BY a."occurredAt" DESC LIMIT 500`,
         params,
