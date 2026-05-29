@@ -13,7 +13,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, currentYear, currentDateInTz, toDateISO, roundTo2, roundTo4, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { internalTechRef } from "../lib/internalRef.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 import { logger } from "../lib/logger.js";
@@ -301,13 +301,21 @@ financeAlgorithmsRouter.get("/dso-trend", authorize({ feature: "finance.algorith
 
     // Build the period series in JS so we don't depend on a date-table
     // and can keep the SQL trivially portable across Postgres versions.
+    // Anchor on Riyadh wall-clock (currentDateInTz) — using new Date()
+    // would walk the UTC month, which trips finance-period-drift in any
+    // tenant whose fiscal calendar is local-time-based.
+    const todayRiyadh = currentDateInTz("Asia/Riyadh");
+    const refYear = Number(todayRiyadh.slice(0, 4));
+    const refMonth = Number(todayRiyadh.slice(5, 7)); // 1-12
     const series: Array<{ period: string; year: number; month: number; startDate: string; endDate: string; daysInMonth: number }> = [];
-    const now = new Date();
     for (let i = months - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = d.getFullYear();
-      const month = d.getMonth() + 1;
-      const lastDay = new Date(year, month, 0).getDate();
+      // Step back i months on (refYear, refMonth) without bouncing off
+      // a Date object — pure arithmetic so no TZ deduction happens.
+      const monthsFromZero = refYear * 12 + (refMonth - 1) - i;
+      const year = Math.floor(monthsFromZero / 12);
+      const month = (monthsFromZero % 12) + 1;
+      // Last day of (year, month) — pass month as next-month + day 0.
+      const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
       const period = `${year}-${String(month).padStart(2, "0")}`;
       series.push({
         period,
@@ -406,7 +414,7 @@ financeAlgorithmsRouter.get("/customer-360/:clientId", authorize({ feature: "fin
     );
     if (!client) throw new NotFoundError("العميل غير موجود");
 
-    const ytdStart = `${new Date().getFullYear()}-01-01`;
+    const ytdStart = `${currentYear()}-01-01`;
 
     const [summary, oldestUnpaid, lastPayment, recentInvoices, topProducts] = await Promise.all([
       // AR summary + lifetime revenue.
