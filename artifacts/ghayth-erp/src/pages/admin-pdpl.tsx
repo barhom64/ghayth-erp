@@ -19,6 +19,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
@@ -38,14 +39,15 @@ export default function AdminPdplPage() {
     { enabled: !!exportEmpId },
   );
 
-  const [reqKind, setReqKind] = useState("access");
-  const [reqSubjectType, setReqSubjectType] = useState("employee");
-  const [reqSubjectId, setReqSubjectId] = useState("");
+  // Schema enums match the PDPL article numbers — see
+  // artifacts/api-server/src/routes/pdpl.ts:39 for the canonical list.
+  const [reqKind, setReqKind] = useState<"access" | "rectification" | "erasure" | "portability" | "objection">("access");
   const [reqName, setReqName] = useState("");
   const [reqEmail, setReqEmail] = useState("");
+  const [reqNotes, setReqNotes] = useState("");
   const submitDataRequest = async () => {
-    if (!reqSubjectId.trim()) {
-      toast({ variant: "destructive", title: "حدد رقم صاحب البيانات" });
+    if (!reqName.trim() && !reqEmail.trim()) {
+      toast({ variant: "destructive", title: "أضف اسم أو بريد مقدّم الطلب" });
       return;
     }
     try {
@@ -53,14 +55,13 @@ export default function AdminPdplPage() {
         method: "POST",
         body: JSON.stringify({
           requestType: reqKind,
-          subjectType: reqSubjectType,
-          subjectId: Number(reqSubjectId),
           requesterName: reqName || undefined,
           requesterEmail: reqEmail || undefined,
+          notes: reqNotes.trim() || undefined,
         }),
       });
       toast({ title: "تم تسجيل الطلب" });
-      setReqSubjectId(""); setReqName(""); setReqEmail("");
+      setReqName(""); setReqEmail(""); setReqNotes("");
     } catch (err: any) {
       toast({ variant: "destructive", title: "تعذّر التسجيل", description: err?.message || "خطأ" });
     }
@@ -214,39 +215,19 @@ export default function AdminPdplPage() {
                 يُسجّل الطلب لمتابعته خلال المهلة النظامية (30 يوماً).
               </p>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
+                <div className="col-span-2">
                   <label className="text-[10px] text-muted-foreground">نوع الطلب</label>
                   <select
                     value={reqKind}
-                    onChange={(e) => setReqKind(e.target.value)}
+                    onChange={(e) => setReqKind(e.target.value as typeof reqKind)}
                     className="w-full h-7 text-xs border rounded px-2 bg-white"
                   >
-                    <option value="access">وصول للبيانات</option>
-                    <option value="correction">تصحيح</option>
-                    <option value="deletion">حذف</option>
+                    <option value="access">اطلاع على البيانات</option>
+                    <option value="rectification">تصحيح</option>
+                    <option value="erasure">حذف</option>
                     <option value="portability">نقل</option>
+                    <option value="objection">اعتراض</option>
                   </select>
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground">نوع صاحب البيانات</label>
-                  <select
-                    value={reqSubjectType}
-                    onChange={(e) => setReqSubjectType(e.target.value)}
-                    className="w-full h-7 text-xs border rounded px-2 bg-white"
-                  >
-                    <option value="employee">موظف</option>
-                    <option value="client">عميل</option>
-                    <option value="supplier">مورد</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground">رقم صاحب البيانات</label>
-                  <input
-                    value={reqSubjectId}
-                    onChange={(e) => setReqSubjectId(e.target.value)}
-                    className="w-full h-7 px-2 text-xs border rounded"
-                    dir="ltr"
-                  />
                 </div>
                 <div>
                   <label className="text-[10px] text-muted-foreground">اسم مقدّم الطلب</label>
@@ -256,7 +237,7 @@ export default function AdminPdplPage() {
                     className="w-full h-7 px-2 text-xs border rounded"
                   />
                 </div>
-                <div className="col-span-2">
+                <div>
                   <label className="text-[10px] text-muted-foreground">بريد مقدّم الطلب</label>
                   <input
                     value={reqEmail}
@@ -265,10 +246,18 @@ export default function AdminPdplPage() {
                     dir="ltr"
                   />
                 </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] text-muted-foreground">ملاحظات / تفاصيل الطلب</label>
+                  <textarea
+                    value={reqNotes}
+                    onChange={(e) => setReqNotes(e.target.value)}
+                    className="w-full h-16 px-2 py-1 text-xs border rounded"
+                  />
+                </div>
               </div>
-              <Button size="sm" onClick={submitDataRequest} rateLimitAware>
+              <GuardedButton perm="admin.pdpl:create" size="sm" rateLimitAware onClick={submitDataRequest}>
                 تسجيل الطلب
-              </Button>
+              </GuardedButton>
             </CardContent>
           </Card>
         </div>

@@ -28,15 +28,31 @@ export default function Notifications() {
   // the inbox so the user can mute noisy categories without leaving the page.
   const [prefsOpen, setPrefsOpen] = useState(false);
   const prefsQ = useApiQuery<any>(["notifications-preferences"], "/notifications/preferences");
-  const prefsRaw = prefsQ.data?.data ?? prefsQ.data?.preferences ?? prefsQ.data ?? {};
-  const savePrefsMut = useApiMutation<unknown, Record<string, boolean>>(
+  // Server returns an array of {channel, category, enabled} rows; index
+  // by channel for the per-channel switch UI below. Toggle posts a
+  // single row to the server (it's an upsert; no need to send the
+  // whole bag of preferences).
+  const prefsList: any[] = Array.isArray(prefsQ.data?.data)
+    ? prefsQ.data.data
+    : Array.isArray(prefsQ.data?.preferences)
+    ? prefsQ.data.preferences
+    : Array.isArray(prefsQ.data)
+    ? prefsQ.data
+    : [];
+  const enabledByChannel: Record<string, boolean> = {};
+  for (const p of prefsList) {
+    if (p?.channel && p?.category === "general") {
+      enabledByChannel[p.channel] = Boolean(p.enabled);
+    }
+  }
+  const savePrefsMut = useApiMutation<unknown, { channel: string; category: string; enabled: boolean }>(
     "/notifications/preferences",
     "POST",
     [["notifications-preferences"]],
     { successMessage: "تم حفظ التفضيلات" },
   );
-  const togglePref = (key: string, value: boolean) => {
-    savePrefsMut.mutate({ ...prefsRaw, [key]: value });
+  const togglePref = (channel: string, enabled: boolean) => {
+    savePrefsMut.mutate({ channel, category: "general", enabled });
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -87,7 +103,7 @@ export default function Notifications() {
               <div key={ch.key} className="flex items-center justify-between gap-2 border rounded p-2 bg-white">
                 <span className="text-xs">{ch.label}</span>
                 <Switch
-                  checked={Boolean(prefsRaw?.[ch.key] ?? true)}
+                  checked={enabledByChannel[ch.key] ?? true}
                   onCheckedChange={(v) => togglePref(ch.key, v)}
                   disabled={savePrefsMut.isPending}
                 />

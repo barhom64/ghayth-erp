@@ -134,14 +134,19 @@ export default function ObligationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newObligation, setNewObligation] = useState({
     entityType: "manual",
-    entityId: "0",
+    entityId: "",
     obligationType: "follow_up",
     title: "",
     dueAt: "",
   });
   const handleCreateObligation = async () => {
+    const entityIdNum = Number(newObligation.entityId);
     if (!newObligation.title.trim() || !newObligation.dueAt) {
       toast({ title: "العنوان والاستحقاق مطلوبان", variant: "destructive" });
+      return;
+    }
+    if (!Number.isFinite(entityIdNum) || entityIdNum <= 0) {
+      toast({ title: "معرف الكيان يجب أن يكون أكبر من صفر", variant: "destructive" });
       return;
     }
     try {
@@ -149,7 +154,7 @@ export default function ObligationsPage() {
         method: "POST",
         body: JSON.stringify({
           entityType: newObligation.entityType,
-          entityId: Number(newObligation.entityId) || 0,
+          entityId: entityIdNum,
           obligationType: newObligation.obligationType,
           title: newObligation.title.trim(),
           dueAt: newObligation.dueAt,
@@ -157,7 +162,7 @@ export default function ObligationsPage() {
       });
       toast({ title: "أُنشئ الالتزام" });
       setCreateOpen(false);
-      setNewObligation({ entityType: "manual", entityId: "0", obligationType: "follow_up", title: "", dueAt: "" });
+      setNewObligation({ entityType: "manual", entityId: "", obligationType: "follow_up", title: "", dueAt: "" });
       refetch();
       refetchSummary();
     } catch (e: any) {

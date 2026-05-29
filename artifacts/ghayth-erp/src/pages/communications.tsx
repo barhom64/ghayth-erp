@@ -506,16 +506,28 @@ function CommLogActions({ logEntry, onSuccess }: { logEntry: any; onSuccess: () 
 function ManualSendPanel({ onSent }: { onSent: () => void }) {
   // POST /communications/send — single ad-hoc send for the operator to
   // verify deliverability of an SMS / WhatsApp / email path without
-  // attaching a template.
+  // attaching a template. Server schema uses `toNumber` for sms /
+  // whatsapp / call and `toEmail` for email.
   const [channel, setChannel] = useState("sms");
   const [to, setTo] = useState("");
   const [body, setBody] = useState("");
-  const sendMut = useApiMutation<unknown, { channel: string; to: string; body: string }>(
+  const sendMut = useApiMutation<unknown, {
+    channel: string;
+    toNumber?: string;
+    toEmail?: string;
+    body: string;
+  }>(
     "/communications/send",
     "POST",
     [["comm-log"], ["comm-stats"], ["comm-queue-stats"]],
     { successMessage: "أُرسلت الرسالة" },
   );
+  const handleSend = () => {
+    const payload = channel === "email"
+      ? { channel, toEmail: to.trim(), body: body.trim() }
+      : { channel, toNumber: to.trim(), body: body.trim() };
+    sendMut.mutate(payload, { onSuccess: () => { setTo(""); setBody(""); onSent(); } });
+  };
   return (
     <Card className="mb-3 border-dashed">
       <CardContent className="p-3 space-y-2">
@@ -526,9 +538,9 @@ function ManualSendPanel({ onSent }: { onSent: () => void }) {
             onChange={(e) => setChannel(e.target.value)}
             className="h-8 text-xs border rounded px-2 bg-white"
           >
-            <option value="sms">SMS</option>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="email">Email</option>
+            <option value="sms">رسالة نصية</option>
+            <option value="whatsapp">واتساب</option>
+            <option value="email">بريد إلكتروني</option>
           </select>
           <input
             value={to}
@@ -549,7 +561,7 @@ function ManualSendPanel({ onSent }: { onSent: () => void }) {
           size="sm"
           rateLimitAware
           disabled={!to.trim() || !body.trim() || sendMut.isPending}
-          onClick={() => sendMut.mutate({ channel, to: to.trim(), body: body.trim() }, { onSuccess: () => { setTo(""); setBody(""); onSent(); } })}
+          onClick={handleSend}
         >
           إرسال
         </GuardedButton>

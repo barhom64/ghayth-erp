@@ -209,7 +209,10 @@ export default function PrintTemplatesPage() {
           entityType: deliverEntity,
           entityId: Number(deliverEntityId),
           channel: deliverChannel,
-          recipient: deliverRecipient.trim(),
+          // Server expects `to: [{address, name?}]` — wrap the operator
+          // input. Single-recipient is the only common case from this
+          // admin probe.
+          to: [{ address: deliverRecipient.trim() }],
         }),
       });
       toast({ title: "أُرسل المستند", description: res?.jobId ? `Job #${res.jobId}` : "" });
@@ -416,9 +419,11 @@ export default function PrintTemplatesPage() {
           <div>
             <label className="text-[10px] text-muted-foreground">القناة</label>
             <select value={deliverChannel} onChange={(e) => setDeliverChannel(e.target.value)} className="w-full h-7 px-2 border rounded bg-white">
-              <option value="email">Email</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="print">طابعة</option>
+              <option value="email">بريد إلكتروني</option>
+              <option value="whatsapp">واتساب</option>
+              <option value="sms">رسالة نصية</option>
+              <option value="internal_inbox">صندوق داخلي</option>
+              <option value="download">تنزيل (Download)</option>
             </select>
           </div>
           <div className="md:col-span-1">

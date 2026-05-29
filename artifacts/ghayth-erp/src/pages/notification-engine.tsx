@@ -500,7 +500,7 @@ function FallbackChainsTab() {
 
   // PUT /notification-engine/fallback-chains/:id — toggle the
   // enabled/disabled state of a chain without rebuilding it.
-  const toggleMut = useApiMutation<any, { id: number; enabled: boolean }>(
+  const toggleMut = useApiMutation<any, { id: number; isActive: boolean }>(
     (body) => `/notification-engine/fallback-chains/${body.id}`,
     "PUT",
     [["notif-fallback-chains"]],
@@ -603,11 +603,11 @@ function FallbackChainsTab() {
                       size="sm"
                       variant="ghost"
                       className="text-xs"
-                      onClick={() => toggleMut.mutate({ id: chain.id as number, enabled: !chain.enabled })}
+                      onClick={() => toggleMut.mutate({ id: chain.id as number, isActive: !(chain.isActive ?? chain.enabled) })}
                       disabled={toggleMut.isPending}
                       rateLimitAware
                     >
-                      {chain.enabled ? "تعطيل" : "تفعيل"}
+                      {(chain.isActive ?? chain.enabled) ? "تعطيل" : "تفعيل"}
                     </GuardedButton>
                     <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-status-error" onClick={() => deleteChain(chain.id as number)}>
                       <Trash2 className="h-3 w-3" />

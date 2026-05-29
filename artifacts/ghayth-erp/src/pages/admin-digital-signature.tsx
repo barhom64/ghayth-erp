@@ -74,7 +74,7 @@ export default function AdminDigitalSignaturePage() {
       });
       toast({
         title: "تم التحقق",
-        description: res?.signatureId ? `معرّف التوقيع #${res.signatureId}` : "",
+        description: res?.signatureRef ? `مرجع التوقيع: ${res.signatureRef}` : "",
       });
       setOtpCode("");
       logsQ.refetch();

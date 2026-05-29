@@ -96,37 +96,37 @@ export default function AdminIntelligencePlayground() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <ProbePanel
             title="تصنيف /intelligence/ai/categorize"
-            defaultBody='{"message":"المكيف لا يعمل في الغرفة","categories":["maintenance","billing","other"]}'
+            defaultBody='{"message":"المكيف لا يعمل في الغرفة","context":{"module":"maintenance"}}'
             onRun={(body) => apiFetch("/intelligence/ai/categorize", { method: "POST", body: JSON.stringify(body) })}
           />
           <ProbePanel
             title="مسودة ردّ /intelligence/ai/draft-reply"
-            defaultBody='{"ticketTitle":"تأخير الفاتورة","ticketBody":"لم أستلم الفاتورة","tone":"professional"}'
+            defaultBody='{"ticketTitle":"تأخير الفاتورة","ticketDescription":"لم أستلم الفاتورة الشهرية"}'
             onRun={(body) => apiFetch("/intelligence/ai/draft-reply", { method: "POST", body: JSON.stringify(body) })}
           />
           <ProbePanel
             title="ترجمة /intelligence/ai/translate"
-            defaultBody='{"text":"مرحباً، كيف حالك؟","targetLang":"en"}'
+            defaultBody='{"text":"مرحباً، كيف حالك؟","targetLanguage":"en"}'
             onRun={(body) => apiFetch("/intelligence/ai/translate", { method: "POST", body: JSON.stringify(body) })}
           />
           <ProbePanel
             title="تلخيص /intelligence/ai/summarize"
-            defaultBody='{"content":"يحتوي هذا التقرير على...","maxWords":50}'
+            defaultBody='{"content":"يحتوي هذا التقرير على...","maxLength":50}'
             onRun={(body) => apiFetch("/intelligence/ai/summarize", { method: "POST", body: JSON.stringify(body) })}
           />
           <ProbePanel
             title="تقييم قواعد /intelligence/ai/evaluate-rules"
-            defaultBody='{"context":{"amount":1000,"currency":"SAR"},"ruleSet":"discount-eligibility"}'
+            defaultBody='{"context":{"module":"finance"},"data":{"amount":1000,"currency":"SAR"}}'
             onRun={(body) => apiFetch("/intelligence/ai/evaluate-rules", { method: "POST", body: JSON.stringify(body) })}
           />
           <ProbePanel
             title="توقع زمني /intelligence/ai/forecast"
-            defaultBody='{"metricName":"monthly_revenue","periods":3,"history":[100,120,135,150]}'
+            defaultBody='{"metricName":"monthly_revenue","forecastPeriods":3,"historicalData":[100,120,135,150]}'
             onRun={(body) => apiFetch("/intelligence/ai/forecast", { method: "POST", body: JSON.stringify(body) })}
           />
           <ProbePanel
             title="إسناد ذكي /intelligence/smart-assign"
-            defaultBody='{"taskType":"maintenance","skills":["plumbing"],"priority":"high"}'
+            defaultBody='{"taskType":"maintenance","requiredSpecialty":"plumbing","taskTitle":"إصلاح تسرب"}'
             onRun={(body) => apiFetch("/intelligence/smart-assign", { method: "POST", body: JSON.stringify(body) })}
           />
         </div>
@@ -137,17 +137,17 @@ export default function AdminIntelligencePlayground() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <ProbePanel
             title="مسافة كروية /intelligence/algorithms/haversine"
-            defaultBody='{"a":{"lat":24.7136,"lon":46.6753},"b":{"lat":21.5433,"lon":39.1728}}'
+            defaultBody='{"lat1":24.7136,"lon1":46.6753,"lat2":21.5433,"lon2":39.1728}'
             onRun={(body) => apiFetch("/intelligence/algorithms/haversine", { method: "POST", body: JSON.stringify(body) })}
           />
           <ProbePanel
             title="متوسط متحرك /intelligence/algorithms/moving-average"
-            defaultBody='{"series":[10,12,15,14,18,20],"window":3}'
+            defaultBody='{"values":[10,12,15,14,18,20],"periods":3}'
             onRun={(body) => apiFetch("/intelligence/algorithms/moving-average", { method: "POST", body: JSON.stringify(body) })}
           />
           <ProbePanel
             title="موازنة الحمل /intelligence/algorithms/load-balance"
-            defaultBody='{"agents":[{"id":1,"capacity":10},{"id":2,"capacity":20}],"tasks":15}'
+            defaultBody='{"resources":[{"id":1,"lat":24.71,"lon":46.67,"workload":2}],"targetLat":24.7,"targetLon":46.7}'
             onRun={(body) => apiFetch("/intelligence/algorithms/load-balance", { method: "POST", body: JSON.stringify(body) })}
           />
         </div>
