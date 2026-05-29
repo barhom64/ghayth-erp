@@ -696,6 +696,44 @@ describe("Print Engine v2 — preset contract (every BESPOKE_PRESETS entry retur
     }
     expect(missing, `ARABIC_TITLES missing entries for: ${missing.join(", ")}`).toEqual([]);
   });
+
+  it("preset bodies do NOT carry English subtitle text (system-language guarantee)", async () => {
+    // The user contract is "نظام الطباعة بلغة النظام" — printed docs must
+    // be in Arabic. Several presets used to ship a bilingual subtitle like
+    // "Fleet Trip — #..." beneath the Arabic h2 header; they're now all
+    // Arabic. Lock that in so a future contributor doesn't sneak an
+    // English sub-line back in by copying an older preset.
+    //
+    // We scan EVERY string passed to makePreset({ body: `…` }) for the
+    // common English title-case bigrams that used to leak ("Fleet Trip",
+    // "Vehicle Card", "Lease Agreement", …). A real attorney's bilingual
+    // contract template can still ship two languages — they'd use the
+    // visual builder + a saved DB row, not the seeded preset.
+    const src = read(join(PRINT_LIB, "templateResolver.ts"));
+    const bodies = Array.from(src.matchAll(/body:\s*`([\s\S]*?)`/g)).map((m) => m[1]);
+    expect(bodies.length).toBeGreaterThan(40);
+    // Allowed English tokens: standard acronyms + a few technical refs.
+    const allow = new Set(["SKU", "IBAN", "VAT", "QR", "PDF", "API", "ID"]);
+    const offenders: Array<{ phrase: string; idx: number }> = [];
+    for (let i = 0; i < bodies.length; i++) {
+      const body = bodies[i];
+      // Match `Word Word` outside of attribute values and outside dir="ltr"
+      // spans. Skip lines that look like CSS (contain : or ;).
+      const matches = body.match(/(?:^|>)[^<]*?\b([A-Z][a-z]{2,}\s+[A-Z][a-z]{2,})\b[^<]*?(?=<|$)/gm);
+      if (!matches) continue;
+      for (const m of matches) {
+        const word = m.match(/([A-Z][a-z]{2,}\s+[A-Z][a-z]{2,})/)?.[1] ?? "";
+        // Skip allowlisted technical phrases (none currently span 2 words
+        // but the structure keeps the check extensible).
+        if ([...allow].some((a) => word.includes(a))) continue;
+        offenders.push({ phrase: word, idx: i });
+      }
+    }
+    expect(
+      offenders.map((o) => o.phrase),
+      `English subtitle leaked into preset body. Translate it to Arabic — keep technical refs (SKU, IBAN, VAT) only.`,
+    ).toEqual([]);
+  });
 });
 
 describe("Print Engine v2 — retention legal hold", () => {
