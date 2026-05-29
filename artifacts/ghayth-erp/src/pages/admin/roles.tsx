@@ -139,6 +139,7 @@ export default function AdminRolesPage() {
       });
       toast({ title: `استُبدلت ${perms.length} صلاحية للدور` });
       setBulkPerms("");
+      setBulkRole("");
       rolePermsQ.refetch();
     } catch (err: any) {
       toast({ variant: "destructive", title: "فشل الاستبدال", description: err?.message });
