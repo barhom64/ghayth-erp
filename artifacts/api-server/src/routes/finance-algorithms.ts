@@ -253,6 +253,219 @@ financeAlgorithmsRouter.get("/ar-aging", authorize({ feature: "finance.algorithm
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DSO TREND — Days Sales Outstanding بمرور الزمن
+// Computes DSO per month for the last N months:
+//   DSO_month = AR_end_of_month / (revenue_in_month / days_in_month)
+// Surfaces collection-quality drift the AR aging snapshot can't show.
+// ─────────────────────────────────────────────────────────────────────────────
+
+financeAlgorithmsRouter.get("/dso-trend", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const months = Math.min(Math.max(Number(req.query.months) || 12, 3), 24);
+
+    // Build the period series in JS so we don't depend on a date-table
+    // and can keep the SQL trivially portable across Postgres versions.
+    const series: Array<{ period: string; year: number; month: number; startDate: string; endDate: string; daysInMonth: number }> = [];
+    const now = new Date();
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      const lastDay = new Date(year, month, 0).getDate();
+      const period = `${year}-${String(month).padStart(2, "0")}`;
+      series.push({
+        period,
+        year,
+        month,
+        startDate: `${period}-01`,
+        endDate: `${period}-${String(lastDay).padStart(2, "0")}`,
+        daysInMonth: lastDay,
+      });
+    }
+
+    // Revenue per month — sum invoice subtotals approved within the
+    // month (excluding cancelled / draft).
+    const revenueRows = await rawQuery<{ period: string; revenue: string }>(
+      `SELECT TO_CHAR(i."createdAt", 'YYYY-MM') AS period,
+              COALESCE(SUM(i.subtotal), 0)::text AS revenue
+         FROM invoices i
+        WHERE i."companyId" = $1
+          AND i."deletedAt" IS NULL
+          AND i.status NOT IN ('draft','cancelled','rejected','returned')
+          AND i."createdAt" >= $2
+        GROUP BY period`,
+      [scope.companyId, series[0].startDate]
+    );
+    const revenueByPeriod = new Map<string, number>();
+    for (const r of revenueRows) revenueByPeriod.set(r.period, Number(r.revenue));
+
+    // AR end-of-month — outstanding (total - paid) for every approved
+    // invoice whose createdAt ≤ end-of-month and either hasn't been
+    // paid yet or was paid AFTER end-of-month. We compute via separate
+    // queries per period for clarity; a single windowed query is
+    // possible but harder to verify.
+    const trend: any[] = [];
+    for (const p of series) {
+      const [arRow] = await rawQuery<{ ar: string }>(
+        `SELECT COALESCE(SUM(i.total - COALESCE(i."paidAmount",0)), 0)::text AS ar
+           FROM invoices i
+          WHERE i."companyId" = $1
+            AND i."deletedAt" IS NULL
+            AND i.status NOT IN ('draft','cancelled','rejected','returned')
+            AND i."createdAt"::date <= $2::date
+            AND (i."paidAt" IS NULL OR i."paidAt"::date > $2::date)`,
+        [scope.companyId, p.endDate]
+      );
+      const arBalance = Number(arRow?.ar ?? 0);
+      const revenue = revenueByPeriod.get(p.period) ?? 0;
+      const dailyRevenue = revenue / p.daysInMonth;
+      const dso = dailyRevenue > 0 ? roundTo2(arBalance / dailyRevenue) : 0;
+      trend.push({
+        period: p.period,
+        endDate: p.endDate,
+        revenue: roundTo2(revenue),
+        arBalance: roundTo2(arBalance),
+        dso,
+      });
+    }
+
+    // Headline: latest DSO + delta vs 3-month avg
+    const latest = trend[trend.length - 1];
+    const last3 = trend.slice(-3);
+    const avg3 = last3.length === 3
+      ? roundTo2(last3.reduce((s, t) => s + t.dso, 0) / 3)
+      : null;
+    const deltaVs3moAvg = avg3 != null && latest ? roundTo2(latest.dso - avg3) : null;
+
+    res.json({
+      months,
+      trend,
+      summary: {
+        latest: latest?.dso ?? 0,
+        avg3mo: avg3,
+        deltaVs3moAvg,
+      },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "DSO trend error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CUSTOMER 360 — ملف عميل شامل
+// One endpoint that hands the frontend everything a sales/finance
+// reviewer needs about a customer: open AR, paid revenue YTD, last
+// payment, oldest unpaid invoice, top buying products, last contact.
+// ─────────────────────────────────────────────────────────────────────────────
+
+financeAlgorithmsRouter.get("/customer-360/:clientId", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const clientId = parseId(req.params.clientId, "clientId");
+
+    const [client] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, name, phone, email, address, "taxNumber", "createdAt"
+         FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [clientId, scope.companyId]
+    );
+    if (!client) throw new NotFoundError("العميل غير موجود");
+
+    const ytdStart = `${new Date().getFullYear()}-01-01`;
+
+    const [summary, oldestUnpaid, lastPayment, recentInvoices, topProducts] = await Promise.all([
+      // AR summary + lifetime revenue.
+      rawQuery<{ openAr: string; ytdRevenue: string; ltdRevenue: string; invoiceCount: string; overdueCount: string }>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN i.status NOT IN ('draft','cancelled','rejected','returned','paid') THEN (i.total - COALESCE(i."paidAmount",0)) ELSE 0 END), 0)::text AS "openAr",
+           COALESCE(SUM(CASE WHEN i.status NOT IN ('draft','cancelled','rejected','returned') AND i."createdAt" >= $3::date THEN i.subtotal ELSE 0 END), 0)::text AS "ytdRevenue",
+           COALESCE(SUM(CASE WHEN i.status NOT IN ('draft','cancelled','rejected','returned') THEN i.subtotal ELSE 0 END), 0)::text AS "ltdRevenue",
+           COUNT(CASE WHEN i.status NOT IN ('draft','cancelled','rejected','returned') THEN 1 END)::text AS "invoiceCount",
+           COUNT(CASE WHEN i.status NOT IN ('draft','cancelled','rejected','returned','paid')
+                       AND i."dueDate" IS NOT NULL
+                       AND i."dueDate" < CURRENT_DATE THEN 1 END)::text AS "overdueCount"
+         FROM invoices i
+        WHERE i."companyId" = $1 AND i."clientId" = $2 AND i."deletedAt" IS NULL`,
+        [scope.companyId, clientId, ytdStart]
+      ),
+      // Oldest unpaid invoice.
+      rawQuery<Record<string, unknown>>(
+        `SELECT id, ref, total, "paidAmount", (total - COALESCE("paidAmount",0)) AS outstanding,
+                "dueDate", (CURRENT_DATE - "dueDate"::date) AS "daysOverdue"
+           FROM invoices
+          WHERE "companyId" = $1 AND "clientId" = $2 AND "deletedAt" IS NULL
+            AND status NOT IN ('draft','cancelled','rejected','returned','paid')
+            AND (total - COALESCE("paidAmount",0)) > 0.009
+            AND "dueDate" IS NOT NULL
+          ORDER BY "dueDate" ASC
+          LIMIT 1`,
+        [scope.companyId, clientId]
+      ),
+      // Last cash receipt — read from journal_entries where ref starts with PAY-.
+      rawQuery<{ ref: string; date: string; amount: string }>(
+        `SELECT je.ref, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0)::text AS amount
+           FROM journal_entries je
+           JOIN journal_lines jl ON jl."journalId" = je.id AND jl."clientId" = $2
+          WHERE je."companyId" = $1
+            AND je."deletedAt" IS NULL
+            AND je.type = 'payment'
+          GROUP BY je.id, je.ref, je."createdAt"
+          ORDER BY je."createdAt" DESC
+          LIMIT 1`,
+        [scope.companyId, clientId]
+      ),
+      // Last 10 invoices (any status except draft).
+      rawQuery<Record<string, unknown>>(
+        `SELECT id, ref, status, total, "paidAmount",
+                (total - COALESCE("paidAmount",0)) AS outstanding,
+                "createdAt", "dueDate", "paidAt"
+           FROM invoices
+          WHERE "companyId" = $1 AND "clientId" = $2 AND "deletedAt" IS NULL
+            AND status NOT IN ('draft')
+          ORDER BY "createdAt" DESC
+          LIMIT 10`,
+        [scope.companyId, clientId]
+      ),
+      // Top 5 products by spend YTD — joins invoice_lines on this client.
+      rawQuery<Record<string, unknown>>(
+        `SELECT il."productId",
+                COUNT(*)::int AS "lineCount",
+                COALESCE(SUM(il.quantity * il."unitPrice"), 0) AS spend,
+                COALESCE(MAX(p.name), 'منتج محذوف') AS name
+           FROM invoice_lines il
+           JOIN invoices i ON i.id = il."invoiceId"
+           LEFT JOIN store_products p ON p.id = il."productId"
+          WHERE i."companyId" = $1 AND i."clientId" = $2 AND i."deletedAt" IS NULL
+            AND i.status NOT IN ('draft','cancelled','rejected','returned')
+            AND i."createdAt" >= $3::date
+            AND il."productId" IS NOT NULL
+          GROUP BY il."productId"
+          ORDER BY spend DESC
+          LIMIT 5`,
+        [scope.companyId, clientId, ytdStart]
+      ).catch(() => [] as Record<string, unknown>[]),
+    ]);
+
+    res.json({
+      client,
+      summary: {
+        openAr: Number(summary[0]?.openAr ?? 0),
+        ytdRevenue: Number(summary[0]?.ytdRevenue ?? 0),
+        ltdRevenue: Number(summary[0]?.ltdRevenue ?? 0),
+        invoiceCount: Number(summary[0]?.invoiceCount ?? 0),
+        overdueCount: Number(summary[0]?.overdueCount ?? 0),
+      },
+      oldestUnpaid: oldestUnpaid[0] ?? null,
+      lastPayment: lastPayment[0] ?? null,
+      recentInvoices,
+      topProducts,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Customer 360 error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AP AGING — تقادم الذمم الدائنة
 // ─────────────────────────────────────────────────────────────────────────────
 

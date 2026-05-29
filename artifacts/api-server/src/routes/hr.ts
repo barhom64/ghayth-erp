@@ -2614,8 +2614,11 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     // reports possible.
     const assignments = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id AS "assignmentId", ea."employeeId", ea.salary, ea."branchId",
-              ea."departmentId"
+              ea."departmentId",
+              COALESCE(e."isNonResident", false) AS "isNonResident",
+              e."whtRate"
        FROM employee_assignments ea
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
        WHERE ea."companyId" = $1 AND ea.status = 'active'`,
       [scope.companyId]
     );
@@ -2768,7 +2771,17 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       // استخدام الأعلى بين وقت الحضور ومبلغ طلبات OT المعتمدة (لتجنب الاحتساب المزدوج)
       const overtime = Math.max(attendanceOt, hrOtAmount);
 
-      const totalDeductions = lateDeduction + absenceDeduction + violationDeduction + loanDeduction + gosiEmployee;
+      // Saudi WHT on salary remuneration (ZATCA) — applies to non-Saudi
+      // / non-resident employees whose income falls under withholding tax
+      // categories. The rate is per-employee (employees.whtRate, default
+      // 0 if isNonResident=false). Computed on gross + overtime before
+      // GOSI / other deductions, so the employer remits the WHT directly
+      // and the employee's net pay drops by the WHT amount.
+      const isNonResident = Boolean(asn.isNonResident);
+      const whtRate = isNonResident && asn.whtRate != null ? Number(asn.whtRate) / 100 : 0;
+      const whtAmount = whtRate > 0 ? roundTo2((gross + overtime) * whtRate) : 0;
+
+      const totalDeductions = lateDeduction + absenceDeduction + violationDeduction + loanDeduction + gosiEmployee + whtAmount;
       const net = Math.max(0, roundTo2(gross + overtime - totalDeductions));
       totalNet += net;
 
@@ -2777,6 +2790,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         basic, housingAllowance, transportAllowance, gross,
         gosiEmployee, gosiEmployer, lateDeduction, absenceDeduction,
         violationDeduction, loanDeduction, overtime, overtimeHours, net,
+        whtAmount,
         departmentId: asn.departmentId != null ? Number(asn.departmentId) : null,
         branchId: asn.branchId != null ? Number(asn.branchId) : null,
       });
@@ -2799,7 +2813,10 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
 
       if (lines.length > 0) {
         // Single bulk INSERT instead of one round-trip per employee.
-        const COLS_PER_ROW = 16;
+        // whtAmount (migration 233) captured so ZATCA WHT filings can
+        // reproduce per-employee withholding from payroll_lines without
+        // re-running the calc.
+        const COLS_PER_ROW = 17;
         const valuesSql: string[] = [];
         const params: unknown[] = [];
         for (const l of lines) {
@@ -2810,11 +2827,12 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
           params.push(
             newRunId, l.assignmentId, l.employeeId, l.basic, l.housingAllowance, l.transportAllowance,
             l.gross, l.gosiEmployee, l.gosiEmployer, l.lateDeduction, l.absenceDeduction,
-            l.violationDeduction, l.loanDeduction, l.overtime, l.overtimeHours, l.net
+            l.violationDeduction, l.loanDeduction, l.overtime, l.overtimeHours, l.net,
+            l.whtAmount
           );
         }
         await client.query(
-          `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"housingAllowance","transportAllowance","grossSalary",gosi,"gosiEmployer","lateDeduction","absenceDeduction","violationDeduction","loanDeduction","overtime","overtimeHours","netSalary")
+          `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"housingAllowance","transportAllowance","grossSalary",gosi,"gosiEmployer","lateDeduction","absenceDeduction","violationDeduction","loanDeduction","overtime","overtimeHours","netSalary","whtAmount")
            VALUES ${valuesSql.join(",")}`,
           params
         );
@@ -2874,6 +2892,13 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       return newRunId;
     });
 
+    // WHT totals — net pay drops by whtAmount per employee; we recompute
+    // total bank payout net of WHT here so the engine sees the correct
+    // cash CR. The engine writes a separate CR line on the WHT-payable
+    // account (default 2330, configurable via accounting_mappings).
+    const totalWht = roundTo2(lines.reduce((s, l) => s + l.whtAmount, 0));
+    const totalBankPayoutNetOfWht = roundTo2(totalBankPayout - totalWht);
+
     try {
       const { hrEngine } = await import("../lib/engines/index.js");
       await hrEngine.postPayrollRunGL(
@@ -2885,9 +2910,10 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
           totalGross,
           totalOvertime,
           totalGosiEmployer,
-          totalBankPayout,
+          totalBankPayout: totalBankPayoutNetOfWht,
           totalGosiPayable,
           totalOtherDeductions,
+          totalWht,
           // Per-employee breakdown — the engine splits salary + OT +
           // GOSI debit lines per employee with departmentId stamped
           // on each, so payroll cost is dimensional. Liabilities stay
@@ -2902,6 +2928,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
             basic: l.gross,
             overtime: l.overtime,
             gosiEmployer: l.gosiEmployer,
+            whtAmount: l.whtAmount,
           })),
         }
       );
