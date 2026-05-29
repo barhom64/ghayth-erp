@@ -179,7 +179,12 @@ export default function AdminDigitalSignaturePage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-[10px]">{l.status ?? "—"}</Badge>
+                        {l.signatureRef && (
+                          <Badge variant="outline" className="text-[10px] font-mono">{l.signatureRef}</Badge>
+                        )}
+                        {l.userName && (
+                          <span className="text-muted-foreground text-[10px]">{l.userName}</span>
+                        )}
                         <span className="text-muted-foreground text-[10px]">
                           {l.createdAt ? formatDateAr(l.createdAt) : ""}
                         </span>
