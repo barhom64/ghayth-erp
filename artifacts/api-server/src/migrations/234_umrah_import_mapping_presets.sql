@@ -10,6 +10,12 @@
 -- one preset per (companyId, userId, fileType) tuple as the auto-pick
 -- when the wizard opens a new file.
 -- ============================================================
+--
+-- @rollback: DROP TABLE IF EXISTS umrah_import_mapping_presets;
+--   (Cascades the 3 partial indexes above. Operators lose saved
+--   column-mapping presets; the wizard falls back to the built-in
+--   Arabic dictionary so imports still work, they just require
+--   re-mapping per non-standard layout.)
 
 CREATE TABLE IF NOT EXISTS umrah_import_mapping_presets (
   id            serial PRIMARY KEY,
