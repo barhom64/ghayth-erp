@@ -100,6 +100,16 @@ function parseRoutesIndex() {
     }
     if (depth !== 0) continue;
     const argsBlob = src.slice(startArgs, j - 1);
+    // Skip mounts that rewrite req.url inside an inline middleware — they
+    // alias a single underlying handler, not the whole sub-router. The
+    // /request-catalog mount in routes/index.ts is a real example:
+    //   router.use("/request-catalog", requireModule(...), (req, _r, next) => {
+    //     req.url = "/catalog"; requestsRouter(req, _r, next);
+    //   });
+    // Treating this mount as a full prefix for requestsRouter inflates
+    // the unused list with phantom routes (/request-catalog/types etc.)
+    // that never actually resolve.
+    if (/\breq\.url\s*=/.test(argsBlob)) { i = j; continue; }
     // Pull the leading string-literal path (if any).
     const pathMatch = argsBlob.match(/^\s*["']([^"']*)["']\s*,?\s*/);
     const mountPath = pathMatch ? pathMatch[1] : "";

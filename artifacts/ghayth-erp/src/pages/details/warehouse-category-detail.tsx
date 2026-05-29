@@ -9,11 +9,13 @@ import {
 } from "@workspace/entity-kit";
 import { FormGrid, FormTextField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, FolderTree } from "lucide-react";
+import { Edit, FolderTree, Trash2 } from "lucide-react";
+import { useLocation } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { PrintButton } from "@/components/shared/print-button";
@@ -33,6 +35,8 @@ export default function WarehouseCategoryDetail() {
   const [, params] = useRoute("/warehouse/categories/:id");
   const id = params?.id ? Number(params.id) : null;
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [, navigate] = useLocation();
   const { extraTabs, hideTabs } = useRegistryTabs("warehouse-category", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -169,9 +173,29 @@ export default function WarehouseCategoryDetail() {
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={!category}>
             <Edit className="h-4 w-4 ms-1" /> تعديل
           </GuardedButton>
+          <GuardedButton
+            perm="warehouse:delete"
+            variant="outline"
+            size="sm"
+            className="text-status-error-foreground"
+            onClick={() => setDeleteOpen(true)}
+            disabled={!category}
+          >
+            <Trash2 className="h-4 w-4 ms-1" /> حذف
+          </GuardedButton>
         </div>
       }
     />
+    {category && id && (
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        entity={{ type: "warehouse-category", id, name: category.name ?? `#${id}` }}
+        deletePath={`/warehouse/categories/${id}`}
+        invalidateKeys={[["warehouse-categories"]]}
+        onDeleted={() => navigate("/warehouse/categories")}
+      />
+    )}
     {category && id && (
       <EntityEditDialog<CategoryEditForm>
         open={editOpen}

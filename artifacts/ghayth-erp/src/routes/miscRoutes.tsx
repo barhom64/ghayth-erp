@@ -60,6 +60,7 @@ const ExecDashboard = lazy(() => import("@/pages/exec-dashboard"));
 const ProjectGantt = lazy(() => import("@/pages/projects/gantt"));
 const ProjectRisks = lazy(() => import("@/pages/projects/risks"));
 const InventoryCount = lazy(() => import("@/pages/warehouse/inventory-count"));
+const WarehouseAdvanced = lazy(() => import("@/pages/warehouse-advanced"));
 const Obligations = lazy(() => import("@/pages/obligations"));
 const CalendarPage = lazy(() => import("@/pages/calendar"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
@@ -112,6 +113,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/warehouse/suppliers/:id", component: WarehouseSupplierDetail, module: "warehouse" },
   { path: "/warehouse/movements", component: Warehouse, module: "warehouse" },
   { path: "/warehouse/categories", component: Warehouse, module: "warehouse" },
+  { path: "/warehouse/advanced", component: WarehouseAdvanced, module: "warehouse" },
   { path: "/warehouse/suppliers", component: Warehouse, module: "warehouse" },
   { path: "/warehouse/inventory-count", component: InventoryCount, module: "warehouse" },
   { path: "/support/create", component: SupportCreate, module: "support" },
