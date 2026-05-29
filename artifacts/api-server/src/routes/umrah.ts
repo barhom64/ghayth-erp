@@ -626,19 +626,34 @@ router.delete("/packages/:id", authorize({ feature: "umrah", action: "delete" })
 router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId, status, agentId, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
+    const { seasonId, status, agentId, groupId, nationality, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
     let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND p.status=$${params.length}`; }
     if (agentId) { params.push(agentId); where += ` AND p."agentId"=$${params.length}`; }
+    if (groupId) { params.push(groupId); where += ` AND p."groupId"=$${params.length}`; }
+    // Nationality is plaintext and operators routinely filter manifests
+    // by country (visa quotas, hotel block bookings). ILIKE — not equality
+    // — because the import file may write "SA" or "SAUDI" or "Saudi
+    // Arabia" depending on the source.
+    if (nationality) { params.push(`%${nationality}%`); where += ` AND p.nationality ILIKE $${params.length}`; }
     if (search) {
+      // Search hits four columns:
+      //   - fullName              (plaintext, ILIKE)
+      //   - nuskNumber            (plaintext, ILIKE) — the OPERATOR's
+      //                            primary identifier; NUSK + MOFA both
+      //                            print this on every document
+      //   - passportNumber_hash   (encrypted column; lookup via blind index)
+      //   - visaNumber_hash       (same)
+      // The single search box accepts any of these so operators don't
+      // need to pre-decide which field they're searching by.
       const searchHash = blindIndex(String(search));
       params.push(`%${search}%`);
       const likePh = params.length;
       params.push(searchHash);
       const hashPh = params.length;
-      where += ` AND (p."fullName" ILIKE $${likePh} OR p."passportNumber_hash" = $${hashPh} OR p."visaNumber_hash" = $${hashPh})`;
+      where += ` AND (p."fullName" ILIKE $${likePh} OR p."nuskNumber" ILIKE $${likePh} OR p."passportNumber_hash" = $${hashPh} OR p."visaNumber_hash" = $${hashPh})`;
     }
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Math.max(Number(limit) || 20, 1), 100);
