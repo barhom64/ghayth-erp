@@ -36,6 +36,10 @@ import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 
 const STEP_IMPACTS: Record<string, { icon: string; title: string; description: string; severity: "info" | "warning" | "danger" | "success" }> = {
@@ -405,6 +409,7 @@ export default function LegalCaseDetail() {
   const [showAddCost, setShowAddCost] = useState(false);
   const [viewCorrespondenceId, setViewCorrespondenceId] = useState<number | null>(null);
   const [manualRiskInput, setManualRiskInput] = useState("");
+  const [confirmCloseCase, setConfirmCloseCase] = useState(false);
 
   // GET /legal/correspondence/:id — full correspondence row including
   // its parent caseNumber/caseTitle. Used when the user clicks a row in
@@ -500,7 +505,10 @@ export default function LegalCaseDetail() {
   };
 
   const handleClose = () => {
-    if (!window.confirm("سيتم إغلاق القضية. متابعة؟")) return;
+    setConfirmCloseCase(true);
+  };
+  const confirmedClose = () => {
+    setConfirmCloseCase(false);
     closeMut.mutate({});
   };
 
@@ -903,6 +911,20 @@ export default function LegalCaseDetail() {
       extraTabs={[...extraTabs, ...registryExtraTabs]}
       hideTabs={registryHideTabs}
     />
+    <AlertDialog open={confirmCloseCase} onOpenChange={(o) => !o && setConfirmCloseCase(false)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>تأكيد إغلاق القضية</AlertDialogTitle>
+          <AlertDialogDescription>
+            سيتم إغلاق القضية وتشغيل side-effects (إشعار المحامي، إغلاق المخاطر، تسجيل audit row). متابعة؟
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>إلغاء</AlertDialogCancel>
+          <AlertDialogAction onClick={confirmedClose}>تأكيد الإغلاق</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

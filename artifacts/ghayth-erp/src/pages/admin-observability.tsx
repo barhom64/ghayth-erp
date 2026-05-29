@@ -20,6 +20,10 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { useState } from "react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { apiFetch, useApiQuery } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -193,6 +197,8 @@ export default function AdminObservability() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [busyId, setBusyId] = useState<number | null>(null);
+  // Confirmation state for the DLQ "resolve" action — replaces window.confirm.
+  const [confirmResolveId, setConfirmResolveId] = useState<number | null>(null);
 
   const refreshDlq = () => {
     refetchDlq();
@@ -213,8 +219,10 @@ export default function AdminObservability() {
     }
   };
 
-  const resolveEntry = async (id: number) => {
-    if (!window.confirm("تأكيد إزالة الحدث من قائمة الفشل بدون إعادة محاولة؟")) return;
+  const confirmedResolveEntry = async () => {
+    const id = confirmResolveId;
+    if (!id) return;
+    setConfirmResolveId(null);
     setBusyId(id);
     try {
       await apiFetch(`/admin/governance/event-dlq/${id}`, { method: "DELETE" });
@@ -588,7 +596,7 @@ export default function AdminObservability() {
                           variant="ghost"
                           size="sm"
                           className="h-7 px-2 text-status-error-foreground"
-                          onClick={() => resolveEntry(r.id)}
+                          onClick={() => setConfirmResolveId(r.id)}
                           disabled={busyId === r.id}
                           title="إزالة من القائمة"
                         >
@@ -760,6 +768,20 @@ export default function AdminObservability() {
           )}
         </div>
       </PageStateWrapper>
+      <AlertDialog open={confirmResolveId !== null} onOpenChange={(o) => !o && setConfirmResolveId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد إزالة الحدث</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم تعليم الحدث كمحلول وحذفه من قائمة الفشل بدون إعادة محاولة. متابعة؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmedResolveEntry}>تأكيد الإزالة</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }
