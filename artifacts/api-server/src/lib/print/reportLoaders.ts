@@ -1041,7 +1041,7 @@ export async function loadCustomerStatement(
     : "";
 
   const [client] = await rawQuery<Record<string, unknown>>(
-    `SELECT id, name, phone, email, "vatNumber" FROM clients
+    `SELECT id, name, phone, email, "taxNumber" AS "vatNumber" FROM clients
      WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
     [clientId, companyId],
   );
