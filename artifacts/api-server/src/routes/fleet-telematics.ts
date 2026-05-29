@@ -957,6 +957,43 @@ router.post(
   },
 );
 
+// Dismiss is the "false positive / not actionable" escape hatch — the
+// schema's status CHECK already allows 'dismissed' but no endpoint
+// wrote it, leaving operators stuck choosing between acknowledge
+// (implies "I'll act on this") and resolve (implies "fixed"). A
+// dismissed alert is treated as a no-op for the driver scorecard
+// (filter applied in the leaderboard + per-driver queries below).
+router.post(
+  "/telematics/ai-alerts/:id/dismiss",
+  authorize({ feature: "fleet.telematics.ai_alerts", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id);
+      const body = zodParse(ackAlertSchema.safeParse(req.body));
+      const { affectedRows } = await rawExecute(
+        `UPDATE fleet_ai_alerts
+            SET status = 'dismissed',
+                "resolvedBy" = $1,
+                "resolvedAt" = NOW(),
+                "resolutionNote" = COALESCE($2, "resolutionNote")
+          WHERE id = $3 AND "companyId" = ANY($4::int[])`,
+        [scope.userId, body.resolutionNote ?? null, id, scope.allowedCompanies],
+      );
+      if (affectedRows === 0) throw new NotFoundError("التنبيه غير موجود");
+      void auditMutation(req, {
+        entity: "fleet_ai_alerts",
+        action: "dismiss",
+        entityId: id,
+        reason: body.resolutionNote,
+      });
+      res.json({ data: { id, status: "dismissed" } });
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics");
+    }
+  },
+);
+
 // ─────────────────────────────────────────────────────────────────────────
 // Sync endpoints — pull from CMSV6 + persist
 // ─────────────────────────────────────────────────────────────────────────
@@ -2435,6 +2472,7 @@ router.get(
              AND a."companyId" = ANY($1::int[])
              AND a."occurredAt" >= $2
              AND a."occurredAt" <= $3
+             AND a.status <> 'dismissed'
           WHERE d."companyId" = ANY($1::int[])
           GROUP BY d.id, d.name, d."licenseNumber"
           ORDER BY "safetyScore" ASC, "totalAlerts" DESC
@@ -2504,11 +2542,14 @@ router.get(
           WHERE "driverId" = $1
             AND "companyId" = ANY($2::int[])
             AND "occurredAt" >= $3
-            AND "occurredAt" <= $4`,
+            AND "occurredAt" <= $4
+            AND status <> 'dismissed'`,
         [driverId, scope.allowedCompanies, from, to],
       );
 
       // Top alert types so the operator sees the dominant failure modes.
+      // Dismissed alerts are false positives by definition — excluded
+      // so they don't poison the "top failure modes" ranking.
       const topTypes = await rawQuery(
         `SELECT "alertType", category, COUNT(*)::int AS count
            FROM fleet_ai_alerts
@@ -2516,6 +2557,7 @@ router.get(
             AND "companyId" = ANY($2::int[])
             AND "occurredAt" >= $3
             AND "occurredAt" <= $4
+            AND status <> 'dismissed'
           GROUP BY "alertType", category
           ORDER BY count DESC
           LIMIT 10`,
@@ -2636,13 +2678,38 @@ export async function persistPosition(
       JSON.stringify(p.rawPayload ?? {}),
     ],
   );
-  // Touch the device's last-known timestamps.
+  // Touch the device's last-known timestamps. Split into two updates
+  // so we can detect the offline→online transition atomically (the
+  // first UPDATE only fires when status was actually `offline`, so its
+  // affectedRows reliably tells us "this position just brought the
+  // device back online"). Without the split, the back-online edge is
+  // invisible to the eventCatalog `fleet.telematics.device.online`
+  // consumer (heartbeat fires the offline edge, but nothing fires the
+  // online edge — leaving the dashboards stuck on red).
+  const flip = await rawExecute(
+    `UPDATE fleet_telematics_devices
+        SET status = 'online'
+      WHERE id = $1 AND status = 'offline'`,
+    [device.id],
+  );
   await rawExecute(
     `UPDATE fleet_telematics_devices
-        SET "lastPositionAt" = $1, "lastOnlineAt" = NOW(), status = 'online'
+        SET "lastPositionAt" = $1, "lastOnlineAt" = NOW()
       WHERE id = $2`,
     [p.occurredAt, device.id],
   );
+  if ((flip.affectedRows ?? 0) > 0) {
+    void emitEvent({
+      companyId,
+      branchId: branchId ?? undefined,
+      userId: null,
+      action: "fleet.telematics.device.online",
+      entity: "fleet_telematics_devices",
+      entityId: device.id,
+      details: `جهاز #${device.id} عاد للاتصال`,
+      after: { deviceId: device.id, vehicleId: device.vehicleId, lastSeenAt: p.occurredAt.toISOString() },
+    });
+  }
   if (affectedRows > 0) {
     const now = Date.now();
     const last = lastPositionEventAt.get(device.id) ?? 0;

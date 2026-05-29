@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Package, Calendar, Receipt, Bus,
   UserCircle, AlertTriangle, Upload, UserPlus, Tag, Briefcase, ShieldAlert,
-  ClipboardList, Scale, Layers, Paperclip,
+  ClipboardList, Scale, Layers, Paperclip, Sparkles,
 } from "lucide-react";
 
 const TABS = [
@@ -15,6 +15,7 @@ const TABS = [
   { href: "/umrah/agents", label: "الوكلاء", icon: UserCircle, match: ["/umrah/agents"] },
   { href: "/umrah/sub-agents", label: "الوكلاء الفرعيون", icon: UserPlus, match: ["/umrah/sub-agents"] },
   { href: "/umrah/pricing", label: "التسعير", icon: Tag, match: ["/umrah/pricing"] },
+  { href: "/umrah/sales-wizard", label: "معالج المبيعات", icon: Sparkles, match: ["/umrah/sales-wizard"] },
   { href: "/umrah/invoices", label: "الفواتير", icon: Receipt, match: ["/umrah/invoices"] },
   { href: "/umrah/violations", label: "المخالفات", icon: ShieldAlert, match: ["/umrah/violations"] },
   { href: "/umrah/commission-plans", label: "العمولات", icon: Briefcase, match: ["/umrah/commission-plans", "/umrah/commission-calculations"] },
