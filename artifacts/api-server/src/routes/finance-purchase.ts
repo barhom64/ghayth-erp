@@ -32,7 +32,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
+import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
 import { z } from "zod";
 
 export const purchaseRouter = Router();
@@ -950,9 +950,37 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // SELECT … FOR UPDATE inside its own transaction (joining ours via
     // SAVEPOINT) to serialise allocators, so concurrent receipts on the
     // same PO queue on the counter row instead of racing.
+    // Pre-INSERT idempotency: hash the receipt date + per-line digest
+    // (poItemId × qty) so a retried request from the SAME operator on
+    // the SAME PO with the SAME lines collapses into the existing GRN
+    // row via the partial UNIQUE index on goods_receipts.sourceKey
+    // (migration 231). Different qty / different lines → different
+    // hash → new GRN, which is the desired behaviour (a partial
+    // top-up receipt). Including X-Idempotency-Token in the hash too
+    // lets clients force a new GRN by rotating the token.
+    const grnLineDigest = inputLines
+      .map((l) => `${l.poItemId}:${l.receivedQty.toFixed(4)}`)
+      .sort()
+      .join("|");
+    const grnIdempotencyToken = requestIdempotencyToken(req);
+    const grnSourceKey = `finance:grn:${id}:${receiptDate}:${grnIdempotencyToken}:${grnLineDigest}`;
+
+    // Check for a pre-existing GRN with this sourceKey; if present,
+    // short-circuit to the existing row.
+    const [existingGrn] = await rawQuery<{ id: number; ref: string }>(
+      `SELECT id, ref FROM goods_receipts
+        WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, grnSourceKey]
+    );
+
     let grnId: number | undefined;
     let grnRef!: string;
-    {
+    if (existingGrn) {
+      grnId = existingGrn.id;
+      grnRef = existingGrn.ref;
+      markIdempotencyReplay(req, res, true);
+    } else {
       try {
         grnId = await withTransaction(async (client) => {
           const issuedGrn = await issueNumber({
@@ -967,9 +995,9 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
           });
           grnRef = issuedGrn.number;
           const grnRes = await client.query(
-            `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes)
-             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-            [scope.companyId, scope.branchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null]
+            `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes,"sourceKey")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+            [scope.companyId, scope.branchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null, grnSourceKey]
           );
           const newGrnId = grnRes.rows[0].id;
           await client.query(
@@ -1687,12 +1715,36 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
       });
       runRef = issuedRun.number;
     }
+
+    // Pre-INSERT idempotency for payment_runs (migration 231 adds the
+    // sourceKey column + partial unique index). The key is the
+    // (idempotency-token, payDate, poIds-sorted-digest), so a retried
+    // request with the same token + same selection collapses into the
+    // existing run row. Different selection / different date → new
+    // sourceKey → new run, which is what the operator wants when
+    // genuinely executing a second batch.
+    const runIdempotencyToken = requestIdempotencyToken(req);
+    const runPoDigest = [...pos].map((p) => p.id).sort().join(",");
+    const runSourceKey = `finance:payment_run:${payDate}:${runIdempotencyToken}:${runPoDigest}`;
+
+    const [existingRun] = await rawQuery<{ id: number; ref: string }>(
+      `SELECT id, ref FROM payment_runs
+        WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, runSourceKey]
+    ).catch(() => [] as { id: number; ref: string }[]);
+
+    if (existingRun) {
+      runId = existingRun.id;
+      runRef = existingRun.ref;
+      markIdempotencyReplay(req, res, true);
+    } else {
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
-          `INSERT INTO payment_runs ("companyId","branchId",ref,"paymentDate",method,"bankAccount","totalAmount","poCount","createdBy",status)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'executed') RETURNING id`,
-          [scope.companyId, scope.branchId, runRef, payDate, method, bankAccount ?? null, totalPayment, pos.length, scope.activeAssignmentId]
+          `INSERT INTO payment_runs ("companyId","branchId",ref,"paymentDate",method,"bankAccount","totalAmount","poCount","createdBy",status,"sourceKey")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'executed',$10) RETURNING id`,
+          [scope.companyId, scope.branchId, runRef, payDate, method, bankAccount ?? null, totalPayment, pos.length, scope.activeAssignmentId, runSourceKey]
         );
         runId = ins.rows[0].id;
       } catch (e: any) {
@@ -1723,9 +1775,9 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
              )`
           );
           const ins2 = await client.query(
-            `INSERT INTO payment_runs ("companyId","branchId",ref,"paymentDate",method,"bankAccount","totalAmount","poCount","createdBy",status)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'executed') RETURNING id`,
-            [scope.companyId, scope.branchId, runRef, payDate, method, bankAccount ?? null, totalPayment, pos.length, scope.activeAssignmentId]
+            `INSERT INTO payment_runs ("companyId","branchId",ref,"paymentDate",method,"bankAccount","totalAmount","poCount","createdBy",status,"sourceKey")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'executed',$10) RETURNING id`,
+            [scope.companyId, scope.branchId, runRef, payDate, method, bankAccount ?? null, totalPayment, pos.length, scope.activeAssignmentId, runSourceKey]
           );
           runId = ins2.rows[0].id;
         } else {
@@ -1746,6 +1798,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
         );
       }
     });
+    }
 
     // Mark each PO as paid via the lifecycle engine (outside the
     // payment_runs transaction so each gets its own audit/event trail).
