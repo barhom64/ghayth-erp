@@ -24,8 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Link } from "wouter";
-import { Plus, Pencil, Trash2, FileText, X, ScrollText, Repeat } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, X } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 /**
@@ -196,25 +195,13 @@ export default function JournalTemplatesPage() {
       subtitle="تعريف الحسابات الافتراضية لكل نوع عملية — تختصر تعبئة القيود اليدوية المتكررة"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "قوالب القيود" }]}
       actions={
-        <>
-          <Link href="/finance/journal">
-            <Button variant="outline" size="sm">
-              <ScrollText className="h-4 w-4 me-2" />القيود اليومية
-            </Button>
-          </Link>
-          <Link href="/finance/recurring-journals">
-            <Button variant="outline" size="sm">
-              <Repeat className="h-4 w-4 me-2" />القيود الدورية
-            </Button>
-          </Link>
-          <GuardedButton
-            perm="finance.accounting_engine:create"
-            onClick={() => setCreating(true)}
-            className="gap-1.5"
-          >
-            <Plus className="h-4 w-4" /> قالب جديد
-          </GuardedButton>
-        </>
+        <GuardedButton
+          perm="finance.accounting_engine:create"
+          onClick={() => setCreating(true)}
+          className="gap-1.5"
+        >
+          <Plus className="h-4 w-4" /> قالب جديد
+        </GuardedButton>
       }
     >
       <FinanceTabsNav />
@@ -279,11 +266,17 @@ function TemplateDialog({
   initial: JournalTemplate | null;
   onSaved: () => void;
 }) {
-  // `initial` (the row from the list) already includes the template
-  // lines — the list endpoint joins journal_entry_template_lines onto
-  // each row. The backend doesn't expose a GET /:id endpoint and a
-  // previous code path was hitting that non-existent route (the audit
-  // surfaced it as a method-mismatch). Hydrate directly from `initial`.
+  // On edit, we need the full template *with* lines — the list
+  // response only carries the header row. Fetch the detail when the
+  // dialog opens for editing. The endpoint is GET
+  // /finance/journal-templates/:id — although the static audit
+  // tagged it as unused, this fetch wires it up (it's a real
+  // backend endpoint, see accounting-engine.ts).
+  const detailQ = useApiQuery<{ data: JournalTemplate & { lines: JournalTemplateLine[] } }>(
+    ["finance-journal-template-detail", String(initial?.id ?? 0)],
+    initial ? `/finance/journal-templates/${initial.id}` : "",
+    !!initial,
+  );
 
   const createMut = useApiMutation<JournalTemplate, TemplateForm>(
     "/finance/journal-templates",
@@ -298,22 +291,35 @@ function TemplateDialog({
     { successMessage: "تم تحديث القالب" },
   );
 
-  const defaults: TemplateForm = initial
-    ? {
-        name: initial.name,
-        operationType: initial.operationType,
-        description: initial.description ?? "",
-        activityType: initial.activityType ?? "",
-        lines:
-          initial.lines && initial.lines.length > 0
-            ? initial.lines.map((l) => ({
-                accountCode: l.accountCode ?? "",
-                lineType: (l.lineType as "debit" | "credit") ?? "debit",
-                description: l.description ?? "",
-              }))
-            : [{ accountCode: "", lineType: "debit", description: "" }],
-      }
-    : EMPTY_DEFAULTS;
+  // For edit, hydrate from the fetched detail (which contains lines)
+  // when it arrives; before then, render with header-only defaults so
+  // the dialog can still open instantly.
+  const detail = detailQ.data?.data ?? null;
+  const defaults: TemplateForm =
+    initial && detail
+      ? {
+          name: detail.name,
+          operationType: detail.operationType,
+          description: detail.description ?? "",
+          activityType: detail.activityType ?? "",
+          lines:
+            detail.lines && detail.lines.length > 0
+              ? detail.lines.map((l) => ({
+                  accountCode: l.accountCode ?? "",
+                  lineType: (l.lineType as "debit" | "credit") ?? "debit",
+                  description: l.description ?? "",
+                }))
+              : [{ accountCode: "", lineType: "debit", description: "" }],
+        }
+      : initial
+      ? {
+          name: initial.name,
+          operationType: initial.operationType,
+          description: initial.description ?? "",
+          activityType: initial.activityType ?? "",
+          lines: [{ accountCode: "", lineType: "debit", description: "" }],
+        }
+      : EMPTY_DEFAULTS;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -327,7 +333,7 @@ function TemplateDialog({
         <FormShell
           // Remount on each `initial` switch so defaults re-seed when
           // the detail response lands.
-          key={`${initial?.id ?? "new"}`}
+          key={`${initial?.id ?? "new"}-${detail ? "loaded" : "fresh"}`}
           schema={templateSchema}
           defaultValues={defaults}
           submitLabel={mode === "create" ? "إنشاء" : "حفظ"}

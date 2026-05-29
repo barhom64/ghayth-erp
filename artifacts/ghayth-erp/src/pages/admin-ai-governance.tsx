@@ -116,6 +116,19 @@ interface EvaluationRow {
   completedAt: string | null;
 }
 
+interface EvaluationResultRow {
+  id: number;
+  caseName: string | null;
+  status: string;
+  passed: boolean | null;
+  expectedContains: string | null;
+  actualOutput: string | null;
+  tokens: number;
+  costUsd: number;
+  durationMs: number;
+  errorMessage: string | null;
+}
+
 interface SimulateResult {
   promptSlug: string;
   output: string;
@@ -710,6 +723,7 @@ function NewPromptDialog({ open, onClose, onSubmit, isSubmitting }: {
 function ViewPromptDialog({ promptId, onClose }: {
   promptId: number | null; onClose: () => void;
 }) {
+  const qc = useQueryClient();
   const { data: prompt } = useApiQuery<PromptDetail>(
     ["ai-governance-prompt", String(promptId ?? 0)],
     promptId ? `/admin/ai-governance/prompts/${promptId}` : null,
@@ -721,6 +735,43 @@ function ViewPromptDialog({ promptId, onClose }: {
     { enabled: !!promptId },
   );
   const reviews = reviewsResp?.data ?? [];
+
+  // PATCH /admin/ai-governance/prompts/:id — edit draft body. Only
+  // visible when the prompt is still a draft; once submitted for review
+  // the server rejects edits.
+  const [editing, setEditing] = useState(false);
+  const [draftSystem, setDraftSystem] = useState("");
+  const [draftUser, setDraftUser] = useState("");
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftDesc, setDraftDesc] = useState("");
+  const startEdit = () => {
+    if (!prompt) return;
+    setDraftSystem(prompt.systemPrompt ?? "");
+    setDraftUser(prompt.userTemplate ?? "");
+    setDraftTitle(prompt.title ?? "");
+    setDraftDesc(prompt.description ?? "");
+    setEditing(true);
+  };
+  const editMut = useMutation({
+    mutationFn: (b: Record<string, unknown>) =>
+      apiFetch(`/admin/ai-governance/prompts/${promptId}`, { method: "PATCH", body: JSON.stringify(b) }),
+    onSuccess: () => {
+      toast({ title: "تم تحديث المسوّدة" });
+      setEditing(false);
+      qc.invalidateQueries({ queryKey: ["ai-governance-prompt", String(promptId ?? 0)] });
+      qc.invalidateQueries({ queryKey: ["ai-governance-prompts"] });
+    },
+    onError: (e: Error) => toast({ title: "فشل التحديث", description: e.message, variant: "destructive" }),
+  });
+  const submitEdit = () => {
+    if (!draftSystem.trim() || !draftTitle.trim()) return;
+    editMut.mutate({
+      title: draftTitle,
+      description: draftDesc || null,
+      systemPrompt: draftSystem,
+      userTemplate: draftUser || null,
+    });
+  };
 
   return (
     <Dialog open={!!promptId} onOpenChange={(v) => !v && onClose()}>
@@ -739,25 +790,62 @@ function ViewPromptDialog({ promptId, onClose }: {
         </DialogHeader>
         {prompt && (
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-            {prompt.description && (
-              <div>
-                <Label className="text-xs text-muted-foreground">الوصف</Label>
-                <p className="text-sm">{prompt.description}</p>
-              </div>
-            )}
-            <div>
-              <Label className="text-xs text-muted-foreground">System Prompt</Label>
-              <pre className="bg-surface-subtle rounded p-3 text-xs font-mono whitespace-pre-wrap break-words">
-                {prompt.systemPrompt}
-              </pre>
-            </div>
-            {prompt.userTemplate && (
-              <div>
-                <Label className="text-xs text-muted-foreground">User Template</Label>
-                <pre className="bg-surface-subtle rounded p-3 text-xs font-mono whitespace-pre-wrap break-words">
-                  {prompt.userTemplate}
-                </pre>
-              </div>
+            {editing ? (
+              <>
+                <div>
+                  <Label className="text-xs">العنوان *</Label>
+                  <input value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)}
+                    className="w-full h-8 px-2 text-sm border rounded" />
+                </div>
+                <div>
+                  <Label className="text-xs">الوصف</Label>
+                  <Textarea value={draftDesc} onChange={(e) => setDraftDesc(e.target.value)} rows={2} />
+                </div>
+                <div>
+                  <Label className="text-xs">System Prompt *</Label>
+                  <Textarea value={draftSystem} onChange={(e) => setDraftSystem(e.target.value)} rows={8}
+                    className="font-mono text-xs" />
+                </div>
+                <div>
+                  <Label className="text-xs">User Template</Label>
+                  <Textarea value={draftUser} onChange={(e) => setDraftUser(e.target.value)} rows={4}
+                    className="font-mono text-xs" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button onClick={submitEdit} disabled={editMut.isPending || !draftSystem.trim() || !draftTitle.trim()}>
+                    حفظ التعديل
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditing(false)}>إلغاء</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {prompt.description && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">الوصف</Label>
+                    <p className="text-sm">{prompt.description}</p>
+                  </div>
+                )}
+                <div>
+                  <Label className="text-xs text-muted-foreground">System Prompt</Label>
+                  <pre className="bg-surface-subtle rounded p-3 text-xs font-mono whitespace-pre-wrap break-words">
+                    {prompt.systemPrompt}
+                  </pre>
+                </div>
+                {prompt.userTemplate && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">User Template</Label>
+                    <pre className="bg-surface-subtle rounded p-3 text-xs font-mono whitespace-pre-wrap break-words">
+                      {prompt.userTemplate}
+                    </pre>
+                  </div>
+                )}
+                {prompt.status === "draft" && (
+                  <Button variant="outline" size="sm" onClick={startEdit}>
+                    تعديل المسوّدة
+                  </Button>
+                )}
+              </>
             )}
             {reviews.length > 0 && (
               <div>
@@ -992,24 +1080,7 @@ function EvaluatePromptDialog({ prompt, onClose }: {
               <Label className="text-sm mb-2 block">آخر تقييمات ({evals.length})</Label>
               <div className="space-y-1">
                 {evals.slice(0, 10).map((e) => (
-                  <div key={e.id} className={cn(
-                    "text-xs p-2 rounded border",
-                    e.failedCases > 0 ? "bg-status-error-surface/40 border-status-error-surface" :
-                    e.skippedCases > 0 ? "bg-status-warning-surface/40 border-status-warning-surface" :
-                    "bg-status-success-surface border-status-success-surface",
-                  )}>
-                    <div className="flex items-center justify-between">
-                      <span>
-                        <Badge variant="outline" className="text-[10px]">v{e.promptVersion}</Badge>
-                        <span className="ms-2">{e.passedCases}/{e.totalCases} نجحت</span>
-                        {e.failedCases > 0 && <span className="ms-2 text-status-error-foreground">{e.failedCases} فشلت</span>}
-                        {e.skippedCases > 0 && <span className="ms-2 text-status-warning-foreground">{e.skippedCases} تخطّت</span>}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        ${e.totalCostUsd.toFixed(4)} · {e.totalTokens} tok · {e.durationMs}ms · {formatDateAr(e.startedAt)}
-                      </span>
-                    </div>
-                  </div>
+                  <EvaluationRunRow key={e.id} run={e} />
                 ))}
               </div>
             </div>
@@ -1028,6 +1099,69 @@ function EvaluatePromptDialog({ prompt, onClose }: {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Expandable evaluation run summary — click to fetch per-case results
+// from /admin/ai-governance/evaluations/:id/results. Lazy so the
+// dialog stays fast when 50 runs exist but only one is interesting.
+function EvaluationRunRow({ run }: { run: EvaluationRow }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: resultsResp } = useApiQuery<{ data: EvaluationResultRow[] }>(
+    ["ai-eval-results", String(run.id)],
+    expanded ? `/admin/ai-governance/evaluations/${run.id}/results` : null,
+    { enabled: expanded },
+  );
+  const results: EvaluationResultRow[] = resultsResp?.data ?? [];
+  return (
+    <div className={cn(
+      "text-xs rounded border",
+      run.failedCases > 0 ? "bg-status-error-surface/40 border-status-error-surface" :
+      run.skippedCases > 0 ? "bg-status-warning-surface/40 border-status-warning-surface" :
+      "bg-status-success-surface border-status-success-surface",
+    )}>
+      <button
+        type="button"
+        className="w-full text-start p-2 cursor-pointer hover:bg-black/5"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="flex items-center justify-between">
+          <span>
+            <Badge variant="outline" className="text-[10px]">v{run.promptVersion}</Badge>
+            <span className="ms-2">{run.passedCases}/{run.totalCases} نجحت</span>
+            {run.failedCases > 0 && <span className="ms-2 text-status-error-foreground">{run.failedCases} فشلت</span>}
+            {run.skippedCases > 0 && <span className="ms-2 text-status-warning-foreground">{run.skippedCases} تخطّت</span>}
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            ${run.totalCostUsd.toFixed(4)} · {run.totalTokens} tok · {run.durationMs}ms · {formatDateAr(run.startedAt)}
+          </span>
+        </div>
+      </button>
+      {expanded && results.length > 0 && (
+        <div className="border-t bg-white px-2 py-2 space-y-1">
+          {results.map((r) => (
+            <div key={r.id} className="text-[10px] flex items-start gap-2">
+              <span className={cn(
+                "inline-block px-1.5 py-0.5 rounded font-mono",
+                r.passed ? "bg-status-success-surface text-status-success-foreground" :
+                r.passed === false ? "bg-status-error-surface text-status-error-foreground" :
+                "bg-status-warning-surface text-status-warning-foreground",
+              )}>{r.status}</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">{r.caseName || "—"}</p>
+                {r.errorMessage && <p className="text-status-error-foreground line-clamp-2">{r.errorMessage}</p>}
+                {r.actualOutput && (
+                  <p className="text-muted-foreground line-clamp-1 font-mono">{r.actualOutput.slice(0, 200)}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {expanded && results.length === 0 && (
+        <p className="border-t bg-white p-2 text-[10px] text-muted-foreground">لا توجد نتائج تفصيلية</p>
+      )}
+    </div>
   );
 }
 

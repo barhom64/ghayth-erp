@@ -42,6 +42,18 @@ export default function LeavesCreate() {
   const { data: empData, isLoading: loadingEmp, isError: errorEmp } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const employees = empData?.data || [];
 
+  // GET /hr/public-holidays/check?date=... — server validates the
+  // chosen start date against the public-holiday calendar so the
+  // user sees a warning before submitting a leave that starts on a
+  // gazetted holiday (employer doesn't deduct from balance for those).
+  const [holidayCheckDate, setHolidayCheckDate] = useState("");
+  const holidayCheckQ = useApiQuery<any>(
+    ["public-holiday-check", holidayCheckDate],
+    holidayCheckDate ? `/hr/public-holidays/check?date=${encodeURIComponent(holidayCheckDate)}` : null,
+    { enabled: !!holidayCheckDate },
+  );
+  const holidayCheckResult = holidayCheckQ.data;
+
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
     leaveTypeId: copyLeaveType || "",
     startDate: "",
@@ -156,7 +168,18 @@ export default function LeavesCreate() {
             </FormFieldWrapper>
             <TextAreaField label="السبب" value={form.reason} onChange={(v) => setForm((f) => ({ ...f, reason: v }))} placeholder="سبب طلب الإجازة..." />
             <FormFieldWrapper label="من تاريخ" required error={fieldErrors.startDate}>
-              <DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} />
+              <DatePicker
+                value={form.startDate}
+                onChange={(v) => {
+                  setForm((f) => ({ ...f, startDate: v }));
+                  setHolidayCheckDate(v);
+                }}
+              />
+              {holidayCheckResult?.isHoliday && (
+                <p className="text-xs text-status-warning-foreground mt-1">
+                  ⚠️ {holidayCheckResult.holiday?.name ?? holidayCheckResult.name ?? "هذا اليوم عطلة رسمية"}
+                </p>
+              )}
             </FormFieldWrapper>
             <FormFieldWrapper label="إلى تاريخ" required error={fieldErrors.endDate}>
               <DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} />

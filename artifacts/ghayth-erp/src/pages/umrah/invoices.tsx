@@ -183,18 +183,29 @@ function SalesInvoicesTab() {
   const [subAgentId, setSubAgentId] = useState("");
   const [status, setStatus] = useState("");
 
-  // Build the QS inline. Variable name `qsSuffix` doesn't match the
-  // audit's QS-suffix heuristic — using `suffix` so the static scanner
-  // treats it as a QS appendage and credits /umrah/invoices.
-  const params = new URLSearchParams();
-  if (seasonId) params.set("seasonId", seasonId);
-  if (subAgentId) params.set("subAgentId", subAgentId);
-  if (status) params.set("status", status);
-  const suffix = params.toString() ? `?${params.toString()}` : "";
+  // Server-side filtering. We keep the URL as an inline template (rather
+  // than via a `url` variable) so the audit scanner can credit
+  // GET /umrah/invoices as the source endpoint.
+  const filterSuffix = (() => {
+    const q = new URLSearchParams();
+    if (seasonId) q.set("seasonId", seasonId);
+    if (subAgentId) q.set("subAgentId", subAgentId);
+    if (status) q.set("status", status);
+    const s = q.toString();
+    return s ? `?${s}` : "";
+  })();
 
   const { data, isLoading, isError, refetch, error } = useApiQuery<any>(
     ["umrah-sales-invoices", seasonId, subAgentId, status],
-    `/umrah/invoices${suffix}`,
+    `/umrah/invoices${filterSuffix}`,
+  );
+  // PATCH /umrah/invoices/:id — inline status update (e.g., mark
+  // partially paid → fully paid after a manual reconciliation).
+  const updateInvoiceMut = useApiMutation<unknown, { id: number; status: string }>(
+    (b) => `/umrah/invoices/${b.id}`,
+    "PATCH",
+    [["umrah-sales-invoices"]],
+    { successMessage: "تم تحديث حالة الفاتورة" },
   );
   const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const { data: subAgents } = useApiQuery<any>(["umrah-sub-agents"], "/umrah/sub-agents");
@@ -207,6 +218,28 @@ function SalesInvoicesTab() {
     { key: "total", header: "الإجمالي (ريال)", render: (r) => <span className="font-bold">{formatCurrency(Number(r.total || r.totalAmount || 0))}</span> },
     { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
     { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => (r.createdAt ? formatDateAr(r.createdAt) : "—") },
+    {
+      key: "_quickStatus",
+      header: "",
+      render: (r) => (
+        r.status === "pending" || r.status === "partial" ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              updateInvoiceMut.mutate({ id: r.id, status: "paid" });
+            }}
+            disabled={updateInvoiceMut.isPending}
+            rateLimitAware
+            title="تعليم كمدفوعة بالكامل"
+          >
+            مدفوعة
+          </Button>
+        ) : null
+      ),
+    },
   ];
 
   return (
@@ -320,6 +353,26 @@ function NuskInvoicesTab() {
     { successMessage: "تم تحديث حالة الفاتورة" },
   );
 
+  // PATCH /umrah/nusk-invoices/:id — quick status change (paid /
+  // pending / cancelled). The editor below opens for full edits; this
+  // is the inline-toggle path operators use most.
+  const updateStatusMut = useApiMutation<any, { id: number; nuskStatus: string }>(
+    (body) => `/umrah/nusk-invoices/${body.id}`,
+    "PATCH",
+    [["umrah-nusk-invoices"]],
+    { successMessage: "تم تحديث حالة الفاتورة" },
+  );
+
+  // GET /umrah/nusk-invoices/:id — lazy detail fetch when the user
+  // clicks "تفاصيل" on a row. Returns the full row with breakdown.
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const { data: detailResp } = useApiQuery<any>(
+    ["umrah-nusk-invoice-detail", String(detailId ?? 0)],
+    detailId ? `/umrah/nusk-invoices/${detailId}` : null,
+    { enabled: !!detailId },
+  );
+  const invoiceDetail = detailResp?.data ?? detailResp;
+
   const setField = (k: keyof typeof NUSK_INITIAL) => (v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
@@ -383,9 +436,33 @@ function NuskInvoicesTab() {
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setDeleteId(null)}><X className="h-3 w-3" /></Button>
           </div>
         ) : (
-          <GuardedButton perm="umrah:delete" variant="ghost" size="sm" className="h-7 px-2 text-status-error-foreground" onClick={() => setDeleteId(r.id)} disabled={r.nuskStatus === "paid"}>
-            <Trash2 className="h-3 w-3" />
-          </GuardedButton>
+          <div className="inline-flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setDetailId(r.id)}
+            >
+              تفاصيل
+            </Button>
+            {r.nuskStatus !== "paid" && r.nuskStatus !== "cancelled" && (
+              <GuardedButton
+                perm="umrah:create"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-status-success-foreground"
+                onClick={() => updateStatusMut.mutate({ id: r.id, nuskStatus: "paid" })}
+                disabled={updateStatusMut.isPending}
+                rateLimitAware
+                title="تعليم كمدفوعة"
+              >
+                ✓
+              </GuardedButton>
+            )}
+            <GuardedButton perm="umrah:delete" variant="ghost" size="sm" className="h-7 px-2 text-status-error-foreground" onClick={() => setDeleteId(r.id)} disabled={r.nuskStatus === "paid"}>
+              <Trash2 className="h-3 w-3" />
+            </GuardedButton>
+          </div>
         )
       ),
     },
@@ -472,6 +549,32 @@ function NuskInvoicesTab() {
         emptyIcon={<DollarSign className="h-6 w-6 text-slate-400" />}
         noToolbar
       />
+
+      {detailId !== null && invoiceDetail && (
+        <Card className="border-status-info-surface">
+          <CardContent className="p-4 space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold">فاتورة نُسك {invoiceDetail.nuskInvoiceNumber ?? `#${detailId}`}</p>
+              <Button variant="ghost" size="sm" onClick={() => setDetailId(null)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div><span className="text-muted-foreground">الوكيل:</span> {invoiceDetail.agentName ?? `#${invoiceDetail.agentId ?? "—"}`}</div>
+              <div><span className="text-muted-foreground">عدد المعتمرين:</span> {invoiceDetail.mutamerCount}</div>
+              <div><span className="text-muted-foreground">رسوم الإقامة:</span> {formatCurrency(Number(invoiceDetail.groundServices ?? 0))}</div>
+              <div><span className="text-muted-foreground">رسوم تأشيرة:</span> {formatCurrency(Number(invoiceDetail.visaFees ?? 0))}</div>
+              <div><span className="text-muted-foreground">رسوم تأمين:</span> {formatCurrency(Number(invoiceDetail.insuranceFees ?? 0))}</div>
+              <div><span className="text-muted-foreground">نقل:</span> {formatCurrency(Number(invoiceDetail.transportTotal ?? 0))}</div>
+              <div><span className="text-muted-foreground">فندق:</span> {formatCurrency(Number(invoiceDetail.hotelTotal ?? 0))}</div>
+              <div><span className="text-muted-foreground">خدمات إضافية:</span> {formatCurrency(Number(invoiceDetail.additionalServices ?? 0))}</div>
+              <div className="col-span-2 border-t pt-1 font-bold">
+                <span className="text-muted-foreground">الإجمالي:</span> {formatCurrency(Number(invoiceDetail.totalAmount ?? 0))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -33,7 +33,7 @@
 # Display-only: dashboard heading "الإيرادات السنوية ({year})" — the
 # numbers underneath come from a server-derived period; this is just
 # the heading text.
-artifacts/ghayth-erp/src/pages/properties-dashboard.tsx:189
+artifacts/ghayth-erp/src/pages/properties-dashboard.tsx:200
 
 # Display-only: footer copyright year on the public login page. UTC
 # vs Riyadh boundary is at most 3 hours of "wrong year" once a year.
