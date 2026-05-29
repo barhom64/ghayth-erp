@@ -161,7 +161,7 @@ financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance.h
               e.name AS "closedByName"
        FROM financial_periods fp
        LEFT JOIN employee_assignments ea ON ea.id = fp."closedBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE fp."companyId" = $1 AND fp."deletedAt" IS NULL
        ORDER BY fp."startDate" DESC`,
       [scope.companyId]

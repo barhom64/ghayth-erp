@@ -229,7 +229,7 @@ router.get("/processing-log", authMiddleware, pdplUserLimiter, authorize({ featu
       `SELECT pal.*, ea.role AS "performedByRole", e.name AS "performedByName"
        FROM processing_activities_log pal
        LEFT JOIN employee_assignments ea ON ea.id = pal."performedBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE pal."companyId" = $1
        ORDER BY pal."createdAt" DESC LIMIT 100`,
       [scope.companyId]

@@ -244,7 +244,7 @@ collectionRouter.get("/collection/:invoiceId/history", authorize({ feature: "fin
       `SELECT ics.*, e.name AS "performedByName"
        FROM invoice_collection_stages ics
        LEFT JOIN employee_assignments ea ON ea.id = ics."performedBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE ics."invoiceId" = $${historyScope.nextParamIndex} AND ${historyScope.where}
        ORDER BY ics.id ASC`,
       [...historyScope.params, invoiceId],
