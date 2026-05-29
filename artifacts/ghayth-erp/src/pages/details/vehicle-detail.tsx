@@ -821,6 +821,7 @@ export default function VehicleDetail() {
                     { key: "occurredAt", header: "الوقت", render: (a: any) => <span className="text-xs">{formatDateAr(a.occurredAt)}</span> },
                     { key: "category", header: "الفئة", render: (a: any) => <Badge variant="outline">{a.category}</Badge> },
                     { key: "alertType", header: "التنبيه", render: (a: any) => a.alertType },
+                    { key: "driverName", header: "السائق", render: (a: any) => a.driverName ? <span className="text-xs">{a.driverName}</span> : <span className="text-xs text-muted-foreground">—</span> },
                     { key: "severity", header: "الخطورة", render: (a: any) => <PageStatusBadge status={a.severity || "info"} /> },
                     { key: "status", header: "الحالة", render: (a: any) => <PageStatusBadge status={a.status} /> },
                   ]}

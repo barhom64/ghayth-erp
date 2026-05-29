@@ -805,9 +805,11 @@ router.get(
       const scope = req.scope!;
       const vehicleId = parseId(req.params.vehicleId);
       const rows = await rawQuery(
-        `SELECT * FROM fleet_ai_alerts
-          WHERE "vehicleId" = $1 AND "companyId" = ANY($2::int[])
-          ORDER BY "occurredAt" DESC LIMIT 200`,
+        `SELECT a.*, dr.name AS "driverName"
+           FROM fleet_ai_alerts a
+           LEFT JOIN fleet_drivers dr ON dr.id = a."driverId" AND dr."companyId" = a."companyId" AND dr."deletedAt" IS NULL
+          WHERE a."vehicleId" = $1 AND a."companyId" = ANY($2::int[])
+          ORDER BY a."occurredAt" DESC LIMIT 200`,
         [vehicleId, scope.allowedCompanies],
       );
       res.json({ data: rows });
