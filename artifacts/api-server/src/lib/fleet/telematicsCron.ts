@@ -312,6 +312,19 @@ export async function fleetTelematicsPoll(): Promise<string> {
             WHERE id = $2`,
           [msg.slice(0, 1000), integ.id],
         );
+      } else {
+        // Breaker-skipped — don't touch lastSyncError (the original
+        // failure that opened the breaker is still the relevant one)
+        // but mark lastSyncStatus = 'skipped' so the settings UI's
+        // "last received" indicator doesn't keep showing the stale
+        // 'success' state from the previous open→success transition.
+        await rawExecute(
+          `UPDATE fleet_telematics_integrations
+              SET "lastSyncAt" = NOW(),
+                  "lastSyncStatus" = 'skipped'
+            WHERE id = $1`,
+          [integ.id],
+        );
       }
       void logSync({
         companyId: integ.companyId,

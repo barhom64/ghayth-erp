@@ -90,17 +90,29 @@ router.post(
   webhookLimiter,
   async (req: Request, res: Response) => {
     const started = Date.now();
+    // Defence against enumeration: every 4xx below uses the SAME
+    // response shape regardless of which gate failed. Without this, an
+    // attacker probing /api/webhooks/cmsv6/:id without a signature would
+    // see 404 for non-existent IDs and 401 for existing ones — and the
+    // 401 body text would differ between "no secret configured" and
+    // "bad signature", revealing which IDs are still pre-rollout. The
+    // only path that returns a different status is a successful HMAC-
+    // verified delivery (200) and the documented "inactive" no-op (200).
+    const denyAuth = () => {
+      res.status(401).json({ error: "توقيع غير صالح أو غير معدّ" });
+    };
+
     try {
       const integrationId = Number(req.params.integrationId);
       if (!Number.isFinite(integrationId) || integrationId <= 0) {
-        res.status(404).json({ error: "تكامل غير موجود" });
+        denyAuth();
         return;
       }
 
       const signature = String(req.header("x-cmsv6-signature") ?? "");
       const timestamp = String(req.header("x-cmsv6-timestamp") ?? "");
       if (!signature || !timestamp) {
-        res.status(401).json({ error: "توقيع HMAC مطلوب" });
+        denyAuth();
         return;
       }
 
@@ -109,7 +121,7 @@ router.post(
       // indefinitely.
       const ts = Number(timestamp);
       if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > REPLAY_WINDOW_MS) {
-        res.status(401).json({ error: "نافذة التوقيع منتهية" });
+        denyAuth();
         return;
       }
 
@@ -120,11 +132,15 @@ router.post(
       );
       const integration = rows[0];
       if (!integration) {
-        res.status(404).json({ error: "تكامل غير موجود" });
+        denyAuth();
         return;
       }
       if (integration.status === "paused" || integration.status === "inactive") {
         // Acknowledge so the vendor doesn't retry forever, but don't write.
+        // This response is only reached after the integration exists AND
+        // is in scope of the operator's config — there's no enumeration
+        // signal here because we still required a valid integration row
+        // (vs the silent 401 above for missing rows).
         res.json({ ok: true, ignored: "integration_not_active" });
         return;
       }
@@ -135,7 +151,7 @@ router.post(
           { integrationId },
           "CMSV6 webhook arrived for integration without a configured secret",
         );
-        res.status(401).json({ error: "التكامل لا يملك مفتاح webhook" });
+        denyAuth();
         return;
       }
 
@@ -144,9 +160,9 @@ router.post(
         Buffer.from(JSON.stringify(req.body ?? {}), "utf8");
 
       if (!verifySignature(rawBody, timestamp, signature, secret)) {
-        // Don't tell the caller WHY it failed — that helps an attacker
-        // iterate a brute-force.
-        res.status(401).json({ error: "توقيع غير صالح" });
+        // Same opaque response shape as every other gate above — no
+        // distinguishing text between "no secret" and "wrong signature".
+        denyAuth();
         return;
       }
 

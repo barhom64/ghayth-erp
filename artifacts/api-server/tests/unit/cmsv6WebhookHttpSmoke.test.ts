@@ -81,7 +81,12 @@ describe("CMSV6 webhook — HTTP-level integration", () => {
   it("URL is /api/webhooks/cmsv6/:integrationId (not doubled)", async () => {
     const app = await makeApp();
     const { rawQuery } = await mockedRawdb();
-    // Integration not found → handler should return 404 cleanly.
+    // Integration not found. Anti-enumeration hardening (commit X) makes
+    // missing integrations return the same opaque 401 as a bad-signature
+    // request — so a probing attacker can't distinguish "ID exists with
+    // wrong secret" from "ID does not exist". Our specific 401 body
+    // proves the handler ran (Express's own router-miss 404 wouldn't
+    // carry this Arabic message).
     rawQuery.mockResolvedValueOnce([]);
 
     const body = JSON.stringify({ positions: [] });
@@ -95,16 +100,52 @@ describe("CMSV6 webhook — HTTP-level integration", () => {
       .set("x-cmsv6-timestamp", ts)
       .send(body);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(401);
+    expect(String(res.body.error)).toMatch(/توقيع غير صالح/);
   });
 
   it("the doubled URL (/cmsv6/cmsv6/:id) returns 404 from Express, not the router", async () => {
     const app = await makeApp();
     const res = await request(app).post("/api/webhooks/cmsv6/cmsv6/42");
-    // If the router were still mounted with the wrong inner path, this
-    // would 401 (missing signature) or 404 from inside the handler.
-    // Express's own router miss gives a 404 with no body shape we set.
+    // The router uses POST "/:integrationId" so /cmsv6/cmsv6/42 has no
+    // matching route. Express's own 404 has an empty body — distinct
+    // from our 401 with an Arabic error message above, proving the URL
+    // is routed correctly.
     expect(res.status).toBe(404);
+  });
+
+  it("anti-enumeration: missing integration AND bad signature both return identical 401 body", async () => {
+    const app = await makeApp();
+    const { rawQuery } = await mockedRawdb();
+
+    // Case 1: missing integration row
+    rawQuery.mockResolvedValueOnce([]);
+    const body = JSON.stringify({});
+    const ts = String(Date.now());
+    const sig = sign(body, ts, WEBHOOK_SECRET);
+    const res1 = await request(app)
+      .post("/api/webhooks/cmsv6/9999")
+      .set("Content-Type", "application/json")
+      .set("x-cmsv6-signature", sig)
+      .set("x-cmsv6-timestamp", ts)
+      .send(body);
+
+    // Case 2: existing integration, wrong signature
+    rawQuery.mockResolvedValueOnce([
+      {
+        id: 42, companyId: 1, branchId: null, status: "active",
+        webhookSecret: `enc:v1::::${WEBHOOK_SECRET}`,
+      },
+    ]);
+    const res2 = await request(app)
+      .post("/api/webhooks/cmsv6/42")
+      .set("Content-Type", "application/json")
+      .set("x-cmsv6-signature", "sha256=deadbeef".padEnd(sig.length, "0"))
+      .set("x-cmsv6-timestamp", ts)
+      .send(body);
+
+    expect(res1.status).toBe(res2.status);
+    expect(res1.body).toEqual(res2.body);
   });
 
   it("rejects requests without a signature with 401", async () => {
@@ -157,7 +198,7 @@ describe("CMSV6 webhook — HTTP-level integration", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 401 when integration has no webhook secret configured", async () => {
+  it("returns 401 when integration has no webhook secret configured (same body as bad sig)", async () => {
     const app = await makeApp();
     const { rawQuery } = await mockedRawdb();
     rawQuery.mockResolvedValueOnce([
@@ -179,6 +220,7 @@ describe("CMSV6 webhook — HTTP-level integration", () => {
       .set("x-cmsv6-timestamp", ts)
       .send(body);
     expect(res.status).toBe(401);
+    expect(String(res.body.error)).toMatch(/توقيع غير صالح/);
   });
 
   it("returns 200 (ignored) when integration is inactive", async () => {

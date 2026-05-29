@@ -1679,6 +1679,13 @@ router.get(
         gate.session.companyId, sessionId, scope.userId, "granted",
         accessIp, userAgent,
       );
+      // The response carries a token-bound URL — even though it's per-
+      // user and short-lived, browsers + reverse proxies must not store
+      // it. Without these headers a back-button or shared cache could
+      // resurrect a token-bound URL after the operator closed the
+      // stream. Mirror the headers used by the playlist + segment routes.
+      res.setHeader("cache-control", "no-store, no-cache, must-revalidate, private");
+      res.setHeader("pragma", "no-cache");
       // For HLS streams Phase 2 takes over: redirect the caller to the
       // playlist proxy so the raw streamUrl never leaves this server.
       if (gate.session.streamType === "hls") {
@@ -1878,6 +1885,15 @@ router.get(
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15_000);
+      // Cancel the upstream fetch + reader when the client disconnects
+      // mid-segment. Without this, an HLS player that stops the stream
+      // (operator clicks "stop", browser navigates away, network drops)
+      // would leave the upstream socket + ReadableStream lock in place
+      // until they timed out — a per-segment file-descriptor leak under
+      // live streaming. The handler removes the listener on normal
+      // completion so we don't double-fire.
+      const onClientClose = () => controller.abort();
+      req.on("close", onClientClose);
       let upstream: Response;
       try {
         upstream = await fetch(target.toString(), { signal: controller.signal });
@@ -1885,6 +1901,7 @@ router.get(
         clearTimeout(timeout);
       }
       if (!upstream.ok) {
+        req.off("close", onClientClose);
         res.status(upstream.status === 404 ? 404 : 502).end();
         return;
       }
@@ -1902,20 +1919,39 @@ router.get(
       // enough for forensic reconstruction.
       const body = upstream.body;
       if (!body) {
+        req.off("close", onClientClose);
         res.end();
         return;
       }
       // Stream the response. Web ReadableStream → Node Buffer chunks.
       const reader = body.getReader();
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (!res.write(Buffer.from(value))) {
-          // Backpressure: wait for the client to drain before pulling more.
-          await new Promise<void>((resolve) => res.once("drain", () => resolve()));
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (!res.write(Buffer.from(value))) {
+            // Backpressure: wait for the client to drain before pulling more.
+            await new Promise<void>((resolve) => res.once("drain", () => resolve()));
+          }
         }
+        res.end();
+      } catch (streamErr) {
+        // AbortError (client disconnect) is expected; anything else is a
+        // genuine upstream failure that we surface to the operator's
+        // server logs. The response is already partially flushed so we
+        // can only destroy it.
+        if (!(streamErr instanceof Error) || streamErr.name !== "AbortError") {
+          logger.warn({ err: streamErr, sessionId }, "video segment stream aborted");
+        }
+        try { reader.cancel().catch(() => undefined); } catch { /* noop */ }
+        if (!res.headersSent) {
+          res.status(502).end();
+        } else {
+          res.destroy();
+        }
+      } finally {
+        req.off("close", onClientClose);
       }
-      res.end();
     } catch (e) {
       handleRouteError(e, res, "fleet-telematics-video-segment");
     }
