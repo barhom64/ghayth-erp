@@ -1052,7 +1052,7 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
     let seasonFilterP = "";
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); seasonFilter = ` AND "seasonId"=$${params.length}`; seasonFilterP = ` AND p."seasonId"=$${params.length}`; }
-    const [stats, penaltyStats, agentStats, recentArrivals, salesFinancials, nuskFinancials] = await Promise.all([
+    const [stats, penaltyStats, agentStats, recentArrivals, salesFinancials, nuskFinancials, visaExpiry] = await Promise.all([
       rawQuery(`
         SELECT
           COUNT(*) as total,
@@ -1112,6 +1112,21 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
         FROM umrah_nusk_invoices
         WHERE "companyId"=$1 AND "deletedAt" IS NULL
       `, [scope.companyId]),
+      // Visa expiry alerts — Saudi compliance: pilgrims still inside KSA
+      // whose visa expires within the next 30 days. The buckets let the
+      // UI render a "critical / warning / soon" traffic light.
+      // Filters on pilgrim status to skip departed/cancelled rows that
+      // don't need action.
+      rawQuery(`
+        SELECT
+          COUNT(*) FILTER (WHERE "visaExpiry" < CURRENT_DATE) AS "expired",
+          COUNT(*) FILTER (WHERE "visaExpiry" >= CURRENT_DATE AND "visaExpiry" < CURRENT_DATE + INTERVAL '7 days') AS "critical",
+          COUNT(*) FILTER (WHERE "visaExpiry" >= CURRENT_DATE + INTERVAL '7 days' AND "visaExpiry" < CURRENT_DATE + INTERVAL '30 days') AS "warning"
+        FROM umrah_pilgrims
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter}
+          AND "visaExpiry" IS NOT NULL
+          AND status NOT IN ('departed','cancelled','deceased','visa_rejected')
+      `, params),
     ]);
     const sales = (salesFinancials[0] || {}) as Record<string, unknown>;
     const nusk = (nuskFinancials[0] || {}) as Record<string, unknown>;
@@ -1129,6 +1144,11 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
         nusk: nuskFinancials[0],
         net: receivable - payable,
       },
+      // Visa-expiry compliance buckets: expired / critical (<7d) /
+      // warning (7-30d). UI renders a traffic-light card; cron C31
+      // already handles per-pilgrim notifications — this is the
+      // operator's at-a-glance summary.
+      visaExpiry: visaExpiry[0],
     }));
   } catch (err) { handleRouteError(err, res, "Dashboard error"); }
 });

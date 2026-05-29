@@ -11,7 +11,7 @@ import {
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Users, Plane, AlertTriangle, UserPlus, Play, Zap, TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { Users, Plane, AlertTriangle, UserPlus, Play, Zap, TrendingUp, TrendingDown, Wallet, ShieldAlert } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -31,6 +31,11 @@ export default function UmrahDashboard() {
   const nuskFin = fin.nusk || {};
   const netPosition: number = Number(fin.net ?? 0);
   const isNetPositive = netPosition >= 0;
+  const visa = dash?.visaExpiry || {};
+  const visaExpired = Number(visa.expired ?? 0);
+  const visaCritical = Number(visa.critical ?? 0);
+  const visaWarning = Number(visa.warning ?? 0);
+  const visaTotal = visaExpired + visaCritical + visaWarning;
 
   const runDaily = async () => {
     try {
@@ -178,6 +183,31 @@ export default function UmrahDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {visaTotal > 0 && (
+        <Card className={visaExpired > 0 ? "border-status-error-surface" : visaCritical > 0 ? "border-status-warning-surface" : "border-status-info-surface"}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm inline-flex items-center gap-2">
+              <ShieldAlert className={`h-4 w-4 ${visaExpired > 0 ? "text-status-error-foreground" : visaCritical > 0 ? "text-status-warning-foreground" : "text-status-info-foreground"}`} />
+              تنبيهات انتهاء التأشيرات
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-xl font-bold text-status-error-foreground">{formatNumber(visaExpired)}</p>
+              <p className="text-xs text-muted-foreground">منتهية الصلاحية</p>
+            </div>
+            <div>
+              <p className="text-xl font-bold text-status-warning-foreground">{formatNumber(visaCritical)}</p>
+              <p className="text-xs text-muted-foreground">حرج (أقل من 7 أيام)</p>
+            </div>
+            <div>
+              <p className="text-xl font-bold text-status-info-foreground">{formatNumber(visaWarning)}</p>
+              <p className="text-xs text-muted-foreground">تحذير (7-30 يوماً)</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>

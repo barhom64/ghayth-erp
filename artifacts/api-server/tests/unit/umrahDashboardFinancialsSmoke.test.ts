@@ -74,3 +74,37 @@ describe("umrah /dashboard — financials block", () => {
     expect(DASH_UI).toMatch(/Number\(salesFin\.overdueTotal[\s\S]{0,80}>\s*0[\s\S]{0,300}Badge variant="destructive"/);
   });
 });
+
+describe("umrah /dashboard — visa expiry alerts (Saudi compliance)", () => {
+  it("backend queries umrah_pilgrims for visaExpiry buckets (expired / critical / warning)", () => {
+    expect(ROUTE).toMatch(/COUNT\(\*\) FILTER \(WHERE "visaExpiry" < CURRENT_DATE\) AS "expired"/);
+    expect(ROUTE).toMatch(/"visaExpiry" >= CURRENT_DATE AND "visaExpiry" < CURRENT_DATE \+ INTERVAL '7 days'\)\s+AS\s+"critical"/);
+    expect(ROUTE).toMatch(/"visaExpiry" >= CURRENT_DATE \+ INTERVAL '7 days' AND "visaExpiry" < CURRENT_DATE \+ INTERVAL '30 days'\)\s+AS\s+"warning"/);
+  });
+
+  it("backend excludes pilgrim statuses that don't need visa-tracking action", () => {
+    // departed/cancelled/deceased/visa_rejected pilgrims aren't at risk
+    // of overstay — they're either out, dead, or never granted entry.
+    expect(ROUTE).toMatch(/status NOT IN \('departed','cancelled','deceased','visa_rejected'\)/);
+  });
+
+  it("response envelope ships `visaExpiry` alongside `financials`", () => {
+    expect(ROUTE).toMatch(/visaExpiry:\s*visaExpiry\[0\]/);
+  });
+
+  it("UI renders the traffic-light card with the three buckets", () => {
+    expect(DASH_UI).toContain("تنبيهات انتهاء التأشيرات");
+    expect(DASH_UI).toContain("منتهية الصلاحية");
+    expect(DASH_UI).toContain("حرج (أقل من 7 أيام)");
+    expect(DASH_UI).toContain("تحذير (7-30 يوماً)");
+  });
+
+  it("UI border colour flips by severity: expired → error, critical → warning, else → info", () => {
+    expect(DASH_UI).toMatch(/visaExpired > 0[\s\S]{0,200}border-status-error-surface[\s\S]{0,200}visaCritical > 0[\s\S]{0,200}border-status-warning-surface/);
+  });
+
+  it("UI hides the card entirely when no visas are at risk (zero noise)", () => {
+    expect(DASH_UI).toContain("visaTotal > 0 &&");
+  });
+});
+
