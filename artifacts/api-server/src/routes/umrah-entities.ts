@@ -1420,7 +1420,10 @@ router.get("/payments", authorize({ feature: "umrah", action: "list" }), async (
     const rows = await rawQuery(
       `SELECT p.*, sa.name AS "subAgentName"
        FROM umrah_payments p
-       LEFT JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
+       LEFT JOIN umrah_sub_agents sa
+         ON sa.id = p."subAgentId"
+        AND sa."companyId" = p."companyId"
+        AND sa."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY p."paymentDate" DESC, p.id DESC
        LIMIT 500`,
