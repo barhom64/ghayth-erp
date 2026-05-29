@@ -198,17 +198,20 @@ export function NumberingTab() {
   );
   const [backfillOpen, setBackfillOpen] = useState(false);
 
-  // GET /numbering/scheme-lookup — server-side dispatch that maps an
-  // arbitrary string (a legacy doc number, an external reference) back
-  // to its scheme. Useful when an operator finds a stray number in a
-  // ticket and wants to know which policy issued it.
+  // GET /numbering/scheme-lookup?moduleKey=X&entityKey=Y — server
+  // resolves the active scheme for a given (module, entity) pair.
+  // Useful for verifying which policy will issue the next code for a
+  // module before triggering a backfill or override.
   const [lookupOpen, setLookupOpen] = useState(false);
-  const [lookupNumber, setLookupNumber] = useState("");
-  const trimmedLookup = lookupNumber.trim();
+  const [lookupModule, setLookupModule] = useState("");
+  const [lookupEntity, setLookupEntity] = useState("");
+  const lookupReady = lookupModule.trim().length > 0 && lookupEntity.trim().length > 0;
   const lookupQ = useApiQuery<any>(
-    ["numbering-scheme-lookup", trimmedLookup],
-    trimmedLookup ? `/numbering/scheme-lookup?number=${encodeURIComponent(trimmedLookup)}` : null,
-    { enabled: lookupOpen && trimmedLookup.length > 0 },
+    ["numbering-scheme-lookup", lookupModule.trim(), lookupEntity.trim()],
+    lookupReady
+      ? `/numbering/scheme-lookup?moduleKey=${encodeURIComponent(lookupModule.trim())}&entityKey=${encodeURIComponent(lookupEntity.trim())}`
+      : null,
+    { enabled: lookupOpen && lookupReady },
   );
 
   if (isLoading) return <LoadingSpinner />;
@@ -287,36 +290,40 @@ export function NumberingTab() {
         <Card className="border-status-info-surface bg-status-info-surface/30">
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold">بحث عن سياسة لرقم</p>
-              <Button variant="ghost" size="sm" onClick={() => { setLookupOpen(false); setLookupNumber(""); }}>
+              <p className="text-sm font-semibold">بحث عن سياسة الترقيم</p>
+              <Button variant="ghost" size="sm" onClick={() => { setLookupOpen(false); setLookupModule(""); setLookupEntity(""); }}>
                 إغلاق
               </Button>
             </div>
-            <Label className="text-xs">الرقم</Label>
-            <Input
-              value={lookupNumber}
-              onChange={(e) => setLookupNumber(e.target.value)}
-              placeholder="مثال: INV-2025-MK-0001"
-              dir="ltr"
-              className="font-mono"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">moduleKey</Label>
+                <Input
+                  value={lookupModule}
+                  onChange={(e) => setLookupModule(e.target.value)}
+                  placeholder="finance"
+                  dir="ltr"
+                  className="font-mono h-8 text-xs"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">entityKey</Label>
+                <Input
+                  value={lookupEntity}
+                  onChange={(e) => setLookupEntity(e.target.value)}
+                  placeholder="invoice"
+                  dir="ltr"
+                  className="font-mono h-8 text-xs"
+                />
+              </div>
+            </div>
             {lookupQ.isLoading && <p className="text-xs text-muted-foreground">جاري البحث...</p>}
+            {lookupQ.isError && <p className="text-xs text-muted-foreground">لم يُعثر على سياسة بهذه المفاتيح.</p>}
             {lookupQ.data && (
               <div className="border rounded p-2 text-xs space-y-1 bg-white">
-                {lookupQ.data.scheme ? (
-                  <>
-                    <p><span className="text-muted-foreground">السياسة:</span> {lookupQ.data.scheme.name ?? `${lookupQ.data.scheme.moduleKey}.${lookupQ.data.scheme.entityKey}`}</p>
-                    {lookupQ.data.assignment && (
-                      <>
-                        <p><span className="text-muted-foreground">الجدول:</span> {lookupQ.data.assignment.entityTable}</p>
-                        <p><span className="text-muted-foreground">المعرف:</span> {lookupQ.data.assignment.entityId ?? "—"}</p>
-                        <p><span className="text-muted-foreground">الحالة:</span> {lookupQ.data.assignment.status}</p>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-muted-foreground">لم يُعثر على سياسة لهذا الرقم.</p>
-                )}
+                <p><span className="text-muted-foreground">الاسم:</span> {lookupQ.data.name ?? "—"}</p>
+                <p><span className="text-muted-foreground">القالب:</span> <span className="font-mono">{lookupQ.data.template ?? lookupQ.data.format ?? "—"}</span></p>
+                <p><span className="text-muted-foreground">التتابع الحالي:</span> {lookupQ.data.currentSequence ?? lookupQ.data.lastSequence ?? "—"}</p>
               </div>
             )}
           </CardContent>
