@@ -65,7 +65,11 @@ describe("payment-run JE reduces cash by the WHT total", () => {
     expect(HANDLER).toMatch(/for \(const \[code, amount\] of whtCreditByAccount\)/);
   });
   it("AP debit per PO stays at FULL gross (so subledger reconciles)", () => {
-    expect(HANDLER).toMatch(/debit: Number\(po\.totalAmount\), credit: 0, vendorId: po\.supplierId/);
+    // Loosened to match the multi-branch shape — each AP DR now carries
+    // branchId from po.branchId so cross-branch payment runs split per
+    // branch on the GL. The gross and vendorId assertions still anchor
+    // the subledger contract.
+    expect(HANDLER).toMatch(/debit: Number\(po\.totalAmount\)[\s\S]{0,80}credit: 0[\s\S]{0,80}vendorId: po\.supplierId/);
   });
 });
 

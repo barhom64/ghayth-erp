@@ -38,6 +38,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
+import { resolveTransactionBranch, assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { z } from "zod";
 
 // ── Zod schemas for POST route validation ──────────────────────────────────
@@ -138,6 +139,10 @@ const createCustomerAdvanceSchema = z.object({
   reference: z.string().optional(),
   notes: z.string().optional(),
   receivedDate: z.string().optional(),
+  // Operator's explicit branch pick. Required for multi-branch users;
+  // single-branch users auto-resolve via the resolver. The advance JE
+  // lands on this branch instead of the operator's working branch.
+  branchId: z.coerce.number().optional(),
 });
 
 const impactPreviewSchema = z.object({
@@ -409,21 +414,34 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     if (!clientId) {
       throw new ValidationError("العميل مطلوب لإنشاء الفاتورة", { field: "clientId", fix: "حدد العميل الذي ستُصدر له الفاتورة" });
     }
-    if (!branchId && !scope.branchId) {
-      throw new ValidationError("الفرع مطلوب لإنشاء الفاتورة", { field: "branchId", fix: "حدد الفرع الذي تنتمي إليه الفاتورة" });
+    // Owner / GM bypasses the resolver: they have global access and can
+    // post to any branch (the resolver throws BranchRequired for users
+    // with allowedBranches.length > 1, which is the right behaviour for
+    // managers but wrong for owners on the global scope).
+    let resolvedBranchId: number;
+    if (scope.isOwner || OWNER_GM_ROLES.includes(scope.role)) {
+      resolvedBranchId = (branchId ?? scope.branchId) as number;
+      if (!resolvedBranchId) {
+        throw new ValidationError("الفرع مطلوب لإنشاء الفاتورة", { field: "branchId", fix: "حدد الفرع الذي تنتمي إليه الفاتورة" });
+      }
+    } else {
+      // Multi-branch user without an explicit branchId in the payload
+      // gets a typed BranchRequired error → frontend renders a branch
+      // picker. Single-branch user auto-resolves silently.
+      const r = resolveTransactionBranch({
+        scope: { companyId: effectiveCompanyId, branchId: scope.branchId, allowedBranches: scope.allowedBranches },
+        bodyBranchId: branchId,
+      });
+      resolvedBranchId = r.branchId;
     }
-    if (branchId) {
-      const [branchRow] = await rawQuery<Record<string, unknown>>(
-        `SELECT id FROM branches WHERE id=$1 AND "companyId"=$2 AND status='active'`,
-        [branchId, effectiveCompanyId]
-      );
-      if (!branchRow) {
-        throw new ValidationError("الفرع غير موجود أو لا ينتمي لهذه الشركة", { field: "branchId" });
-      }
-      if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
-          scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
-        throw new ForbiddenError("لا تملك صلاحية إنشاء فواتير في هذا الفرع", { field: "branchId" });
-      }
+    // Validate the resolved branch actually belongs to the effective
+    // company (cross-tenant guard) and is active.
+    const [branchRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT id FROM branches WHERE id=$1 AND "companyId"=$2 AND status='active'`,
+      [resolvedBranchId, effectiveCompanyId]
+    );
+    if (!branchRow) {
+      throw new ValidationError("الفرع غير موجود أو لا ينتمي لهذه الشركة", { field: "branchId" });
     }
     // FK pre-check on clientId so the frontend can light up the input.
     const [clientRow] = await rawQuery<Record<string, unknown>>(
@@ -613,7 +631,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     // the global `invoice_number_seq`).
     const issued = await issueNumber({
       companyId: effectiveCompanyId,
-      branchId: branchId ?? scope.branchId ?? null,
+      branchId: resolvedBranchId,
       moduleKey: "finance",
       entityKey: "sales_invoice",
       entityTable: "invoices",
@@ -681,7 +699,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
                 "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter",
                 "taxCode","taxInclusive","discountAmount","discountPercent")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
-        [effectiveCompanyId, branchId ?? scope.branchId, clientId ?? null, ref, description ?? null,
+        [effectiveCompanyId, resolvedBranchId, clientId ?? null, ref, description ?? null,
           baseAmount, Number(vatRate), vatAmount, total, finalDueDate, scope.activeAssignmentId, notes ?? null,
           isTaxLinked ? true : false, invoiceTypeCode ?? "388", taxCategoryCode ?? "S", exemptionReason ?? null,
           // as-any-reason: justified-pragmatic - defensive read of optional costCenter field not yet in createInvoiceSchema; behavior unchanged
@@ -1781,6 +1799,22 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     const id = parseId(req.params.id, "id");
     const { amount, method = "bank_transfer" } = zodParse(createPaymentSchema.safeParse(req.body));
 
+    // FIN-AUD-07 — payment recording into a closed period would post
+    // DR Cash / CR AR onto the GL inside that period, moving balances
+    // after close. The downstream postJournalEntry would reject it,
+    // but the invoice's paidAmount UPDATE runs in a separate transaction
+    // BEFORE the GL post — so a closed-period payment used to leave
+    // invoices.paidAmount bumped while the GL had no matching entry
+    // (silent AR overstatement). Gate the whole flow up front.
+    const paymentDate = todayISO();
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, paymentDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسجيل دفعة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "date", meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
     const { financialEngine } = await import("../lib/engines/index.js");
     const [cashAccountCode, arAccountCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
@@ -1791,15 +1825,31 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     let newPaid!: number;
     let newStatus!: string;
     let invoiceClientId: number | undefined;
+    let invoiceBranchId: number | null = null;
     await withTransaction(async (client) => {
       const invRes = await client.query(
-        `SELECT id, total, "paidAmount", status, ref, "clientId" FROM invoices
+        `SELECT id, total, "paidAmount", status, ref, "clientId", "branchId" FROM invoices
          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
         [id, scope.companyId]
       );
       const invoice = invRes.rows[0];
       if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
       invoiceClientId = (invoice.clientId as number | null) ?? undefined;
+      // Payment lands on the INVOICE's branch, not the operator's
+      // active branch. Pre-fix the payment JE was hardcoded to
+      // scope.branchId, so paying an Invoice-in-BranchA from a session
+      // working in BranchB silently posted the cash inflow + AR
+      // clearing to Branch B's books — per-branch AR aging diverged
+      // from per-branch revenue forever. Validate the operator has
+      // access to the invoice's branch (security check, not UX prompt).
+      invoiceBranchId = (invoice.branchId as number | null) ?? null;
+      if (invoiceBranchId != null) {
+        assertDocumentBranchAccess(invoiceBranchId, {
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          allowedBranches: (scope as any).allowedBranches,
+        });
+      }
 
       const lockedStatuses = ["paid", "closed", "cancelled"];
       if (lockedStatuses.includes(invoice.status)) {
@@ -1865,7 +1915,11 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     const paidScaled = Math.round(newPaid * 100);
     const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
-      branchId: scope.branchId,
+      // Payment JE lands on the invoice's own branch, not the operator's
+      // working branch. Falls back to scope.branchId only if the invoice
+      // has no branchId (legacy data — should be rare now that the create
+      // route enforces it).
+      branchId: invoiceBranchId ?? scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref: `PAY-${invoiceRef}-${paidScaled}`,
       description: `سداد فاتورة ${invoiceRef}`,
@@ -3202,10 +3256,17 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
       d90plus: Number(rates?.d90plus ?? 0.75),
     };
 
+    // Exclude draft + cancelled + paid invoices. Drafts haven't posted a GL
+    // AR DR yet — accruing an allowance for them would credit allowance for
+    // doubtful accounts against a receivable the GL doesn't show, breaking
+    // trial balance reconciliation. Cancelled/paid never accrue allowance.
+    // Status `sent` is treated as the legacy synonym for `approved` (some
+    // older invoices missed the schema update).
     const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT "createdAt", "dueDate", (total - COALESCE("paidAmount",0)) AS outstanding
          FROM invoices
         WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" <= $2
+          AND status NOT IN ('draft','cancelled','paid','rejected','returned')
           AND (total - COALESCE("paidAmount",0)) > 0.01`,
       [scope.companyId, targetDate]
     );
@@ -3293,10 +3354,27 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
   try {
     const scope = req.scope!;
 
-    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = zodParse(createCustomerAdvanceSchema.safeParse(req.body));
+    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate, branchId: bodyBranchId } = zodParse(createCustomerAdvanceSchema.safeParse(req.body));
 
     const [client] = await rawQuery<{ id: number }>(`SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [clientId, scope.companyId]);
     if (!client) throw new ValidationError("العميل غير موجود", { field: "clientId", fix: "اختر عميلاً من قائمة العملاء." });
+
+    // Resolve the branch the advance JE will land on. Multi-branch users
+    // who didn't pick a branch get the typed BRANCH_REQUIRED error so the
+    // frontend can render the picker. Single-branch users auto-resolve.
+    let advanceBranchId: number;
+    if (scope.isOwner || OWNER_GM_ROLES.includes(scope.role)) {
+      advanceBranchId = (bodyBranchId ?? scope.branchId) as number;
+      if (!advanceBranchId) {
+        throw new ValidationError("الفرع مطلوب لتسجيل دفعة مقدمة", { field: "branchId" });
+      }
+    } else {
+      const r = resolveTransactionBranch({
+        scope: { companyId: scope.companyId, branchId: scope.branchId, allowedBranches: scope.allowedBranches },
+        bodyBranchId,
+      });
+      advanceBranchId = r.branchId;
+    }
 
     const recvDate = receivedDate || todayISO();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, recvDate);
@@ -3332,7 +3410,7 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
         const ins = await client.query(
           `INSERT INTO customer_advances ("companyId","branchId","clientId",ref,amount,"appliedAmount",method,"receivedDate",notes,"createdBy",status)
            VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,'open') RETURNING id`,
-          [scope.companyId, scope.branchId, clientId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId]
+          [scope.companyId, advanceBranchId, clientId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId]
         );
         advanceId = ins.rows[0].id;
       } catch (e: any) {
@@ -3358,7 +3436,7 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
           const ins2 = await client.query(
             `INSERT INTO customer_advances ("companyId","branchId","clientId",ref,amount,"appliedAmount",method,"receivedDate",notes,"createdBy",status)
              VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,'open') RETURNING id`,
-            [scope.companyId, scope.branchId, clientId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId]
+            [scope.companyId, advanceBranchId, clientId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId]
           );
           advanceId = ins2.rows[0].id;
         } else {
@@ -3383,7 +3461,10 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     try {
       const advanceResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
-        branchId: scope.branchId,
+        // Lands on the resolved advanceBranchId, not scope.branchId — so
+        // a multi-branch user posts to the explicit branch they picked
+        // and the customer's per-branch AR aging stays accurate.
+        branchId: advanceBranchId,
         createdBy: scope.activeAssignmentId,
         ref: advRef,
         description: `دفعة مقدمة من العميل ${clientId}: ${amt}`,

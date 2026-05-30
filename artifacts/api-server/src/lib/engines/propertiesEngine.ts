@@ -91,7 +91,12 @@ class PropertiesEngineImpl implements DomainEngine {
     ctx: PropertyGLContext,
     maintenance: {
       id: number;
+      /** property_buildings.id — the parent building the maintenance ran on. */
       propertyId: number;
+      /** property_units.id — the specific unit (sub-property) being maintained. */
+      unitId?: number | null;
+      /** clients.id of the tenant assigned to the unit at maintenance time. */
+      tenantId?: number | null;
       totalCost: number;
       type?: string;
     }
@@ -100,6 +105,14 @@ class PropertiesEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_expense", "debit", "6400"),
       financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_payable", "credit", "2100"),
     ]);
+
+    // Carry unitId + clientId on every line — caller (properties.ts:complete)
+    // pulls unitId from maintenance_requests and tenantId from the active
+    // rental_contract assigned to that unit. Per-unit / per-tenant maintenance
+    // cost drilldowns rely on these dims; without them, the entity-360
+    // financial profile for both unit and tenant came back empty.
+    const unitId = maintenance.unitId ?? undefined;
+    const clientId = maintenance.tenantId ?? undefined;
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -114,8 +127,8 @@ class PropertiesEngineImpl implements DomainEngine {
       guardTable: "maintenance_requests",
       guardId: maintenance.id,
       lines: [
-        { accountCode: debitCode, debit: maintenance.totalCost, credit: 0, description: `صيانة — ${maintenance.type ?? "عامة"}`, propertyId: maintenance.propertyId },
-        { accountCode: creditCode, debit: 0, credit: maintenance.totalCost, description: "مستحقات صيانة", propertyId: maintenance.propertyId },
+        { accountCode: debitCode, debit: maintenance.totalCost, credit: 0, description: `صيانة — ${maintenance.type ?? "عامة"}`, propertyId: maintenance.propertyId, unitId, clientId },
+        { accountCode: creditCode, debit: 0, credit: maintenance.totalCost, description: "مستحقات صيانة", propertyId: maintenance.propertyId, unitId, clientId },
       ],
     });
   }
@@ -126,6 +139,9 @@ class PropertiesEngineImpl implements DomainEngine {
       id: number;
       contractId: number;
       propertyId: number;
+      /** clients.id of the tenant — deposit is a per-tenant liability,
+       *  so the tenant subledger must carry it. */
+      tenantId?: number | null;
       amount: number;
       type: "received" | "refunded";
     }
@@ -136,6 +152,10 @@ class PropertiesEngineImpl implements DomainEngine {
     ]);
 
     const isReceived = deposit.type === "received";
+    // clientId — tenant subledger. Without this, AR aging + tenant
+    // financial profile showed no liability for the held deposit; the
+    // liability sat in 2300 with no per-tenant breakdown.
+    const clientId = deposit.tenantId ?? undefined;
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -157,6 +177,7 @@ class PropertiesEngineImpl implements DomainEngine {
           description: `${isReceived ? "استلام" : "صرف"} تأمين`,
           propertyId: deposit.propertyId,
           contractId: deposit.contractId,
+          clientId,
         },
         {
           accountCode: depositLiability,
@@ -165,6 +186,7 @@ class PropertiesEngineImpl implements DomainEngine {
           description: `التزام تأمين — عقد #${deposit.contractId}`,
           propertyId: deposit.propertyId,
           contractId: deposit.contractId,
+          clientId,
         },
       ],
     });
@@ -175,6 +197,9 @@ class PropertiesEngineImpl implements DomainEngine {
     termination: {
       contractId: number;
       propertyId: number;
+      /** clients.id of the tenant — penalty receivable should land in the
+       *  tenant subledger so AR aging reflects it. */
+      tenantId?: number | null;
       penaltyAmount: number;
     }
   ) {
@@ -182,6 +207,8 @@ class PropertiesEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "rent_receivable", "debit", "1200"),
       financialEngine.resolveAccountCode(ctx.companyId, "early_termination_revenue", "credit", "4150"),
     ]);
+
+    const clientId = termination.tenantId ?? undefined;
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -196,8 +223,8 @@ class PropertiesEngineImpl implements DomainEngine {
       guardTable: "rental_contracts",
       guardId: termination.contractId,
       lines: [
-        { accountCode: debitCode, debit: termination.penaltyAmount, credit: 0, description: "ذمم غرامة إنهاء مبكر", propertyId: termination.propertyId, contractId: termination.contractId },
-        { accountCode: creditCode, debit: 0, credit: termination.penaltyAmount, description: "إيرادات غرامة إنهاء مبكر", propertyId: termination.propertyId, contractId: termination.contractId },
+        { accountCode: debitCode, debit: termination.penaltyAmount, credit: 0, description: "ذمم غرامة إنهاء مبكر", propertyId: termination.propertyId, contractId: termination.contractId, clientId },
+        { accountCode: creditCode, debit: 0, credit: termination.penaltyAmount, description: "إيرادات غرامة إنهاء مبكر", propertyId: termination.propertyId, contractId: termination.contractId, clientId },
       ],
     });
   }
