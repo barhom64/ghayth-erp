@@ -170,6 +170,47 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     [scope.companyId],
   );
 
+  // Phase 3d — when all 3 service products are configured, the
+  // engine splits each group's lineTotal into 3 distinct lines
+  // sourced from the matching NUSK invoice's per-category columns.
+  // The fallback (bundled single line) still works when ANY of the
+  // 3 mappings is unset or when no NUSK invoice matches the group
+  // — current behaviour preserved as a regression-safe default.
+  const canSplit =
+    productMap?.servicesProductId != null
+    && productMap?.visaProductId != null
+    && productMap?.transportProductId != null;
+
+  // One round-trip per invoice instead of per group. Sums per group
+  // across multiple NUSK invoices if a group was billed in chunks.
+  // Maps groupId → { visa, transport } cost basis for the split.
+  const nuskCostByGroup = new Map<number, { visa: number; transport: number }>();
+  if (canSplit) {
+    const nuskRows = await rawQuery<{ groupId: number; visa: string; transport: string }>(
+      `SELECT "groupId",
+              COALESCE(SUM("visaFees"), 0)        AS visa,
+              COALESCE(SUM("transportTotal"), 0)  AS transport
+         FROM umrah_nusk_invoices
+        WHERE "groupId" = ANY($1)
+          AND "companyId" = $2
+          AND "deletedAt" IS NULL
+          AND "nuskStatus" NOT IN ('cancelled')
+        GROUP BY "groupId"`,
+      [groupIds, scope.companyId],
+    );
+    for (const r of nuskRows) {
+      nuskCostByGroup.set(r.groupId, {
+        visa: Number(r.visa) || 0,
+        transport: Number(r.transport) || 0,
+      });
+    }
+  }
+
+  // Tax-code helper — 'zero' / 'exempt' map to 0% VAT; else fall
+  // back to the invoice-header vatRate (undefined here ⇒ default).
+  const taxCodeToVat = (code: string | null | undefined): number | undefined =>
+    (code === "zero" || code === "exempt" ? 0 : undefined);
+
   const lineItems: InvoiceLineItem[] = [];
   let subtotal = 0;
   let totalPilgrims = 0;
@@ -211,37 +252,98 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     totalPilgrims += mutamerCount;
     groupRefs.push(grp.nuskGroupNumber as string);
 
-    // Phase 3c — when the operator configured a services product at
-    // /umrah/settings, each 'group' line gets routed to its account +
-    // taxCode. Visa + transport mappings are NOT consumed yet — those
-    // require Phase 3d's per-NUSK split. Pulling the productId etc.
-    // from the resolved map (productMap) keeps the lookup cost at
-    // one query for the whole invoice instead of one per group.
-    const servicesProductId = productMap?.servicesProductId ?? null;
-    const servicesAccountCode = productMap?.servicesAccountCode ?? null;
-    // defaultTaxCode 'zero' / 'exempt' resolve to 0 VAT on the line;
-    // 'standard' (or anything else, or null) falls back to the
-    // invoice-level vatRate. Pin this in the smoke so a future map
-    // refactor can't silently change the contract.
-    const servicesVatRate =
-      productMap?.servicesTaxCode === "zero" || productMap?.servicesTaxCode === "exempt"
-        ? 0
-        : undefined;
-    lineItems.push({
-      itemType: "group",
-      groupId: grp.id as number,
-      violationId: null,
-      description: `مجموعة ${grp.nuskGroupNumber} — ${grp.name || ""}`.trim(),
-      quantity: mutamerCount,
-      unitPrice: price,
-      lineTotal,
-      // Optional fields — fall back to null/undefined when no
-      // services product is configured (the engine then uses the
-      // invoice-header defaults established in PR #1467).
-      productId: servicesProductId,
-      accountCode: servicesAccountCode,
-      vatRate: servicesVatRate,
-    });
+    // Phase 3d — split the group's lineTotal into visa / transport /
+    // services sub-lines when ALL 3 products are configured AND the
+    // group has a matching NUSK invoice to source visa + transport
+    // pass-through costs from. Otherwise fall back to the bundled
+    // Phase 3c single line (which only consumes the services
+    // mapping). The fallback path keeps the existing pre-split
+    // behaviour byte-identical when ANY mapping is missing — strict
+    // regression safety.
+    const groupCost = canSplit ? nuskCostByGroup.get(grp.id as number) : undefined;
+    if (canSplit && groupCost && (groupCost.visa > 0 || groupCost.transport > 0)) {
+      // visa + transport are pass-through at NUSK cost (the
+      // operator's "fixed visa price" rule). Services absorbs the
+      // remainder — sales total minus the two pass-through costs —
+      // which is the operator's margin plus any other NUSK costs
+      // (hotel / electronic / insurance / etc.). Clamp to 0 if the
+      // operator priced below pass-through (sellingBelowCost from
+      // PR #1457 already surfaces this case).
+      const visaPortion = Math.min(groupCost.visa, lineTotal);
+      const transportPortion = Math.min(groupCost.transport, Math.max(0, lineTotal - visaPortion));
+      const servicesPortion = Math.max(0, lineTotal - visaPortion - transportPortion);
+
+      // Visa line — quantity per pilgrim matches NUSK's per-pilgrim
+      // visa pricing; zero-rated when the operator configured the
+      // visa product with defaultTaxCode='zero' (the typical setup).
+      if (visaPortion > 0) {
+        lineItems.push({
+          itemType: "group",
+          groupId: grp.id as number,
+          violationId: null,
+          description: `تأشيرة عمرة — مجموعة ${grp.nuskGroupNumber}`.trim(),
+          quantity: mutamerCount,
+          unitPrice: mutamerCount > 0 ? visaPortion / mutamerCount : visaPortion,
+          lineTotal: visaPortion,
+          productId: productMap!.visaProductId,
+          accountCode: productMap!.visaAccountCode,
+          vatRate: taxCodeToVat(productMap!.visaTaxCode),
+        });
+      }
+
+      // Transport line — quantity 1 since transport is per-trip not
+      // per-pilgrim. vatRate from the product's defaultTaxCode.
+      if (transportPortion > 0) {
+        lineItems.push({
+          itemType: "group",
+          groupId: grp.id as number,
+          violationId: null,
+          description: `نقل — مجموعة ${grp.nuskGroupNumber}`.trim(),
+          quantity: 1,
+          unitPrice: transportPortion,
+          lineTotal: transportPortion,
+          productId: productMap!.transportProductId,
+          accountCode: productMap!.transportAccountCode,
+          vatRate: taxCodeToVat(productMap!.transportTaxCode),
+        });
+      }
+
+      // Services line — the operator's margin + any uncategorised
+      // NUSK costs. ALWAYS emitted (even when 0) so the e-invoice
+      // shows a consistent 3-line structure per group.
+      lineItems.push({
+        itemType: "group",
+        groupId: grp.id as number,
+        violationId: null,
+        description: `خدمات أرضية — مجموعة ${grp.nuskGroupNumber}`.trim(),
+        quantity: 1,
+        unitPrice: servicesPortion,
+        lineTotal: servicesPortion,
+        productId: productMap!.servicesProductId,
+        accountCode: productMap!.servicesAccountCode,
+        vatRate: taxCodeToVat(productMap!.servicesTaxCode),
+      });
+    } else {
+      // Fallback path — bundled single line. Either the operator
+      // hasn't finished the product mapping or this group has no
+      // matching NUSK invoice. Phase 3c's services routing still
+      // applies when the services product is configured.
+      const servicesProductId = productMap?.servicesProductId ?? null;
+      const servicesAccountCode = productMap?.servicesAccountCode ?? null;
+      const servicesVatRate = taxCodeToVat(productMap?.servicesTaxCode);
+      lineItems.push({
+        itemType: "group",
+        groupId: grp.id as number,
+        violationId: null,
+        description: `مجموعة ${grp.nuskGroupNumber} — ${grp.name || ""}`.trim(),
+        quantity: mutamerCount,
+        unitPrice: price,
+        lineTotal,
+        productId: servicesProductId,
+        accountCode: servicesAccountCode,
+        vatRate: servicesVatRate,
+      });
+    }
 
     const nuskInvs = await rawQuery<Record<string, unknown>>(
       `SELECT "nuskInvoiceNumber" FROM umrah_nusk_invoices
