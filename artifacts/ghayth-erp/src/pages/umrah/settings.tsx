@@ -8,13 +8,28 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { Settings as SettingsIcon, Save, AlertTriangle, Wallet } from "lucide-react";
+import { Settings as SettingsIcon, Save, AlertTriangle, Wallet, Package } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
 interface UmrahSettings {
   nuskSupplierId: number | null;
   nuskSupplierName: string | null;
   nuskSupplierCode: string | null;
+  // Phase 3a (PR #1469) — service-type → product mapping. Each may
+  // be null pre-configuration; the Phase 3b engine resolver falls
+  // back to the bundled single-line behaviour in that case.
+  umrahVisaProductId: number | null;
+  umrahVisaProductName: string | null;
+  umrahServicesProductId: number | null;
+  umrahServicesProductName: string | null;
+  umrahTransportProductId: number | null;
+  umrahTransportProductName: string | null;
+}
+
+interface Product {
+  id: number;
+  name: string;
+  defaultTaxCode?: string | null;
 }
 
 interface NuskWallet {
@@ -57,20 +72,50 @@ export default function UmrahSettings() {
   );
   const suppliers: Supplier[] = suppliersResp?.data ?? [];
 
+  // Products list feeds the 3 service-type dropdowns (Phase 3a). The
+  // canonical products list endpoint lives under /warehouse/products
+  // — products are warehouse-domain entities (with stock, inventory
+  // account, etc.) even though they're picked here for revenue
+  // routing. The defaultTaxCode (when present) is surfaced in the
+  // option label so the operator can confirm they picked a
+  // zero-rated product for visa, not a 15% one.
+  const { data: productsResp } = useApiQuery<{ data: Product[] }>(
+    ["warehouse-products"],
+    "/warehouse/products",
+  );
+  const products: Product[] = productsResp?.data ?? [];
+
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
+  const [selectedVisaProductId, setSelectedVisaProductId] = useState<string>("");
+  const [selectedServicesProductId, setSelectedServicesProductId] = useState<string>("");
+  const [selectedTransportProductId, setSelectedTransportProductId] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
-  // Sync local state when the settings load — keeps the dropdown's
-  // initial value in sync with the server's persisted setting.
+  // Sync local state when the settings load — keeps the dropdowns'
+  // initial values in sync with the server's persisted settings.
+  // Each field has its own effect so that a save of ONE setting
+  // doesn't accidentally re-sync the others (which would lose the
+  // operator's in-flight edits).
   useEffect(() => {
-    if (settings?.nuskSupplierId != null) {
-      setSelectedSupplierId(String(settings.nuskSupplierId));
-    } else if (settings) {
-      // Explicitly empty when settings load and nuskSupplierId is null
-      // — the operator hasn't configured it yet.
-      setSelectedSupplierId("");
-    }
+    if (settings == null) return;
+    setSelectedSupplierId(settings.nuskSupplierId != null ? String(settings.nuskSupplierId) : "");
   }, [settings?.nuskSupplierId]);
+  useEffect(() => {
+    if (settings == null) return;
+    setSelectedVisaProductId(settings.umrahVisaProductId != null ? String(settings.umrahVisaProductId) : "");
+  }, [settings?.umrahVisaProductId]);
+  useEffect(() => {
+    if (settings == null) return;
+    setSelectedServicesProductId(settings.umrahServicesProductId != null ? String(settings.umrahServicesProductId) : "");
+  }, [settings?.umrahServicesProductId]);
+  useEffect(() => {
+    if (settings == null) return;
+    setSelectedTransportProductId(settings.umrahTransportProductId != null ? String(settings.umrahTransportProductId) : "");
+  }, [settings?.umrahTransportProductId]);
+
+  // Helper: convert a SearchableSelect value ("" / "<number>") to the
+  // wire format the PR #1469 PATCH expects ("" → null, value → Number).
+  const toPatchValue = (v: string): number | null => (v === "" ? null : Number(v));
 
   const save = async () => {
     setSaving(true);
@@ -78,8 +123,13 @@ export default function UmrahSettings() {
       await apiFetch("/umrah/settings", {
         method: "PATCH",
         body: JSON.stringify({
-          // Empty string maps to null on the backend — clears the link.
-          nuskSupplierId: selectedSupplierId === "" ? null : Number(selectedSupplierId),
+          // Each field's "" maps to null on the backend (clears the link).
+          // The PATCH handler treats null as "explicit clear" and value
+          // as "update" — see umrahSettingsPatchSchema docstring.
+          nuskSupplierId: toPatchValue(selectedSupplierId),
+          umrahVisaProductId: toPatchValue(selectedVisaProductId),
+          umrahServicesProductId: toPatchValue(selectedServicesProductId),
+          umrahTransportProductId: toPatchValue(selectedTransportProductId),
         }),
       });
       toast({ title: "تم حفظ إعدادات العمرة" });
@@ -99,7 +149,14 @@ export default function UmrahSettings() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const dirty = selectedSupplierId !== (settings?.nuskSupplierId != null ? String(settings.nuskSupplierId) : "");
+  // Dirty check — any of the 4 fields differs from its loaded value.
+  // The save button stays disabled until SOMETHING changes so we
+  // don't fire useless audit-log entries on every page revisit.
+  const dirty =
+    selectedSupplierId !== (settings?.nuskSupplierId != null ? String(settings.nuskSupplierId) : "") ||
+    selectedVisaProductId !== (settings?.umrahVisaProductId != null ? String(settings.umrahVisaProductId) : "") ||
+    selectedServicesProductId !== (settings?.umrahServicesProductId != null ? String(settings.umrahServicesProductId) : "") ||
+    selectedTransportProductId !== (settings?.umrahTransportProductId != null ? String(settings.umrahTransportProductId) : "");
 
   return (
     <PageShell title="إعدادات العمرة" subtitle="ضبط ربط وحدة العمرة بالنظام المالي">
@@ -162,6 +219,106 @@ export default function UmrahSettings() {
                 {saving ? "جاري الحفظ..." : "حفظ الإعدادات"}
               </GuardedButton>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Service-type → product mapping (Phase 3a, PR #1469).
+            Lets the operator pick which products represent visa /
+            services / transport on umrah sales invoices. Phase 3b
+            uses these to split each group line into 3 properly-VAT'd
+            sub-lines so e-invoices show "visa zero-rated" and
+            "services 15%" distinctly — matching ZATCA + the
+            "تأشيرة 422 + خدمات 50 + نقل 200" example. */}
+        <Card data-testid="umrah-service-products-card">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              ربط أنواع الخدمة بالمنتجات
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              يربط كل نوع خدمة بمنتج في سجل المنتجات. الـ
+              <strong> defaultTaxCode </strong>
+              على المنتج هو المصدر الحقيقي لنسبة الضريبة (مثلاً
+              <span dir="ltr"> "zero" </span>
+              للتأشيرة،
+              <span dir="ltr"> "standard" </span>
+              للخدمات والنقل). الفاتورة بعدها تظهر كل بند بنسبته الصحيحة في كشف ZATCA.
+            </p>
+
+            {(settings?.umrahVisaProductId == null
+              || settings?.umrahServicesProductId == null
+              || settings?.umrahTransportProductId == null) && (
+              <div
+                className="rounded-md border border-status-warning-surface bg-status-warning-surface/30 p-3 text-sm text-status-warning-foreground flex items-start gap-2"
+                data-testid="service-products-incomplete-banner"
+              >
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  لم تُكتمل خريطة المنتجات. حتى تربط الثلاثة، يُسجّل المحرّك كل مجموعة كبند واحد دون فصل
+                  (تأشيرة / خدمات / نقل). أكمل الربط ليتم التقسيم تلقائياً.
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2" data-testid="umrah-visa-product-select">
+                <Label>منتج التأشيرة (بدون ضريبة)</Label>
+                <SearchableSelect
+                  value={selectedVisaProductId}
+                  onValueChange={setSelectedVisaProductId}
+                  placeholder="— لم يُحدّد —"
+                  options={[
+                    { value: "", label: "— لا منتج —" },
+                    ...products.map((p) => ({
+                      value: String(p.id),
+                      label: p.defaultTaxCode ? `${p.name} [${p.defaultTaxCode}]` : p.name,
+                    })),
+                  ]}
+                />
+              </div>
+
+              <div className="space-y-2" data-testid="umrah-services-product-select">
+                <Label>منتج الخدمات الأرضية (15%)</Label>
+                <SearchableSelect
+                  value={selectedServicesProductId}
+                  onValueChange={setSelectedServicesProductId}
+                  placeholder="— لم يُحدّد —"
+                  options={[
+                    { value: "", label: "— لا منتج —" },
+                    ...products.map((p) => ({
+                      value: String(p.id),
+                      label: p.defaultTaxCode ? `${p.name} [${p.defaultTaxCode}]` : p.name,
+                    })),
+                  ]}
+                />
+              </div>
+
+              <div className="space-y-2" data-testid="umrah-transport-product-select">
+                <Label>منتج النقل (15%)</Label>
+                <SearchableSelect
+                  value={selectedTransportProductId}
+                  onValueChange={setSelectedTransportProductId}
+                  placeholder="— لم يُحدّد —"
+                  options={[
+                    { value: "", label: "— لا منتج —" },
+                    ...products.map((p) => ({
+                      value: String(p.id),
+                      label: p.defaultTaxCode ? `${p.name} [${p.defaultTaxCode}]` : p.name,
+                    })),
+                  ]}
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              لم تُنشئ المنتجات بعد؟ أنشئها من{" "}
+              <a href="/finance/product-catalog" className="text-status-info-foreground hover:underline">
+                المالية ← كتالوج المنتجات
+              </a>{" "}
+              ثم ارجع هنا للربط.
+            </p>
           </CardContent>
         </Card>
 
