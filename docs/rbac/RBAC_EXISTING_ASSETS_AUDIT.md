@@ -86,7 +86,7 @@
 |---|---|---|---|---|---|
 | **RBAC-001** | تدقيق | الدور النشط `selectedRoleKey` **لا يُسجَّل** في `audit_logs` — يضيع "بأي صفة نُفّذت العملية" (#1413 §9 صراحة) | `auditMiddleware.ts` لا يستقبل scope الدور | 🔴 حرجة | يُطوَّر: تمرير `selectedRoleKey` + عمود `active_role_key` |
 | **RBAC-002** | تجربة | لا مسار "إنشاء موظف + حساب + أدوار" ذرّي (#1413 §6) | نقاط منفصلة | 🟠 متوسطة | يُبنى `USER_QUICK_CREATE_FLOW` (مرحلة 3) |
-| **RBAC-003** | تكرار | كتالوجا صلاحيات متوازيان (rbacCatalog مسطّح ↔ featureCatalog شجري) — نقطتا تفويض (`requirePermission` ↔ `authorize`) تخاطران بانحراف | FND-010 (`foundation.md:137`) | 🟠 متوسطة | يُدمَج: featureCatalog مصدر واحد، اشتقاق المسطّح، هجر التدريجي |
+| **RBAC-003** | تكرار (مُجَسَّر جزئيًا) | كتالوجا صلاحيات متوازيان (rbacCatalog مسطّح ↔ featureCatalog شجري). **تحقّق محدّث:** ترويسة `rbacCatalog.ts` توثّق أن featureCatalog هو المصدر الحديث، و`isKnownPermission()` **يقبل الاثنين** (إضافة ميزة لـ featureCatalog تمدّد سطح الصلاحيات بلا تكرار) — فالانحراف مُحتوى. يحتفظ rbacCatalog فقط بثابتات مجموعات الأدوار (يستخدمها 30+ مسارًا) وبذرة `ROLE_PERMISSIONS` (migration 068) | FND-010 (`foundation.md:137`) + `rbacCatalog.ts` (الترويسة) | 🟡 منخفضة (بعد التحقق) | **يبقى الجسر**؛ الإزالة الكاملة = إعادة هيكلة 30+ مسارًا عن مجموعات الأدوار + إعادة بذر → **مؤجَّل كمتابعة مستقلة تحتاج CI/staging**، لا تنفيذ أعمى |
 | **RBAC-004** | تجربة | لا Effective Permissions Viewer ولا Role Conflict Analyzer كواجهة لغير التقني (#1413 §8/§11) | لا صفحات | 🟠 متوسطة | يُبنى فوق الموجود (مرحلة 3 specs) |
 | **RBAC-005** | حوكمة | `roleKeySubPages` ثابتة في الواجهة لا تُشتق من الأدوار الفعلية | `app-context.tsx` | 🟠 متوسطة | يُطوَّر للاشتقاق من featureCatalog |
 | **RBAC-006** | حماية | routers حسّاسة بلا حارس تركيب (`requireModule`) تعتمد على `authorize` inline لكل route | FND-004 (`foundation.md:131`) | 🟠 متوسطة | يُعمَّم حارس التركيب (مرحلة تنفيذ) |
@@ -98,10 +98,10 @@
 
 - **يُستخدم كما هو:** `authzEngine`, `authorize`, `abacConditions`, جداول `rbac_*`, `permission-gate`, `distributedCache`, `siemForwarder`, `catalogSync`, `autoMigrate`.
 - **يُطوَّر:** تسجيل الدور بالتدقيق (RBAC-001)؛ اشتقاق `roleKeySubPages`/`perm` من الكتالوج؛ تفعيل `is_primary`؛ تعميم حارس التركيب؛ واجهة `role-assignment-tab` (نطاق/انتهاء/ملخص).
-- **يُدمَج:** `rbacCatalog` ← `featureCatalog` (مصدر واحد)؛ `/admin/roles` + `/admin/rbac-matrix` (واجهة موحّدة).
+- **مُجَسَّر مسبقًا (RBAC-003):** `isKnownPermission()` يقبل featureCatalog + الكتالوج المسطّح، فالانحراف مُحتوى. `/admin/roles` + `/admin/rbac-matrix` يُدمَجان في واجهة موحّدة (تطوير واجهة منخفض الخطر).
 - **يُبنى (لا بديل صالح):** Quick-Create flow؛ Effective Permissions Viewer؛ Role Conflict Analyzer UI — **فوق** المحرك الموجود، لا بجانبه.
-- **يُهجَر بعد توثيق:** النموذج المسطّح `role_permissions`/`rbacCatalog` بعد اكتمال الاشتقاق (السبب: FND-010 انحراف صلاحيات).
-- **لا يُحذف الآن:** لا حذف في المرحلة 1.
+- **مؤجَّل كمتابعة مستقلة (تحتاج CI/staging — لا تنفيذ أعمى):** إزالة `rbacCatalog` بالكامل تعني نقل 30+ مسارًا عن ثابتات مجموعات الأدوار + إعادة بذر `ROLE_PERMISSIONS`؛ إعادة هيكلة كبيرة لا تُنفَّذ بلا تحقق تشغيلي. كذلك دمج المرفقات (DOC-VIOLATION) = هجرة بيانات + قطع، تحتاج فترة إهلاك وتحقق staging.
+- **لا يُحذف الآن:** لا حذف؛ الدمج يسبق الحذف وبتوثيق السبب.
 
 ---
 
