@@ -1,4 +1,19 @@
+/**
+ * Shared base for entity-scoped statement views. Re-exported as the
+ * default by two thin wrappers in this folder:
+ *
+ *   customer-statement.tsx → <AccountStatementPage entityType="customer">
+ *                            mounted at /clients/:id/statement
+ *   vendor-statement.tsx   → <AccountStatementPage entityType="vendor">
+ *                            mounted at /finance/vendors/:id/statement
+ *
+ * This file is NOT registered in any route file because the wrappers
+ * are what bind to URLs. Conflict #2 in
+ * `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md` flagged it as "dead" vs
+ * "keep". Resolved here as **keep** — the wrappers depend on it.
+ */
 import { useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -64,12 +79,14 @@ function exportCSV(name: string, period: { from: string; to: string }, movements
     Number(m.credit).toFixed(2),
     Number(m.runningBalance).toFixed(2),
   ]);
-  const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `${name}-${period.from}-to-${period.to}.csv`;
-  link.click();
+  // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+  // Routed through unified export helper for audit + letterhead.
+  void exportRowsToCsv({
+    entityType: "report_account_statement",
+    title: String(`${name}-${period.from}-to-${period.to}.csv`).replace(/\.csv$/i, ""),
+    rows: rows.map((row: any) => Object.fromEntries(headers.map((h: string, i: number) => [h, Array.isArray(row) ? row[i] : (row?.[h] ?? "")]))),
+    columns: headers.map((h: string) => ({ key: h, label: h })),
+  }).catch((err) => console.error("[export] failed", err));
 }
 
 interface Props {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -74,31 +75,31 @@ function exportCSV(rows: OverrideRow[]) {
     "تغيير؟",
     "بواسطة (override)", "السبب", "بواسطة (resolve)",
   ];
-  const csv = [
-    headers,
-    ...rows.map((r) => {
-      const acctChanged = r.proposedAccountCode !== r.resolvedAccountCode;
-      const ccChanged = (r.proposedCostCenterId ?? null) !== (r.costCenterId ?? null);
-      return [
-        csvEscape(r.resolvedAt?.slice(0, 19).replace("T", " ") ?? ""),
-        csvEscape(SOURCE_LABEL[r.sourceTable] ?? r.sourceTable),
-        String(r.sourceLineId),
-        csvEscape(r.proposedAccountCode ?? ""),
-        r.proposedCostCenterId ? String(r.proposedCostCenterId) : "",
-        csvEscape(r.resolvedAccountCode ?? ""),
-        r.costCenterId ? String(r.costCenterId) : "",
-        acctChanged || ccChanged ? "نعم" : "لا",
-        r.manualOverrideBy ? String(r.manualOverrideBy) : "",
-        csvEscape(r.manualOverrideReason ?? ""),
-        r.resolvedBy ? String(r.resolvedBy) : "",
-      ];
-    }),
-  ].map((r) => r.join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `manual-overrides-${todayLocal()}.csv`;
-  link.click();
+  // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+  // Routed through the unified export helper for audit + letterhead.
+  const items = rows.map((r) => {
+    const acctChanged = r.proposedAccountCode !== r.resolvedAccountCode;
+    const ccChanged = (r.proposedCostCenterId ?? null) !== (r.costCenterId ?? null);
+    return {
+      [headers[0]]: r.resolvedAt?.slice(0, 19).replace("T", " ") ?? "",
+      [headers[1]]: SOURCE_LABEL[r.sourceTable] ?? r.sourceTable,
+      [headers[2]]: String(r.sourceLineId),
+      [headers[3]]: r.proposedAccountCode ?? "",
+      [headers[4]]: r.proposedCostCenterId ? String(r.proposedCostCenterId) : "",
+      [headers[5]]: r.resolvedAccountCode ?? "",
+      [headers[6]]: r.costCenterId ? String(r.costCenterId) : "",
+      [headers[7]]: acctChanged || ccChanged ? "نعم" : "لا",
+      [headers[8]]: r.manualOverrideBy ? String(r.manualOverrideBy) : "",
+      [headers[9]]: r.manualOverrideReason ?? "",
+      [headers[10]]: r.resolvedBy ? String(r.resolvedBy) : "",
+    };
+  });
+  void exportRowsToCsv({
+    entityType: "report_overrides",
+    title: `سجل تعديلات التوجيه — ${todayLocal()}`,
+    rows: items,
+    columns: headers.map((h) => ({ key: h, label: h })),
+  }).catch((err) => console.error("[export] failed", err));
 }
 
 export default function OverridesReportPage() {
