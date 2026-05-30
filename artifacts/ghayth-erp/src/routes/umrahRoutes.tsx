@@ -50,9 +50,15 @@ const UmrahAttachments = lazy(() => import("@/pages/umrah/attachments"));
 // calculations and exposes POST /commission-plans/:id/calculate as a
 // dialog so a payroll admin can re-run for a given month/year.
 const UmrahCommissionCalculations = lazy(() => import("@/pages/umrah/commission-calculations"));
+const UmrahSettings = lazy(() => import("@/pages/umrah/settings"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
+  // Settings registered FIRST among the umrah/<specific> entries so the
+  // page is easy to find when scanning the route table. Module gate is
+  // "operations" — same as the rest of umrah; per-action permissions
+  // are enforced at the backend (umrah:update on PATCH).
+  { path: "/umrah/settings", component: UmrahSettings, module: "operations" },
   { path: "/umrah/pilgrims", component: UmrahPilgrims, module: "operations" },
   { path: "/umrah/pilgrims/create", component: PilgrimCreate, module: "operations" },
   { path: "/umrah/pilgrims/:id", component: PilgrimDetail, module: "operations" },
