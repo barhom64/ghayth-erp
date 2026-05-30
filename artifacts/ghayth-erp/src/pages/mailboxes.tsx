@@ -27,6 +27,8 @@ type MailboxRow = {
   provider: Provider;
   displayName: string | null;
   emailAddress: string;
+  branchId: number | null;
+  branchName?: string | null;
   imapHost: string | null;
   imapPort: number | null;
   imapUsername: string | null;
@@ -123,6 +125,12 @@ export default function Mailboxes() {
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="text-muted-foreground">{m.emailAddress}</div>
+                {m.branchName && (
+                  <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 gap-1">
+                    <Mail className="w-3 h-3" />
+                    فرع: {m.branchName}
+                  </Badge>
+                )}
                 {m.imapHost && (
                   <div className="text-xs text-muted-foreground">
                     {m.imapHost}:{m.imapPort} ({m.imapUsername})
@@ -188,8 +196,13 @@ export default function Mailboxes() {
 function ConnectDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
   const { toast } = useToast();
   const [provider, setProvider] = useState<Provider>("imap");
+  const { data: branchesResp } = useApiQuery<{ data: { id: number; name: string }[] }>(
+    ["branches-list"],
+    "/settings/branches",
+  );
+  const branches = branchesResp?.data ?? [];
   const [form, setForm] = useState({
-    displayName: "", emailAddress: "",
+    displayName: "", emailAddress: "", branchId: "",
     imapHost: "", imapPort: 993, imapUsername: "", imapPassword: "",
     smtpHost: "", smtpPort: 587, smtpUsername: "", smtpPassword: "",
     accessToken: "", refreshToken: "", tenantId: "",
@@ -209,6 +222,7 @@ function ConnectDialog({ open, onClose, onSuccess }: { open: boolean; onClose: (
       provider,
       displayName: form.displayName || undefined,
       emailAddress: form.emailAddress,
+      branchId: form.branchId ? Number(form.branchId) : undefined,
     };
     if (provider === "microsoft365") {
       Object.assign(payload, {
@@ -248,6 +262,21 @@ function ConnectDialog({ open, onClose, onSuccess }: { open: boolean; onClose: (
               onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
             <Input placeholder="عنوان البريد" value={form.emailAddress}
               onChange={(e) => setForm({ ...form, emailAddress: e.target.value })} />
+          </div>
+          <div>
+            <label className="text-sm mb-1 block">الفرع (اختياري — لربط الصندوق بفرع مشترك)</label>
+            <Select
+              value={form.branchId || "none"}
+              onValueChange={(v) => setForm({ ...form, branchId: v === "none" ? "" : v })}
+            >
+              <SelectTrigger><SelectValue placeholder="بدون فرع (صندوق شخصي)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">بدون فرع (صندوق شخصي)</SelectItem>
+                {branches.map((b) => (
+                  <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {provider === "microsoft365" ? (
