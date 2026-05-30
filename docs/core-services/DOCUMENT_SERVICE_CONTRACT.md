@@ -14,9 +14,19 @@
 
 **القاعدة:** خدمة واحدة عبر `document_entity_links` — **ممنوع** مرفقات لكل مسار.
 
-**التكرار المرصود (DOC-VIOLATION):**
-- `umrah_attachments` (FK لـ `umrah_groups`) → **يُدمَج** في `documents` بـ `entityType='umrah_group'`.
-- `employee_documents` (انتهاء إقامة/رخصة) → **يُدمَج** في `documents` + جدول `document_metadata` (انتهاء/امتثال).
+**تحقّق مخطط محدّث (يصحّح DOC-VIOLATION في الجرد):** فحص المخططات والمستهلكين الفعليين غيّر التصنيف:
 
-**القرار:** تُستخدم الخدمة الموحّدة؛ **يُدمَج** الجدولان الخاصان (ترحيل + إهلاك بعد فترة، **بتوثيق السبب**). الدمج منخفض المخاطر عالي النظافة — يُجدوَل في التنفيذ.
+| الجدول | الحقيقة بعد التحقق | القرار المصحّح |
+|---|---|---|
+| `employee_documents` (083) | **ليس** مرفقات مكرّرة — جدول **امتثال/انتهاء domain** (`documentType/documentNumber/issueDate/expiryDate/issuingAuthority/reminderDays/status`) يستهلكه **8 ملفات** (`cronScheduler` تذكيرات الانتهاء، `bi`, `calendar`, `dashboard`, `operationsCenter`, `mySpace`, `hr`, `employees`) | **يُبقى كما هو** — دمجه يكسر تتبّع انتهاء الوثائق والامتثال. التصنيف السابق كان **سوء تصنيف** من وكيل الجرد |
+| `umrah_attachments` (154) | متعدد الأشكال فعلًا (`entityType`+`entityId`، **لا FK لـ umrah_groups**)؛ يستهلكه ملف واحد (`umrah-entities.ts`، 3 نقاط + تحقّق ملكية + enum نوع) | **مرشّح توحيد حقيقي ومحتوى** — لكنه نظام **يعمل**، فالتوحيد **تحسين نظافة** لا إصلاح؛ يغيّر شكل الاستجابة ويتطلب **تحقق UI تشغيلي** |
+
+**خطة توحيد `umrah_attachments` (دون كسر — تحتاج تحقق staging قبل الدمج):**
+1. إضافة أنواع كيانات العمرة إلى `ALLOWED_ENTITY_TYPES` في `documents.ts`.
+2. مهاجرة backfill idempotent: نسخ `umrah_attachments` → `documents` (`type`→`category`, `title`, `notes`→`description`, `storageKey`) + `document_entity_links` (`entityType`,`entityId`). **بلا حذف الجدول القديم** (عكوس).
+3. إعادة توجيه نقاط `/umrah/attachments` الثلاث داخليًا لتقرأ/تكتب `documents`+`document_entity_links`، **مع الحفاظ على شكل الاستجابة** (تعيين `category`→`type`) حتى لا تتغيّر الواجهة.
+4. تحقق UI: تبويب مرفقات العمرة (`umrah-attachments-panel.tsx`) يعرض/يرفع/يحذف بشكل صحيح — **خطوة تشغيلية إلزامية قبل الدمج**.
+5. بعد فترة إهلاك وتأكّد: إسقاط `umrah_attachments` (مهاجرة منفصلة، `@policy:destructive`).
+
+**القرار:** الخدمة الموحّدة تُستخدم. `employee_documents` يُبقى (تصحيح). توحيد `umrah_attachments` **مخطّط دقيقًا أعلاه** ويُنفَّذ كـ PR يُتحقَّق منه في staging قبل الدمج — لا يُنفَّذ "أعمى" لأنه يمسّ ميزة تعمل.
 </content>
