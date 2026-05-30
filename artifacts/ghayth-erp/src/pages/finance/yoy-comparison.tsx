@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { PageShell } from "@workspace/ui-core";
@@ -150,12 +151,25 @@ export default function YoyComparisonPage() {
     lines.push(["", "", "إجمالي الإيرادات", totalCurRevenue.toFixed(2), totalPriorRevenue.toFixed(2), revVariance.toFixed(2), revVariancePct.toFixed(2)].join(","));
     lines.push(["", "", "إجمالي المصروفات", totalCurExpense.toFixed(2), totalPriorExpense.toFixed(2), expVariance.toFixed(2), expVariancePct.toFixed(2)].join(","));
     lines.push(["", "", "صافي الربح", curNet.toFixed(2), priorNet.toFixed(2), netVariance.toFixed(2), netVariancePct.toFixed(2)].join(","));
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `yoy-${year}-vs-${year - 1}-ytd-${throughMonth}.csv`;
-    a.click();
-  };
+    // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+    // Routed through unified export helper for audit + letterhead.
+    {
+      const _allLines = lines;
+      const _headers = (_allLines[0] ?? "").split(",");
+      const _rows = _allLines.slice(1).map((line) => {
+        const parts = line.split(",");
+        const obj: Record<string, string> = {};
+        _headers.forEach((h, i) => { obj[h] = parts[i] ?? ""; });
+        return obj;
+      });
+      void exportRowsToCsv({
+        entityType: "report_yoy_comparison",
+        title: String(`yoy-${year}-vs-${year - 1}-ytd-${throughMonth}.csv`).replace(/\.csv$/i, ""),
+        rows: _rows,
+        columns: _headers.map((h) => ({ key: h, label: h })),
+      }).catch((err) => console.error("[export] failed", err));
+    }
+};
 
   if (qCur.isLoading || qPrior.isLoading) return <LoadingSpinner />;
 
