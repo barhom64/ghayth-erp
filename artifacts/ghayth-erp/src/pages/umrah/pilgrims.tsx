@@ -53,10 +53,24 @@ export default function UmrahPilgrims() {
   // "today" chip can't accidentally query UTC.
   const arrivalDate = (filters as Record<string, string>).arrivalDate || "";
   const departureDate = (filters as Record<string, string>).departureDate || "";
+  // Visa-expiring window — the banner uses 7-day default but the
+  // operator can flip the active filter (set by the banner click) on
+  // and off. Empty string means "no filter".
+  const visaExpiringWithin = (filters as Record<string, string>).visaExpiringWithin || "";
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["umrah-pilgrims", filters.search, filters.status, seasonId, groupId, flight, arrivalDate, departureDate, String(page)],
-    `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&flight=${encodeURIComponent(flight)}&arrivalDate=${encodeURIComponent(arrivalDate)}&departureDate=${encodeURIComponent(departureDate)}&page=${page}&limit=${pageSize}`,
+    ["umrah-pilgrims", filters.search, filters.status, seasonId, groupId, flight, arrivalDate, departureDate, visaExpiringWithin, String(page)],
+    `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&flight=${encodeURIComponent(flight)}&arrivalDate=${encodeURIComponent(arrivalDate)}&departureDate=${encodeURIComponent(departureDate)}&visaExpiringWithin=${encodeURIComponent(visaExpiringWithin)}&page=${page}&limit=${pageSize}`,
   );
+
+  // Independent count query — banner shows even when the operator
+  // hasn't filtered. Uses limit=1 so the round-trip stays cheap; we
+  // only care about `total`. Stale-while-revalidate is fine here —
+  // the banner is informational, not a control input.
+  const { data: visaSoonResp } = useApiQuery<{ total?: number }>(
+    ["umrah-pilgrims-visa-expiring", "7"],
+    `/umrah/pilgrims?visaExpiringWithin=7&limit=1`,
+  );
+  const visaSoonCount = Number(visaSoonResp?.total ?? 0);
 
   // Seasons + groups feed the extraFilters dropdowns so operators can
   // narrow the pilgrim list by the two most common scopes (this season,
@@ -232,6 +246,35 @@ export default function UmrahPilgrims() {
         </div>
       )}
 
+      {/* Visa-expiring banner — the daily compliance siren. Surfaces a
+          count of pilgrims with visa expiring within 7 days so the
+          operator chases them BEFORE the visa expires (becomes a KSA
+          overstay fine). Click "عرضهم" to apply the matching filter;
+          a second click on the active filter clears it. */}
+      {visaSoonCount > 0 && (
+        <div
+          data-testid="pilgrims-visa-expiring-banner"
+          className="rounded-md border border-status-error-surface bg-status-error-surface/30 p-3 text-sm text-status-error-foreground flex items-center gap-3 justify-between flex-wrap"
+        >
+          <span>
+            <strong>{visaSoonCount}</strong> معتمر تنتهي تأشيرتهم خلال ٧ أيام — تابعوهم قبل تحوّل الحالة إلى مخالف.
+          </span>
+          <Button
+            size="sm"
+            variant={visaExpiringWithin === "7" ? "default" : "outline"}
+            className="text-xs h-7 gap-1"
+            data-testid="pilgrims-visa-expiring-filter"
+            onClick={() => {
+              const next = visaExpiringWithin === "7" ? "" : "7";
+              setFilters({ ...filters, visaExpiringWithin: next } as any);
+              setPage(1);
+            }}
+          >
+            {visaExpiringWithin === "7" ? "إلغاء التصفية" : "عرضهم"}
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {kpiCards.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -339,7 +382,7 @@ export default function UmrahPilgrims() {
         // 21-column manifest with NUSK, visa, flights, hotel, agent —
         // exactly what MOFA / hotels / bus drivers need.
         onExportCSV={() => {
-          const qs = `search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&flight=${encodeURIComponent(flight)}&arrivalDate=${encodeURIComponent(arrivalDate)}&departureDate=${encodeURIComponent(departureDate)}`;
+          const qs = `search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&flight=${encodeURIComponent(flight)}&arrivalDate=${encodeURIComponent(arrivalDate)}&departureDate=${encodeURIComponent(departureDate)}&visaExpiringWithin=${encodeURIComponent(visaExpiringWithin)}`;
           window.location.href = `/api/umrah/pilgrims/export.csv?${qs}`;
         }}
         resultCount={total}
