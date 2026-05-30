@@ -157,7 +157,10 @@ export async function fleetTelematicsHeartbeat(): Promise<string> {
             d."lastPositionAt",
             COALESCE(i."offlineThresholdSec", 600) AS "offlineThresholdSec"
        FROM fleet_telematics_devices d
-       LEFT JOIN fleet_telematics_integrations i ON i.id = d."integrationId"
+       LEFT JOIN fleet_telematics_integrations i
+              ON i.id = d."integrationId"
+             AND i."companyId" = d."companyId"
+             AND i."deletedAt" IS NULL
        WHERE d."deletedAt" IS NULL
          AND d.status = 'online'
          AND d."lastPositionAt" IS NOT NULL
