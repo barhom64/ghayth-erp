@@ -1534,6 +1534,10 @@ export function registerEventListeners() {
     "support_ticket", "trip", "vehicle", "maintenance", "fuel_log",
     "warehouse_product", "warehouse_movement", "crm_opportunity", "crm_activity",
     "company", "branch", "request", "communication", "property",
+    // FND-006: listeners for the newly-mapped tracks (auditMiddleware emits
+    // audit.{entity}.{action}; without a listener here the row would be lost).
+    "legal_contract", "legal_case", "governance_item", "automation_rule",
+    "marketing_campaign", "store_order", "bi_object",
   ];
   const auditActions = ["create", "update", "delete"];
   for (const entity of auditEntities) {
