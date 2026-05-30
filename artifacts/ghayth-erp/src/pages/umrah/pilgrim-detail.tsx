@@ -18,7 +18,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Save, User, Calendar, AlertTriangle, Trash2, Edit, UserCog } from "lucide-react";
+import { Save, User, Calendar, AlertTriangle, Trash2, Edit, UserCog, ShieldOff } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -78,6 +80,11 @@ export default function PilgrimDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
+  // Overstay-exemption (migration 242 / PR #1482). The card lives
+  // below the trip data; reason is a textarea so the operator can
+  // type a sentence ("تأخّر مستشفى - تقرير مرفق", etc.).
+  const [exemptionReason, setExemptionReason] = useState("");
+  const [savingExemption, setSavingExemption] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
@@ -113,6 +120,49 @@ export default function PilgrimDetail() {
       setNewStatus("");
       refetch();
     } catch { toast({ variant: "destructive", title: "خطأ في التحديث" }); }
+  };
+
+  // Toggle overstay exemption (PR #1482). Adding an exemption requires
+  // a reason; removing one doesn't. The backend re-validates and writes
+  // server-side audit metadata (overstayExemptBy + overstayExemptAt).
+  const toggleExemption = async (exempt: boolean) => {
+    setSavingExemption(true);
+    try {
+      const body: { overstayExempt: boolean; overstayExemptReason?: string } = {
+        overstayExempt: exempt,
+      };
+      if (exempt) {
+        const reason = exemptionReason.trim();
+        if (!reason) {
+          toast({
+            variant: "destructive",
+            title: "السبب مطلوب",
+            description: "اكتب سبباً واضحاً للاستثناء قبل التفعيل",
+          });
+          setSavingExemption(false);
+          return;
+        }
+        body.overstayExemptReason = reason;
+      }
+      await apiFetch(`/umrah/pilgrims/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      toast({
+        title: exempt ? "تم استثناء المعتمر" : "أُلغي الاستثناء",
+        description: exempt ? "لن يدخل ضمن المسح اليومي للتأخّر" : "سيُمسح ضمن المسح اليومي للتأخّر",
+      });
+      setExemptionReason("");
+      refetch();
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "خطأ في الحفظ",
+        description: e?.message ?? "فشل تحديث حالة الاستثناء",
+      });
+    } finally {
+      setSavingExemption(false);
+    }
   };
 
   const personalFields = [
@@ -201,6 +251,80 @@ export default function PilgrimDetail() {
           </CardContent>
         </Card>
       )}
+
+      {/* Overstay-exemption card (PR #1482). Shows the active flag,
+          the reason + audit metadata when exempt, and a toggle to
+          flip it. Adding the exemption requires a non-empty reason
+          (backend re-validates so the API stays honest even if the
+          UI is bypassed). */}
+      <Card
+        className={data?.overstayExempt ? "border-status-warning-surface" : ""}
+        data-testid="overstay-exemption-card"
+      >
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShieldOff className="h-4 w-4" />
+            استثناء غرامة التأخّر
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {data?.overstayExempt ? (
+            <>
+              <div
+                className="rounded-md border border-status-warning-surface bg-status-warning-surface/30 p-3 text-sm text-status-warning-foreground space-y-1"
+                data-testid="exemption-active-banner"
+              >
+                <div className="font-semibold">المعتمر مستثنى من المسح اليومي للتأخّر</div>
+                <div className="text-xs">
+                  السبب: <span className="font-medium">{data.overstayExemptReason || "—"}</span>
+                </div>
+                {data.overstayExemptAt && (
+                  <div className="text-xs">
+                    منذ: {formatDateAr(data.overstayExemptAt)}
+                  </div>
+                )}
+              </div>
+              <GuardedButton
+                perm="umrah:update"
+                variant="outline"
+                size="sm"
+                onClick={() => toggleExemption(false)}
+                disabled={savingExemption}
+                data-testid="exemption-remove-button"
+              >
+                {savingExemption ? "جاري الحفظ..." : "إلغاء الاستثناء"}
+              </GuardedButton>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                المسح اليومي سيُضيف غرامة تلقائياً إذا تجاوز المعتمر مدة البرنامج. استثنِه فقط عند
+                اتفاق وكيل أو ظرف موثَّق (تأخّر مستشفى، تأخّر طيران…)
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="exemption-reason">سبب الاستثناء</Label>
+                <Textarea
+                  id="exemption-reason"
+                  data-testid="exemption-reason-input"
+                  value={exemptionReason}
+                  onChange={(e) => setExemptionReason(e.target.value)}
+                  placeholder="اكتب سبباً واضحاً (مثل: تأخّر مستشفى — تقرير مرفق)"
+                  rows={3}
+                />
+              </div>
+              <GuardedButton
+                perm="umrah:update"
+                size="sm"
+                onClick={() => toggleExemption(true)}
+                disabled={!exemptionReason.trim() || savingExemption}
+                data-testid="exemption-apply-button"
+              >
+                {savingExemption ? "جاري الحفظ..." : "تفعيل الاستثناء"}
+              </GuardedButton>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {data?.notes && (
         <Card>
