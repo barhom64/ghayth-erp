@@ -715,8 +715,81 @@ export async function confirmVouchersImport(
   scope: ImportScope,
   rows: ParsedRow[],
   fileName: string,
+  options: { allowOverdraft?: boolean } = {},
 ): Promise<ImportResult> {
   return withTransaction(async (client) => {
+    // Wallet-overdraft guardrail — the hard form of PR #1464's
+    // soft red banner. Refuses the entire import if the cumulative
+    // new obligations would push the NUSK supplier wallet below
+    // zero. Matches the operator rule:
+    //   "لا يمكن نشتري تأشيرة الا وفي فلوس في الحساب"
+    //
+    // Skipped when:
+    //   - The company hasn't configured nuskSupplierId yet (settings
+    //     unset → wallet view also shows configured:false, consistent)
+    //   - The operator explicitly passed allowOverdraft=true (logged
+    //     to audit for compliance review)
+    //
+    // Computed inside the transaction so a concurrent NUSK invoice
+    // import can't slip past the check. The query shapes match the
+    // /umrah/nusk-wallet endpoint exactly so the guardrail and the
+    // display reconcile on the same number.
+    if (!options.allowOverdraft) {
+      const cfgRes = await client.query(
+        `SELECT "nuskSupplierId" FROM companies WHERE id = $1`,
+        [scope.companyId],
+      );
+      const nuskSupplierId = cfgRes.rows[0]?.nuskSupplierId ?? null;
+      if (nuskSupplierId != null) {
+        const depRes = await client.query(
+          `SELECT COALESCE(SUM(spa.amount), 0) AS total
+             FROM supplier_payment_allocations spa
+             JOIN journal_entries je ON je.id = spa."journalEntryId"
+             JOIN purchase_orders po ON po.id = spa."obligationId"
+            WHERE spa."companyId" = $1
+              AND spa."deletedAt" IS NULL
+              AND spa."obligationType" = 'purchase_order'
+              AND po."supplierId" = $2
+              AND je."deletedAt" IS NULL
+              AND je."balancesApplied" = true
+              AND je."reversedById" IS NULL`,
+          [scope.companyId, nuskSupplierId],
+        );
+        const oblRes = await client.query(
+          `SELECT COALESCE(SUM("totalAmount"), 0) AS total,
+                  COALESCE(SUM("refundAmount"), 0) AS refunds
+             FROM umrah_nusk_invoices
+            WHERE "companyId" = $1
+              AND "deletedAt" IS NULL
+              AND "nuskStatus" NOT IN ('cancelled')`,
+          [scope.companyId],
+        );
+        const currentBalance =
+          Number(depRes.rows[0]?.total ?? 0)
+          - (Number(oblRes.rows[0]?.total ?? 0) - Number(oblRes.rows[0]?.refunds ?? 0));
+        const newObligations = rows.reduce((sum, r) => {
+          // Match the schema columns the row INSERT below uses.
+          // `refundAmount` isn't a column on the imported row;
+          // refunds happen post-import via a separate flow.
+          const t = Number((r as any).totalAmount ?? 0);
+          return sum + (Number.isFinite(t) && t > 0 ? t : 0);
+        }, 0);
+        const projectedBalance = currentBalance - newObligations;
+        if (projectedBalance < 0) {
+          const shortfall = Math.abs(projectedBalance);
+          throw new ValidationError(
+            `الاستيراد سيتجاوز رصيد محفظة نسك بـ ${shortfall.toFixed(2)} ر.س`,
+            {
+              field: "wallet",
+              fix:
+                `حوّل ${shortfall.toFixed(2)} ر.س على الأقل إلى مورد نسك ثم أعد المحاولة، ` +
+                `أو ابعث allowOverdraft=true إذا كان التحويل في الطريق وتريد التسجيل الآن`,
+            },
+          );
+        }
+      }
+    }
+
     const batchRes = await client.query(
       `INSERT INTO umrah_import_batches
        ("companyId","branchId","seasonId","fileType","fileName","uploadedBy","totalRows",status)

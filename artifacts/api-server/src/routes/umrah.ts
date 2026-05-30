@@ -266,6 +266,17 @@ const importVouchersSchema = z.object({
   /** Override umrah_nusk_cost DR account code (gap #3). */
   purchaseAccountCode: z.string().trim().min(1).optional().nullable(),
   columnMapping: columnMappingSchema,
+  /**
+   * Explicit override for the wallet-overdraft guardrail. By default
+   * the engine refuses an import that would push the NUSK supplier
+   * wallet (PR #1464) below zero — matching the operator rule
+   * "لا يمكن نشتري تأشيرة الا وفي فلوس في الحساب". Setting
+   * allowOverdraft=true bypasses the check for cases where the
+   * operator KNOWS a top-up is on its way and wants to record the
+   * NUSK invoices anyway. The audit log captures the override so
+   * compliance can review.
+   */
+  allowOverdraft: z.boolean().optional().default(false),
 });
 
 const importSchema = z.object({
@@ -1224,7 +1235,7 @@ router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }
 router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping } =
+    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping, allowOverdraft } =
       zodParse(importVouchersSchema.safeParse(req.body));
     await requireOpenSeason(seasonId, scope.companyId);
     // Wire vouchers through the dedicated engine so they actually create
@@ -1246,7 +1257,7 @@ router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }
     // `row.nuskInvoiceNumber === undefined` and bucket every row as an
     // error — the same bug the preview route hit before normalization.
     const normalizedRows = normalizeImportRows(importRows, "vouchers", columnMapping);
-    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers");
+    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers", { allowOverdraft });
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
 });
