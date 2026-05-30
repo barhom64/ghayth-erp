@@ -401,11 +401,15 @@ export async function createAuditLog(params: {
   before?: any;
   after?: any;
   reason?: string;
+  // RBAC-001 (#1413 §9): the role (capacity) the actor performed under.
+  // Optional/back-compatible — callers that pass scope.selectedRoleKey get it
+  // persisted; older callers omit it and the column stays NULL.
+  activeRoleKey?: string | null;
 }) {
   try {
     await rawExecute(
-      `INSERT INTO audit_logs ("companyId","branchId","userId",action,entity,"entityId","before","after",reason)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      `INSERT INTO audit_logs ("companyId","branchId","userId",action,entity,"entityId","before","after",reason,"active_role_key")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [
         params.companyId,
         params.branchId ?? null,
@@ -416,6 +420,7 @@ export async function createAuditLog(params: {
         params.before ? JSON.stringify(params.before) : null,
         params.after ? JSON.stringify(params.after) : null,
         params.reason ?? null,
+        params.activeRoleKey ?? null,
       ]
     );
   } catch (err) {
