@@ -86,6 +86,7 @@ const allNavSections: NavSection[] = [
     title: "الرئيسية",
     items: [
       { label: "لوحة التحكم", path: "/dashboard", icon: LayoutDashboard, module: "home" },
+      { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar, minRoleLevel: 20 },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
         { label: "مساحتي", path: "/my-space", icon: User },
@@ -622,16 +623,27 @@ const allNavSections: NavSection[] = [
 
 const allNavItems: NavItem[] = allNavSections.flatMap(s => s.items);
 
-export function getAllNavigationPages(): { label: string; path: string; section: string; parent?: string }[] {
-  const pages: { label: string; path: string; section: string; parent?: string }[] = [];
+export function getAllNavigationPages(): { label: string; path: string; section: string; parent?: string; icon?: any; module?: ModuleType; minRoleLevel?: number; perm?: string | string[]; permMode?: "all" | "any" }[] {
+  const pages: { label: string; path: string; section: string; parent?: string; icon?: any; module?: ModuleType; minRoleLevel?: number; perm?: string | string[]; permMode?: "all" | "any" }[] = [];
 
-  function collectPages(items: NavItem[], section: string, parentLabel?: string) {
+  function collectPages(items: NavItem[], section: string, parentLabel?: string, inheritedRoleLevel?: number) {
     for (const item of items) {
+      const effectiveRoleLevel = item.minRoleLevel ?? inheritedRoleLevel;
       if (!item.path.startsWith("#")) {
-        pages.push({ label: item.label, path: item.path, section, parent: parentLabel });
+        pages.push({
+          label: item.label,
+          path: item.path,
+          section,
+          parent: parentLabel,
+          icon: item.icon,
+          module: item.module,
+          minRoleLevel: effectiveRoleLevel,
+          perm: item.perm,
+          permMode: item.permMode,
+        });
       }
       if (item.children) {
-        collectPages(item.children, section, parentLabel ? `${parentLabel} / ${item.label}` : item.label);
+        collectPages(item.children, section, parentLabel ? `${parentLabel} / ${item.label}` : item.label, effectiveRoleLevel);
       }
     }
   }
@@ -640,6 +652,56 @@ export function getAllNavigationPages(): { label: string; path: string; section:
     collectPages(section.items, section.title);
   }
   return pages;
+}
+
+/**
+ * useFilteredNavSections — exposes the same filter pipeline the sidebar
+ * uses (role-level, module access, feature flags, sub-page gates,
+ * fine-grained perms, route-registry check) as a reusable hook. Returns
+ * the navigation tree pre-filtered for the current user. Consumed by
+ * sidebar-layout itself AND by the /services hub page so both stay in
+ * sync without duplicating the filter logic.
+ */
+export function useFilteredNavSections(): NavSection[] {
+  const {
+    canAccessModule,
+    canAccessSubPage,
+    isFeatureEnabled,
+    can,
+    effectiveRoleLevel,
+  } = useAppContext();
+
+  const itemPermAllowed = (item: NavItem): boolean => {
+    if (!item.perm) return true;
+    const list = Array.isArray(item.perm) ? item.perm : [item.perm];
+    return item.permMode === "any" ? list.some(can) : list.every(can);
+  };
+
+  const filterItems = (items: NavItem[], parentModule?: ModuleType): NavItem[] =>
+    items
+      .map((item): NavItem | null => {
+        const mod = item.module ?? parentModule;
+        if (item.module && !canAccessModule(item.module)) return null;
+        if (item.module && !isFeatureEnabled(item.module)) return null;
+        if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
+        if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
+        if (!itemPermAllowed(item)) return null;
+        if (!item.children || item.children.length === 0) {
+          if (!isRegisteredRoute(item.path)) return null;
+          return item;
+        }
+        const filteredChildren = filterItems(item.children, mod);
+        if (filteredChildren.length === 0) return null;
+        return { ...item, children: filteredChildren };
+      })
+      .filter((x): x is NavItem => x !== null);
+
+  return allNavSections
+    .map((section) => ({
+      ...section,
+      items: filterItems(section.items),
+    }))
+    .filter((section) => section.items.length > 0);
 }
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
@@ -727,39 +789,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   usePropertyKeyboardShortcuts(navigate);
 
-  const itemPermAllowed = (item: NavItem): boolean => {
-    if (!item.perm) return true;
-    const list = Array.isArray(item.perm) ? item.perm : [item.perm];
-    return item.permMode === "any" ? list.some(can) : list.every(can);
-  };
-
-  const filterItems = (items: NavItem[], parentModule?: ModuleType): NavItem[] =>
-    items
-      .map((item): NavItem | null => {
-        const mod = item.module ?? parentModule;
-        if (item.module && !canAccessModule(item.module)) return null;
-        // VIS-002: partial activation. Hide a track when the company disabled
-        // its feature. Default-ON (empty disabled set) ⇒ no change.
-        if (item.module && !isFeatureEnabled(item.module)) return null;
-        if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
-        if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
-        if (!itemPermAllowed(item)) return null;
-        if (!item.children || item.children.length === 0) {
-          if (!isRegisteredRoute(item.path)) return null;
-          return item;
-        }
-        const filteredChildren = filterItems(item.children, mod);
-        if (filteredChildren.length === 0) return null;
-        return { ...item, children: filteredChildren };
-      })
-      .filter((x): x is NavItem => x !== null);
-
-  const filteredSections = allNavSections
-    .map(section => ({
-      ...section,
-      items: filterItems(section.items),
-    }))
-    .filter(section => section.items.length > 0);
+  // filterItems / filteredSections were inlined here pre-2026-05-30. They
+  // moved to the exported `useFilteredNavSections` hook so the /services
+  // hub page can reuse the same pipeline without copy-pasting the rule
+  // set. The hook re-reads useAppContext() internally — same context,
+  // same answers, single source of truth.
+  const filteredSections = useFilteredNavSections();
 
   const filteredNavItems = filteredSections.flatMap(s => s.items);
 

@@ -38,6 +38,7 @@ const AiWorkbench = lazy(() => import("@/pages/ai-workbench"));
 const Insights = lazy(() => import("@/pages/insights"));
 const Automation = lazy(() => import("@/pages/automation"));
 const ActivityLog = lazy(() => import("@/pages/activity-log"));
+const Services = lazy(() => import("@/pages/services"));
 const MySpace = lazy(() => import("@/pages/my-space"));
 const MyRequests = lazy(() => import("@/pages/my-requests"));
 const MyAttendance = lazy(() => import("@/pages/my-attendance"));
@@ -66,6 +67,7 @@ const Dashboard = lazy(() => import("@/pages/dashboard"));
 
 export const miscRoutes: { path: string; component: any; module?: ModuleType; minRoleLevel?: number }[] = [
   { path: "/dashboard", component: Dashboard },
+  { path: "/services", component: Services },
   { path: "/my-space", component: MySpace },
   { path: "/my-requests", component: MyRequests },
   { path: "/my-attendance", component: MyAttendance },
