@@ -67,10 +67,10 @@ const ALLOWLIST: Allow[] = [
   },
   {
     file: "auth.ts",
-    line: 422,
+    line: 423,
     table: "employee_assignments",
     reason:
-      "Same refresh-token bootstrap flow as L297/L327 — third active-assignment lookup in the refresh handler. Runs after the verified refresh token is loaded; tenant boundary is the token's employeeId, not scope.companyId (scope is being rebuilt).",
+      "Same refresh-token bootstrap flow as L297/L327 — third active-assignment lookup in the refresh handler. Runs after the verified refresh token is loaded; tenant boundary is the token's employeeId, not scope.companyId (scope is being rebuilt). (Line shifted +1 by the RBAC-007 is_primary ordering edit in the /login union query above.)",
   },
   {
     file: "hr.ts",
