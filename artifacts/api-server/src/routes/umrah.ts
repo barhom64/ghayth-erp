@@ -626,19 +626,34 @@ router.delete("/packages/:id", authorize({ feature: "umrah", action: "delete" })
 router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId, status, agentId, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
+    const { seasonId, status, agentId, groupId, nationality, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
     let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND p.status=$${params.length}`; }
     if (agentId) { params.push(agentId); where += ` AND p."agentId"=$${params.length}`; }
+    if (groupId) { params.push(groupId); where += ` AND p."groupId"=$${params.length}`; }
+    // Nationality is plaintext and operators routinely filter manifests
+    // by country (visa quotas, hotel block bookings). ILIKE — not equality
+    // — because the import file may write "SA" or "SAUDI" or "Saudi
+    // Arabia" depending on the source.
+    if (nationality) { params.push(`%${nationality}%`); where += ` AND p.nationality ILIKE $${params.length}`; }
     if (search) {
+      // Search hits four columns:
+      //   - fullName              (plaintext, ILIKE)
+      //   - nuskNumber            (plaintext, ILIKE) — the OPERATOR's
+      //                            primary identifier; NUSK + MOFA both
+      //                            print this on every document
+      //   - passportNumber_hash   (encrypted column; lookup via blind index)
+      //   - visaNumber_hash       (same)
+      // The single search box accepts any of these so operators don't
+      // need to pre-decide which field they're searching by.
       const searchHash = blindIndex(String(search));
       params.push(`%${search}%`);
       const likePh = params.length;
       params.push(searchHash);
       const hashPh = params.length;
-      where += ` AND (p."fullName" ILIKE $${likePh} OR p."passportNumber_hash" = $${hashPh} OR p."visaNumber_hash" = $${hashPh})`;
+      where += ` AND (p."fullName" ILIKE $${likePh} OR p."nuskNumber" ILIKE $${likePh} OR p."passportNumber_hash" = $${hashPh} OR p."visaNumber_hash" = $${hashPh})`;
     }
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Math.max(Number(limit) || 20, 1), 100);
@@ -821,12 +836,22 @@ router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "view" }), asy
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // JOINs surface the operator-facing names for every FK on the row.
+    // Defence-in-depth: every JOIN also matches "companyId" so a stale
+    // / mistyped id can't lift another tenant's name into the response.
     const [row] = await rawQuery(
-      `SELECT p.*, a.name as "agentName", pkg.name as "packageName", s.title as "seasonTitle"
+      `SELECT p.*,
+              a.name  as "agentName",
+              pkg.name as "packageName",
+              s.title  as "seasonTitle",
+              g.name  as "groupName",
+              sa.name as "subAgentName"
        FROM umrah_pilgrims p
-       LEFT JOIN umrah_agents a ON p."agentId"=a.id
-       LEFT JOIN umrah_packages pkg ON p."packageId"=pkg.id
-       LEFT JOIN umrah_seasons s ON p."seasonId"=s.id AND s."deletedAt" IS NULL
+       LEFT JOIN umrah_agents     a   ON p."agentId"=a.id      AND a."companyId"=p."companyId"  AND a."deletedAt" IS NULL
+       LEFT JOIN umrah_packages   pkg ON p."packageId"=pkg.id  AND pkg."companyId"=p."companyId" AND pkg."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons    s   ON p."seasonId"=s.id     AND s."companyId"=p."companyId"  AND s."deletedAt" IS NULL
+       LEFT JOIN umrah_groups     g   ON p."groupId"=g.id      AND g."companyId"=p."companyId"  AND g."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa  ON p."subAgentId"=sa.id  AND sa."companyId"=p."companyId" AND sa."deletedAt" IS NULL
        WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("المعتمر غير موجود"); }
