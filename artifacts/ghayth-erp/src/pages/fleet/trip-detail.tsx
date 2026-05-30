@@ -33,6 +33,7 @@ import {
   Clock,
   Gauge,
   DollarSign,
+  Radio,
   CheckCircle2,
   XCircle,
 } from "lucide-react";
@@ -91,6 +92,20 @@ export default function TripDetailPage() {
     id && trip?.vehicleId ? `/fleet/maintenance?vehicleId=${trip.vehicleId}` : null,
     !!(id && trip?.vehicleId)
   );
+
+  // Live telematics for the trip's vehicle. Enabled only while the trip is
+  // in-progress or scheduled (no point polling for completed trips). React
+  // Query caches it; the operator can hit "تحديث" or re-open the tab for
+  // fresh data. (No setInterval — the trip page is heavy enough already.)
+  const liveEnabled = !!trip?.vehicleId
+    && (trip.status === "in_progress" || trip.status === "scheduled");
+  const { data: liveResp, refetch: refetchLive } = useApiQuery<any>(
+    ["trip-telematics-live", id, String(trip?.vehicleId ?? "")],
+    trip?.vehicleId ? `/fleet/telematics/vehicles/${trip.vehicleId}/live` : null,
+    liveEnabled,
+  );
+  const live = liveResp?.data;
+
   const allMaint: any[] = maintResp?.data || [];
   const maintenance = useMemo(
     () =>
@@ -340,6 +355,99 @@ export default function TripDetailPage() {
     : "default" as const;
 
   const extraTabs: ExtraTab[] = [
+    {
+      key: "live",
+      label: "تتبع مباشر",
+      icon: Radio,
+      content: () => {
+        if (!trip?.vehicleId) return emptyMsg("لا توجد مركبة مرتبطة بهذه الرحلة");
+        if (!liveEnabled) {
+          return emptyMsg("التتبع المباشر متاح فقط للرحلات الجارية أو المجدولة");
+        }
+        if (!live?.device) {
+          return emptyMsg("هذه المركبة لا تحتوي على جهاز MDVR مرتبط — اربط جهاز من شاشة الأجهزة");
+        }
+        const pos = live.position;
+        const events = (live.events || []) as any[];
+        const alerts = (live.alerts || []) as any[];
+        return (
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-status-info-foreground" />
+                    آخر موقع
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => refetchLive()}>تحديث</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/fleet/telematics/live-map?vehicleId=${trip.vehicleId}`)}
+                    >
+                      <MapPin className="w-3 h-3 me-1" />
+                      الخريطة المباشرة
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <div><p className="text-xs text-muted-foreground">السرعة</p><p className="font-mono">{pos?.speed != null ? `${Number(pos.speed).toFixed(0)} كم/س` : "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">الموقع</p><p className="font-mono text-xs">{pos?.lat != null ? `${Number(pos.lat).toFixed(5)}, ${Number(pos.lng).toFixed(5)}` : "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">الاتجاه</p><p className="font-mono">{pos?.direction != null ? `${Number(pos.direction).toFixed(0)}°` : "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">آخر تحديث</p><p className="text-xs">{pos?.occurredAt ? formatDateAr(pos.occurredAt) : "—"}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                  <Activity className="w-4 h-4 text-purple-600" />
+                  أحدث الأحداث ({events.length})
+                </h3>
+                {events.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-4 text-sm">لا أحداث</p>
+                ) : (
+                  <DataTable
+                    columns={[
+                      { key: "occurredAt", header: "الوقت", render: (e: any) => <span className="text-xs">{formatDateAr(e.occurredAt)}</span> },
+                      { key: "eventType", header: "النوع", render: (e: any) => e.eventType },
+                      { key: "severity", header: "الخطورة", render: (e: any) => <span className="text-xs">{e.severity || "—"}</span> },
+                    ]}
+                    data={events}
+                    noToolbar
+                    pageSize={0}
+                    searchPlaceholder={null}
+                  />
+                )}
+              </CardContent>
+            </Card>
+            {alerts.length > 0 && (
+              <Card>
+                <CardContent className="p-4">
+                  <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                    <Activity className="w-4 h-4 text-rose-600" />
+                    تنبيهات السلامة الذكية ({alerts.length})
+                  </h3>
+                  <DataTable
+                    columns={[
+                      { key: "occurredAt", header: "الوقت", render: (a: any) => <span className="text-xs">{formatDateAr(a.occurredAt)}</span> },
+                      { key: "category", header: "الفئة", render: (a: any) => a.category },
+                      { key: "alertType", header: "التنبيه", render: (a: any) => a.alertType },
+                      { key: "severity", header: "الخطورة", render: (a: any) => <span className="text-xs">{a.severity}</span> },
+                    ]}
+                    data={alerts}
+                    noToolbar
+                    pageSize={0}
+                    searchPlaceholder={null}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        );
+      },
+    },
     {
       key: "fuel",
       label: "سجلات الوقود",

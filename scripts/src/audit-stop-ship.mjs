@@ -76,6 +76,7 @@ const ALLOWLIST = new Map([
   ["auth.ts", "anonymous login/register/refresh endpoints — pre-auth by design"],
   ["careersPortal.ts", "uses its own careersPortalJwt middleware, not authorize()"],
   ["clientPortal.ts", "uses its own clientPortalJwt middleware, not authorize()"],
+  ["driverPortal.ts", "uses its own driver_portal JWT middleware (#1354), not authorize()"],
   ["fleet-telematics-webhook.ts", "anonymous HMAC-signed CMSV6 push (#1354) — audit + events fire inside the shared persist* helpers in fleet-telematics.ts; webhook itself only orchestrates"],
   ["print.ts", "every print creates a row in print_jobs (its own audit table) with operator + template + payload — emitEvent would be redundant duplication"],
   ["wiring-stubs.ts", "test scaffolding for the wiring audit — no production traffic, no business writes"],

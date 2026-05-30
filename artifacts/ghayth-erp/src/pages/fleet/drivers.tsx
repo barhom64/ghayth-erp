@@ -44,7 +44,12 @@ export default function DriversPage() {
     { key: "name", label: "الاسم" },
     { key: "phone", label: "الهاتف" },
     { key: "licenseNumber", label: "الرخصة" },
-    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "inactive", label: "غير نشط" }] },
+    { key: "status", label: "الحالة", type: "select" as const, options: [
+      { value: "available", label: "متاح" },
+      { value: "on_trip", label: "في رحلة" },
+      { value: "off_duty", label: "خارج الدوام" },
+      { value: "suspended", label: "موقوف" },
+    ] },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -66,7 +71,7 @@ export default function DriversPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (d) => <PageStatusBadge status={d.status || "active"} domain="driver" />,
+      render: (d) => <PageStatusBadge status={d.status || "available"} domain="driver" />,
     },
     {
       key: "actions",
@@ -75,7 +80,7 @@ export default function DriversPage() {
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="sm" onClick={() => setPreviewDriver(d)}><Eye className="h-4 w-4" /></Button>
           <RowActions
-            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "active" })}
+            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "available" })}
             onDelete={() => startDelete(d.id)}
             deletePerm="fleet:delete"
           />
@@ -101,9 +106,9 @@ export default function DriversPage() {
       <FleetTabsNav />
       <KpiGrid items={[
         { label: "إجمالي السائقين", value: items.length, icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
-        { label: "نشطين", value: items.filter((d: any) => d.status === "active").length, icon: UserCheck, color: "text-status-success-foreground bg-status-success-surface" },
-        { label: "غير نشطين", value: items.filter((d: any) => d.status !== "active").length, icon: UserX, color: "text-status-error-foreground bg-status-error-surface" },
-        { label: "المركبات المسندة", value: items.filter((d: any) => d.vehicleId).length, icon: Car, color: "text-purple-600 bg-purple-50" },
+        { label: "متاحين", value: items.filter((d: any) => d.status === "available").length, icon: UserCheck, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "في رحلة", value: items.filter((d: any) => d.status === "on_trip").length, icon: Car, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "خارج الدوام / موقوفين", value: items.filter((d: any) => d.status === "off_duty" || d.status === "suspended").length, icon: UserX, color: "text-status-warning-foreground bg-status-warning-surface" },
       ]} />
 
       <BulkActionsBar
