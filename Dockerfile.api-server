@@ -11,16 +11,14 @@ COPY lib/api-client-react/package.json lib/api-client-react/
 COPY lib/db/package.json lib/db/
 COPY lib/object-storage-web/package.json lib/object-storage-web/
 COPY scripts/package.json scripts/
-RUN pnpm install --frozen-lockfile
-
+RUN pnpm install --frozen-lockfile --ignore-scripts
 FROM deps AS build
 WORKDIR /app
 COPY tsconfig.base.json tsconfig.json ./
 COPY lib/ ./lib/
 COPY artifacts/api-server/ ./artifacts/api-server/
 RUN pnpm run typecheck:libs && pnpm --filter @workspace/api-server run build
-RUN pnpm install --prod --frozen-lockfile
-
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 FROM node:24-alpine AS runtime
 RUN apk add --no-cache tini && corepack enable
 WORKDIR /app
