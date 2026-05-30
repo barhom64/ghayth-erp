@@ -12,6 +12,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { hashPassword } from "../lib/auth.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
@@ -916,6 +917,112 @@ router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "de
 
     res.json({ message: "تم حذف السائق بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete driver error:"); }
+});
+
+// ─── Driver portal-account provisioning (#1354) ──────────────────────────
+// Operator-side endpoints to manage driver_portal_accounts (migration 242).
+// Mirrors the client portal-account endpoints in routes/clients.ts. The
+// driver-side login + my-trips view lives in routes/driverPortal.ts and
+// reads from the same table.
+const driverPortalAccountCreateSchema = z.object({
+  email: z.string().email("البريد الإلكتروني غير صالح"),
+  password: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"),
+});
+
+const driverPortalAccountUpdateSchema = z.object({
+  isActive: z.boolean().optional(),
+  password: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل").optional(),
+});
+
+router.get("/drivers/:id/portal-account", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [account] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt"
+       FROM driver_portal_accounts
+       WHERE "driverId" = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    res.json({ account: account ?? null });
+  } catch (err) { handleRouteError(err, res, "Get driver portal account error:"); }
+});
+
+router.post("/drivers/:id/portal-account", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(driverPortalAccountCreateSchema.safeParse(req.body ?? {}));
+    const email = b.email.trim().toLowerCase();
+    const [driver] = await rawQuery<{ id: number }>(
+      `SELECT id FROM fleet_drivers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!driver) throw new NotFoundError("السائق غير موجود");
+    const [existing] = await rawQuery<{ id: number }>(
+      `SELECT id FROM driver_portal_accounts WHERE "driverId" = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (existing) throw new ConflictError("يوجد حساب بوابة لهذا السائق مسبقاً");
+    const [emailTaken] = await rawQuery<{ id: number }>(
+      `SELECT id FROM driver_portal_accounts WHERE email = $1`,
+      [email]
+    );
+    if (emailTaken) throw new ConflictError("هذا البريد الإلكتروني مستخدم بالفعل في بوابة السائقين");
+    const passwordHash = await hashPassword(b.password);
+    const { insertId } = await rawExecute(
+      `INSERT INTO driver_portal_accounts ("driverId", "companyId", email, "passwordHash", "isActive", "mustChangePassword")
+       VALUES ($1, $2, $3, $4, true, true)`,
+      [id, scope.companyId, email, passwordHash]
+    );
+    assertInsert(insertId, "driver_portal_accounts");
+    const [account] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, email, "isActive", "mustChangePassword", "createdAt" FROM driver_portal_accounts WHERE id = $1`,
+      [insertId]
+    );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "driver.portal_created", entity: "driver_portal_accounts", entityId: insertId, details: JSON.stringify({ driverId: id, email }) }).catch((e) => logger.error(e, "fleet background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "driver_portal_accounts", entityId: insertId, after: { driverId: id, email } }).catch((e) => logger.error(e, "fleet background task failed"));
+    res.status(201).json({ account });
+  } catch (err) { handleRouteError(err, res, "Create driver portal account error:"); }
+});
+
+router.patch("/drivers/:id/portal-account", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(driverPortalAccountUpdateSchema.safeParse(req.body ?? {}));
+    const [account] = await rawQuery<{ id: number }>(
+      `SELECT id FROM driver_portal_accounts WHERE "driverId" = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!account) throw new NotFoundError("حساب البوابة غير موجود");
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (b.isActive !== undefined) { params.push(b.isActive); sets.push(`"isActive" = $${params.length}`); }
+    if (b.password) {
+      const hash = await hashPassword(b.password);
+      params.push(hash); sets.push(`"passwordHash" = $${params.length}`);
+      params.push(true); sets.push(`"mustChangePassword" = $${params.length}`);
+    }
+    // Any reset (password OR suspend) bumps tokenVersion so all
+    // already-issued JWTs die immediately. Same model as client portal.
+    if (b.password || b.isActive === false) {
+      sets.push(`"tokenVersion" = COALESCE("tokenVersion", 0) + 1`);
+    }
+    if (sets.length === 0) { res.json({ account }); return; }
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(account.id);
+    await rawExecute(
+      `UPDATE driver_portal_accounts SET ${sets.join(",")} WHERE id = $${params.length} AND "companyId" = $${params.length + 1}`,
+      [...params, scope.companyId]
+    );
+    const [updated] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt" FROM driver_portal_accounts WHERE id = $1`,
+      [account.id]
+    );
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "driver_portal_accounts", entityId: account.id, after: { passwordReset: !!b.password, suspended: b.isActive === false } }).catch((e) => logger.error(e, "fleet background task failed"));
+    res.json({ account: updated });
+  } catch (err) { handleRouteError(err, res, "Update driver portal account error:"); }
 });
 
 router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {
