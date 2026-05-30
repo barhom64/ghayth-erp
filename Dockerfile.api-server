@@ -6,7 +6,8 @@ FROM node:24-alpine AS deps
 RUN corepack enable
 WORKDIR /app
 ENV npm_config_user_agent=pnpm/docker \
-    PNPM_CONFIG_IGNORE_SCRIPTS=true
+    PNPM_CONFIG_IGNORE_SCRIPTS=true \
+    CI=true
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY artifacts/api-server/package.json artifacts/api-server/
@@ -25,8 +26,8 @@ COPY tsconfig.base.json tsconfig.json ./
 COPY lib/ ./lib/
 COPY artifacts/api-server/ ./artifacts/api-server/
 
-RUN PNPM_CONFIG_IGNORE_SCRIPTS=true pnpm --filter @workspace/api-server run build
-RUN PNPM_CONFIG_IGNORE_SCRIPTS=true pnpm install --prod --frozen-lockfile --ignore-scripts
+RUN PNPM_CONFIG_IGNORE_SCRIPTS=true CI=true pnpm --filter @workspace/api-server run build
+RUN PNPM_CONFIG_IGNORE_SCRIPTS=true CI=true pnpm install --prod --frozen-lockfile --ignore-scripts
 
 FROM node:24-alpine AS runtime
 RUN apk add --no-cache tini && corepack enable
