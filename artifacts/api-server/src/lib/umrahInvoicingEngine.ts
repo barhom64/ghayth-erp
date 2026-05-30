@@ -373,8 +373,36 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     umrahSeasonId?: number;
   }> = [
     { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}`, ...umrahDims },
-    { accountCode: revCode, debit: 0, credit: subtotal, description: `إيراد خدمات عمرة — ${ref}`, ...umrahDims },
   ];
+
+  // Phase 2 — bucket revenue by accountCode. Currently every 'group'
+  // line uses null accountCode (no Phase 3 resolver yet), so this
+  // produces ONE entry with the default revCode and the output JE is
+  // byte-identical to Phase 1. When the operator-facing product
+  // mapping lands (visa→revenue-visa, services→revenue-services,
+  // transport→revenue-transport), the same code will emit a separate
+  // CR Revenue per account without further changes.
+  //
+  // Penalties stay on their own line via penaltiesTotal — same as
+  // before, since penalty rows already use a distinct revenue
+  // account (umrah_penalty_revenue / 4210).
+  const revenueByAccount = new Map<string, number>();
+  for (const li of lineItems) {
+    if (li.itemType !== "group") continue;
+    const code = li.accountCode ?? revCode;
+    revenueByAccount.set(code, (revenueByAccount.get(code) ?? 0) + li.lineTotal);
+  }
+  for (const [code, amount] of revenueByAccount) {
+    glLines.push({
+      accountCode: code,
+      debit: 0,
+      credit: amount,
+      description: code === revCode
+        ? `إيراد خدمات عمرة — ${ref}`
+        : `إيراد عمرة (${code}) — ${ref}`,
+      ...umrahDims,
+    });
+  }
   if (penaltiesTotal > 0) {
     glLines.push({ accountCode: penaltyRevCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}`, ...umrahDims });
   }
