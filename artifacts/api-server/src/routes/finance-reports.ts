@@ -598,7 +598,69 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
         WHERE ip."clientId" = $1 AND ip."companyId" = $2 AND ip."paidAt" < $3${obPayBranchCond}`,
       obPayParams
     );
-    const openingBalance = Number(obInvRow?.total ?? 0) - Number(obPayRow?.total ?? 0);
+    // ── Umrah AR integration ───────────────────────────────────────
+    // The customer statement was historically blind to umrah_sales_invoices
+    // — operators opening it for a sub-agent's linked client saw zero
+    // umrah activity even though the GL had it. The umrah module posts
+    // every sales invoice + payment to journal_entries (see
+    // umrahInvoicingEngine.createGuardedJournalEntry), so the GL was
+    // correct; only the customer-statement endpoint was broken.
+    //
+    // Match rule: an umrah_sales_invoice belongs to this customer if
+    //   - its clientId column directly references this customer, OR
+    //   - its subAgentId resolves to a sub-agent whose clientId is this
+    //     customer (the common path — most umrah sales invoices are
+    //     keyed by sub-agent because the sub-agent is who actually pays)
+    //
+    // Same `csBranchIds` scoping as the existing invoices query so a
+    // per-branch user can't see another branch's umrah rows here.
+    const umrahMatchSql = `(u."clientId" = $1
+        OR EXISTS (
+          SELECT 1 FROM umrah_sub_agents sa
+           WHERE sa.id = u."subAgentId"
+             AND sa."clientId" = $1
+             AND sa."companyId" = $2
+             AND sa."deletedAt" IS NULL
+        ))`;
+
+    // Opening balance contribution from umrah — same BEFORE-start-date
+    // window as the existing obInvRow / obPayRow above.
+    const obUmrahInvParams: unknown[] = [clientId, scope.companyId, from];
+    const obUmrahInvBranchCond = csBranchIds
+      ? (() => { obUmrahInvParams.push(csBranchIds); return ` AND u."branchId" = ANY($${obUmrahInvParams.length}::int[])`; })()
+      : "";
+    const [obUmrahInvRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(u.total), 0) AS total
+         FROM umrah_sales_invoices u
+        WHERE ${umrahMatchSql}
+          AND u."companyId" = $2
+          AND u."deletedAt" IS NULL
+          AND u."createdAt" < $3${obUmrahInvBranchCond}`,
+      obUmrahInvParams
+    );
+    const obUmrahPayParams: unknown[] = [clientId, scope.companyId, from];
+    const obUmrahPayBranchCond = csBranchIds
+      ? (() => { obUmrahPayParams.push(csBranchIds); return ` AND up."branchId" = ANY($${obUmrahPayParams.length}::int[])`; })()
+      : "";
+    const [obUmrahPayRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(up."sarAmount"), 0) AS total
+         FROM umrah_payments up
+         JOIN umrah_sub_agents sa
+           ON sa.id = up."subAgentId"
+          AND sa."companyId" = up."companyId"
+          AND sa."deletedAt" IS NULL
+        WHERE sa."clientId" = $1
+          AND up."companyId" = $2
+          AND up."deletedAt" IS NULL
+          AND up."paymentDate" < $3${obUmrahPayBranchCond}`,
+      obUmrahPayParams
+    );
+    const openingBalanceWithUmrah =
+      Number(obInvRow?.total ?? 0)
+      + Number(obUmrahInvRow?.total ?? 0)
+      - Number(obPayRow?.total ?? 0)
+      - Number(obUmrahPayRow?.total ?? 0);
+    const openingBalance = openingBalanceWithUmrah;
 
     const csBranchCond = csBranchIds ? ` AND "branchId" = ANY($5::int[])` : "";
     const csBaseParams = (extra?: unknown[]): unknown[] => [clientId, scope.companyId, from, asOf, ...(extra || [])];
@@ -634,7 +696,54 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
       payParams
     );
 
-    const all = [...invoices, ...payments].sort(
+    // In-period umrah sales invoices for this customer (direct clientId
+    // or via the sub-agent's clientId — see umrahMatchSql above). Shape
+    // matches the existing invoice movement row so they merge into the
+    // sorted timeline alongside core-finance invoices without special
+    // handling.
+    const umrahInvParams: unknown[] = [clientId, scope.companyId, from, asOf];
+    const umrahInvBranchCond = csBranchIds
+      ? (() => { umrahInvParams.push(csBranchIds); return ` AND u."branchId" = ANY($${umrahInvParams.length}::int[])`; })()
+      : "";
+    const umrahInvoices = await rawQuery<Record<string, unknown>>(
+      `SELECT u.id, u.ref, u."createdAt" AS date, u.total AS debit, 0 AS credit,
+              u."dueDate", u.status, 'umrah_sales_invoice' AS "movementType",
+              CONCAT('فاتورة عمرة ', COALESCE(u.ref, CONCAT('#', u.id))) AS description
+         FROM umrah_sales_invoices u
+        WHERE ${umrahMatchSql}
+          AND u."companyId"=$2
+          AND u."deletedAt" IS NULL
+          AND u."createdAt" >= $3 AND u."createdAt" < ($4::date + 1)${umrahInvBranchCond}
+        ORDER BY u."createdAt"`,
+      umrahInvParams
+    );
+
+    // In-period umrah payments — JOINed to umrah_sub_agents to resolve
+    // the customer. paymentDate (not createdAt) is the cash-effective
+    // date the customer cares about.
+    const umrahPayParams: unknown[] = [clientId, scope.companyId, from, asOf];
+    const umrahPayBranchCond = csBranchIds
+      ? (() => { umrahPayParams.push(csBranchIds); return ` AND up."branchId" = ANY($${umrahPayParams.length}::int[])`; })()
+      : "";
+    const umrahPayments = await rawQuery<Record<string, unknown>>(
+      `SELECT up.id, COALESCE(up.ref, CONCAT('UPAY-', up.id)) AS ref,
+              up."paymentDate" AS date, 0 AS debit, up."sarAmount" AS credit,
+              NULL AS "dueDate", 'paid' AS status, 'umrah_payment' AS "movementType",
+              CONCAT('دفعة عمرة (', COALESCE(up.method,'manual'), ')') AS description
+         FROM umrah_payments up
+         JOIN umrah_sub_agents sa
+           ON sa.id = up."subAgentId"
+          AND sa."companyId" = up."companyId"
+          AND sa."deletedAt" IS NULL
+        WHERE sa."clientId" = $1
+          AND up."companyId" = $2
+          AND up."deletedAt" IS NULL
+          AND up."paymentDate" >= $3 AND up."paymentDate" <= $4${umrahPayBranchCond}
+        ORDER BY up."paymentDate"`,
+      umrahPayParams
+    );
+
+    const all = [...invoices, ...payments, ...umrahInvoices, ...umrahPayments].sort(
       (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
     let running = openingBalance;
@@ -655,6 +764,27 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
           AND (total - COALESCE("paidAmount",0)) > 0.01${agingBranchCond}`,
       agingParams
     );
+
+    // Aging extension — open umrah sales invoices contribute to the
+    // same buckets. Without this the aging total understates AR for
+    // any customer whose umrah activity is non-trivial.
+    const umrahAgingParams: unknown[] = [clientId, scope.companyId, asOf];
+    const umrahAgingBranchCond = csBranchIds
+      ? (() => { umrahAgingParams.push(csBranchIds); return ` AND u."branchId" = ANY($${umrahAgingParams.length}::int[])`; })()
+      : "";
+    const openUmrahInvoices = await rawQuery<Record<string, unknown>>(
+      `SELECT u.id, u.ref, u."createdAt", u."dueDate", u.total, u."paidAmount",
+              (u.total - COALESCE(u."paidAmount",0)) AS outstanding
+         FROM umrah_sales_invoices u
+        WHERE ${umrahMatchSql}
+          AND u."companyId"=$2
+          AND u."deletedAt" IS NULL
+          AND u."createdAt" < ($3::date + 1)
+          AND (u.total - COALESCE(u."paidAmount",0)) > 0.01${umrahAgingBranchCond}`,
+      umrahAgingParams
+    );
+    // Merge into the same aging loop below.
+    openInvoices.push(...openUmrahInvoices);
     const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
     const asOfMs = new Date(asOf).getTime();
     for (const inv of openInvoices) {
