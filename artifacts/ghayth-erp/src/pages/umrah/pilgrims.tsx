@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, todayLocal } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   PageStatusBadge,
@@ -49,9 +49,14 @@ export default function UmrahPilgrims() {
   // like "PIA-310" / "SV-471" / "EK" depending on what their carrier
   // file printed.
   const flight = (filters as Record<string, string>).flight || "";
+  // arrivalDate / departureDate ride the same dynamic-keys pattern.
+  // YYYY-MM-DD strings in Riyadh-local time (todayLocal()) so the
+  // "today" chip can't accidentally query UTC.
+  const arrivalDate = (filters as Record<string, string>).arrivalDate || "";
+  const departureDate = (filters as Record<string, string>).departureDate || "";
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["umrah-pilgrims", filters.search, filters.status, seasonId, groupId, flight, String(page)],
-    `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&flight=${encodeURIComponent(flight)}&page=${page}&limit=${pageSize}`,
+    ["umrah-pilgrims", filters.search, filters.status, seasonId, groupId, flight, arrivalDate, departureDate, String(page)],
+    `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&flight=${encodeURIComponent(flight)}&arrivalDate=${encodeURIComponent(arrivalDate)}&departureDate=${encodeURIComponent(departureDate)}&page=${page}&limit=${pageSize}`,
   );
 
   // Seasons + groups feed the extraFilters dropdowns so operators can
@@ -248,8 +253,10 @@ export default function UmrahPilgrims() {
           dropdowns since extraFilters only supports option lists. Paired
           with bulk-status flip (PR #1430), this is the operator's
           flight-day landing flow: type "PIA-310" → pick all → mark
-          arrived in one click. */}
-      <div className="flex items-center gap-2 -mb-3">
+          arrived in one click. The two "today" chips next to it are
+          the morning landing question: "who's coming in / who's
+          leaving today?" — one click. */}
+      <div className="flex items-center gap-2 -mb-3 flex-wrap">
         <label className="text-xs text-muted-foreground whitespace-nowrap" htmlFor="pilgrims-flight-filter">رقم الرحلة:</label>
         <input
           id="pilgrims-flight-filter"
@@ -260,6 +267,41 @@ export default function UmrahPilgrims() {
           placeholder="مثال: PIA-310"
           className="h-8 w-40 text-xs rounded border border-input bg-background px-2"
         />
+        <Button
+          variant={arrivalDate === todayLocal() ? "default" : "outline"}
+          size="sm"
+          className="h-8 text-xs gap-1"
+          data-testid="pilgrims-today-arrivals"
+          onClick={() => {
+            const t = todayLocal();
+            const next = arrivalDate === t ? "" : t;
+            setFilters({ ...filters, arrivalDate: next, departureDate: "" } as any);
+            setPage(1);
+          }}
+        >
+          <Plane className="h-3.5 w-3.5" />
+          وصول اليوم
+        </Button>
+        <Button
+          variant={departureDate === todayLocal() ? "default" : "outline"}
+          size="sm"
+          className="h-8 text-xs gap-1"
+          data-testid="pilgrims-today-departures"
+          onClick={() => {
+            const t = todayLocal();
+            const next = departureDate === t ? "" : t;
+            setFilters({ ...filters, departureDate: next, arrivalDate: "" } as any);
+            setPage(1);
+          }}
+        >
+          <Plane className="h-3.5 w-3.5 rotate-180" />
+          مغادرة اليوم
+        </Button>
+        {(arrivalDate || departureDate) && (
+          <span className="text-xs text-muted-foreground">
+            {arrivalDate ? `وصول: ${arrivalDate}` : `مغادرة: ${departureDate}`}
+          </span>
+        )}
       </div>
 
       <AdvancedFilters
