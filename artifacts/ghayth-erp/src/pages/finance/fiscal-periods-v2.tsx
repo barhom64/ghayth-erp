@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { Calendar, Lock, Unlock, AlertTriangle } from "lucide-react";
 
@@ -29,16 +29,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { useDirtyGuard } from "@/hooks/use-dirty-guard";
 import { useApiQuery, useApiMutation, ApiError } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
@@ -274,52 +265,6 @@ function DirtyTracker({ onChange }: { onChange: (dirty: boolean) => void }) {
   return null;
 }
 
-/**
- * Hook variant of the confirm-on-dismiss guard. Replaces the synchronous
- * `window.confirm` call that previously blocked the dismiss handler — the
- * native prompt looked out of place on top of the form dialog and broke
- * keyboard-trap testing. Returns:
- *   - `guardedClose`: drop-in replacement for the parent's onOpenChange
- *   - `confirmDialog`: an AlertDialog the parent must render as a sibling
- */
-function useDirtyGuard(
-  isDirty: boolean,
-  onClose: (open: boolean) => void,
-): { guardedClose: (open: boolean) => void; confirmDialog: ReactElement } {
-  const [pending, setPending] = useState(false);
-  const guardedClose = (next: boolean) => {
-    if (!next && isDirty) {
-      setPending(true);
-      return;
-    }
-    onClose(next);
-  };
-  const confirmDialog = (
-    <AlertDialog open={pending} onOpenChange={setPending}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>تغييرات لم تُحفظ</AlertDialogTitle>
-          <AlertDialogDescription>
-            لديك تغييرات لم تُحفظ بعد. هل تريد المغادرة وتجاهل التعديلات؟
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>متابعة التحرير</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={() => {
-              setPending(false);
-              onClose(false);
-            }}
-          >
-            تجاهل وأغلق
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-  return { guardedClose, confirmDialog };
-}
-
 // ─── Create dialog ────────────────────────────────────────────────────
 
 function CreateDialog({
@@ -336,7 +281,7 @@ function CreateDialog({
     "POST",
     [[...QUERY_KEY]],
   );
-  const { guardedClose, confirmDialog } = useDirtyGuard(isDirty, onOpenChange);
+  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, onOpenChange);
 
   return (
     <>
@@ -372,7 +317,7 @@ function CreateDialog({
           </FormShell>
         </DialogContent>
       </Dialog>
-      {confirmDialog}
+      {discardDialog}
     </>
   );
 }
@@ -394,7 +339,7 @@ function CloseDialog({
     "POST",
     [[...QUERY_KEY]],
   );
-  const { guardedClose, confirmDialog } = useDirtyGuard(isDirty, (open) => {
+  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, (open) => {
     if (!open) setPendingCount(null);
     onOpenChange(open);
   });
@@ -469,7 +414,7 @@ function CloseDialog({
         </FormShell>
       </DialogContent>
     </Dialog>
-    {confirmDialog}
+    {discardDialog}
     </>
   );
 }
@@ -490,7 +435,7 @@ function ReopenDialog({
     "POST",
     [[...QUERY_KEY]],
   );
-  const { guardedClose, confirmDialog } = useDirtyGuard(isDirty, onOpenChange);
+  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, onOpenChange);
 
   return (
     <>
@@ -532,7 +477,7 @@ function ReopenDialog({
         </FormShell>
       </DialogContent>
     </Dialog>
-    {confirmDialog}
+    {discardDialog}
     </>
   );
 }
@@ -556,7 +501,7 @@ function LockDialog({
     "POST",
     [[...QUERY_KEY]],
   );
-  const { guardedClose, confirmDialog } = useDirtyGuard(isDirty, onOpenChange);
+  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, onOpenChange);
 
   return (
     <>
@@ -599,7 +544,7 @@ function LockDialog({
         </FormShell>
       </DialogContent>
     </Dialog>
-    {confirmDialog}
+    {discardDialog}
     </>
   );
 }

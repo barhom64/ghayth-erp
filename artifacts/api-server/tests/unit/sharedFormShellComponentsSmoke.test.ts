@@ -138,7 +138,7 @@ describe("useDirtyGuard shared hook", () => {
     expect(HOOK_CODE).not.toMatch(/window\.confirm\b/);
   });
 
-  it.skip("fiscal-periods-v2 imports the shared hook, not a local copy", () => {
+  it("fiscal-periods-v2 imports the shared hook, not a local copy", () => {
     const page = readFileSync(
       join(
         import.meta.dirname!,
