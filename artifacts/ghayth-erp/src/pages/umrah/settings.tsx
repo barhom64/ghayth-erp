@@ -8,12 +8,22 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { Settings as SettingsIcon, Save, AlertTriangle } from "lucide-react";
+import { Settings as SettingsIcon, Save, AlertTriangle, Wallet } from "lucide-react";
+import { formatCurrency } from "@/lib/formatters";
 
 interface UmrahSettings {
   nuskSupplierId: number | null;
   nuskSupplierName: string | null;
   nuskSupplierCode: string | null;
+}
+
+interface NuskWallet {
+  configured: boolean;
+  nuskSupplierId: number | null;
+  walletBalance: number;
+  totalDeposits: number;
+  totalObligations: number;
+  totalRefunds: number;
 }
 
 interface Supplier {
@@ -31,6 +41,13 @@ export default function UmrahSettings() {
   const { data: settings, isLoading, isError, refetch } = useApiQuery<UmrahSettings>(
     ["umrah-settings"],
     "/umrah/settings",
+  );
+  // NUSK wallet balance — derived view over the existing AP ledger.
+  // Re-fetched alongside settings so the balance reflects any saves
+  // (though saves don't change wallet balance, defensive consistency).
+  const { data: wallet, refetch: refetchWallet } = useApiQuery<NuskWallet>(
+    ["umrah-nusk-wallet"],
+    "/umrah/nusk-wallet",
   );
   // Suppliers feed the SearchableSelect — the operator picks the one
   // that represents NUSK. Fetched once and cached.
@@ -67,6 +84,7 @@ export default function UmrahSettings() {
       });
       toast({ title: "تم حفظ إعدادات العمرة" });
       refetch();
+      refetchWallet();
     } catch (e: any) {
       toast({
         variant: "destructive",
@@ -146,6 +164,80 @@ export default function UmrahSettings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* NUSK wallet card — derived view of the operator's prepayment
+            balance with NUSK. NOT a separate wallet system; it's the
+            running balance of the NUSK supplier in the standard AP
+            ledger, so this view stays in sync with the vendor
+            statement (PR #1453) automatically. */}
+        {wallet?.configured && (
+          <Card data-testid="nusk-wallet-card">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wallet className="h-4 w-4" />
+                محفظة نسك
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">الرصيد الحالي</p>
+                <div className="flex items-baseline gap-2">
+                  <span
+                    className={`text-3xl font-bold ${
+                      wallet.walletBalance > 0
+                        ? "text-status-success-foreground"
+                        : wallet.walletBalance === 0
+                          ? "text-muted-foreground"
+                          : "text-status-error-foreground"
+                    }`}
+                    data-testid="nusk-wallet-balance"
+                  >
+                    {formatCurrency(wallet.walletBalance)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">ر.س</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {wallet.walletBalance > 0
+                    ? "رصيد متاح للشراء"
+                    : wallet.walletBalance === 0
+                      ? "متطابق — اشحن المحفظة قبل أي فاتورة جديدة"
+                      : "العمليات تجاوزت الإيداعات — التزام مستحق لنسك"}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 pt-3 border-t text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">إجمالي التحويلات لنسك</p>
+                  <span className="font-semibold" data-testid="nusk-wallet-deposits">
+                    {formatCurrency(wallet.totalDeposits)}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">إجمالي فواتير نسك</p>
+                  <span className="font-semibold" data-testid="nusk-wallet-obligations">
+                    {formatCurrency(wallet.totalObligations)}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">إجمالي المرتجعات</p>
+                  <span className="font-semibold text-status-info-foreground" data-testid="nusk-wallet-refunds">
+                    {formatCurrency(wallet.totalRefunds)}
+                  </span>
+                </div>
+              </div>
+
+              {wallet.walletBalance < 0 && (
+                <div className="rounded-md border border-status-error-surface bg-status-error-surface/30 p-3 text-sm text-status-error-foreground flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div>
+                    التزاماتك تجاوزت تحويلاتك — لا يمكن شراء تأشيرات جديدة قبل تسوية الرصيد. يجب تحويل
+                    {" "}<strong>{formatCurrency(Math.abs(wallet.walletBalance))} ر.س</strong> على الأقل إلى مورد نسك.
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </PageShell>
   );
