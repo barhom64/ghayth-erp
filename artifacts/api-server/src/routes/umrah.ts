@@ -2625,6 +2625,14 @@ const nullableFkPreproc = z.preprocess(
   z.coerce.number().nullable().optional(),
 );
 
+// Penalty knobs are non-negative numbers (or null = "reset to global
+// default"). Same preprocess pattern as the FK fields — "" treated as
+// null, undefined preserves existing value.
+const nullableNumberPreproc = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.coerce.number().nonnegative({ message: "القيمة يجب أن تكون ≥ 0" }).nullable().optional(),
+);
+
 const umrahSettingsPatchSchema = z.object({
   // When unset, the vendor-statement endpoint skips its umrah branch
   // (gracefully — no broken queries).
@@ -2636,6 +2644,12 @@ const umrahSettingsPatchSchema = z.object({
   umrahVisaProductId: nullableFkPreproc,
   umrahServicesProductId: nullableFkPreproc,
   umrahTransportProductId: nullableFkPreproc,
+  // Overstay penalty knobs (PR #1477). Stored as system_settings rows
+  // keyed per company. Send null to clear (reverts to the global
+  // default from key=… companyId IS NULL).
+  umrahOverstayDailyPenalty: nullableNumberPreproc,
+  umrahOverstayTierDays: nullableNumberPreproc,
+  umrahOverstayTierAmount: nullableNumberPreproc,
 });
 
 router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
@@ -2672,11 +2686,45 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
         WHERE c.id = $1`,
       [scope.companyId],
     );
-    res.json(row ?? {
-      nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null,
-      umrahVisaProductId: null, umrahVisaProductName: null,
-      umrahServicesProductId: null, umrahServicesProductName: null,
-      umrahTransportProductId: null, umrahTransportProductName: null,
+    // Overstay-penalty settings live in system_settings (not
+    // companies) because they're tunable per-company without a
+    // migration per knob. PR #1477 added the tiered model
+    // (tier_days / tier_amount); this endpoint surfaces the three
+    // existing knobs to the UI so the operator can edit them
+    // without opening a DB console.
+    const penaltyRows = await rawQuery<{ key: string; value: string }>(
+      `SELECT key, value FROM system_settings
+        WHERE key IN ('umrah.overstay_daily_penalty',
+                      'umrah.overstay_tier_days',
+                      'umrah.overstay_tier_amount')
+          AND ( ("companyId" IS NULL AND "branchId" IS NULL)
+                OR ("companyId" = $1 AND "branchId" IS NULL) )
+        ORDER BY "companyId" NULLS FIRST`,
+      [scope.companyId],
+    );
+    // Same NULLS-FIRST precedence the cron uses (PR #1477) — the
+    // company-scoped value overwrites the global default in the
+    // dict assignment loop.
+    const penaltyByKey: Record<string, number | null> = {
+      "umrah.overstay_daily_penalty": null,
+      "umrah.overstay_tier_days": null,
+      "umrah.overstay_tier_amount": null,
+    };
+    for (const r of penaltyRows) {
+      const v = Number(r.value);
+      penaltyByKey[r.key] = Number.isFinite(v) ? v : null;
+    }
+
+    res.json({
+      ...(row ?? {
+        nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null,
+        umrahVisaProductId: null, umrahVisaProductName: null,
+        umrahServicesProductId: null, umrahServicesProductName: null,
+        umrahTransportProductId: null, umrahTransportProductName: null,
+      }),
+      umrahOverstayDailyPenalty: penaltyByKey["umrah.overstay_daily_penalty"],
+      umrahOverstayTierDays: penaltyByKey["umrah.overstay_tier_days"],
+      umrahOverstayTierAmount: penaltyByKey["umrah.overstay_tier_amount"],
     });
   } catch (err) { handleRouteError(err, res, "Get umrah settings error"); }
 });
@@ -2749,6 +2797,47 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
         params,
       );
     }
+
+    // Overstay-penalty knobs live in system_settings (not companies).
+    // Same omit/null/value semantics as the FK fields above. We UPSERT
+    // when the value is non-null, DELETE the company-scoped row when
+    // the value is explicitly null — clearing reverts to the global
+    // default (key with companyId IS NULL).
+    const penaltyFields: Array<[string, number | null | undefined]> = [
+      ["umrah.overstay_daily_penalty", b.umrahOverstayDailyPenalty],
+      ["umrah.overstay_tier_days", b.umrahOverstayTierDays],
+      ["umrah.overstay_tier_amount", b.umrahOverstayTierAmount],
+    ];
+    const keyToAuditField: Record<string, string> = {
+      "umrah.overstay_daily_penalty": "umrahOverstayDailyPenalty",
+      "umrah.overstay_tier_days": "umrahOverstayTierDays",
+      "umrah.overstay_tier_amount": "umrahOverstayTierAmount",
+    };
+    for (const [key, value] of penaltyFields) {
+      if (value === undefined) continue;
+      if (value === null) {
+        await rawExecute(
+          `DELETE FROM system_settings WHERE key = $1 AND "companyId" = $2 AND "branchId" IS NULL`,
+          [key, scope.companyId],
+        );
+      } else {
+        // UPSERT — UPDATE first; INSERT only if no row exists.
+        // Matches the pattern in routes/settings.ts so a future
+        // shared helper can replace both call sites.
+        const result = await rawExecute(
+          `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3 AND "branchId" IS NULL`,
+          [String(value), key, scope.companyId],
+        );
+        if (!result.affectedRows) {
+          await rawExecute(
+            `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
+            [key, String(value), scope.companyId],
+          );
+        }
+      }
+      auditAfter[keyToAuditField[key]!] = value;
+    }
+
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "umrah.settings.updated", entity: "companies", entityId: scope.companyId,

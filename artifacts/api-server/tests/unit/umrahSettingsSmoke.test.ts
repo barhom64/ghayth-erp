@@ -33,9 +33,12 @@ describe("GET /umrah/settings — read", () => {
   it("returns null placeholder when no setting exists yet", () => {
     // Operators opening the page on a fresh install must see a sane
     // empty state, not a 500. PR #1469 extended the null placeholder
-    // with the 3 new product mapping fields — anchor on the first
-    // 3 keys (nuskSupplier*) which remain the leading entries.
-    expect(ROUTE).toMatch(/res\.json\(row \?\? \{[\s\S]{0,400}nuskSupplierId: null,\s*nuskSupplierName: null,\s*nuskSupplierCode: null/);
+    // with the 3 new product mapping fields; PR #1479 spreads the
+    // placeholder into a larger response with the 3 penalty knobs.
+    // Anchor on the trio of nuskSupplier* keys + the response now
+    // being spread rather than returned directly.
+    expect(ROUTE).toMatch(/nuskSupplierId: null,\s*nuskSupplierName: null,\s*nuskSupplierCode: null/);
+    expect(ROUTE).toMatch(/res\.json\(\{[\s\S]{1,200}\.\.\.\(row \?\?/);
   });
 });
 

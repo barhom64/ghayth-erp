@@ -8,7 +8,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { Settings as SettingsIcon, Save, AlertTriangle, Wallet, Package } from "lucide-react";
+import { Settings as SettingsIcon, Save, AlertTriangle, Wallet, Package, Clock } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/formatters";
 
 interface UmrahSettings {
@@ -24,6 +25,11 @@ interface UmrahSettings {
   umrahServicesProductName: string | null;
   umrahTransportProductId: number | null;
   umrahTransportProductName: string | null;
+  // Overstay-penalty knobs (PR #1477 + this PR). null = use the global
+  // default; explicit number = company-scoped override.
+  umrahOverstayDailyPenalty: number | null;
+  umrahOverstayTierDays: number | null;
+  umrahOverstayTierAmount: number | null;
 }
 
 interface Product {
@@ -89,6 +95,12 @@ export default function UmrahSettings() {
   const [selectedVisaProductId, setSelectedVisaProductId] = useState<string>("");
   const [selectedServicesProductId, setSelectedServicesProductId] = useState<string>("");
   const [selectedTransportProductId, setSelectedTransportProductId] = useState<string>("");
+  // Overstay-penalty knobs (PR #1477 + this PR). Stored as strings to
+  // preserve the operator's empty-state distinction ("" = use global
+  // default; "0" = explicit zero penalty).
+  const [penaltyDailyAmount, setPenaltyDailyAmount] = useState<string>("");
+  const [penaltyTierDays, setPenaltyTierDays] = useState<string>("");
+  const [penaltyTierAmount, setPenaltyTierAmount] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   // Sync local state when the settings load — keeps the dropdowns'
@@ -112,6 +124,18 @@ export default function UmrahSettings() {
     if (settings == null) return;
     setSelectedTransportProductId(settings.umrahTransportProductId != null ? String(settings.umrahTransportProductId) : "");
   }, [settings?.umrahTransportProductId]);
+  useEffect(() => {
+    if (settings == null) return;
+    setPenaltyDailyAmount(settings.umrahOverstayDailyPenalty != null ? String(settings.umrahOverstayDailyPenalty) : "");
+  }, [settings?.umrahOverstayDailyPenalty]);
+  useEffect(() => {
+    if (settings == null) return;
+    setPenaltyTierDays(settings.umrahOverstayTierDays != null ? String(settings.umrahOverstayTierDays) : "");
+  }, [settings?.umrahOverstayTierDays]);
+  useEffect(() => {
+    if (settings == null) return;
+    setPenaltyTierAmount(settings.umrahOverstayTierAmount != null ? String(settings.umrahOverstayTierAmount) : "");
+  }, [settings?.umrahOverstayTierAmount]);
 
   // Helper: convert a SearchableSelect value ("" / "<number>") to the
   // wire format the PR #1469 PATCH expects ("" → null, value → Number).
@@ -130,6 +154,9 @@ export default function UmrahSettings() {
           umrahVisaProductId: toPatchValue(selectedVisaProductId),
           umrahServicesProductId: toPatchValue(selectedServicesProductId),
           umrahTransportProductId: toPatchValue(selectedTransportProductId),
+          umrahOverstayDailyPenalty: toPatchValue(penaltyDailyAmount),
+          umrahOverstayTierDays: toPatchValue(penaltyTierDays),
+          umrahOverstayTierAmount: toPatchValue(penaltyTierAmount),
         }),
       });
       toast({ title: "تم حفظ إعدادات العمرة" });
@@ -156,7 +183,10 @@ export default function UmrahSettings() {
     selectedSupplierId !== (settings?.nuskSupplierId != null ? String(settings.nuskSupplierId) : "") ||
     selectedVisaProductId !== (settings?.umrahVisaProductId != null ? String(settings.umrahVisaProductId) : "") ||
     selectedServicesProductId !== (settings?.umrahServicesProductId != null ? String(settings.umrahServicesProductId) : "") ||
-    selectedTransportProductId !== (settings?.umrahTransportProductId != null ? String(settings.umrahTransportProductId) : "");
+    selectedTransportProductId !== (settings?.umrahTransportProductId != null ? String(settings.umrahTransportProductId) : "") ||
+    penaltyDailyAmount !== (settings?.umrahOverstayDailyPenalty != null ? String(settings.umrahOverstayDailyPenalty) : "") ||
+    penaltyTierDays !== (settings?.umrahOverstayTierDays != null ? String(settings.umrahOverstayTierDays) : "") ||
+    penaltyTierAmount !== (settings?.umrahOverstayTierAmount != null ? String(settings.umrahOverstayTierAmount) : "");
 
   return (
     <PageShell title="إعدادات العمرة" subtitle="ضبط ربط وحدة العمرة بالنظام المالي">
@@ -318,6 +348,101 @@ export default function UmrahSettings() {
                 المالية ← كتالوج المنتجات
               </a>{" "}
               ثم ارجع هنا للربط.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Overstay-penalty knobs (PR #1477 + #1479). Lets the
+            operator switch between the per-day and the tiered
+            penalty models without opening a DB console. The
+            tiered model takes effect when BOTH tier_days AND
+            tier_amount are > 0 — the cron picks the right formula
+            from the values it reads here. */}
+        <Card data-testid="umrah-overstay-penalty-card">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              نموذج غرامة التأخّر
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              يحدّد كيف يحسب المحرّك غرامة المعتمر المتأخّر بعد انتهاء برنامج العمرة. اترك جميع الحقول
+              فارغة لاستخدام القيمة الافتراضية على مستوى النظام، أو اضبط رقماً لتجاوزها على هذه الشركة.
+            </p>
+
+            {Number(penaltyTierDays) > 0 && Number(penaltyTierAmount) > 0 ? (
+              <div
+                className="rounded-md border border-status-info-surface bg-status-info-surface/30 p-3 text-sm text-status-info-foreground"
+                data-testid="penalty-tiered-active-banner"
+              >
+                النموذج النشط حالياً:
+                <strong className="mx-1">متدرّج</strong>
+                — كل {penaltyTierDays} يوم تأخّر = {penaltyTierAmount} ر.س على الوكيل.
+              </div>
+            ) : Number(penaltyDailyAmount) > 0 ? (
+              <div
+                className="rounded-md border border-muted bg-muted/30 p-3 text-sm text-muted-foreground"
+                data-testid="penalty-per-day-active-banner"
+              >
+                النموذج النشط حالياً:
+                <strong className="mx-1">يومي</strong>
+                — {penaltyDailyAmount} ر.س لكل يوم تأخّر.
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2" data-testid="penalty-tier-days-field">
+                <Label htmlFor="penalty-tier-days">عدد أيام الشريحة</Label>
+                <Input
+                  id="penalty-tier-days"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={penaltyTierDays}
+                  onChange={(e) => setPenaltyTierDays(e.target.value)}
+                  placeholder="مثلاً 10"
+                />
+                <p className="text-xs text-muted-foreground">
+                  كل كم يوم تأخّر = شريحة غرامة واحدة؟
+                </p>
+              </div>
+
+              <div className="space-y-2" data-testid="penalty-tier-amount-field">
+                <Label htmlFor="penalty-tier-amount">قيمة الشريحة (ر.س)</Label>
+                <Input
+                  id="penalty-tier-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={penaltyTierAmount}
+                  onChange={(e) => setPenaltyTierAmount(e.target.value)}
+                  placeholder="مثلاً 50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  المبلغ المضاف على الوكيل لكل شريحة.
+                </p>
+              </div>
+
+              <div className="space-y-2" data-testid="penalty-daily-amount-field">
+                <Label htmlFor="penalty-daily-amount">الغرامة اليومية (ر.س)</Label>
+                <Input
+                  id="penalty-daily-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={penaltyDailyAmount}
+                  onChange={(e) => setPenaltyDailyAmount(e.target.value)}
+                  placeholder="مثلاً 5"
+                />
+                <p className="text-xs text-muted-foreground">
+                  يُستخدم فقط عندما لا تكون قيم الشريحتَين معاً مضبوطة.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              مثال على النموذج المتدرّج (10 / 50): تأخّر 5 أيام = 50 ر.س، 15 يوماً = 100 ر.س، 21 يوماً = 150 ر.س.
             </p>
           </CardContent>
         </Card>
