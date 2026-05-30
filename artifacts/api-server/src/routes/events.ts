@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, NotFoundError } from "../lib/errorHandler.js";
-import { maskFields } from "../lib/rbac/authorize.js";
+import { maskFields, authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
 import {
   EVENT_CATALOG,
@@ -87,7 +87,7 @@ eventsRouter.get("/catalog/:name", (req, res) => {
 // behavior is preserved exactly for existing callers.
 // ─────────────────────────────────────────────────────────────────────────────
 
-eventsRouter.get("/log", async (req, res) => {
+eventsRouter.get("/log", authorize({ feature: "admin", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { action, entity, entityId, from, to, limit = "100", cursor } =
@@ -185,7 +185,7 @@ eventsRouter.get("/log", async (req, res) => {
   }
 });
 
-eventsRouter.get("/log/stats", async (req, res) => {
+eventsRouter.get("/log/stats", authorize({ feature: "admin", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 7;
