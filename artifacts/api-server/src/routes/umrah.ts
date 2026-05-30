@@ -636,7 +636,7 @@ router.delete("/packages/:id", authorize({ feature: "umrah", action: "delete" })
 router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId, status, agentId, groupId, nationality, flight, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
+    const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
     let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
@@ -657,6 +657,13 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
       params.push(`%${flight}%`);
       where += ` AND (p."entryFlight" ILIKE $${params.length} OR p."exitFlight" ILIKE $${params.length})`;
     }
+    // Exact-date filters — the morning "who's coming in today / leaving
+    // today" question. arrivalDate / departureDate are `date` columns,
+    // so an equality match against a YYYY-MM-DD string works without
+    // cast. Operators pass the Riyadh-local date from the UI (the
+    // todayLocal() helper) so they don't accidentally query UTC.
+    if (arrivalDate) { params.push(arrivalDate); where += ` AND p."arrivalDate" = $${params.length}`; }
+    if (departureDate) { params.push(departureDate); where += ` AND p."departureDate" = $${params.length}`; }
     if (search) {
       // Search hits four columns:
       //   - fullName              (plaintext, ILIKE)

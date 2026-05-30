@@ -31,7 +31,9 @@ const DETAIL = readFileSync(
 
 describe("GET /umrah/pilgrims — flight filter", () => {
   it("destructures `flight` from req.query alongside the existing filters", () => {
-    expect(ROUTE).toMatch(/\{\s*seasonId,\s*status,\s*agentId,\s*groupId,\s*nationality,\s*flight,\s*search/);
+    // Order-tolerant — future filter additions (arrivalDate, etc.)
+    // shouldn't churn this pin.
+    expect(ROUTE).toMatch(/\{[^}]*\bflight\b[^}]*\}\s*=\s*req\.query/);
   });
 
   it("matches entryFlight OR exitFlight via ILIKE on the same param", () => {
