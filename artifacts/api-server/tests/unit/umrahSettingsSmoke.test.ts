@@ -32,8 +32,10 @@ describe("GET /umrah/settings — read", () => {
 
   it("returns null placeholder when no setting exists yet", () => {
     // Operators opening the page on a fresh install must see a sane
-    // empty state, not a 500.
-    expect(ROUTE).toMatch(/res\.json\(row \?\? \{\s*nuskSupplierId: null,\s*nuskSupplierName: null,\s*nuskSupplierCode: null\s*\}\)/);
+    // empty state, not a 500. PR #1469 extended the null placeholder
+    // with the 3 new product mapping fields — anchor on the first
+    // 3 keys (nuskSupplier*) which remain the leading entries.
+    expect(ROUTE).toMatch(/res\.json\(row \?\? \{[\s\S]{0,400}nuskSupplierId: null,\s*nuskSupplierName: null,\s*nuskSupplierCode: null/);
   });
 });
 
@@ -42,10 +44,14 @@ describe("PATCH /umrah/settings — write", () => {
     expect(ROUTE).toMatch(/router\.patch\("\/settings",\s*authorize\(\{\s*feature:\s*"umrah",\s*action:\s*"update"\s*\}\)/);
   });
 
-  it("zod schema treats '' and undefined as null (matches PR #1428 pattern)", () => {
+  it("zod schema uses the shared nullableFkPreproc helper (PR #1469)", () => {
+    // PR #1469 refactored the inline preprocess into a shared
+    // helper `nullableFkPreproc` reused by all 4 settings FKs.
+    // The new shape distinguishes "" (clear) from undefined
+    // (preserve) so PATCH actually behaves like PATCH.
     expect(ROUTE).toMatch(/umrahSettingsPatchSchema = z\.object/);
-    expect(ROUTE).toMatch(/nuskSupplierId: z\.preprocess/);
-    expect(ROUTE).toMatch(/v === "" \|\| v === undefined \? null : v/);
+    expect(ROUTE).toMatch(/nuskSupplierId: nullableFkPreproc/);
+    expect(ROUTE).toMatch(/const nullableFkPreproc = z\.preprocess\(/);
   });
 
   it("validates the supplier belongs to THIS company before saving (defence-in-depth)", () => {
@@ -55,7 +61,10 @@ describe("PATCH /umrah/settings — write", () => {
   });
 
   it("writes via single-statement UPDATE on companies (no migration here)", () => {
-    expect(ROUTE).toMatch(/UPDATE companies SET "nuskSupplierId" = \$1 WHERE id = \$2/);
+    // PR #1469 switched to a dynamic SET clause so PATCH semantics
+    // are correct (omit=preserve, null=clear, value=update). The
+    // single-statement form would clobber unrelated settings.
+    expect(ROUTE).toMatch(/UPDATE companies SET \$\{sets\.join\(", "\)\} WHERE id = \$1/);
   });
 
   it("emits a settings.updated audit log", () => {
