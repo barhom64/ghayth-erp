@@ -35,6 +35,7 @@ import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
 import { internalTechRef } from "../lib/internalRef.js";
+import { assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { z } from "zod";
 
 export const purchaseRouter = Router();
@@ -918,6 +919,22 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       throw new ValidationError("يمكن استلام الطلبات المعتمدة فقط");
     }
 
+    // GRN lands on the PO's branch, not the operator's working branch.
+    // Pre-fix the receipt JE used scope.branchId — a PO created in Branch
+    // A but received by a user logged into Branch B silently posted the
+    // inventory + GRNI to Branch B, then the 3-way match split GL across
+    // branches forever. Assert the operator has access to the PO's branch
+    // before proceeding.
+    const poBranchId = (po.branchId as number | null) ?? null;
+    if (poBranchId != null) {
+      assertDocumentBranchAccess(poBranchId, {
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        allowedBranches: scope.allowedBranches,
+      });
+    }
+    const grnBranchId = poBranchId ?? scope.branchId;
+
     const receiptDate = receivedDate || new Date().toISOString();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, receiptDate);
     if (!periodCheck.open) {
@@ -1036,7 +1053,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
           const grnRes = await client.query(
             `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes,"sourceKey")
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-            [scope.companyId, scope.branchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null, grnSourceKey]
+            [scope.companyId, grnBranchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null, grnSourceKey]
           );
           const newGrnId = grnRes.rows[0].id;
           await client.query(
@@ -1395,7 +1412,9 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     let journalId: number | null = null;
     const grnJournalResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
-      branchId: scope.branchId,
+      // GRN JE lands on the PO's branch (grnBranchId), not the operator's
+      // working branch. See branch-resolution rationale at the SELECT above.
+      branchId: grnBranchId,
       createdBy: scope.activeAssignmentId,
       ref: grnRef,
       description: `استلام بضاعة ${grnRef} - أمر ${po.ref}`,
@@ -1875,9 +1894,30 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     //        CR Cash           total − wht
     let journalId: number | null = null;
     const lines: any[] = [];
+    // Multi-branch payment run: each per-PO AP debit line carries the
+    // PO's own branchId so per-branch AP aging stays accurate even when
+    // a single run consolidates POs from multiple branches in the same
+    // company. The aggregated WHT + cash CR lines carry the dominant
+    // branch (the one with the most POs in this run) so single-branch
+    // runs work exactly as before; multi-branch runs leave the credit
+    // side on the dominant branch (the per-PO DR lines anchor the
+    // per-branch subledger).
+    const branchCounts = new Map<number, number>();
     for (const po of pos) {
-      lines.push({ accountCode: apAccount, debit: Number(po.totalAmount), credit: 0, vendorId: po.supplierId });
+      const poBranchId = po.branchId as number | null;
+      lines.push({
+        accountCode: apAccount,
+        debit: Number(po.totalAmount),
+        credit: 0,
+        vendorId: po.supplierId,
+        branchId: poBranchId ?? undefined,
+      });
+      if (poBranchId != null) {
+        branchCounts.set(poBranchId, (branchCounts.get(poBranchId) ?? 0) + 1);
+      }
     }
+    const dominantBranchId = Array.from(branchCounts.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] ?? scope.branchId;
     // When the payment run covers exactly ONE vendor, carry vendorId
     // on the WHT-payable and cash CR lines too so the vendor subledger
     // reconciles cleanly. With multiple vendors the credit side is an
@@ -1887,12 +1927,16 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     const uniqueSupplierIds = Array.from(new Set(pos.map(po => Number(po.supplierId)).filter(Boolean)));
     const singleVendorId = uniqueSupplierIds.length === 1 ? uniqueSupplierIds[0] : undefined;
     for (const [code, amount] of whtCreditByAccount) {
-      lines.push({ accountCode: code, debit: 0, credit: amount, vendorId: singleVendorId });
+      lines.push({ accountCode: code, debit: 0, credit: amount, vendorId: singleVendorId, branchId: dominantBranchId ?? undefined });
     }
-    lines.push({ accountCode: cashAccount, debit: 0, credit: netCashOut, vendorId: singleVendorId });
+    lines.push({ accountCode: cashAccount, debit: 0, credit: netCashOut, vendorId: singleVendorId, branchId: dominantBranchId ?? undefined });
     const paymentRunJournalResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
-      branchId: scope.branchId,
+      // Header branch = dominant branch from the PO mix. When the run
+      // spans multiple branches, per-line branchId on the AP debits keeps
+      // per-branch AR/AP reports accurate; the header just anchors the
+      // primary owning branch for permission scoping.
+      branchId: dominantBranchId ?? scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref: runRef,
       description: totalWht > 0
