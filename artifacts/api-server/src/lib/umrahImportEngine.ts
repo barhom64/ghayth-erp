@@ -146,6 +146,144 @@ export interface ParsedRow {
  * — the engine looks up by camelCase field name anyway, so unmapped
  * columns are simply invisible to the import logic (no harm done).
  */
+// ---------------------------------------------------------------------------
+// Smart column-mapping suggestion — fuzzy match for unknown headers
+// ---------------------------------------------------------------------------
+//
+// The hardcoded dictionaries above cover the NUSK / MOFA standard layouts
+// (the common case). When a vendor's Excel file labels the same data with
+// a different header — typo, abbreviation, translated, or just a custom
+// internal name — the operator hits the column-mapping step and has to
+// pick the target field manually. This suggestion engine reduces that
+// friction by computing the closest hardcoded-dictionary key for each
+// unknown header and surfacing it as a suggestion the wizard can accept
+// with one click.
+//
+// Algorithm: Levenshtein-distance-based similarity, normalised by the
+// longer string's length. Below `MIN_CONFIDENCE` (currently 0.6) the
+// suggestion is suppressed — better no suggestion than a wrong one that
+// the operator might accept blindly.
+
+const MIN_CONFIDENCE = 0.6;
+
+/**
+ * Lightweight Arabic-aware normaliser. Lowercases, trims, collapses
+ * runs of whitespace, and folds common variants:
+ *   - ـ (tatweel) stripped
+ *   - أ إ آ → ا  (hamza-on-alif variants)
+ *   - ى → ي    (alif maksura → ya)
+ *   - ة → ه    (ta marbuta → ha)
+ *
+ * Without these folds, "رقم المعتمر" and "رقم المعتمرة" would compute
+ * as 1-char distant (false positive) but "العمرة" vs "العمره" would
+ * compute as 1-char distant (false negative — the operator obviously
+ * means the same thing). The folds make the similarity score reflect
+ * what the operator actually thinks of as "same word".
+ */
+function normaliseHeader(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/ـ/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه");
+}
+
+/**
+ * Classic 2-row Levenshtein distance — O(n×m) time, O(min(n,m)) space.
+ * Iterative bottom-up DP; no recursion to keep the call stack flat
+ * when the wizard suggests for 30+ headers at once.
+ */
+function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  // Ensure `a` is the shorter to minimise memory.
+  if (a.length > b.length) [a, b] = [b, a];
+  let prev: number[] = Array.from({ length: a.length + 1 }, (_, i) => i);
+  let curr: number[] = new Array(a.length + 1);
+  for (let j = 1; j <= b.length; j++) {
+    curr[0] = j;
+    for (let i = 1; i <= a.length; i++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[i] = Math.min(
+        curr[i - 1] + 1,        // insertion
+        prev[i] + 1,            // deletion
+        prev[i - 1] + cost,     // substitution
+      );
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[a.length]!;
+}
+
+function similarity(a: string, b: string): number {
+  const longer = Math.max(a.length, b.length);
+  if (longer === 0) return 1;
+  return 1 - levenshteinDistance(a, b) / longer;
+}
+
+export interface MappingSuggestion {
+  /** The engine field the unknown header is most likely meant for. */
+  target: string;
+  /** 0..1; suppressed below MIN_CONFIDENCE so callers never see a low-quality guess. */
+  confidence: number;
+  /** The dictionary entry that matched — surfaces context in the UI. */
+  matchedKey: string;
+  /** Where the suggestion came from. "exact" when the header IS a dict key (post-normalisation), "fuzzy" otherwise. */
+  source: "exact" | "fuzzy";
+}
+
+/**
+ * For each header in the file, returns the engine's best guess of which
+ * field it represents, with a confidence score. Exact matches (after
+ * normalisation) always win and carry confidence=1. Fuzzy matches scan
+ * every dictionary key once and pick the highest similarity above
+ * MIN_CONFIDENCE.
+ *
+ * Headers that ARE in the hardcoded dictionary post-normalisation are
+ * still returned with source="exact" so the wizard can render them
+ * with a "✓ exact match" badge — clearer than silently auto-mapping.
+ */
+export function suggestColumnMapping(
+  headers: string[],
+  fileType: "mutamers" | "vouchers",
+): Record<string, MappingSuggestion> {
+  const dict = fileType === "vouchers" ? VOUCHER_HEADER_MAP : MUTAMER_HEADER_MAP;
+  // Pre-normalise the dictionary once so the inner loop stays cheap.
+  const normalisedDict: Array<{ key: string; normalised: string; target: string }> = [];
+  for (const [key, target] of Object.entries(dict)) {
+    normalisedDict.push({ key, normalised: normaliseHeader(key), target });
+  }
+
+  const out: Record<string, MappingSuggestion> = {};
+  for (const header of headers) {
+    if (!header) continue;
+    const normH = normaliseHeader(header);
+    // Exact-match short-circuit — same algorithm the existing
+    // normalizeImportRows uses post-trim, so the wizard and engine
+    // agree on what counts as "known".
+    const exact = normalisedDict.find((d) => d.normalised === normH);
+    if (exact) {
+      out[header] = { target: exact.target, confidence: 1, matchedKey: exact.key, source: "exact" };
+      continue;
+    }
+    // Fuzzy scan — track the best score above MIN_CONFIDENCE.
+    let best: MappingSuggestion | null = null;
+    for (const d of normalisedDict) {
+      const score = similarity(normH, d.normalised);
+      if (score < MIN_CONFIDENCE) continue;
+      if (best == null || score > best.confidence) {
+        best = { target: d.target, confidence: score, matchedKey: d.key, source: "fuzzy" };
+      }
+    }
+    if (best) out[header] = best;
+  }
+  return out;
+}
+
 export function normalizeImportRows(
   rows: Array<Record<string, unknown>>,
   fileType: "mutamers" | "vouchers",
