@@ -12,7 +12,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import type pg from "pg";
 import type { Request as ExpressRequest } from "express";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2 } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, computeVat, getCompanyVatRate } from "../lib/businessHelpers.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -803,7 +803,11 @@ async function handleDealWon(scope: RequestScope, opp: CrmOpportunityRow, dealVa
     const monthNum = currentMonthPadded();
     const yearShort = String(currentYear()).slice(2);
     const invoiceRef = `INV-CRM-${yearShort}${monthNum}-${opp.id}`;
-    const vatAmount = roundTo2(dealValue * 0.15);
+    // Per-company VAT rate via system_settings (default 15%). Pre-fix
+    // CRM deal-won posting hardcoded 0.15 — wrong VAT obligation for any
+    // tenant on a non-15% rate flowed straight into the GL.
+    const vatRate = await getCompanyVatRate(scope.companyId);
+    const vatAmount = computeVat(dealValue, vatRate);
     const totalAmount = roundTo2(dealValue + vatAmount);
 
     // Request invoice creation via CRM Engine (event-based, no direct write to finance table)

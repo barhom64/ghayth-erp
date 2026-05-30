@@ -14,7 +14,7 @@ import { logger } from "../lib/logger.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2 } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, computeVat, getCompanyVatRate } from "../lib/businessHelpers.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -2553,7 +2553,11 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
       const monthNum = currentMonthPadded();
       const yearShort = String(currentYear()).slice(2);
       const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
-      const vatAmount = cost * 0.15;
+      // VAT rate resolved per company via system_settings (FALLBACK_VAT_RATE=15).
+      // Pre-fix this was hardcoded 0.15; tenants on different rates posted
+      // an incorrect VAT obligation on every property maintenance invoice.
+      const vatRate = await getCompanyVatRate(scope.companyId);
+      const vatAmount = computeVat(cost, vatRate);
       const { propertiesEngine } = await import("../lib/engines/index.js");
       propertiesEngine.requestInvoiceCreation(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
@@ -3301,7 +3305,8 @@ router.patch("/maintenance-requests/:id", authorize({ feature: "properties.maint
           const monthNum = currentMonthPadded();
           const yearShort = String(currentYear()).slice(2);
           const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
-          const vatAmount = updatedCost * 0.15;
+          const vatRate = await getCompanyVatRate(scope.companyId);
+          const vatAmount = computeVat(updatedCost, vatRate);
           const { propertiesEngine } = await import("../lib/engines/index.js");
           propertiesEngine.requestInvoiceCreation(
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },

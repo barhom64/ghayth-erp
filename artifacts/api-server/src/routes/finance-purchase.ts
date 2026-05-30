@@ -22,6 +22,7 @@ import {
   updateBudgetUsed,
   checkFinancialPeriodOpen,
   computeVat,
+  getCompanyVatRate,
   roundTo2,
   currentYear,
   todayISO,
@@ -972,7 +973,11 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     }
     subtotal = roundTo2(subtotal);
     const poTotal = Number(po.totalAmount);
-    const defaultVatRate = 0.15;
+    // Per-company VAT rate via system_settings.vat_rate (default 15%).
+    // Pre-fix the GRN VAT-ratio split hardcoded 0.15 → a tenant on 5%
+    // VAT would back-derive the wrong VAT-vs-subtotal split on every
+    // GRN, then post the wrong amounts to inventory + VAT input.
+    const defaultVatRate = (await getCompanyVatRate(scope.companyId)) / 100;
     const poSubtotal = roundTo2(poTotal / (1 + defaultVatRate));
     const poVatAmount = roundTo2(poTotal - poSubtotal);
     const vatRatio = poSubtotal > 0 ? poVatAmount / poSubtotal : 0;
@@ -2699,7 +2704,10 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     }
 
     const totalAmt = roundTo2(Number(amount));
-    const vatRate = 0.15;
+    // Per-company VAT rate via system_settings (default 15%). Pre-fix
+    // vendor credit memo hardcoded 0.15 → tenant on 5% computed the
+    // wrong VAT input reversal.
+    const vatRate = (await getCompanyVatRate(scope.companyId)) / 100;
     const subtotal = vatIncluded ? roundTo2(totalAmt / (1 + vatRate)) : totalAmt;
     const vatAmount = roundTo2(vatIncluded ? totalAmt - subtotal : totalAmt * vatRate);
     const fullAmount = vatIncluded ? totalAmt : roundTo2(totalAmt + vatAmount);

@@ -321,7 +321,13 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     glLines.push({ accountCode: penaltyRevCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}`, ...umrahDims });
   }
   if (vatAmount > 0) {
-    const vatPayableCode = await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2160");
+    // Use the standard vat_output fallback (2300) so umrah VAT lines join
+    // the same payable account every other sales path posts to. The
+    // previous "2160" fallback (unearned revenue) created an isolated
+    // sub-ledger that the VAT reconciliation report — which sums by
+    // accountCode = vat_output — never saw, understating reported VAT
+    // payable by the entire umrah sales volume.
+    const vatPayableCode = await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2300");
     glLines.push({ accountCode: vatPayableCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${ref}`, ...umrahDims });
   }
   await createGuardedJournalEntry({

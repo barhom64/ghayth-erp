@@ -108,6 +108,20 @@ const createExpenseSchema = z.object({
     assetId: z.coerce.number().optional(),
     contractId: z.coerce.number().optional(),
     umrahAgentId: z.coerce.number().optional(),
+    // Same gap as journalLineSchema — pre-fix expense lineAllocation
+    // schema dropped 6 fields silently. LineAllocationPanel exposes all
+    // 17 in buildAllocationPayload, but the Zod validator stripped these
+    // 6 → the expense JE line never carried them → drilldown reports
+    // for client / vendor / driver / product / umrahSeason / department
+    // came back empty. Accept all 17 now so an expense allocation
+    // matches manual-journal parity.
+    clientId: z.coerce.number().optional(),
+    vendorId: z.coerce.number().optional(),
+    driverId: z.coerce.number().optional(),
+    productId: z.coerce.number().optional(),
+    umrahSeasonId: z.coerce.number().optional(),
+    departmentId: z.coerce.number().optional(),
+    employeeId: z.coerce.number().optional(),
     manualOverrideReason: z.string().optional(),
   }).optional(),
 });
@@ -172,10 +186,33 @@ const journalLineSchema = z.object({
   description: z.string().optional(),
   debit: z.any().optional(),
   credit: z.any().optional(),
+  // Pre-fix the schema accepted only 4 of 17 dim FK columns —
+  // LineAllocationPanel (frontend) submitted all 17 in buildAllocationPayload,
+  // but Zod silently stripped 12 of them at the validation boundary, so
+  // the route handler never saw vehicleId / propertyId / contractId /
+  // assetId / driverId / productId / vendorId / clientId / umrahAgentId /
+  // umrahSeasonId / costCenterId / activityType / unitId. Users saw the
+  // form fields working in the UI but every drilldown report came back
+  // empty — exactly the "cosmetic pictures" complaint. Accept all 17 +
+  // the activityType string + costCenter free-text fallback now.
   costCenter: z.string().optional(),
+  costCenterId: z.any().optional(),
   departmentId: z.any().optional(),
   projectId: z.any().optional(),
   employeeId: z.any().optional(),
+  vehicleId: z.any().optional(),
+  propertyId: z.any().optional(),
+  unitId: z.any().optional(),
+  assetId: z.any().optional(),
+  contractId: z.any().optional(),
+  driverId: z.any().optional(),
+  productId: z.any().optional(),
+  vendorId: z.any().optional(),
+  clientId: z.any().optional(),
+  umrahAgentId: z.any().optional(),
+  umrahSeasonId: z.any().optional(),
+  activityType: z.string().optional(),
+  templateId: z.any().optional(),
 });
 
 const createJournalSchema = z.object({
@@ -548,6 +585,16 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       if (lineAllocation.assetId != null) entityLink.assetId = lineAllocation.assetId;
       if (lineAllocation.contractId != null) entityLink.contractId = lineAllocation.contractId;
       if (lineAllocation.umrahAgentId != null) entityLink.umrahAgentId = lineAllocation.umrahAgentId;
+      // Propagate the 6 fields that the upstream schema previously dropped
+      // silently. Without these, an expense line could carry a clientId in
+      // the form payload that vanished by the time the JE was posted.
+      if (lineAllocation.clientId != null) entityLink.clientId = lineAllocation.clientId;
+      if (lineAllocation.vendorId != null) entityLink.vendorId = lineAllocation.vendorId;
+      if (lineAllocation.driverId != null) entityLink.driverId = lineAllocation.driverId;
+      if (lineAllocation.productId != null) entityLink.productId = lineAllocation.productId;
+      if (lineAllocation.umrahSeasonId != null) entityLink.umrahSeasonId = lineAllocation.umrahSeasonId;
+      if (lineAllocation.departmentId != null) entityLink.departmentId = lineAllocation.departmentId;
+      if (lineAllocation.employeeId != null) entityLink.employeeId = lineAllocation.employeeId;
       if (lineAllocation.manualOverrideReason) entityLink.manualOverrideReason = lineAllocation.manualOverrideReason;
     }
 
@@ -1580,10 +1627,30 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
       debit: l.debit,
       credit: l.credit,
       description: l.description,
+      // Map all 17 dim FK columns. Pre-fix this mapping covered only 4
+      // (costCenter / departmentId / projectId / employeeId) — the
+      // remaining 12 were stripped by the journalLineSchema Zod validator
+      // upstream AND would have been dropped here even if the schema let
+      // them through. createJournalEntry (businessHelpers.ts) writes all
+      // 17 to journal_lines, so the entire chain works end-to-end now.
       costCenter: l.costCenter,
+      costCenterId: l.costCenterId != null ? Number(l.costCenterId) : undefined,
       departmentId: l.departmentId != null ? Number(l.departmentId) : undefined,
       projectId: l.projectId != null ? Number(l.projectId) : undefined,
       employeeId: l.employeeId != null ? Number(l.employeeId) : undefined,
+      vehicleId: l.vehicleId != null ? Number(l.vehicleId) : undefined,
+      propertyId: l.propertyId != null ? Number(l.propertyId) : undefined,
+      unitId: l.unitId != null ? Number(l.unitId) : undefined,
+      assetId: l.assetId != null ? Number(l.assetId) : undefined,
+      contractId: l.contractId != null ? Number(l.contractId) : undefined,
+      driverId: l.driverId != null ? Number(l.driverId) : undefined,
+      productId: l.productId != null ? Number(l.productId) : undefined,
+      vendorId: l.vendorId != null ? Number(l.vendorId) : undefined,
+      clientId: l.clientId != null ? Number(l.clientId) : undefined,
+      umrahAgentId: l.umrahAgentId != null ? Number(l.umrahAgentId) : undefined,
+      umrahSeasonId: l.umrahSeasonId != null ? Number(l.umrahSeasonId) : undefined,
+      activityType: l.activityType,
+      templateId: l.templateId != null ? Number(l.templateId) : undefined,
     }));
 
     if (isDryRun(req)) {
