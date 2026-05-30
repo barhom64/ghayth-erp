@@ -197,15 +197,36 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   // invoice linked to the groups being billed (joined via group_id).
   // Penalties are pure revenue (no offsetting cost), so they stay in the
   // VAT base when the company opts in.
+  // Cost basis — net of refunds, excluding cancelled NUSK invoices.
+  //
+  // Pre-PR this query ran `SUM(totalAmount)` blindly, which:
+  //   1. Counted refunded amounts as cost (a partially-refunded NUSK
+  //      invoice inflated cost → shrank margin → undercharged VAT, a
+  //      ZATCA compliance violation: the operator must remit the FULL
+  //      output VAT on the actual margin, not a refund-inflated one).
+  //   2. Counted cancelled NUSK invoices as cost (same problem; the
+  //      NUSK row exists for audit but no payable was actually owed).
+  //
+  // Fix: subtract refundAmount and exclude cancelled rows. The match
+  // logic is identical to the vendor-statement integration (PR #1453)
+  // so both reports converge on the same cost figure.
   const costRows = await rawQuery<Record<string, unknown>>(
-    `SELECT COALESCE(SUM("totalAmount"), 0) AS cost_basis
+    `SELECT COALESCE(SUM("totalAmount" - COALESCE("refundAmount", 0)), 0) AS cost_basis
        FROM umrah_nusk_invoices
       WHERE "companyId" = $1
         AND "groupId" = ANY($2)
-        AND "deletedAt" IS NULL`,
+        AND "deletedAt" IS NULL
+        AND "nuskStatus" NOT IN ('cancelled')`,
     [scope.companyId, groupIds]
   );
   const costBasis = roundTo2(Number(costRows[0]?.cost_basis ?? 0));
+  // Selling-below-cost detection — `subtotal < costBasis` means the
+  // operator is taking a loss. `Math.max(0, ...)` still clamps so we
+  // don't accidentally compute negative VAT, but we EXPOSE the
+  // condition on the returned object so the UI can warn the operator
+  // (was silently buried before: invoice generated fine, no signal
+  // the sale was below cost).
+  const sellingBelowCost = subtotal < costBasis;
   const marginBase = roundTo2(Math.max(0, subtotal - costBasis));
 
   const [vatSetting] = await rawQuery<Record<string, unknown>>(
@@ -374,7 +395,14 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
 
   createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: invoiceId, after: { ref, total } }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
 
-  return { invoiceId, ref, subtotal, penaltiesTotal, vatRate, vatAmount, total, pilgrimCount: totalPilgrims, lineItems: lineItems.length, nuskInvoiceRefs, groupRefs };
+  return {
+    invoiceId, ref, subtotal, penaltiesTotal, vatRate, vatAmount, total,
+    pilgrimCount: totalPilgrims, lineItems: lineItems.length,
+    nuskInvoiceRefs, groupRefs,
+    // Margin-scheme telemetry — surfaces what was previously buried in
+    // the column values, so callers (UI, audit, alerting) can react.
+    costBasis, marginBase, sellingBelowCost,
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
