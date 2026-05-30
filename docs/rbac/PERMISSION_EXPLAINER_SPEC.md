@@ -2,7 +2,9 @@
 
 > المرحلة 3 — تنفيذ **#1413 §8** · 2026-05-29 · فرع `claude/ghaith-foundation-audit-wdIUf`
 > **الهدف:** يجيب بالعربية الواضحة: "لماذا يستطيع/لا يستطيع المستخدم تنفيذ إجراء؟"
-> **يُبنى على:** `authzEngine.checkAccess` (يُرجِع `diagnostics` + سبب الرفض) — يغلّفه بشرح بشري.
+> **يُبنى على:** `authzEngine.checkAccess` (يُرجِع السبب + الدور المطابق + النطاق + حد الاعتماد) — يغلّفه بشرح بشري.
+>
+> **✅ منفّذ (Backend):** `POST /admin/permissions/explain` في `routes/admin.ts` — يفوّض القرار لـ `checkAccess` (لا منطق تفويض موازٍ) ويُرجِع: `allowed` + `reason` (عربي) + `sourceRole` + `scope` + `approvalLimit`، معزولًا بالشركة. اختبار: `tests/unit/rbacAdminCompletionSmoke.test.ts`. **المتبقّي:** زر "لماذا؟" في الواجهة.
 
 ---
 
