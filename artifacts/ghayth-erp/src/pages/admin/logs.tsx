@@ -12,6 +12,8 @@ import { ScrollText, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr, todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
+import { downloadDocument } from "@/lib/print-client";
+import { useToast } from "@/hooks/use-toast";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
@@ -144,21 +146,36 @@ export default function AdminLogsPage() {
     );
   };
 
-  const exportCSV = () => {
-    const headers = ["المستخدم", "الإجراء", "الكيان", "المعرف", "التاريخ"];
-    const rows = filteredLogs.map((l: any) => [
-      l.userName || "النظام",
-      ACTION_LABELS[l.action] || l.action,
-      ENTITY_LABELS[l.entity] || l.entity,
-      `#${l.entityId}`,
-      l.createdAt ? formatDateAr(l.createdAt) : "-",
-    ]);
-    const csvContent = [headers, ...rows].map(r => r.join(",")).join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "audit-logs.csv"; a.click();
-    URL.revokeObjectURL(url);
+  // GAP_MATRIX item #10 — the previous implementation built CSV with
+  // Blob + URL.createObjectURL, which bypasses the print engine: no
+  // print_jobs row, no audit trail of WHO read audit_logs (a PDPL gap
+  // since audit_logs contain personal data), no letterhead, no
+  // server-side RBAC re-check on the format. Route through
+  // downloadDocument() so the export appears in /reports/print-log
+  // with entity=report_audit_logs and a copy_number.
+  const { toast } = useToast();
+  const exportCSV = async () => {
+    const items = filteredLogs.map((l: any) => ({
+      "المستخدم": l.userName || "النظام",
+      "الإجراء": ACTION_LABELS[l.action] || l.action,
+      "الكيان": ENTITY_LABELS[l.entity] || l.entity,
+      "المعرف": `#${l.entityId}`,
+      "التاريخ": l.createdAt ? formatDateAr(l.createdAt) : "-",
+    }));
+    try {
+      await downloadDocument({
+        entityType: "report_audit_logs",
+        entityId: "list",
+        format: "csv",
+        payload: { entity: { id: "list", title: "سجل التدقيق" }, items },
+      });
+    } catch (err) {
+      toast({
+        title: "تعذّر تصدير CSV",
+        description: (err as { message?: string })?.message ?? "خطأ غير متوقع",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
