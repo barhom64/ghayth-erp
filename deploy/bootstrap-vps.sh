@@ -41,7 +41,7 @@ fi
 log "Installing Node 24, nginx, PostgreSQL…"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y curl ca-certificates gnupg git nginx postgresql postgresql-contrib
+apt-get install -y curl ca-certificates gnupg git nginx postgresql postgresql-contrib rsync gettext-base
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -v | cut -dv -f2 | cut -d. -f1)" -lt 24 ]]; then
   curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
   apt-get install -y nodejs
@@ -56,9 +56,18 @@ id -u "${APP_USER}" >/dev/null 2>&1 || useradd -m -s /bin/bash "${APP_USER}"
 
 # --- 3. PostgreSQL role + database ----------------------------------------
 log "Provisioning PostgreSQL database '${DB_NAME}'…"
-DB_PASS="$(openssl rand -hex 24)"
-sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1 || \
+# Reuse the DB password already stored in .env on re-runs so the role and the
+# app stay in sync; only generate a fresh one on a truly first run. (hex-only,
+# so it never contains :, @, or spaces — safe in a URL and in SQL.)
+if [[ -f "${APP_DIR}/.env" ]] && grep -q '^DATABASE_URL=' "${APP_DIR}/.env"; then
+  DB_PASS="$(sed -n 's#^DATABASE_URL=postgres://[^:]*:\([^@]*\)@.*#\1#p' "${APP_DIR}/.env")"
+fi
+DB_PASS="${DB_PASS:-$(openssl rand -hex 24)}"
+if sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1; then
+  sudo -u postgres psql -c "ALTER ROLE ${DB_USER} LOGIN PASSWORD '${DB_PASS}';"
+else
   sudo -u postgres psql -c "CREATE ROLE ${DB_USER} LOGIN PASSWORD '${DB_PASS}';"
+fi
 sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1 || \
   sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};"
 
