@@ -113,7 +113,7 @@ const allNavSections: NavSection[] = [
     items: [
       { label: "طلباتي", path: "/my-requests", icon: ClipboardCheck, children: [
         { label: "كل طلباتي", path: "/my-requests", icon: ClipboardCheck },
-        { label: "طلب إجازة", path: "/my-leave-request", icon: Calendar },
+        { label: "طلب إجازة", path: "/hr/leaves/create", icon: Calendar },
       ]},
       { label: "معلوماتي", path: "/my-attendance", icon: User, children: [
         { label: "حضوري وانصرافي", path: "/my-attendance", icon: Clock },
@@ -192,7 +192,7 @@ const allNavSections: NavSection[] = [
       { label: "الانضباط والمخالفات", path: "/hr/violations", icon: Scale, module: "hr", children: [
         { label: "نظرة عامة", path: "/hr/violations", icon: ListChecks, subKey: "violations" },
         { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
-        { label: "المحاضر التأديبية", path: "/hr/discipline/memos", icon: FileText, subKey: "violations" },
+        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations" },
         { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
         { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
         { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
@@ -1081,26 +1081,21 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
       { label: "الرصد التلقائي", icon: Radar, link: "/hr/violations/auto-detection" },
       { label: "إدارة المخالفات", icon: ClipboardList, link: "/hr/violations/management" },
-      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
       { label: "لائحة الانضباط", icon: BookOpen, link: "/hr/discipline/regulation" },
     ],
     "/hr/violations/auto-detection": [
       { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
-      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
     ],
     "/hr/violations/management": [
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
       { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
-      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
-    ],
-    "/hr/discipline/memos": [
-      { label: "محضر جديد", icon: Plus, link: "/hr/discipline/memos" },
-      { label: "لائحة الانضباط", icon: BookOpen, link: "/hr/discipline/regulation" },
-      { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
     ],
     "/hr/discipline/regulation": [
-      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
       { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
     ],
     "/hr/shifts": [

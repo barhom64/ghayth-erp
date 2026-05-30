@@ -41,7 +41,6 @@ const Shifts = lazy(() => import("@/pages/hr/shifts"));
 const ShiftsCreate = lazy(() => import("@/pages/create/hr/shifts-create"));
 const ShiftDetail = lazy(() => import("@/pages/details/shift-detail"));
 
-const EmployeeProfile = lazy(() => import("@/pages/hr/employee-profile"));
 const AttendanceReports = lazy(() => import("@/pages/hr/attendance-reports"));
 const LeaveManagement = lazy(() => import("@/pages/hr/leave-management"));
 const ApprovalChains = lazy(() => import("@/pages/hr/approval-chains"));
@@ -77,7 +76,6 @@ const AutoDetection = lazy(() => import("@/pages/hr/auto-detection"));
 const DisciplineRegulation = lazy(() => import("@/pages/hr/discipline-regulation"));
 const ApprovalInbox = lazy(() => import("@/pages/hr/approval-inbox"));
 const HrDocuments = lazy(() => import("@/pages/hr/documents"));
-const DisciplineMemos = lazy(() => import("@/pages/hr/discipline-memos"));
 const DisciplineMemoDetail = lazy(() => import("@/pages/hr/discipline-memo-detail"));
 const OfficialLetters = lazy(() => import("@/pages/hr/official-letters"));
 const Contracts = lazy(() => import("@/pages/hr/contracts"));
@@ -157,13 +155,11 @@ export const hrRoutes = [
   { path: "/hr/discipline/regulation", component: DisciplineRegulation, subKey: "violations" },
   { path: "/hr/approvals", component: ApprovalInbox },
   { path: "/hr/documents", component: HrDocuments },
-  { path: "/hr/discipline/memos", component: DisciplineMemos, subKey: "violations" },
   { path: "/hr/discipline/memos/:id", component: DisciplineMemoDetail, subKey: "violations" },
   { path: "/hr/shifts", component: Shifts, subKey: "shifts" },
   { path: "/hr/shifts/create", component: ShiftsCreate, subKey: "shifts" },
   { path: "/hr/shifts/management", component: ShiftsManagement, subKey: "shifts" },
   { path: "/hr/shifts/:id", component: ShiftDetail, subKey: "shifts" },
-  { path: "/hr/employee-profile/:id", component: EmployeeProfile, subKey: "employees" },
   { path: "/hr/employee-activation", component: EmployeeActivation, subKey: "employees" },
   { path: "/hr/onboarding-review", component: OnboardingReview, subKey: "employees" },
   { path: "/hr/evaluation-360/create", component: Evaluation360Create, subKey: "performance" },

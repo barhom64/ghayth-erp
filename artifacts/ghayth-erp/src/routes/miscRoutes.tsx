@@ -40,7 +40,6 @@ const Automation = lazy(() => import("@/pages/automation"));
 const ActivityLog = lazy(() => import("@/pages/activity-log"));
 const MySpace = lazy(() => import("@/pages/my-space"));
 const MyRequests = lazy(() => import("@/pages/my-requests"));
-const MyLeaveRequest = lazy(() => import("@/pages/my-leave-request"));
 const MyAttendance = lazy(() => import("@/pages/my-attendance"));
 const MyPayslip = lazy(() => import("@/pages/my-payslip"));
 const MyPerformance = lazy(() => import("@/pages/my-performance"));
@@ -69,7 +68,6 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/dashboard", component: Dashboard },
   { path: "/my-space", component: MySpace },
   { path: "/my-requests", component: MyRequests },
-  { path: "/my-leave-request", component: MyLeaveRequest },
   { path: "/my-attendance", component: MyAttendance },
   { path: "/my-payslip", component: MyPayslip },
   { path: "/my-performance", component: MyPerformance },
