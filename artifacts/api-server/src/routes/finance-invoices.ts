@@ -38,6 +38,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
+import { resolveTransactionBranch, assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { z } from "zod";
 
 // ── Zod schemas for POST route validation ──────────────────────────────────
@@ -409,21 +410,34 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     if (!clientId) {
       throw new ValidationError("العميل مطلوب لإنشاء الفاتورة", { field: "clientId", fix: "حدد العميل الذي ستُصدر له الفاتورة" });
     }
-    if (!branchId && !scope.branchId) {
-      throw new ValidationError("الفرع مطلوب لإنشاء الفاتورة", { field: "branchId", fix: "حدد الفرع الذي تنتمي إليه الفاتورة" });
+    // Owner / GM bypasses the resolver: they have global access and can
+    // post to any branch (the resolver throws BranchRequired for users
+    // with allowedBranches.length > 1, which is the right behaviour for
+    // managers but wrong for owners on the global scope).
+    let resolvedBranchId: number;
+    if (scope.isOwner || OWNER_GM_ROLES.includes(scope.role)) {
+      resolvedBranchId = (branchId ?? scope.branchId) as number;
+      if (!resolvedBranchId) {
+        throw new ValidationError("الفرع مطلوب لإنشاء الفاتورة", { field: "branchId", fix: "حدد الفرع الذي تنتمي إليه الفاتورة" });
+      }
+    } else {
+      // Multi-branch user without an explicit branchId in the payload
+      // gets a typed BranchRequired error → frontend renders a branch
+      // picker. Single-branch user auto-resolves silently.
+      const r = resolveTransactionBranch({
+        scope: { companyId: effectiveCompanyId, branchId: scope.branchId, allowedBranches: scope.allowedBranches },
+        bodyBranchId: branchId,
+      });
+      resolvedBranchId = r.branchId;
     }
-    if (branchId) {
-      const [branchRow] = await rawQuery<Record<string, unknown>>(
-        `SELECT id FROM branches WHERE id=$1 AND "companyId"=$2 AND status='active'`,
-        [branchId, effectiveCompanyId]
-      );
-      if (!branchRow) {
-        throw new ValidationError("الفرع غير موجود أو لا ينتمي لهذه الشركة", { field: "branchId" });
-      }
-      if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
-          scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
-        throw new ForbiddenError("لا تملك صلاحية إنشاء فواتير في هذا الفرع", { field: "branchId" });
-      }
+    // Validate the resolved branch actually belongs to the effective
+    // company (cross-tenant guard) and is active.
+    const [branchRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT id FROM branches WHERE id=$1 AND "companyId"=$2 AND status='active'`,
+      [resolvedBranchId, effectiveCompanyId]
+    );
+    if (!branchRow) {
+      throw new ValidationError("الفرع غير موجود أو لا ينتمي لهذه الشركة", { field: "branchId" });
     }
     // FK pre-check on clientId so the frontend can light up the input.
     const [clientRow] = await rawQuery<Record<string, unknown>>(
@@ -613,7 +627,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     // the global `invoice_number_seq`).
     const issued = await issueNumber({
       companyId: effectiveCompanyId,
-      branchId: branchId ?? scope.branchId ?? null,
+      branchId: resolvedBranchId,
       moduleKey: "finance",
       entityKey: "sales_invoice",
       entityTable: "invoices",
@@ -681,7 +695,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
                 "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter",
                 "taxCode","taxInclusive","discountAmount","discountPercent")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
-        [effectiveCompanyId, branchId ?? scope.branchId, clientId ?? null, ref, description ?? null,
+        [effectiveCompanyId, resolvedBranchId, clientId ?? null, ref, description ?? null,
           baseAmount, Number(vatRate), vatAmount, total, finalDueDate, scope.activeAssignmentId, notes ?? null,
           isTaxLinked ? true : false, invoiceTypeCode ?? "388", taxCategoryCode ?? "S", exemptionReason ?? null,
           // as-any-reason: justified-pragmatic - defensive read of optional costCenter field not yet in createInvoiceSchema; behavior unchanged
@@ -1807,15 +1821,31 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     let newPaid!: number;
     let newStatus!: string;
     let invoiceClientId: number | undefined;
+    let invoiceBranchId: number | null = null;
     await withTransaction(async (client) => {
       const invRes = await client.query(
-        `SELECT id, total, "paidAmount", status, ref, "clientId" FROM invoices
+        `SELECT id, total, "paidAmount", status, ref, "clientId", "branchId" FROM invoices
          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
         [id, scope.companyId]
       );
       const invoice = invRes.rows[0];
       if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
       invoiceClientId = (invoice.clientId as number | null) ?? undefined;
+      // Payment lands on the INVOICE's branch, not the operator's
+      // active branch. Pre-fix the payment JE was hardcoded to
+      // scope.branchId, so paying an Invoice-in-BranchA from a session
+      // working in BranchB silently posted the cash inflow + AR
+      // clearing to Branch B's books — per-branch AR aging diverged
+      // from per-branch revenue forever. Validate the operator has
+      // access to the invoice's branch (security check, not UX prompt).
+      invoiceBranchId = (invoice.branchId as number | null) ?? null;
+      if (invoiceBranchId != null) {
+        assertDocumentBranchAccess(invoiceBranchId, {
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          allowedBranches: (scope as any).allowedBranches,
+        });
+      }
 
       const lockedStatuses = ["paid", "closed", "cancelled"];
       if (lockedStatuses.includes(invoice.status)) {
@@ -1881,7 +1911,11 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     const paidScaled = Math.round(newPaid * 100);
     const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
-      branchId: scope.branchId,
+      // Payment JE lands on the invoice's own branch, not the operator's
+      // working branch. Falls back to scope.branchId only if the invoice
+      // has no branchId (legacy data — should be rare now that the create
+      // route enforces it).
+      branchId: invoiceBranchId ?? scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref: `PAY-${invoiceRef}-${paidScaled}`,
       description: `سداد فاتورة ${invoiceRef}`,

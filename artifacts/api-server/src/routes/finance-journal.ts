@@ -38,6 +38,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logAllocationOverride } from "../lib/accountingAllocation.js";
+import { resolveTransactionBranch } from "../lib/branchResolution.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -219,6 +220,16 @@ const createJournalSchema = z.object({
   description: z.string().optional(),
   lines: z.array(journalLineSchema).optional(),
   date: z.string().optional(),
+  // Operator's explicit branch pick. Required for multi-branch users; single-
+  // branch users auto-derive. branchSplits[] allows splitting one JE across
+  // multiple branches in the same company — when provided, each line in
+  // the JE inherits its branch from the matching split entry.
+  branchId: z.coerce.number().optional(),
+  branchSplits: z.array(z.object({
+    branchId: z.coerce.number(),
+    percentage: z.coerce.number().optional(),
+    amount: z.coerce.number().optional(),
+  })).optional(),
 });
 
 const reverseJournalSchema = z.object({
@@ -1589,7 +1600,24 @@ journalRouter.get("/journal", authorize({ feature: "finance.journal", action: "l
 journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { description, lines, date } = zodParse(createJournalSchema.safeParse(req.body ?? {}));
+    const { description, lines, date, branchId: bodyBranchId, branchSplits } = zodParse(createJournalSchema.safeParse(req.body ?? {}));
+    // Resolve the entry-level branch. Owner / GM short-circuits the
+    // resolver and uses body || scope. Multi-branch users get the
+    // BranchRequired typed error so the frontend can render a picker.
+    let manualBranchId: number;
+    if (scope.isOwner || OWNER_GM_ROLES.includes(scope.role)) {
+      manualBranchId = (bodyBranchId ?? scope.branchId) as number;
+      if (!manualBranchId) {
+        throw new ValidationError("الفرع مطلوب لإنشاء القيد", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه القيد" });
+      }
+    } else {
+      const r = resolveTransactionBranch({
+        scope: { companyId: scope.companyId, branchId: scope.branchId, allowedBranches: scope.allowedBranches },
+        bodyBranchId,
+        bodySplits: branchSplits,
+      });
+      manualBranchId = r.branchId;
+    }
     if (!description) throw new ValidationError("وصف القيد مطلوب", { field: "description" });
     if (!Array.isArray(lines) || lines.length < 2) throw new ValidationError("القيد يجب أن يحتوي على بندين على الأقل", { field: "lines" });
     for (const l of lines) { l.debit = roundTo2(Number(l.debit) || 0); l.credit = roundTo2(Number(l.credit) || 0); }
@@ -1669,7 +1697,7 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     // fallback: if numbering fails, the manual JE creation fails too.
     const issued = await issueNumber({
       companyId: scope.companyId,
-      branchId: scope.branchId ?? null,
+      branchId: manualBranchId,
       moduleKey: "finance",
       entityKey: "journal_entry",
       entityTable: "journal_entries",
@@ -1678,6 +1706,16 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     });
     const ref = issued.number;
     const idempotencyToken = requestIdempotencyToken(req);
+
+    // Multi-branch split: if branchSplits[] was provided, stamp the
+    // matching branchId on each line (operator's choice). Otherwise
+    // every line inherits the header's manualBranchId (engine default).
+    if (branchSplits && branchSplits.length > 0) {
+      for (let i = 0; i < engineLines.length; i++) {
+        const split = branchSplits[i] ?? branchSplits[branchSplits.length - 1];
+        (engineLines[i] as any).branchId = split.branchId;
+      }
+    }
 
     // FIN-013 — manual journals now follow a draft → approved → posted
     // workflow instead of posting directly. `deferBalances: true` keeps
@@ -1688,7 +1726,7 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     const { financialEngine } = await import("../lib/engines/index.js");
     const { journalId: insertId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
-      branchId: scope.branchId,
+      branchId: manualBranchId,
       createdBy: scope.activeAssignmentId,
       ref,
       description,
