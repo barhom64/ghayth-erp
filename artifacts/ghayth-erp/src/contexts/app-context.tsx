@@ -168,6 +168,15 @@ interface AppContextType {
 
   canAccessSubPage: (module: string, subKey: string) => boolean;
 
+  /**
+   * VIS-002 (Ghaith Operating Foundation): partial activation. A feature/track
+   * is ENABLED by default and only hidden when explicitly disabled for the
+   * company (company_feature_flags). Default-ON keeps existing behaviour
+   * unchanged when no flags are set, and lets a supporting service appear only
+   * within context once subscribed. See docs/frontend/VISIBILITY_ENGINE_SPEC.md.
+   */
+  isFeatureEnabled: (featureKey: string) => boolean;
+
   currentUserId: number | null;
   scopeQueryString: string;
   refreshFilters: () => void;
@@ -214,7 +223,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const selectedRoleColor = roleKeyColors[selectedRole?.roleKey ?? "employee"] ?? "#95A5A6";
   const jobTitle = user?.jobTitle || null;
 
-  const [apiData, setApiData] = useState<{ permissions: string[]; modules: string[]; highestLevel: number } | null>(null);
+  const [apiData, setApiData] = useState<{ permissions: string[]; modules: string[]; highestLevel: number; disabledFeatures: string[] } | null>(null);
   const [permRefreshKey, setPermRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -230,6 +239,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           permissions: Array.isArray(data?.permissions) ? data.permissions : [],
           modules: Array.isArray(data?.modules) ? data.modules : [],
           highestLevel: typeof data?.highestLevel === "number" ? data.highestLevel : 10,
+          // VIS-002: default-ON — missing/older backend ⇒ empty ⇒ all enabled.
+          disabledFeatures: Array.isArray(data?.disabledFeatures) ? data.disabledFeatures : [],
         });
       })
       .catch(() => { setApiData(null); });
@@ -433,6 +444,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const hasPermission = (permission: PermissionKey) => permissions[permission];
   const canAccessModule = (module: ModuleType) => allowedModules.includes(module);
 
+  // VIS-002: default-ON partial activation. A feature/track key is enabled
+  // unless the company explicitly disabled it. Empty set ⇒ no behaviour change.
+  const disabledFeatures = apiData?.disabledFeatures ?? [];
+  const isFeatureEnabled = useCallback(
+    (featureKey: string) => !featureKey || !disabledFeatures.includes(featureKey),
+    [disabledFeatures],
+  );
+
   const rawPermissions = apiData?.permissions ?? [];
   const isOwnerRole = selectedRole?.roleKey === "owner" || effectiveRoleLevel >= 100;
   const can = useCallback((permission: string): boolean => {
@@ -490,6 +509,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       allowedModules,
       canAccessModule,
       canAccessSubPage,
+      isFeatureEnabled,
       currentUserId,
       scopeQueryString,
       refreshFilters,
