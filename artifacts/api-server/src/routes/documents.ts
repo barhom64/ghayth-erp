@@ -266,7 +266,13 @@ router.post("/upload", authorize({ feature: "documents", action: "create" }), as
     const scope = req.scope!;
     const { title, description, fileName, fileSize, mimeType, category, storageKey, entityLinks } = body;
 
-    const ALLOWED_ENTITY_TYPES = ["employee", "client", "project", "invoice", "vehicle"];
+    const ALLOWED_ENTITY_TYPES = [
+      "employee", "client", "project", "invoice", "vehicle",
+      "legal_case", "legal_contract",
+      "rental_contract", "property_building", "property_unit",
+      "umrah_pilgrim", "umrah_invoice",
+      "purchase_order", "expense",
+    ];
     if (entityLinks && Array.isArray(entityLinks)) {
       for (const link of entityLinks) {
         if (!link.entityType || !ALLOWED_ENTITY_TYPES.includes(link.entityType) || !Number.isInteger(Number(link.entityId))) {
@@ -333,6 +339,16 @@ router.get("/:id/download", authorize({ feature: "documents", action: "export" }
       throw new NotFoundError("لا يوجد ملف مرفق");
     }
 
+    // Compliance: record every access. Fire-and-forget — a logging
+    // failure must not block a legitimate download, but the row goes
+    // in BEFORE the stream pipes so we record intent even if the
+    // upstream object-storage call later fails.
+    rawQuery(
+      `INSERT INTO document_access_log ("companyId","documentId","userId","accessType","ipAddress","userAgent")
+       VALUES ($1,$2,$3,'download',$4,$5)`,
+      [scope.companyId, id, scope.userId ?? null, req.ip ?? null, req.get("user-agent") ?? null]
+    ).catch((e) => logger.error(e, "document access log failed (download)"));
+
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(doc.storageKey);
       const response = await objectStorageService.downloadObject(objectFile);
@@ -370,6 +386,15 @@ router.get("/:id/preview", authorize({ feature: "documents", action: "export" })
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
     if (!doc.storageKey) throw new NotFoundError("لا يوجد ملف مرفق");
+
+    // Compliance: same fire-and-forget access log as /download, with
+    // accessType='preview' so reports can distinguish embed/preview
+    // views (often cached, lower bar) from explicit downloads.
+    rawQuery(
+      `INSERT INTO document_access_log ("companyId","documentId","userId","accessType","ipAddress","userAgent")
+       VALUES ($1,$2,$3,'preview',$4,$5)`,
+      [scope.companyId, id, scope.userId ?? null, req.ip ?? null, req.get("user-agent") ?? null]
+    ).catch((e) => logger.error(e, "document access log failed (preview)"));
 
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(doc.storageKey);
@@ -1061,6 +1086,31 @@ router.delete("/:id", authorize({ feature: "documents", action: "delete" }), asy
       entityId: id,
     }).catch((e) => logger.error(e, "documents background task failed"));
     res.json({ message: "تم حذف المستند بنجاح" });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+// Access log read endpoint — admins / compliance officers see who
+// downloaded/previewed which document. Gated by `documents:export` so
+// only users who can pull a file can also see the log of pulls.
+router.get("/:id/access-log", authorize({ feature: "documents", action: "export" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Tenant scope is enforced on the log row itself, not on the
+    // document — the document may be soft-deleted but the log must
+    // still be retrievable for compliance.
+    const rows = await rawQuery(
+      `SELECT l.id, l."documentId", l."userId", l."accessType", l."accessedAt", l."ipAddress",
+              u.email AS "userEmail", e.name AS "userName"
+       FROM document_access_log l
+       LEFT JOIN users u ON u.id = l."userId"
+       LEFT JOIN employees e ON e.id = u."employeeId" AND e."deletedAt" IS NULL
+       WHERE l."companyId" = $1 AND l."documentId" = $2
+       ORDER BY l."accessedAt" DESC
+       LIMIT 500`,
+      [scope.companyId, id]
+    ).catch(() => []);
+    res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 

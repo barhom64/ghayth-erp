@@ -5,7 +5,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
-import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { authorize, authorizeAny, maskFields } from "../lib/rbac/authorize.js";
 import {
   resolveSettings,
   getSettingsByScope,
@@ -522,7 +522,14 @@ router.delete("/branches/:id", authorize({ feature: "settings", action: "update"
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.post("/departments", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+// N13 fix: departments are co-owned by SysAdmin (settings feature) and
+// HR Director (hr.organization feature). authorizeAny accepts whichever
+// the caller's role grants — previously the page was reachable but the
+// "create department" button silently failed for HR Director.
+router.post("/departments", authorizeAny(
+  { feature: "settings", action: "update" },
+  { feature: "hr.organization", action: "create" },
+), async (req, res) => {
   try {
     const body = zodParse(createDepartmentSchema.safeParse(req.body));
     const { name, nameEn, manager } = body;
@@ -539,7 +546,10 @@ router.post("/departments", authorize({ feature: "settings", action: "update" })
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/departments/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+router.put("/departments/:id", authorizeAny(
+  { feature: "settings", action: "update" },
+  { feature: "hr.organization", action: "update" },
+), async (req, res) => {
   try {
     const body = zodParse(updateDepartmentSchema.safeParse(req.body));
     const id = parseId(req.params.id, "id");
@@ -557,7 +567,10 @@ router.put("/departments/:id", authorize({ feature: "settings", action: "update"
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.delete("/departments/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+router.delete("/departments/:id", authorizeAny(
+  { feature: "settings", action: "update" },
+  { feature: "hr.organization", action: "delete" },
+), async (req, res) => {
   try {
     const id = parseId(req.params.id, "id");
     const scope = req.scope!;
