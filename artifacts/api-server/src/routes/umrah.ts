@@ -206,10 +206,20 @@ const patchPackageSchema = z.object({
   description: z.string().optional(),
 });
 
+// Lets the reassign modal (pilgrim-detail.tsx) ship an empty string
+// to mean "unassign", instead of having to remember to send literal
+// null from the frontend. Without this, z.coerce.number("") returns 0
+// and the FK insert would fail against the non-existent agent id 0.
+const nullableFkId = z.preprocess(
+  (v) => (v === "" || v === undefined ? null : v),
+  z.coerce.number().nullable(),
+);
+
 const patchPilgrimSchema = z.object({
   status: z.enum(["pending", "arrived", "active", "overstayed", "departed", "violated", "cancelled"]).optional(),
-  agentId: z.coerce.number().optional().nullable(),
-  packageId: z.coerce.number().optional().nullable(),
+  agentId: nullableFkId.optional(),
+  subAgentId: nullableFkId.optional(),
+  packageId: nullableFkId.optional(),
   fullName: z.string().optional(),
   passportNumber: z.string().optional(),
   visaNumber: z.string().optional().nullable(),
@@ -763,7 +773,7 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
     const scope = req.scope!;
     const b = zodParse(patchPilgrimSchema.safeParse(req.body));
     const pilgrimId = parseId(req.params.id, "id");
-    const fieldKeys = ["agentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
+    const fieldKeys = ["agentId","subAgentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
 
     const encryptIfSensitive = (key: string, val: any): any => {
       if (!val) return val;
