@@ -2,6 +2,7 @@ import { lazy } from "react";
 
 const Admin = lazy(() => import("@/pages/admin"));
 const AdminUsers = lazy(() => import("@/pages/admin/users"));
+const AdminUserOnboarding = lazy(() => import("@/pages/admin/user-onboarding"));
 const AdminRoles = lazy(() => import("@/pages/admin/roles"));
 const AdminLogs = lazy(() => import("@/pages/admin/logs"));
 const AdminIntegrations = lazy(() => import("@/pages/admin-integrations"));
@@ -35,6 +36,7 @@ const AdminDigitalSignature = lazy(() => import("@/pages/admin-digital-signature
 export const adminRoutes = [
   { path: "/admin", component: Admin },
   { path: "/admin/users", component: AdminUsers },
+  { path: "/admin/user-onboarding", component: AdminUserOnboarding },
   { path: "/admin/roles", component: AdminRoles },
   { path: "/admin/logs", component: AdminLogs },
   { path: "/admin/integrations", component: AdminIntegrations },
