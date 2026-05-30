@@ -562,9 +562,15 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
   try {
     const scope = req.scope!;
     const clientId = parseId(req.params.clientId, "clientId");
-    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const { startDate, endDate, seasonId: seasonIdRaw } = req.query as Record<string, string | undefined>;
     const asOf = endDate || todayISO();
     const from = startDate || "1900-01-01";
+    // Optional umrah-season filter — same shape as the vendor-statement
+    // endpoint. Narrows the umrah_sales_invoices + umrah_payments rows
+    // (payments are scoped via the parent invoice's season indirectly
+    // by joining the sub-agent — kept simple here: payments aren't
+    // season-scoped per row).
+    const seasonIdNum = seasonIdRaw && /^\d+$/.test(seasonIdRaw) ? Number(seasonIdRaw) : null;
 
     const [client] = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, phone, email, "taxNumber", "taxNumber" AS "vatNumber" FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -598,7 +604,72 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
         WHERE ip."clientId" = $1 AND ip."companyId" = $2 AND ip."paidAt" < $3${obPayBranchCond}`,
       obPayParams
     );
-    const openingBalance = Number(obInvRow?.total ?? 0) - Number(obPayRow?.total ?? 0);
+    // ── Umrah AR integration ───────────────────────────────────────
+    // The customer statement was historically blind to umrah_sales_invoices
+    // — operators opening it for a sub-agent's linked client saw zero
+    // umrah activity even though the GL had it. The umrah module posts
+    // every sales invoice + payment to journal_entries (see
+    // umrahInvoicingEngine.createGuardedJournalEntry), so the GL was
+    // correct; only the customer-statement endpoint was broken.
+    //
+    // Match rule: an umrah_sales_invoice belongs to this customer if
+    //   - its clientId column directly references this customer, OR
+    //   - its subAgentId resolves to a sub-agent whose clientId is this
+    //     customer (the common path — most umrah sales invoices are
+    //     keyed by sub-agent because the sub-agent is who actually pays)
+    //
+    // Same `csBranchIds` scoping as the existing invoices query so a
+    // per-branch user can't see another branch's umrah rows here.
+    const umrahMatchSql = `(u."clientId" = $1
+        OR EXISTS (
+          SELECT 1 FROM umrah_sub_agents sa
+           WHERE sa.id = u."subAgentId"
+             AND sa."clientId" = $1
+             AND sa."companyId" = $2
+             AND sa."deletedAt" IS NULL
+        ))`;
+
+    // Opening balance contribution from umrah — same BEFORE-start-date
+    // window as the existing obInvRow / obPayRow above.
+    const obUmrahInvParams: unknown[] = [clientId, scope.companyId, from];
+    const obUmrahInvBranchCond = csBranchIds
+      ? (() => { obUmrahInvParams.push(csBranchIds); return ` AND u."branchId" = ANY($${obUmrahInvParams.length}::int[])`; })()
+      : "";
+    const obUmrahInvSeasonCond = seasonIdNum != null
+      ? (() => { obUmrahInvParams.push(seasonIdNum); return ` AND u."seasonId" = $${obUmrahInvParams.length}`; })()
+      : "";
+    const [obUmrahInvRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(u.total), 0) AS total
+         FROM umrah_sales_invoices u
+        WHERE ${umrahMatchSql}
+          AND u."companyId" = $2
+          AND u."deletedAt" IS NULL
+          AND u."createdAt" < $3${obUmrahInvBranchCond}${obUmrahInvSeasonCond}`,
+      obUmrahInvParams
+    );
+    const obUmrahPayParams: unknown[] = [clientId, scope.companyId, from];
+    const obUmrahPayBranchCond = csBranchIds
+      ? (() => { obUmrahPayParams.push(csBranchIds); return ` AND up."branchId" = ANY($${obUmrahPayParams.length}::int[])`; })()
+      : "";
+    const [obUmrahPayRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(up."sarAmount"), 0) AS total
+         FROM umrah_payments up
+         JOIN umrah_sub_agents sa
+           ON sa.id = up."subAgentId"
+          AND sa."companyId" = up."companyId"
+          AND sa."deletedAt" IS NULL
+        WHERE sa."clientId" = $1
+          AND up."companyId" = $2
+          AND up."deletedAt" IS NULL
+          AND up."paymentDate" < $3${obUmrahPayBranchCond}`,
+      obUmrahPayParams
+    );
+    const openingBalanceWithUmrah =
+      Number(obInvRow?.total ?? 0)
+      + Number(obUmrahInvRow?.total ?? 0)
+      - Number(obPayRow?.total ?? 0)
+      - Number(obUmrahPayRow?.total ?? 0);
+    const openingBalance = openingBalanceWithUmrah;
 
     const csBranchCond = csBranchIds ? ` AND "branchId" = ANY($5::int[])` : "";
     const csBaseParams = (extra?: unknown[]): unknown[] => [clientId, scope.companyId, from, asOf, ...(extra || [])];
@@ -634,7 +705,58 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
       payParams
     );
 
-    const all = [...invoices, ...payments].sort(
+    // In-period umrah sales invoices for this customer (direct clientId
+    // or via the sub-agent's clientId — see umrahMatchSql above). Shape
+    // matches the existing invoice movement row so they merge into the
+    // sorted timeline alongside core-finance invoices without special
+    // handling.
+    const umrahInvParams: unknown[] = [clientId, scope.companyId, from, asOf];
+    const umrahInvBranchCond = csBranchIds
+      ? (() => { umrahInvParams.push(csBranchIds); return ` AND u."branchId" = ANY($${umrahInvParams.length}::int[])`; })()
+      : "";
+    const umrahInvSeasonCond = seasonIdNum != null
+      ? (() => { umrahInvParams.push(seasonIdNum); return ` AND u."seasonId" = $${umrahInvParams.length}`; })()
+      : "";
+    const umrahInvoices = await rawQuery<Record<string, unknown>>(
+      `SELECT u.id, u.ref, u."createdAt" AS date, u.total AS debit, 0 AS credit,
+              u."dueDate", u.status, 'umrah_sales_invoice' AS "movementType",
+              CONCAT('فاتورة عمرة ', COALESCE(u.ref, CONCAT('#', u.id))) AS description,
+              u."seasonId" AS "seasonId"
+         FROM umrah_sales_invoices u
+        WHERE ${umrahMatchSql}
+          AND u."companyId"=$2
+          AND u."deletedAt" IS NULL
+          AND u."createdAt" >= $3 AND u."createdAt" < ($4::date + 1)${umrahInvBranchCond}${umrahInvSeasonCond}
+        ORDER BY u."createdAt"`,
+      umrahInvParams
+    );
+
+    // In-period umrah payments — JOINed to umrah_sub_agents to resolve
+    // the customer. paymentDate (not createdAt) is the cash-effective
+    // date the customer cares about.
+    const umrahPayParams: unknown[] = [clientId, scope.companyId, from, asOf];
+    const umrahPayBranchCond = csBranchIds
+      ? (() => { umrahPayParams.push(csBranchIds); return ` AND up."branchId" = ANY($${umrahPayParams.length}::int[])`; })()
+      : "";
+    const umrahPayments = await rawQuery<Record<string, unknown>>(
+      `SELECT up.id, COALESCE(up.ref, CONCAT('UPAY-', up.id)) AS ref,
+              up."paymentDate" AS date, 0 AS debit, up."sarAmount" AS credit,
+              NULL AS "dueDate", 'paid' AS status, 'umrah_payment' AS "movementType",
+              CONCAT('دفعة عمرة (', COALESCE(up.method,'manual'), ')') AS description
+         FROM umrah_payments up
+         JOIN umrah_sub_agents sa
+           ON sa.id = up."subAgentId"
+          AND sa."companyId" = up."companyId"
+          AND sa."deletedAt" IS NULL
+        WHERE sa."clientId" = $1
+          AND up."companyId" = $2
+          AND up."deletedAt" IS NULL
+          AND up."paymentDate" >= $3 AND up."paymentDate" <= $4${umrahPayBranchCond}
+        ORDER BY up."paymentDate"`,
+      umrahPayParams
+    );
+
+    const all = [...invoices, ...payments, ...umrahInvoices, ...umrahPayments].sort(
       (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
     let running = openingBalance;
@@ -655,6 +777,30 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
           AND (total - COALESCE("paidAmount",0)) > 0.01${agingBranchCond}`,
       agingParams
     );
+
+    // Aging extension — open umrah sales invoices contribute to the
+    // same buckets. Without this the aging total understates AR for
+    // any customer whose umrah activity is non-trivial.
+    const umrahAgingParams: unknown[] = [clientId, scope.companyId, asOf];
+    const umrahAgingBranchCond = csBranchIds
+      ? (() => { umrahAgingParams.push(csBranchIds); return ` AND u."branchId" = ANY($${umrahAgingParams.length}::int[])`; })()
+      : "";
+    const umrahAgingSeasonCond = seasonIdNum != null
+      ? (() => { umrahAgingParams.push(seasonIdNum); return ` AND u."seasonId" = $${umrahAgingParams.length}`; })()
+      : "";
+    const openUmrahInvoices = await rawQuery<Record<string, unknown>>(
+      `SELECT u.id, u.ref, u."createdAt", u."dueDate", u.total, u."paidAmount",
+              (u.total - COALESCE(u."paidAmount",0)) AS outstanding
+         FROM umrah_sales_invoices u
+        WHERE ${umrahMatchSql}
+          AND u."companyId"=$2
+          AND u."deletedAt" IS NULL
+          AND u."createdAt" < ($3::date + 1)
+          AND (u.total - COALESCE(u."paidAmount",0)) > 0.01${umrahAgingBranchCond}${umrahAgingSeasonCond}`,
+      umrahAgingParams
+    );
+    // Merge into the same aging loop below.
+    openInvoices.push(...openUmrahInvoices);
     const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
     const asOfMs = new Date(asOf).getTime();
     for (const inv of openInvoices) {
@@ -708,15 +854,30 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
   try {
     const scope = req.scope!;
     const supplierId = parseId(req.params.supplierId, "supplierId");
-    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const { startDate, endDate, seasonId: seasonIdRaw } = req.query as Record<string, string | undefined>;
     const asOf = endDate || todayISO();
     const from = startDate || "1900-01-01";
+    // Optional umrah-season filter — when set, narrows the umrah rows
+    // to a single season (e.g. "show me only هـ 1446 ramadan"). Doesn't
+    // touch the core PO rows, which aren't season-scoped.
+    const seasonIdNum = seasonIdRaw && /^\d+$/.test(seasonIdRaw) ? Number(seasonIdRaw) : null;
 
     const [supplier] = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, phone, email, "taxNumber" FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [supplierId, scope.companyId]
     );
     if (!supplier) { throw new NotFoundError("المورد غير موجود"); return; }
+
+    // NUSK linkage — load the company's configured NUSK supplier id.
+    // When the supplier we're rendering MATCHES that id, this statement
+    // also surfaces umrah_nusk_invoices. Without the per-company config,
+    // there'd be no way to distinguish "NUSK supplier" from "any random
+    // supplier" since umrah_nusk_invoices has no supplierId of its own.
+    const [companyCfg] = await rawQuery<{ nuskSupplierId: number | null }>(
+      `SELECT "nuskSupplierId" FROM companies WHERE id = $1`,
+      [scope.companyId]
+    );
+    const isNuskSupplier = companyCfg?.nuskSupplierId === supplierId;
 
     const isPrivVS = scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
     const vsBranchIds = !isPrivVS && scope.allowedBranches.length > 0 ? scope.allowedBranches : null;
@@ -744,7 +905,36 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
           AND je."createdAt" < $3`,
       [supplierId, scope.companyId, from]
     );
-    const openingBalance = Number(obPORow?.total ?? 0) - Number(obPayRow?.total ?? 0);
+    // NUSK opening balance contribution — sum of totalAmount on
+    // umrah_nusk_invoices issued BEFORE startDate, less any rows
+    // already flagged paid/refunded. Only runs when this supplier IS
+    // the configured NUSK supplier; otherwise the result is forced 0
+    // so the math stays the same for non-NUSK suppliers.
+    let obNuskAmount = 0;
+    if (isNuskSupplier) {
+      const obNuskParams: unknown[] = [scope.companyId, from];
+      let obNuskBranchCond = "";
+      if (vsBranchIds) {
+        obNuskParams.push(vsBranchIds);
+        obNuskBranchCond = ` AND "branchId" = ANY($${obNuskParams.length}::int[])`;
+      }
+      let obNuskSeasonCond = "";
+      if (seasonIdNum != null) {
+        obNuskParams.push(seasonIdNum);
+        obNuskSeasonCond = ` AND "seasonId" = $${obNuskParams.length}`;
+      }
+      const [obNuskRow] = await rawQuery<{ total: string }>(
+        `SELECT COALESCE(SUM("totalAmount" - COALESCE("refundAmount",0)), 0) AS total
+           FROM umrah_nusk_invoices
+          WHERE "companyId" = $1
+            AND "deletedAt" IS NULL
+            AND "nuskStatus" NOT IN ('cancelled')
+            AND COALESCE("issueDate", "createdAt") < $2${obNuskBranchCond}${obNuskSeasonCond}`,
+        obNuskParams,
+      );
+      obNuskAmount = Number(obNuskRow?.total ?? 0);
+    }
+    const openingBalance = Number(obPORow?.total ?? 0) + obNuskAmount - Number(obPayRow?.total ?? 0);
 
     const vsBranchCond = vsBranchIds ? ` AND "branchId" = ANY($5::int[])` : "";
     const vsBaseParams = (extra?: unknown[]): unknown[] => [supplierId, scope.companyId, from, asOf, ...(extra || [])];
@@ -787,7 +977,45 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
       [supplierId, scope.companyId, from, asOf]
     );
 
-    const combined = [...pos, ...payRows].sort((a: any, b: any) => {
+    // In-period NUSK invoices — same credit-side shape as PO movements
+    // (they're our AP obligation). Description distinguishes them in
+    // the timeline so an operator can spot which rows are NUSK vs
+    // regular PO. Only runs when supplier IS NUSK.
+    let nuskMovements: Array<Record<string, unknown>> = [];
+    if (isNuskSupplier) {
+      const nuskInvParams: unknown[] = [scope.companyId, from, asOf];
+      let nuskInvBranchCond = "";
+      if (vsBranchIds) {
+        nuskInvParams.push(vsBranchIds);
+        nuskInvBranchCond = ` AND "branchId" = ANY($${nuskInvParams.length}::int[])`;
+      }
+      let nuskInvSeasonCond = "";
+      if (seasonIdNum != null) {
+        nuskInvParams.push(seasonIdNum);
+        nuskInvSeasonCond = ` AND "seasonId" = $${nuskInvParams.length}`;
+      }
+      nuskMovements = await rawQuery<Record<string, unknown>>(
+        `SELECT id, "nuskInvoiceNumber" AS ref,
+                COALESCE("issueDate", "createdAt") AS date,
+                0 AS debit,
+                ("totalAmount" - COALESCE("refundAmount",0)) AS credit,
+                NULL AS "dueDate",
+                "nuskStatus" AS status,
+                'umrah_nusk_invoice' AS "movementType",
+                CONCAT('فاتورة نسك ', "nuskInvoiceNumber") AS description,
+                "seasonId" AS "seasonId"
+           FROM umrah_nusk_invoices
+          WHERE "companyId" = $1
+            AND "deletedAt" IS NULL
+            AND "nuskStatus" NOT IN ('cancelled')
+            AND COALESCE("issueDate", "createdAt") >= $2
+            AND COALESCE("issueDate", "createdAt") <= $3${nuskInvBranchCond}${nuskInvSeasonCond}
+          ORDER BY COALESCE("issueDate", "createdAt")`,
+        nuskInvParams,
+      );
+    }
+
+    const combined = [...pos, ...payRows, ...nuskMovements].sort((a: any, b: any) => {
       const ad = new Date(a.date as string | Date).getTime();
       const bd = new Date(b.date as string | Date).getTime();
       return ad - bd;
@@ -821,6 +1049,38 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
           AND po."createdAt" < ($3::date + 1)${agingPOBranchCond}`,
       agingPOParams
     );
+
+    // Aging extension — open NUSK invoices added to the same bucket
+    // pass. Open = nuskStatus IS NOT IN paid/cancelled/refunded.
+    // Aging uses issueDate + 30 days as the default due (umrah_nusk_
+    // invoices has no explicit dueDate column).
+    let openNuskInvoices: Array<Record<string, unknown>> = [];
+    if (isNuskSupplier) {
+      const agingNuskParams: unknown[] = [scope.companyId, asOf];
+      let agingNuskBranchCond = "";
+      if (vsBranchIds) {
+        agingNuskParams.push(vsBranchIds);
+        agingNuskBranchCond = ` AND "branchId" = ANY($${agingNuskParams.length}::int[])`;
+      }
+      let agingNuskSeasonCond = "";
+      if (seasonIdNum != null) {
+        agingNuskParams.push(seasonIdNum);
+        agingNuskSeasonCond = ` AND "seasonId" = $${agingNuskParams.length}`;
+      }
+      openNuskInvoices = await rawQuery<Record<string, unknown>>(
+        `SELECT id, "nuskInvoiceNumber" AS ref,
+                COALESCE("issueDate", "createdAt") AS "createdAt",
+                "totalAmount",
+                COALESCE("refundAmount", 0) AS "paidAmount"
+           FROM umrah_nusk_invoices
+          WHERE "companyId" = $1
+            AND "deletedAt" IS NULL
+            AND "nuskStatus" NOT IN ('paid','cancelled','refunded')
+            AND COALESCE("issueDate", "createdAt") < ($2::date + 1)${agingNuskBranchCond}${agingNuskSeasonCond}`,
+        agingNuskParams,
+      );
+    }
+
     const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
     const asOfMs = new Date(asOf).getTime();
     for (const po of openPos) {
@@ -828,6 +1088,20 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
         : new Date(po.createdAt as string | Date).getTime() + 30 * 86400000;
       const daysOverdue = Math.floor((asOfMs - due) / 86400000);
       const amt = Math.max(0, Number(po.totalAmount) - Number(po.paidAmount ?? 0));
+      if (amt === 0) continue;
+      if (daysOverdue <= 0) buckets.current += amt;
+      else if (daysOverdue <= 30) buckets.d30 += amt;
+      else if (daysOverdue <= 60) buckets.d60 += amt;
+      else if (daysOverdue <= 90) buckets.d90 += amt;
+      else buckets.d90plus += amt;
+    }
+    // Same bucketing loop for NUSK rows — keeps the aging math
+    // single-sourced. NUSK rows use createdAt + 30 days as the implicit
+    // due date.
+    for (const inv of openNuskInvoices) {
+      const due = new Date(inv.createdAt as string | Date).getTime() + 30 * 86400000;
+      const daysOverdue = Math.floor((asOfMs - due) / 86400000);
+      const amt = Math.max(0, Number(inv.totalAmount) - Number(inv.paidAmount ?? 0));
       if (amt === 0) continue;
       if (daysOverdue <= 0) buckets.current += amt;
       else if (daysOverdue <= 30) buckets.d30 += amt;

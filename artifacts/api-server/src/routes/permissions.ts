@@ -181,12 +181,23 @@ router.get("/my", async (req, res) => {
     const revokes = new Set(userPermRows.filter((p) => p.type === "revoke").map((p) => p.permission));
     const grantedPerms = Array.from(new Set([...rolePerms, ...grants])).filter((p) => !revokes.has(p));
 
+    // VIS-002 (Ghaith Operating Foundation): partial activation. Return the
+    // company's explicitly DISABLED feature keys so the frontend can hide
+    // unsubscribed tracks/services. Default-ON: any failure or empty table
+    // yields [] ⇒ everything stays enabled (no behaviour change).
+    const disabledRows = await rawQuery<{ feature_key: string }>(
+      `SELECT feature_key FROM company_feature_flags WHERE "companyId" = $1 AND enabled = false`,
+      [scope.companyId]
+    ).catch(() => [] as { feature_key: string }[]);
+    const disabledFeatures = disabledRows.map((r) => r.feature_key);
+
     res.json(maskFields(req, {
       userId: scope.userId,
       roles,
       highestLevel,
       modules: allModules,
       permissions: grantedPerms,
+      disabledFeatures,
     }));
   } catch (err) {
     handleRouteError(err, res, "Get my permissions error:");

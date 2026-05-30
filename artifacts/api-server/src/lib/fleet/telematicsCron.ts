@@ -157,7 +157,10 @@ export async function fleetTelematicsHeartbeat(): Promise<string> {
             d."lastPositionAt",
             COALESCE(i."offlineThresholdSec", 600) AS "offlineThresholdSec"
        FROM fleet_telematics_devices d
-       LEFT JOIN fleet_telematics_integrations i ON i.id = d."integrationId"
+       LEFT JOIN fleet_telematics_integrations i
+              ON i.id = d."integrationId"
+             AND i."companyId" = d."companyId"
+             AND i."deletedAt" IS NULL
        WHERE d."deletedAt" IS NULL
          AND d.status = 'online'
          AND d."lastPositionAt" IS NOT NULL
@@ -255,9 +258,16 @@ export async function fleetTelematicsPoll(): Promise<string> {
     // review flagged as #6.
     const adapter = buildAdapter(integ);
     if (!adapter) {
+      // Distinguish the two rejection paths so debugging a stuck poll
+      // tick doesn't require reading buildAdapter source:
+      //   • provider != 'cmsv6' — gated by #1427 (legacy stub rows)
+      //   • account/password missing — gated by encryption boundary
+      const reason = integ.provider && integ.provider !== "cmsv6"
+        ? `unsupported provider '${integ.provider}'`
+        : "missing credentials";
       logger.warn(
-        { integrationId: integ.id },
-        "[telematicsPoll] integration missing credentials — skipping",
+        { integrationId: integ.id, provider: integ.provider },
+        `[telematicsPoll] ${reason} — skipping`,
       );
       continue;
     }

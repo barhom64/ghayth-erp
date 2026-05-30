@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -168,6 +168,15 @@ interface AppContextType {
 
   canAccessSubPage: (module: string, subKey: string) => boolean;
 
+  /**
+   * VIS-002 (Ghaith Operating Foundation): partial activation. A feature/track
+   * is ENABLED by default and only hidden when explicitly disabled for the
+   * company (company_feature_flags). Default-ON keeps existing behaviour
+   * unchanged when no flags are set, and lets a supporting service appear only
+   * within context once subscribed. See docs/frontend/VISIBILITY_ENGINE_SPEC.md.
+   */
+  isFeatureEnabled: (featureKey: string) => boolean;
+
   currentUserId: number | null;
   scopeQueryString: string;
   refreshFilters: () => void;
@@ -214,7 +223,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const selectedRoleColor = roleKeyColors[selectedRole?.roleKey ?? "employee"] ?? "#95A5A6";
   const jobTitle = user?.jobTitle || null;
 
-  const [apiData, setApiData] = useState<{ permissions: string[]; modules: string[]; highestLevel: number } | null>(null);
+  const [apiData, setApiData] = useState<{ permissions: string[]; modules: string[]; highestLevel: number; disabledFeatures: string[] } | null>(null);
   const [permRefreshKey, setPermRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -230,6 +239,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           permissions: Array.isArray(data?.permissions) ? data.permissions : [],
           modules: Array.isArray(data?.modules) ? data.modules : [],
           highestLevel: typeof data?.highestLevel === "number" ? data.highestLevel : 10,
+          // VIS-002: default-ON — missing/older backend ⇒ empty ⇒ all enabled.
+          disabledFeatures: Array.isArray(data?.disabledFeatures) ? data.disabledFeatures : [],
         });
       })
       .catch(() => { setApiData(null); });
@@ -364,6 +375,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [selectedCompanyIds, filteredBranches]);
 
+  // When a single company is freshly opened, land the user directly on its
+  // main branch (الفرع الرئيسي) instead of "جميع الفروع". "Main" = a branch
+  // whose name contains رئيس, else the earliest-created (lowest id) branch of
+  // that company. Keyed on company *change* via a ref so the user can still
+  // manually pick "جميع الفروع" or another branch within the same company,
+  // and a branch already restored from localStorage is respected.
+  const lastAutoBranchCompanyRef = useRef<number | null>(null);
+  useEffect(() => {
+    const single = selectedCompanyIds.length === 1 ? selectedCompanyIds[0] : null;
+    if (single === null) {
+      lastAutoBranchCompanyRef.current = null;
+      return;
+    }
+    if (lastAutoBranchCompanyRef.current === single) return;
+    const companyBranches = branches.filter((b) => b.companyId === single);
+    if (companyBranches.length === 0) return; // branches not loaded yet
+    const alreadyValid =
+      selectedBranchIds.length > 0 &&
+      selectedBranchIds.every((id) => companyBranches.some((b) => b.id === id));
+    lastAutoBranchCompanyRef.current = single;
+    if (alreadyValid) return;
+    const mainBranch =
+      companyBranches.find((b) => b.name && b.name.includes("رئيس")) ??
+      [...companyBranches].sort((a, b) => a.id - b.id)[0];
+    if (mainBranch) setSelectedBranchIds([mainBranch.id]);
+  }, [selectedCompanyIds, branches, selectedBranchIds]);
+
   const selectedBranchId = selectedBranchIds.length > 0 ? selectedBranchIds[0] : null;
   const currentBranch = branches.find(b => b.id === selectedBranchId) || null;
   const allowedBranchIds = permissions.canViewAllBranches
@@ -433,6 +471,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const hasPermission = (permission: PermissionKey) => permissions[permission];
   const canAccessModule = (module: ModuleType) => allowedModules.includes(module);
 
+  // VIS-002: default-ON partial activation. A feature/track key is enabled
+  // unless the company explicitly disabled it. Empty set ⇒ no behaviour change.
+  const disabledFeatures = apiData?.disabledFeatures ?? [];
+  const isFeatureEnabled = useCallback(
+    (featureKey: string) => !featureKey || !disabledFeatures.includes(featureKey),
+    [disabledFeatures],
+  );
+
   const rawPermissions = apiData?.permissions ?? [];
   const isOwnerRole = selectedRole?.roleKey === "owner" || effectiveRoleLevel >= 100;
   const can = useCallback((permission: string): boolean => {
@@ -490,6 +536,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       allowedModules,
       canAccessModule,
       canAccessSubPage,
+      isFeatureEnabled,
       currentUserId,
       scopeQueryString,
       refreshFilters,

@@ -32,7 +32,7 @@ import {
 import { listTemplates } from "../lib/print/templateResolver.js";
 import { fetchPrintArtifact } from "../lib/print/printStorage.js";
 import { logger } from "../lib/logger.js";
-import { todayISO } from "../lib/businessHelpers.js";
+import { todayISO, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -356,7 +356,23 @@ router.post("/templates", requirePermission("templates:write"), async (req: Requ
         scope.userId,
       ]
     );
-    res.status(201).json({ id: rows[0].id });
+    const templateId = rows[0].id;
+    await createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "print.template.created",
+      entity: "document_templates",
+      entityId: templateId,
+      after: { name: body.name, entityType: body.entityType, mode: body.mode, isDefault: body.isDefault ?? false },
+    }).catch((e) => logger.error(e, "print template audit failed"));
+    await emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId ?? null,
+      action: "print.template.created",
+      entity: "document_templates",
+      entityId: templateId,
+    }).catch((e) => logger.error(e, "print template event failed"));
+    res.status(201).json({ id: templateId });
   } catch (err) {
     return handleRouteError(err, res, "print");
   }
@@ -409,6 +425,23 @@ router.patch(
         } AND ("companyId" = $${params.length} OR "companyId" IS NULL)`,
         params
       );
+      await createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "print.template.updated",
+        entity: "document_templates",
+        entityId: id,
+        after: Object.fromEntries(
+          Object.entries(body).filter(([k, v]) => v !== undefined && !["htmlContent", "layoutJson", "headerOverride", "footerOverride", "cssOverrides"].includes(k))
+        ),
+      }).catch((e) => logger.error(e, "print template audit failed"));
+      await emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId ?? null,
+        action: "print.template.updated",
+        entity: "document_templates",
+        entityId: id,
+      }).catch((e) => logger.error(e, "print template event failed"));
       res.json({ ok: true });
     } catch (err) {
       return handleRouteError(err, res, "print");
@@ -429,6 +462,20 @@ router.delete(
          WHERE id = $1 AND "companyId" = $2`,
         [id, scope.companyId]
       );
+      await createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "print.template.deleted",
+        entity: "document_templates",
+        entityId: id,
+      }).catch((e) => logger.error(e, "print template audit failed"));
+      await emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId ?? null,
+        action: "print.template.deleted",
+        entity: "document_templates",
+        entityId: id,
+      }).catch((e) => logger.error(e, "print template event failed"));
       res.json({ ok: true });
     } catch (err) {
       return handleRouteError(err, res, "print");

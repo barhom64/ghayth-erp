@@ -446,7 +446,7 @@ const allNavSections: NavSection[] = [
         { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
         { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
       ]},
-      { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, children: [
+      { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, module: "umrah", children: [
         { label: "لوحة التشغيل", path: "/umrah", icon: LayoutDashboard },
         { label: "المعتمرين", path: "/umrah/pilgrims", icon: Users },
         { label: "الوكلاء الرئيسيين", path: "/umrah/agents", icon: Building2 },
@@ -563,6 +563,7 @@ const allNavSections: NavSection[] = [
       { label: "مدير النظام", path: "/admin", icon: Shield, module: "admin", minRoleLevel: 90, children: [
         { label: "المستخدمين والصلاحيات", path: "/admin/users", icon: KeyRound, children: [
           { label: "المستخدمين", path: "/admin/users", icon: Users, perm: ["admin:list", "admin:update"], permMode: "any" },
+          { label: "إنشاء سريع وصلاحيات", path: "/admin/user-onboarding", icon: UserPlus, perm: ["admin:update"], permMode: "any" },
           { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
           { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
           { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
@@ -658,6 +659,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     filteredBranches,
     canAccessModule,
     canAccessSubPage,
+    isFeatureEnabled,
     can,
     roleLevel,
     effectiveRoleLevel,
@@ -735,6 +737,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       .map((item): NavItem | null => {
         const mod = item.module ?? parentModule;
         if (item.module && !canAccessModule(item.module)) return null;
+        // VIS-002: partial activation. Hide a track when the company disabled
+        // its feature. Default-ON (empty disabled set) ⇒ no change.
+        if (item.module && !isFeatureEnabled(item.module)) return null;
         if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
         if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
         if (!itemPermAllowed(item)) return null;

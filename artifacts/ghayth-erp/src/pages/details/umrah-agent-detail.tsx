@@ -29,6 +29,19 @@ const STATUS_LABELS: Record<string, string> = {
   blocked: "محظور",
 };
 
+// Pilgrim status labels — mirrors the route's PILGRIM_STATUSES enum.
+// Used by the statement card's status-breakdown chips to render
+// human-readable Arabic instead of raw values.
+const PILGRIM_STATUS_LABELS: Record<string, string> = {
+  pending: "لم يصل",
+  arrived: "وصل",
+  active: "نشط",
+  overstayed: "متأخر",
+  departed: "غادر",
+  violated: "مخالف",
+  cancelled: "ملغي",
+};
+
 function statusTone(status?: string | null) {
   if (!status) return "default" as const;
   if (status === "active") return "success" as const;
@@ -36,6 +49,85 @@ function statusTone(status?: string | null) {
   if (status === "suspended") return "warning" as const;
   if (status === "blocked") return "destructive" as const;
   return "default" as const;
+}
+
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  draft: "مسودّة",
+  sent: "مرسلة",
+  partially_paid: "مدفوعة جزئياً",
+  paid: "مدفوعة",
+  overdue: "متأخّرة",
+  cancelled: "ملغاة",
+};
+
+const INVOICE_TYPE_LABELS: Record<string, string> = {
+  sales: "مبيعات",
+  purchase: "مشتريات",
+  credit_note: "إشعار دائن",
+};
+
+interface AgentInvoiceRow {
+  id: number;
+  ref: string | null;
+  type: string;
+  pilgrimCount: number;
+  total: string | number;
+  status: string;
+  dueDate: string | null;
+  createdAt: string;
+}
+
+function AgentRecentInvoicesCard({ agentId }: { agentId: number }) {
+  const { data } = useApiQuery<{ data: AgentInvoiceRow[] }>(
+    ["umrah-agent-invoices", String(agentId)],
+    `/umrah/agents/${agentId}/invoices?limit=10`,
+  );
+  const rows = data?.data ?? [];
+  if (rows.length === 0) {
+    // Render nothing on the "no invoices" path — the statement card
+    // above already shows the zero totals, an empty table just adds
+    // noise without information.
+    return null;
+  }
+  return (
+    <Card data-testid="agent-recent-invoices-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">آخر الفواتير</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-right text-muted-foreground border-b">
+                <th className="p-2 font-medium">المرجع</th>
+                <th className="p-2 font-medium">النوع</th>
+                <th className="p-2 font-medium">عدد المعتمرين</th>
+                <th className="p-2 font-medium">الإجمالي</th>
+                <th className="p-2 font-medium">الاستحقاق</th>
+                <th className="p-2 font-medium">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-b last:border-b-0" data-testid={`agent-invoice-row-${r.id}`}>
+                  <td className="p-2 font-mono">{r.ref || `#${r.id}`}</td>
+                  <td className="p-2">{INVOICE_TYPE_LABELS[r.type] || r.type}</td>
+                  <td className="p-2">{r.pilgrimCount ?? 0}</td>
+                  <td className="p-2 font-semibold">{formatCurrency(Number(r.total))}</td>
+                  <td className="p-2 text-muted-foreground">{r.dueDate ? formatDateAr(r.dueDate) : "—"}</td>
+                  <td className="p-2">
+                    <Badge variant="outline" className="text-xs">
+                      {INVOICE_STATUS_LABELS[r.status] || r.status}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function UmrahAgentDetail() {
@@ -142,7 +234,9 @@ export default function UmrahAgentDetail() {
             )}
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">إجمالي المعتمرين</p>
-              <span className="text-status-neutral-foreground font-semibold">{agent?.totalPilgrims ?? agent?.pilgrimsCount ?? 0}</span>
+              <span className="text-status-neutral-foreground font-semibold" data-testid="agent-pilgrim-count">
+                {agent?.pilgrimCount ?? 0}
+              </span>
             </div>
           </div>
 
@@ -173,23 +267,67 @@ export default function UmrahAgentDetail() {
       </Card>
 
       <div className="space-y-3">
-        <Card>
+        {/* Operator statement — answers the sub-agent's #1 question
+            ("what's my outstanding balance?") and the operator's #1
+            question ("how many of this agent's pilgrims are still
+            here?") in a single glance. Numbers come straight from
+            the enriched GET /umrah/agents/:id response, no extra
+            round-trip. */}
+        <Card data-testid="agent-statement-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Wallet className="h-4 w-4 text-muted-foreground" />
-              الرصيد
+              كشف حساب الوكيل
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-gray-900">
-                {formatCurrency(Number(agent?.balance ?? 0))}
-              </span>
-              <span className="text-xs text-muted-foreground">ر.س</span>
+          <CardContent className="space-y-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">الرصيد المستحق</p>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className={`text-2xl font-bold ${Number(agent?.totalOutstanding ?? 0) > 0 ? "text-status-error-foreground" : "text-status-success-foreground"}`}
+                  data-testid="agent-outstanding"
+                >
+                  {formatCurrency(Number(agent?.totalOutstanding ?? 0))}
+                </span>
+                <span className="text-xs text-muted-foreground">ر.س</span>
+              </div>
             </div>
+            <div className="pt-2 border-t grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">إجمالي المُفوتر</p>
+                <span className="font-semibold" data-testid="agent-invoiced">
+                  {formatCurrency(Number(agent?.totalInvoiced ?? 0))}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">المُحصّل</p>
+                <span className="font-semibold text-status-success-foreground" data-testid="agent-paid">
+                  {formatCurrency(Number(agent?.totalPaid ?? 0))}
+                </span>
+              </div>
+            </div>
+            {agent?.statusBreakdown && Object.keys(agent.statusBreakdown).length > 0 && (
+              <div className="pt-2 border-t">
+                <p className="text-xs text-muted-foreground mb-1.5">توزيع حالة المعتمرين</p>
+                <div className="flex flex-wrap gap-1.5" data-testid="agent-status-breakdown">
+                  {Object.entries(agent.statusBreakdown as Record<string, number>).map(([status, count]) => (
+                    <Badge key={status} variant="outline" className="text-xs">
+                      {PILGRIM_STATUS_LABELS[status] || status}: {count}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent invoices — makes the statement card actionable. The
+          operator can spot which invoice is unpaid, not just the
+          balance number. The fetch is gated on `!!id` so we don't
+          probe `/umrah/agents/0/invoices`. */}
+      {id && <AgentRecentInvoicesCard agentId={id} />}
 
       {id && <EntityComments entityType="umrah-agent" entityId={id} />}
       {id && <EntityTags entityType="umrah-agent" entityId={id} />}
