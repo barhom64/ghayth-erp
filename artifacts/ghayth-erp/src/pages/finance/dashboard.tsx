@@ -1,3 +1,17 @@
+/**
+ * Finance landing dashboard. Conflict #9 in
+ * `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md` flagged "ready" vs
+ * "legacy — replaced by /module-dashboards?tab=finance". Resolved
+ * after re-inspection: **keep**.
+ *
+ *   - /module-dashboards is a thin KPI overview (one query, ~12 KPIs).
+ *   - THIS page wires 5 distinct domain queries: /finance/summary,
+ *     bank guarantees, fiscal periods, pending manual journals,
+ *     and recent finance audit-log activity — none of which
+ *     module-dashboards surfaces.
+ *   - The two pages serve different audiences: module-dashboards
+ *     for cross-module managers, finance/dashboard for finance ICs.
+ */
 import { Link } from "wouter";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {

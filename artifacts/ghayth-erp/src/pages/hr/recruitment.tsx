@@ -1,3 +1,28 @@
+/**
+ * Recruitment operational page (job listings + applications inbox).
+ *
+ * Conflict #8 in `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md` flagged the
+ * 6 HR pairs as duplicates that should merge into tabs. Resolved as
+ * **keep paired pages, document the contract**:
+ *
+ *   - `recruitment.tsx` (this file) — operational daily-use page:
+ *       job listings, applicants, hiring pipeline.
+ *   - `recruitment-advanced.tsx` — analytics / funnel metrics /
+ *       sourcing dashboards. Different audience (HR managers + BI),
+ *       different page weight, different data shape.
+ *
+ * Same pattern for the other 5 pairs:
+ *   training / training-advanced
+ *   performance / performance-advanced
+ *   shifts / shifts-management
+ *   violations / violations-management
+ *   (leaves is single — already merged the "management" tab inside.)
+ *
+ * The HR sidebar already groups them, and HrTabsNav cross-links them.
+ * Folding pair-A into pair-B as a tab would double the page weight of
+ * the operational view for an audience that doesn't use the advanced
+ * features daily. Decision: keep separate, JSDoc the contract.
+ */
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
