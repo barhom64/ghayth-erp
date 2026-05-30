@@ -72,15 +72,16 @@ export default function UmrahSettings() {
   );
   const suppliers: Supplier[] = suppliersResp?.data ?? [];
 
-  // Products list feeds the 3 service-type dropdowns (Phase 3a).
-  // We don't filter to umrah-tagged products specifically — operators
-  // configure freely whichever products represent visa / services /
-  // transport for their books. The defaultTaxCode (when present) is
-  // surfaced in the option label so the operator can confirm they
-  // picked a zero-rated product for visa, not a 15% one.
+  // Products list feeds the 3 service-type dropdowns (Phase 3a). The
+  // canonical products list endpoint lives under /warehouse/products
+  // — products are warehouse-domain entities (with stock, inventory
+  // account, etc.) even though they're picked here for revenue
+  // routing. The defaultTaxCode (when present) is surfaced in the
+  // option label so the operator can confirm they picked a
+  // zero-rated product for visa, not a 15% one.
   const { data: productsResp } = useApiQuery<{ data: Product[] }>(
-    ["finance-products"],
-    "/finance/products",
+    ["warehouse-products"],
+    "/warehouse/products",
   );
   const products: Product[] = productsResp?.data ?? [];
 
@@ -313,8 +314,8 @@ export default function UmrahSettings() {
 
             <p className="text-xs text-muted-foreground">
               لم تُنشئ المنتجات بعد؟ أنشئها من{" "}
-              <a href="/finance/products" className="text-status-info-foreground hover:underline">
-                المالية ← المنتجات
+              <a href="/finance/product-catalog" className="text-status-info-foreground hover:underline">
+                المالية ← كتالوج المنتجات
               </a>{" "}
               ثم ارجع هنا للربط.
             </p>

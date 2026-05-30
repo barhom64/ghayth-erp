@@ -22,9 +22,13 @@ describe("settings page — Phase 3a state additions", () => {
     expect(PAGE).toMatch(/umrahTransportProductName: string \| null/);
   });
 
-  it("fetches the products list from /finance/products", () => {
-    expect(PAGE).toContain('"/finance/products"');
-    expect(PAGE).toContain('["finance-products"]');
+  it("fetches the products list from /warehouse/products (canonical endpoint)", () => {
+    // The frontend-backend wiring audit caught /finance/products as
+    // an orphan — products are warehouse-domain entities. Pin the
+    // correct path so a future refactor doesn't accidentally point
+    // at a non-existent endpoint again.
+    expect(PAGE).toContain('"/warehouse/products"');
+    expect(PAGE).toContain('["warehouse-products"]');
   });
 
   it("each dropdown has its own useState + useEffect that syncs from settings", () => {
@@ -78,7 +82,10 @@ describe("settings page — service-products card UI", () => {
     expect(PAGE).toMatch(/p\.defaultTaxCode \? `\$\{p\.name\} \[\$\{p\.defaultTaxCode\}\]` : p\.name/);
   });
 
-  it("link to /finance/products lets the operator create missing products inline", () => {
-    expect(PAGE).toContain('href="/finance/products"');
+  it("link to /finance/product-catalog lets the operator create missing products inline", () => {
+    // The page route is /finance/product-catalog (financeRoutes.tsx
+    // line 290). Pin the exact path so a future "rename to /products"
+    // refactor must update this anchor too.
+    expect(PAGE).toContain('href="/finance/product-catalog"');
   });
 });
