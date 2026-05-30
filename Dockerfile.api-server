@@ -1,9 +1,10 @@
 # Dockerfile.api-server
 FROM node:24-alpine AS deps
-RUN corepack enable
+RUN apk add --no-cache bash && corepack enable
 WORKDIR /app
 ENV npm_config_user_agent=pnpm/docker
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY .githooks/ .githooks/
 COPY artifacts/api-server/package.json artifacts/api-server/
 COPY lib/api-spec/package.json lib/api-spec/
 COPY lib/api-zod/package.json lib/api-zod/
@@ -11,6 +12,7 @@ COPY lib/api-client-react/package.json lib/api-client-react/
 COPY lib/db/package.json lib/db/
 COPY lib/object-storage-web/package.json lib/object-storage-web/
 COPY scripts/package.json scripts/
+COPY scripts/install-hooks.sh scripts/install-hooks.sh
 RUN pnpm install --frozen-lockfile --ignore-scripts
 FROM deps AS build
 WORKDIR /app
