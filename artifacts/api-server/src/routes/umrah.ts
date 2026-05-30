@@ -2242,6 +2242,30 @@ router.get("/import/header-maps", authorize({ feature: "umrah", action: "create"
   } catch (err) { handleRouteError(err, res, "Import header maps error"); }
 });
 
+// ── Smart column-mapping suggestion ──────────────────────────────────
+// Feeds the wizard's column-mapping step with a fuzzy-matched
+// engine-field suggestion per unknown Excel header. Closes the
+// "operator pastes a vendor file with a non-standard header — wizard
+// asks them to manually pick every column" friction that the hardcoded
+// dictionary + saved presets alone don't cover.
+//
+// The engine ALSO returns exact matches with confidence=1 so the
+// wizard can show a "✓ exact" badge — explicit confirmation beats
+// silent auto-mapping for the operator's confidence.
+
+const suggestMappingSchema = z.object({
+  headers: z.array(z.string()).min(1, "أعمدة الملف مطلوبة"),
+  fileType: z.enum(["mutamers", "vouchers"]),
+});
+
+router.post("/import/suggest-mapping", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const { headers, fileType } = zodParse(suggestMappingSchema.safeParse(req.body));
+    const { suggestColumnMapping } = await import("../lib/umrahImportEngine.js");
+    res.json({ suggestions: suggestColumnMapping(headers, fileType) });
+  } catch (err) { handleRouteError(err, res, "Suggest mapping error"); }
+});
+
 // ── Column-mapping presets ───────────────────────────────────────────
 // Operators re-import the same Excel layout every week from the same
 // NUSK/MOFA portal. Saving the mapping per (user, fileType) lets the
@@ -2592,15 +2616,26 @@ router.post("/penalties", authorize({ feature: "umrah", action: "create" }), asy
 // projection of the companies row (just the umrah-relevant columns) so
 // adding future settings is one zod field + one SET clause.
 
+// Shared nullable-FK preprocessor — "" → null, undefined stays
+// undefined so the PATCH handler can distinguish "field omitted"
+// (preserve existing value via COALESCE) from "field set to null"
+// (explicit clear). Then coerce to number when present.
+const nullableFkPreproc = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.coerce.number().nullable().optional(),
+);
+
 const umrahSettingsPatchSchema = z.object({
-  // Empty string ("") and explicit null both map to "unset" — matches
-  // the pattern PR #1428 introduced for the pilgrim-reassign modal.
   // When unset, the vendor-statement endpoint skips its umrah branch
   // (gracefully — no broken queries).
-  nuskSupplierId: z.preprocess(
-    (v) => (v === "" || v === undefined ? null : v),
-    z.coerce.number().nullable(),
-  ).optional(),
+  nuskSupplierId: nullableFkPreproc,
+  // Service-type → product mapping (migration 241). When all 3 are
+  // set, the Phase 3b engine will split each group's lineTotal into
+  // visa / services / transport lines. When any is unset, the engine
+  // falls back to the single bundled line — no error, just no split.
+  umrahVisaProductId: nullableFkPreproc,
+  umrahServicesProductId: nullableFkPreproc,
+  umrahTransportProductId: nullableFkPreproc,
 });
 
 router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
@@ -2608,20 +2643,41 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
     const scope = req.scope!;
     // JOIN suppliers so the UI can show the supplier name without
     // a second fetch. LEFT JOIN — `nuskSupplierId` may be null on a
-    // freshly-installed company.
+    // freshly-installed company. The 3 product joins follow the same
+    // pattern (migration 241).
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT c."nuskSupplierId",
               s.name  AS "nuskSupplierName",
-              s.code  AS "nuskSupplierCode"
+              s.code  AS "nuskSupplierCode",
+              c."umrahVisaProductId",
+              pv.name AS "umrahVisaProductName",
+              c."umrahServicesProductId",
+              ps.name AS "umrahServicesProductName",
+              c."umrahTransportProductId",
+              pt.name AS "umrahTransportProductName"
          FROM companies c
          LEFT JOIN suppliers s
                 ON s.id = c."nuskSupplierId"
                AND s."companyId" = c.id
                AND s."deletedAt" IS NULL
+         LEFT JOIN products pv
+                ON pv.id = c."umrahVisaProductId"
+               AND pv."companyId" = c.id
+         LEFT JOIN products ps
+                ON ps.id = c."umrahServicesProductId"
+               AND ps."companyId" = c.id
+         LEFT JOIN products pt
+                ON pt.id = c."umrahTransportProductId"
+               AND pt."companyId" = c.id
         WHERE c.id = $1`,
       [scope.companyId],
     );
-    res.json(row ?? { nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null });
+    res.json(row ?? {
+      nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null,
+      umrahVisaProductId: null, umrahVisaProductName: null,
+      umrahServicesProductId: null, umrahServicesProductName: null,
+      umrahTransportProductId: null, umrahTransportProductName: null,
+    });
   } catch (err) { handleRouteError(err, res, "Get umrah settings error"); }
 });
 
@@ -2645,16 +2701,60 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
         });
       }
     }
-    await rawExecute(
-      `UPDATE companies SET "nuskSupplierId" = $1 WHERE id = $2`,
-      [b.nuskSupplierId ?? null, scope.companyId],
-    );
+    // Validate each product FK belongs to THIS company — defence in
+    // depth identical to the supplier check above. Products list is
+    // shared across modules so a cross-tenant id leaking through
+    // settings would silently mis-route revenue on future invoices.
+    const productChecks: Array<[number | null | undefined, "umrahVisaProductId" | "umrahServicesProductId" | "umrahTransportProductId"]> = [
+      [b.umrahVisaProductId, "umrahVisaProductId"],
+      [b.umrahServicesProductId, "umrahServicesProductId"],
+      [b.umrahTransportProductId, "umrahTransportProductId"],
+    ];
+    for (const [value, field] of productChecks) {
+      if (value == null) continue;
+      const [product] = await rawQuery<{ id: number }>(
+        `SELECT id FROM products WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+        [value, scope.companyId],
+      );
+      if (!product) {
+        throw new ValidationError(`المنتج رقم ${value} غير موجود`, {
+          field,
+          fix: "اختر منتجاً مسجلاً لهذه الشركة أو اتركه فارغاً",
+        });
+      }
+    }
+    // Dynamic SET clause — proper PATCH semantics. A field absent
+    // from the body is PRESERVED (not touched), a field set to null
+    // is CLEARED, a field set to a value is UPDATED. SQL COALESCE
+    // can't express the "explicit clear" path, so we build the
+    // statement based on what zod actually parsed.
+    const sets: string[] = [];
+    const params: unknown[] = [scope.companyId];
+    const fields: Array<["nuskSupplierId" | "umrahVisaProductId" | "umrahServicesProductId" | "umrahTransportProductId", number | null | undefined]> = [
+      ["nuskSupplierId", b.nuskSupplierId],
+      ["umrahVisaProductId", b.umrahVisaProductId],
+      ["umrahServicesProductId", b.umrahServicesProductId],
+      ["umrahTransportProductId", b.umrahTransportProductId],
+    ];
+    const auditAfter: Record<string, number | null> = {};
+    for (const [field, value] of fields) {
+      if (value === undefined) continue;
+      params.push(value);
+      sets.push(`"${field}" = $${params.length}`);
+      auditAfter[field] = value;
+    }
+    if (sets.length > 0) {
+      await rawExecute(
+        `UPDATE companies SET ${sets.join(", ")} WHERE id = $1`,
+        params,
+      );
+    }
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "umrah.settings.updated", entity: "companies", entityId: scope.companyId,
-      after: { nuskSupplierId: b.nuskSupplierId ?? null },
+      after: auditAfter,
     }).catch((e) => logger.error(e, "umrah settings audit failed"));
-    res.json({ success: true, nuskSupplierId: b.nuskSupplierId ?? null });
+    res.json({ success: true, ...auditAfter });
   } catch (err) { handleRouteError(err, res, "Update umrah settings error"); }
 });
 

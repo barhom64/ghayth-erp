@@ -4812,6 +4812,9 @@ CREATE TABLE public.companies (
     "functionalCurrency" character(3) DEFAULT 'SAR'::bpchar,
     "presentationCurrency" character(3),
     "nuskSupplierId" integer,
+    "umrahVisaProductId" integer,
+    "umrahServicesProductId" integer,
+    "umrahTransportProductId" integer,
     CONSTRAINT chk_companies_functional_currency_iso CHECK (("functionalCurrency" ~ '^[A-Z]{3}$'::text))
 );
 
