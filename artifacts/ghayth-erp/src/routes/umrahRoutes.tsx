@@ -41,6 +41,9 @@ const UmrahReconciliation = lazy(() => import("@/pages/umrah/reconciliation"));
 // Groups list + split / merge actions — surfaces /umrah/groups + the two POST
 // endpoints from PR #312.
 const UmrahGroups = lazy(() => import("@/pages/umrah/groups"));
+// Group detail — drill-down enriched with status breakdown, financials,
+// schedule, pilgrim list. Mirrors the agent-detail pattern.
+const UmrahGroupDetail = lazy(() => import("@/pages/details/umrah-group-detail"));
 
 // Standalone cross-entity attachments index. Editing is still per-entity
 // via the embedded UmrahAttachmentsPanel; this page is read-only.
@@ -93,5 +96,6 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },
+  { path: "/umrah/groups/:id", component: UmrahGroupDetail, module: "operations" },
   { path: "/umrah/attachments", component: UmrahAttachments, module: "operations" },
 ];

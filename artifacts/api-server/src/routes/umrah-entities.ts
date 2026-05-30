@@ -697,21 +697,135 @@ router.get("/groups/:id", authorize({ feature: "umrah", action: "view" }), async
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Tenant-scoped JOIN on every table we read from — without this, a
+    // stale row from another tenant (or a soft-deleted record) could
+    // surface as the agent/sub-agent/season name. Defence in depth.
     const [row] = await rawQuery(
       `SELECT g.*, a.name AS "agentName", sa.name AS "subAgentName", s.title AS "seasonTitle"
        FROM umrah_groups g
-       LEFT JOIN umrah_agents a ON g."agentId" = a.id
-       LEFT JOIN umrah_sub_agents sa ON g."subAgentId" = sa.id
-       LEFT JOIN umrah_seasons s ON g."seasonId" = s.id AND s."deletedAt" IS NULL
+       LEFT JOIN umrah_agents a
+         ON g."agentId" = a.id AND a."companyId" = g."companyId" AND a."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa
+         ON g."subAgentId" = sa.id AND sa."companyId" = g."companyId" AND sa."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons s
+         ON g."seasonId" = s.id AND s."companyId" = g."companyId" AND s."deletedAt" IS NULL
        WHERE g.id = $1 AND g."companyId" = $2 AND g."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المجموعة غير موجودة");
-    const pilgrims = await rawQuery(
-      `SELECT id, "fullName", nationality, status FROM umrah_pilgrims WHERE "groupId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "fullName"`,
-      [id, scope.companyId]
+
+    // Fire the 6 aggregate queries in parallel — none depend on each
+    // other and the page-load latency budget says "single roundtrip".
+    // Each query is tenant-scoped + soft-delete filtered independently
+    // (the FK alone isn't enough — stale rows from a deleted group's
+    // history shouldn't leak into the new group's totals if an id is
+    // ever reused).
+    const [
+      pilgrims,
+      statusBreakdownRows,
+      financeRow,
+      nuskRow,
+      visaExpiringRow,
+      flightAggRow,
+    ] = await Promise.all([
+      rawQuery<{ id: number; fullName: string; nationality: string | null; status: string; overstayExempt: boolean; visaExpiry: string | null; entryFlight: string | null; exitFlight: string | null }>(
+        `SELECT id, "fullName", nationality, status, "overstayExempt", "visaExpiry", "entryFlight", "exitFlight"
+         FROM umrah_pilgrims
+         WHERE "groupId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+         ORDER BY "fullName"`,
+        [id, scope.companyId]
+      ),
+      rawQuery<{ status: string; count: string }>(
+        `SELECT status, COUNT(*)::text AS count
+         FROM umrah_pilgrims
+         WHERE "groupId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+         GROUP BY status`,
+        [id, scope.companyId]
+      ),
+      // Sales invoices reach the group via the per-line items table —
+      // the invoice header has no groupId column (an invoice can span
+      // multiple groups). DISTINCT keeps a single invoice from being
+      // double-counted when it has >1 group line.
+      rawQuery<{ count: string; total: string | null; paid: string | null }>(
+        `SELECT COUNT(DISTINCT si.id)::text AS count,
+                COALESCE(SUM(DISTINCT si.total), 0)::text AS total,
+                COALESCE(SUM(DISTINCT si."paidAmount"), 0)::text AS paid
+         FROM umrah_sales_invoice_items it
+         JOIN umrah_sales_invoices si
+           ON si.id = it."invoiceId" AND si."companyId" = $2 AND si."deletedAt" IS NULL
+         WHERE it."groupId" = $1 AND it."companyId" = $2 AND it."deletedAt" IS NULL
+           AND si.status <> 'cancelled'`,
+        [id, scope.companyId]
+      ),
+      rawQuery<{ count: string; netCost: string | null; refundAmount: string | null }>(
+        `SELECT COUNT(*)::text AS count,
+                COALESCE(SUM("netCost"), 0)::text AS "netCost",
+                COALESCE(SUM("refundAmount"), 0)::text AS "refundAmount"
+         FROM umrah_nusk_invoices
+         WHERE "groupId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+           AND "nuskStatus" <> 'cancelled'`,
+        [id, scope.companyId]
+      ),
+      // Visa-expiring window matches the banner on the pilgrims list
+      // (7 days). Pilgrims who already left or were cancelled are
+      // excluded — they wouldn't trigger a real alert.
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+         FROM umrah_pilgrims
+         WHERE "groupId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+           AND "visaExpiry" IS NOT NULL
+           AND "visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
+           AND status NOT IN ('departed', 'cancelled')`,
+        [id, scope.companyId]
+      ),
+      // Date range + distinct flight codes — answers "when does this
+      // group fly" without opening every pilgrim.
+      rawQuery<{ minArrival: string | null; maxDeparture: string | null; entryFlights: string | null; exitFlights: string | null }>(
+        `SELECT MIN("arrivalDate") AS "minArrival",
+                MAX("departureDate") AS "maxDeparture",
+                STRING_AGG(DISTINCT "entryFlight", ',' ORDER BY "entryFlight") AS "entryFlights",
+                STRING_AGG(DISTINCT "exitFlight", ',' ORDER BY "exitFlight") AS "exitFlights"
+         FROM umrah_pilgrims
+         WHERE "groupId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+    ]);
+
+    const statusBreakdown: Record<string, number> = {};
+    for (const r of statusBreakdownRows) statusBreakdown[r.status] = Number(r.count);
+
+    const overstayExemptCount = pilgrims.reduce(
+      (n, p) => n + (p.overstayExempt ? 1 : 0),
+      0
     );
-    res.json(maskFields(req, { ...row, pilgrims }));
+
+    const fin = financeRow[0] || { count: "0", total: "0", paid: "0" };
+    const nusk = nuskRow[0] || { count: "0", netCost: "0", refundAmount: "0" };
+    const flights = flightAggRow[0] || { minArrival: null, maxDeparture: null, entryFlights: null, exitFlights: null };
+
+    res.json(maskFields(req, {
+      ...row,
+      pilgrims,
+      statusBreakdown,
+      overstayExemptCount,
+      visaExpiringCount: Number(visaExpiringRow[0]?.count ?? "0"),
+      finance: {
+        invoiceCount: Number(fin.count),
+        invoiceTotal: Number(fin.total ?? "0"),
+        invoicePaid: Number(fin.paid ?? "0"),
+        invoiceOutstanding: Number(fin.total ?? "0") - Number(fin.paid ?? "0"),
+        nuskCount: Number(nusk.count),
+        nuskNetCost: Number(nusk.netCost ?? "0"),
+        nuskRefund: Number(nusk.refundAmount ?? "0"),
+        margin: Number(fin.total ?? "0") - Number(nusk.netCost ?? "0"),
+      },
+      schedule: {
+        minArrival: flights.minArrival,
+        maxDeparture: flights.maxDeparture,
+        entryFlights: flights.entryFlights ? flights.entryFlights.split(",").filter(Boolean) : [],
+        exitFlights: flights.exitFlights ? flights.exitFlights.split(",").filter(Boolean) : [],
+      },
+    }));
   } catch (err) { handleRouteError(err, res, "Get group"); }
 });
 
