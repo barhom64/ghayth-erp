@@ -29,7 +29,23 @@ export default defineConfig({
           include: ["tests/integration/**/*.test.ts"],
           testTimeout: 30000,
           hookTimeout: 30000,
+          // Serialise on multiple dimensions: file-level (one file at a
+          // time) AND pool-level (one worker process). The previous
+          // fileParallelism-only config still let vitest spin up multiple
+          // forks/threads that shared the test-postgres connection pool;
+          // one worker's fixture TRUNCATE wiped another worker's
+          // companies/branches/users mid-setUp (the FK violations seen in
+          // CI: "companyId=4 not in companies" and "employeeId=4 not in
+          // employees"). With singleFork: true every integration test
+          // file runs in the same process serially, so every fixture's
+          // setUp + tearDown is atomic w.r.t. the other files'.
           fileParallelism: false,
+          pool: "forks",
+          poolOptions: {
+            forks: {
+              singleFork: true,
+            },
+          },
         },
       },
     ],
