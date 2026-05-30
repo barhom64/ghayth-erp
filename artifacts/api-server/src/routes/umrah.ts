@@ -700,6 +700,111 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
   } catch (err) { handleRouteError(err, res, "List pilgrims error"); }
 });
 
+// CSV export of the FULL filtered set (no pagination). The list page's
+// existing exportToCSV() only grabs the current page (~20 rows), which
+// is useless for handing manifests to MOFA / hotels / bus drivers. This
+// endpoint mirrors the list filters and streams every match.
+//
+// Defence-in-depth: every JOIN matches BOTH id AND companyId so a
+// mistyped FK can't lift another tenant's name onto an exported row
+// (same pattern as PR #1425 added to GET /pilgrims/:id).
+router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, search } = req.query as Record<string, string | undefined>;
+    let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
+    const params: unknown[] = [scope.companyId];
+    if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
+    if (status) { params.push(status); where += ` AND p.status=$${params.length}`; }
+    if (agentId) { params.push(agentId); where += ` AND p."agentId"=$${params.length}`; }
+    if (groupId) { params.push(groupId); where += ` AND p."groupId"=$${params.length}`; }
+    if (nationality) { params.push(`%${nationality}%`); where += ` AND p.nationality ILIKE $${params.length}`; }
+    if (flight) {
+      params.push(`%${flight}%`);
+      where += ` AND (p."entryFlight" ILIKE $${params.length} OR p."exitFlight" ILIKE $${params.length})`;
+    }
+    if (arrivalDate) { params.push(arrivalDate); where += ` AND p."arrivalDate" = $${params.length}`; }
+    if (departureDate) { params.push(departureDate); where += ` AND p."departureDate" = $${params.length}`; }
+    if (search) {
+      const searchHash = blindIndex(String(search));
+      params.push(`%${search}%`);
+      const likePh = params.length;
+      params.push(searchHash);
+      const hashPh = params.length;
+      where += ` AND (p."fullName" ILIKE $${likePh} OR p."nuskNumber" ILIKE $${likePh} OR p."passportNumber_hash" = $${hashPh} OR p."visaNumber_hash" = $${hashPh})`;
+    }
+
+    const rows = await rawQuery(
+      `SELECT p.*,
+              a.name  as "agentName",
+              pkg.name as "packageName",
+              s.title  as "seasonTitle",
+              g.name  as "groupName",
+              sa.name as "subAgentName"
+       FROM umrah_pilgrims p
+       LEFT JOIN umrah_agents     a   ON p."agentId"=a.id      AND a."companyId"=p."companyId"  AND a."deletedAt" IS NULL
+       LEFT JOIN umrah_packages   pkg ON p."packageId"=pkg.id  AND pkg."companyId"=p."companyId" AND pkg."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons    s   ON p."seasonId"=s.id     AND s."companyId"=p."companyId"  AND s."deletedAt" IS NULL
+       LEFT JOIN umrah_groups     g   ON p."groupId"=g.id      AND g."companyId"=p."companyId"  AND g."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa  ON p."subAgentId"=sa.id  AND sa."companyId"=p."companyId" AND sa."deletedAt" IS NULL
+       WHERE ${where}
+       ORDER BY p."createdAt" DESC`,
+      params
+    );
+
+    // Audit trail — exports of identifying info are sensitive.
+    logSensitiveAccess({
+      companyId: scope.companyId, userId: scope.userId, action: "export_csv",
+      entity: "umrah_pilgrims", ipAddress: req.ip, userAgent: req.headers["user-agent"],
+      details: { count: rows.length, filters: { seasonId, status, agentId, groupId, flight, arrivalDate, departureDate, search: search || null } },
+    });
+
+    // RFC 4180 escape — quote when the cell contains the delimiter,
+    // a quote, or any newline; double internal quotes.
+    const csvEscape = (v: unknown): string => {
+      if (v === null || v === undefined) return "";
+      const s = String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    // Manifest columns operators routinely need. Order matches what
+    // MOFA / hotel / bus driver handouts use: identity → trip → flight.
+    const headers = [
+      ["nuskNumber", "رقم نسك"],
+      ["fullName", "الاسم"],
+      ["passportNumber", "رقم الجواز"],
+      ["nationality", "الجنسية"],
+      ["gender", "الجنس"],
+      ["phone", "الهاتف"],
+      ["visaNumber", "رقم التأشيرة"],
+      ["visaExpiry", "صلاحية التأشيرة"],
+      ["mofaNumber", "رقم الموفا"],
+      ["borderNumber", "رقم الحدود"],
+      ["status", "الحالة"],
+      ["arrivalDate", "تاريخ الوصول"],
+      ["departureDate", "تاريخ المغادرة"],
+      ["entryFlight", "رحلة الوصول"],
+      ["exitFlight", "رحلة المغادرة"],
+      ["hotelName", "الفندق"],
+      ["roomNumber", "رقم الغرفة"],
+      ["seasonTitle", "الموسم"],
+      ["groupName", "المجموعة"],
+      ["agentName", "الوكيل الرئيسي"],
+      ["subAgentName", "الوكيل الفرعي"],
+    ] as const;
+    const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
+    const decrypted = rows.map(decryptPilgrimRow) as Array<Record<string, unknown>>;
+    const dataRows = decrypted.map((r) => headers.map(([key]) => csvEscape(r[key])).join(","));
+    // BOM so Excel detects UTF-8 Arabic — without it the file opens as
+    // mojibake (same lesson as PR #1420's rejected-rows CSV).
+    const BOM = "﻿";
+    const csv = BOM + [headerRow, ...dataRows].join("\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="umrah-pilgrims-${todayISO()}.csv"`);
+    res.send(csv);
+  } catch (err) { handleRouteError(err, res, "Export pilgrims CSV error"); }
+});
+
 router.post("/pilgrims", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;

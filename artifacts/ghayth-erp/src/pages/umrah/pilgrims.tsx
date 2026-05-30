@@ -6,7 +6,6 @@ import {
   PageStatusBadge,
   AdvancedFilters,
   useFilters,
-  exportToCSV,
   DataTable,
   type DataTableColumn,
 } from "@workspace/ui-core";
@@ -333,13 +332,16 @@ export default function UmrahPilgrims() {
         }}
         values={filters}
         onChange={(v) => { setFilters(v); setPage(1); }}
-        onExportCSV={() => exportToCSV(items ?? [], [
-          { key: "fullName", label: "الاسم" },
-          { key: "passportNumber", label: "الجواز" },
-          { key: "nationality", label: "الجنسية" },
-          { key: "status", label: "الحالة" },
-          { key: "agentName", label: "الوكيل" },
-        ], "المعتمرين")}
+        // Export hits the dedicated /pilgrims/export.csv endpoint so
+        // the operator gets EVERY matching row (not just the visible
+        // page). Same query string as the list refetch so what they
+        // see + what they download stay in sync. The endpoint emits a
+        // 21-column manifest with NUSK, visa, flights, hotel, agent —
+        // exactly what MOFA / hotels / bus drivers need.
+        onExportCSV={() => {
+          const qs = `search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&flight=${encodeURIComponent(flight)}&arrivalDate=${encodeURIComponent(arrivalDate)}&departureDate=${encodeURIComponent(departureDate)}`;
+          window.location.href = `/api/umrah/pilgrims/export.csv?${qs}`;
+        }}
         resultCount={total}
       />
 
