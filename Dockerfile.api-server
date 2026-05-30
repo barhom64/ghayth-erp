@@ -1,10 +1,13 @@
 # Dockerfile.api-server
+# Production Docker build for @workspace/api-server.
+# Keep Docker production isolated from developer-only postinstall/git hooks.
+
 FROM node:24-alpine AS deps
-RUN apk add --no-cache bash && corepack enable
+RUN corepack enable
 WORKDIR /app
 ENV npm_config_user_agent=pnpm/docker
+
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY .githooks/ .githooks/
 COPY artifacts/api-server/package.json artifacts/api-server/
 COPY lib/api-spec/package.json lib/api-spec/
 COPY lib/api-zod/package.json lib/api-zod/
@@ -12,15 +15,20 @@ COPY lib/api-client-react/package.json lib/api-client-react/
 COPY lib/db/package.json lib/db/
 COPY lib/object-storage-web/package.json lib/object-storage-web/
 COPY scripts/package.json scripts/
-COPY scripts/install-hooks.sh scripts/install-hooks.sh
+
 RUN pnpm install --frozen-lockfile --ignore-scripts
+
 FROM deps AS build
 WORKDIR /app
 COPY tsconfig.base.json tsconfig.json ./
 COPY lib/ ./lib/
 COPY artifacts/api-server/ ./artifacts/api-server/
-RUN pnpm run typecheck:libs && pnpm --filter @workspace/api-server run build
+
+# Build the API bundle only. Full workspace typecheck remains a CI/local guard,
+# not a production image build dependency.
+RUN pnpm --filter @workspace/api-server run build
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+
 FROM node:24-alpine AS runtime
 RUN apk add --no-cache tini && corepack enable
 WORKDIR /app
