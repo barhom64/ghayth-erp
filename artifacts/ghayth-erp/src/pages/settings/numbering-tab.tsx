@@ -575,7 +575,7 @@ function SchemeEditor({
             {scheme.moduleKey}.{scheme.entityKey}
           </span>
         </CardTitle>
-        <Button variant="ghost" size="sm" onClick={onClose}>
+        <Button variant="ghost" size="sm" onClick={onClose} title="إغلاق">
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>

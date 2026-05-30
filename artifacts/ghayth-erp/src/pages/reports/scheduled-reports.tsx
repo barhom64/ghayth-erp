@@ -262,7 +262,7 @@ function ScheduledReportCard({ item }: { item: any }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Switch checked={item.isActive} onCheckedChange={handleToggle} />
-            <GuardedButton perm="reports:create" variant="ghost" size="sm" onClick={handleDelete} disabled={deleteMut.isPending}>
+            <GuardedButton perm="reports:create" variant="ghost" size="sm" onClick={handleDelete} disabled={deleteMut.isPending} title="حذف">
               <Trash2 className="h-4 w-4 text-status-error" />
             </GuardedButton>
           </div>

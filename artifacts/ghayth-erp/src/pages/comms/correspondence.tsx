@@ -163,7 +163,7 @@ export default function CorrespondencePage() {
       render: (r: any) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e: any) => e.stopPropagation()}>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="المزيد">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>

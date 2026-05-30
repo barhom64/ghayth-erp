@@ -366,7 +366,7 @@ export default function Cash13WeekPage() {
                     </td>
                     <td className="p-2">
                       <Link href={`/finance/cash-calendar`}>
-                        <Button variant="ghost" size="sm" className="h-7 px-2">
+                        <Button variant="ghost" size="sm" className="h-7 px-2" title="التالي">
                           <ChevronRight className="h-3 w-3" />
                         </Button>
                       </Link>

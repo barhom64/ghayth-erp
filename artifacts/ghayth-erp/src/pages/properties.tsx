@@ -78,7 +78,7 @@ export default function Properties() {
       header: "الإجراءات",
       render: (u) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Link href={`/properties/${u.id}`}><Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button></Link>
+          <Link href={`/properties/${u.id}`}><Button variant="ghost" size="sm" title="عرض"><Eye className="h-4 w-4" /></Button></Link>
           {canManage && (
             <RowActions
               canEdit={canManage}

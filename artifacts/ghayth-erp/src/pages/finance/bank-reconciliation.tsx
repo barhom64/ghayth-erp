@@ -268,7 +268,7 @@ export default function BankReconciliationPage() {
                     { key: "amount", header: "المبلغ", render: (r: any) => <span className="font-semibold">{formatCurrency(Number(r.amount))}</span> },
                     { key: "actions", header: "مطابقة يدوية", render: (r: any) => (
                       <Link href={`/finance/bank-reconciliation/manual-match/${activeBatch}/${r.id}`}>
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" title="ربط">
                           <Link2 className="h-4 w-4 text-status-info" />
                         </Button>
                       </Link>
