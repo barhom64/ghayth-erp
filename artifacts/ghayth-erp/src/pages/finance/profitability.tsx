@@ -1,3 +1,21 @@
+/**
+ * Shared base for the per-entity profitability views. Re-exported as the
+ * default by four 6-7 LoC wrappers in this folder:
+ *
+ *   profitability-vehicle.tsx     → <ProfitabilityPage entityType="vehicle">
+ *   profitability-property.tsx    → <ProfitabilityPage entityType="property">
+ *   profitability-project.tsx     → <ProfitabilityPage entityType="project">
+ *   profitability-umrah-agent.tsx → <ProfitabilityPage entityType="umrah-agent">
+ *
+ * This file is NOT registered in any route file because the wrappers
+ * are what bind to the four `/finance/profitability/<kind>/:id` paths.
+ * `SYSTEM_PAGE_INVENTORY` flagged the absence of a direct route as
+ * "dead", while `DEAD_DUPLICATE_PAGE_AUDIT` flagged it as "keep"
+ * because the wrappers import it as a sibling — both readings of
+ * the matrix are recorded as conflict #1 in
+ * `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md`. This JSDoc resolves it:
+ * **keep** — removing the file would break four routed wrappers.
+ */
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";

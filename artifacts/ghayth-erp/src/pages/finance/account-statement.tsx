@@ -1,3 +1,17 @@
+/**
+ * Shared base for entity-scoped statement views. Re-exported as the
+ * default by two thin wrappers in this folder:
+ *
+ *   customer-statement.tsx → <AccountStatementPage entityType="customer">
+ *                            mounted at /clients/:id/statement
+ *   vendor-statement.tsx   → <AccountStatementPage entityType="vendor">
+ *                            mounted at /finance/vendors/:id/statement
+ *
+ * This file is NOT registered in any route file because the wrappers
+ * are what bind to URLs. Conflict #2 in
+ * `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md` flagged it as "dead" vs
+ * "keep". Resolved here as **keep** — the wrappers depend on it.
+ */
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";

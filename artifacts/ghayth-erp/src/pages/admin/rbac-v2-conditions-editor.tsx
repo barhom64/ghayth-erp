@@ -1,3 +1,16 @@
+/**
+ * ConditionsEditor — sub-component (not a routed page). Imported by
+ * `rbac-v2-tab.tsx:23` and rendered inside the RBAC v2 condition
+ * builder modal at `rbac-v2-tab.tsx:605`.
+ *
+ * Conflict #3 in `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md` flagged
+ * this file as "dead" because it has no route registration, while
+ * the dead-page audit flagged it as "imported by sibling" → partial.
+ * Resolved here as **keep** — it's a sub-component of the rbac-v2
+ * tab, not a standalone page. Lives under `pages/admin/` because
+ * the migration pre-dates the `components/admin/` convention; safe
+ * to relocate later but not required.
+ */
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
