@@ -31,6 +31,11 @@ export interface JournalLine {
   costCenter?: string | null;
   costCenterId?: number | null;
   departmentId?: number | null;
+  // Per-line branch — defaults to the entry header's branchId. Pass
+  // explicitly when one logical operation needs to land across multiple
+  // branches in the same company (the multi-branch split flow). Column
+  // added in migration 236; older callers that omit branchId still work.
+  branchId?: number | null;
   projectId?: number | null;
   employeeId?: number | null;
   vehicleId?: number | null;
@@ -104,6 +109,7 @@ export function buildEntry(input: BuildEntryInput): JournalEntryPayload {
       costCenter: raw.costCenter,
       costCenterId: raw.costCenterId,
       departmentId: raw.departmentId,
+      branchId: raw.branchId,
       projectId: raw.projectId,
       employeeId: raw.employeeId,
       vehicleId: raw.vehicleId,

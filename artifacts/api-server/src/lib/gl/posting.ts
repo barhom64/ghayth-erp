@@ -234,6 +234,12 @@ export async function postJournalEntry(
       // activityType / dimensionJson). Per-vehicle profitability,
       // per-property GL drilldowns, and the entity-360 financial profile
       // tab silently excluded every FX + inventory line.
+      // branchId per line — defaults to ctx.branchId so a single-branch
+      // entry has every line tagged with the header branch; callers that
+      // need to split across branches in the same company can override
+      // per line (the user's multi-branch requirement: split by lines or
+      // percentages). Backfill of existing rows happened in migration 236.
+      const lineBranchId = (line as any).branchId ?? ctx.branchId ?? null;
       await rawExecute(
         `INSERT INTO journal_lines (
            "journalId", "accountId", "accountCode",
@@ -242,7 +248,7 @@ export async function postJournalEntry(
            "vehicleId", "propertyId", "contractId", "unitId", "assetId",
            "umrahSeasonId", "umrahAgentId", "productId", "clientId", "vendorId",
            "driverId", "activityType", "templateId",
-           "sourceLineTable", "sourceLineId", "dimensionJson"
+           "sourceLineTable", "sourceLineId", "dimensionJson", "branchId"
          ) VALUES (
            $1, $2, $3,
            $4, $5, $6,
@@ -250,7 +256,7 @@ export async function postJournalEntry(
            $12, $13, $14, $15, $16,
            $17, $18, $19, $20, $21,
            $22, $23, $24,
-           $25, $26, $27
+           $25, $26, $27, $28
          )`,
         [
           journalEntryId, line.accountId, accountCode,
@@ -264,6 +270,7 @@ export async function postJournalEntry(
           line.driverId ?? null, line.activityType ?? null, line.templateId ?? null,
           line.sourceLineTable ?? null, line.sourceLineId ?? null,
           line.dimensionJson ? JSON.stringify(line.dimensionJson) : null,
+          lineBranchId,
         ],
       );
       balanceDeltas.set(
