@@ -1,5 +1,5 @@
 # Dockerfile.frontend
-FROM node:24-alpine AS build
+FROM node:24-slim AS build
 RUN corepack enable
 WORKDIR /app
 ENV npm_config_user_agent=pnpm/docker \
