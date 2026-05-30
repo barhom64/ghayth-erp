@@ -58,7 +58,13 @@ const allModuleRoutes: RouteConfig[] = [
   ...tagRoutes(commsRoutes, "comms"),
   ...tagRoutes(adminRoutes, "admin", 90),
   ...tagRoutes(settingsRoutes, "settings", 70),
-  ...umrahRoutes,
+  // VIS-001 (Ghaith Operating Foundation): umrah is a leader track and must be
+  // gated by its own module exactly like fleet/property/finance. It was
+  // previously spread raw (no module gate), so any authenticated user could
+  // reach /umrah/* directly. featureCatalog defines umrah under moduleKey
+  // "umrah", so umrah-granted users carry "umrah" in allowedModules; owners/GM
+  // keep ALL_MODULES. See docs/frontend/PAGE_VISIBILITY_INVENTORY.md.
+  ...tagRoutes(umrahRoutes, "umrah"),
   ...miscRoutes,
 ];
 
@@ -102,10 +108,13 @@ function AccessDenied() {
 }
 
 function ModuleRoute({ Component, module, subKey, minRoleLevel }: { Component: React.LazyExoticComponent<any>; module?: ModuleType; subKey?: string; minRoleLevel?: number }) {
-  const { canAccessModule, canAccessSubPage, roleLevel } = useAppContext();
+  const { canAccessModule, canAccessSubPage, roleLevel, isFeatureEnabled } = useAppContext();
 
   const blocked =
     (module && !canAccessModule(module)) ||
+    // VIS-002: partial activation — block routes of a track the company
+    // disabled. Default-ON (empty disabled set) ⇒ no behaviour change.
+    (module && !isFeatureEnabled(module)) ||
     (subKey && module && !canAccessSubPage(module, subKey)) ||
     (minRoleLevel !== undefined && roleLevel < minRoleLevel);
 
