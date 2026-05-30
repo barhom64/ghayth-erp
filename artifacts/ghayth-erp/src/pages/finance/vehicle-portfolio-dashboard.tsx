@@ -134,6 +134,10 @@ export default function VehiclePortfolioDashboardPage() {
   return (
     <PageShell
       title="لوحة محفظة المركبات"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "لوحة محفظة المركبات" },
+      ]}
       subtitle={`ربحية كل مركبة نشطة في ${year} — حدد المركبات الرابحة من الخاسرة`}
     >
       <FinanceTabsNav />

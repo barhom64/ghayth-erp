@@ -186,6 +186,10 @@ export default function FinanceWorkflowsHubPage() {
   return (
     <PageShell
       title="مركز سير عمل المالية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "مركز سير عمل المالية" },
+      ]}
       subtitle={`${totalEntries} صفحة عمل عميقة منظمة في ${CATEGORIES.length} مجموعة`}
     >
       <FinanceTabsNav />

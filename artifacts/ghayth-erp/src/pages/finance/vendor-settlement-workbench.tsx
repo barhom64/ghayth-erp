@@ -173,6 +173,10 @@ export default function VendorSettlementWorkbenchPage() {
   return (
     <PageShell
       title="منضدة تسوية الموردين"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "منضدة تسوية الموردين" },
+      ]}
       subtitle="شاشة موظف الذمم الدائنة اليومية — اعرف من تدفع ومتى"
     >
       <FinanceTabsNav />

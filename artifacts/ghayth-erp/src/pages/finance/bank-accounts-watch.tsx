@@ -153,6 +153,10 @@ export default function BankAccountsWatchPage() {
   return (
     <PageShell
       title="مراقبة الحسابات البنكية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "مراقبة الحسابات البنكية" },
+      ]}
       subtitle="نظرة فورية على رصيد كل حساب نقدي/بنكي + حركة آخر 30 يوم"
       actions={
         <div className="flex gap-2">

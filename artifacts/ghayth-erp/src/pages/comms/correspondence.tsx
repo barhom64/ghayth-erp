@@ -124,7 +124,11 @@ export default function CorrespondencePage() {
     });
   };
 
-  if (isLoading) return <PageShell title="المراسلات"><LoadingSpinner /></PageShell>;
+  if (isLoading) return <PageShell title="المراسلات"
+      breadcrumbs={[
+        { href: "/comms", label: "المراسلات" },
+        { label: "المراسلات" },
+      ]}><LoadingSpinner /></PageShell>;
   if (isError) return <PageShell title="المراسلات"><ErrorState onRetry={() => refetch()} /></PageShell>;
 
   const columns: DataTableColumn<Correspondence>[] = [

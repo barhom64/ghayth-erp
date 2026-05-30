@@ -115,7 +115,11 @@ export default function ContractsPage() {
     { successMessage: "تم إنهاء العقد" },
   );
 
-  if (isLoading) return <PageShell title="عقود الموظفين">
+  if (isLoading) return <PageShell title="عقود الموظفين"
+      breadcrumbs={[
+        { href: "/hr", label: "الموارد البشرية" },
+        { label: "عقود الموظفين" },
+      ]}>
       <HrTabsNav /><LoadingSpinner /></PageShell>;
   if (isError) return <PageShell title="عقود الموظفين"><ErrorState onRetry={() => refetch()} /></PageShell>;
 

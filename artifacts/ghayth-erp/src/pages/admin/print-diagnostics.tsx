@@ -255,6 +255,10 @@ export default function PrintDiagnosticsPage() {
   return (
     <PageShell
       title="تشخيص الطباعة"
+      breadcrumbs={[
+        { href: "/admin", label: "الإدارة" },
+        { label: "تشخيص الطباعة" },
+      ]}
       subtitle="القوالب النشطة، الإسنادات، والمحاولات الأخيرة — مع زر إعادة ضبط لكل إسناد فاسد"
       loading={templates.isLoading || assignments.isLoading || jobs.isLoading}
       actions={

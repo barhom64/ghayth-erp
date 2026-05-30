@@ -136,6 +136,10 @@ export default function VendorContractsTrackerPage() {
   return (
     <PageShell
       title="متابعة عقود الموردين"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "متابعة عقود الموردين" },
+      ]}
       subtitle="عقود تنتهي قريباً — لا تترك مورداً يجدد تلقائياً أو ينتهي بدون تخطيط"
     >
       <FinanceTabsNav />

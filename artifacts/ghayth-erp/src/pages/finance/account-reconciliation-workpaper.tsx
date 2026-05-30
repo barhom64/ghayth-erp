@@ -207,6 +207,10 @@ export default function AccountReconciliationWorkpaperPage() {
   return (
     <PageShell
       title="ورقة عمل تسوية حساب"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "ورقة عمل تسوية حساب" },
+      ]}
       subtitle="تسوية أي حساب GL إلى مصدر خارجي (كشف بنك، مساعد، إقرار ضريبي)"
     >
       <FinanceTabsNav />

@@ -202,6 +202,10 @@ export default function WhtFilingWorkbenchPage() {
   return (
     <PageShell
       title="إعداد إقرار الاستقطاع WHT"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "إعداد إقرار الاستقطاع WHT" },
+      ]}
       subtitle={`شهر ${periodLabel} — تجميع كامل بالمورد وبفئة الاستقطاع`}
       actions={
         <div className="flex gap-2">

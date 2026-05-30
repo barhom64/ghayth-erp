@@ -141,6 +141,10 @@ export default function CashFlowStatementPage() {
   return (
     <PageShell
       title="قائمة التدفقات النقدية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "قائمة التدفقات النقدية" },
+      ]}
       subtitle={`الطريقة المباشرة — ${label}`}
       actions={
         <div className="flex gap-2">

@@ -178,6 +178,10 @@ export default function Vendor360SheetPage() {
   return (
     <PageShell
       title="ملف المورد 360°"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "ملف المورد 360°" },
+      ]}
       subtitle="ملخص شامل لعلاقة المورد المالية — جاهز للاجتماعات والمفاوضات"
     >
       <FinanceTabsNav />

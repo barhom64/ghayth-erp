@@ -176,6 +176,10 @@ export default function Customer360SheetPage() {
   return (
     <PageShell
       title="ملف العميل 360°"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "ملف العميل 360°" },
+      ]}
       subtitle="ملخص شامل لعلاقة العميل المالية — جاهز للطباعة والاجتماعات"
     >
       <FinanceTabsNav />

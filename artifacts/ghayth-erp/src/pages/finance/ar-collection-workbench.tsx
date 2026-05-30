@@ -176,6 +176,10 @@ export default function ArCollectionWorkbenchPage() {
   return (
     <PageShell
       title="منضدة عمل التحصيل"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "منضدة عمل التحصيل" },
+      ]}
       subtitle="تنظيم يوم محصّل الديون — عملاء، أعمار، اتصالات، أولويات"
     >
       <FinanceTabsNav />

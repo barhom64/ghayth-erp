@@ -132,6 +132,10 @@ export default function CustomerStatementPrintPage() {
   return (
     <PageShell
       title="كشف حساب عميل قابل للطباعة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "كشف حساب عميل قابل للطباعة" },
+      ]}
       subtitle="نموذج رسمي للإرسال للعميل — تنسيق A4"
     >
       <FinanceTabsNav />

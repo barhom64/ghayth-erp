@@ -183,6 +183,10 @@ export default function CustodyWorkbenchPage() {
   return (
     <PageShell
       title="منضدة عمل العُهد"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "منضدة عمل العُهد" },
+      ]}
       subtitle="عُهد الموظفين النشطة مجمّعة لكل موظف — تتبّع، تسوية، أعمار"
     >
       <FinanceTabsNav />

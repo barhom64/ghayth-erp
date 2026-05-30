@@ -123,6 +123,10 @@ export default function VendorStatementPrintPage() {
   return (
     <PageShell
       title="كشف حساب مورد قابل للطباعة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "كشف حساب مورد قابل للطباعة" },
+      ]}
       subtitle="نموذج رسمي للإرسال للمورد أو الاحتفاظ به في الملف"
     >
       <FinanceTabsNav />

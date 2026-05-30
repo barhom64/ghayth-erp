@@ -198,6 +198,10 @@ export default function TaxFilingCalendarPage() {
   return (
     <PageShell
       title="تقويم الإقرارات الضريبية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "تقويم الإقرارات الضريبية" },
+      ]}
       subtitle="مواعيد إقرارات ZATCA + GOSI خلال السنة — لا تفوّت أي موعد"
       actions={
         <div className="flex gap-2">

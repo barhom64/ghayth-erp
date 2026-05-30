@@ -155,6 +155,10 @@ export default function TrialBalanceDrilldownPage() {
   return (
     <PageShell
       title="ميزان المراجعة مع التتبّع"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "ميزان المراجعة مع التتبّع" },
+      ]}
       subtitle="ميزان مراجعة تفصيلي قابل للنقر — انقر على أي حساب لتفجير حركاته"
     >
       <FinanceTabsNav />

@@ -194,6 +194,10 @@ export default function ApPaymentCalendarPage() {
   return (
     <PageShell
       title="تقويم الدفعات للموردين"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "تقويم الدفعات للموردين" },
+      ]}
       subtitle={`${horizon} يوم قادمة — ما الذي سيخرج من البنك ومتى؟`}
     >
       <FinanceTabsNav />

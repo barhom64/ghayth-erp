@@ -126,6 +126,10 @@ export default function ExpenseBulkApprovalsPage() {
   return (
     <PageShell
       title="اعتماد المصاريف بالجملة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "اعتماد المصاريف بالجملة" },
+      ]}
       subtitle="اختر عدة مصاريف واعتمدها أو ارفضها مرة واحدة — توفير وقت المعتمد"
       actions={
         <div className="flex gap-2">

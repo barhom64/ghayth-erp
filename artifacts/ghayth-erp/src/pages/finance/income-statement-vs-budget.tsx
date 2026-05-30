@@ -165,6 +165,10 @@ export default function IncomeStatementVsBudgetPage() {
   return (
     <PageShell
       title="قائمة الدخل مقابل الميزانية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "قائمة الدخل مقابل الميزانية" },
+      ]}
       subtitle={`تحليل الانحراف لـ ${period} — هل أنت قبل الميزانية أم بعدها؟`}
       actions={
         <div className="flex gap-2">

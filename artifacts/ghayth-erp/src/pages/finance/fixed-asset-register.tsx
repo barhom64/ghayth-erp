@@ -169,6 +169,10 @@ export default function FixedAssetRegisterPage() {
   return (
     <PageShell
       title="سجل الأصول الثابتة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "سجل الأصول الثابتة" },
+      ]}
       subtitle="نظرة محفظية على الأصول — توزيع، أعمار، تقدم الإهلاك"
       actions={
         <div className="flex gap-2">

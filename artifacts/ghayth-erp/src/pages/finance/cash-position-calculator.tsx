@@ -200,6 +200,10 @@ export default function CashPositionCalculatorPage() {
   return (
     <PageShell
       title="حاسبة الوضع النقدي"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "حاسبة الوضع النقدي" },
+      ]}
       subtitle="ما هو رصيد البنك بعد X يوم؟ توقع الوضع النقدي مع إمكانية إضافة افتراضات"
     >
       <FinanceTabsNav />

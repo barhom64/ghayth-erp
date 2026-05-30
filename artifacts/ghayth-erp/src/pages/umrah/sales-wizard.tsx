@@ -147,7 +147,11 @@ export default function UmrahSalesWizard() {
   }, [groups, prices]);
 
   return (
-    <PageShell title="إنشاء فاتورة مبيعات — معالج ذكي">
+    <PageShell title="إنشاء فاتورة مبيعات — معالج ذكي"
+      breadcrumbs={[
+        { href: "/umrah", label: "العمرة" },
+        { label: "إنشاء فاتورة مبيعات — معالج ذكي" },
+      ]}>
       <UmrahTabsNav />
 
       <Card>

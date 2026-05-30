@@ -138,6 +138,10 @@ export default function VatFilingReadinessPage() {
   return (
     <PageShell
       title="جاهزية إقرار ZATCA"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "جاهزية إقرار ZATCA" },
+      ]}
       subtitle={`${periodLabel} — تجميع ضرائب القيمة المضافة الفصلية للإقرار`}
       actions={
         <div className="flex gap-2">

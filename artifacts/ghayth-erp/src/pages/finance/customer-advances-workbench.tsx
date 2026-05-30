@@ -159,6 +159,10 @@ export default function CustomerAdvancesWorkbenchPage() {
   return (
     <PageShell
       title="منضدة الدفعات المقدمة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "منضدة الدفعات المقدمة" },
+      ]}
       subtitle="إدارة الدفعات المقدمة من العملاء — اعرف أرصدتها وطبّقها على الفواتير"
     >
       <FinanceTabsNav />
