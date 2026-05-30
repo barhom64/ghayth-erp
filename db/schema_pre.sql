@@ -17232,6 +17232,10 @@ CREATE TABLE public.umrah_sales_invoice_items (
     "updatedBy" integer,
     "updatedAt" timestamp with time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
+    "productId" integer,
+    "vatRate" numeric(5,2) DEFAULT 15,
+    "vatAmount" numeric(12,2) DEFAULT 0,
+    "accountCode" character varying(20),
     CONSTRAINT "umrah_sales_invoice_items_itemType_check" CHECK ((("itemType")::text = ANY (ARRAY[('group'::character varying)::text, ('penalty'::character varying)::text, ('adjustment'::character varying)::text])))
 );
 
