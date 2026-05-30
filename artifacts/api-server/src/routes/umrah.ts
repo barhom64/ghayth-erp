@@ -1864,16 +1864,23 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
     });
     const rows = [invoiceRow];
 
+    let glJournalId: number | null = null;
     try {
       const { umrahEngine } = await import("../lib/engines/index.js");
-      const journalId = await umrahEngine.postAgentInvoiceGL(
+      // postAgentInvoiceGL returns GLPostingResult ({journalId, sourceKey,
+      // alreadyExists}), NOT a raw number — extract .journalId. The prior
+      // version passed the whole object to SQL and serialised it as JSON
+      // into the "journalEntryId" integer column, which silently failed
+      // (or stored garbage) on every successful GL post.
+      const glResult = await umrahEngine.postAgentInvoiceGL(
         { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
         { id: rows[0].id, ref, agentName: agent.name, agentId, total, servicesTotal, penaltiesTotal, commission }
       );
+      glJournalId = glResult.journalId;
 
       await rawExecute(
         `UPDATE umrah_agent_invoices SET "journalEntryId"=$1 WHERE id=$2 AND "companyId"=$3`,
-        [journalId, rows[0].id, scope.companyId]
+        [glJournalId, rows[0].id, scope.companyId]
       ).catch((e) => logger.error(e, "umrah background task failed"));
 
       emitEvent({
@@ -1882,11 +1889,32 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
         action: "umrah.invoice.gl_posted",
         entity: "umrah_agent_invoices",
         entityId: rows[0].id,
-        details: JSON.stringify({ journalId, total, servicesTotal, penaltiesTotal, commission }),
+        details: JSON.stringify({ journalId: glJournalId, total, servicesTotal, penaltiesTotal, commission }),
       }).catch((e) => logger.error(e, "umrah background task failed"));
     } catch (glErr) {
       logger.error({ err: glErr, invoiceId: rows[0].id }, "[umrah] GL posting failed for agent invoice");
     }
+
+    // M9 fix: always emit umrah.agent_invoice.created, regardless of GL
+    // outcome above. The recovery listener at eventListeners.ts uses this
+    // event to detect invoices with missing journalEntryId and re-post.
+    // Without this, a GL failure leaves the invoice orphaned (no JE,
+    // no signal, no reconciliation path).
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "umrah.agent_invoice.created",
+      entity: "umrah_agent_invoices",
+      entityId: rows[0].id,
+      details: JSON.stringify({
+        invoiceId: rows[0].id,
+        ref,
+        agentId,
+        agentName: agent.name,
+        total, servicesTotal, penaltiesTotal, commission,
+        journalEntryId: glJournalId,
+      }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agent_invoices", entityId: rows[0]?.id, after: { agentId, seasonId, total } }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
