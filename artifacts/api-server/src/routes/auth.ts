@@ -353,7 +353,7 @@ router.post("/login", loginLimiter, async (req, res) => {
               WHERE ul."userId" = $1 AND ul."roleKey" = r.role_key
            )
        ) combined
-       ORDER BY source_order, level DESC`,
+       ORDER BY is_primary DESC, source_order, level DESC`,
       [user.id, primary.companyId]
     );
     const token = signToken({
@@ -622,7 +622,7 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
               WHERE ul."userId" = $1 AND ul."roleKey" = r.role_key
            )
        ) combined
-       ORDER BY source_order, level DESC`,
+       ORDER BY is_primary DESC, source_order, level DESC`,
       [scope.userId, scope.companyId]
     );
 

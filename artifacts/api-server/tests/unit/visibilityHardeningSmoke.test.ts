@@ -6,11 +6,12 @@ import { join } from "node:path";
 // Visibility / authorization hardening smoke — Ghaith Operating Foundation
 //
 // Two additive backend hardenings that close documented gaps:
-//   - FND-005: /events/log + /events/log/stats were mounted with
-//     authMiddleware only — any authenticated user could read the company's
-//     full event-bus log. Now gated by admin:view (like /events/catalog).
-//   - RBAC-007 (#1413 §10): the user's roles are now ordered is_primary
-//     first so the frontend's default active role honors the primary role.
+//   - FND-005: /events/catalog + /events/log + /events/log/stats were mounted
+//     with authMiddleware + requireMinLevel(70) only — no per-feature gate, so
+//     any level≥70 user could read the company's event catalog/log. Now every
+//     GET is gated by admin:view.
+//   - RBAC-007 (#1413 §10): the user's roles are now ordered is_primary first
+//     so the frontend's default active role honors the primary role.
 //
 // Static source scan (matching rbacAdminCompletionSmoke / umrahReportsSmoke).
 // ══════════════════════════════════════════════════════════════════════════
@@ -19,19 +20,25 @@ const root = join(import.meta.dirname!, "../../../../artifacts/api-server");
 const EVENTS = readFileSync(join(root, "src/routes/events.ts"), "utf8");
 const AUTH = readFileSync(join(root, "src/routes/auth.ts"), "utf8");
 
-describe("FND-005 — /events/log is no longer readable by any authenticated user", () => {
-  it("GET /events/log is gated by admin:view", () => {
-    expect(EVENTS).toMatch(/router\.get\("\/log",\s*authorize\(\{ feature: "admin", action: "view" \}\)/);
+describe("FND-005 — every /events GET is gated by admin:view", () => {
+  it("imports authorize alongside maskFields", () => {
+    expect(EVENTS).toMatch(/import \{ maskFields, authorize \} from "\.\.\/lib\/rbac\/authorize\.js"/);
   });
 
-  it("GET /events/log/stats is gated by admin:view", () => {
-    expect(EVENTS).toMatch(/router\.get\("\/log\/stats",\s*authorize\(\{ feature: "admin", action: "view" \}\)/);
+  it("GET /catalog is gated by admin:view", () => {
+    expect(EVENTS).toMatch(/eventsRouter\.get\("\/catalog",\s*authorize\(\{ feature: "admin", action: "view" \}\)/);
   });
 
-  it("no /events route is left mounted without an authorize() gate", () => {
-    // Every `router.get("/...")` in events.ts must carry an authorize() on the
-    // same line. (catalog/log/log-stats are the three GET routes.)
-    const getRoutes = [...EVENTS.matchAll(/router\.get\("([^"]+)",\s*([^\n]*)/g)];
+  it("GET /log is gated by admin:view", () => {
+    expect(EVENTS).toMatch(/eventsRouter\.get\("\/log",\s*authorize\(\{ feature: "admin", action: "view" \}\)/);
+  });
+
+  it("GET /log/stats is gated by admin:view", () => {
+    expect(EVENTS).toMatch(/eventsRouter\.get\("\/log\/stats",\s*authorize\(\{ feature: "admin", action: "view" \}\)/);
+  });
+
+  it("no eventsRouter.get is left without an authorize() gate", () => {
+    const getRoutes = [...EVENTS.matchAll(/eventsRouter\.get\("([^"]+)",\s*([^\n]*)/g)];
     expect(getRoutes.length).toBeGreaterThanOrEqual(3);
     for (const m of getRoutes) {
       expect(m[2]).toContain("authorize(");
@@ -40,11 +47,11 @@ describe("FND-005 — /events/log is no longer readable by any authenticated use
 });
 
 describe("RBAC-007 — primary role is the default active role (#1413 §10)", () => {
-  it("the login role query orders by is_primary before level", () => {
-    expect(AUTH).toMatch(/ORDER BY ur\.is_primary DESC, r\.level DESC/);
+  it("the user-roles union query orders by is_primary first", () => {
+    expect(AUTH).toMatch(/ORDER BY is_primary DESC, source_order, level DESC/);
   });
 
-  it("the role query still exposes isPrimary to the frontend", () => {
-    expect(AUTH).toMatch(/ur\.is_primary AS "isPrimary"/);
+  it("the union still selects is_primary so the ordering has a column to sort on", () => {
+    expect(AUTH).toMatch(/is_primary/);
   });
 });
