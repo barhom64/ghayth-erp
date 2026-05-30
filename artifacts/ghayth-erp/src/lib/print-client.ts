@@ -20,7 +20,7 @@
 
 import { apiFetch, ApiError } from "@/lib/api";
 
-export type PrintFormat = "a4" | "thermal_80" | "thermal_58" | "label" | "excel";
+export type PrintFormat = "a4" | "thermal_80" | "thermal_58" | "label" | "excel" | "csv";
 
 export type PaperSize =
   | "A4"

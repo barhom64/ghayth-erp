@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -132,6 +133,7 @@ export default function PropertiesOwners() {
         </Link>
       )}
     >
+      <PropertyTabsNav />
 
       <AdvancedFilters
         config={{ searchPlaceholder: "بحث بالاسم أو الهاتف أو رقم الهوية...", showDateRange: false }}

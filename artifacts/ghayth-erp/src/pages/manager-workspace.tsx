@@ -56,6 +56,10 @@ export default function ManagerWorkspace() {
   return (
     <PageShell
       title="مساحة المدير"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مساحة المدير" },
+      ]}
       subtitle={`نبض الفريق اليوم — ${selectedRoleLabel}`}
       actions={
         <div className="flex gap-2">

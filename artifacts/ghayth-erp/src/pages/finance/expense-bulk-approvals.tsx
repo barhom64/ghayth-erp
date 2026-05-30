@@ -126,6 +126,10 @@ export default function ExpenseBulkApprovalsPage() {
   return (
     <PageShell
       title="اعتماد المصاريف بالجملة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "اعتماد المصاريف بالجملة" },
+      ]}
       subtitle="اختر عدة مصاريف واعتمدها أو ارفضها مرة واحدة — توفير وقت المعتمد"
       actions={
         <div className="flex gap-2">
@@ -386,7 +390,7 @@ export default function ExpenseBulkApprovalsPage() {
                             </td>
                             <td className="py-2 px-2">
                               <Link href={`/finance/expenses/${e.id}`}>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(ev) => ev.stopPropagation()}>
+                                <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7" onClick={(ev) => ev.stopPropagation()}>
                                   <ExternalLink className="w-3 h-3" />
                                 </Button>
                               </Link>

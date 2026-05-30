@@ -86,6 +86,7 @@ const allNavSections: NavSection[] = [
     title: "الرئيسية",
     items: [
       { label: "لوحة التحكم", path: "/dashboard", icon: LayoutDashboard, module: "home" },
+      { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar, minRoleLevel: 20 },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
         { label: "مساحتي", path: "/my-space", icon: User },
@@ -95,7 +96,8 @@ const allNavSections: NavSection[] = [
       { label: "لوحات الإدارة", path: "/manager-board", icon: Users, minRoleLevel: 40, children: [
         { label: "لوحة المدير", path: "/manager-board", icon: Users },
         { label: "مساحة المدير", path: "/manager-workspace", icon: Users },
-        { label: "لوحة القيادة التنفيذية", path: "/exec-dashboard", icon: Shield, minRoleLevel: 60 },
+        { label: "لوحات مؤشرات المسارات", path: "/module-dashboards", icon: LayoutDashboard },
+        { label: "لوحة القيادة التنفيذية", path: "/exec-dashboard", icon: Shield, minRoleLevel: 70 },
       ]},
       { label: "مراكز التحكم", path: "/action-center", icon: Briefcase, minRoleLevel: 20, children: [
         { label: "مركز القرارات", path: "/action-center", icon: Briefcase },
@@ -112,7 +114,7 @@ const allNavSections: NavSection[] = [
     items: [
       { label: "طلباتي", path: "/my-requests", icon: ClipboardCheck, children: [
         { label: "كل طلباتي", path: "/my-requests", icon: ClipboardCheck },
-        { label: "طلب إجازة", path: "/my-leave-request", icon: Calendar },
+        { label: "طلب إجازة", path: "/hr/leaves/create", icon: Calendar },
       ]},
       { label: "معلوماتي", path: "/my-attendance", icon: User, children: [
         { label: "حضوري وانصرافي", path: "/my-attendance", icon: Clock },
@@ -175,7 +177,7 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "الامتثال السعودي", path: "/hr/saudization", icon: Flag, module: "hr", children: [
         { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees" },
-        { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
+        { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll" },
       ]},
       { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
         { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
@@ -191,7 +193,7 @@ const allNavSections: NavSection[] = [
       { label: "الانضباط والمخالفات", path: "/hr/violations", icon: Scale, module: "hr", children: [
         { label: "نظرة عامة", path: "/hr/violations", icon: ListChecks, subKey: "violations" },
         { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
-        { label: "المحاضر التأديبية", path: "/hr/discipline/memos", icon: FileText, subKey: "violations" },
+        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations" },
         { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
         { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
         { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
@@ -242,7 +244,6 @@ const allNavSections: NavSection[] = [
         { label: "موزّع التكاليف", path: "/finance/expenses/split", icon: Layers },
         { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
         { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
-        { label: "تسجيل دفعة عميل", path: "/finance/receivables/receipt", icon: DollarSign },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
         { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
         { label: "منضدة الدفعات المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
@@ -265,8 +266,6 @@ const allNavSections: NavSection[] = [
         { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
         { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
         { label: "ورقة عمل تسوية حساب", path: "/finance/account-recon-workpaper", icon: FileSignature },
-        { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
-        { label: "منضدة التحصيل", path: "/finance/ar-collection-workbench", icon: Users },
         { label: "كشف حساب عميل للطباعة", path: "/finance/customer-statement-print", icon: Printer },
         { label: "ملف العميل 360°", path: "/finance/customer-360-sheet", icon: Users },
         { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
@@ -300,9 +299,7 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "التكاليف والتسويات", path: "/finance/project-costing", icon: FolderOpen, module: "finance", children: [
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
-        { label: "محفظة المشاريع", path: "/finance/project-portfolio", icon: BarChart3 },
         { label: "محفظة المركبات", path: "/finance/vehicle-portfolio", icon: BarChart3 },
-        { label: "محفظة العقارات", path: "/finance/property-portfolio", icon: BarChart3 },
         { label: "Cost Center P&L", path: "/finance/cost-center-pnl", icon: BarChart3 },
         { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
         { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
@@ -310,6 +307,7 @@ const allNavSections: NavSection[] = [
       { label: "الضرائب والتقارير", path: "/finance/tax", icon: Scale, module: "finance", children: [
         { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
         { label: "رموز الضريبة", path: "/finance/tax-codes", icon: Percent },
+        { label: "قواعد التسعير", path: "/finance/pricing-rules", icon: Percent },
         { label: "فئات WHT", path: "/finance/wht-categories", icon: Percent },
         { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
         { label: "جاهزية ZATCA", path: "/finance/vat-filing-readiness", icon: FileCheck },
@@ -323,9 +321,6 @@ const allNavSections: NavSection[] = [
         { label: "قائمة التدفقات النقدية", path: "/finance/reports/cash-flow-statement", icon: Banknote },
         { label: "Y/Y Comparison", path: "/finance/reports/yoy", icon: BarChart2 },
         { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
-        { label: "محلل الإيرادات", path: "/finance/revenue-mix", icon: BarChart3 },
-        { label: "محلل المصاريف", path: "/finance/expense-mix", icon: BarChart3 },
-        { label: "DSO Trend", path: "/finance/reports/dso-trend", icon: Activity },
         { label: "GL Health Score", path: "/finance/gl-health", icon: ShieldAlert },
       ]},
       { label: "صناديق الواردات", path: "/finance/approvals-inbox", icon: Bell, module: "finance", children: [
@@ -339,8 +334,8 @@ const allNavSections: NavSection[] = [
       // 1297, 1304, 1307, 1309, 1311). الترابط بينها مكتمل عبر AllocationTabsNav
       // و AllocationHealthCard، وهذا المدخل في القائمة الجانبية يخلي الكلستر
       // قابلاً للوصول من أي صفحة في النظام (ليس من finance فقط).
-      { label: "محرك التوجيه المحاسبي", path: "/finance/settings-hub", icon: Network, module: "finance", children: [
-        { label: "مركز الإعدادات", path: "/finance/settings-hub", icon: Settings },
+      { label: "محرك التوجيه المحاسبي", path: "/finance/settings", icon: Network, module: "finance", children: [
+        { label: "مركز الإعدادات", path: "/finance/settings", icon: Settings },
         { label: "قواعد التوجيه", path: "/finance/allocation-rules", icon: Network },
         { label: "كتالوج المنتجات", path: "/finance/product-catalog", icon: Package },
         { label: "تشخيص التغطية", path: "/finance/allocation-coverage", icon: Target },
@@ -424,6 +419,7 @@ const allNavSections: NavSection[] = [
         { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
         { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
         { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
+        { label: "عمليات متقدّمة (دفعات/تسلسلات/ABC)", path: "/warehouse/advanced", icon: BarChart3 },
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
         { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard },
@@ -446,7 +442,13 @@ const allNavSections: NavSection[] = [
         { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
         { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
       ]},
-      { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, module: "umrah", children: [
+      // GAP_MATRIX item #20 — backend mounts /umrah under
+      // requireModule("operations") and ROLE_DEFAULT_MODULES doesn't
+      // contain "umrah" as a key at all. Setting module: "umrah" on the
+      // sidebar entry meant the filter checked an access flag the
+      // backend never granted, so the entry collapsed for everyone
+      // except owner/GM (who get every module).
+      { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, module: "operations", children: [
         { label: "لوحة التشغيل", path: "/umrah", icon: LayoutDashboard },
         { label: "المعتمرين", path: "/umrah/pilgrims", icon: Users },
         { label: "الوكلاء الرئيسيين", path: "/umrah/agents", icon: Building2 },
@@ -507,6 +509,7 @@ const allNavSections: NavSection[] = [
         { label: "جميع المستندات", path: "/documents", icon: FileText },
         { label: "المجلدات", path: "/documents/folders", icon: FolderOpen },
         { label: "الأرشيف", path: "/documents/archive", icon: Archive },
+        { label: "صندوق OCR", path: "/documents/ocr-inbox", icon: FileText },
         { label: "القوالب", path: "/documents/templates", icon: FilePlus },
         { label: "رفع مستند", path: "/documents/upload", icon: FilePlus },
       ]},
@@ -563,6 +566,7 @@ const allNavSections: NavSection[] = [
       { label: "مدير النظام", path: "/admin", icon: Shield, module: "admin", minRoleLevel: 90, children: [
         { label: "المستخدمين والصلاحيات", path: "/admin/users", icon: KeyRound, children: [
           { label: "المستخدمين", path: "/admin/users", icon: Users, perm: ["admin:list", "admin:update"], permMode: "any" },
+          { label: "إنشاء سريع وصلاحيات", path: "/admin/user-onboarding", icon: UserPlus, perm: ["admin:update"], permMode: "any" },
           { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
           { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
           { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
@@ -581,6 +585,8 @@ const allNavSections: NavSection[] = [
         { label: "السياسات والحوكمة", path: "/admin/policy-engine", icon: Shield, children: [
           { label: "محرك السياسات", path: "/admin/policy-engine", icon: Shield, perm: "admin:update" },
           { label: "تجاوزات الموافقات", path: "/admin/approval-overrides", icon: Bell, perm: "admin:update" },
+          { label: "حماية البيانات (PDPL)", path: "/admin/pdpl", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "التوقيع الرقمي", path: "/admin/digital-signature", icon: FileSignature, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
         { label: "تشخيص محاسبي وطباعة", path: "/admin/gl-reconciliation", icon: ShieldAlert, children: [
           { label: "تسوية GL", path: "/admin/gl-reconciliation", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
@@ -594,7 +600,11 @@ const allNavSections: NavSection[] = [
           { label: "مركز التحكّم بالـ PBX", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "توجيه الإشعارات", path: "/admin/notification-routing", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "إعدادات المزوّدات", path: "/admin/vendor-settings", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "تشخيص التكاملات", path: "/admin/integrations-diagnostics", icon: Activity, perm: "admin:update" },
+          { label: "مراجعات ZATCA", path: "/admin/zatca-audits", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "حوكمة الذكاء الاصطناعي", path: "/admin/ai-governance", icon: Brain, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "مختبر الذكاء", path: "/admin/intelligence-playground", icon: Brain, perm: "admin:update" },
+          { label: "استيراد البيانات", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
         ]},
         { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [
           { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
@@ -602,7 +612,7 @@ const allNavSections: NavSection[] = [
         ]},
       ]},
       { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60, perm: ["admin:update", "automation:write"], permMode: "any" },
-      { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 40, perm: ["bi:read", "reports:read"], permMode: "any" },
+      { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 50, perm: ["bi:read", "reports:read"], permMode: "any" },
       { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 40, perm: "print_jobs:read" },
       { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 40, perm: "print:reprint:approve" },
       { label: "الإعدادات", path: "/settings", icon: Cog, module: "settings", minRoleLevel: 70, children: [
@@ -620,16 +630,27 @@ const allNavSections: NavSection[] = [
 
 const allNavItems: NavItem[] = allNavSections.flatMap(s => s.items);
 
-export function getAllNavigationPages(): { label: string; path: string; section: string; parent?: string }[] {
-  const pages: { label: string; path: string; section: string; parent?: string }[] = [];
+export function getAllNavigationPages(): { label: string; path: string; section: string; parent?: string; icon?: any; module?: ModuleType; minRoleLevel?: number; perm?: string | string[]; permMode?: "all" | "any" }[] {
+  const pages: { label: string; path: string; section: string; parent?: string; icon?: any; module?: ModuleType; minRoleLevel?: number; perm?: string | string[]; permMode?: "all" | "any" }[] = [];
 
-  function collectPages(items: NavItem[], section: string, parentLabel?: string) {
+  function collectPages(items: NavItem[], section: string, parentLabel?: string, inheritedRoleLevel?: number) {
     for (const item of items) {
+      const effectiveRoleLevel = item.minRoleLevel ?? inheritedRoleLevel;
       if (!item.path.startsWith("#")) {
-        pages.push({ label: item.label, path: item.path, section, parent: parentLabel });
+        pages.push({
+          label: item.label,
+          path: item.path,
+          section,
+          parent: parentLabel,
+          icon: item.icon,
+          module: item.module,
+          minRoleLevel: effectiveRoleLevel,
+          perm: item.perm,
+          permMode: item.permMode,
+        });
       }
       if (item.children) {
-        collectPages(item.children, section, parentLabel ? `${parentLabel} / ${item.label}` : item.label);
+        collectPages(item.children, section, parentLabel ? `${parentLabel} / ${item.label}` : item.label, effectiveRoleLevel);
       }
     }
   }
@@ -638,6 +659,56 @@ export function getAllNavigationPages(): { label: string; path: string; section:
     collectPages(section.items, section.title);
   }
   return pages;
+}
+
+/**
+ * useFilteredNavSections — exposes the same filter pipeline the sidebar
+ * uses (role-level, module access, feature flags, sub-page gates,
+ * fine-grained perms, route-registry check) as a reusable hook. Returns
+ * the navigation tree pre-filtered for the current user. Consumed by
+ * sidebar-layout itself AND by the /services hub page so both stay in
+ * sync without duplicating the filter logic.
+ */
+export function useFilteredNavSections(): NavSection[] {
+  const {
+    canAccessModule,
+    canAccessSubPage,
+    isFeatureEnabled,
+    can,
+    effectiveRoleLevel,
+  } = useAppContext();
+
+  const itemPermAllowed = (item: NavItem): boolean => {
+    if (!item.perm) return true;
+    const list = Array.isArray(item.perm) ? item.perm : [item.perm];
+    return item.permMode === "any" ? list.some(can) : list.every(can);
+  };
+
+  const filterItems = (items: NavItem[], parentModule?: ModuleType): NavItem[] =>
+    items
+      .map((item): NavItem | null => {
+        const mod = item.module ?? parentModule;
+        if (item.module && !canAccessModule(item.module)) return null;
+        if (item.module && !isFeatureEnabled(item.module)) return null;
+        if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
+        if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
+        if (!itemPermAllowed(item)) return null;
+        if (!item.children || item.children.length === 0) {
+          if (!isRegisteredRoute(item.path)) return null;
+          return item;
+        }
+        const filteredChildren = filterItems(item.children, mod);
+        if (filteredChildren.length === 0) return null;
+        return { ...item, children: filteredChildren };
+      })
+      .filter((x): x is NavItem => x !== null);
+
+  return allNavSections
+    .map((section) => ({
+      ...section,
+      items: filterItems(section.items),
+    }))
+    .filter((section) => section.items.length > 0);
 }
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
@@ -725,39 +796,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   usePropertyKeyboardShortcuts(navigate);
 
-  const itemPermAllowed = (item: NavItem): boolean => {
-    if (!item.perm) return true;
-    const list = Array.isArray(item.perm) ? item.perm : [item.perm];
-    return item.permMode === "any" ? list.some(can) : list.every(can);
-  };
-
-  const filterItems = (items: NavItem[], parentModule?: ModuleType): NavItem[] =>
-    items
-      .map((item): NavItem | null => {
-        const mod = item.module ?? parentModule;
-        if (item.module && !canAccessModule(item.module)) return null;
-        // VIS-002: partial activation. Hide a track when the company disabled
-        // its feature. Default-ON (empty disabled set) ⇒ no change.
-        if (item.module && !isFeatureEnabled(item.module)) return null;
-        if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
-        if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
-        if (!itemPermAllowed(item)) return null;
-        if (!item.children || item.children.length === 0) {
-          if (!isRegisteredRoute(item.path)) return null;
-          return item;
-        }
-        const filteredChildren = filterItems(item.children, mod);
-        if (filteredChildren.length === 0) return null;
-        return { ...item, children: filteredChildren };
-      })
-      .filter((x): x is NavItem => x !== null);
-
-  const filteredSections = allNavSections
-    .map(section => ({
-      ...section,
-      items: filterItems(section.items),
-    }))
-    .filter(section => section.items.length > 0);
+  // filterItems / filteredSections were inlined here pre-2026-05-30. They
+  // moved to the exported `useFilteredNavSections` hook so the /services
+  // hub page can reuse the same pipeline without copy-pasting the rule
+  // set. The hook re-reads useAppContext() internally — same context,
+  // same answers, single source of truth.
+  const filteredSections = useFilteredNavSections();
 
   const filteredNavItems = filteredSections.flatMap(s => s.items);
 
@@ -1079,26 +1123,21 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
       { label: "الرصد التلقائي", icon: Radar, link: "/hr/violations/auto-detection" },
       { label: "إدارة المخالفات", icon: ClipboardList, link: "/hr/violations/management" },
-      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
       { label: "لائحة الانضباط", icon: BookOpen, link: "/hr/discipline/regulation" },
     ],
     "/hr/violations/auto-detection": [
       { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
-      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
     ],
     "/hr/violations/management": [
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
       { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
-      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
-    ],
-    "/hr/discipline/memos": [
-      { label: "محضر جديد", icon: Plus, link: "/hr/discipline/memos" },
-      { label: "لائحة الانضباط", icon: BookOpen, link: "/hr/discipline/regulation" },
-      { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
     ],
     "/hr/discipline/regulation": [
-      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/discipline/memos" },
+      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
       { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
     ],
     "/hr/shifts": [
@@ -1266,6 +1305,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                     size="icon"
                     className="lg:hidden h-8 w-8"
                     onClick={() => setIsSidebarOpen(false)}
+                    title="إغلاق القائمة"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -1339,6 +1379,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
               size="icon"
               className="lg:hidden h-8 w-8"
               onClick={() => setIsSidebarOpen(true)}
+              title="فتح القائمة"
             >
               <Menu className="h-5 w-5" />
             </Button>

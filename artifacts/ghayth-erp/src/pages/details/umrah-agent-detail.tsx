@@ -51,6 +51,85 @@ function statusTone(status?: string | null) {
   return "default" as const;
 }
 
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  draft: "مسودّة",
+  sent: "مرسلة",
+  partially_paid: "مدفوعة جزئياً",
+  paid: "مدفوعة",
+  overdue: "متأخّرة",
+  cancelled: "ملغاة",
+};
+
+const INVOICE_TYPE_LABELS: Record<string, string> = {
+  sales: "مبيعات",
+  purchase: "مشتريات",
+  credit_note: "إشعار دائن",
+};
+
+interface AgentInvoiceRow {
+  id: number;
+  ref: string | null;
+  type: string;
+  pilgrimCount: number;
+  total: string | number;
+  status: string;
+  dueDate: string | null;
+  createdAt: string;
+}
+
+function AgentRecentInvoicesCard({ agentId }: { agentId: number }) {
+  const { data } = useApiQuery<{ data: AgentInvoiceRow[] }>(
+    ["umrah-agent-invoices", String(agentId)],
+    `/umrah/agents/${agentId}/invoices?limit=10`,
+  );
+  const rows = data?.data ?? [];
+  if (rows.length === 0) {
+    // Render nothing on the "no invoices" path — the statement card
+    // above already shows the zero totals, an empty table just adds
+    // noise without information.
+    return null;
+  }
+  return (
+    <Card data-testid="agent-recent-invoices-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">آخر الفواتير</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-right text-muted-foreground border-b">
+                <th className="p-2 font-medium">المرجع</th>
+                <th className="p-2 font-medium">النوع</th>
+                <th className="p-2 font-medium">عدد المعتمرين</th>
+                <th className="p-2 font-medium">الإجمالي</th>
+                <th className="p-2 font-medium">الاستحقاق</th>
+                <th className="p-2 font-medium">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-b last:border-b-0" data-testid={`agent-invoice-row-${r.id}`}>
+                  <td className="p-2 font-mono">{r.ref || `#${r.id}`}</td>
+                  <td className="p-2">{INVOICE_TYPE_LABELS[r.type] || r.type}</td>
+                  <td className="p-2">{r.pilgrimCount ?? 0}</td>
+                  <td className="p-2 font-semibold">{formatCurrency(Number(r.total))}</td>
+                  <td className="p-2 text-muted-foreground">{r.dueDate ? formatDateAr(r.dueDate) : "—"}</td>
+                  <td className="p-2">
+                    <Badge variant="outline" className="text-xs">
+                      {INVOICE_STATUS_LABELS[r.status] || r.status}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function UmrahAgentDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/umrah/agents/:id");
@@ -243,6 +322,12 @@ export default function UmrahAgentDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent invoices — makes the statement card actionable. The
+          operator can spot which invoice is unpaid, not just the
+          balance number. The fetch is gated on `!!id` so we don't
+          probe `/umrah/agents/0/invoices`. */}
+      {id && <AgentRecentInvoicesCard agentId={id} />}
 
       {id && <EntityComments entityType="umrah-agent" entityId={id} />}
       {id && <EntityTags entityType="umrah-agent" entityId={id} />}

@@ -4811,6 +4811,10 @@ CREATE TABLE public.companies (
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "functionalCurrency" character(3) DEFAULT 'SAR'::bpchar,
     "presentationCurrency" character(3),
+    "nuskSupplierId" integer,
+    "umrahVisaProductId" integer,
+    "umrahServicesProductId" integer,
+    "umrahTransportProductId" integer,
     CONSTRAINT chk_companies_functional_currency_iso CHECK (("functionalCurrency" ~ '^[A-Z]{3}$'::text))
 );
 
@@ -5853,6 +5857,45 @@ CREATE TABLE public.document_entity_links (
     "entityId" integer NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+--
+-- Name: document_access_log; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 234_document_access_log.sql (per-access compliance log for downloads/previews).
+--
+
+CREATE TABLE public.document_access_log (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "documentId" integer NOT NULL,
+    "userId" integer,
+    "accessType" text NOT NULL,
+    "accessedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "ipAddress" text,
+    "userAgent" text,
+    CONSTRAINT document_access_log_access_type_check
+      CHECK (("accessType" = ANY (ARRAY['download'::text, 'preview'::text, 'view'::text, 'sign'::text])))
+);
+
+
+--
+-- Name: document_access_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.document_access_log_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: document_access_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.document_access_log_id_seq OWNED BY public.document_access_log.id;
 
 
 --
@@ -17022,6 +17065,7 @@ CREATE TABLE public.umrah_penalties (
     "createdBy" integer,
     "updatedBy" integer,
     "branchId" integer,
+    "journalEntryId" integer,
     CONSTRAINT umrah_penalties_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('invoiced'::character varying)::text, ('paid'::character varying)::text, ('waived'::character varying)::text]))),
     CONSTRAINT umrah_penalties_type_check CHECK (((type)::text = ANY (ARRAY[('overstay'::character varying)::text, ('violation'::character varying)::text, ('lost'::character varying)::text, ('regulatory'::character varying)::text])))
 );
@@ -17191,6 +17235,10 @@ CREATE TABLE public.umrah_sales_invoice_items (
     "updatedBy" integer,
     "updatedAt" timestamp with time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
+    "productId" integer,
+    "vatRate" numeric(5,2) DEFAULT 15,
+    "vatAmount" numeric(12,2) DEFAULT 0,
+    "accountCode" character varying(20),
     CONSTRAINT "umrah_sales_invoice_items_itemType_check" CHECK ((("itemType")::text = ANY (ARRAY[('group'::character varying)::text, ('penalty'::character varying)::text, ('adjustment'::character varying)::text])))
 );
 

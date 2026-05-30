@@ -18,6 +18,7 @@ import {
 import { Plus, Target, TrendingUp, Award, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "in_progress", label: "جارٍ التقييم" },
   { value: "completed",   label: "مكتمل"        },
@@ -139,6 +140,25 @@ export default function Evaluation360Page() {
       sortable: true,
       render: (v) => <PageStatusBadge status={v.status} />,
     },
+    {
+      key: "history",
+      header: "السجل",
+      render: (v) =>
+        v.employeeId ? (
+          <Link href={`/hr/evaluation-360/history/${v.employeeId}`}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={(e) => e.stopPropagation()}
+              title="عرض تاريخ تقييمات الموظف"
+            >
+              <TrendingUp className="h-3.5 w-3.5 me-1" />
+              التاريخ
+            </Button>
+          </Link>
+        ) : null,
+    },
   ];
 
   return (
@@ -155,6 +175,7 @@ export default function Evaluation360Page() {
         </Link>
       }
     >
+      <HrTabsNav />
       {/* KPI cards */}
       <KpiGrid items={kpis} />
 

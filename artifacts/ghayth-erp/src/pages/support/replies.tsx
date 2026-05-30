@@ -9,6 +9,7 @@ import { MessageSquare, Clock, CheckCircle2, User, type LucideIcon } from "lucid
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
+import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface Reply {
@@ -66,6 +67,7 @@ export default function SupportReplies() {
       breadcrumbs={[{ href: "/support", label: "الدعم" }, { label: "ردود الدعم الفني" }]}
       loading={isLoading}
     >
+      <SupportTabsNav />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => {
           const Icon = c.icon;

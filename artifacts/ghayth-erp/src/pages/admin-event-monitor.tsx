@@ -55,6 +55,10 @@ export default function AdminEventMonitor() {
   return (
     <PageShell
       title="كتالوج الأحداث"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "كتالوج الأحداث" },
+      ]}
       subtitle="جميع الأحداث المسجلة في النظام وآخر الأحداث الفعلية"
       loading={isLoading}
       actions={

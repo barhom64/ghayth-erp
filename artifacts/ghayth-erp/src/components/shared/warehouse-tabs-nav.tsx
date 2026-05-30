@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { Package, ArrowLeftRight, FolderOpen, Building2, ClipboardCheck } from "lucide-react";
+import { Package, ArrowLeftRight, FolderOpen, Building2, ClipboardCheck, BarChart3 } from "lucide-react";
 
 const TABS = [
   { href: "/warehouse", label: "الأصناف", icon: Package, match: ["/warehouse"], exact: true },
@@ -8,6 +8,7 @@ const TABS = [
   { href: "/warehouse/categories", label: "التصنيفات", icon: FolderOpen, match: ["/warehouse/categories"] },
   { href: "/warehouse/suppliers", label: "الموردون", icon: Building2, match: ["/warehouse/suppliers"] },
   { href: "/warehouse/inventory-count", label: "جرد المخزون", icon: ClipboardCheck, match: ["/warehouse/inventory-count"] },
+  { href: "/warehouse/advanced", label: "عمليات متقدّمة", icon: BarChart3, match: ["/warehouse/advanced"] },
 ];
 
 export function WarehouseTabsNav() {

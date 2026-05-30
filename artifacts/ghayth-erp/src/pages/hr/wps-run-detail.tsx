@@ -22,6 +22,7 @@ import {
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 interface WpsLine {
   id: number;
   employeeId: number;
@@ -198,6 +199,7 @@ export default function WpsRunDetailPage() {
         </div>
       }
     >
+      <HrTabsNav />
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">

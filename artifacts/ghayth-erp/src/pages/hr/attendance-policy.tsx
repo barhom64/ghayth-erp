@@ -8,6 +8,7 @@ import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Save } from "lucide-react";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 /**
  * HR-010 — Attendance policy editor. Single row per company; reads from
  * GET /hr/attendance-policy (returns the row OR sensible defaults), writes
@@ -70,6 +71,7 @@ export default function AttendancePolicyPage() {
       subtitle="عتبات التأخّر ونصف القطر الجغرافي + سُلَّم الجزاءات الخمسة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "سياسة الحضور" }]}
     >
+      <HrTabsNav />
       <div className="grid gap-4">
         <Card>
           <CardHeader><CardTitle className="text-base">عتبات أساسية</CardTitle></CardHeader>

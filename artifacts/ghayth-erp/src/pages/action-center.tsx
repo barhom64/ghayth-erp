@@ -403,6 +403,10 @@ export default function ActionCenter() {
   return (
     <PageShell
       title="مركز القرارات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مركز القرارات" },
+      ]}
       subtitle="المعاملات والقرارات التي تنتظر اعتمادك"
       actions={
         <Link href="/my-space">

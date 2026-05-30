@@ -206,6 +206,13 @@ export interface ListPageProps<T> {
   // ─── Optional stats grid (above the filter bar) ────────────────────
   stats?: ListPageStat[];
 
+  /**
+   * Module TabsNav (FinanceTabsNav, HrTabsNav, ...) rendered above the
+   * stats grid. Lets ListPage-based pages stay consistent with the
+   * PageShell + TabsNav pattern used everywhere else.
+   */
+  tabsNav?: ReactNode;
+
   // ─── Children rendered after the table (dialogs, panels, ...) ─────
   children?: ReactNode;
 }
@@ -249,6 +256,7 @@ export function ListPage<T>(props: ListPageProps<T>) {
     documentTemplate,
     exports: exportOpts,
     stats,
+    tabsNav,
     children,
   } = props;
 
@@ -326,6 +334,8 @@ export function ListPage<T>(props: ListPageProps<T>) {
       actions={actions}
       loading={isLoading}
     >
+      {tabsNav}
+
       {stats && stats.length > 0 && (
         <div
           // Tailwind's JIT scanner only sees literal class strings, so the
@@ -505,6 +515,26 @@ function ListPageExportMenu<T>(props: {
     }
   }
 
+  async function runCsv() {
+    // GAP_MATRIX item #7 — CSV exports were previously built client-side
+    // via Blob + URL.createObjectURL, skipping audit + letterhead +
+    // per-feature RBAC. Routing through downloadDocument() puts the
+    // export onto the same /api/print/render path as Excel/A4.
+    setBusy(true);
+    try {
+      await downloadDocument({
+        entityType,
+        entityId: "list",
+        format: "csv",
+        payload: { entity: { id: "list" }, items: props.rows },
+      });
+    } catch (err) {
+      toast({ title: "فشل تصدير CSV", description: (err as { message?: string })?.message ?? "—", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!showExcel && !showPrint && !showPdf && !showCsv) return null;
 
   return (
@@ -533,6 +563,12 @@ function ListPageExportMenu<T>(props: {
           <DropdownMenuItem onClick={runPrint} className="gap-2">
             <FileText className="h-4 w-4" />
             <span>PDF</span>
+          </DropdownMenuItem>
+        )}
+        {showCsv && (
+          <DropdownMenuItem onClick={runCsv} className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />
+            <span>CSV</span>
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>

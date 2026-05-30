@@ -1,4 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -169,18 +174,57 @@ export default function TripDetailPage() {
     }
   };
 
-  const handleCancel = async () => {
-    // FLT-001: /cancel frees the vehicle + driver and requires a reason.
-    const reason = window.prompt("سبب إلغاء الرحلة:");
-    if (reason === null) return; // user dismissed the prompt
-    if (!reason.trim()) {
+  // POST /fleet/trips/:id/waypoints — append an intermediate waypoint
+  // (lat/lon required by backend zod schema). Uses the browser's
+  // geolocation API to read the dispatcher's current position; the driver
+  // would typically be the one posting from the mobile app, but the
+  // desktop dispatcher can also record an ad-hoc stop.
+  const handleAddWaypoint = async () => {
+    if (!navigator.geolocation) {
+      toast({ variant: "destructive", title: "الموقع الجغرافي غير متاح في هذا المتصفح" });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await apiFetch(`/fleet/trips/${id}/waypoints`, {
+            method: "POST",
+            body: JSON.stringify({
+              lat: pos.coords.latitude,
+              lon: pos.coords.longitude,
+              speed: pos.coords.speed ?? undefined,
+            }),
+          });
+          queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
+          toast({ title: "تمت إضافة النقطة" });
+        } catch (err: any) {
+          toast({ variant: "destructive", title: "تعذر إضافة النقطة", description: err.message });
+        }
+      },
+      (err) => {
+        toast({ variant: "destructive", title: "فشل قراءة الموقع", description: err.message });
+      },
+      { enableHighAccuracy: true, timeout: 5000 },
+    );
+  };
+
+  // Cancellation dialog state — FLT-001 requires a non-empty reason.
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const handleCancel = () => {
+    setCancelReason("");
+    setCancelOpen(true);
+  };
+  const confirmCancel = async () => {
+    if (!cancelReason.trim()) {
       toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
       return;
     }
+    setCancelOpen(false);
     try {
       await apiFetch(`/fleet/trips/${id}/cancel`, {
         method: "POST",
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason: cancelReason.trim() }),
       });
       queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
       toast({ title: "تم إلغاء الرحلة" });
@@ -289,6 +333,16 @@ export default function TripDetailPage() {
       >
         <XCircle className="h-4 w-4" />
         إلغاء
+      </GuardedButton>
+      <GuardedButton
+        perm="fleet:update"
+        size="sm"
+        variant="outline"
+        onClick={handleAddWaypoint}
+        disabled={trip?.status === "completed" || trip?.status === "cancelled"}
+        rateLimitAware
+      >
+        + نقطة
       </GuardedButton>
       <EntityPrintButton entityType="fleet_trip" entityId={id ?? ""} />
       <DetailActionButtons hook={editDelete} editPerm="fleet:create" deletePerm="fleet:delete" />
@@ -417,6 +471,7 @@ export default function TripDetailPage() {
   ];
 
   return (
+    <>
     <DetailPageLayout
       title={trip ? `رحلة #${trip.id}` : "الرحلة"}
       subtitle={trip ? `${trip.fromLocation || trip.origin || ""} → ${trip.toLocation || trip.destination || ""}` : undefined}
@@ -435,6 +490,26 @@ export default function TripDetailPage() {
       extraTabs={[...extraTabs, ...registryExtraTabs]}
       hideTabs={registryHideTabs}
     />
+    <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إلغاء الرحلة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">سبب الإلغاء (مطلوب)</Label>
+          <Textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            rows={3}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCancelOpen(false)}>تراجع</Button>
+          <Button variant="destructive" onClick={confirmCancel} rateLimitAware>تأكيد الإلغاء</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

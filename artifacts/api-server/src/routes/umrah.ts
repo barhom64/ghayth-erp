@@ -266,6 +266,17 @@ const importVouchersSchema = z.object({
   /** Override umrah_nusk_cost DR account code (gap #3). */
   purchaseAccountCode: z.string().trim().min(1).optional().nullable(),
   columnMapping: columnMappingSchema,
+  /**
+   * Explicit override for the wallet-overdraft guardrail. By default
+   * the engine refuses an import that would push the NUSK supplier
+   * wallet (PR #1464) below zero — matching the operator rule
+   * "لا يمكن نشتري تأشيرة الا وفي فلوس في الحساب". Setting
+   * allowOverdraft=true bypasses the check for cases where the
+   * operator KNOWS a top-up is on its way and wants to record the
+   * NUSK invoices anyway. The audit log captures the override so
+   * compliance can review.
+   */
+  allowOverdraft: z.boolean().optional().default(false),
 });
 
 const importSchema = z.object({
@@ -516,6 +527,37 @@ router.get("/agents/:id", authorize({ feature: "umrah", action: "view" }), async
       statusBreakdown,
     }));
   } catch (err) { handleRouteError(err, res, "Get agent error"); }
+});
+
+// Recent invoices for an agent — makes the statement (PR #1438)
+// actionable by showing WHICH invoices are unpaid so the operator
+// can follow up on a specific ref, not just an abstract balance.
+// `limit` is clamped to [1, 100] so the dropdown can't accidentally
+// pull the full season.
+router.get("/agents/:id/invoices", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 10));
+    // Existence check up-front so a wrong agent id surfaces a 404
+    // instead of "data: []" — operators have hit that ambiguity on
+    // other detail endpoints and assumed "nothing invoiced" when
+    // really the URL was wrong.
+    const [agent] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (!agent) throw new NotFoundError("الوكيل غير موجود");
+    const rows = await rawQuery(
+      `SELECT id, ref, type, "pilgrimCount", total, status, "dueDate", "createdAt"
+         FROM umrah_agent_invoices
+        WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        ORDER BY "createdAt" DESC
+        LIMIT $3`,
+      [id, scope.companyId, limit]
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
 });
 
 router.post("/agents", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
@@ -1193,7 +1235,7 @@ router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }
 router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping } =
+    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping, allowOverdraft } =
       zodParse(importVouchersSchema.safeParse(req.body));
     await requireOpenSeason(seasonId, scope.companyId);
     // Wire vouchers through the dedicated engine so they actually create
@@ -1215,7 +1257,7 @@ router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }
     // `row.nuskInvoiceNumber === undefined` and bucket every row as an
     // error — the same bug the preview route hit before normalization.
     const normalizedRows = normalizeImportRows(importRows, "vouchers", columnMapping);
-    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers");
+    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers", { allowOverdraft });
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
 });
@@ -1833,16 +1875,23 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
     });
     const rows = [invoiceRow];
 
+    let glJournalId: number | null = null;
     try {
       const { umrahEngine } = await import("../lib/engines/index.js");
-      const journalId = await umrahEngine.postAgentInvoiceGL(
+      // postAgentInvoiceGL returns GLPostingResult ({journalId, sourceKey,
+      // alreadyExists}), NOT a raw number — extract .journalId. The prior
+      // version passed the whole object to SQL and serialised it as JSON
+      // into the "journalEntryId" integer column, which silently failed
+      // (or stored garbage) on every successful GL post.
+      const glResult = await umrahEngine.postAgentInvoiceGL(
         { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
         { id: rows[0].id, ref, agentName: agent.name, agentId, total, servicesTotal, penaltiesTotal, commission }
       );
+      glJournalId = glResult.journalId;
 
       await rawExecute(
         `UPDATE umrah_agent_invoices SET "journalEntryId"=$1 WHERE id=$2 AND "companyId"=$3`,
-        [journalId, rows[0].id, scope.companyId]
+        [glJournalId, rows[0].id, scope.companyId]
       ).catch((e) => logger.error(e, "umrah background task failed"));
 
       emitEvent({
@@ -1851,11 +1900,32 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
         action: "umrah.invoice.gl_posted",
         entity: "umrah_agent_invoices",
         entityId: rows[0].id,
-        details: JSON.stringify({ journalId, total, servicesTotal, penaltiesTotal, commission }),
+        details: JSON.stringify({ journalId: glJournalId, total, servicesTotal, penaltiesTotal, commission }),
       }).catch((e) => logger.error(e, "umrah background task failed"));
     } catch (glErr) {
       logger.error({ err: glErr, invoiceId: rows[0].id }, "[umrah] GL posting failed for agent invoice");
     }
+
+    // M9 fix: always emit umrah.agent_invoice.created, regardless of GL
+    // outcome above. The recovery listener at eventListeners.ts uses this
+    // event to detect invoices with missing journalEntryId and re-post.
+    // Without this, a GL failure leaves the invoice orphaned (no JE,
+    // no signal, no reconciliation path).
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "umrah.agent_invoice.created",
+      entity: "umrah_agent_invoices",
+      entityId: rows[0].id,
+      details: JSON.stringify({
+        invoiceId: rows[0].id,
+        ref,
+        agentId,
+        agentName: agent.name,
+        total, servicesTotal, penaltiesTotal, commission,
+        journalEntryId: glJournalId,
+      }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agent_invoices", entityId: rows[0]?.id, after: { agentId, seasonId, total } }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
@@ -2003,10 +2073,17 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
     const tripCost = Number(b.cost || 0);
     if (tripCost > 0) {
       try {
+        // Resolve the season's branch so the transport expense lands on
+        // the right branch instead of the operator's working branch.
+        const [season] = await rawQuery<{ branchId?: number | null }>(
+          `SELECT "branchId" FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+          [b.seasonId, scope.companyId]
+        ).catch(() => [] as { branchId?: number | null }[]);
+        const transportBranchId = season?.branchId ?? scope.branchId ?? 0;
         const { umrahEngine } = await import("../lib/engines/index.js");
         await umrahEngine.postTransportExpenseGL(
-          { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-          { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined }
+          { companyId: scope.companyId, branchId: transportBranchId, createdBy: scope.userId },
+          { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined, umrahSeasonId: b.seasonId || null }
         );
       } catch (glErr) {
         logger.error(glErr, "Transport GL posting failed:");
@@ -2163,6 +2240,30 @@ router.get("/import/header-maps", authorize({ feature: "umrah", action: "create"
       },
     });
   } catch (err) { handleRouteError(err, res, "Import header maps error"); }
+});
+
+// ── Smart column-mapping suggestion ──────────────────────────────────
+// Feeds the wizard's column-mapping step with a fuzzy-matched
+// engine-field suggestion per unknown Excel header. Closes the
+// "operator pastes a vendor file with a non-standard header — wizard
+// asks them to manually pick every column" friction that the hardcoded
+// dictionary + saved presets alone don't cover.
+//
+// The engine ALSO returns exact matches with confidence=1 so the
+// wizard can show a "✓ exact" badge — explicit confirmation beats
+// silent auto-mapping for the operator's confidence.
+
+const suggestMappingSchema = z.object({
+  headers: z.array(z.string()).min(1, "أعمدة الملف مطلوبة"),
+  fileType: z.enum(["mutamers", "vouchers"]),
+});
+
+router.post("/import/suggest-mapping", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const { headers, fileType } = zodParse(suggestMappingSchema.safeParse(req.body));
+    const { suggestColumnMapping } = await import("../lib/umrahImportEngine.js");
+    res.json({ suggestions: suggestColumnMapping(headers, fileType) });
+  } catch (err) { handleRouteError(err, res, "Suggest mapping error"); }
 });
 
 // ── Column-mapping presets ───────────────────────────────────────────
@@ -2505,6 +2606,244 @@ router.post("/penalties", authorize({ feature: "umrah", action: "create" }), asy
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty.created", entity: "umrah_penalties", entityId: rows[0]?.id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create penalty error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTINGS — per-company configuration that drives umrah↔finance integration
+// ─────────────────────────────────────────────────────────────────────────────
+// Lives under /umrah (not /settings) so the operator finds it where they
+// expect — alongside the rest of the umrah module. Reads/writes a tiny
+// projection of the companies row (just the umrah-relevant columns) so
+// adding future settings is one zod field + one SET clause.
+
+// Shared nullable-FK preprocessor — "" → null, undefined stays
+// undefined so the PATCH handler can distinguish "field omitted"
+// (preserve existing value via COALESCE) from "field set to null"
+// (explicit clear). Then coerce to number when present.
+const nullableFkPreproc = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.coerce.number().nullable().optional(),
+);
+
+const umrahSettingsPatchSchema = z.object({
+  // When unset, the vendor-statement endpoint skips its umrah branch
+  // (gracefully — no broken queries).
+  nuskSupplierId: nullableFkPreproc,
+  // Service-type → product mapping (migration 241). When all 3 are
+  // set, the Phase 3b engine will split each group's lineTotal into
+  // visa / services / transport lines. When any is unset, the engine
+  // falls back to the single bundled line — no error, just no split.
+  umrahVisaProductId: nullableFkPreproc,
+  umrahServicesProductId: nullableFkPreproc,
+  umrahTransportProductId: nullableFkPreproc,
+});
+
+router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    // JOIN suppliers so the UI can show the supplier name without
+    // a second fetch. LEFT JOIN — `nuskSupplierId` may be null on a
+    // freshly-installed company. The 3 product joins follow the same
+    // pattern (migration 241).
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT c."nuskSupplierId",
+              s.name  AS "nuskSupplierName",
+              s.code  AS "nuskSupplierCode",
+              c."umrahVisaProductId",
+              pv.name AS "umrahVisaProductName",
+              c."umrahServicesProductId",
+              ps.name AS "umrahServicesProductName",
+              c."umrahTransportProductId",
+              pt.name AS "umrahTransportProductName"
+         FROM companies c
+         LEFT JOIN suppliers s
+                ON s.id = c."nuskSupplierId"
+               AND s."companyId" = c.id
+               AND s."deletedAt" IS NULL
+         LEFT JOIN products pv
+                ON pv.id = c."umrahVisaProductId"
+               AND pv."companyId" = c.id
+         LEFT JOIN products ps
+                ON ps.id = c."umrahServicesProductId"
+               AND ps."companyId" = c.id
+         LEFT JOIN products pt
+                ON pt.id = c."umrahTransportProductId"
+               AND pt."companyId" = c.id
+        WHERE c.id = $1`,
+      [scope.companyId],
+    );
+    res.json(row ?? {
+      nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null,
+      umrahVisaProductId: null, umrahVisaProductName: null,
+      umrahServicesProductId: null, umrahServicesProductName: null,
+      umrahTransportProductId: null, umrahTransportProductName: null,
+    });
+  } catch (err) { handleRouteError(err, res, "Get umrah settings error"); }
+});
+
+router.patch("/settings", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(umrahSettingsPatchSchema.safeParse(req.body));
+    // Validate the supplier (if provided) belongs to THIS company —
+    // defence in depth so a cross-tenant id can't be silently
+    // accepted via API.
+    if (b.nuskSupplierId != null) {
+      const [supplier] = await rawQuery<{ id: number }>(
+        `SELECT id FROM suppliers
+          WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [b.nuskSupplierId, scope.companyId],
+      );
+      if (!supplier) {
+        throw new ValidationError(`المورد رقم ${b.nuskSupplierId} غير موجود`, {
+          field: "nuskSupplierId",
+          fix: "اختر مورداً مسجلاً لهذه الشركة أو اتركه فارغاً",
+        });
+      }
+    }
+    // Validate each product FK belongs to THIS company — defence in
+    // depth identical to the supplier check above. Products list is
+    // shared across modules so a cross-tenant id leaking through
+    // settings would silently mis-route revenue on future invoices.
+    const productChecks: Array<[number | null | undefined, "umrahVisaProductId" | "umrahServicesProductId" | "umrahTransportProductId"]> = [
+      [b.umrahVisaProductId, "umrahVisaProductId"],
+      [b.umrahServicesProductId, "umrahServicesProductId"],
+      [b.umrahTransportProductId, "umrahTransportProductId"],
+    ];
+    for (const [value, field] of productChecks) {
+      if (value == null) continue;
+      const [product] = await rawQuery<{ id: number }>(
+        `SELECT id FROM products WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+        [value, scope.companyId],
+      );
+      if (!product) {
+        throw new ValidationError(`المنتج رقم ${value} غير موجود`, {
+          field,
+          fix: "اختر منتجاً مسجلاً لهذه الشركة أو اتركه فارغاً",
+        });
+      }
+    }
+    // Dynamic SET clause — proper PATCH semantics. A field absent
+    // from the body is PRESERVED (not touched), a field set to null
+    // is CLEARED, a field set to a value is UPDATED. SQL COALESCE
+    // can't express the "explicit clear" path, so we build the
+    // statement based on what zod actually parsed.
+    const sets: string[] = [];
+    const params: unknown[] = [scope.companyId];
+    const fields: Array<["nuskSupplierId" | "umrahVisaProductId" | "umrahServicesProductId" | "umrahTransportProductId", number | null | undefined]> = [
+      ["nuskSupplierId", b.nuskSupplierId],
+      ["umrahVisaProductId", b.umrahVisaProductId],
+      ["umrahServicesProductId", b.umrahServicesProductId],
+      ["umrahTransportProductId", b.umrahTransportProductId],
+    ];
+    const auditAfter: Record<string, number | null> = {};
+    for (const [field, value] of fields) {
+      if (value === undefined) continue;
+      params.push(value);
+      sets.push(`"${field}" = $${params.length}`);
+      auditAfter[field] = value;
+    }
+    if (sets.length > 0) {
+      await rawExecute(
+        `UPDATE companies SET ${sets.join(", ")} WHERE id = $1`,
+        params,
+      );
+    }
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "umrah.settings.updated", entity: "companies", entityId: scope.companyId,
+      after: auditAfter,
+    }).catch((e) => logger.error(e, "umrah settings audit failed"));
+    res.json({ success: true, ...auditAfter });
+  } catch (err) { handleRouteError(err, res, "Update umrah settings error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NUSK WALLET — derived view over the existing AP system
+// ─────────────────────────────────────────────────────────────────────────────
+// The "NUSK wallet" the operator thinks about is NOT a new table — it's the
+// running balance of the NUSK supplier in the standard AP ledger:
+//
+//   walletBalance = (deposits TO NUSK)  -  (NUSK invoice obligations net of refunds)
+//
+//   Positive → operator has prepaid credit with NUSK (can buy more visas)
+//   Zero     → fully reconciled
+//   Negative → operator owes NUSK (must top up before next invoice)
+//
+// Computation reuses the same shapes used by the vendor-statement endpoint
+// (PR #1453), so the wallet display and the supplier statement converge on
+// the same number — no drift, no parallel system.
+
+router.get("/nusk-wallet", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const [companyCfg] = await rawQuery<{ nuskSupplierId: number | null }>(
+      `SELECT "nuskSupplierId" FROM companies WHERE id = $1`,
+      [scope.companyId],
+    );
+    const nuskSupplierId = companyCfg?.nuskSupplierId ?? null;
+    if (nuskSupplierId == null) {
+      // Settings unset — return null balance with a configured: false
+      // flag so the UI can render the "configure NUSK first" CTA
+      // instead of misleading zeroes.
+      res.json({
+        configured: false,
+        nuskSupplierId: null,
+        walletBalance: 0,
+        totalDeposits: 0,
+        totalObligations: 0,
+        totalRefunds: 0,
+      });
+      return;
+    }
+
+    // Deposits TO NUSK — payment-voucher allocations against POs owned by
+    // the NUSK supplier. Same JE filters the vendor-statement uses
+    // (balancesApplied + not reversed + soft-delete guards) so the
+    // numbers reconcile across both reports.
+    const [depositsRow] = await rawQuery<{ total: string }>(
+      `SELECT COALESCE(SUM(spa.amount), 0) AS total
+         FROM supplier_payment_allocations spa
+         JOIN journal_entries je ON je.id = spa."journalEntryId"
+         JOIN purchase_orders po ON po.id = spa."obligationId"
+        WHERE spa."companyId" = $1
+          AND spa."deletedAt" IS NULL
+          AND spa."obligationType" = 'purchase_order'
+          AND po."supplierId" = $2
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL`,
+      [scope.companyId, nuskSupplierId],
+    );
+
+    // NUSK obligations — net of refunds, excluding cancelled rows. Same
+    // shape as the cost-basis fix in PR #1457 so this view's "owed to
+    // NUSK" number matches what's used as cost for margin VAT.
+    const [obligationsRow] = await rawQuery<{ total: string; refunds: string }>(
+      `SELECT COALESCE(SUM("totalAmount"), 0) AS total,
+              COALESCE(SUM("refundAmount"), 0) AS refunds
+         FROM umrah_nusk_invoices
+        WHERE "companyId" = $1
+          AND "deletedAt" IS NULL
+          AND "nuskStatus" NOT IN ('cancelled')`,
+      [scope.companyId],
+    );
+
+    const totalDeposits = Number(depositsRow?.total ?? 0);
+    const grossObligations = Number(obligationsRow?.total ?? 0);
+    const totalRefunds = Number(obligationsRow?.refunds ?? 0);
+    const totalObligations = grossObligations - totalRefunds;
+    const walletBalance = totalDeposits - totalObligations;
+
+    res.json({
+      configured: true,
+      nuskSupplierId,
+      walletBalance,
+      totalDeposits,
+      totalObligations,
+      totalRefunds,
+    });
+  } catch (err) { handleRouteError(err, res, "Get NUSK wallet error"); }
 });
 
 export default router;

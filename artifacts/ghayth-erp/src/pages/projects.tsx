@@ -280,7 +280,7 @@ function ProjectListTab() {
       key: "actions", header: "الإجراءات",
       render: (p) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Link href={`/projects/${p.id}`}><Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button></Link>
+          <Link href={`/projects/${p.id}`}><Button variant="ghost" size="sm" title="عرض"><Eye className="h-4 w-4" /></Button></Link>
           <RowActions
             canEdit={canManage}
             onEdit={() => startEdit(p.id, { name: p.name, budget: p.budget || 0, progress: p.progress || 0, status: p.status || "active" })}

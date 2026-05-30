@@ -20,6 +20,7 @@ const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
 const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
 const CostCenterPnl = lazy(() => import("@/pages/finance/cost-center-pnl"));
 const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
+const PricingRules = lazy(() => import("@/pages/finance/pricing-rules"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
 const WhtCategories = lazy(() => import("@/pages/finance/wht-categories"));
 const WhtCategoriesCreate = lazy(() => import("@/pages/create/finance/wht-categories-create"));
@@ -197,6 +198,7 @@ export const financeRoutes = [
   // Both pages live under finance/ and use the same PageShell pattern
   // as accounts.tsx; create pages mirror accounts-create.tsx.
   { path: "/finance/tax-codes", component: TaxCodes },
+  { path: "/finance/pricing-rules", component: PricingRules },
   { path: "/finance/tax-codes/create", component: TaxCodesCreate },
   { path: "/finance/tax-codes/:id/edit", component: TaxCodesEdit },
   { path: "/finance/wht-categories", component: WhtCategories },

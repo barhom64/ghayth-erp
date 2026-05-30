@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { Download, TrendingUp, Boxes, Users, BarChart3 } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * COGS / Margin summary report — consumes #1034's
  * /reports/cogs-summary endpoint.
@@ -97,12 +99,14 @@ function exportCSV(rows: CogsRow[], filename: string) {
     r.cogsNet.toFixed(2),
     r.profit.toFixed(2),
   ]);
-  const csv = [headers, ...out].map((r) => r.join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
+  // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+  // Routed through unified export helper for audit + letterhead.
+  void exportRowsToCsv({
+    entityType: "report_cogs_summary",
+    title: String(filename).replace(/\.csv$/i, ""),
+    rows: out.map((row: any) => Object.fromEntries(headers.map((h: string, i: number) => [h, Array.isArray(row) ? row[i] : (row?.[h] ?? "")]))),
+    columns: headers.map((h: string) => ({ key: h, label: h })),
+  }).catch((err) => console.error("[export] failed", err));
 }
 
 const marginColor = (pct: number) =>
@@ -238,6 +242,7 @@ export default function CogsSummaryPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       {/* KPIs */}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         <Card>

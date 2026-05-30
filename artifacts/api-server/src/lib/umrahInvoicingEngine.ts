@@ -48,6 +48,24 @@ interface InvoiceLineItem {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  // Per-line financial-routing fields — applied to umrah following the
+  // finance `invoice_items` pattern (PR #1466 / migration 240). Phase 1:
+  // persist them on the row so the data is captured. Phase 2: the GL
+  // posting will split revenue + VAT credits by accountCode + vatRate
+  // buckets instead of one lump JE line.
+  //
+  //   productId   — links the line to its product (carries
+  //                 defaultTaxCode + defaultRevenueAccountId)
+  //   vatRate     — 0 for visa pass-through, 15 for standard services
+  //   vatAmount   — persisted so SUM(line vatAmount) reconciles to
+  //                 the invoice header's vatAmount when all lines use
+  //                 line-level VAT
+  //   accountCode — optional GL revenue-account override (null → use
+  //                 the umrah_invoice_revenue resolver fallback)
+  productId?: number | null;
+  vatRate?: number;
+  vatAmount?: number;
+  accountCode?: string | null;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -94,6 +112,105 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     throw new ConflictError(`بعض المجموعات مفوترة مسبقاً في: ${refs}`);
   }
 
+  // Phase 3c — resolve the service-products mapping the operator
+  // configured at /umrah/settings (migration 241 + PR #1469/1470).
+  // For this PR we surface ALL 3 (visa / services / transport) so
+  // Phase 3d's NUSK-driven split can populate them; the IMMEDIATE
+  // effect today is just that every 'group' line gets routed to
+  // the SERVICES product + its account when configured. When the
+  // operator hasn't configured services (or any mapping is unset),
+  // the line's accountCode falls back to null and Phase 2's
+  // bucketing routes it to the default umrah_invoice_revenue —
+  // current behaviour unchanged.
+  //
+  // One JOIN-heavy query rather than 6 round-trips. Each LEFT JOIN
+  // gates on `companyId = c.id` so a stale FK can't lift another
+  // tenant's product into the mapping (defence in depth, matches
+  // the pattern PR #1425 introduced).
+  const [productMap] = await rawQuery<{
+    visaProductId: number | null;
+    visaTaxCode: string | null;
+    visaAccountCode: string | null;
+    servicesProductId: number | null;
+    servicesTaxCode: string | null;
+    servicesAccountCode: string | null;
+    transportProductId: number | null;
+    transportTaxCode: string | null;
+    transportAccountCode: string | null;
+  }>(
+    `SELECT c."umrahVisaProductId"      AS "visaProductId",
+            pv."defaultTaxCode"          AS "visaTaxCode",
+            av.code                      AS "visaAccountCode",
+            c."umrahServicesProductId"   AS "servicesProductId",
+            ps."defaultTaxCode"          AS "servicesTaxCode",
+            asv.code                     AS "servicesAccountCode",
+            c."umrahTransportProductId"  AS "transportProductId",
+            pt."defaultTaxCode"          AS "transportTaxCode",
+            at.code                      AS "transportAccountCode"
+       FROM companies c
+       LEFT JOIN products pv
+              ON pv.id = c."umrahVisaProductId"
+             AND pv."companyId" = c.id
+       LEFT JOIN chart_of_accounts av
+              ON av.id = pv."defaultRevenueAccountId"
+             AND av."companyId" = c.id
+       LEFT JOIN products ps
+              ON ps.id = c."umrahServicesProductId"
+             AND ps."companyId" = c.id
+       LEFT JOIN chart_of_accounts asv
+              ON asv.id = ps."defaultRevenueAccountId"
+             AND asv."companyId" = c.id
+       LEFT JOIN products pt
+              ON pt.id = c."umrahTransportProductId"
+             AND pt."companyId" = c.id
+       LEFT JOIN chart_of_accounts at
+              ON at.id = pt."defaultRevenueAccountId"
+             AND at."companyId" = c.id
+      WHERE c.id = $1`,
+    [scope.companyId],
+  );
+
+  // Phase 3d — when all 3 service products are configured, the
+  // engine splits each group's lineTotal into 3 distinct lines
+  // sourced from the matching NUSK invoice's per-category columns.
+  // The fallback (bundled single line) still works when ANY of the
+  // 3 mappings is unset or when no NUSK invoice matches the group
+  // — current behaviour preserved as a regression-safe default.
+  const canSplit =
+    productMap?.servicesProductId != null
+    && productMap?.visaProductId != null
+    && productMap?.transportProductId != null;
+
+  // One round-trip per invoice instead of per group. Sums per group
+  // across multiple NUSK invoices if a group was billed in chunks.
+  // Maps groupId → { visa, transport } cost basis for the split.
+  const nuskCostByGroup = new Map<number, { visa: number; transport: number }>();
+  if (canSplit) {
+    const nuskRows = await rawQuery<{ groupId: number; visa: string; transport: string }>(
+      `SELECT "groupId",
+              COALESCE(SUM("visaFees"), 0)        AS visa,
+              COALESCE(SUM("transportTotal"), 0)  AS transport
+         FROM umrah_nusk_invoices
+        WHERE "groupId" = ANY($1)
+          AND "companyId" = $2
+          AND "deletedAt" IS NULL
+          AND "nuskStatus" NOT IN ('cancelled')
+        GROUP BY "groupId"`,
+      [groupIds, scope.companyId],
+    );
+    for (const r of nuskRows) {
+      nuskCostByGroup.set(r.groupId, {
+        visa: Number(r.visa) || 0,
+        transport: Number(r.transport) || 0,
+      });
+    }
+  }
+
+  // Tax-code helper — 'zero' / 'exempt' map to 0% VAT; else fall
+  // back to the invoice-header vatRate (undefined here ⇒ default).
+  const taxCodeToVat = (code: string | null | undefined): number | undefined =>
+    (code === "zero" || code === "exempt" ? 0 : undefined);
+
   const lineItems: InvoiceLineItem[] = [];
   let subtotal = 0;
   let totalPilgrims = 0;
@@ -135,15 +252,98 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     totalPilgrims += mutamerCount;
     groupRefs.push(grp.nuskGroupNumber as string);
 
-    lineItems.push({
-      itemType: "group",
-      groupId: grp.id as number,
-      violationId: null,
-      description: `مجموعة ${grp.nuskGroupNumber} — ${grp.name || ""}`.trim(),
-      quantity: mutamerCount,
-      unitPrice: price,
-      lineTotal,
-    });
+    // Phase 3d — split the group's lineTotal into visa / transport /
+    // services sub-lines when ALL 3 products are configured AND the
+    // group has a matching NUSK invoice to source visa + transport
+    // pass-through costs from. Otherwise fall back to the bundled
+    // Phase 3c single line (which only consumes the services
+    // mapping). The fallback path keeps the existing pre-split
+    // behaviour byte-identical when ANY mapping is missing — strict
+    // regression safety.
+    const groupCost = canSplit ? nuskCostByGroup.get(grp.id as number) : undefined;
+    if (canSplit && groupCost && (groupCost.visa > 0 || groupCost.transport > 0)) {
+      // visa + transport are pass-through at NUSK cost (the
+      // operator's "fixed visa price" rule). Services absorbs the
+      // remainder — sales total minus the two pass-through costs —
+      // which is the operator's margin plus any other NUSK costs
+      // (hotel / electronic / insurance / etc.). Clamp to 0 if the
+      // operator priced below pass-through (sellingBelowCost from
+      // PR #1457 already surfaces this case).
+      const visaPortion = Math.min(groupCost.visa, lineTotal);
+      const transportPortion = Math.min(groupCost.transport, Math.max(0, lineTotal - visaPortion));
+      const servicesPortion = Math.max(0, lineTotal - visaPortion - transportPortion);
+
+      // Visa line — quantity per pilgrim matches NUSK's per-pilgrim
+      // visa pricing; zero-rated when the operator configured the
+      // visa product with defaultTaxCode='zero' (the typical setup).
+      if (visaPortion > 0) {
+        lineItems.push({
+          itemType: "group",
+          groupId: grp.id as number,
+          violationId: null,
+          description: `تأشيرة عمرة — مجموعة ${grp.nuskGroupNumber}`.trim(),
+          quantity: mutamerCount,
+          unitPrice: mutamerCount > 0 ? visaPortion / mutamerCount : visaPortion,
+          lineTotal: visaPortion,
+          productId: productMap!.visaProductId,
+          accountCode: productMap!.visaAccountCode,
+          vatRate: taxCodeToVat(productMap!.visaTaxCode),
+        });
+      }
+
+      // Transport line — quantity 1 since transport is per-trip not
+      // per-pilgrim. vatRate from the product's defaultTaxCode.
+      if (transportPortion > 0) {
+        lineItems.push({
+          itemType: "group",
+          groupId: grp.id as number,
+          violationId: null,
+          description: `نقل — مجموعة ${grp.nuskGroupNumber}`.trim(),
+          quantity: 1,
+          unitPrice: transportPortion,
+          lineTotal: transportPortion,
+          productId: productMap!.transportProductId,
+          accountCode: productMap!.transportAccountCode,
+          vatRate: taxCodeToVat(productMap!.transportTaxCode),
+        });
+      }
+
+      // Services line — the operator's margin + any uncategorised
+      // NUSK costs. ALWAYS emitted (even when 0) so the e-invoice
+      // shows a consistent 3-line structure per group.
+      lineItems.push({
+        itemType: "group",
+        groupId: grp.id as number,
+        violationId: null,
+        description: `خدمات أرضية — مجموعة ${grp.nuskGroupNumber}`.trim(),
+        quantity: 1,
+        unitPrice: servicesPortion,
+        lineTotal: servicesPortion,
+        productId: productMap!.servicesProductId,
+        accountCode: productMap!.servicesAccountCode,
+        vatRate: taxCodeToVat(productMap!.servicesTaxCode),
+      });
+    } else {
+      // Fallback path — bundled single line. Either the operator
+      // hasn't finished the product mapping or this group has no
+      // matching NUSK invoice. Phase 3c's services routing still
+      // applies when the services product is configured.
+      const servicesProductId = productMap?.servicesProductId ?? null;
+      const servicesAccountCode = productMap?.servicesAccountCode ?? null;
+      const servicesVatRate = taxCodeToVat(productMap?.servicesTaxCode);
+      lineItems.push({
+        itemType: "group",
+        groupId: grp.id as number,
+        violationId: null,
+        description: `مجموعة ${grp.nuskGroupNumber} — ${grp.name || ""}`.trim(),
+        quantity: mutamerCount,
+        unitPrice: price,
+        lineTotal,
+        productId: servicesProductId,
+        accountCode: servicesAccountCode,
+        vatRate: servicesVatRate,
+      });
+    }
 
     const nuskInvs = await rawQuery<Record<string, unknown>>(
       `SELECT "nuskInvoiceNumber" FROM umrah_nusk_invoices
@@ -197,15 +397,36 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   // invoice linked to the groups being billed (joined via group_id).
   // Penalties are pure revenue (no offsetting cost), so they stay in the
   // VAT base when the company opts in.
+  // Cost basis — net of refunds, excluding cancelled NUSK invoices.
+  //
+  // Pre-PR this query ran `SUM(totalAmount)` blindly, which:
+  //   1. Counted refunded amounts as cost (a partially-refunded NUSK
+  //      invoice inflated cost → shrank margin → undercharged VAT, a
+  //      ZATCA compliance violation: the operator must remit the FULL
+  //      output VAT on the actual margin, not a refund-inflated one).
+  //   2. Counted cancelled NUSK invoices as cost (same problem; the
+  //      NUSK row exists for audit but no payable was actually owed).
+  //
+  // Fix: subtract refundAmount and exclude cancelled rows. The match
+  // logic is identical to the vendor-statement integration (PR #1453)
+  // so both reports converge on the same cost figure.
   const costRows = await rawQuery<Record<string, unknown>>(
-    `SELECT COALESCE(SUM("totalAmount"), 0) AS cost_basis
+    `SELECT COALESCE(SUM("totalAmount" - COALESCE("refundAmount", 0)), 0) AS cost_basis
        FROM umrah_nusk_invoices
       WHERE "companyId" = $1
         AND "groupId" = ANY($2)
-        AND "deletedAt" IS NULL`,
+        AND "deletedAt" IS NULL
+        AND "nuskStatus" NOT IN ('cancelled')`,
     [scope.companyId, groupIds]
   );
   const costBasis = roundTo2(Number(costRows[0]?.cost_basis ?? 0));
+  // Selling-below-cost detection — `subtotal < costBasis` means the
+  // operator is taking a loss. `Math.max(0, ...)` still clamps so we
+  // don't accidentally compute negative VAT, but we EXPOSE the
+  // condition on the returned object so the UI can warn the operator
+  // (was silently buried before: invoice generated fine, no signal
+  // the sale was below cost).
+  const sellingBelowCost = subtotal < costBasis;
   const marginBase = roundTo2(Math.max(0, subtotal - costBasis));
 
   const [vatSetting] = await rawQuery<Record<string, unknown>>(
@@ -258,17 +479,36 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     );
 
     if (lineItems.length > 0) {
-      const cols = 8;
+      // Migration 240 added 4 per-line columns — productId / vatRate /
+      // vatAmount / accountCode — for the finance-style per-line
+      // routing (visa zero-rated, services standard 15%, etc.).
+      // Phase 1 persists them as defaults; Phase 2 will source from
+      // a per-itemType resolver. Until then:
+      //   - vatRate defaults to invoice.vatRate (typically 15)
+      //   - vatAmount = lineTotal × vatRate / 100 (tax-exclusive)
+      //   - productId / accountCode left null until a resolver lookup
+      //     is wired up
+      // The aggregate vatAmount on the invoice header still drives
+      // the GL posting today; the per-line values are an additive
+      // richer source ready for the Phase 2 GL split.
+      const cols = 12;
       const valuesSql: string[] = [];
       const params: unknown[] = [];
       for (const li of lineItems) {
+        const lineVatRate = li.vatRate ?? vatRate;
+        const lineVatAmount = li.vatAmount ?? roundTo2(li.lineTotal * lineVatRate / 100);
         const base = params.length;
         valuesSql.push(`(${Array.from({ length: cols }, (_, i) => `$${base + i + 1}`).join(",")})`);
-        params.push(invoiceId, li.itemType, li.groupId, li.violationId, li.description, li.quantity, li.unitPrice, li.lineTotal);
+        params.push(
+          invoiceId, li.itemType, li.groupId, li.violationId,
+          li.description, li.quantity, li.unitPrice, li.lineTotal,
+          li.productId ?? null, lineVatRate, lineVatAmount, li.accountCode ?? null,
+        );
       }
       await client.query(
         `INSERT INTO umrah_sales_invoice_items
-         ("invoiceId","itemType","groupId","violationId",description,quantity,"unitPrice","lineTotal")
+         ("invoiceId","itemType","groupId","violationId",description,quantity,"unitPrice","lineTotal",
+          "productId","vatRate","vatAmount","accountCode")
          VALUES ${valuesSql.join(",")}`,
         params
       );
@@ -315,13 +555,47 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     umrahSeasonId?: number;
   }> = [
     { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}`, ...umrahDims },
-    { accountCode: revCode, debit: 0, credit: subtotal, description: `إيراد خدمات عمرة — ${ref}`, ...umrahDims },
   ];
+
+  // Phase 2 — bucket revenue by accountCode. Currently every 'group'
+  // line uses null accountCode (no Phase 3 resolver yet), so this
+  // produces ONE entry with the default revCode and the output JE is
+  // byte-identical to Phase 1. When the operator-facing product
+  // mapping lands (visa→revenue-visa, services→revenue-services,
+  // transport→revenue-transport), the same code will emit a separate
+  // CR Revenue per account without further changes.
+  //
+  // Penalties stay on their own line via penaltiesTotal — same as
+  // before, since penalty rows already use a distinct revenue
+  // account (umrah_penalty_revenue / 4210).
+  const revenueByAccount = new Map<string, number>();
+  for (const li of lineItems) {
+    if (li.itemType !== "group") continue;
+    const code = li.accountCode ?? revCode;
+    revenueByAccount.set(code, (revenueByAccount.get(code) ?? 0) + li.lineTotal);
+  }
+  for (const [code, amount] of revenueByAccount) {
+    glLines.push({
+      accountCode: code,
+      debit: 0,
+      credit: amount,
+      description: code === revCode
+        ? `إيراد خدمات عمرة — ${ref}`
+        : `إيراد عمرة (${code}) — ${ref}`,
+      ...umrahDims,
+    });
+  }
   if (penaltiesTotal > 0) {
     glLines.push({ accountCode: penaltyRevCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}`, ...umrahDims });
   }
   if (vatAmount > 0) {
-    const vatPayableCode = await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2160");
+    // Use the standard vat_output fallback (2300) so umrah VAT lines join
+    // the same payable account every other sales path posts to. The
+    // previous "2160" fallback (unearned revenue) created an isolated
+    // sub-ledger that the VAT reconciliation report — which sums by
+    // accountCode = vat_output — never saw, understating reported VAT
+    // payable by the entire umrah sales volume.
+    const vatPayableCode = await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2300");
     glLines.push({ accountCode: vatPayableCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${ref}`, ...umrahDims });
   }
   await createGuardedJournalEntry({
@@ -374,7 +648,14 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
 
   createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: invoiceId, after: { ref, total } }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
 
-  return { invoiceId, ref, subtotal, penaltiesTotal, vatRate, vatAmount, total, pilgrimCount: totalPilgrims, lineItems: lineItems.length, nuskInvoiceRefs, groupRefs };
+  return {
+    invoiceId, ref, subtotal, penaltiesTotal, vatRate, vatAmount, total,
+    pilgrimCount: totalPilgrims, lineItems: lineItems.length,
+    nuskInvoiceRefs, groupRefs,
+    // Margin-scheme telemetry — surfaces what was previously buried in
+    // the column values, so callers (UI, audit, alerting) can react.
+    costBasis, marginBase, sellingBelowCost,
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────────────

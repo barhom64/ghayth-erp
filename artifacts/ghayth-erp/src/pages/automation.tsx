@@ -131,7 +131,11 @@ export default function Automation() {
   ];
 
   return (
-    <PageShell title="الأتمتة والجدولة" loading={isLoading}>
+    <PageShell title="الأتمتة والجدولة"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "الأتمتة والجدولة" },
+      ]} loading={isLoading}>
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Cog className="h-4 w-4" /> المهام المجدولة</CardTitle></CardHeader>

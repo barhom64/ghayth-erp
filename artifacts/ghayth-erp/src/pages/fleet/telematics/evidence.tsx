@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, asList, apiUrl } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -156,7 +156,7 @@ export default function FleetTelematicsEvidence() {
         // Always route through the server-side proxy — the CMSV6 URL
         // never reaches the browser. Same security model as the video
         // proxy (cb870a1) extended to media evidence.
-        const proxyHref = `/api/fleet/telematics/media-evidence/${r.id}/blob`;
+        const proxyHref = apiUrl(`/fleet/telematics/media-evidence/${r.id}/blob`);
         return r.mediaType === "image" ? (
           <a href={proxyHref} target="_blank" rel="noreferrer">
             <img

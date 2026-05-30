@@ -126,9 +126,29 @@ export default function UmrahSalesWizard() {
         groupIds: groups.map((g) => g.id),
         manualPrices,
       });
+      // Selling-below-cost guardrail — the backend (PR #1457) now
+      // returns this flag when subtotal < costBasis (the operator
+      // would be taking a loss). Surface as a destructive-variant
+      // toast in addition to the success one so it can't be missed.
+      // VAT is still clamped at zero on the loss case, but the
+      // operator should know they priced below the NUSK cost.
+      if (result?.sellingBelowCost === true) {
+        toast({
+          variant: "destructive",
+          title: "تحذير: بيع أقل من التكلفة",
+          description: `تكلفة نسك: ${formatCurrency(Number(result?.costBasis ?? 0))} — راجع الأسعار قبل المتابعة`,
+        });
+      }
+      // Success toast shows ref + total. Margin is surfaced when
+      // available so the operator sees gross profit at a glance —
+      // matches PR #1438's pattern of putting financial signal where
+      // operators already look.
+      const marginPart = result?.marginBase != null
+        ? ` (هامش: ${formatCurrency(Number(result.marginBase))})`
+        : "";
       toast({
         title: "تم إنشاء الفاتورة",
-        description: `${result?.ref ?? ""} — ${formatCurrency(Number(result?.total ?? 0))}`,
+        description: `${result?.ref ?? ""} — ${formatCurrency(Number(result?.total ?? 0))}${marginPart}`,
       });
       setPrices({});
     } catch (err: any) {
@@ -147,7 +167,11 @@ export default function UmrahSalesWizard() {
   }, [groups, prices]);
 
   return (
-    <PageShell title="إنشاء فاتورة مبيعات — معالج ذكي">
+    <PageShell title="إنشاء فاتورة مبيعات — معالج ذكي"
+      breadcrumbs={[
+        { href: "/umrah", label: "العمرة" },
+        { label: "إنشاء فاتورة مبيعات — معالج ذكي" },
+      ]}>
       <UmrahTabsNav />
 
       <Card>

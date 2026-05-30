@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import {
   PageShell,
   DataTable,
@@ -54,6 +55,7 @@ export default function Evaluation360HistoryPage() {
         </Link>
       }
     >
+      <HrTabsNav />
 
       {!isLoading && history.length === 0 && (
         <Card>

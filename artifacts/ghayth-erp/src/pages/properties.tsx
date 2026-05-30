@@ -14,6 +14,7 @@ import {
   exportToCSV,
 } from "@workspace/ui-core";
 import { useApiQuery, asList } from "@/lib/api";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Building, Building2, Plus, Eye, Home, DollarSign } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -77,7 +78,7 @@ export default function Properties() {
       header: "الإجراءات",
       render: (u) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Link href={`/properties/${u.id}`}><Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button></Link>
+          <Link href={`/properties/${u.id}`}><Button variant="ghost" size="sm" title="عرض"><Eye className="h-4 w-4" /></Button></Link>
           {canManage && (
             <RowActions
               canEdit={canManage}
@@ -110,6 +111,7 @@ export default function Properties() {
         ) : null
       }
     >
+      <PropertyTabsNav />
       <KpiGrid items={[
         { label: "إجمالي العقارات", value: stats?.totalUnits || 0, icon: Building2, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "وحدات شاغرة", value: stats?.available || 0, icon: Home, color: "text-emerald-600 bg-emerald-50" },

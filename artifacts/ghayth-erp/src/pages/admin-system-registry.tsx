@@ -179,6 +179,10 @@ export default function AdminSystemRegistry() {
   return (
     <PageShell
       title="المرجعية المركزية الشاملة"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "المرجعية المركزية الشاملة" },
+      ]}
       subtitle="فهرس شامل لكل النطاقات والكيانات والإجراءات والصلاحيات والأحداث في النظام"
       loading={isLoading}
       actions={

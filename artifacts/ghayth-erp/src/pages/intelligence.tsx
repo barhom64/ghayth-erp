@@ -83,7 +83,11 @@ export default function Intelligence() {
   if (overviewError) return <ErrorState />;
 
   return (
-    <PageShell title="لوحة الذكاء">
+    <PageShell title="لوحة الذكاء"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "لوحة الذكاء" },
+      ]}>
       <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
         {loadingOverview ? [...Array(7)].map((_, i) => <Card key={i}><CardContent className="pt-6"><Skeleton className="h-10 w-full" /></CardContent></Card>) : (
           <>

@@ -19,6 +19,7 @@ import {
 import { DOCUMENT_TYPES, DOCUMENT_COLORS } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const DOC_STATUS_OPTIONS = Object.entries(DOCUMENT_TYPES).map(([value, label]) => ({ value, label }));
 
 function getSeverityBadge(daysLeft: number) {
@@ -141,6 +142,7 @@ export default function ExpiringDocumentsPage() {
         </Select>
       }
     >
+      <HrTabsNav />
       {/* KPI cards */}
       <KpiGrid items={kpis} />
 

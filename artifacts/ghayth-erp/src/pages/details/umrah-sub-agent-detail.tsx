@@ -21,7 +21,21 @@ import {
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { EntityTags } from "@/components/shared/entity-tags";
-import { UserPlus, FileText, ExternalLink, Phone, Mail, MapPin, DollarSign, Plus, X } from "lucide-react";
+import { UserPlus, FileText, ExternalLink, Phone, Mail, MapPin, DollarSign, Plus, X, Wallet } from "lucide-react";
+
+// Pilgrim status labels — mirrors the route's PILGRIM_STATUSES enum.
+// Used by the statement card's status-breakdown chips to render
+// human-readable Arabic instead of raw values. Same dictionary as the
+// agent detail page (PR #1438).
+const PILGRIM_STATUS_LABELS: Record<string, string> = {
+  pending: "لم يصل",
+  arrived: "وصل",
+  active: "نشط",
+  overstayed: "متأخر",
+  departed: "غادر",
+  violated: "مخالف",
+  cancelled: "ملغي",
+};
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
 
@@ -86,6 +100,14 @@ interface SubAgent {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  // Statement aggregates from GET /umrah/sub-agents/:id (mirrors PR #1438
+  // for agents). pilgrimCount counts non-deleted pilgrims with this
+  // subAgentId; totalPaid is SUM sarAmount from umrah_payments;
+  // statusBreakdown is { status → count } over the same pilgrim set.
+  pilgrimCount?: number;
+  overstayedCount?: number;
+  totalPaid?: number;
+  statusBreakdown?: Record<string, number>;
 }
 
 const PAYMENT_TERMS_LABEL: Record<string, string> = {
@@ -111,6 +133,14 @@ export default function UmrahSubAgentDetail() {
     !!id,
   );
   const payments = asList(paymentsResp?.data ?? paymentsResp);
+
+  // GET /umrah/statements/:subAgentId — rolled-up running balance + per-
+  // booking breakdown, computed server-side.
+  const { data: statement } = useApiQuery<any>(
+    ["umrah-sub-agent-statement", String(id ?? 0)],
+    id ? `/umrah/statements/${id}` : null,
+    !!id,
+  );
 
   const paymentsTab: ExtraTab = {
     key: "payments",
@@ -162,6 +192,31 @@ export default function UmrahSubAgentDetail() {
 
   const overview = (
     <div className="space-y-4">
+      {statement && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">كشف الحساب الجاري</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div>
+              <p className="text-muted-foreground">الرصيد</p>
+              <p className="font-bold font-mono">{formatCurrency(Number(statement.balance ?? 0))}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">المدفوع</p>
+              <p className="font-mono">{formatCurrency(Number(statement.totalPaid ?? 0))}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">المستحق</p>
+              <p className="font-mono">{formatCurrency(Number(statement.totalDue ?? 0))}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">عدد الحجوزات</p>
+              <p className="font-mono">{statement.bookingsCount ?? 0}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="inline-flex items-center gap-2 text-sm">
@@ -278,6 +333,46 @@ export default function UmrahSubAgentDetail() {
                   </Button>
                 </a>
               </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Statement card — same one-pane summary as the agent detail
+          (PR #1438). totalPaid comes from umrah_payments (the actual
+          receipts ledger for sub-agents, not invoice statuses). */}
+      <Card data-testid="sub-agent-statement-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-muted-foreground" />
+            كشف حساب الوكيل الفرعي
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">إجمالي المعتمرين</p>
+              <span className="font-semibold" data-testid="sub-agent-pilgrim-count">
+                {sa?.pilgrimCount ?? 0}
+              </span>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">المُحصّل</p>
+              <span className="font-semibold text-status-success-foreground" data-testid="sub-agent-paid">
+                {formatCurrency(Number(sa?.totalPaid ?? 0))}
+              </span>
+            </div>
+          </div>
+          {sa?.statusBreakdown && Object.keys(sa.statusBreakdown).length > 0 && (
+            <div className="pt-2 border-t">
+              <p className="text-xs text-muted-foreground mb-1.5">توزيع حالة المعتمرين</p>
+              <div className="flex flex-wrap gap-1.5" data-testid="sub-agent-status-breakdown">
+                {Object.entries(sa.statusBreakdown as Record<string, number>).map(([status, count]) => (
+                  <Badge key={status} variant="outline" className="text-xs">
+                    {PILGRIM_STATUS_LABELS[status] || status}: {count}
+                  </Badge>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>

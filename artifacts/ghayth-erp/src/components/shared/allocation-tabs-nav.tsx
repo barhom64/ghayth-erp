@@ -21,10 +21,10 @@ import {
 
 const TABS = [
   {
-    href: "/finance/settings-hub",
+    href: "/finance/settings",
     label: "الإعدادات",
     icon: Settings,
-    match: ["/finance/settings-hub"],
+    match: ["/finance/settings"],
   },
   {
     href: "/finance/allocation-rules",

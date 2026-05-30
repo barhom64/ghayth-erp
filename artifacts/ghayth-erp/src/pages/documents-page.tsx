@@ -671,7 +671,11 @@ export default function DocumentsPage() {
   const s = stats || {};
 
   return (
-    <PageShell title="إدارة المستندات">
+    <PageShell title="إدارة المستندات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "إدارة المستندات" },
+      ]}>
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           { label: "إجمالي المستندات", value: s.totalDocuments || 0, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },

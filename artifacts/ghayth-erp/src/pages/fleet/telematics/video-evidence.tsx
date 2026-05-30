@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList, apiUrl } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -127,6 +127,18 @@ export default function FleetTelematicsVideoEvidence() {
       header: "إجراء",
       render: (s) => (
         <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {/* HLS playlist link — routes through the server-side proxy so
+              the upstream CMSV6 URL never reaches the browser. */}
+          {s.status === "active" && (
+            <a
+              href={apiUrl(`/fleet/telematics/video/proxy/${s.id}/playlist.m3u8`)}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-status-info-foreground underline"
+            >
+              تشغيل
+            </a>
+          )}
           <Button
             variant="ghost"
             size="sm"

@@ -46,6 +46,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { toast } from "@/hooks/use-toast";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 interface MudadPendingRow {
   id: number;
   employeeId: number;
@@ -503,6 +504,7 @@ export default function GLPostingQueuePage() {
       subtitle="السجلات الجاهزة للترحيل إلى الأستاذ العام — Mudad، شطب الدفعات، إعادة تقييم FX، الجرد الدوري"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "قائمة الترحيل" }]}
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-6">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">

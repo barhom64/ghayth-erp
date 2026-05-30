@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 // ─────────────────────────────────────────────────────────────────────────────
 // الأنواع
 // ─────────────────────────────────────────────────────────────────────────────
@@ -289,6 +290,7 @@ export default function AutoDetectionPage() {
         </div>
       }
     >
+      <HrTabsNav />
       {/* مؤشرات الأداء */}
       <KpiGrid items={kpis} />
 

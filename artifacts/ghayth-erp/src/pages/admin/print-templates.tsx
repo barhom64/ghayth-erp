@@ -327,6 +327,10 @@ export default function PrintTemplatesPage() {
   return (
     <PageShell
       title="قوالب الطباعة"
+      breadcrumbs={[
+        { href: "/admin", label: "الإدارة" },
+        { label: "قوالب الطباعة" },
+      ]}
       subtitle="إدارة قوالب المستندات: الخطوط، الألوان، الـ HTML، التذييل والترويسة"
       loading={isLoading}
       actions={

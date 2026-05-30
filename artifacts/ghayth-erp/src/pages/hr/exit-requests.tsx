@@ -25,6 +25,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { EXIT_TYPES, EXIT_REQUEST_STATUS } from "@/lib/hr-type-maps";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const STATUS_OPTIONS = Object.entries(EXIT_REQUEST_STATUS).map(([value, { label }]) => ({ value, label }));
 
 export default function ExitRequestsPage() {
@@ -225,6 +226,7 @@ export default function ExitRequestsPage() {
         </Link>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       {Number(stats.pending) > 0 && (

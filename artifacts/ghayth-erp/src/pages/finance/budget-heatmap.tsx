@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
@@ -131,18 +132,33 @@ export default function BudgetHeatmapPage() {
       ];
       lines.push(row.join(","));
     }
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `budget-heatmap-${year}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+    // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+    // Routed through unified export helper for audit + letterhead.
+    {
+      const _allLines = lines;
+      const _headers = (_allLines[0] ?? "").split(",");
+      const _rows = _allLines.slice(1).map((line) => {
+        const parts = line.split(",");
+        const obj: Record<string, string> = {};
+        _headers.forEach((h, i) => { obj[h] = parts[i] ?? ""; });
+        return obj;
+      });
+      void exportRowsToCsv({
+        entityType: "report_budget_heatmap",
+        title: String(`budget-heatmap-${year}.csv`).replace(/\.csv$/i, ""),
+        rows: _rows,
+        columns: _headers.map((h) => ({ key: h, label: h })),
+      }).catch((err) => console.error("[export] failed", err));
+    }
+};
 
   return (
     <PageShell
       title="خريطة حرارية للميزانية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "خريطة حرارية للميزانية" },
+      ]}
       subtitle="استخدام الميزانية شهرياً × بنداً — ألوان فورية تكشف نقاط الانفجار"
       actions={
         <div className="flex gap-2">

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
@@ -147,18 +148,33 @@ export default function CustomerAdvancesWorkbenchPage() {
         ].join(","));
       }
     }
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `customer-advances-${today}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+    // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+    // Routed through unified export helper for audit + letterhead.
+    {
+      const _allLines = lines;
+      const _headers = (_allLines[0] ?? "").split(",");
+      const _rows = _allLines.slice(1).map((line) => {
+        const parts = line.split(",");
+        const obj: Record<string, string> = {};
+        _headers.forEach((h, i) => { obj[h] = parts[i] ?? ""; });
+        return obj;
+      });
+      void exportRowsToCsv({
+        entityType: "report_customer_advances_workbench",
+        title: String(`customer-advances-${today}.csv`).replace(/\.csv$/i, ""),
+        rows: _rows,
+        columns: _headers.map((h) => ({ key: h, label: h })),
+      }).catch((err) => console.error("[export] failed", err));
+    }
+};
 
   return (
     <PageShell
       title="منضدة الدفعات المقدمة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "منضدة الدفعات المقدمة" },
+      ]}
       subtitle="إدارة الدفعات المقدمة من العملاء — اعرف أرصدتها وطبّقها على الفواتير"
     >
       <FinanceTabsNav />
@@ -193,7 +209,7 @@ export default function CustomerAdvancesWorkbenchPage() {
                 </Button>
               </div>
             </div>
-            <Link href="/finance/receivables/receipt">
+            <Link href="/finance/receivables">
               <Button size="sm">
                 <Plus className="w-4 h-4 ml-1" />
                 دفعة جديدة
@@ -355,9 +371,7 @@ export default function CustomerAdvancesWorkbenchPage() {
                                   <td className="py-1.5 px-2">
                                     {a.journalId && (
                                       <Link href={`/finance/journal/${a.journalId}`}>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7">
-                                          <ExternalLink className="w-3 h-3" />
-                                        </Button>
+                                        <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                                       </Link>
                                     )}
                                   </td>
@@ -369,7 +383,7 @@ export default function CustomerAdvancesWorkbenchPage() {
                         {g.clientId && (
                           <div className="flex justify-end gap-2 mt-3 border-t pt-3">
                             {g.totalRemaining > 0.01 && (
-                              <Link href={`/finance/receivables/receipt?clientId=${g.clientId}`}>
+                              <Link href={`/finance/receivables?clientId=${g.clientId}`}>
                                 <Button size="sm" variant="outline">
                                   <DollarSign className="w-4 h-4 ml-1" />
                                   تطبيق على فاتورة

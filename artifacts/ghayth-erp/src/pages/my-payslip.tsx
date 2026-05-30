@@ -27,6 +27,10 @@ export default function MyPayslip() {
   return (
     <PageShell
       title="كشف راتبي"
+      breadcrumbs={[
+        { href: "/my-space", label: "مساحاتي" },
+        { label: "كشف راتبي" },
+      ]}
       subtitle="عرض مفصّل لراتبك الشهري"
       actions={
         hasData && payslip?.id ? (

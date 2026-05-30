@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,14 +27,16 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { ErrorState } from "@/components/shared/loading-error-states";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 
-function exportCSV(rows: any[], headers: string[], filename: string) {
+// GAP_MATRIX item #7 — routed through unified export helper so the
+// download appears in /reports/print-log with entity=report_reports.
+async function exportCSV(rows: any[], headers: string[], title: string) {
   if (!rows.length) return;
-  const csv = [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ""))].map((r) => r.join(",")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
+  await exportRowsToCsv({
+    entityType: "report_reports",
+    title,
+    rows: rows,
+    columns: headers.map((h) => ({ key: h, label: h })),
+  });
 }
 
 // PrintButton — routes through Print Engine v2 unconditionally. Every report
@@ -686,7 +689,7 @@ function CashBankStatement({ dateParams, startDate, endDate }: { dateParams: str
           </SelectContent>
         </Select>
         <PrintButton entityType="report_cash_bank" entityId={dateRangeId(startDate, endDate)} />
-        <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(entries, ["ref", "description", "debit", "credit", "runningBalance", "date"], `cash-${accountCode}.csv`)}>
+        <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => { void exportCSV(entries, ["ref", "description", "debit", "credit", "runningBalance", "date"], `cash-${accountCode}`); }}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
       </div>
@@ -1124,7 +1127,7 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
               }
               entityId={`${entityId}:${dateRangeId(startDate, endDate)}`}
             />
-            <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rowsWithBalance, ["ref", "description", "debit", "credit", "runningBalance", "date", "type"], `entity-statement-${entityId}.csv`)}>
+            <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => { void exportCSV(rowsWithBalance, ["ref", "description", "debit", "credit", "runningBalance", "date", "type"], `entity-statement-${entityId}`); }}>
               <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
             </GuardedButton>
           </>

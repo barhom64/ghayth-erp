@@ -98,6 +98,17 @@ export default function UmrahImportWizard() {
   // doesn't already know.
   const [detectedHeaders, setDetectedHeaders] = useState<string[]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+  // Smart-mapping suggestions per header (PR #1474). Keyed by header text.
+  // Populated AFTER the priority cascade fills the obvious matches —
+  // suggestions only apply to columns the cascade left unmapped, so a
+  // saved preset can't be overridden by a lower-confidence guess.
+  interface MappingSuggestion {
+    target: string;
+    confidence: number;
+    matchedKey: string;
+    source: "exact" | "fuzzy";
+  }
+  const [mappingSuggestions, setMappingSuggestions] = useState<Record<string, MappingSuggestion>>({});
   const [showMapping, setShowMapping] = useState<boolean>(false);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [parseError, setParseError] = useState("");
@@ -208,27 +219,69 @@ export default function UmrahImportWizard() {
       // Detect headers + pre-fill the column mapping. Priority order:
       //   1. Saved default preset for this user + fileType (highest)
       //   2. Built-in Arabic dictionary fallback
-      //   3. Empty (operator must map)
+      //   3. Smart-mapping suggestion (PR #1474) — Arabic-aware fuzzy
+      //      match for vendor files with typos / variants the built-in
+      //      dict doesn't carry. Only applies to columns the 2 layers
+      //      above left blank, so it can't override a saved preset.
+      //   4. Empty (operator must map)
       // The mapping panel auto-opens only if at least one column ends
-      // up unmapped after both passes — zero typing when the preset
+      // up unmapped after all passes — zero typing when the cascade
       // covers everything.
       const headers = rows.length > 0 ? Object.keys(rows[0] ?? {}) : [];
       setDetectedHeaders(headers);
       const forward = headerMapsQ.data?.[fileType]?.forward ?? {};
       const defaultPreset = presets.find((p) => p.isDefault);
       const auto: Record<string, string> = {};
-      let unmapped = 0;
+      const unmappedAfterCascade: string[] = [];
       for (const h of headers) {
         const fromPreset = defaultPreset?.mapping?.[h];
         const target = fromPreset || forward[h];
         if (target) auto[h] = target;
-        else { auto[h] = ""; unmapped++; }
+        else { auto[h] = ""; unmappedAfterCascade.push(h); }
       }
       setColumnMapping(auto);
       if (defaultPreset) setSelectedPresetId(String(defaultPreset.id));
-      // If anything is unmapped, open the mapping panel automatically so
-      // the operator doesn't import garbage by accident.
-      setShowMapping(unmapped > 0);
+
+      // Smart-mapping pass — POST every unmapped header to the
+      // suggest-mapping endpoint and merge high-confidence hits into
+      // the mapping. Stays async so the UI doesn't block on file pick
+      // (the operator can already see the panel + override anything).
+      let finalUnmapped = unmappedAfterCascade.length;
+      if (unmappedAfterCascade.length > 0) {
+        try {
+          const resp: any = await apiFetch("/umrah/import/suggest-mapping", {
+            method: "POST",
+            body: JSON.stringify({ headers: unmappedAfterCascade, fileType }),
+          });
+          const suggestions = (resp?.suggestions ?? {}) as Record<string, MappingSuggestion>;
+          setMappingSuggestions(suggestions);
+          // Apply any suggestion the engine considered high-confidence
+          // (the engine already suppressed below 0.6, so anything that
+          // came back is safe to pre-fill). Operators can still override
+          // via the dropdown — pre-fill just saves clicks on the obvious
+          // cases.
+          setColumnMapping((current) => {
+            const next = { ...current };
+            for (const h of unmappedAfterCascade) {
+              const s = suggestions[h];
+              if (s && !next[h]) {
+                next[h] = s.target;
+                finalUnmapped--;
+              }
+            }
+            return next;
+          });
+        } catch {
+          // Suggestion lookup is a best-effort enhancement — if it
+          // fails (network blip, server down), the operator still has
+          // the manual mapping dropdowns. No need to surface an error.
+        }
+      } else {
+        setMappingSuggestions({});
+      }
+      // If anything is still unmapped after smart-mapping, open the
+      // panel so the operator doesn't import garbage by accident.
+      setShowMapping(finalUnmapped > 0);
     } catch (e: any) {
       setParseError(`خطأ في قراءة الملف: ${e?.message ?? "خطأ غير معروف"}`);
     }
@@ -561,18 +614,44 @@ export default function UmrahImportWizard() {
                     const targets = headerMapsQ.data?.[fileType]?.targets ?? {};
                     const dbFields = Object.keys(targets).sort();
                     const value = columnMapping[h] ?? "";
+                    // Smart-mapping suggestion for this header (PR
+                    // #1474). Only shown when the value MATCHES the
+                    // suggestion — i.e. the engine pre-filled and the
+                    // operator hasn't overridden. Lets the operator
+                    // confirm "yes, this is the column I meant" at a
+                    // glance, or notice + override when the fuzzy
+                    // guess was wrong.
+                    const suggestion = mappingSuggestions[h];
+                    const showHint =
+                      suggestion != null && suggestion.target === value;
                     return (
-                      <div key={h} className="flex items-center gap-2 text-xs">
-                        <span className="font-mono text-muted-foreground truncate w-1/2" title={h}>{h}</span>
-                        <Select value={value} onValueChange={(v) => setColumnMapping((m) => ({ ...m, [h]: v }))}>
-                          <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="— تجاهل —" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="">— تجاهل العمود —</SelectItem>
-                            {dbFields.map((field) => (
-                              <SelectItem key={field} value={field}>{field}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <div key={h} className="flex flex-col gap-1 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-muted-foreground truncate w-1/2" title={h}>{h}</span>
+                          <Select value={value} onValueChange={(v) => setColumnMapping((m) => ({ ...m, [h]: v }))}>
+                            <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="— تجاهل —" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">— تجاهل العمود —</SelectItem>
+                              {dbFields.map((field) => (
+                                <SelectItem key={field} value={field}>{field}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {showHint && (
+                          <span
+                            className={`text-[10px] pr-1 ${
+                              suggestion.source === "exact"
+                                ? "text-status-success-foreground"
+                                : "text-status-info-foreground"
+                            }`}
+                            data-testid={`mapping-suggestion-${h}`}
+                          >
+                            {suggestion.source === "exact"
+                              ? `✓ تطابق دقيق`
+                              : `💡 اقتراح: "${suggestion.matchedKey}" (${Math.round(suggestion.confidence * 100)}%)`}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
@@ -816,11 +895,6 @@ export default function UmrahImportWizard() {
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-muted-foreground">معرف الدفعة:</span>
                     <Badge variant="outline" className="font-mono">{String(confirmResult.batchId)}</Badge>
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/admin/import-batches/${confirmResult.batchId}`}>
-                        عرض تفاصيل الدفعة
-                      </Link>
-                    </Button>
                   </div>
                 )}
                 <div>

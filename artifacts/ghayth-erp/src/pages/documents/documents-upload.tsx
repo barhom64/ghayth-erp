@@ -174,7 +174,7 @@ export default function DocumentsUpload() {
                   value={link.entityId}
                   onChange={(e) => updateEntityLink(idx, "entityId", e.target.value)}
                 />
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeEntityLink(idx)}>
+                <Button type="button" variant="ghost" size="icon" title="إغلاق" className="h-8 w-8 shrink-0" onClick={() => removeEntityLink(idx)}>
                   <X className="h-4 w-4 text-status-error" />
                 </Button>
               </div>

@@ -2,7 +2,9 @@
 
 > المرحلة 3 — تنفيذ **#1413 §8** · 2026-05-29 · فرع `claude/ghaith-foundation-audit-wdIUf`
 > **الهدف:** حساب وعرض الصلاحيات النهائية للمستخدم من كل أدواره، مع سبب كل صلاحية.
-> **يُبنى على:** `authzEngine.loadEffectiveGrants` (CTE تكراري موجود) + `GET /permissions/my` (يحترم `x-selected-role`).
+> **يُبنى على:** `authzEngine` + جداول `rbac_user_roles`/`rbac_role_grants`/`rbac_user_grants` + `GET /permissions/my` (يحترم `x-selected-role`).
+>
+> **✅ منفّذ (Backend):** `GET /admin/users/:id/effective-permissions` في `routes/admin.ts` — يُرجِع كل grant **مع الدور المصدر** (join: user-roles → roles → grants) + استثناءات المستخدم (grant/deny) واحترام الانتهاء، معزولًا بالشركة. اختبار: `tests/unit/rbacAdminCompletionSmoke.test.ts`. **المتبقّي:** واجهة العرض (Viewer).
 
 ---
 

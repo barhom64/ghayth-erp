@@ -8,7 +8,9 @@ import {
   useFilters,
   DataTable,
   type DataTableColumn,
+  PageShell,
 } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Button } from "@/components/ui/button";
 import { Plus, Users, AlertTriangle, Plane, UserPlus, X } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -229,16 +231,17 @@ export default function UmrahPilgrims() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">المعتمرين</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">متابعة ملفات المعتمرين وحالاتهم</p>
-        </div>
+    <PageShell
+      title="المعتمرين"
+      subtitle="متابعة ملفات المعتمرين وحالاتهم"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المعتمرين" }]}
+      actions={
         <Link href="/umrah/pilgrims/create">
           <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
         </Link>
-      </div>
+      }
+    >
+      <UmrahTabsNav />
 
       {unassignedCount > 0 && (
         <div className="rounded-md border border-status-warning-surface bg-status-warning-surface/30 p-3 text-sm text-status-warning-foreground">
@@ -469,6 +472,6 @@ export default function UmrahPilgrims() {
         noToolbar
         onRowClick={(row) => navigate(`/umrah/pilgrims/${row.id}`)}
       />
-    </div>
+    </PageShell>
   );
 }

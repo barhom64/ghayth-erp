@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import {
 import { Download, AlertTriangle, ShieldAlert } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * Negative stock outliers — consumes #1035's
  * /reports/negative-stock. Lot.quantity < 0 should NEVER happen;
@@ -74,12 +76,14 @@ function exportCSV(rows: NegRow[], filename: string) {
     csvEscape(r.latestMovementType ?? ""),
     csvEscape(String(r.latestJournalEntryId ?? "")),
   ]);
-  const csv = [headers, ...out].map((r) => r.join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
+  // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+  // Routed through unified export helper for audit + letterhead.
+  void exportRowsToCsv({
+    entityType: "report_negative_stock",
+    title: String(filename).replace(/\.csv$/i, ""),
+    rows: out.map((row: any) => Object.fromEntries(headers.map((h: string, i: number) => [h, Array.isArray(row) ? row[i] : (row?.[h] ?? "")]))),
+    columns: headers.map((h: string) => ({ key: h, label: h })),
+  }).catch((err) => console.error("[export] failed", err));
 }
 
 export default function NegativeStockPage() {
@@ -209,6 +213,7 @@ export default function NegativeStockPage() {
         ) : null
       }
     >
+      <FinanceTabsNav />
       {/* Hero state — green vs red */}
       <Card className={isClean ? "border-emerald-300 bg-emerald-50/40" : "border-destructive/40 bg-destructive/5"}>
         <CardContent className="p-4 flex items-start gap-3">

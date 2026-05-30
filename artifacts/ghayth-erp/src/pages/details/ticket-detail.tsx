@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatDateAr, formatTimeAr } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Headphones, User, MessageSquare, Send, Trash2, Clock, Star } from "lucide-react";
@@ -139,6 +145,43 @@ export default function TicketDetail() {
   };
 
   const replies = ticket?.replies || [];
+
+  // POST /support/tickets/:id/field-visit — schedule an on-site visit.
+  // Backend schema field is `visitDate`, not scheduledDate.
+  const [visitOpen, setVisitOpen] = useState(false);
+  const [visitDate, setVisitDate] = useState("");
+  const handleScheduleVisit = () => {
+    setVisitDate("");
+    setVisitOpen(true);
+  };
+  const confirmScheduleVisit = async () => {
+    if (!visitDate.trim()) return;
+    setVisitOpen(false);
+    try {
+      await apiFetch(`/support/tickets/${id}/field-visit`, {
+        method: "POST",
+        body: JSON.stringify({ visitDate: visitDate.trim() }),
+      });
+      toast({ title: "تم جدولة الزيارة الميدانية" });
+      qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
+    } catch (err) {
+      toast({ variant: "destructive", title: "تعذر الجدولة", description: getErrorMessage(err) });
+    }
+  };
+
+  // POST /support/tickets/check-sla — runs the SLA bookkeeper across all
+  // open tickets and flags breaches. Triggered manually from this page as
+  // an "احسب الـ SLA الآن" diagnostic.
+  const handleCheckSla = async () => {
+    try {
+      await apiFetch("/support/tickets/check-sla", { method: "POST" });
+      toast({ title: "تم احتساب الـ SLA" });
+      qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
+      qc.invalidateQueries({ queryKey: ["tickets"] });
+    } catch (err) {
+      toast({ variant: "destructive", title: "تعذر الاحتساب", description: getErrorMessage(err) });
+    }
+  };
 
   const overview = ticket ? (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -321,6 +364,7 @@ export default function TicketDetail() {
   ) : null;
 
   return (
+    <>
     <DetailPageLayout
       title={ticket?.ref || `TKT-${id}`}
       subtitle={ticket?.title || undefined}
@@ -340,6 +384,8 @@ export default function TicketDetail() {
       actions={
         <div className="flex items-center gap-2">
           <PrintButton entityType="support_ticket" entityId={id ?? 0} label="طباعة" />
+          <GuardedButton perm="support:update" variant="outline" size="sm" onClick={handleCheckSla} rateLimitAware>احسب الـ SLA</GuardedButton>
+          <GuardedButton perm="support:update" variant="outline" size="sm" onClick={handleScheduleVisit} rateLimitAware>زيارة ميدانية</GuardedButton>
           {deleting ? (
             <div className="flex gap-2">
               <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
@@ -351,5 +397,21 @@ export default function TicketDetail() {
         </div>
       }
     />
+    <Dialog open={visitOpen} onOpenChange={setVisitOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>جدولة زيارة ميدانية</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">تاريخ الزيارة</Label>
+          <Input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setVisitOpen(false)}>إلغاء</Button>
+          <Button onClick={confirmScheduleVisit} disabled={!visitDate.trim()} rateLimitAware>جدولة</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

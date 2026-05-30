@@ -2,6 +2,7 @@ import { lazy } from "react";
 
 const Admin = lazy(() => import("@/pages/admin"));
 const AdminUsers = lazy(() => import("@/pages/admin/users"));
+const AdminUserOnboarding = lazy(() => import("@/pages/admin/user-onboarding"));
 const AdminRoles = lazy(() => import("@/pages/admin/roles"));
 const AdminLogs = lazy(() => import("@/pages/admin/logs"));
 const AdminIntegrations = lazy(() => import("@/pages/admin-integrations"));
@@ -31,10 +32,13 @@ const AdminPdpl = lazy(() => import("@/pages/admin-pdpl"));
 const AdminDataImport = lazy(() => import("@/pages/admin-data-import"));
 const AdminIntelligencePlayground = lazy(() => import("@/pages/admin-intelligence-playground"));
 const AdminDigitalSignature = lazy(() => import("@/pages/admin-digital-signature"));
+const AdminZatcaAudits = lazy(() => import("@/pages/admin-zatca-audits"));
+const AdminIntegrationsDiagnostics = lazy(() => import("@/pages/admin-integrations-diagnostics"));
 
 export const adminRoutes = [
   { path: "/admin", component: Admin },
   { path: "/admin/users", component: AdminUsers },
+  { path: "/admin/user-onboarding", component: AdminUserOnboarding },
   { path: "/admin/roles", component: AdminRoles },
   { path: "/admin/logs", component: AdminLogs },
   { path: "/admin/integrations", component: AdminIntegrations },
@@ -64,4 +68,6 @@ export const adminRoutes = [
   { path: "/admin/data-import", component: AdminDataImport },
   { path: "/admin/intelligence-playground", component: AdminIntelligencePlayground },
   { path: "/admin/digital-signature", component: AdminDigitalSignature },
+  { path: "/admin/zatca-audits", component: AdminZatcaAudits },
+  { path: "/admin/integrations-diagnostics", component: AdminIntegrationsDiagnostics },
 ];

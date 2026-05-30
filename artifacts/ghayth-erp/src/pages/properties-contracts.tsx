@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useSearch, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -303,6 +304,7 @@ export default function PropertiesContracts() {
         </Link>
       }
     >
+      <PropertyTabsNav />
       <AdvancedFilters
             config={{
               searchPlaceholder: "بحث بالمستأجر أو الوحدة أو رقم إيجار...",

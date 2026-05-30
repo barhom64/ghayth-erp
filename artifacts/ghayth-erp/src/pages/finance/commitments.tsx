@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   PageStatusBadge,
@@ -76,6 +77,7 @@ export default function CommitmentsPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الالتزامات المالية" }]}
       loading={isLoading}
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
         <Card className="bg-orange-600 text-white"><CardContent className="p-4 flex items-center gap-3">
           <DollarSign className="h-8 w-8 opacity-80" />

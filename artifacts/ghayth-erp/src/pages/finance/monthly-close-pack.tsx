@@ -129,6 +129,10 @@ export default function MonthlyClosePackPage() {
   return (
     <PageShell
       title="حزمة الإقفال الشهري"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "حزمة الإقفال الشهري" },
+      ]}
       subtitle={`ملخص ${period} للعرض على مجلس الإدارة — قابل للطباعة في صفحة واحدة`}
     >
       <FinanceTabsNav />

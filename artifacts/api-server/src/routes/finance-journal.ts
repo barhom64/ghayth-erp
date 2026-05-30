@@ -12,6 +12,7 @@ import { FINANCE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
@@ -38,6 +39,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logAllocationOverride } from "../lib/accountingAllocation.js";
+import { resolveTransactionBranch } from "../lib/branchResolution.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -108,6 +110,20 @@ const createExpenseSchema = z.object({
     assetId: z.coerce.number().optional(),
     contractId: z.coerce.number().optional(),
     umrahAgentId: z.coerce.number().optional(),
+    // Same gap as journalLineSchema — pre-fix expense lineAllocation
+    // schema dropped 6 fields silently. LineAllocationPanel exposes all
+    // 17 in buildAllocationPayload, but the Zod validator stripped these
+    // 6 → the expense JE line never carried them → drilldown reports
+    // for client / vendor / driver / product / umrahSeason / department
+    // came back empty. Accept all 17 now so an expense allocation
+    // matches manual-journal parity.
+    clientId: z.coerce.number().optional(),
+    vendorId: z.coerce.number().optional(),
+    driverId: z.coerce.number().optional(),
+    productId: z.coerce.number().optional(),
+    umrahSeasonId: z.coerce.number().optional(),
+    departmentId: z.coerce.number().optional(),
+    employeeId: z.coerce.number().optional(),
     manualOverrideReason: z.string().optional(),
   }).optional(),
 });
@@ -172,16 +188,49 @@ const journalLineSchema = z.object({
   description: z.string().optional(),
   debit: z.any().optional(),
   credit: z.any().optional(),
+  // Pre-fix the schema accepted only 4 of 17 dim FK columns —
+  // LineAllocationPanel (frontend) submitted all 17 in buildAllocationPayload,
+  // but Zod silently stripped 12 of them at the validation boundary, so
+  // the route handler never saw vehicleId / propertyId / contractId /
+  // assetId / driverId / productId / vendorId / clientId / umrahAgentId /
+  // umrahSeasonId / costCenterId / activityType / unitId. Users saw the
+  // form fields working in the UI but every drilldown report came back
+  // empty — exactly the "cosmetic pictures" complaint. Accept all 17 +
+  // the activityType string + costCenter free-text fallback now.
   costCenter: z.string().optional(),
+  costCenterId: z.any().optional(),
   departmentId: z.any().optional(),
   projectId: z.any().optional(),
   employeeId: z.any().optional(),
+  vehicleId: z.any().optional(),
+  propertyId: z.any().optional(),
+  unitId: z.any().optional(),
+  assetId: z.any().optional(),
+  contractId: z.any().optional(),
+  driverId: z.any().optional(),
+  productId: z.any().optional(),
+  vendorId: z.any().optional(),
+  clientId: z.any().optional(),
+  umrahAgentId: z.any().optional(),
+  umrahSeasonId: z.any().optional(),
+  activityType: z.string().optional(),
+  templateId: z.any().optional(),
 });
 
 const createJournalSchema = z.object({
   description: z.string().optional(),
   lines: z.array(journalLineSchema).optional(),
   date: z.string().optional(),
+  // Operator's explicit branch pick. Required for multi-branch users; single-
+  // branch users auto-derive. branchSplits[] allows splitting one JE across
+  // multiple branches in the same company — when provided, each line in
+  // the JE inherits its branch from the matching split entry.
+  branchId: z.coerce.number().optional(),
+  branchSplits: z.array(z.object({
+    branchId: z.coerce.number(),
+    percentage: z.coerce.number().optional(),
+    amount: z.coerce.number().optional(),
+  })).optional(),
 });
 
 const reverseJournalSchema = z.object({
@@ -548,6 +597,16 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       if (lineAllocation.assetId != null) entityLink.assetId = lineAllocation.assetId;
       if (lineAllocation.contractId != null) entityLink.contractId = lineAllocation.contractId;
       if (lineAllocation.umrahAgentId != null) entityLink.umrahAgentId = lineAllocation.umrahAgentId;
+      // Propagate the 6 fields that the upstream schema previously dropped
+      // silently. Without these, an expense line could carry a clientId in
+      // the form payload that vanished by the time the JE was posted.
+      if (lineAllocation.clientId != null) entityLink.clientId = lineAllocation.clientId;
+      if (lineAllocation.vendorId != null) entityLink.vendorId = lineAllocation.vendorId;
+      if (lineAllocation.driverId != null) entityLink.driverId = lineAllocation.driverId;
+      if (lineAllocation.productId != null) entityLink.productId = lineAllocation.productId;
+      if (lineAllocation.umrahSeasonId != null) entityLink.umrahSeasonId = lineAllocation.umrahSeasonId;
+      if (lineAllocation.departmentId != null) entityLink.departmentId = lineAllocation.departmentId;
+      if (lineAllocation.employeeId != null) entityLink.employeeId = lineAllocation.employeeId;
       if (lineAllocation.manualOverrideReason) entityLink.manualOverrideReason = lineAllocation.manualOverrideReason;
     }
 
@@ -1542,7 +1601,24 @@ journalRouter.get("/journal", authorize({ feature: "finance.journal", action: "l
 journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { description, lines, date } = zodParse(createJournalSchema.safeParse(req.body ?? {}));
+    const { description, lines, date, branchId: bodyBranchId, branchSplits } = zodParse(createJournalSchema.safeParse(req.body ?? {}));
+    // Resolve the entry-level branch. Owner / GM short-circuits the
+    // resolver and uses body || scope. Multi-branch users get the
+    // BranchRequired typed error so the frontend can render a picker.
+    let manualBranchId: number;
+    if (scope.isOwner || OWNER_GM_ROLES.includes(scope.role)) {
+      manualBranchId = (bodyBranchId ?? scope.branchId) as number;
+      if (!manualBranchId) {
+        throw new ValidationError("الفرع مطلوب لإنشاء القيد", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه القيد" });
+      }
+    } else {
+      const r = resolveTransactionBranch({
+        scope: { companyId: scope.companyId, branchId: scope.branchId, allowedBranches: scope.allowedBranches },
+        bodyBranchId,
+        bodySplits: branchSplits,
+      });
+      manualBranchId = r.branchId;
+    }
     if (!description) throw new ValidationError("وصف القيد مطلوب", { field: "description" });
     if (!Array.isArray(lines) || lines.length < 2) throw new ValidationError("القيد يجب أن يحتوي على بندين على الأقل", { field: "lines" });
     for (const l of lines) { l.debit = roundTo2(Number(l.debit) || 0); l.credit = roundTo2(Number(l.credit) || 0); }
@@ -1580,10 +1656,30 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
       debit: l.debit,
       credit: l.credit,
       description: l.description,
+      // Map all 17 dim FK columns. Pre-fix this mapping covered only 4
+      // (costCenter / departmentId / projectId / employeeId) — the
+      // remaining 12 were stripped by the journalLineSchema Zod validator
+      // upstream AND would have been dropped here even if the schema let
+      // them through. createJournalEntry (businessHelpers.ts) writes all
+      // 17 to journal_lines, so the entire chain works end-to-end now.
       costCenter: l.costCenter,
+      costCenterId: l.costCenterId != null ? Number(l.costCenterId) : undefined,
       departmentId: l.departmentId != null ? Number(l.departmentId) : undefined,
       projectId: l.projectId != null ? Number(l.projectId) : undefined,
       employeeId: l.employeeId != null ? Number(l.employeeId) : undefined,
+      vehicleId: l.vehicleId != null ? Number(l.vehicleId) : undefined,
+      propertyId: l.propertyId != null ? Number(l.propertyId) : undefined,
+      unitId: l.unitId != null ? Number(l.unitId) : undefined,
+      assetId: l.assetId != null ? Number(l.assetId) : undefined,
+      contractId: l.contractId != null ? Number(l.contractId) : undefined,
+      driverId: l.driverId != null ? Number(l.driverId) : undefined,
+      productId: l.productId != null ? Number(l.productId) : undefined,
+      vendorId: l.vendorId != null ? Number(l.vendorId) : undefined,
+      clientId: l.clientId != null ? Number(l.clientId) : undefined,
+      umrahAgentId: l.umrahAgentId != null ? Number(l.umrahAgentId) : undefined,
+      umrahSeasonId: l.umrahSeasonId != null ? Number(l.umrahSeasonId) : undefined,
+      activityType: l.activityType,
+      templateId: l.templateId != null ? Number(l.templateId) : undefined,
     }));
 
     if (isDryRun(req)) {
@@ -1602,7 +1698,7 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     // fallback: if numbering fails, the manual JE creation fails too.
     const issued = await issueNumber({
       companyId: scope.companyId,
-      branchId: scope.branchId ?? null,
+      branchId: manualBranchId,
       moduleKey: "finance",
       entityKey: "journal_entry",
       entityTable: "journal_entries",
@@ -1611,6 +1707,16 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     });
     const ref = issued.number;
     const idempotencyToken = requestIdempotencyToken(req);
+
+    // Multi-branch split: if branchSplits[] was provided, stamp the
+    // matching branchId on each line (operator's choice). Otherwise
+    // every line inherits the header's manualBranchId (engine default).
+    if (branchSplits && branchSplits.length > 0) {
+      for (let i = 0; i < engineLines.length; i++) {
+        const split = branchSplits[i] ?? branchSplits[branchSplits.length - 1];
+        (engineLines[i] as any).branchId = split.branchId;
+      }
+    }
 
     // FIN-013 — manual journals now follow a draft → approved → posted
     // workflow instead of posting directly. `deferBalances: true` keeps
@@ -1621,7 +1727,7 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     const { financialEngine } = await import("../lib/engines/index.js");
     const { journalId: insertId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
-      branchId: scope.branchId,
+      branchId: manualBranchId,
       createdBy: scope.activeAssignmentId,
       ref,
       description,
@@ -1852,6 +1958,7 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
                 "unitId", "assetId", "contractId",
                 "umrahSeasonId", "umrahAgentId", "activityType",
                 "productId", "clientId", "vendorId", "driverId",
+                "templateId", "dimensionJson",
                 "sourceLineTable", "sourceLineId"
          FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
         [id]
@@ -1882,6 +1989,8 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         clientId: l.clientId as number | undefined,
         vendorId: l.vendorId as number | undefined,
         driverId: l.driverId as number | undefined,
+        templateId: l.templateId as number | undefined,
+        dimensionJson: l.dimensionJson as Record<string, unknown> | undefined,
         sourceLineTable: l.sourceLineTable as string | undefined,
         sourceLineId: l.sourceLineId as number | undefined,
       }));
@@ -2095,7 +2204,10 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
   return { revenues, expenses, totalRevenue, totalExpense, netIncome, lines };
 }
 
-journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+// GAP_MATRIX item #2 — year-end close is permanent: it generates the
+// closing journal and locks every period in the year. Floor at level 70
+// (CFO/controller) on top of the per-feature authorize check.
+journalRouter.post("/fiscal-periods/:period/year-end-close", requireMinLevel(70), authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

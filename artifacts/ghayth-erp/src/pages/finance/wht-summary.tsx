@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -11,6 +12,7 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh, todayLocal } from "@/lib/formatters";
 import { Download, Receipt } from "lucide-react";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 interface DetailRow {
   allocationId: number;
   journalEntryId: number;
@@ -93,12 +95,14 @@ function exportDetailCSV(rows: DetailRow[], filename: string) {
     Number(r.whtAmount ?? 0).toFixed(2),
     Number(r.amount ?? 0).toFixed(2),
   ]);
-  const csv = [headers, ...out].map((r) => r.join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
+  // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+  // Routed through unified export helper for audit + letterhead.
+  void exportRowsToCsv({
+    entityType: "report_wht_summary",
+    title: String(filename).replace(/\.csv$/i, ""),
+    rows: out.map((row: any) => Object.fromEntries(headers.map((h: string, i: number) => [h, Array.isArray(row) ? row[i] : (row?.[h] ?? "")]))),
+    columns: headers.map((h: string) => ({ key: h, label: h })),
+  }).catch((err) => console.error("[export] failed", err));
 }
 
 export default function WhtSummaryPage() {
@@ -193,6 +197,7 @@ export default function WhtSummaryPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         <div className="md:col-span-3 flex items-end gap-2 flex-wrap">
           <div>

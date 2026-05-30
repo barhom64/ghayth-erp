@@ -18,6 +18,7 @@ import { Link } from "wouter";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 export default function BankReconciliationPage() {
   const [activeBatch, setActiveBatch] = useState<string | null>(null);
   const [accountCode, setAccountCode] = useState("1120");
@@ -149,6 +150,7 @@ export default function BankReconciliationPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
           <CardHeader><CardTitle className="text-base">استيراد كشف بنكي </CardTitle></CardHeader>
@@ -266,7 +268,7 @@ export default function BankReconciliationPage() {
                     { key: "amount", header: "المبلغ", render: (r: any) => <span className="font-semibold">{formatCurrency(Number(r.amount))}</span> },
                     { key: "actions", header: "مطابقة يدوية", render: (r: any) => (
                       <Link href={`/finance/bank-reconciliation/manual-match/${activeBatch}/${r.id}`}>
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" title="ربط">
                           <Link2 className="h-4 w-4 text-status-info" />
                         </Button>
                       </Link>

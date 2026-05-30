@@ -278,16 +278,74 @@ router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), a
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Defence-in-depth: the umrah_agents JOIN previously matched only
+    // sa."agentId" = a.id (no companyId / deletedAt guards) — a stale
+    // FK could surface another tenant's agent name. Adding the same
+    // pattern used by GET /umrah/pilgrims/:id (PR #1425).
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
          FROM umrah_sub_agents sa
-         LEFT JOIN umrah_agents a ON sa."agentId" = a.id
-         LEFT JOIN clients c ON sa."clientId" = c.id AND c."companyId" = sa."companyId" AND c."deletedAt" IS NULL
+         LEFT JOIN umrah_agents a
+                ON sa."agentId" = a.id
+               AND a."companyId" = sa."companyId"
+               AND a."deletedAt" IS NULL
+         LEFT JOIN clients c
+                ON sa."clientId" = c.id
+               AND c."companyId" = sa."companyId"
+               AND c."deletedAt" IS NULL
         WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
-    res.json(maskFields(req, row));
+
+    // Statement aggregates — mirrors the agent statement (PR #1438) so
+    // sub-agents get the same one-pane view. Three queries run in
+    // parallel via Promise.all so adding them doesn't double the
+    // detail-fetch latency.
+    //
+    //   - pilgrimCount        : how many pilgrims this sub-agent sent
+    //   - statusBreakdown     : dict keyed by pilgrim status
+    //   - totalPaid           : SUM(sarAmount) from umrah_payments —
+    //                            real receipts table (unlike agents
+    //                            where we approximate via invoice
+    //                            status). Sub-agents are the actual
+    //                            money sources in most umrah setups,
+    //                            so the payments table IS the source
+    //                            of truth.
+    const [statsResult, statusBreakdownResult, paymentResult] = await Promise.all([
+      rawQuery<{ pilgrimCount: number; overstayedCount: number }>(
+        `SELECT COUNT(*)::int AS "pilgrimCount",
+                COUNT(*) FILTER (WHERE status='overstayed')::int AS "overstayedCount"
+           FROM umrah_pilgrims
+          WHERE "subAgentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+      rawQuery<{ status: string; c: number }>(
+        `SELECT status, COUNT(*)::int AS c
+           FROM umrah_pilgrims
+          WHERE "subAgentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          GROUP BY status`,
+        [id, scope.companyId]
+      ),
+      rawQuery<{ totalPaid: string }>(
+        `SELECT COALESCE(SUM("sarAmount"), 0)::numeric AS "totalPaid"
+           FROM umrah_payments
+          WHERE "subAgentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+    ]);
+    const stats = statsResult[0] || { pilgrimCount: 0, overstayedCount: 0 };
+    const totalPaid = Number(paymentResult[0]?.totalPaid ?? 0);
+    const statusBreakdown = Object.fromEntries(
+      statusBreakdownResult.map((r) => [r.status, Number(r.c)])
+    );
+
+    res.json(maskFields(req, {
+      ...row,
+      ...stats,
+      totalPaid,
+      statusBreakdown,
+    }));
   } catch (err) { handleRouteError(err, res, "Get sub-agent"); }
 });
 
@@ -1368,10 +1426,22 @@ router.get("/invoices", authorize({ feature: "umrah", action: "list" }), async (
     if (subAgentId) { params.push(subAgentId); where += ` AND si."subAgentId" = $${params.length}`; }
     if (status) { params.push(status); where += ` AND si.status = $${params.length}`; }
     const rows = await rawQuery(
+      // Defence-in-depth on the sub-agents JOIN — it previously matched
+      // only on id, so a stale FK could lift another tenant's name into
+      // the response. Matches the pattern PR #1425 added to GET
+      // /umrah/pilgrims/:id. Selecting si.* surfaces the costBasis +
+      // marginBase columns (populated by umrahInvoicingEngine since
+      // PR #1457) so the UI can display gross profit per row.
       `SELECT si.*, sa.name AS "subAgentName", c.name AS "clientName"
        FROM umrah_sales_invoices si
-       LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
-       LEFT JOIN clients c ON c.id = si."clientId" AND c."companyId" = si."companyId" AND c."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa
+              ON sa.id = si."subAgentId"
+             AND sa."companyId" = si."companyId"
+             AND sa."deletedAt" IS NULL
+       LEFT JOIN clients c
+              ON c.id = si."clientId"
+             AND c."companyId" = si."companyId"
+             AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY si."createdAt" DESC
        LIMIT 500`,
@@ -1825,20 +1895,41 @@ router.get("/attachments", authorize({ feature: "umrah", action: "list" }), asyn
   try {
     const scope = req.scope!;
     const { entityType, entityId, type } = req.query as Record<string, string | undefined>;
-    let where = `"companyId" = $1 AND "deletedAt" IS NULL`;
+    // DOC-VIOLATION unification (migration 237): umrah attachments now live in
+    // the shared documents + document_entity_links store. The polymorphic owner
+    // is namespaced as 'umrah_<entityType>' in the link table; type → category,
+    // notes → description. Response shape is preserved (entityType stripped back
+    // to the umrah-local value) so the umrah attachments panel is unchanged.
+    let where = `d."companyId" = $1 AND d."deletedAt" IS NULL AND del."entityType" LIKE 'umrah\\_%'`;
     const params: unknown[] = [scope.companyId];
-    if (entityType) { params.push(entityType); where += ` AND "entityType" = $${params.length}`; }
-    if (entityId)   { params.push(Number(entityId)); where += ` AND "entityId" = $${params.length}`; }
-    if (type)       { params.push(type); where += ` AND type = $${params.length}`; }
-    const rows = await rawQuery(
-      `SELECT id, "entityType", "entityId", type, title, notes, "fileUrl", "storageKey",
-              "fileSize", "mimeType", "uploadedBy", "createdAt"
-         FROM umrah_attachments
+    if (entityType) { params.push(`umrah_${entityType}`); where += ` AND del."entityType" = $${params.length}`; }
+    if (entityId)   { params.push(Number(entityId)); where += ` AND del."entityId" = $${params.length}`; }
+    if (type)       { params.push(type); where += ` AND d.category = $${params.length}`; }
+    const docs = await rawQuery<Record<string, unknown>>(
+      `SELECT d.id, del."entityType" AS "linkEntityType", del."entityId" AS "entityId",
+              d.category AS type, d.title, d.description AS notes, d."fileUrl", d."storageKey",
+              d."fileSize", d."mimeType", d."uploadedBy", d."createdAt"
+         FROM documents d
+         JOIN document_entity_links del ON del."documentId" = d.id
         WHERE ${where}
-        ORDER BY "createdAt" DESC
+        ORDER BY d."createdAt" DESC
         LIMIT 500`,
       params
     );
+    const rows = docs.map((d) => ({
+      id: d.id,
+      entityType: String(d.linkEntityType).replace(/^umrah_/, ""),
+      entityId: d.entityId,
+      type: d.type,
+      title: d.title,
+      notes: d.notes,
+      fileUrl: d.fileUrl,
+      storageKey: d.storageKey,
+      fileSize: d.fileSize,
+      mimeType: d.mimeType,
+      uploadedBy: d.uploadedBy,
+      createdAt: d.createdAt,
+    }));
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List attachments"); }
 });
@@ -1849,20 +1940,32 @@ router.post("/attachments", authorize({ feature: "umrah", action: "create" }), a
     const body = zodParse(createAttachmentSchema.safeParse(req.body));
     await assertAttachmentOwner(scope.companyId, body.entityType, body.entityId);
 
-    const [row] = await rawQuery<{ id: number }>(
-      `INSERT INTO umrah_attachments
-         ("companyId","branchId","entityType","entityId",type,title,notes,
-          "fileUrl","storageKey","fileSize","mimeType","uploadedBy","createdAt","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())
-       RETURNING id`,
-      [
-        scope.companyId, scope.branchId || null, body.entityType, body.entityId,
-        body.type, body.title, body.notes || null,
-        body.fileUrl || null, body.storageKey || null,
-        body.fileSize ?? null, body.mimeType || null,
-        scope.userId,
-      ]
-    );
+    // DOC-VIOLATION unification (migration 237): write to the shared documents
+    // store (+ document_entity_links) instead of the per-track umrah_attachments
+    // table. type → category, notes → description, owner namespaced as
+    // 'umrah_<entityType>'. Atomic so a document is never left without its link.
+    let newId!: number;
+    await withTransaction(async (client) => {
+      const r = await client.query(
+        `INSERT INTO documents
+           (title, description, category, "fileName", "fileUrl", "storageKey",
+            "fileSize", "mimeType", status, "currentVersion", "uploadedBy", "companyId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',1,$9,$10) RETURNING id`,
+        [
+          body.title, body.notes || null, body.type, body.title,
+          body.fileUrl || null, body.storageKey || null,
+          body.fileSize ?? null, body.mimeType || null,
+          scope.userId, scope.companyId,
+        ]
+      );
+      newId = r.rows[0].id;
+      await client.query(
+        `INSERT INTO document_entity_links ("documentId", "entityType", "entityId")
+         VALUES ($1, $2, $3) ON CONFLICT ("documentId", "entityType", "entityId") DO NOTHING`,
+        [newId, `umrah_${body.entityType}`, body.entityId]
+      );
+    });
+    const row = { id: newId };
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -1883,13 +1986,21 @@ router.delete("/attachments/:id", authorize({ feature: "umrah", action: "delete"
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // DOC-VIOLATION unification (migration 237): the id is now a documents.id.
+    // Only allow deleting documents that belong to this company AND are linked
+    // to an umrah owner (entityType LIKE 'umrah\_%') so this endpoint can't be
+    // used to delete arbitrary documents.
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT id FROM umrah_attachments WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      `SELECT d.id FROM documents d
+         JOIN document_entity_links del ON del."documentId" = d.id
+        WHERE d.id=$1 AND d."companyId"=$2 AND d."deletedAt" IS NULL
+          AND del."entityType" LIKE 'umrah\\_%'
+        LIMIT 1`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المرفق غير موجود");
     await rawExecute(
-      `UPDATE umrah_attachments SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+      `UPDATE documents SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_attachments", entityId: id }).catch((e) => logger.error(e, "umrah attachments bg"));

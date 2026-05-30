@@ -1,3 +1,11 @@
+/**
+ * Shared formatters for the my-space sub-section cards. Not a routed
+ * page; co-located with its sibling cards/sections for locality.
+ *
+ * Conflict #4 in `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md`. Resolved
+ * here as **keep in place** for the same reason as `bi/shared.tsx`
+ * — relocate together if/when the my-space folder is reorganized.
+ */
 import { formatTimeAr } from "@/lib/formatters";
 
 export function formatTimeAgo(timestamp: string): string {

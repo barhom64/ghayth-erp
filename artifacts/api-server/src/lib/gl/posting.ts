@@ -223,14 +223,54 @@ export async function postJournalEntry(
         // Shouldn't happen — we validated above. Belt + braces.
         throw new Error(`postJournalEntry: account ${line.accountId} disappeared mid-transaction`);
       }
+      // Full dimensional INSERT — every FK column on journal_lines is
+      // written (NULL if the line didn't supply it). Path A
+      // (createJournalEntry) writes all 27 columns; without parity here,
+      // every FX revaluation, FX realized, cycle-count variance, and
+      // inventory write-off entry posted via this primitive lost all
+      // per-entity dims (vehicleId / propertyId / contractId / projectId /
+      // assetId / employeeId / clientId / vendorId / driverId / productId /
+      // unitId / costCenterId / umrahSeasonId / umrahAgentId / templateId /
+      // activityType / dimensionJson). Per-vehicle profitability,
+      // per-property GL drilldowns, and the entity-360 financial profile
+      // tab silently excluded every FX + inventory line.
+      // branchId per line — defaults to ctx.branchId so a single-branch
+      // entry has every line tagged with the header branch; callers that
+      // need to split across branches in the same company can override
+      // per line (the user's multi-branch requirement: split by lines or
+      // percentages). Backfill of existing rows happened in migration 236.
+      const lineBranchId = (line as any).branchId ?? ctx.branchId ?? null;
       await rawExecute(
         `INSERT INTO journal_lines (
            "journalId", "accountId", "accountCode",
-           debit, credit, description
-         ) VALUES ($1, $2, $3, $4, $5, $6)`,
+           debit, credit, description,
+           "costCenter", "costCenterId", "departmentId", "projectId", "employeeId",
+           "vehicleId", "propertyId", "contractId", "unitId", "assetId",
+           "umrahSeasonId", "umrahAgentId", "productId", "clientId", "vendorId",
+           "driverId", "activityType", "templateId",
+           "sourceLineTable", "sourceLineId", "dimensionJson", "branchId"
+         ) VALUES (
+           $1, $2, $3,
+           $4, $5, $6,
+           $7, $8, $9, $10, $11,
+           $12, $13, $14, $15, $16,
+           $17, $18, $19, $20, $21,
+           $22, $23, $24,
+           $25, $26, $27, $28
+         )`,
         [
           journalEntryId, line.accountId, accountCode,
           line.debit, line.credit, line.description,
+          line.costCenter ?? null, line.costCenterId ?? null, line.departmentId ?? null,
+          line.projectId ?? null, line.employeeId ?? null,
+          line.vehicleId ?? null, line.propertyId ?? null, line.contractId ?? null,
+          line.unitId ?? null, line.assetId ?? null,
+          line.umrahSeasonId ?? null, line.umrahAgentId ?? null, line.productId ?? null,
+          line.clientId ?? null, line.vendorId ?? null,
+          line.driverId ?? null, line.activityType ?? null, line.templateId ?? null,
+          line.sourceLineTable ?? null, line.sourceLineId ?? null,
+          line.dimensionJson ? JSON.stringify(line.dimensionJson) : null,
+          lineBranchId,
         ],
       );
       balanceDeltas.set(

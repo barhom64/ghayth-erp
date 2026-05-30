@@ -152,7 +152,7 @@ export function AllocationHealthCard() {
               </Button>
             </Link>
           )}
-          <Link href="/finance/settings-hub">
+          <Link href="/finance/settings">
             <Button variant="ghost" size="sm" className="h-7 text-xs">
               مركز الإعدادات
             </Button>

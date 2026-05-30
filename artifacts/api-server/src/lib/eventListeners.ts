@@ -902,6 +902,38 @@ export function registerEventListeners() {
   eventBus.on("rent_payment.received", async (payload) => {
     await logEvent("rent_payment.received", payload);
     await logAudit("rent_payment.received", { ...payload, action: "receive", entity: "rent_payment" });
+    // N8 fix: cross-module write into CRM client ledger. Without this
+    // the rent payment only touches rent_payments + journal_entries —
+    // the CRM client card never reflects the tenant's latest payment.
+    // Reports that join client_overview pages still query rent_payments
+    // directly, but the badge "Last paid: 12 days ago" on /clients lives
+    // on clients.lastPaymentAt and stays stale forever otherwise.
+    if (payload.companyId && payload.entityId) {
+      try {
+        // rent_payments has no companyId column — scope flows via the
+        // rental_contracts JOIN. The double `companyId = $2` (on
+        // rental_contracts and on the outer UPDATE) is intentional:
+        // it's a defence-in-depth seatbelt against a cross-tenant
+        // payment id (which the route layer already rejects).
+        await rawExecute(
+          `UPDATE clients
+             SET "lastPaymentAt" = NOW(),
+                 "lastActivityAt" = NOW(),
+                 "updatedAt"      = NOW()
+           WHERE id = (
+             SELECT t."clientId"
+               FROM rent_payments rp
+               JOIN rental_contracts rc ON rc.id = rp."contractId" AND rc."companyId" = $2
+               JOIN tenants t           ON t.id  = rc."tenantId"
+              WHERE rp.id = $1
+                AND t."clientId" IS NOT NULL
+              LIMIT 1
+           )
+             AND "companyId" = $2`,
+          [payload.entityId, payload.companyId]
+        );
+      } catch (e) { logger.error(e, "[EventListener] rent_payment.received → clients.lastPaymentAt failed"); }
+    }
   });
   eventBus.on("deposit.received", async (payload) => {
     await logEvent("deposit.received", payload);
@@ -1286,6 +1318,81 @@ export function registerEventListeners() {
         priority: "normal", refType: "umrah_sales_invoices", refId: payload.entityId as number,
         actionUrl: `/umrah/invoices/${payload.entityId}`,
       });
+    }
+  });
+
+  // M9 recovery: umrah AGENT invoice (commission billing) — checks for
+  // missing journalEntryId on the row and re-posts the GL if absent.
+  // The route at umrah.ts:1623+ already posts the JE inline, but with a
+  // non-blocking .catch() outside the withTransaction. If that inline
+  // post fails, this listener picks up the slack — matches the sales-
+  // invoice recovery pattern above so both paths converge on dual-entry.
+  eventBus.on("umrah.agent_invoice.created", async (payload) => {
+    await logEvent("umrah.agent_invoice.created", payload);
+    if (!payload.companyId) return;
+
+    const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
+    const invoiceId = payload.entityId as number;
+    // If the inline post already wrote a journalEntryId, no recovery
+    // needed. Re-check from the DB rather than trusting the event
+    // payload — payload.journalEntryId may be stale if a concurrent
+    // request already healed the row.
+    const [row] = await rawQuery<{ journalEntryId: number | null }>(
+      `SELECT "journalEntryId" FROM umrah_agent_invoices
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [invoiceId, payload.companyId]
+    ).catch(() => []);
+    if (row?.journalEntryId) return;
+
+    try {
+      const total = Number(details.total ?? 0);
+      const servicesTotal = Number(details.servicesTotal ?? 0);
+      const penaltiesTotal = Number(details.penaltiesTotal ?? 0);
+      const commission = Number(details.commission ?? 0);
+      const ref = String(details.ref ?? `INV-${invoiceId}`);
+      const agentName = String(details.agentName ?? "");
+      if (total <= 0) return;
+
+      const arCode = await getAccountCodeFromMapping(payload.companyId, "umrah_agent_receivable", "debit", "1210");
+      const revenueCode = await getAccountCodeFromMapping(payload.companyId, "umrah_revenue", "credit", "4200");
+      const penaltyCode = await getAccountCodeFromMapping(payload.companyId, "penalty_revenue", "credit", "4210");
+      const commissionCode = await getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "5200");
+
+      const lines: Array<{ accountCode: string; debit: number; credit: number; description: string }> = [
+        { accountCode: arCode, debit: total, credit: 0, description: `ذمم وكيل — فاتورة ${ref}` },
+      ];
+      if (servicesTotal > 0) {
+        lines.push({ accountCode: revenueCode, debit: 0, credit: servicesTotal, description: `إيراد خدمات — فاتورة ${ref}` });
+      }
+      if (penaltiesTotal > 0) {
+        lines.push({ accountCode: penaltyCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — فاتورة ${ref}` });
+      }
+      if (commission > 0) {
+        lines.push({ accountCode: commissionCode, debit: commission, credit: 0, description: `عمولة وكيل — فاتورة ${ref}` });
+      }
+
+      const journalId = await createGuardedJournalEntry({
+        companyId: payload.companyId,
+        branchId: (payload.branchId as number) || 0,
+        createdBy: (payload.userId as number) || 0,
+        ref: `JE-UMR-AG-${invoiceId}`,
+        description: `فاتورة عمرة — وكيل ${agentName} — ${ref}`,
+        type: "sales",
+        sourceType: "umrah_agent_invoices",
+        sourceId: invoiceId,
+        lines,
+      }, { table: "umrah_agent_invoices", id: invoiceId });
+
+      // Backfill the row so the next reconciliation pass sees it healed.
+      if (journalId) {
+        await rawExecute(
+          `UPDATE umrah_agent_invoices SET "journalEntryId" = $1
+            WHERE id = $2 AND "companyId" = $3 AND "journalEntryId" IS NULL`,
+          [journalId, invoiceId, payload.companyId]
+        ).catch((e) => logger.error(e, "[EventListener] backfill journalEntryId failed"));
+      }
+    } catch (glErr) {
+      logger.error(glErr, `[EventListener] umrah agent invoice GL recovery failed for #${invoiceId}`);
     }
   });
 

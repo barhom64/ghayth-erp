@@ -15,18 +15,30 @@ import {
   PageShell,
 } from "@workspace/ui-core";
 import { useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 
-function exportCSV(rows: any[], headers: string[], filename: string) {
+// GAP_MATRIX item #7 — routed through unified export helper so the
+// download appears in /reports/print-log with entity=report_ledger.
+async function exportCSV(rows: any[], headers: string[], title: string) {
   if (!rows.length) return;
-  const csv = [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ""))].map((r) => r.join(",")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
+  const HEADER_LABELS: Record<string, string> = {
+    date: "التاريخ",
+    ref: "المرجع",
+    description: "الوصف",
+    debit: "مدين",
+    credit: "دائن",
+    runningBalance: "الرصيد الجاري",
+  };
+  await exportRowsToCsv({
+    entityType: "report_ledger",
+    title,
+    rows,
+    columns: headers.map((h) => ({ key: h, label: HEADER_LABELS[h] ?? h })),
+  });
 }
 
 export default function LedgerPage() {
@@ -67,7 +79,7 @@ export default function LedgerPage() {
       actions={
         <>
           <Link href="/finance/accounts">
-            <Button variant="ghost" size="icon"><ArrowRight className="h-5 w-5" /></Button>
+            <Button variant="ghost" size="icon" title="الانتقال"><ArrowRight className="h-5 w-5" /></Button>
           </Link>
           {account && <Badge variant="outline">{typeMap[account.type] || account.type}</Badge>}
           <DatePicker value={startDate} onChange={setStartDate} className="w-40" placeholder="من" />
@@ -87,12 +99,13 @@ export default function LedgerPage() {
             entityId={`${code}:${startDate ?? ""}..${endDate ?? ""}`}
            
           />
-          <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(entries, ["date", "ref", "description", "debit", "credit", "runningBalance"], `ledger-${code}.csv`)}>
+          <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => { void exportCSV(entries, ["date", "ref", "description", "debit", "credit", "runningBalance"], `سجل الحساب — ${code}`); }}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </GuardedButton>
         </>
       }
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-4">
         <Card><CardContent className="p-4 text-center">
           <p className="text-xs text-muted-foreground">عدد القيود</p>

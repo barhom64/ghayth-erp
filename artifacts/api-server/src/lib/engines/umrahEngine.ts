@@ -3,6 +3,7 @@
 // All journal entries go through the Financial Engine.
 
 import { financialEngine } from "./financialEngine.js";
+import { rawExecute } from "../rawdb.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 
 interface UmrahGLContext {
@@ -80,12 +81,18 @@ class UmrahEngineImpl implements DomainEngine {
       toLocation: string;
       vehicleId?: number;
       driverId?: number;
+      /** Season cost-centre — without this, per-season transport-cost
+       *  breakdowns at season close had to JOIN umrah_transport back
+       *  to the JE; now the GL line carries it directly. */
+      umrahSeasonId?: number | null;
     }
   ) {
     const [expenseCode, payableCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_transport_expense", "debit", "5300"),
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_transport_payable", "credit", "2100"),
     ]);
+
+    const umrahSeasonId = transport.umrahSeasonId ?? undefined;
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -100,8 +107,8 @@ class UmrahEngineImpl implements DomainEngine {
       guardTable: "umrah_transport",
       guardId: transport.id,
       lines: [
-        { accountCode: expenseCode, debit: transport.cost, credit: 0, description: `مصروف نقل — ${transport.fromLocation} → ${transport.toLocation}`, vehicleId: transport.vehicleId, driverId: transport.driverId },
-        { accountCode: payableCode, debit: 0, credit: transport.cost, description: `مستحقات نقل عمرة`, vehicleId: transport.vehicleId, driverId: transport.driverId },
+        { accountCode: expenseCode, debit: transport.cost, credit: 0, description: `مصروف نقل — ${transport.fromLocation} → ${transport.toLocation}`, vehicleId: transport.vehicleId, driverId: transport.driverId, umrahSeasonId },
+        { accountCode: payableCode, debit: 0, credit: transport.cost, description: `مستحقات نقل عمرة`, vehicleId: transport.vehicleId, driverId: transport.driverId, umrahSeasonId },
       ],
     });
   }
@@ -127,7 +134,7 @@ class UmrahEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4210"),
     ]);
 
-    return financialEngine.postJournalEntry({
+    const result = await financialEngine.postJournalEntry({
       companyId: ctx.companyId,
       branchId: ctx.branchId,
       createdBy: ctx.createdBy,
@@ -144,6 +151,21 @@ class UmrahEngineImpl implements DomainEngine {
         { accountCode: revenueCode, debit: 0, credit: penalty.amount, description: `إيراد غرامة ${penalty.type}`, umrahAgentId: penalty.agentId, umrahSeasonId: penalty.seasonId },
       ],
     });
+
+    // Bidirectional traceability — store the JE id on the penalty row
+    // so operators can navigate from penalty → GL trail without
+    // separately querying journal_entries by (sourceType, sourceId).
+    // Skipped on already-existing entries (idempotency re-runs) since
+    // the row was already linked the first time around.
+    if (!result.alreadyExists) {
+      await rawExecute(
+        `UPDATE umrah_penalties SET "journalEntryId" = $1
+          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [result.journalId, penalty.id, ctx.companyId],
+      );
+    }
+
+    return result;
   }
 
   async postPenaltyWaiverGL(
