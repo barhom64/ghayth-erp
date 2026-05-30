@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { AccountSelect, CostCenterSelect, VehicleSelect, ProjectSelect } from "@/components/shared/entity-selects";
+import { AccountSelect, CostCenterSelect, VehicleSelect, ProjectSelect, EmployeeSelect, ClientSelect, VendorSelect, DriverSelect } from "@/components/shared/entity-selects";
 import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Pencil } from "lucide-react";
 
 /**
@@ -199,23 +199,19 @@ export function LineAllocationPanel({
             />
           </FormFieldWrapper>
 
-          <FormFieldWrapper label="الموظف (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.employeeId ?? ""}
-              onChange={(e) => set("employeeId", e.target.value)}
-              placeholder="employeeId"
-            />
-          </FormFieldWrapper>
+          <EmployeeSelect
+            value={value.employeeId ?? ""}
+            onChange={(v) => set("employeeId", v)}
+            label="الموظف"
+            allowCreate={false}
+          />
 
-          <FormFieldWrapper label="السائق (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.driverId ?? ""}
-              onChange={(e) => set("driverId", e.target.value)}
-              placeholder="driverId"
-            />
-          </FormFieldWrapper>
+          <DriverSelect
+            value={value.driverId ?? ""}
+            onChange={(v) => set("driverId", v)}
+            label="السائق"
+            allowCreate={false}
+          />
 
           <FormFieldWrapper label="القسم (ID)">
             <Input
@@ -235,23 +231,19 @@ export function LineAllocationPanel({
             />
           </FormFieldWrapper>
 
-          <FormFieldWrapper label="العميل (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.clientId ?? ""}
-              onChange={(e) => set("clientId", e.target.value)}
-              placeholder="clientId"
-            />
-          </FormFieldWrapper>
+          <ClientSelect
+            value={value.clientId ?? ""}
+            onChange={(v) => set("clientId", v)}
+            label="العميل"
+            allowCreate={false}
+          />
 
-          <FormFieldWrapper label="المورد (ID)">
-            <Input
-              type="number" dir="ltr"
-              value={value.vendorId ?? ""}
-              onChange={(e) => set("vendorId", e.target.value)}
-              placeholder="vendorId"
-            />
-          </FormFieldWrapper>
+          <VendorSelect
+            value={value.vendorId ?? ""}
+            onChange={(v) => set("vendorId", v)}
+            label="المورد"
+            allowCreate={false}
+          />
 
           <FormFieldWrapper label="موسم العمرة (ID)">
             <Input
