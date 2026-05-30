@@ -504,6 +504,8 @@ export async function runAutoDetectionAllCompanies(
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function logDetectionRun(result: AutoDetectionResult): Promise<void> {
+  // Schema guaranteed by migration 242 (run-aggregate shape). A failure here
+  // is best-effort logging only — never let it abort a detection run.
   try {
     await rawExecute(
       `INSERT INTO auto_detection_log
@@ -522,36 +524,7 @@ async function logDetectionRun(result: AutoDetectionResult): Promise<void> {
       ]
     );
   } catch (err) {
-    // الجدول قد لا يكون موجوداً — نُنشئه
-    try {
-      await rawExecute(`
-        CREATE TABLE IF NOT EXISTS auto_detection_log (
-          id SERIAL PRIMARY KEY,
-          "companyId" INTEGER NOT NULL,
-          "targetDate" DATE NOT NULL,
-          detected INTEGER DEFAULT 0,
-          "violationsCreated" INTEGER DEFAULT 0,
-          "memosCreated" INTEGER DEFAULT 0,
-          skipped INTEGER DEFAULT 0,
-          errors INTEGER DEFAULT 0,
-          details JSONB DEFAULT '[]',
-          "createdAt" TIMESTAMPTZ DEFAULT NOW()
-        )
-      `);
-      await rawExecute(
-        `INSERT INTO auto_detection_log
-           ("companyId", "targetDate", detected, "violationsCreated", "memosCreated",
-            skipped, errors, details, "createdAt")
-         VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8::jsonb, NOW())`,
-        [
-          result.companyId, result.date, result.detected,
-          result.violationsCreated, result.memosCreated,
-          result.skipped, result.errors, JSON.stringify(result.details),
-        ]
-      );
-    } catch (innerErr) {
-      logger.error(innerErr, "[الرصد التلقائي] فشل تسجيل السجل:");
-    }
+    logger.error(err, "[الرصد التلقائي] فشل تسجيل سجل التشغيل:");
   }
 }
 

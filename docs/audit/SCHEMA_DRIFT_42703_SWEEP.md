@@ -64,21 +64,38 @@ authMiddleware owner-expansion add the new company to `allowedCompanies` on
 the next request. `isPrimary=false` leaves the creator's original primary
 assignment untouched. Skipped only when the user has no employee record.
 
-## 5. Deferred (needs a design decision — NOT a blind fix)
+## 5. `auto_detection_log` — table-name conflict, resolved end-to-end
 
-**`auto_detection_log`** — `lib/autoViolationEngine.ts:509` writes
-*run-aggregate* columns (`targetDate, detected, violationsCreated, …`), but the
-table created by migration `105_missing_tables.sql` and read by
-`routes/hr-discipline.ts` (`detectedAt, ruleType, severity, violationId`) is a
-*per-detection* table. Two features share one name with incompatible shapes.
-The engine's insert is wrapped in a swallowing `try/catch`, so it is
-**background-only with no user-facing error** — but the detection-run log is
-silently never written. Correct fix is to give the engine its own table
-(e.g. `auto_detection_run_log`) rather than overload this one; deferred so the
-schema decision is made deliberately.
+`lib/autoViolationEngine.ts` `logDetectionRun()` writes **run-aggregate**
+columns (`targetDate, detected, violationsCreated, memosCreated, skipped,
+errors, details, createdAt`), but migration `105_missing_tables.sql` created
+the table as **per-detection** (`ruleType NOT NULL, employeeId, detectedAt,
+severity, violationId, status`). Investigation showed **the engine is the only
+writer** — no code ever produced per-detection rows — so both the engine's
+logging (42703 / 23502, swallowed by a self-heal `try/catch`) and the
+`routes/hr-discipline.ts` summary that reads it were effectively dead.
+
+Resolution (the engine's actual shape wins, since it is the sole writer):
+
+- **migration 242** adds the run-aggregate columns and drops the
+  never-satisfiable `ruleType NOT NULL`. `detectedAt` (DEFAULT NOW) is kept;
+  `createdAt` is added (the engine orders/filters on it).
+- `autoViolationEngine.logDetectionRun` — the self-heal `CREATE TABLE` + retry
+  hack is removed; the schema is now guaranteed by the migration, so a failure
+  is best-effort log-only.
+- `routes/hr-discipline.ts` `/auto-detection/summary` — the two stat queries
+  are switched to run-aggregate semantics: `totalRuns = COUNT(*)`, the
+  counters `SUM()`-ed (so `totalMemos`/`totalErrors` are now real instead of
+  hard-coded `0`), and the by-type breakdown unnests each run's `details`
+  JSON array (`jsonb_array_elements`) instead of reading a never-populated
+  `ruleType` column.
 
 ## 6. Verification
 
-- Static re-scan after fixes: drift list went **20 → 7**, the remaining 7 all
-  the single deferred `auto_detection_log` insert above.
+- Static re-scan after fixes: **INSERT** column drift **20 → 0**.
+- Extended the sweep to **UPDATE … SET** column lists: **0** drift.
 - `tsc --noEmit` on `artifacts/api-server`: **0 errors**.
+- Scope note: the sweep covers raw-SQL `INSERT`/`UPDATE` column lists (the
+  surfaces that produce user-facing write 42703s). Drift inside complex
+  `SELECT`/join projections is not statically resolved here and is left as a
+  follow-up if any read-path 42703 is reported.
