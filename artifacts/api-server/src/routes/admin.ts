@@ -1958,13 +1958,18 @@ router.post("/onboard", authorize({ feature: "admin", action: "update" }), async
       });
     }
 
-    const empNum = await issueNumber({
+    // Mirror the proven employee-number issuance in employees.ts exactly
+    // (same scheme key + timing) so onboard shares the hr.employee_code series.
+    const issued = await issueNumber({
       companyId,
       branchId: defaultBranchId,
-      module: "hr",
-      entity: "employee",
-      format: "EMP-{seq:5}",
+      moduleKey: "hr",
+      entityKey: "employee_code",
+      entityTable: "employees",
+      actorId: scope.userId,
+      expectedTiming: "on_draft",
     });
+    const empNum = issued.number;
     const tempPassword = d.password || crypto.randomBytes(16).toString("hex");
     const hashed = await hashPassword(tempPassword);
     const primaryRole = resolvedRoles[0].roleKey;

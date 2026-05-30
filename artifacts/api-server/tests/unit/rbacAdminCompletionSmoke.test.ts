@@ -63,6 +63,19 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
     expect(section).toMatch(/الدور غير موجود/);
   });
 
+  // Folded in from Ghaith Bot's "partial-onboard guard": role resolution must
+  // run BEFORE withTransaction opens, so an invalid role never creates an
+  // orphan employee/user (the whole onboard is atomic).
+  it("rolls the whole onboard back when any role key is invalid (atomic ordering)", () => {
+    const idx = ADMIN.indexOf('router.post("/onboard"');
+    const section = ADMIN.slice(idx, idx + 4500);
+    const roleCheckIdx = section.indexOf("SELECT id FROM rbac_roles WHERE role_key");
+    const txIdx = section.indexOf("withTransaction");
+    expect(roleCheckIdx).toBeGreaterThan(-1);
+    expect(txIdx).toBeGreaterThan(-1);
+    expect(roleCheckIdx).toBeLessThan(txIdx);
+  });
+
   it("records the active role in the audit log (RBAC-001) + emits an event", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
     const section = ADMIN.slice(idx, idx + 4500);
