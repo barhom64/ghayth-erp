@@ -231,9 +231,9 @@ export default function AdminIntegrationsDiagnosticsPage() {
               />
             </div>
             <div className="flex gap-1 flex-wrap">
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleCmsv6Webhook}>POST webhook</GuardedButton>
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleCmsv6Test}>Ping test</GuardedButton>
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleSyncEvents}>Sync events</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleCmsv6Webhook}>إرسال Webhook</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleCmsv6Test}>اختبار الاتصال</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleSyncEvents}>مزامنة الأحداث</GuardedButton>
             </div>
           </CardContent>
         </Card>

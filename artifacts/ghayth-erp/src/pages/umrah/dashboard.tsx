@@ -1,4 +1,3 @@
-import React from "react";
 import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useApiQuery, apiFetch } from "@/lib/api";
