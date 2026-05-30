@@ -50,6 +50,22 @@ const STATUS_TONES: Record<string, "success" | "warning" | "info" | "muted" | "d
   cancelled: "destructive",
 };
 
+// Audit-log action codes → operator-readable Arabic. Unknown actions
+// fall through to the raw code so we never render a blank cell (raw
+// code is strictly better than empty for a debugging operator).
+const ACTION_LABELS: Record<string, string> = {
+  create: "تم إنشاء الملف",
+  update: "تم التعديل",
+  delete: "تم الحذف",
+  "umrah.pilgrim.created": "تم إنشاء الملف",
+  "umrah.pilgrim.updated": "تم التعديل",
+  "umrah.pilgrim.deleted": "تم الحذف",
+  "umrah.pilgrim.status_changed": "تغيّرت الحالة",
+  "umrah.pilgrims.bulk_assigned": "إسناد دفعي",
+  "umrah.pilgrims.bulk_status_changed": "تغيير حالة دفعي",
+  read: "اطّلاع",
+};
+
 const pilgrimEditSchema = z.object({
   fullName: z.string().min(1, "الاسم مطلوب"),
   nationality: z.string().optional().default(""),
@@ -76,6 +92,22 @@ export default function PilgrimDetail() {
   const id = params?.id || "";
   const { extraTabs, hideTabs } = useRegistryTabs("pilgrim", id ?? "");
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["umrah-pilgrim", id], `/umrah/pilgrims/${id}`);
+  // Per-pilgrim activity timeline (PR #1484). Re-fetched alongside the
+  // pilgrim row so any PATCH that mutates state (status change,
+  // exemption flip, reassignment) refreshes the events log too —
+  // operators see their own action land instantly.
+  const { data: timelineResp, refetch: refetchTimeline } = useApiQuery<{
+    data: Array<{
+      id: number;
+      action: string;
+      userId: number | null;
+      userName: string | null;
+      before: Record<string, unknown> | null;
+      after: Record<string, unknown> | null;
+      createdAt: string;
+    }>;
+  }>(["umrah-pilgrim-timeline", id], `/umrah/pilgrims/${id}/timeline`);
+  const timelineEvents = timelineResp?.data ?? [];
   const [newStatus, setNewStatus] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -119,6 +151,7 @@ export default function PilgrimDetail() {
       toast({ title: "تم تحديث الحالة" });
       setNewStatus("");
       refetch();
+      refetchTimeline();
     } catch { toast({ variant: "destructive", title: "خطأ في التحديث" }); }
   };
 
@@ -154,6 +187,7 @@ export default function PilgrimDetail() {
       });
       setExemptionReason("");
       refetch();
+      refetchTimeline();
     } catch (e: any) {
       toast({
         variant: "destructive",
@@ -325,6 +359,59 @@ export default function PilgrimDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* Activity timeline (PR #1484). Shows the operational lifecycle
+          per pilgrim — create → status changes → reassignments →
+          exemption flips → delete. The list is bounded to the last
+          100 events server-side to keep the page snappy. Empty state
+          is hidden (a brand-new pilgrim might have no events beyond
+          the create row that fired the audit asynchronously). */}
+      {timelineEvents.length > 0 && (
+        <Card data-testid="pilgrim-timeline-card">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              السجل التشغيلي
+              <span className="text-xs text-muted-foreground font-normal">
+                ({timelineEvents.length} حدث)
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-3" data-testid="pilgrim-timeline-list">
+              {timelineEvents.slice(0, 20).map((ev) => {
+                // Friendly action label — falls back to the raw code
+                // for actions the engine emits but the UI doesn't
+                // know yet. Operators see the raw value instead of
+                // an empty cell — strictly better than a blank.
+                const actionLabel =
+                  ACTION_LABELS[ev.action]
+                  ?? (ev.action.startsWith("umrah.") ? ev.action.replace("umrah.", "") : ev.action);
+                return (
+                  <li
+                    key={ev.id}
+                    className="flex items-start gap-3 text-sm border-b last:border-b-0 pb-2 last:pb-0"
+                    data-testid={`timeline-event-${ev.id}`}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-status-info-foreground mt-1.5 shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-medium">{actionLabel}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {ev.userName ?? "النظام"} — {formatDateAr(ev.createdAt)}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            {timelineEvents.length > 20 && (
+              <p className="text-xs text-muted-foreground text-center pt-3">
+                و {timelineEvents.length - 20} حدث أقدم — لعرض السجل الكامل افتح صفحة التدقيق.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {data?.notes && (
         <Card>

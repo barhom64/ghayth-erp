@@ -1151,6 +1151,47 @@ router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "view" }), asy
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
 });
 
+// Per-pilgrim activity timeline (PR #1484) — closes the operator's
+// "بمجر يدخل المعتمر او يتم اصدار تأشيرة لابد يكون فيه تحديد يومي
+//  عن بيانات المعتمر دخل خرج" rule. Reads audit_logs scoped to this
+// pilgrim, LEFT JOINs users for the operator's name, returns the
+// last 100 events newest-first.
+//
+// Why not just SELECT *? entityId on audit_logs is `text` (legacy
+// shape, supports composite ids elsewhere). We cast on the WHERE
+// clause and use the index that already covers (entity, entityId).
+router.get("/pilgrims/:id/timeline", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Existence check first — a 404 here means the operator typed
+    // a bad URL, not "no events yet for this pilgrim".
+    const [exists] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId],
+    );
+    if (!exists) throw new NotFoundError("المعتمر غير موجود");
+
+    const events = await rawQuery<Record<string, unknown>>(
+      `SELECT al.id, al.action, al."userId", al.before, al.after, al."createdAt",
+              COALESCE(e.name, u.email) AS "userName"
+         FROM audit_logs al
+         LEFT JOIN users u
+                ON u.id = al."userId"
+         LEFT JOIN employees e
+                ON e.id = u."employeeId"
+        WHERE al.entity = 'umrah_pilgrims'
+          AND al."entityId" = $1::text
+          AND al."companyId" = $2
+        ORDER BY al."createdAt" DESC
+        LIMIT 100`,
+      [String(id), scope.companyId],
+    );
+
+    res.json({ data: events, total: events.length });
+  } catch (err) { handleRouteError(err, res, "Get pilgrim timeline error"); }
+});
+
 router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
