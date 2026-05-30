@@ -2242,6 +2242,30 @@ router.get("/import/header-maps", authorize({ feature: "umrah", action: "create"
   } catch (err) { handleRouteError(err, res, "Import header maps error"); }
 });
 
+// ── Smart column-mapping suggestion ──────────────────────────────────
+// Feeds the wizard's column-mapping step with a fuzzy-matched
+// engine-field suggestion per unknown Excel header. Closes the
+// "operator pastes a vendor file with a non-standard header — wizard
+// asks them to manually pick every column" friction that the hardcoded
+// dictionary + saved presets alone don't cover.
+//
+// The engine ALSO returns exact matches with confidence=1 so the
+// wizard can show a "✓ exact" badge — explicit confirmation beats
+// silent auto-mapping for the operator's confidence.
+
+const suggestMappingSchema = z.object({
+  headers: z.array(z.string()).min(1, "أعمدة الملف مطلوبة"),
+  fileType: z.enum(["mutamers", "vouchers"]),
+});
+
+router.post("/import/suggest-mapping", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const { headers, fileType } = zodParse(suggestMappingSchema.safeParse(req.body));
+    const { suggestColumnMapping } = await import("../lib/umrahImportEngine.js");
+    res.json({ suggestions: suggestColumnMapping(headers, fileType) });
+  } catch (err) { handleRouteError(err, res, "Suggest mapping error"); }
+});
+
 // ── Column-mapping presets ───────────────────────────────────────────
 // Operators re-import the same Excel layout every week from the same
 // NUSK/MOFA portal. Saving the mapping per (user, fileType) lets the
