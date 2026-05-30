@@ -836,12 +836,22 @@ router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "view" }), asy
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // JOINs surface the operator-facing names for every FK on the row.
+    // Defence-in-depth: every JOIN also matches "companyId" so a stale
+    // / mistyped id can't lift another tenant's name into the response.
     const [row] = await rawQuery(
-      `SELECT p.*, a.name as "agentName", pkg.name as "packageName", s.title as "seasonTitle"
+      `SELECT p.*,
+              a.name  as "agentName",
+              pkg.name as "packageName",
+              s.title  as "seasonTitle",
+              g.name  as "groupName",
+              sa.name as "subAgentName"
        FROM umrah_pilgrims p
-       LEFT JOIN umrah_agents a ON p."agentId"=a.id
-       LEFT JOIN umrah_packages pkg ON p."packageId"=pkg.id
-       LEFT JOIN umrah_seasons s ON p."seasonId"=s.id AND s."deletedAt" IS NULL
+       LEFT JOIN umrah_agents     a   ON p."agentId"=a.id      AND a."companyId"=p."companyId"  AND a."deletedAt" IS NULL
+       LEFT JOIN umrah_packages   pkg ON p."packageId"=pkg.id  AND pkg."companyId"=p."companyId" AND pkg."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons    s   ON p."seasonId"=s.id     AND s."companyId"=p."companyId"  AND s."deletedAt" IS NULL
+       LEFT JOIN umrah_groups     g   ON p."groupId"=g.id      AND g."companyId"=p."companyId"  AND g."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa  ON p."subAgentId"=sa.id  AND sa."companyId"=p."companyId" AND sa."deletedAt" IS NULL
        WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("المعتمر غير موجود"); }

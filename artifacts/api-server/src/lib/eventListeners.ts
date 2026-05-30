@@ -38,9 +38,13 @@ async function logAudit(event: string, payload: EventPayload) {
       ? JSON.stringify({ approvalStep, workflowId })
       : null;
 
+    // RBAC-001 (#1413 §9): persist the role (capacity) the action was
+    // performed under, supplied by auditMiddleware from scope.selectedRoleKey.
+    const activeRoleKey = (payload.activeRoleKey as string) ?? null;
+
     await pool.query(
-      `INSERT INTO audit_logs ("companyId","branchId","userId",action,entity,"entityId","before","after","changes","reason","scope")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      `INSERT INTO audit_logs ("companyId","branchId","userId",action,entity,"entityId","before","after","changes","reason","scope","active_role_key")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [
         payload.companyId ?? null,
         payload.branchId ?? null,
@@ -53,6 +57,7 @@ async function logAudit(event: string, payload: EventPayload) {
         changes && (Array.isArray(changes) ? changes.length > 0 : true) ? JSON.stringify(changes) : null,
         reason,
         scope,
+        activeRoleKey,
       ]
     );
   } catch (err) {
@@ -1604,6 +1609,10 @@ export function registerEventListeners() {
     "support_ticket", "trip", "vehicle", "maintenance", "fuel_log",
     "warehouse_product", "warehouse_movement", "crm_opportunity", "crm_activity",
     "company", "branch", "request", "communication", "property",
+    // FND-006: listeners for the newly-mapped tracks (auditMiddleware emits
+    // audit.{entity}.{action}; without a listener here the row would be lost).
+    "legal_contract", "legal_case", "governance_item", "automation_rule",
+    "marketing_campaign", "store_order", "bi_object",
   ];
   const auditActions = ["create", "update", "delete"];
   for (const entity of auditEntities) {
