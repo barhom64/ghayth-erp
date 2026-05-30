@@ -100,13 +100,13 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الأثر**: عملية أساسية مكسورة لـLegal Manager.
 **الإصلاح**: إضافة `'legal_case'` للـwhitelist في `documents.ts:269`.
 
-### M9. Umrah Agent Invoice GL Non-Blocking
-**الموقع**: `umrah.ts:1508-1510`
-**الوصف**: 
-- Sales invoice path: blocking GL ✅
-- **Agent invoice path**: `.catch(...)` non-blocking — invoice قد يُحفظ بدون JE
-**الأثر**: نافذة سباق (race window) حيث فاتورة وكيل عمولة موجودة بدون قيد محاسبي → ميزان مراجعة off.
-**الإصلاح**: تحويل لـblocking pattern + reconciliation listener.
+### M9. Umrah Agent Invoice GL Non-Blocking ✅ FIXED in follow-up PR
+**الموقع**: `umrah.ts:1623+` + `eventListeners.ts`
+**الإصلاح المنفذ**: 
+- الـroute الآن يُطلق `umrah.agent_invoice.created` event دائماً (نجاح GL أو فشل)
+- اكتُشف bug إضافي: الكود الأصلي يمرر `GLPostingResult` ككائن للـSQL — يخزن JSON في عمود integer
+- listener جديد في `eventListeners.ts` يتحقق من غياب `journalEntryId` ويُعيد إنشاء الـJE عبر `createGuardedJournalEntry` (نفس نمط الـsales invoice)
+**الأثر**: فاتورة وكيل عمرة لا يمكن أن توجد بدون JE صالح. الـrecovery يضمن المحاسبة المزدوجة حتى عند فشل الـinline GL.
 
 ### M10. CMSV6 Wialon/Teltonika Stubs
 **الموقع**: `lib/integrations/cmsv6Adapter.ts:35` (enum) + `fleet-telematics.ts:251` (`buildAdapter` returns null)
@@ -176,10 +176,12 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الوصف**: classification field نص حر، لا taxonomy enforcement.
 **الإصلاح**: enum + dropdown.
 
-### N13. HR Org Structure RBAC Misalignment
-**الموقع**: `hr/organization-structure.tsx` → `settings.ts:525`
-**الوصف**: HR Director بدون `settings:update` لا يقدر يدير org structure.
-**الإصلاح**: تحويل الـpermission إلى `hr.organization` أو منح Director الـdual.
+### N13. HR Org Structure RBAC Misalignment ✅ FIXED in follow-up PR
+**الموقع**: `settings.ts:525,542,560` + `authorize.ts`
+**الإصلاح المنفذ**: 
+- helper جديد `authorizeAny()` يقبل عدة specs ويسمح إذا أي منها يمنح الصلاحية
+- `/settings/departments` POST/PUT/DELETE الآن مفتوحة لـ`settings:update` OR `hr.organization:create|update|delete`
+**الأثر**: HR Director يقدر إدارة الهيكل التنظيمي من صفحته دون الحاجة لـSysAdmin.
 
 ### N14. Create User بدون "إنشاء موظف" Shortcut
 **الموقع**: `users-tab.tsx:46`

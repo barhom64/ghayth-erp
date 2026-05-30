@@ -177,6 +177,52 @@ export function authorize(opts: AuthorizeOptions) {
 }
 
 /**
+ * Sequentially try a list of authorize specs and let the request through
+ * if ANY of them grants access. Used for endpoints that legitimately
+ * belong to two domains (e.g. /settings/departments is reachable from
+ * the SysAdmin "settings" feature AND the HR Director "hr.organization"
+ * feature — both should be allowed to maintain the org structure).
+ *
+ * Semantics: the first matching feature populates `req.access` (so the
+ * downstream handler still has field-policy + scope checks). On no
+ * match, the LAST 403 from the last attempted spec is returned.
+ *
+ * NOTE: this composes individual authorize() middlewares — each one
+ * runs through the same checkAccess + scope + amount-limit pipeline.
+ * There's no shortcut path that bypasses scope checks.
+ */
+export function authorizeAny(...specs: AuthorizeOptions[]) {
+  if (specs.length === 0) {
+    throw new Error("authorizeAny requires at least one spec");
+  }
+  const handlers = specs.map((s) => authorize(s));
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    let lastStatus = 403;
+    let lastError: unknown = null;
+    for (const handler of handlers) {
+      // Capture the response shape but don't send it — we want to know
+      // if this spec passed or failed without committing the response.
+      let passed = false;
+      const fakeRes = {
+        status: (code: number) => {
+          lastStatus = code;
+          return { json: (body: unknown) => { lastError = body; }, end: () => undefined };
+        },
+        json: (body: unknown) => { lastError = body; },
+      } as unknown as Response;
+      await new Promise<void>((resolve) => {
+        handler(req, fakeRes, () => { passed = true; resolve(); }).then(() => resolve()).catch(() => resolve());
+      });
+      if (passed) {
+        next();
+        return;
+      }
+    }
+    res.status(lastStatus).json(lastError ?? { error: "غير مصرح" });
+  };
+}
+
+/**
  * Helper for handlers that build their response and want to apply the
  * field policy in one line:
  *
