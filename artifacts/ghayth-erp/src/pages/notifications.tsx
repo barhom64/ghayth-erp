@@ -175,7 +175,7 @@ export default function Notifications() {
                   {!notification.isRead && (
                     <Button 
                       variant="ghost" 
-                      size="icon" 
+                      size="icon"
                       className="shrink-0 text-muted-foreground hover:text-primary"
                       onClick={() => handleMarkAsRead(notification.id)}
                       disabled={markingId === notification.id}

@@ -152,7 +152,7 @@ export default function JournalCreate() {
                   <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="وصف البند" />
                   <NumberField label="مدين" value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
                   <NumberField label="دائن" value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />
-                  <Button variant="ghost" size="icon" onClick={() => removeLine(idx)} disabled={lines.length <= 2}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <Button variant="ghost" size="icon" title="حذف" onClick={() => removeLine(idx)} disabled={lines.length <= 2}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
                 <div className="grid grid-cols-3 gap-2 ps-1">
                   <Input

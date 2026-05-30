@@ -366,7 +366,7 @@ export default function CashPositionCalculatorPage() {
                         <span>{formatDateAr(a.date)}</span>
                         <span className="text-muted-foreground">{a.description}</span>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-status-danger-foreground" onClick={() => removeAdhoc(a.id)}>
+                      <Button variant="ghost" size="icon" title="حذف" className="h-6 w-6 text-status-danger-foreground" onClick={() => removeAdhoc(a.id)}>
                         <Trash2 className="w-3 h-3" />
                       </Button>
                     </div>
