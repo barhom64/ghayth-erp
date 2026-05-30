@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -374,6 +374,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, [selectedCompanyIds, filteredBranches]);
+
+  // When a single company is freshly opened, land the user directly on its
+  // main branch (الفرع الرئيسي) instead of "جميع الفروع". "Main" = a branch
+  // whose name contains رئيس, else the earliest-created (lowest id) branch of
+  // that company. Keyed on company *change* via a ref so the user can still
+  // manually pick "جميع الفروع" or another branch within the same company,
+  // and a branch already restored from localStorage is respected.
+  const lastAutoBranchCompanyRef = useRef<number | null>(null);
+  useEffect(() => {
+    const single = selectedCompanyIds.length === 1 ? selectedCompanyIds[0] : null;
+    if (single === null) {
+      lastAutoBranchCompanyRef.current = null;
+      return;
+    }
+    if (lastAutoBranchCompanyRef.current === single) return;
+    const companyBranches = branches.filter((b) => b.companyId === single);
+    if (companyBranches.length === 0) return; // branches not loaded yet
+    const alreadyValid =
+      selectedBranchIds.length > 0 &&
+      selectedBranchIds.every((id) => companyBranches.some((b) => b.id === id));
+    lastAutoBranchCompanyRef.current = single;
+    if (alreadyValid) return;
+    const mainBranch =
+      companyBranches.find((b) => b.name && b.name.includes("رئيس")) ??
+      [...companyBranches].sort((a, b) => a.id - b.id)[0];
+    if (mainBranch) setSelectedBranchIds([mainBranch.id]);
+  }, [selectedCompanyIds, branches, selectedBranchIds]);
 
   const selectedBranchId = selectedBranchIds.length > 0 ? selectedBranchIds[0] : null;
   const currentBranch = branches.find(b => b.id === selectedBranchId) || null;

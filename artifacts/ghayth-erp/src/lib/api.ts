@@ -324,6 +324,16 @@ export interface ApiMutationOptions<TData = any, TBody = any> {
    * keeping the default for everything else.
    */
   onCodeError?: (code: string, error: ApiError, body: TBody) => boolean | void;
+  /**
+   * Per-request extra headers (e.g. `Idempotency-Key`). Called once per
+   * mutation invocation so the caller can mint a fresh value or read the
+   * latest from `useIdempotencyKey()`. Header names are normalized to
+   * lowercase and merged on top of the built-in idempotency-key, so a
+   * caller that manages its own key (via `useIdempotencyKey`) deterministically
+   * overrides the auto-generated one rather than producing a case-variant
+   * duplicate.
+   */
+  headers?: () => Record<string, string>;
 }
 
 /**
@@ -451,6 +461,12 @@ export function useApiMutation<TData = any, TBody = any>(
       if (method.toUpperCase() === "POST") {
         if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
         headers["idempotency-key"] = idempotencyKey.current;
+      }
+      const extraHeaders = options?.headers?.();
+      if (extraHeaders) {
+        for (const [k, v] of Object.entries(extraHeaders)) {
+          headers[k.toLowerCase()] = v;
+        }
       }
       return apiFetch<TData>(url, {
         method,
