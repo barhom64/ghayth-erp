@@ -466,13 +466,55 @@ router.get("/agents/:id", authorize({ feature: "umrah", action: "view" }), async
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery(`SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) { throw new NotFoundError("الوكيل غير موجود"); }
-    const stats = await rawQuery(
-      `SELECT COUNT(*)::int AS "pilgrimCount",
-              COUNT(*) FILTER (WHERE status='overstayed')::int AS "overstayedCount"
-       FROM umrah_pilgrims WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
+    // Operator statement — answers "how many pilgrims has this agent
+    // sent? what's their balance?" without a second round-trip. Three
+    // aggregate queries (pilgrim counts, status breakdown, finance) run
+    // in parallel via Promise.all so adding them doesn't double the
+    // latency of the detail fetch.
+    const [statsResult, statusBreakdownResult, financeResult] = await Promise.all([
+      rawQuery(
+        `SELECT COUNT(*)::int AS "pilgrimCount",
+                COUNT(*) FILTER (WHERE status='overstayed')::int AS "overstayedCount"
+         FROM umrah_pilgrims WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+      rawQuery<{ status: string; c: number }>(
+        `SELECT status, COUNT(*)::int AS c
+         FROM umrah_pilgrims WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+         GROUP BY status`,
+        [id, scope.companyId]
+      ),
+      rawQuery(
+        // 'cancelled' is excluded from totalInvoiced — operators don't
+        // include voided invoices in the "owed" number. totalPaid uses
+        // status='paid'; partial payments will undercount slightly but
+        // the operator overhead of tracking allocations per invoice is
+        // larger than the rounding gain — left for a follow-up that
+        // joins umrah_payments + umrah_payment_allocations.
+        `SELECT COALESCE(SUM(total) FILTER (WHERE status <> 'cancelled'), 0)::numeric AS "totalInvoiced",
+                COALESCE(SUM(total) FILTER (WHERE status = 'paid'), 0)::numeric         AS "totalPaid"
+         FROM umrah_agent_invoices
+         WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+    ]);
+    const stats = statsResult[0] || { pilgrimCount: 0, overstayedCount: 0 };
+    const finance = financeResult[0] as { totalInvoiced: string; totalPaid: string } | undefined;
+    const totalInvoiced = Number(finance?.totalInvoiced ?? 0);
+    const totalPaid = Number(finance?.totalPaid ?? 0);
+    // statusBreakdown shipped as a dict keyed by status so the UI can
+    // pluck specific buckets without sorting.
+    const statusBreakdown = Object.fromEntries(
+      (statusBreakdownResult as Array<{ status: string; c: number }>).map((r) => [r.status, Number(r.c)])
     );
-    res.json(maskFields(req, { ...row, ...(stats[0] || {}) }));
+    res.json(maskFields(req, {
+      ...row,
+      ...stats,
+      totalInvoiced,
+      totalPaid,
+      totalOutstanding: Math.max(0, totalInvoiced - totalPaid),
+      statusBreakdown,
+    }));
   } catch (err) { handleRouteError(err, res, "Get agent error"); }
 });
 
@@ -636,7 +678,7 @@ router.delete("/packages/:id", authorize({ feature: "umrah", action: "delete" })
 router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
+    const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, visaExpiringWithin, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
     let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
@@ -664,6 +706,21 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
     // todayLocal() helper) so they don't accidentally query UTC.
     if (arrivalDate) { params.push(arrivalDate); where += ` AND p."arrivalDate" = $${params.length}`; }
     if (departureDate) { params.push(departureDate); where += ` AND p."departureDate" = $${params.length}`; }
+    // Visa-expiring window — surfaces compliance risk before it
+    // becomes a KSA overstay fine. Range: [today, today + N days];
+    // also excludes already-departed/cancelled rows since their visa
+    // status is operationally irrelevant. The UI dashboard banner +
+    // chip filter clicks set N=7 by default. Date arithmetic uses
+    // CURRENT_DATE so the boundary tracks the server's date — same
+    // source todayISO() reads.
+    if (visaExpiringWithin) {
+      const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
+      params.push(days);
+      where += ` AND p."visaExpiry" IS NOT NULL
+                 AND p."visaExpiry" >= CURRENT_DATE
+                 AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
+                 AND p.status NOT IN ('departed','cancelled')`;
+    }
     if (search) {
       // Search hits four columns:
       //   - fullName              (plaintext, ILIKE)
@@ -711,7 +768,7 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
 router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, search } = req.query as Record<string, string | undefined>;
+    const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, visaExpiringWithin, search } = req.query as Record<string, string | undefined>;
     let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
@@ -725,6 +782,21 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     }
     if (arrivalDate) { params.push(arrivalDate); where += ` AND p."arrivalDate" = $${params.length}`; }
     if (departureDate) { params.push(departureDate); where += ` AND p."departureDate" = $${params.length}`; }
+    // Visa-expiring window — surfaces compliance risk before it
+    // becomes a KSA overstay fine. Range: [today, today + N days];
+    // also excludes already-departed/cancelled rows since their visa
+    // status is operationally irrelevant. The UI dashboard banner +
+    // chip filter clicks set N=7 by default. Date arithmetic uses
+    // CURRENT_DATE so the boundary tracks the server's date — same
+    // source todayISO() reads.
+    if (visaExpiringWithin) {
+      const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
+      params.push(days);
+      where += ` AND p."visaExpiry" IS NOT NULL
+                 AND p."visaExpiry" >= CURRENT_DATE
+                 AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
+                 AND p.status NOT IN ('departed','cancelled')`;
+    }
     if (search) {
       const searchHash = blindIndex(String(search));
       params.push(`%${search}%`);
