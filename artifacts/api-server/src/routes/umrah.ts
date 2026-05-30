@@ -235,6 +235,12 @@ const patchPilgrimSchema = z.object({
   roomNumber: z.string().optional().nullable(),
   transportAssigned: z.boolean().optional(),
   notes: z.string().optional().nullable(),
+  // Overstay-exemption knobs (migration 242 / PR #1481). When the
+  // operator flips overstayExempt=true, the cron skips this pilgrim
+  // entirely. Reason is required by the API guard below so a
+  // compliance reviewer can see WHY each exemption was granted.
+  overstayExempt: z.boolean().optional(),
+  overstayExemptReason: z.string().optional().nullable(),
 });
 
 // `columnMapping` lets the wizard's column-mapping step override the
@@ -1008,6 +1014,22 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
     const scope = req.scope!;
     const b = zodParse(patchPilgrimSchema.safeParse(req.body));
     const pilgrimId = parseId(req.params.id, "id");
+
+    // Overstay-exemption invariants (PR #1481): setting exempt=true
+    // REQUIRES a reason so compliance can audit WHY. Without it the
+    // operator could silently skip the cron for arbitrary pilgrims.
+    // Setting exempt=false (un-exempting) DOESN'T require a reason —
+    // the operator's removing the exemption, not adding one.
+    if (b.overstayExempt === true) {
+      const reason = (b.overstayExemptReason ?? "").trim();
+      if (!reason) {
+        throw new ValidationError("سبب الاستثناء مطلوب — لا يمكن استثناء معتمر بدون مبرّر مكتوب", {
+          field: "overstayExemptReason",
+          fix: "اكتب سبباً واضحاً (مثل: تأخّر مستشفى، اتفاق وكيل، تأخّر طيران)",
+        });
+      }
+    }
+
     const fieldKeys = ["agentId","subAgentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
 
     const encryptIfSensitive = (key: string, val: any): any => {
@@ -1052,6 +1074,29 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
           sets.push(`"${key}"=$${params.length}`);
           if (key === "passportNumber") { params.push(blindIndex(String(b[key]).trim())); sets.push(`"passportNumber_hash"=$${params.length}`); }
           if (key === "visaNumber") { params.push(blindIndex(String(b[key]).trim())); sets.push(`"visaNumber_hash"=$${params.length}`); }
+        }
+      }
+      // Overstay-exemption columns (migration 242). Written together
+      // with the standard fields so a single PATCH can flip the flag
+      // + update other state in one transaction. We track WHO + WHEN
+      // server-side so the audit trail can't be forged via API body.
+      if (b.overstayExempt !== undefined) {
+        params.push(b.overstayExempt);
+        sets.push(`"overstayExempt"=$${params.length}`);
+        if (b.overstayExempt) {
+          // Exempting → record the operator + timestamp + reason.
+          params.push(b.overstayExemptReason!.trim());
+          sets.push(`"overstayExemptReason"=$${params.length}`);
+          params.push(scope.userId);
+          sets.push(`"overstayExemptBy"=$${params.length}`);
+          sets.push(`"overstayExemptAt"=NOW()`);
+        } else {
+          // Un-exempting → clear the metadata so a re-exemption
+          // gets a fresh by/at trail instead of inheriting stale
+          // values from a prior exemption.
+          sets.push(`"overstayExemptReason"=NULL`);
+          sets.push(`"overstayExemptBy"=NULL`);
+          sets.push(`"overstayExemptAt"=NULL`);
         }
       }
       if (sets.length === 0) {
@@ -2625,6 +2670,14 @@ const nullableFkPreproc = z.preprocess(
   z.coerce.number().nullable().optional(),
 );
 
+// Penalty knobs are non-negative numbers (or null = "reset to global
+// default"). Same preprocess pattern as the FK fields — "" treated as
+// null, undefined preserves existing value.
+const nullableNumberPreproc = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.coerce.number().nonnegative({ message: "القيمة يجب أن تكون ≥ 0" }).nullable().optional(),
+);
+
 const umrahSettingsPatchSchema = z.object({
   // When unset, the vendor-statement endpoint skips its umrah branch
   // (gracefully — no broken queries).
@@ -2636,6 +2689,12 @@ const umrahSettingsPatchSchema = z.object({
   umrahVisaProductId: nullableFkPreproc,
   umrahServicesProductId: nullableFkPreproc,
   umrahTransportProductId: nullableFkPreproc,
+  // Overstay penalty knobs (PR #1477). Stored as system_settings rows
+  // keyed per company. Send null to clear (reverts to the global
+  // default from key=… companyId IS NULL).
+  umrahOverstayDailyPenalty: nullableNumberPreproc,
+  umrahOverstayTierDays: nullableNumberPreproc,
+  umrahOverstayTierAmount: nullableNumberPreproc,
 });
 
 router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
@@ -2672,11 +2731,45 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
         WHERE c.id = $1`,
       [scope.companyId],
     );
-    res.json(row ?? {
-      nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null,
-      umrahVisaProductId: null, umrahVisaProductName: null,
-      umrahServicesProductId: null, umrahServicesProductName: null,
-      umrahTransportProductId: null, umrahTransportProductName: null,
+    // Overstay-penalty settings live in system_settings (not
+    // companies) because they're tunable per-company without a
+    // migration per knob. PR #1477 added the tiered model
+    // (tier_days / tier_amount); this endpoint surfaces the three
+    // existing knobs to the UI so the operator can edit them
+    // without opening a DB console.
+    const penaltyRows = await rawQuery<{ key: string; value: string }>(
+      `SELECT key, value FROM system_settings
+        WHERE key IN ('umrah.overstay_daily_penalty',
+                      'umrah.overstay_tier_days',
+                      'umrah.overstay_tier_amount')
+          AND ( ("companyId" IS NULL AND "branchId" IS NULL)
+                OR ("companyId" = $1 AND "branchId" IS NULL) )
+        ORDER BY "companyId" NULLS FIRST`,
+      [scope.companyId],
+    );
+    // Same NULLS-FIRST precedence the cron uses (PR #1477) — the
+    // company-scoped value overwrites the global default in the
+    // dict assignment loop.
+    const penaltyByKey: Record<string, number | null> = {
+      "umrah.overstay_daily_penalty": null,
+      "umrah.overstay_tier_days": null,
+      "umrah.overstay_tier_amount": null,
+    };
+    for (const r of penaltyRows) {
+      const v = Number(r.value);
+      penaltyByKey[r.key] = Number.isFinite(v) ? v : null;
+    }
+
+    res.json({
+      ...(row ?? {
+        nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null,
+        umrahVisaProductId: null, umrahVisaProductName: null,
+        umrahServicesProductId: null, umrahServicesProductName: null,
+        umrahTransportProductId: null, umrahTransportProductName: null,
+      }),
+      umrahOverstayDailyPenalty: penaltyByKey["umrah.overstay_daily_penalty"],
+      umrahOverstayTierDays: penaltyByKey["umrah.overstay_tier_days"],
+      umrahOverstayTierAmount: penaltyByKey["umrah.overstay_tier_amount"],
     });
   } catch (err) { handleRouteError(err, res, "Get umrah settings error"); }
 });
@@ -2749,6 +2842,47 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
         params,
       );
     }
+
+    // Overstay-penalty knobs live in system_settings (not companies).
+    // Same omit/null/value semantics as the FK fields above. We UPSERT
+    // when the value is non-null, DELETE the company-scoped row when
+    // the value is explicitly null — clearing reverts to the global
+    // default (key with companyId IS NULL).
+    const penaltyFields: Array<[string, number | null | undefined]> = [
+      ["umrah.overstay_daily_penalty", b.umrahOverstayDailyPenalty],
+      ["umrah.overstay_tier_days", b.umrahOverstayTierDays],
+      ["umrah.overstay_tier_amount", b.umrahOverstayTierAmount],
+    ];
+    const keyToAuditField: Record<string, string> = {
+      "umrah.overstay_daily_penalty": "umrahOverstayDailyPenalty",
+      "umrah.overstay_tier_days": "umrahOverstayTierDays",
+      "umrah.overstay_tier_amount": "umrahOverstayTierAmount",
+    };
+    for (const [key, value] of penaltyFields) {
+      if (value === undefined) continue;
+      if (value === null) {
+        await rawExecute(
+          `DELETE FROM system_settings WHERE key = $1 AND "companyId" = $2 AND "branchId" IS NULL`,
+          [key, scope.companyId],
+        );
+      } else {
+        // UPSERT — UPDATE first; INSERT only if no row exists.
+        // Matches the pattern in routes/settings.ts so a future
+        // shared helper can replace both call sites.
+        const result = await rawExecute(
+          `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3 AND "branchId" IS NULL`,
+          [String(value), key, scope.companyId],
+        );
+        if (!result.affectedRows) {
+          await rawExecute(
+            `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
+            [key, String(value), scope.companyId],
+          );
+        }
+      }
+      auditAfter[keyToAuditField[key]!] = value;
+    }
+
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "umrah.settings.updated", entity: "companies", entityId: scope.companyId,
