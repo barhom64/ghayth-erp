@@ -139,6 +139,10 @@ const createCustomerAdvanceSchema = z.object({
   reference: z.string().optional(),
   notes: z.string().optional(),
   receivedDate: z.string().optional(),
+  // Operator's explicit branch pick. Required for multi-branch users;
+  // single-branch users auto-resolve via the resolver. The advance JE
+  // lands on this branch instead of the operator's working branch.
+  branchId: z.coerce.number().optional(),
 });
 
 const impactPreviewSchema = z.object({
@@ -3350,10 +3354,27 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
   try {
     const scope = req.scope!;
 
-    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate } = zodParse(createCustomerAdvanceSchema.safeParse(req.body));
+    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate, branchId: bodyBranchId } = zodParse(createCustomerAdvanceSchema.safeParse(req.body));
 
     const [client] = await rawQuery<{ id: number }>(`SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [clientId, scope.companyId]);
     if (!client) throw new ValidationError("العميل غير موجود", { field: "clientId", fix: "اختر عميلاً من قائمة العملاء." });
+
+    // Resolve the branch the advance JE will land on. Multi-branch users
+    // who didn't pick a branch get the typed BRANCH_REQUIRED error so the
+    // frontend can render the picker. Single-branch users auto-resolve.
+    let advanceBranchId: number;
+    if (scope.isOwner || OWNER_GM_ROLES.includes(scope.role)) {
+      advanceBranchId = (bodyBranchId ?? scope.branchId) as number;
+      if (!advanceBranchId) {
+        throw new ValidationError("الفرع مطلوب لتسجيل دفعة مقدمة", { field: "branchId" });
+      }
+    } else {
+      const r = resolveTransactionBranch({
+        scope: { companyId: scope.companyId, branchId: scope.branchId, allowedBranches: scope.allowedBranches },
+        bodyBranchId,
+      });
+      advanceBranchId = r.branchId;
+    }
 
     const recvDate = receivedDate || todayISO();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, recvDate);
@@ -3389,7 +3410,7 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
         const ins = await client.query(
           `INSERT INTO customer_advances ("companyId","branchId","clientId",ref,amount,"appliedAmount",method,"receivedDate",notes,"createdBy",status)
            VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,'open') RETURNING id`,
-          [scope.companyId, scope.branchId, clientId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId]
+          [scope.companyId, advanceBranchId, clientId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId]
         );
         advanceId = ins.rows[0].id;
       } catch (e: any) {
@@ -3415,7 +3436,7 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
           const ins2 = await client.query(
             `INSERT INTO customer_advances ("companyId","branchId","clientId",ref,amount,"appliedAmount",method,"receivedDate",notes,"createdBy",status)
              VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,'open') RETURNING id`,
-            [scope.companyId, scope.branchId, clientId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId]
+            [scope.companyId, advanceBranchId, clientId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId]
           );
           advanceId = ins2.rows[0].id;
         } else {
@@ -3440,7 +3461,10 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     try {
       const advanceResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
-        branchId: scope.branchId,
+        // Lands on the resolved advanceBranchId, not scope.branchId — so
+        // a multi-branch user posts to the explicit branch they picked
+        // and the customer's per-branch AR aging stays accurate.
+        branchId: advanceBranchId,
         createdBy: scope.activeAssignmentId,
         ref: advRef,
         description: `دفعة مقدمة من العميل ${clientId}: ${amt}`,

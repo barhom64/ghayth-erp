@@ -10,7 +10,7 @@ import { CreatePageLayout } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { ClientSelect } from "@/components/shared/entity-selects";
+import { ClientSelect, BranchSelect } from "@/components/shared/entity-selects";
 import { todayLocal, formatCurrency } from "@/lib/formatters";
 
 const PAYMENT_METHODS = [
@@ -32,6 +32,7 @@ export default function CustomerAdvancesCreate() {
     receivedDate: todayLocal(),
     reference: "",
     notes: "",
+    branchId: "",
   });
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
@@ -54,6 +55,9 @@ export default function CustomerAdvancesCreate() {
         receivedDate: form.receivedDate,
         reference: form.reference || undefined,
         notes: form.notes || undefined,
+        // Multi-branch users must pick a branch (backend resolver throws
+        // BRANCH_REQUIRED otherwise). Single-branch users can leave blank.
+        branchId: form.branchId ? Number(form.branchId) : undefined,
       });
       toast({ title: "تم تسجيل الدفعة المقدمة" });
       setLocation("/finance/customer-advances");
@@ -89,6 +93,13 @@ export default function CustomerAdvancesCreate() {
             allowCreate={false}
           />
         </FormFieldWrapper>
+
+        <BranchSelect
+          value={form.branchId}
+          onChange={(v) => setForm((f) => ({ ...f, branchId: String(v ?? "") }))}
+          label="الفرع"
+          allowCreate={false}
+        />
 
         <FormFieldWrapper label="تاريخ الاستلام" required error={fieldErrors.receivedDate}>
           <DatePicker
