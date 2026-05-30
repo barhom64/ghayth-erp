@@ -844,6 +844,27 @@ financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", authorize({ feature
   }
 });
 
+/**
+ * GAP_MATRIX item #6 (FIN-008) — bank reconciliation design note.
+ *
+ * The sweep audit flagged this endpoint as "updates a flag only without
+ * posting a GL entry". Re-inspection confirms the design is correct:
+ *
+ *   - Every bank statement row represents a real-world bank transaction.
+ *   - A matching journal_line ALREADY EXISTS from the original payment
+ *     or receipt that the operator entered when the payment was made
+ *     (DR Bank / CR AR for receipts; DR AP / CR Bank for payments).
+ *   - Reconciliation matches a `bank_statements` row to that pre-existing
+ *     journal_line — both rows are just FLAGGED as matched. Posting a new
+ *     GL entry here would double-count the transaction.
+ *
+ * Open feature gap (NOT a bug): when a bank row has no matching journal
+ * (bank fee, interest income, error) the current code returns 404. A
+ * future workflow can let the operator post DR Bank-Fee-Expense /
+ * CR Bank from this endpoint. That's a product scope decision, not an
+ * audit finding — tracked in
+ * docs/audit/GHAITH_SWEEP_EXECUTION_PROGRESS.md.
+ */
 financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
