@@ -27,7 +27,12 @@ const PAGE = readFileSync(
 
 describe("/umrah/pilgrims — search + filter coverage", () => {
   it("destructures the new query params alongside the existing ones", () => {
-    expect(ROUTE).toMatch(/\{\s*seasonId,\s*status,\s*agentId,\s*groupId,\s*nationality,\s*search/);
+    // Match groupId + nationality at any position INSIDE the destructure
+    // block before `= req.query`. Pinning the exact order broke when
+    // PR #1431 added `flight` between nationality and search — keep
+    // this assertion order-tolerant.
+    expect(ROUTE).toMatch(/\{[^}]*\bgroupId\b[^}]*\}\s*=\s*req\.query/);
+    expect(ROUTE).toMatch(/\{[^}]*\bnationality\b[^}]*\}\s*=\s*req\.query/);
   });
 
   it("groupId is filtered by equality on p.\"groupId\"", () => {

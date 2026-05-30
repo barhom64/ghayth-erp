@@ -636,7 +636,7 @@ router.delete("/packages/:id", authorize({ feature: "umrah", action: "delete" })
 router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId, status, agentId, groupId, nationality, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
+    const { seasonId, status, agentId, groupId, nationality, flight, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
     let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
@@ -648,6 +648,15 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
     // — because the import file may write "SA" or "SAUDI" or "Saudi
     // Arabia" depending on the source.
     if (nationality) { params.push(`%${nationality}%`); where += ` AND p.nationality ILIKE $${params.length}`; }
+    // Flight filter — the daily flight-day workflow. Matches either
+    // entryFlight OR exitFlight via ILIKE so a single search hits both
+    // arrival + departure manifests. Pair with the bulk-status flip
+    // (PR #1430) for the canonical pattern: filter flight → select all
+    // → mark arrived/departed in one click.
+    if (flight) {
+      params.push(`%${flight}%`);
+      where += ` AND (p."entryFlight" ILIKE $${params.length} OR p."exitFlight" ILIKE $${params.length})`;
+    }
     if (search) {
       // Search hits four columns:
       //   - fullName              (plaintext, ILIKE)
