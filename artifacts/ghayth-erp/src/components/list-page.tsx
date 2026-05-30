@@ -515,6 +515,26 @@ function ListPageExportMenu<T>(props: {
     }
   }
 
+  async function runCsv() {
+    // GAP_MATRIX item #7 — CSV exports were previously built client-side
+    // via Blob + URL.createObjectURL, skipping audit + letterhead +
+    // per-feature RBAC. Routing through downloadDocument() puts the
+    // export onto the same /api/print/render path as Excel/A4.
+    setBusy(true);
+    try {
+      await downloadDocument({
+        entityType,
+        entityId: "list",
+        format: "csv",
+        payload: { entity: { id: "list" }, items: props.rows },
+      });
+    } catch (err) {
+      toast({ title: "فشل تصدير CSV", description: (err as { message?: string })?.message ?? "—", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!showExcel && !showPrint && !showPdf && !showCsv) return null;
 
   return (
@@ -543,6 +563,12 @@ function ListPageExportMenu<T>(props: {
           <DropdownMenuItem onClick={runPrint} className="gap-2">
             <FileText className="h-4 w-4" />
             <span>PDF</span>
+          </DropdownMenuItem>
+        )}
+        {showCsv && (
+          <DropdownMenuItem onClick={runCsv} className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />
+            <span>CSV</span>
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
