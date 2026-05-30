@@ -206,6 +206,13 @@ export interface ListPageProps<T> {
   // ─── Optional stats grid (above the filter bar) ────────────────────
   stats?: ListPageStat[];
 
+  /**
+   * Module TabsNav (FinanceTabsNav, HrTabsNav, ...) rendered above the
+   * stats grid. Lets ListPage-based pages stay consistent with the
+   * PageShell + TabsNav pattern used everywhere else.
+   */
+  tabsNav?: ReactNode;
+
   // ─── Children rendered after the table (dialogs, panels, ...) ─────
   children?: ReactNode;
 }
@@ -249,6 +256,7 @@ export function ListPage<T>(props: ListPageProps<T>) {
     documentTemplate,
     exports: exportOpts,
     stats,
+    tabsNav,
     children,
   } = props;
 
@@ -326,6 +334,8 @@ export function ListPage<T>(props: ListPageProps<T>) {
       actions={actions}
       loading={isLoading}
     >
+      {tabsNav}
+
       {stats && stats.length > 0 && (
         <div
           // Tailwind's JIT scanner only sees literal class strings, so the

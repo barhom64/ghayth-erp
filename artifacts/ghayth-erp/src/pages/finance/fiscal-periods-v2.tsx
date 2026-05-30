@@ -21,6 +21,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   Dialog,
   DialogContent,
@@ -143,6 +144,7 @@ export default function FiscalPeriodsV2Page() {
         { href: "/finance", label: "المالية" },
         { label: "إقفال الفترات" },
       ]}
+      tabsNav={<FinanceTabsNav />}
       queryKey={[...QUERY_KEY]}
       endpoint="/finance/fiscal-periods-v2"
       printEntityType="report_fiscal_periods"
