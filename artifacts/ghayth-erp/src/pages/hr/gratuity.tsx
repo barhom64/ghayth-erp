@@ -15,6 +15,7 @@ import { TERMINATION_TYPES } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 // Calculation form (no POST) — submit builds the query URL the
 // gratuity endpoint reads. employeeId required; the rest have safe
 // defaults. terminationType uses TERMINATION_TYPES keys verbatim
@@ -63,6 +64,7 @@ export default function GratuityPage() {
       loading={isLoading}
       contentClassName="space-y-4 max-w-3xl mx-auto"
     >
+      <HrTabsNav />
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">بيانات الحساب</CardTitle></CardHeader>
         <CardContent>

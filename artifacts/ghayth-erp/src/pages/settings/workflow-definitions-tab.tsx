@@ -195,11 +195,18 @@ export function WorkflowDefinitionsTab() {
       toast({ variant: "destructive", title: "فشل الإرسال", description: e?.message });
     }
   };
-  const handleTestSubmit = async (definition: any) => {
-    const refIdStr = window.prompt(`اختبار سير العمل "${definition.name ?? definition.requestType}" — أدخل رقم الكيان المرجعي:`);
-    if (!refIdStr) return;
-    const refId = Number(refIdStr);
+  const [testTarget, setTestTarget] = useState<any | null>(null);
+  const [testRefId, setTestRefId] = useState("");
+  const handleTestSubmit = (definition: any) => {
+    setTestRefId("");
+    setTestTarget(definition);
+  };
+  const confirmTestSubmit = async () => {
+    if (!testTarget) return;
+    const refId = Number(testRefId);
     if (!Number.isFinite(refId)) return;
+    const definition = testTarget;
+    setTestTarget(null);
     await submitWorkflowMut({
       requestType: definition.requestType,
       refTable: definition.refTable ?? definition.requestType,
@@ -354,6 +361,27 @@ export function WorkflowDefinitionsTab() {
         successMessage="تم الحذف"
         onDeleted={() => { setDeletingDef(null); refetch(); }}
       />
+      {testTarget && (
+        <Card className="border-dashed border-status-info-surface">
+          <CardContent className="p-3 space-y-2">
+            <div className="text-sm font-medium">
+              اختبار سير العمل &quot;{testTarget.name ?? testTarget.requestType}&quot;
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">رقم الكيان المرجعي:</span>
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={testRefId}
+                onChange={(e) => setTestRefId(e.target.value)}
+                className="h-8 w-32 text-xs"
+              />
+              <Button size="sm" onClick={confirmTestSubmit} disabled={!testRefId.trim()} rateLimitAware>تشغيل</Button>
+              <Button size="sm" variant="outline" onClick={() => setTestTarget(null)}>إلغاء</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

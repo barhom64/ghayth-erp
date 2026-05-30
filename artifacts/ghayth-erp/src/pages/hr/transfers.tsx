@@ -30,6 +30,7 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { TRANSFER_STATUS } from "@/lib/hr-type-maps";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 // employeeId + toBranchId required (was `if (!form.employeeId || !form.toBranchId)`
 // toast guard — now caught at schema validation before any network call).
 const transferSchema = z.object({
@@ -217,6 +218,7 @@ export default function TransfersPage() {
         </GuardedButton>
       }
     >
+      <HrTabsNav />
       {/* KPI cards */}
       <KpiGrid items={kpis} />
 

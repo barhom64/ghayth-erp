@@ -347,6 +347,10 @@ export default function AdminPbxControl() {
   return (
     <PageShell
       title="مركز التحكّم بالـ PBX"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مركز التحكّم بالـ PBX" },
+      ]}
       subtitle="الامتدادات، قوائم الـ IVR، التسجيلات، وطابور تحويل الصوت إلى نص"
       actions={
         <Button variant="outline" size="sm" onClick={refreshAll}>

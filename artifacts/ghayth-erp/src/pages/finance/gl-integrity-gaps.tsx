@@ -10,6 +10,7 @@ import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { CheckCircle2, AlertTriangle, Download, FileWarning } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * GL integrity gaps — period-close pre-flight UI.
  * Consumes /reports/gl-integrity-gaps (#1043).
@@ -213,6 +214,7 @@ export default function GlIntegrityGapsPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       {/* Hero state */}
       <Card className={summary.isClean
         ? "border-emerald-300 bg-emerald-50/40"

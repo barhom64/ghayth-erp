@@ -132,6 +132,10 @@ export default function InvoiceSendQueuePage() {
   return (
     <PageShell
       title="صف إرسال الفواتير"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "صف إرسال الفواتير" },
+      ]}
       subtitle="فواتير معتمدة لم تُرسل بعد — اعرض، أرسل، وانتقل لجلب الدفعة"
     >
       <FinanceTabsNav />

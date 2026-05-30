@@ -575,7 +575,7 @@ function SchemeEditor({
             {scheme.moduleKey}.{scheme.entityKey}
           </span>
         </CardTitle>
-        <Button variant="ghost" size="sm" onClick={onClose}>
+        <Button variant="ghost" size="sm" onClick={onClose} title="إغلاق">
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
@@ -822,6 +822,14 @@ function CountersStrip({ schemeId }: { schemeId: number }) {
     `/numbering/schemes/${schemeId}`,
   );
   const counters = (data?.counters || []) as Counter[];
+  // Inline state for reset / lock forms (replaces 3 window.prompt calls).
+  // Only one form is open at a time per row, so we keep a single
+  // `mode` discriminator plus the counter id.
+  const [actionMode, setActionMode] = useState<"reset" | "lock" | null>(null);
+  const [actionCounterId, setActionCounterId] = useState<number | null>(null);
+  const [actionReason, setActionReason] = useState("");
+  const [resetNewValue, setResetNewValue] = useState("1");
+  const closeForm = () => { setActionMode(null); setActionCounterId(null); setActionReason(""); setResetNewValue("1"); };
 
   if (isLoading) return null;
   if (counters.length === 0) {
@@ -832,16 +840,28 @@ function CountersStrip({ schemeId }: { schemeId: number }) {
     );
   }
 
-  const handleReset = async (counterId: number) => {
-    const reason = window.prompt("سبب تصفير العداد:");
-    if (!reason || reason.trim().length < 3) {
+  const handleReset = (counterId: number) => {
+    setActionMode("reset");
+    setActionCounterId(counterId);
+    setActionReason("");
+    setResetNewValue("1");
+  };
+  const confirmReset = async () => {
+    if (actionCounterId == null) return;
+    if (!actionReason.trim() || actionReason.trim().length < 3) {
       toast({ title: "السبب مطلوب", description: "السبب لا يقل عن 3 أحرف" });
       return;
     }
-    const newValue = Number(window.prompt("القيمة الجديدة للعداد:", "1"));
-    if (!Number.isFinite(newValue) || newValue < 0) return;
+    const newValue = Number(resetNewValue);
+    if (!Number.isFinite(newValue) || newValue < 0) {
+      toast({ title: "قيمة غير صالحة", description: "أدخل رقماً صحيحاً ≥ 0", variant: "destructive" });
+      return;
+    }
+    const cid = actionCounterId;
+    const reason = actionReason.trim();
+    closeForm();
     try {
-      await apiFetch(`/numbering/counters/${counterId}/reset`, {
+      await apiFetch(`/numbering/counters/${cid}/reset`, {
         method: "POST",
         body: JSON.stringify({ newValue, reason }),
       });
@@ -852,13 +872,22 @@ function CountersStrip({ schemeId }: { schemeId: number }) {
     }
   };
 
-  const handleLockToggle = async (counter: Counter) => {
-    const op = counter.lockedAt ? "unlock" : "lock";
-    const reason = window.prompt(counter.lockedAt ? "سبب فتح القفل:" : "سبب القفل:");
-    if (!reason || reason.trim().length < 3) {
-      toast({ title: "السبب مطلوب" });
+  const handleLockToggle = (counter: Counter) => {
+    setActionMode("lock");
+    setActionCounterId(counter.id);
+    setActionReason("");
+  };
+  const confirmLockToggle = async () => {
+    if (actionCounterId == null) return;
+    const counter = counters.find((c) => c.id === actionCounterId);
+    if (!counter) { closeForm(); return; }
+    if (!actionReason.trim() || actionReason.trim().length < 3) {
+      toast({ title: "السبب مطلوب", description: "السبب لا يقل عن 3 أحرف" });
       return;
     }
+    const op = counter.lockedAt ? "unlock" : "lock";
+    const reason = actionReason.trim();
+    closeForm();
     try {
       await apiFetch(`/numbering/counters/${counter.id}/${op}`, {
         method: "POST",
@@ -929,6 +958,43 @@ function CountersStrip({ schemeId }: { schemeId: number }) {
           </tbody>
         </table>
       </div>
+      {actionMode && actionCounterId !== null && (
+        <div className="border-t pt-2 mt-2 space-y-2 bg-surface-subtle/40 rounded p-2">
+          <div className="text-xs font-medium">
+            {actionMode === "reset" ? "تصفير العداد" :
+              counters.find((c) => c.id === actionCounterId)?.lockedAt ? "فتح قفل العداد" : "قفل العداد"}
+          </div>
+          {actionMode === "reset" && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">القيمة الجديدة:</span>
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={resetNewValue}
+                onChange={(e) => setResetNewValue(e.target.value)}
+                className="h-7 w-24 text-xs"
+              />
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">السبب (≥ 3 أحرف):</span>
+            <Input
+              value={actionReason}
+              onChange={(e) => setActionReason(e.target.value)}
+              className="h-7 flex-1 text-xs"
+            />
+            <Button
+              size="sm"
+              onClick={actionMode === "reset" ? confirmReset : confirmLockToggle}
+              disabled={actionReason.trim().length < 3}
+              rateLimitAware
+            >
+              تأكيد
+            </Button>
+            <Button size="sm" variant="outline" onClick={closeForm}>إلغاء</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -960,52 +1026,10 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
   // body; void also takes {newNumber} when overriding. Backend enforces
   // settings.numbering.override authorize, so the prompt is mostly UX
   // (operator confirmation + reason capture).
-  const [busyId, setBusyId] = useState<number | null>(null);
-
-  const overrideAssignment = async (a: Assignment) => {
-    const newNumber = window.prompt("الرقم الجديد للمعاملة", a.number);
-    if (!newNumber || !newNumber.trim()) return;
-    const reason = window.prompt("سبب التعديل (3 أحرف على الأقل):", "");
-    if (!reason || reason.trim().length < 3) {
-      toast({ variant: "destructive", title: "سبب التعديل مطلوب" });
-      return;
-    }
-    try {
-      setBusyId(a.id);
-      await apiFetch(`/numbering/assignments/${a.id}/override`, {
-        method: "POST",
-        body: JSON.stringify({ newNumber: newNumber.trim(), reason: reason.trim() }),
-      });
-      toast({ title: "تم تعديل الرقم" });
-      refetch();
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "تعذر التعديل", description: err.message });
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const voidAssignment = async (a: Assignment) => {
-    const reason = window.prompt(`سبب إلغاء الرقم ${a.number} (3 أحرف على الأقل):`, "");
-    if (!reason || reason.trim().length < 3) {
-      toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
-      return;
-    }
-    if (!window.confirm(`سيتم إلغاء الرقم ${a.number} نهائياً. متابعة؟`)) return;
-    try {
-      setBusyId(a.id);
-      await apiFetch(`/numbering/assignments/${a.id}/void`, {
-        method: "POST",
-        body: JSON.stringify({ reason: reason.trim() }),
-      });
-      toast({ title: "تم إلغاء الرقم" });
-      refetch();
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "تعذر الإلغاء", description: err.message });
-    } finally {
-      setBusyId(null);
-    }
-  };
+  // Override + void actions live as inline Cards driven by overrideRow /
+  // voidRow state below — the previous overrideAssignment / voidAssignment
+  // window.prompt handlers were dead code (no caller after the inline-card
+  // refactor) and have been removed.
 
   // POST /numbering/assignments/:id/override — manually rewrite the
   // issued number (e.g. correct a typo before the document is delivered).

@@ -12,6 +12,7 @@ import { Download, TrendingUp, Boxes, Users, BarChart3 } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * COGS / Margin summary report — consumes #1034's
  * /reports/cogs-summary endpoint.
@@ -238,6 +239,7 @@ export default function CogsSummaryPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       {/* KPIs */}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         <Card>

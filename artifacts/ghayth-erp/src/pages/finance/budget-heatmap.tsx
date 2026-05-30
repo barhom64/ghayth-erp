@@ -143,6 +143,10 @@ export default function BudgetHeatmapPage() {
   return (
     <PageShell
       title="خريطة حرارية للميزانية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "خريطة حرارية للميزانية" },
+      ]}
       subtitle="استخدام الميزانية شهرياً × بنداً — ألوان فورية تكشف نقاط الانفجار"
       actions={
         <div className="flex gap-2">

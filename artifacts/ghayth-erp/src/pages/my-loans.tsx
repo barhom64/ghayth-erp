@@ -78,6 +78,10 @@ export default function MyLoans() {
   return (
     <PageShell
       title="سلفي"
+      breadcrumbs={[
+        { href: "/my-space", label: "مساحاتي" },
+        { label: "سلفي" },
+      ]}
       subtitle="متابعة السلف والقروض الخاصة بك"
       actions={
         <Link href="/hr/loans/create">

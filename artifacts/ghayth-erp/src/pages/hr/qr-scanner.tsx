@@ -9,6 +9,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { QrCode, Clock, CheckCircle, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 /**
  * HR-U1 — تسجيل الحضور السريع عبر QR/الموقع.
  *
@@ -92,6 +93,7 @@ export default function QRScannerPage() {
         { label: "تسجيل الحضور السريع" },
       ]}
     >
+      <HrTabsNav />
       <div className="max-w-lg mx-auto">
         <Card className="border-0 shadow-lg">
           <CardContent className="p-8 text-center">

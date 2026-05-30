@@ -219,7 +219,7 @@ export default function OpeningBalancesCreatePage() {
                 />
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="icon" title="حذف"
                   type="button"
                   onClick={() => removeLine(idx)}
                   disabled={lines.length <= 2}

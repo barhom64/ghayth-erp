@@ -25,6 +25,7 @@ import {
 import { MoreHorizontal, Plus, FileText } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 // ─── Arabic Maps ────────────────────────────────────────────────────
 
 const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -114,7 +115,12 @@ export default function ContractsPage() {
     { successMessage: "تم إنهاء العقد" },
   );
 
-  if (isLoading) return <PageShell title="عقود الموظفين"><LoadingSpinner /></PageShell>;
+  if (isLoading) return <PageShell title="عقود الموظفين"
+      breadcrumbs={[
+        { href: "/hr", label: "الموارد البشرية" },
+        { label: "عقود الموظفين" },
+      ]}>
+      <HrTabsNav /><LoadingSpinner /></PageShell>;
   if (isError) return <PageShell title="عقود الموظفين"><ErrorState onRetry={() => refetch()} /></PageShell>;
 
   const contracts = data?.data || [];
@@ -224,9 +230,7 @@ function ActionsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
+        <Button variant="ghost" size="icon" title="المزيد" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {canSubmit && <DropdownMenuItem onClick={onSubmit}>تقديم للاعتماد</DropdownMenuItem>}

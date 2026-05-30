@@ -13,6 +13,7 @@ import { Banknote, Send, AlertCircle, Calendar, Clock, FileText } from "lucide-r
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { BulkCheckbox } from "@/components/shared/bulk-actions";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * FIN-016 — Payment-run batch UI.
  *
@@ -168,6 +169,7 @@ export default function PaymentRunPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       {isLoading ? <LoadingSpinner /> : isError ? <ErrorState /> : (
         <div className="space-y-4">
           {/* KPIs */}

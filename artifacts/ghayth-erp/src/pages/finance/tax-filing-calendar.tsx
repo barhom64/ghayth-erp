@@ -101,7 +101,7 @@ function buildFilings(year: number, vatFrequency: "monthly" | "quarterly"): Fili
       label: "إقرار ضريبة الاستقطاع",
       periodLabel: `${year}-${String(m).padStart(2, "0")}`,
       deadline: fixedDayOfMonth(dlYear, dlMonth, 10),
-      href: "/finance/wht-summary",
+      href: "/finance/reports/wht-summary",
       icon: FileCheck2,
       color: "text-status-warning-foreground",
     });
@@ -198,6 +198,10 @@ export default function TaxFilingCalendarPage() {
   return (
     <PageShell
       title="تقويم الإقرارات الضريبية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "تقويم الإقرارات الضريبية" },
+      ]}
       subtitle="مواعيد إقرارات ZATCA + GOSI خلال السنة — لا تفوّت أي موعد"
       actions={
         <div className="flex gap-2">

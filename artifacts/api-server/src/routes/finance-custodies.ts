@@ -13,6 +13,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
+import { assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import {
   emitEvent,
   createAuditLog,
@@ -690,9 +691,13 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
 
     const idempotencyToken = requestIdempotencyToken(req);
     const { journalId, settleRef, remaining, alreadyExists } = await withTransaction(async (client) => {
-      // Lock the custody header row to prevent concurrent settlements
+      // Lock the custody header row to prevent concurrent settlements.
+      // Pull branchId too so the settlement JE lands on the SAME branch
+      // as the grant — pre-fix the settle JE used scope.branchId so a
+      // custody granted on Branch A settled by a user working on Branch
+      // B silently split the GL movement across two branches.
       const lockResult = await client.query(
-        `SELECT je.id, je.status AS "approvalStatus"
+        `SELECT je.id, je.status AS "approvalStatus", je."branchId"
          FROM journal_entries je
          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
          FOR UPDATE`,
@@ -759,10 +764,21 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
 
       const sourceAcct = sourceAccountCode || "1100";
       const settleRef = `CUSTODY-SETTLE-${idempotencyToken}`;
+      // Settlement lands on the custody grant's branch, not the operator's
+      // working branch. The header was pulled with branchId above (the
+      // grant's own header).
+      const custodyBranchId = (custodyHeader.branchId as number | null) ?? scope.branchId;
+      if (custodyBranchId != null) {
+        assertDocumentBranchAccess(custodyBranchId, {
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          allowedBranches: scope.allowedBranches,
+        });
+      }
       const { financialEngine } = await import("../lib/engines/index.js");
       const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
-        branchId: scope.branchId,
+        branchId: custodyBranchId,
         createdBy: scope.activeAssignmentId,
         ref: settleRef,
         description: custodyRef,
@@ -861,12 +877,20 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
     const { journalId, settleRef, remaining, alreadyExists } = await withTransaction(async (client) => {
       // Lock the custody header row to prevent concurrent settlements
       const lockResult = await client.query(
-        `SELECT je.id, je.ref FROM journal_entries je
+        `SELECT je.id, je.ref, je."branchId" FROM journal_entries je
          WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
          FOR UPDATE`,
         [custodyId, scope.companyId]
       );
       if (!lockResult.rows[0]) throw new NotFoundError("العهدة غير موجودة (lock)");
+      const custodyBranchId = (lockResult.rows[0].branchId as number | null) ?? scope.branchId;
+      if (custodyBranchId != null) {
+        assertDocumentBranchAccess(custodyBranchId, {
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          allowedBranches: scope.allowedBranches,
+        });
+      }
 
       // Resolve the custody account code from the original journal entry (not hardcoded)
       const custodyLinesResult = await client.query(
@@ -915,7 +939,8 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
       const settleRef = `CUSTODY-SETTLE-${idempotencyToken}`;
       const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
-        branchId: scope.branchId,
+        // Settle JE on the custody grant's branch — see lock SELECT above.
+        branchId: custodyBranchId,
         createdBy: scope.activeAssignmentId,
         ref: settleRef,
         description: custody.ref,

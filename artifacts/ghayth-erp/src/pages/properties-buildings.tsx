@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -185,8 +186,8 @@ export default function PropertiesBuildings() {
             </Button>
           </Link>
           {canManage && (
-            <Link href={`/properties/buildings/${b.id}/edit`}>
-              <Button variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs">
+            <Link href={`/properties/buildings/${b.id}`}>
+              <Button variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs" title="تعديل">
                 <Pencil className="h-3 w-3" />
               </Button>
             </Link>
@@ -212,6 +213,7 @@ export default function PropertiesBuildings() {
         ) : undefined
       }
     >
+      <PropertyTabsNav />
       <KpiGrid items={kpis} />
 
       <AdvancedFilters

@@ -8,6 +8,16 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Edit, CalendarDays, XCircle, ChevronsUp, Trash2 } from "lucide-react";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { formatDateAr } from "@/lib/formatters";
@@ -89,9 +99,14 @@ export default function LeaveDetail() {
   }, [leave]);
 
 
-  const handleEscalate = async () => {
+  const [confirmEscalate, setConfirmEscalate] = useState(false);
+  const handleEscalate = () => {
     if (!id) return;
-    if (!window.confirm("سيتم تصعيد الطلب للمرحلة التالية إذا انقضت مهلة 48 ساعة. متابعة؟")) return;
+    setConfirmEscalate(true);
+  };
+  const confirmedEscalate = async () => {
+    setConfirmEscalate(false);
+    if (!id) return;
     try {
       await apiFetch(`/hr/leave-requests/${id}/escalate`, {
         method: "PATCH",
@@ -104,15 +119,21 @@ export default function LeaveDetail() {
     }
   };
 
-  const handleCancel = async () => {
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const handleCancel = () => {
     if (!id) return;
-    const reason = window.prompt("سبب إلغاء الإجازة:", "");
-    if (reason == null) return;
+    setCancelReason("");
+    setCancelOpen(true);
+  };
+  const confirmCancel = async () => {
+    if (!id) return;
+    setCancelOpen(false);
     setCancelling(true);
     try {
       await apiFetch(`/hr/leave-requests/${id}/cancel`, {
         method: "POST",
-        body: JSON.stringify({ reason: reason || undefined }),
+        body: JSON.stringify({ reason: cancelReason.trim() || undefined }),
       });
       toast({ title: "تم إلغاء الإجازة" });
       refetch();
@@ -342,6 +363,35 @@ export default function LeaveDetail() {
         onDeleted={() => setLocation("/hr/leaves")}
       />
     )}
+    <AlertDialog open={confirmEscalate} onOpenChange={(o) => !o && setConfirmEscalate(false)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>تأكيد التصعيد</AlertDialogTitle>
+          <AlertDialogDescription>
+            سيتم تصعيد الطلب للمرحلة التالية إذا انقضت مهلة 48 ساعة. متابعة؟
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>إلغاء</AlertDialogCancel>
+          <AlertDialogAction onClick={confirmedEscalate}>تأكيد التصعيد</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إلغاء الإجازة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">سبب الإلغاء (اختياري)</Label>
+          <Textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} rows={3} />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCancelOpen(false)}>تراجع</Button>
+          <Button variant="destructive" onClick={confirmCancel} disabled={cancelling} rateLimitAware>تأكيد الإلغاء</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

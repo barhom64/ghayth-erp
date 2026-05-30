@@ -14,7 +14,7 @@ import { logger } from "../lib/logger.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2 } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, computeVat, getCompanyVatRate } from "../lib/businessHelpers.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
@@ -1634,9 +1634,24 @@ router.post("/contracts/:id/terminate", authorize({ feature: "properties.contrac
     if (earlyFee > 0) {
       try {
         const { propertiesEngine } = await import("../lib/engines/index.js");
+        // Resolve real propertyId (parent building) — the previous shape
+        // passed contract.unitId in the propertyId slot, a semantic FK
+        // violation (different target tables). Per-tenant AR aging didn't
+        // surface the penalty before because tenantId wasn't carried.
+        const termDimRow = contract.unitId
+          ? (await rawQuery<{ buildingId: number | null }>(
+              `SELECT "buildingId" FROM property_units WHERE id = $1 AND "companyId" = $2`,
+              [Number(contract.unitId), scope.companyId]
+            ))[0]
+          : undefined;
         const glResult = await propertiesEngine.postEarlyTerminationGL(
           { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-          { contractId: Number(id), propertyId: contract.unitId as number, penaltyAmount: earlyFee }
+          {
+            contractId: Number(id),
+            propertyId: termDimRow?.buildingId ?? 0,
+            tenantId: (contract.tenantId as number | null) ?? null,
+            penaltyAmount: earlyFee,
+          }
         );
         journalEntryId = glResult.journalId;
       } catch (e) { logger.error(e, "early termination GL posting failed"); journalEntryId = null; }
@@ -1942,7 +1957,9 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
     const { row, journalEntryId: finalJournalId } = await withTransaction(async (client) => {
       // Lock the payment row to prevent concurrent pay requests.
       const lockRes = await client.query(
-        `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId", u."unitNumber", u."buildingName", u.id AS "unitId"
+        `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId",
+                c."branchId" AS "contractBranchId",
+                u."unitNumber", u."buildingName", u.id AS "unitId", u."branchId" AS "unitBranchId"
            FROM rent_payments rp
            JOIN rental_contracts c ON c.id = rp."contractId"
            LEFT JOIN property_units u ON u.id = c."unitId" AND u."deletedAt" IS NULL
@@ -1976,8 +1993,16 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
       let journalEntryId: number | null = null;
       try {
         const { propertiesEngine } = await import("../lib/engines/index.js");
+        // Rent revenue JE lands on the contract/unit's branch, not the
+        // operator's. Pre-fix the JE used scope.branchId so a unit in
+        // Branch A, paid for by a session working Branch B, silently
+        // booked revenue to Branch B and broke per-branch property
+        // P&L forever.
+        const rentBranchId = (existing.contractBranchId as number | null)
+          ?? (existing.unitBranchId as number | null)
+          ?? scope.branchId;
         const glResult = await propertiesEngine.postRentRevenueGL(
-          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+          { companyId: scope.companyId, branchId: rentBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
           { id: Number(id), contractId: existing.contractId, propertyId: existing.unitId, amount: paidAmount, tenantId: existing.tenantId }
         );
         journalEntryId = glResult.journalId;
@@ -2538,7 +2563,11 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
       const monthNum = currentMonthPadded();
       const yearShort = String(currentYear()).slice(2);
       const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
-      const vatAmount = cost * 0.15;
+      // VAT rate resolved per company via system_settings (FALLBACK_VAT_RATE=15).
+      // Pre-fix this was hardcoded 0.15; tenants on different rates posted
+      // an incorrect VAT obligation on every property maintenance invoice.
+      const vatRate = await getCompanyVatRate(scope.companyId);
+      const vatAmount = computeVat(cost, vatRate);
       const { propertiesEngine } = await import("../lib/engines/index.js");
       propertiesEngine.requestInvoiceCreation(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
@@ -2582,9 +2611,31 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
     if (cost > 0) {
       try {
         const { propertiesEngine } = await import("../lib/engines/index.js");
+        // Resolve building + active tenant from the unit so the JE lines
+        // carry the right propertyId (parent building, FK to
+        // property_buildings) AND unitId (FK to property_units) — the
+        // previous shape passed unitId in the propertyId slot, which is a
+        // semantic FK violation (different target tables). Per-unit and
+        // per-tenant maintenance cost drilldowns silently looked in the
+        // wrong table.
+        const unitDimRow = mr.unitId
+          ? (await rawQuery<{ buildingId: number | null; tenantId: number | null }>(
+              `SELECT u."buildingId",
+                      (SELECT rc."tenantId" FROM rental_contracts rc
+                        WHERE rc."unitId" = u.id AND rc."companyId" = $2
+                          AND rc.status = 'active' AND rc."deletedAt" IS NULL
+                        ORDER BY rc.id DESC LIMIT 1) AS "tenantId"
+                 FROM property_units u
+                WHERE u.id = $1 AND u."companyId" = $2`,
+              [Number(mr.unitId), scope.companyId]
+            ))[0]
+          : undefined;
+        const propertyId = unitDimRow?.buildingId ?? 0;
+        const unitId = mr.unitId ? Number(mr.unitId) : null;
+        const tenantId = unitDimRow?.tenantId ?? null;
         const glResult = await propertiesEngine.postMaintenanceExpenseGL(
           { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
-          { id, propertyId: mr.unitId ? Number(mr.unitId) : 0, totalCost: cost, type: mr.category as string | undefined }
+          { id, propertyId, unitId, tenantId, totalCost: cost, type: mr.category as string | undefined }
         );
         journalEntryId = glResult.journalId;
       } catch (e) { logger.error(e, "maintenance expense GL posting failed"); journalEntryId = null; }
@@ -3264,7 +3315,8 @@ router.patch("/maintenance-requests/:id", authorize({ feature: "properties.maint
           const monthNum = currentMonthPadded();
           const yearShort = String(currentYear()).slice(2);
           const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
-          const vatAmount = updatedCost * 0.15;
+          const vatRate = await getCompanyVatRate(scope.companyId);
+          const vatAmount = computeVat(updatedCost, vatRate);
           const { propertiesEngine } = await import("../lib/engines/index.js");
           propertiesEngine.requestInvoiceCreation(
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
@@ -3288,9 +3340,30 @@ router.patch("/maintenance-requests/:id", authorize({ feature: "properties.maint
 
         try {
           const { propertiesEngine } = await import("../lib/engines/index.js");
+          // Same dim resolution as POST /complete — pull building + active
+          // tenant from unit so the JE carries propertyId + unitId + clientId.
+          const existingUnitDim = existing.unitId
+            ? (await rawQuery<{ buildingId: number | null; tenantId: number | null }>(
+                `SELECT u."buildingId",
+                        (SELECT rc."tenantId" FROM rental_contracts rc
+                          WHERE rc."unitId" = u.id AND rc."companyId" = $2
+                            AND rc.status = 'active' AND rc."deletedAt" IS NULL
+                          ORDER BY rc.id DESC LIMIT 1) AS "tenantId"
+                   FROM property_units u
+                  WHERE u.id = $1 AND u."companyId" = $2`,
+                [Number(existing.unitId), scope.companyId]
+              ))[0]
+            : undefined;
           await propertiesEngine.postMaintenanceExpenseGL(
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-            { id, propertyId: existing.unitId ? Number(existing.unitId) : 0, totalCost: updatedCost, type: existing.category as string | undefined }
+            {
+              id,
+              propertyId: existingUnitDim?.buildingId ?? 0,
+              unitId: existing.unitId ? Number(existing.unitId) : null,
+              tenantId: existingUnitDim?.tenantId ?? null,
+              totalCost: updatedCost,
+              type: existing.category as string | undefined,
+            }
           );
         } catch (jeErr) { logger.error(jeErr, "PATCH maintenance GL posting via engine failed:"); }
       }
@@ -4232,13 +4305,27 @@ router.post("/deposits", authorize({ feature: "properties.payments", action: "cr
         { field: "amount", fix: "أدخل قيمة موجبة" }
       );
     }
-    const [contract] = await rawQuery<Record<string, unknown>>(
-      `SELECT id, status FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+    const [contract] = await rawQuery<{ id: number; status: string; unitId: number | null; tenantId: number | null }>(
+      `SELECT rc.id, rc.status, rc."unitId", rc."tenantId"
+         FROM rental_contracts rc
+        WHERE rc.id = $1 AND rc."companyId" = $2 AND rc."deletedAt" IS NULL`,
       [b.contractId, scope.companyId]
     );
     if (!contract) {
       throw new ValidationError("العقد غير موجود", { field: "contractId", fix: "اختر عقداً مسجلاً" });
     }
+    // Look up the building (parent of the unit) so the deposit JE carries
+    // a real propertyId instead of the hardcoded 0 fallback. Without this,
+    // GL drilldowns by building couldn't see deposit liabilities.
+    const depositBuildingRow = contract.unitId
+      ? (await rawQuery<{ buildingId: number | null }>(
+          `SELECT "buildingId" FROM property_units WHERE id = $1 AND "companyId" = $2`,
+          [Number(contract.unitId), scope.companyId]
+        ))[0]
+      : undefined;
+    const depositPropertyId = depositBuildingRow?.buildingId ?? 0;
+    const depositTenantId = contract.tenantId ?? null;
+
     const { insertId } = await rawExecute(
       `INSERT INTO property_security_deposits
        ("companyId","contractId",amount,"receivedDate",status,notes,"refundAmount","refundDate","refundReason")
@@ -4256,7 +4343,14 @@ router.post("/deposits", authorize({ feature: "properties.payments", action: "cr
       const { propertiesEngine } = await import("../lib/engines/index.js");
       await propertiesEngine.postSecurityDepositGL(
         { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id: insertId, contractId: Number(b.contractId), propertyId: 0, amount: Number(b.amount), type: "received" }
+        {
+          id: insertId,
+          contractId: Number(b.contractId),
+          propertyId: depositPropertyId,
+          tenantId: depositTenantId,
+          amount: Number(b.amount),
+          type: "received",
+        }
       );
     } catch (jErr) {
       logger.error(jErr, "Deposit journal entry failed:");
@@ -4309,9 +4403,30 @@ router.patch("/deposits/:id/refund", authorize({ feature: "properties.payments",
     // permanently out of sync.
     try {
       const { propertiesEngine } = await import("../lib/engines/index.js");
+      // Resolve real propertyId (parent building) + tenantId from the
+      // contract so the refund JE drills the same way as the deposit
+      // receipt JE. Previous shape passed propertyId: 0 + no tenantId,
+      // so refunded liability rows were disconnected from per-tenant
+      // and per-building drilldowns.
+      const refundDimRow = deposit.contractId
+        ? (await rawQuery<{ unitId: number | null; tenantId: number | null; buildingId: number | null }>(
+            `SELECT rc."unitId", rc."tenantId", u."buildingId"
+               FROM rental_contracts rc
+               LEFT JOIN property_units u ON u.id = rc."unitId" AND u."deletedAt" IS NULL
+              WHERE rc.id = $1 AND rc."companyId" = $2`,
+            [Number(deposit.contractId), scope.companyId]
+          ))[0]
+        : undefined;
       await propertiesEngine.postSecurityDepositGL(
         { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id: Number(id), contractId: deposit.contractId ? Number(deposit.contractId) : 0, propertyId: 0, amount: refundAmount, type: "refunded" }
+        {
+          id: Number(id),
+          contractId: deposit.contractId ? Number(deposit.contractId) : 0,
+          propertyId: refundDimRow?.buildingId ?? 0,
+          tenantId: refundDimRow?.tenantId ?? null,
+          amount: refundAmount,
+          type: "refunded",
+        }
       );
     } catch (jErr) {
       logger.error(jErr, "Deposit refund journal entry failed:");

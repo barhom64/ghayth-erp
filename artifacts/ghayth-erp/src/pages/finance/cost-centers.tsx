@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { Layers, Plus, Building, Car, User, Briefcase, MapPin, Pencil, Trash2 } from "lucide-react";
+import { Layers, Plus, Building, Car, User, Briefcase, MapPin, Pencil, Trash2, Info } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 interface CostCenter {
@@ -59,6 +59,16 @@ export default function CostCentersPage() {
   const { data, isLoading, isError } = useApiQuery<{ data: CostCenter[] }>(
     ["cost-centers"],
     `/finance/cost-centers`,
+  );
+
+  // GET /finance/cost-centers/:id — full detail with children + recent
+  // allocations. Fetched lazily when the operator clicks "تفاصيل" on a
+  // row.
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const detailQ = useApiQuery<any>(
+    ["cost-center-detail", String(detailId ?? 0)],
+    detailId ? `/finance/cost-centers/${detailId}` : null,
+    { enabled: detailId !== null },
   );
 
   const [editing, setEditing] = useState<CostCenter | null>(null);
@@ -185,6 +195,14 @@ export default function CostCentersPage() {
       header: "إجراءات",
       render: (r) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDetailId(r.id === detailId ? null : r.id)}
+            title="تفاصيل"
+          >
+            <Info className="h-3.5 w-3.5" />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -348,6 +366,26 @@ export default function CostCentersPage() {
           />
         </CardContent>
       </Card>
+
+      {detailId !== null && detailQ.data && (
+        <Card className="mt-3 border-indigo-100 bg-indigo-50/30">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">تفاصيل مركز تكلفة #{detailId}</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setDetailId(null)}>إغلاق</Button>
+          </CardHeader>
+          <CardContent className="text-xs grid grid-cols-2 md:grid-cols-4 gap-2">
+            {Object.entries(detailQ.data)
+              .filter(([k, v]) => typeof v !== "object" || v === null)
+              .slice(0, 12)
+              .map(([k, v]) => (
+                <div key={k} className="border bg-white rounded p-1">
+                  <p className="text-muted-foreground text-[10px]">{k}</p>
+                  <p className="font-mono">{v == null ? "—" : String(v)}</p>
+                </div>
+              ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Inline edit dialog — wires PATCH /finance/cost-centers/:id. */}
       <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>

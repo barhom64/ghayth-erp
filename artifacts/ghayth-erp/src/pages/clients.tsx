@@ -180,6 +180,10 @@ export default function Clients() {
   return (
     <PageShell
       title="إدارة العملاء"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "إدارة العملاء" },
+      ]}
       loading={isLoading}
       actions={
         canManage && (

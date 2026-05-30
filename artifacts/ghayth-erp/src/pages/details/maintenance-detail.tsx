@@ -14,6 +14,13 @@ import {
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Wrench, Car, User, CheckCircle2, XCircle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -64,15 +71,21 @@ export default function MaintenanceDetail() {
   // the bare PATCH /:id) so the side-effects fire: complete bumps the
   // vehicle's lastServiceDate + odometer; cancel releases the workshop
   // booking. Buttons are status-gated to match the backend's 409 guard.
-  const handleComplete = async () => {
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [completeOdometer, setCompleteOdometer] = useState("");
+  const handleComplete = () => {
     if (!id) return;
-    const odometer = window.prompt("قراءة عداد المركبة عند إكمال الصيانة (اختياري):", "");
-    if (odometer === null) return;
+    setCompleteOdometer("");
+    setCompleteOpen(true);
+  };
+  const confirmComplete = async () => {
+    if (!id) return;
+    setCompleteOpen(false);
     setActionBusy(true);
     try {
       await apiFetch(`/fleet/maintenance/${id}/complete`, {
         method: "POST",
-        body: JSON.stringify(odometer ? { odometer: Number(odometer) } : {}),
+        body: JSON.stringify(completeOdometer ? { odometer: Number(completeOdometer) } : {}),
       });
       toast({ title: "تم إكمال الصيانة" });
       refetch();
@@ -82,15 +95,21 @@ export default function MaintenanceDetail() {
       setActionBusy(false);
     }
   };
-  const handleCancel = async () => {
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const handleCancel = () => {
     if (!id) return;
-    const reason = window.prompt("سبب إلغاء الصيانة:", "");
-    if (reason == null) return;
+    setCancelReason("");
+    setCancelOpen(true);
+  };
+  const confirmCancel = async () => {
+    if (!id) return;
+    setCancelOpen(false);
     setActionBusy(true);
     try {
       await apiFetch(`/fleet/maintenance/${id}/cancel`, {
         method: "POST",
-        body: JSON.stringify({ reason: reason || undefined }),
+        body: JSON.stringify({ reason: cancelReason.trim() || undefined }),
       });
       toast({ title: "تم إلغاء الصيانة" });
       refetch();
@@ -276,6 +295,7 @@ export default function MaintenanceDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={maintenance?.ref ? `صيانة ${maintenance.ref}` : "تفاصيل الصيانة"}
       subtitle={
@@ -344,5 +364,36 @@ export default function MaintenanceDetail() {
         </>
       }
     />
+    <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إكمال الصيانة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">قراءة عداد المركبة (اختياري)</Label>
+          <Input type="number" inputMode="numeric" value={completeOdometer} onChange={(e) => setCompleteOdometer(e.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCompleteOpen(false)}>إلغاء</Button>
+          <Button onClick={confirmComplete} disabled={actionBusy} rateLimitAware>تأكيد الإكمال</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إلغاء الصيانة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">سبب الإلغاء (اختياري)</Label>
+          <Textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} rows={3} />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCancelOpen(false)}>تراجع</Button>
+          <Button variant="destructive" onClick={confirmCancel} disabled={actionBusy} rateLimitAware>تأكيد الإلغاء</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

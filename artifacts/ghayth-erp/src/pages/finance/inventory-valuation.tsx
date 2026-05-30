@@ -13,6 +13,7 @@ import { Download, Boxes, Warehouse, Tags } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * Inventory valuation report page — consumes #1033's
  * /reports/inventory-valuation endpoint.
@@ -227,6 +228,7 @@ export default function InventoryValuationPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       {/* KPIs */}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card>

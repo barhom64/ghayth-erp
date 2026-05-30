@@ -124,12 +124,12 @@ export default function WhtCategoriesPage() {
       width: "120px",
       render: (c) => (
         <div className="flex items-center gap-1" onClick={(ev) => ev.stopPropagation()}>
-          <GuardedButton perm="finance:update" size="icon" variant="ghost" asChild>
+          <GuardedButton perm="finance:update" size="icon" title="تعديل" variant="ghost" asChild>
             <Link href={`/finance/wht-categories/${c.id}/edit`}>
               <Pencil className="h-4 w-4" />
             </Link>
           </GuardedButton>
-          <GuardedButton perm="finance:delete" size="icon" variant="ghost"
+          <GuardedButton perm="finance:delete" size="icon" title="حذف" variant="ghost"
             onClick={() => setPendingDelete(c)}
           >
             <Trash2 className="h-4 w-4 text-destructive" />

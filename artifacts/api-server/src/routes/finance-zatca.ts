@@ -13,7 +13,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, toDateISO, getCompanyVatRate, computeVat } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { resolveZatcaSettings } from "../lib/zatca/settingsResolver.js";
 import crypto from "node:crypto";
@@ -775,7 +775,13 @@ zatcaRouter.post("/zatca/expense/:id/submit", authorize({ feature: "finance.zatc
     const sellerName = settings.organizationName || "المنشأة";
     const sellerVat = settings.vatRegistrationNumber || "";
     const amount = Number(expense.amount || 0);
-    const vatAmount = Number(expense.vatAmount || (expense.taxCategory === "VAT" ? amount * 0.15 : 0));
+    // Per-company VAT rate; pre-fix this hardcoded 0.15 inside the
+    // ZATCA QR encoding path, so tenants on a non-15% rate had a QR
+    // amount that didn't match their actual filing.
+    const zatcaVatRate = expense.taxCategory === "VAT"
+      ? await getCompanyVatRate(scope.companyId)
+      : 0;
+    const vatAmount = Number(expense.vatAmount || computeVat(amount, zatcaVatRate));
 
     const qrCode = await generateZatcaQrCode({
       sellerName,

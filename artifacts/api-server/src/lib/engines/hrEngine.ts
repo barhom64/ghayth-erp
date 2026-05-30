@@ -103,12 +103,17 @@ class HREngineImpl implements DomainEngine {
 
   async postLoanDisbursementGL(
     ctx: HRGLContext,
-    loan: { id: number; employeeId: number; amount: number }
+    loan: { id: number; employeeId: number; amount: number; departmentId?: number | null }
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_receivable", "debit", "1400"),
       financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_disbursement", "credit", "1100"),
     ]);
+
+    // departmentId carries the employee's home cost-centre so per-dept
+    // labour-cost roll-ups capture loan accruals alongside payroll. The
+    // caller (hr-loans.ts:approve) pulls it from employee_assignments.
+    const departmentId = loan.departmentId ?? undefined;
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -123,8 +128,8 @@ class HREngineImpl implements DomainEngine {
       guardTable: "hr_loans",
       guardId: loan.id,
       lines: [
-        { accountCode: debitCode, debit: loan.amount, credit: 0, description: "ذمم سلف موظفين", employeeId: loan.employeeId },
-        { accountCode: creditCode, debit: 0, credit: loan.amount, description: "صرف سلفة", employeeId: loan.employeeId },
+        { accountCode: debitCode, debit: loan.amount, credit: 0, description: "ذمم سلف موظفين", employeeId: loan.employeeId, departmentId },
+        { accountCode: creditCode, debit: 0, credit: loan.amount, description: "صرف سلفة", employeeId: loan.employeeId, departmentId },
       ],
     });
   }
@@ -137,6 +142,7 @@ class HREngineImpl implements DomainEngine {
       eosAmount: number;
       remainingLeaveAmount: number;
       totalSettlement: number;
+      departmentId?: number | null;
     }
   ) {
     const [eosExpense, leaveExpense, settlementPayable] = await Promise.all([
@@ -146,6 +152,11 @@ class HREngineImpl implements DomainEngine {
     ]);
 
     const lines = [];
+    // departmentId — employee's home department lets per-dept labour
+    // cost roll-ups capture EOS / leave settlement expense in the same
+    // bucket as monthly payroll. Caller (hr-exit.ts:complete) reads
+    // from employee_assignments at exit time.
+    const departmentId = exit.departmentId ?? undefined;
 
     if (exit.eosAmount > 0) {
       lines.push({
@@ -154,6 +165,7 @@ class HREngineImpl implements DomainEngine {
         credit: 0,
         description: `مكافأة نهاية خدمة — موظف #${exit.employeeId}`,
         employeeId: exit.employeeId,
+        departmentId,
       });
     }
 
@@ -164,6 +176,7 @@ class HREngineImpl implements DomainEngine {
         credit: 0,
         description: `بدل إجازات — موظف #${exit.employeeId}`,
         employeeId: exit.employeeId,
+        departmentId,
       });
     }
 
@@ -173,6 +186,7 @@ class HREngineImpl implements DomainEngine {
       credit: exit.totalSettlement,
       description: `تسوية نهاية خدمة — موظف #${exit.employeeId}`,
       employeeId: exit.employeeId,
+      departmentId,
     });
 
     return financialEngine.postJournalEntry({
@@ -259,6 +273,11 @@ class HREngineImpl implements DomainEngine {
       totalBankPayout: number;
       totalGosiPayable: number;
       totalOtherDeductions: number;
+      /** ZATCA WHT total — when > 0, a CR line on the WHT-payable
+       *  account (default 2330) is added so the employer remits the
+       *  amount on the next filing. The caller has already netted
+       *  WHT off totalBankPayout, so credit-side totals remain balanced. */
+      totalWht?: number;
       /**
        * Optional per-employee breakdown. When provided, the salary +
        * GOSI expense + overtime DR lines are split per employee with
@@ -278,6 +297,7 @@ class HREngineImpl implements DomainEngine {
         basic: number;
         overtime: number;
         gosiEmployer: number;
+        whtAmount?: number;
       }>;
     }
   ) {
@@ -286,14 +306,16 @@ class HREngineImpl implements DomainEngine {
     // credited to salary_payable, settled later by postPayrollPostGL when the
     // run is posted. Crediting the bank here (and again at posting) was the
     // source of the double-count.
-    const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, salaryPayableCode, gosiPayableCode, deductionsPayableCode] = await Promise.all([
+    const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, salaryPayableCode, gosiPayableCode, deductionsPayableCode, whtPayableCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_salary_expense", "debit", "5100"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_expense", "debit", "5110"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_overtime_expense", "debit", "5120"),
       financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2200"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "wht_payable", "credit", "2330"),
     ]);
+    const totalWht = roundTo2(payroll.totalWht ?? 0);
 
     // The six payroll aggregates are each rounded independently, so Σdebit
     // can drift a sub-cent from Σcredit. The salary-expense debit is DERIVED
@@ -306,7 +328,11 @@ class HREngineImpl implements DomainEngine {
     const bankPayout = roundTo2(payroll.totalBankPayout);
     const gosiPayable = roundTo2(payroll.totalGosiPayable);
     const otherDeductions = roundTo2(payroll.totalOtherDeductions);
-    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions - totalOvertime - gosiEmployer);
+    // totalGross is derived as Σcredit − Σother-debits so debits and
+    // credits balance to the cent. The WHT-payable credit is part of
+    // the credit side (caller already netted WHT off bankPayout), so
+    // it joins the running total.
+    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions + totalWht - totalOvertime - gosiEmployer);
 
     // Build debit lines — per-employee when breakdown is provided,
     // otherwise the legacy 3-line aggregate. The credit side stays
@@ -399,6 +425,9 @@ class HREngineImpl implements DomainEngine {
       { accountCode: salaryPayableCode, debit: 0, credit: bankPayout },
       { accountCode: gosiPayableCode, debit: 0, credit: gosiPayable },
       { accountCode: deductionsPayableCode, debit: 0, credit: otherDeductions },
+      // WHT payable — separate CR line on the ZATCA WHT-payable account.
+      // Caller has already netted WHT off bankPayout so the entry balances.
+      { accountCode: whtPayableCode, debit: 0, credit: totalWht },
     ].filter(l => l.debit > 0 || l.credit > 0);
 
     return financialEngine.postJournalEntry({

@@ -16,6 +16,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, NumberField } from "@/components/shared/form-field-wrapper";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
+import { BranchSelect } from "@/components/shared/entity-selects";
 import { roundMoney, formatCurrency , todayLocal } from "@/lib/formatters";
 
 interface JournalLine {
@@ -36,7 +37,7 @@ interface JournalLine {
 }
 
 const DRAFT_KEY = "finance_journal_create";
-const INITIAL = { description: "", date: todayLocal() };
+const INITIAL = { description: "", date: todayLocal(), branchId: "" };
 
 export default function JournalCreate() {
   const [, setLocation] = useLocation();
@@ -88,6 +89,10 @@ export default function JournalCreate() {
       await createMut.mutateAsync({
         ref: autoNumberRef.current,
         description: form.description,
+        // Operator's explicit branch pick. Required for multi-branch
+        // users (backend returns BRANCH_REQUIRED if missing). Single-
+        // branch users auto-derive from scope.
+        branchId: form.branchId ? Number(form.branchId) : undefined,
         lines: validLines.map(l => ({
           accountCode: l.accountCode,
           description: l.description,
@@ -126,6 +131,12 @@ export default function JournalCreate() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <AutoField label="رقم القيد" value={autoNumberRef.current} />
         <CreationDateField />
+        <BranchSelect
+          value={form.branchId ?? ""}
+          onChange={(v) => setForm((f) => ({ ...f, branchId: String(v ?? "") }))}
+          label="الفرع"
+          allowCreate={false}
+        />
         <TextField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} className="md:col-span-2" />
       </div>
 
@@ -152,7 +163,7 @@ export default function JournalCreate() {
                   <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="وصف البند" />
                   <NumberField label="مدين" value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
                   <NumberField label="دائن" value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />
-                  <Button variant="ghost" size="icon" onClick={() => removeLine(idx)} disabled={lines.length <= 2}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <Button variant="ghost" size="icon" title="حذف" onClick={() => removeLine(idx)} disabled={lines.length <= 2}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
                 <div className="grid grid-cols-3 gap-2 ps-1">
                   <Input

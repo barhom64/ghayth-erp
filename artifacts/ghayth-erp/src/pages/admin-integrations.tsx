@@ -296,6 +296,10 @@ export default function AdminIntegrations() {
   return (
     <PageShell
       title="مركز التكاملات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مركز التكاملات" },
+      ]}
       subtitle="إدارة قنوات الإرسال والتكاملات الخارجية"
     >
       <Tabs defaultValue="integrations" dir="rtl">

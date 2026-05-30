@@ -70,7 +70,7 @@ export default function PilgrimCreate() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <Link href="/umrah/pilgrims"><Button variant="ghost" size="sm"><ArrowRight className="h-4 w-4" /></Button></Link>
+        <Link href="/umrah/pilgrims"><Button variant="ghost" size="sm" title="الانتقال"><ArrowRight className="h-4 w-4" /></Button></Link>
         <h1 className="text-3xl font-bold">إضافة معتمر جديد</h1>
       </div>
       <Card>

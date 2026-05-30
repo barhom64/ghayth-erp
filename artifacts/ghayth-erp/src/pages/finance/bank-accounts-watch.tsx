@@ -153,6 +153,10 @@ export default function BankAccountsWatchPage() {
   return (
     <PageShell
       title="مراقبة الحسابات البنكية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "مراقبة الحسابات البنكية" },
+      ]}
       subtitle="نظرة فورية على رصيد كل حساب نقدي/بنكي + حركة آخر 30 يوم"
       actions={
         <div className="flex gap-2">
@@ -361,9 +365,7 @@ export default function BankAccountsWatchPage() {
                         </td>
                         <td className="py-2 px-2">
                           <Link href={`/finance/journal/${e.id}`}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <ChevronRight className="w-3 h-3" />
-                            </Button>
+                            <Button variant="ghost" size="icon" title="التالي" className="h-7 w-7"><ChevronRight className="w-3 h-3" /></Button>
                           </Link>
                         </td>
                       </tr>

@@ -157,11 +157,11 @@ export default function Inbox() {
   const threadsParams: string[] = [];
   if (tab !== "all" && tab !== "calls") threadsParams.push(`channel=${tab}`);
   if (folder !== "inbox") threadsParams.push(`folder=${folder}`);
-  const threadsPath = `/inbox/threads${threadsParams.length ? `?${threadsParams.join("&")}` : ""}`;
+  const threadsQs = threadsParams.length ? `?${threadsParams.join("&")}` : "";
 
   const { data: threadsResp, isLoading, refetch: refetchThreads } = useApiQuery<{ data: ThreadRow[] }>(
     ["inbox-threads", tab, folder],
-    threadsPath,
+    `/inbox/threads${threadsQs}`,
     { enabled: !isCallsTab && !isDraftsFolder },
   );
   const { data: draftsResp, refetch: refetchDrafts } = useApiQuery<{ data: DraftRow[] }>(
@@ -196,6 +196,10 @@ export default function Inbox() {
   return (
     <PageShell
       title="صندوقي الموحّد"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "صندوقي الموحّد" },
+      ]}
       subtitle="بريد إلكتروني، واتساب، رسائل نصية، ومكالمات — كلها في مكان واحد، مع إمكانية الإرسال والرد"
       actions={
         <div className="flex items-center gap-2">
@@ -761,9 +765,14 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
 
   // Recipient autocomplete — fires after 2 chars + 300ms debounce
   // (debounce inlined via useDeferredValue alternative — keep simple).
+  const recipientSuggestEnabled =
+    recipient.length >= 2 &&
+    !recipient.includes("@") &&
+    !recipient.startsWith("+") &&
+    showSuggestions;
   const { data: searchResp } = useApiQuery<{ data: RecipientHit[] }>(
     ["inbox-recipients", channel, recipient],
-    recipient.length >= 2 && !recipient.includes("@") && !recipient.startsWith("+") && showSuggestions
+    recipientSuggestEnabled
       ? `/inbox/recipients/search?channel=${channel}&q=${encodeURIComponent(recipient)}`
       : null,
     { enabled: recipient.length >= 2 && showSuggestions },

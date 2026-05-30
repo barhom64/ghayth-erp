@@ -155,6 +155,10 @@ export default function TrialBalanceDrilldownPage() {
   return (
     <PageShell
       title="ميزان المراجعة مع التتبّع"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "ميزان المراجعة مع التتبّع" },
+      ]}
       subtitle="ميزان مراجعة تفصيلي قابل للنقر — انقر على أي حساب لتفجير حركاته"
     >
       <FinanceTabsNav />
@@ -460,9 +464,7 @@ function AccountDrillDown({
                 </td>
                 <td className="py-1.5 px-2">
                   <Link href={`/finance/journal/${e.id}`}>
-                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                      <ExternalLink className="w-3 h-3" />
-                    </Button>
+                    <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><ExternalLink className="w-3 h-3" /></Button>
                   </Link>
                 </td>
               </tr>

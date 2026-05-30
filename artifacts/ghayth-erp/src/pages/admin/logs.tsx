@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PageShell } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,8 @@ import { ScrollText, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr, todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
+import { downloadDocument } from "@/lib/print-client";
+import { useToast } from "@/hooks/use-toast";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
@@ -143,33 +146,44 @@ export default function AdminLogsPage() {
     );
   };
 
-  const exportCSV = () => {
-    const headers = ["المستخدم", "الإجراء", "الكيان", "المعرف", "التاريخ"];
-    const rows = filteredLogs.map((l: any) => [
-      l.userName || "النظام",
-      ACTION_LABELS[l.action] || l.action,
-      ENTITY_LABELS[l.entity] || l.entity,
-      `#${l.entityId}`,
-      l.createdAt ? formatDateAr(l.createdAt) : "-",
-    ]);
-    const csvContent = [headers, ...rows].map(r => r.join(",")).join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "audit-logs.csv"; a.click();
-    URL.revokeObjectURL(url);
+  // GAP_MATRIX item #10 — the previous implementation built CSV with
+  // Blob + URL.createObjectURL, which bypasses the print engine: no
+  // print_jobs row, no audit trail of WHO read audit_logs (a PDPL gap
+  // since audit_logs contain personal data), no letterhead, no
+  // server-side RBAC re-check on the format. Route through
+  // downloadDocument() so the export appears in /reports/print-log
+  // with entity=report_audit_logs and a copy_number.
+  const { toast } = useToast();
+  const exportCSV = async () => {
+    const items = filteredLogs.map((l: any) => ({
+      "المستخدم": l.userName || "النظام",
+      "الإجراء": ACTION_LABELS[l.action] || l.action,
+      "الكيان": ENTITY_LABELS[l.entity] || l.entity,
+      "المعرف": `#${l.entityId}`,
+      "التاريخ": l.createdAt ? formatDateAr(l.createdAt) : "-",
+    }));
+    try {
+      await downloadDocument({
+        entityType: "report_audit_logs",
+        entityId: "list",
+        format: "csv",
+        payload: { entity: { id: "list", title: "سجل التدقيق" }, items },
+      });
+    } catch (err) {
+      toast({
+        title: "تعذّر تصدير CSV",
+        description: (err as { message?: string })?.message ?? "خطأ غير متوقع",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <ScrollText className="w-8 h-8 text-status-warning-foreground" />
-            سجل التدقيق
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">عرض وتصفية جميع العمليات والتغييرات في النظام</p>
-        </div>
+    <PageShell
+      title="سجل التدقيق"
+      subtitle="عرض وتصفية جميع العمليات والتغييرات في النظام"
+      breadcrumbs={[{ label: "الإدارة" }, { label: "سجل التدقيق" }]}
+      actions={
         <div className="flex gap-2">
           <GuardedButton perm="admin:export" variant="outline" size="sm" onClick={exportCSV}>
             <Download className="h-4 w-4 me-1" />تصدير جدولي
@@ -194,7 +208,8 @@ export default function AdminLogsPage() {
           />
           <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
         </div>
-      </div>
+      }
+    >
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -286,6 +301,6 @@ export default function AdminLogsPage() {
           onPageChange={setPage}
         />
       </div>
-    </div>
+    </PageShell>
   );
 }

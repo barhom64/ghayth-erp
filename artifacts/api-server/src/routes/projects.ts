@@ -24,6 +24,8 @@ import {
   currentYear,
   toDateISO,
   currentMonthPadded,
+  computeVat,
+  getCompanyVatRate,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
@@ -858,7 +860,8 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
         const monthNum = currentMonthPadded();
         const yearShort = String(currentYear()).slice(2);
         const ref = `INV-MS-${yearShort}${monthNum}-${phaseId}`;
-        const vatAmount = milestoneAmount * 0.15;
+        const vatRate = await getCompanyVatRate(scope.companyId);
+        const vatAmount = computeVat(milestoneAmount, vatRate);
         const { projectsEngine } = await import("../lib/engines/index.js");
         projectsEngine.requestInvoiceCreation(
           { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },

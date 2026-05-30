@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export type PrintFormat = "a4" | "thermal_80" | "thermal_58" | "label" | "excel";
+export type PrintFormat = "a4" | "thermal_80" | "thermal_58" | "label" | "excel" | "csv";
 
 interface RenderResponse {
   jobId: string | null;
@@ -43,6 +43,7 @@ const FORMAT_LABEL: Record<PrintFormat, string> = {
   thermal_58: "إيصال حراري 58mm",
   label: "ملصق / باركود",
   excel: "تصدير Excel",
+  csv: "تصدير CSV",
 };
 
 const FORMAT_ICON: Record<PrintFormat, React.ReactNode> = {
@@ -51,6 +52,7 @@ const FORMAT_ICON: Record<PrintFormat, React.ReactNode> = {
   thermal_58: <Receipt className="h-4 w-4" />,
   label: <Tag className="h-4 w-4" />,
   excel: <FileSpreadsheet className="h-4 w-4" />,
+  csv: <FileSpreadsheet className="h-4 w-4" />,
 };
 
 interface PrintButtonProps {

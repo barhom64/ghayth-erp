@@ -123,6 +123,10 @@ export default function VendorStatementPrintPage() {
   return (
     <PageShell
       title="كشف حساب مورد قابل للطباعة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "كشف حساب مورد قابل للطباعة" },
+      ]}
       subtitle="نموذج رسمي للإرسال للمورد أو الاحتفاظ به في الملف"
     >
       <FinanceTabsNav />
@@ -313,9 +317,7 @@ export default function VendorStatementPrintPage() {
                       <td className="py-1.5 px-2 print:hidden">
                         {m.movementType === "purchase_order" && (
                           <Link href={`/finance/purchase-orders/${m.id}`}>
-                            <Button variant="ghost" size="icon" className="h-6 w-6">
-                              <ExternalLink className="w-3 h-3" />
-                            </Button>
+                            <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><ExternalLink className="w-3 h-3" /></Button>
                           </Link>
                         )}
                       </td>

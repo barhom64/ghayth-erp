@@ -29,6 +29,7 @@ import {
 import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useAppContext } from "@/contexts/app-context";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 type LifecycleAction = "activate" | "suspend" | "terminate";
 
 const ACTION_CONFIG: Record<LifecycleAction, {
@@ -270,6 +271,7 @@ export default function EmployeeActivationPage() {
       subtitle="إدارة دورة حياة الموظفين: تفعيل، تعليق، وإنهاء الخدمة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تفعيل / تعليق الموظفين" }]}
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <AdvancedFilters

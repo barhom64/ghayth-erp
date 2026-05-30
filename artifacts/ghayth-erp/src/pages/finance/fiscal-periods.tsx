@@ -16,6 +16,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Button } from "@/components/ui/button";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * Fiscal periods list — migrated in R.2 iter 2 to the unified template
  * stack (PageShell + PageStatusBadge). The underlying data source is
@@ -178,6 +179,7 @@ export default function FiscalPeriodsPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الفترات المالية" }]}
       loading={isLoading}
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">

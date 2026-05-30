@@ -13,6 +13,7 @@ import {
 import { Package, Calculator, TrendingUp, CheckCircle, Info } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 export default function InventoryCostingPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [setupResult, setSetupResult] = useState<any>(null);
@@ -119,6 +120,7 @@ export default function InventoryCostingPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تقييم المخزون بالمتوسط المرجح" }]}
       loading={isLoading}
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-3">
         <Card><CardContent className="p-4 text-center">
           <p className="text-xs text-muted-foreground">عدد المنتجات</p>

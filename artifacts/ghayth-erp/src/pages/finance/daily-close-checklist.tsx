@@ -246,6 +246,10 @@ export default function DailyCloseChecklistPage() {
   return (
     <PageShell
       title="فحص الإغلاق اليومي"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "فحص الإغلاق اليومي" },
+      ]}
       subtitle="روتين يومي للمحاسب — تحقق من نظافة دفاتر اليوم قبل إغلاقه"
     >
       <FinanceTabsNav />

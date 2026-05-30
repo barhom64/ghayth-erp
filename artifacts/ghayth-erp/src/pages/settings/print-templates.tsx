@@ -29,7 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Save, Eye, Trash2, Pencil, FileText, Receipt, Tag, Layers } from "lucide-react";
-import { PageHeader } from "@workspace/ui-core";
+import { PageHeader, PageShell } from "@workspace/ui-core";
 
 const PRINTABLE_ENTITIES = [
   { id: "invoice", label: "فاتورة" },
@@ -163,17 +163,16 @@ export default function PrintTemplatesPage() {
   }
 
   return (
-    <div className="space-y-4 p-4">
-      <PageHeader
-        title="قوالب الطباعة (الكليشة)"
-        subtitle="بناء وتخصيص قوالب الطباعة لكل فرع بشكل مستقل"
-        action={
-          <Button onClick={() => setEditingId("new")} className="gap-1">
-            <Plus className="h-4 w-4" /> قالب جديد
-          </Button>
-        }
-      />
-
+    <PageShell
+      title="قوالب الطباعة (الكليشة)"
+      subtitle="بناء وتخصيص قوالب الطباعة لكل فرع بشكل مستقل"
+      breadcrumbs={[{ label: "الإعدادات" }, { label: "قوالب الطباعة" }]}
+      actions={
+        <Button onClick={() => setEditingId("new")} className="gap-1">
+          <Plus className="h-4 w-4" /> قالب جديد
+        </Button>
+      }
+    >
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -251,7 +250,7 @@ export default function PrintTemplatesPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
 

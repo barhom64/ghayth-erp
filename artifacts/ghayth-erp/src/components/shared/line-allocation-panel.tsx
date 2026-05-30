@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { AccountSelect, CostCenterSelect, VehicleSelect, ProjectSelect } from "@/components/shared/entity-selects";
+import { AccountSelect, CostCenterSelect, VehicleSelect, ProjectSelect, EmployeeSelect, ClientSelect, VendorSelect, DriverSelect } from "@/components/shared/entity-selects";
 import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Pencil } from "lucide-react";
 
 /**
@@ -33,6 +33,19 @@ export interface LineAllocation {
   assetId?: string;
   contractId?: string;
   umrahAgentId?: string;
+  // Dim parity with journal_lines — the 7 fields below were missing,
+  // so Manual JE created via journal-create.tsx silently dropped
+  // employeeId/driverId/productId/vendorId/clientId/umrahSeasonId/
+  // departmentId on every line even though the backend INSERT accepts
+  // them. Entity-360 profile tabs for employee/driver/product/vendor/
+  // client/umrahSeason showed zero data from manual journals.
+  employeeId?: string;
+  driverId?: string;
+  productId?: string;
+  vendorId?: string;
+  clientId?: string;
+  umrahSeasonId?: string;
+  departmentId?: string;
   manualOverrideReason?: string;
 }
 
@@ -186,6 +199,70 @@ export function LineAllocationPanel({
             />
           </FormFieldWrapper>
 
+          <EmployeeSelect
+            value={value.employeeId ?? ""}
+            onChange={(v) => set("employeeId", v)}
+            label="الموظف"
+            allowCreate={false}
+          />
+
+          <DriverSelect
+            value={value.driverId ?? ""}
+            onChange={(v) => set("driverId", v)}
+            label="السائق"
+            allowCreate={false}
+          />
+
+          <FormFieldWrapper label="القسم (ID)">
+            <Input
+              type="number" dir="ltr"
+              value={value.departmentId ?? ""}
+              onChange={(e) => set("departmentId", e.target.value)}
+              placeholder="departmentId"
+            />
+          </FormFieldWrapper>
+
+          <FormFieldWrapper label="المنتج (ID)">
+            <Input
+              type="number" dir="ltr"
+              value={value.productId ?? ""}
+              onChange={(e) => set("productId", e.target.value)}
+              placeholder="productId"
+            />
+          </FormFieldWrapper>
+
+          <ClientSelect
+            value={value.clientId ?? ""}
+            onChange={(v) => set("clientId", v)}
+            label="العميل"
+            allowCreate={false}
+          />
+
+          <VendorSelect
+            value={value.vendorId ?? ""}
+            onChange={(v) => set("vendorId", v)}
+            label="المورد"
+            allowCreate={false}
+          />
+
+          <FormFieldWrapper label="موسم العمرة (ID)">
+            <Input
+              type="number" dir="ltr"
+              value={value.umrahSeasonId ?? ""}
+              onChange={(e) => set("umrahSeasonId", e.target.value)}
+              placeholder="umrahSeasonId"
+            />
+          </FormFieldWrapper>
+
+          <FormFieldWrapper label="وكيل العمرة (ID)">
+            <Input
+              type="number" dir="ltr"
+              value={value.umrahAgentId ?? ""}
+              onChange={(e) => set("umrahAgentId", e.target.value)}
+              placeholder="umrahAgentId"
+            />
+          </FormFieldWrapper>
+
           {status === "manual_override" && (
             <div className="md:col-span-3">
               <FormFieldWrapper label="سبب التعديل اليدوي">
@@ -240,6 +317,13 @@ export function buildAllocationPayload(allocation: LineAllocation): Record<strin
     assetId: allocation.assetId ? Number(allocation.assetId) : undefined,
     contractId: allocation.contractId ? Number(allocation.contractId) : undefined,
     umrahAgentId: allocation.umrahAgentId ? Number(allocation.umrahAgentId) : undefined,
+    employeeId: allocation.employeeId ? Number(allocation.employeeId) : undefined,
+    driverId: allocation.driverId ? Number(allocation.driverId) : undefined,
+    productId: allocation.productId ? Number(allocation.productId) : undefined,
+    vendorId: allocation.vendorId ? Number(allocation.vendorId) : undefined,
+    clientId: allocation.clientId ? Number(allocation.clientId) : undefined,
+    umrahSeasonId: allocation.umrahSeasonId ? Number(allocation.umrahSeasonId) : undefined,
+    departmentId: allocation.departmentId ? Number(allocation.departmentId) : undefined,
     manualOverrideReason: allocation.manualOverrideReason || undefined,
   };
 }

@@ -84,7 +84,7 @@ export default function ReceivablesPage() {
       header: "إجراءات",
       render: (r) => (
         <Link href={`/finance/invoices/${r.id}`}>
-          <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" title="عرض"><Eye className="h-4 w-4" /></Button>
         </Link>
       ),
     },

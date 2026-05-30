@@ -178,6 +178,10 @@ export default function Vendor360SheetPage() {
   return (
     <PageShell
       title="ملف المورد 360°"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "ملف المورد 360°" },
+      ]}
       subtitle="ملخص شامل لعلاقة المورد المالية — جاهز للاجتماعات والمفاوضات"
     >
       <FinanceTabsNav />
@@ -423,10 +427,8 @@ export default function Vendor360SheetPage() {
                             {formatCurrency(Number(c.totalValue ?? 0))}
                           </td>
                           <td className="py-1.5 px-2">
-                            <Link href={`/finance/contracts/${c.id}`}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <ExternalLink className="w-3 h-3" />
-                              </Button>
+                            <Link href="/finance/contracts">
+                              <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                             </Link>
                           </td>
                         </tr>
@@ -469,9 +471,7 @@ export default function Vendor360SheetPage() {
                         </td>
                         <td className="py-1.5 px-2">
                           <Link href={`/finance/purchase-orders/${p.id}`}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <ExternalLink className="w-3 h-3" />
-                            </Button>
+                            <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                           </Link>
                         </td>
                       </tr>

@@ -120,17 +120,22 @@ export default function RecruitmentCreate() {
           <TextField label="المسمى الوظيفي" required value={form.title} onChange={(v) => set("title", v)} placeholder="مثال: مهندس برمجيات" error={fieldErrors.title} />
           <FormFieldWrapper label="القسم">
             <Select value={form.department || "_none"} onValueChange={(v) => set("department", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="اختر القسم" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder={isLoading ? "جاري التحميل..." : "اختر القسم"} />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر القسم</SelectItem>
                 {departments.map((d: any) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
-                {departments.length === 0 && <>
-                  <SelectItem value="الإدارة">الإدارة</SelectItem>
-                  <SelectItem value="الموارد البشرية">الموارد البشرية</SelectItem>
-                  <SelectItem value="المالية">المالية</SelectItem>
-                  <SelectItem value="تقنية المعلومات">تقنية المعلومات</SelectItem>
-                  <SelectItem value="العمليات">العمليات</SelectItem>
-                </>}
+                {!isLoading && departments.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    لا توجد أقسام. أضفها من <a href="/settings/departments" className="text-status-info-foreground hover:underline">الإعدادات ← الأقسام</a>.
+                  </div>
+                )}
+                {isError && (
+                  <div className="px-3 py-2 text-xs text-status-error-foreground">
+                    تعذر تحميل قائمة الأقسام
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </FormFieldWrapper>

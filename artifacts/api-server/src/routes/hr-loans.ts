@@ -580,9 +580,20 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
         period = advancePeriod(period);
       }
 
+      // Pull the employee's current department so the loan JE lines
+      // (DR receivable + CR cash) carry the dim — per-dept labour-cost
+      // roll-ups already include payroll; without departmentId here,
+      // loan disbursements showed in the GL but not in the per-dept
+      // labour drilldown.
+      const [assignmentRow] = await rawQuery<{ departmentId: number | null }>(
+        `SELECT "departmentId" FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
+        [loan.assignmentId, scope.companyId]
+      );
+      const loanDepartmentId = assignmentRow?.departmentId ?? null;
+
       await hrEngine.postLoanDisbursementGL(
         { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
-        { id: loan.id, employeeId: loan.employeeId ?? 0, amount: Number(loan.amount) },
+        { id: loan.id, employeeId: loan.employeeId ?? 0, amount: Number(loan.amount), departmentId: loanDepartmentId },
       );
     });
 

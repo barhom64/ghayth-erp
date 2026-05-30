@@ -30,6 +30,7 @@ import { EmployeeSelect } from "@/components/shared/entity-selects";
 import { useFormContext } from "react-hook-form";
 import { formatDateAr } from "@/lib/formatters";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 /**
  * HR / Documents — company + employee documents in one place.
  *
@@ -143,6 +144,7 @@ export default function HrDocumentsPage() {
         { label: "الوثائق" },
       ]}
     >
+      <HrTabsNav />
       <Tabs defaultValue="company" dir="rtl" className="w-full">
         <TabsList>
           <TabsTrigger value="company" className="gap-1.5">

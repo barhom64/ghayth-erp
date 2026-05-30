@@ -153,6 +153,10 @@ export default function ExpenseBurnRatePage() {
   return (
     <PageShell
       title="معدل الحرق وفترة البقاء"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "معدل الحرق وفترة البقاء" },
+      ]}
       subtitle="6 أشهر من معدل صافي الحرق + توقع فترة البقاء بناءً على السيولة الحالية"
       actions={
         <div className="flex gap-2">

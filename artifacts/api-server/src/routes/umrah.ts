@@ -2062,10 +2062,17 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
     const tripCost = Number(b.cost || 0);
     if (tripCost > 0) {
       try {
+        // Resolve the season's branch so the transport expense lands on
+        // the right branch instead of the operator's working branch.
+        const [season] = await rawQuery<{ branchId?: number | null }>(
+          `SELECT "branchId" FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+          [b.seasonId, scope.companyId]
+        ).catch(() => [] as { branchId?: number | null }[]);
+        const transportBranchId = season?.branchId ?? scope.branchId ?? 0;
         const { umrahEngine } = await import("../lib/engines/index.js");
         await umrahEngine.postTransportExpenseGL(
-          { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-          { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined }
+          { companyId: scope.companyId, branchId: transportBranchId, createdBy: scope.userId },
+          { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined, umrahSeasonId: b.seasonId || null }
         );
       } catch (glErr) {
         logger.error(glErr, "Transport GL posting failed:");

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { PageShell } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -126,15 +128,12 @@ export default function UmrahAttachmentsPage() {
   ];
 
   return (
-    <div dir="rtl" lang="ar" className="space-y-6 p-6">
-      <header>
-        <h1 className="inline-flex items-center gap-2 text-2xl font-bold">
-          <Paperclip className="h-6 w-6" /> مرفقات العمرة
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          فهرس موحّد لكل وثيقة عمرة. التحرير (إضافة/حذف) يتم من صفحة الكيان نفسه (معتمر / وكيل فرعي / مجموعة / ...).
-        </p>
-      </header>
+    <PageShell
+      title="مرفقات العمرة"
+      subtitle="فهرس موحّد لكل وثيقة عمرة. التحرير (إضافة/حذف) يتم من صفحة الكيان نفسه (معتمر / وكيل فرعي / مجموعة / ...)."
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المرفقات" }]}
+    >
+      <UmrahTabsNav />
 
       <Card>
         <CardContent className="p-4 grid gap-3 md:grid-cols-3">
@@ -179,6 +178,6 @@ export default function UmrahAttachmentsPage() {
       </div>
 
       <DataTable data={items} columns={columns} emptyMessage="لا توجد مرفقات تطابق المعايير" />
-    </div>
+    </PageShell>
   );
 }

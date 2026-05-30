@@ -30,6 +30,7 @@ import {
 import { useFormContext } from "react-hook-form";
 import { formatDateAr } from "@/lib/formatters";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 /**
  * HR / Approval Inbox.
  *
@@ -242,6 +243,7 @@ export default function HrApprovalsPage() {
         { label: "صندوق الموافقات" },
       ]}
     >
+      <HrTabsNav />
       <Card>
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-1">

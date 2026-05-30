@@ -19,6 +19,10 @@ export default function AdminDomainRegistry() {
   return (
     <PageShell
       title="سجل النطاقات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "سجل النطاقات" },
+      ]}
       subtitle="خريطة كاملة لكل نطاق في النظام — الجداول والمحركات والصلاحيات"
       loading={isLoading}
       actions={

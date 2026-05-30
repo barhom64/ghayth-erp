@@ -9,7 +9,9 @@ import {
   type DataTableColumn,
   AdvancedFilters,
   useFilters,
+  PageShell,
 } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -181,9 +183,10 @@ export default function UmrahPenalties() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">الغرامات</h1>
+    <PageShell
+      title="الغرامات"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "الغرامات" }]}
+      actions={
         <div className="flex items-center gap-2">
           {selectedIds.length > 0 && (
             <Button
@@ -203,7 +206,9 @@ export default function UmrahPenalties() {
             <Zap className="h-4 w-4" />تشغيل محرك الغرامات
           </GuardedButton>
         </div>
-      </div>
+      }
+    >
+      <UmrahTabsNav />
 
       {manualOpen && (
         <Card className="border-dashed">
@@ -322,6 +327,6 @@ export default function UmrahPenalties() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

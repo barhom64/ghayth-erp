@@ -84,6 +84,15 @@ export default function DriverDetail() {
     "/fleet/vehicles",
     !!id
   );
+
+  // GET /fleet/telematics/drivers/:driverId/scorecard — rolled-up driving
+  // score (harsh-braking, speeding events, idle %, fuel efficiency). Shown
+  // as a compact KPI strip on the driver profile.
+  const { data: scorecard } = useApiQuery<any>(
+    ["driver-scorecard", String(id)],
+    id ? `/fleet/telematics/drivers/${id}/scorecard` : null,
+    !!id,
+  );
   const assignedVehicle = useMemo(() => {
     const all = asList(vehiclesResp);
     return all.find((v: any) => v.assignedDriverId === Number(id)) || null;
@@ -144,6 +153,21 @@ export default function DriverDetail() {
       <div className="md:col-span-3">
         <InlineEditCard hook={editDelete} />
       </div>
+      {scorecard && (
+        <Card className="md:col-span-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">تقييم القيادة (Telematics)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+            {Object.entries(scorecard).filter(([, v]) => typeof v !== "object").slice(0, 10).map(([k, v]) => (
+              <div key={k} className="border rounded p-2">
+                <p className="text-muted-foreground text-[10px]">{k}</p>
+                <p className="font-mono font-medium">{v == null ? "—" : String(v)}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">بيانات السائق</CardTitle>

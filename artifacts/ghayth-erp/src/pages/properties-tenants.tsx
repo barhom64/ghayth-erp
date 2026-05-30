@@ -11,6 +11,7 @@ import {
   exportToCSV,
 } from "@workspace/ui-core";
 import { useApiQuery, asList } from "@/lib/api";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -143,6 +144,7 @@ export default function PropertiesTenants() {
         </Link>
       }
     >
+      <PropertyTabsNav />
 
       <AdvancedFilters
         config={{

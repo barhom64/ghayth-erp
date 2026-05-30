@@ -32,7 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Check, X, AlertTriangle, Repeat } from "lucide-react";
-import { PageHeader } from "@workspace/ui-core";
+import { PageShell } from "@workspace/ui-core";
 
 interface ReprintRequest {
   id: number;
@@ -99,12 +99,11 @@ export default function ReprintApprovalsPage() {
   }
 
   return (
-    <div className="space-y-4 p-4">
-      <PageHeader
-        title="موافقات إعادة الطباعة"
-        subtitle="مراجعة طلبات إعادة طباعة الوثائق وإصدار نسخ مكررة بختم رسمي."
-      />
-
+    <PageShell
+      title="موافقات إعادة الطباعة"
+      subtitle="مراجعة طلبات إعادة طباعة الوثائق وإصدار نسخ مكررة بختم رسمي."
+      breadcrumbs={[{ label: "لوحات الإدارة" }, { label: "موافقات إعادة الطباعة" }]}
+    >
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -250,6 +249,6 @@ export default function ReprintApprovalsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

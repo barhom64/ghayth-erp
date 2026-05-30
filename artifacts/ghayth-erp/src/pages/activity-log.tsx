@@ -303,6 +303,10 @@ export default function ActivityLogPage() {
   return (
     <PageShell
       title="سجل الحركات والنشاطات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "سجل الحركات والنشاطات" },
+      ]}
       subtitle="جميع العمليات والتغييرات عبر وحدات النظام مع تفاصيل التغييرات"
       loading={isLoading}
       actions={

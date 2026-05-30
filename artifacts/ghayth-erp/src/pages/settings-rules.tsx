@@ -180,7 +180,7 @@ function RuleCard({ rule, onToggle, onDelete, onBumpPriority }: { rule: Business
               {rule.isActive ? <PowerOff className="h-3.5 w-3.5 text-orange-500" /> : <Power className="h-3.5 w-3.5 text-status-success" />}
             </GuardedButton>
             {rule.companyId && (
-              <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
+              <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete} title="حذف">
                 <Trash2 className="h-3.5 w-3.5 text-status-error" />
               </GuardedButton>
             )}

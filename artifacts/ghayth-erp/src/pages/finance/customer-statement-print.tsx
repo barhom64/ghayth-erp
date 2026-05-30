@@ -132,6 +132,10 @@ export default function CustomerStatementPrintPage() {
   return (
     <PageShell
       title="كشف حساب عميل قابل للطباعة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "كشف حساب عميل قابل للطباعة" },
+      ]}
       subtitle="نموذج رسمي للإرسال للعميل — تنسيق A4"
     >
       <FinanceTabsNav />
@@ -325,9 +329,7 @@ export default function CustomerStatementPrintPage() {
                       <td className="py-1.5 px-2 print:hidden">
                         {m.movementType === "invoice" && (
                           <Link href={`/finance/invoices/${m.id}`}>
-                            <Button variant="ghost" size="icon" className="h-6 w-6">
-                              <ExternalLink className="w-3 h-3" />
-                            </Button>
+                            <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><ExternalLink className="w-3 h-3" /></Button>
                           </Link>
                         )}
                       </td>

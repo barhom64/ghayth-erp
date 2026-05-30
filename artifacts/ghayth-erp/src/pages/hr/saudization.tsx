@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const SECTOR_OPTIONS = [
   { value: "default", label: "افتراضي" },
   { value: "construction", label: "إنشاءات" },
@@ -197,6 +198,7 @@ export default function SaudizationPage() {
         </div>
       }
     >
+      <HrTabsNav />
       {/* Hero status card */}
       <Card className={cn("mb-6 border-2", meta.bg)}>
         <CardContent className="py-8">

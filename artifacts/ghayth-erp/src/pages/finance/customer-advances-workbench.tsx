@@ -159,6 +159,10 @@ export default function CustomerAdvancesWorkbenchPage() {
   return (
     <PageShell
       title="منضدة الدفعات المقدمة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "منضدة الدفعات المقدمة" },
+      ]}
       subtitle="إدارة الدفعات المقدمة من العملاء — اعرف أرصدتها وطبّقها على الفواتير"
     >
       <FinanceTabsNav />
@@ -193,7 +197,7 @@ export default function CustomerAdvancesWorkbenchPage() {
                 </Button>
               </div>
             </div>
-            <Link href="/finance/receivables/receipt">
+            <Link href="/finance/receivables">
               <Button size="sm">
                 <Plus className="w-4 h-4 ml-1" />
                 دفعة جديدة
@@ -355,9 +359,7 @@ export default function CustomerAdvancesWorkbenchPage() {
                                   <td className="py-1.5 px-2">
                                     {a.journalId && (
                                       <Link href={`/finance/journal/${a.journalId}`}>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7">
-                                          <ExternalLink className="w-3 h-3" />
-                                        </Button>
+                                        <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                                       </Link>
                                     )}
                                   </td>
@@ -369,7 +371,7 @@ export default function CustomerAdvancesWorkbenchPage() {
                         {g.clientId && (
                           <div className="flex justify-end gap-2 mt-3 border-t pt-3">
                             {g.totalRemaining > 0.01 && (
-                              <Link href={`/finance/receivables/receipt?clientId=${g.clientId}`}>
+                              <Link href={`/finance/receivables?clientId=${g.clientId}`}>
                                 <Button size="sm" variant="outline">
                                   <DollarSign className="w-4 h-4 ml-1" />
                                   تطبيق على فاتورة

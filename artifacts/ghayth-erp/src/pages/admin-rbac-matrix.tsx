@@ -52,6 +52,10 @@ export default function AdminRbacMatrix() {
   return (
     <PageShell
       title="مصفوفة الصلاحيات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مصفوفة الصلاحيات" },
+      ]}
       subtitle="الأدوار والصلاحيات الافتراضية والمخصصة"
       loading={isLoading}
       actions={

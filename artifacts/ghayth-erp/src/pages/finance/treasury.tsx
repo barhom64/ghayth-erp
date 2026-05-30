@@ -17,6 +17,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 export default function TreasuryPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
@@ -191,6 +192,7 @@ export default function TreasuryPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
