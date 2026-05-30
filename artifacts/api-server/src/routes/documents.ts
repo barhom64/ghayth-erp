@@ -1104,7 +1104,7 @@ router.get("/:id/access-log", authorize({ feature: "documents", action: "export"
               u.email AS "userEmail", e.name AS "userName"
        FROM document_access_log l
        LEFT JOIN users u ON u.id = l."userId"
-       LEFT JOIN employees e ON e.id = u."employeeId"
+       LEFT JOIN employees e ON e.id = u."employeeId" AND e."deletedAt" IS NULL
        WHERE l."companyId" = $1 AND l."documentId" = $2
        ORDER BY l."accessedAt" DESC
        LIMIT 500`,
