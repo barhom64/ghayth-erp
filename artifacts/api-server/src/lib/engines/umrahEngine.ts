@@ -3,6 +3,7 @@
 // All journal entries go through the Financial Engine.
 
 import { financialEngine } from "./financialEngine.js";
+import { rawExecute } from "../rawdb.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 
 interface UmrahGLContext {
@@ -127,7 +128,7 @@ class UmrahEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4210"),
     ]);
 
-    return financialEngine.postJournalEntry({
+    const result = await financialEngine.postJournalEntry({
       companyId: ctx.companyId,
       branchId: ctx.branchId,
       createdBy: ctx.createdBy,
@@ -144,6 +145,21 @@ class UmrahEngineImpl implements DomainEngine {
         { accountCode: revenueCode, debit: 0, credit: penalty.amount, description: `إيراد غرامة ${penalty.type}`, umrahAgentId: penalty.agentId, umrahSeasonId: penalty.seasonId },
       ],
     });
+
+    // Bidirectional traceability — store the JE id on the penalty row
+    // so operators can navigate from penalty → GL trail without
+    // separately querying journal_entries by (sourceType, sourceId).
+    // Skipped on already-existing entries (idempotency re-runs) since
+    // the row was already linked the first time around.
+    if (!result.alreadyExists) {
+      await rawExecute(
+        `UPDATE umrah_penalties SET "journalEntryId" = $1
+          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [result.journalId, penalty.id, ctx.companyId],
+      );
+    }
+
+    return result;
   }
 
   async postPenaltyWaiverGL(
