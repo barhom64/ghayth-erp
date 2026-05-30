@@ -52,8 +52,18 @@ describe("umrah route — /import/preview wired through the engine", () => {
     expect(ROUTE).toMatch(/rowsWithoutAgent:\s*diff\.rowsWithoutAgent/);
   });
 
-  it("normalises errors into { row, message } shape that the UI lists", () => {
-    expect(ROUTE).toMatch(/errors:\s*diff\.errorRows\.map\(\(e\)\s*=>\s*\(\{\s*row:\s*e\.rowIndex,\s*message:\s*e\.error\s*\}\)\)/);
+  it("normalises errors into the rich shape the wizard renders as a table", () => {
+    // Includes:
+    //   - row     : 1-based, so the operator's row number matches Excel.
+    //   - message : human reason.
+    //   - fieldName / sample : structured metadata so the UI shows WHICH
+    //                          column failed + a row preview the operator
+    //                          can match against the source file.
+    expect(ROUTE).toMatch(/errors:\s*diff\.errorRows\.map/);
+    expect(ROUTE).toMatch(/row:\s*e\.rowIndex \+ 1/);
+    expect(ROUTE).toMatch(/message:\s*e\.error/);
+    expect(ROUTE).toMatch(/fieldName:\s*e\.fieldName \?\? null/);
+    expect(ROUTE).toMatch(/sample:\s*e\.sample \?\? null/);
   });
 
   it("keeps legacy field names alongside the modern ones for back-compat", () => {
