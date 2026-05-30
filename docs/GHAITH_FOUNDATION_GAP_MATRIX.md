@@ -15,10 +15,12 @@
 | الظهور والتنقّل | 5 | 1 | 2 |
 | الرحلات التشغيلية | 5 | 2 | 1 (واجهة تهيئة) |
 | الخدمات المشتركة | 13 | 1 | 0 |
-| المالية | 6 | 4 | 0 |
+| المالية | 6 | 6 | 0 |
 | الأسطول والعمرة | 9 | 2 | 0 |
 
 **النتيجة:** البنية الأساسية لـ #1413/#1418 **مكتملة في الكود**. الفجوات المتبقّية الأعلى قيمة **معمارية مالية** (توحيد ترحيل GL) و**تجربة** (أزرار حسب حالة السجل، واجهة تهيئة الشركة)، وكلها تحتاج تحقق staging أو قرار منتج — لا تُنفَّذ عمياء.
+
+> **تحديث 2026-05-30 (دمج وكيلَي الرحلات + المالية):** أُضيف عمودان جزئيان للمالية بعد فحص موضّع (تتبّع GL لمذكرات/سلف المورّد، وترميز الضريبة المثبّت 15% في الشراء). **تصحيح مهم:** ادّعى وكيل الرحلات غياب CRUD للمصروفات — وهو **خطأ**؛ المسارات موجودة في `finance-journal.ts` (`POST /expenses:402` · `PATCH /expenses/:id:659` · `PATCH /expenses/:id/approve:752`). كما **بالغ** وكيل المالية في خطورة تجاوز نطاق الفرع؛ الكود يتحقق فعليًا من `branchId` الجسم مقابل `scope.allowedBranches` (`finance-purchase.ts:712`) ويستخدم `enforceBranchScope:true` في الاستعلامات.
 
 ---
 
@@ -61,8 +63,8 @@
 |---|---|---|
 | موظف → دخول | ✅ | `routes/employees.ts` POST / · `admin.ts` /users · /onboard |
 | مستخدم متعدد الأدوار | ✅ | POST `/admin/onboard` |
-| مصروف → اعتماد → GL | ✅ | finance routes + approval_actions + createGuardedJournalEntry |
-| عقد عقاري → تحصيل | ✅ | `routes/properties.ts` (آلة حالة) + rent_payments + obligations |
+| مصروف → اعتماد → GL | ✅ | `finance-journal.ts` POST `/expenses:402` → PATCH `/expenses/:id/approve:752` + `expenseImpactPreviewSchema` + createGuardedJournalEntry + approval_actions |
+| عقد عقاري → تحصيل | ✅ **(النمط المرجعي)** | `routes/properties.ts:1929` POST `/payments/:id/pay`: `SELECT…FOR UPDATE` (سطر 1944) ثم `postRentRevenueGL` **داخل** المعاملة **قبل** كتابة السداد (1978–1990) — هذا هو نمط الترحيل الآمن الذي يجب أن تتوحّد عليه باقي المسارات |
 | قضية → جلسة → تنبيه | ✅ | `routes/legal.ts` + obligations؛ N9 (مهمة) أُغلق #1426 |
 | إنشاء شركة → تفعيل | 🟡→🔴 | `lib/companyBootstrap.ts` يزرع البنية؛ **لا واجهة تهيئة self-serve** (حاجز B1/B2/B3) |
 | رحلة نقل → إغلاق | 🟡 | قيد 4 أسطر + قلب الحالة؛ **خطر ازدواج عدّ الوقود** عند الإغلاق |
@@ -91,14 +93,16 @@
 | الأبعاد على journal_lines | ✅ | `lib/gl/posting.ts` 25-27 عمودًا (PR #1304/#1316) |
 | الفواتير/المذكرات | ✅ | `routes/finance-invoices.ts` |
 | المشتريات/3-way match | ✅ | `routes/finance-purchase.ts` (goods_receipts.totalAmount) |
-| دورة AP (سلف/مذكرات/فواتير مورّد) | ✅ | migrations 232/235 · `finance-vendors.ts` |
-| ZATCA/الضرائب | ✅ | `routes/finance-zatca.ts` + WHT (migration 233) |
-| **اتساق ترحيل GL** | 🟡 | عدّة posters (posting.ts + per-engine)؛ لا واجهة واحدة |
-| بوابات إقفال الفترة | 🟡 | مطبّقة على عدة مسارات؛ غير موحّدة عبر helper واحد |
-| financial_posting_failures | 🟡 | guarded poster يكتبها؛ **umrahEngine يبتلع الفشل** (logger.error فقط) |
-| عزل المستأجر | 🟡 | buildScopedWhere موجود؛ 68 محمول companyId يدوي (FND-013) |
+| دورة AP — النواة | ✅ | migrations 232/235 · `finance-vendors.ts` (سلف/تسويات/عرض payables) |
+| دورة AP — تتبّع GL للمذكرات/السلف | 🟡 | لا جدول `purchase_invoices` مخصّص (Umrah يستخدم `umrah_nusk_invoices`)؛ مذكرات المورّد المدينة/الدائنة والسلف **لا تُرحَّل ببُعد `vendorId`** على journal_lines → نقطة عمياء في مطابقة المورّد |
+| ZATCA/الضرائب (AR) | ✅ | `routes/finance-zatca.ts` + WHT (migration 233) |
+| ترميز الضريبة في الشراء (AP) | 🟡 | AR يقرأ `tax_codes.rate`؛ **AP يثبّت 15%** (`finance-purchase.ts` defaultVatRate) → سيناريوهات 0%/5% تنكسر على جانب الشراء |
+| **اتساق ترحيل GL** | 🟡 | عدّة posters: `financialEngine.postJournalEntry` (المسار الأساسي، 15+ موضع) + `createJournalEntry` مباشرة (umrah) + `lib/gl/posting.ts` لإعادة تقييم العملة (Path B يتجاوز بوابة الفترة) — لا واجهة واحدة |
+| بوابات إقفال الفترة | 🟡 | مطبّقة على 8 مخانق (createJournalEntry/financialEngine/الفواتير/الشراء…)؛ غير موحّدة عبر helper واحد · **حافة:** عكس قيد لفترة أُقفلت يُرفض حتى لو كان العكس مؤرّخًا في فترة مفتوحة |
+| financial_posting_failures | 🟡 | guarded poster يكتبها؛ **umrahEngine يبتلع الفشل** (logger.error فقط، بلا صف فشل) |
+| عزل المستأجر / نطاق الفرع | 🟡 | `buildScopedWhere` + `enforceBranchScope` مستخدمان حيث وُجدا (الشراء/الفواتير) و`branchId` الجسم **يُتحقَّق منه** (`finance-purchase.ts:712`)؛ لكن **0 استدعاء** في `finance-algorithms`/`finance-custodies`/`finance-gl-helpers`/`finance-hardening` (اعتماد كامل على companyId يدوي) — أعلى المرشّحين للمراجعة (FND-013) |
 
-(17 ملف finance routes · ~304 endpoint)
+(16 ملف finance routes · ~304 endpoint · مجموع مرشّحات companyId يدوية عبر المالية ~455، أغلبها ربط معاملات INSERT/UPDATE لا ثغرات WHERE)
 
 ---
 
@@ -114,17 +118,24 @@
 
 | # | العمل | المحور | الأولوية | لماذا / القيد |
 |---|---|---|---|---|
-| 1 | **توحيد ترحيل GL** (واجهة واحدة داخل transaction الكيان + كتابة الفشل دائمًا في financial_posting_failures) | مالية+عمرة+أسطول+HR+عقارات | 🔴 حرجة | يغلق: swallow، before/after-transition، ازدواج. يحتاج **CI/staging** — إعادة هيكلة مالية 6 مسارات |
+| 1 | **توحيد ترحيل GL** على **نمط العقارات** (واجهة واحدة `financialEngine.postJournalEntry` **داخل** transaction الكيان **قبل** كتابة السجل + كتابة الفشل دائمًا في financial_posting_failures + ضم Path B لإعادة تقييم العملة + ترحيل مذكرات/سلف المورّد ببُعد vendorId) | مالية+عمرة+أسطول+HR+عقارات | 🔴 حرجة | يغلق: swallow، before/after-transition، ازدواج، تجاوز بوابة الفترة في Path B، النقطة العمياء في AP. يحتاج **CI/staging** — إعادة هيكلة مالية 6 مسارات |
 | 2 | **عيب ازدواج عدّ الوقود** عند إغلاق الرحلة | أسطول | 🔴 حرجة | خطأ مالي مباشر — يحتاج **تحقق تشغيلي** |
 | 3 | **VIS-005:** `visibleWhenStatus` في GuardedButton + توحيد حكم حالة السجل | UX | 🟠 عالية | إضافي قابل للتحقق عبر CI |
 | 4 | **بوابة إقفال فترة موحّدة** على كل مسار ترحيل | مالية | 🟠 عالية | يحتاج staging |
 | 5 | **تعميم SLA/التصعيد** (entityType,entityId) | core | 🟠 متوسطة | إضافي |
 | 6 | **واجهة تهيئة الشركة** (رحلة 1 الحاجزة) | foundation | 🟡 متوسطة | يحتاج **قرار منتج** |
-| 7 | **واجهة SoD + مؤلّف الأدوار v2** | RBAC | 🟡 متوسطة | عمق واجهة |
-| 8 | تعميم buildScopedWhere (68 محمول) · VIS-003 routing · VIS-004 maturity · إسقاط umrah_attachments القديم · توحيد الكتالوجين | متعدد | 🟢 منخفضة | تحسينات/نظافة |
+| 7 | **توحيد ترميز الضريبة في الشراء** (قراءة `tax_codes.rate` بدل تثبيت 15%) | مالية | 🟠 متوسطة | يكسر سيناريوهات 0%/5% — قابل للتحقق عبر CI |
+| 8 | **تعميم buildScopedWhere في finance-algorithms/custodies/gl-helpers/hardening** (0 استدعاء حاليًا) + سماح بعكس القيد في فترة مفتوحة | مالية | 🟠 متوسطة | أعلى مرشّحات عزل المستأجر؛ يحتاج مراجعة WHERE موضعية |
+| 9 | **واجهة SoD + مؤلّف الأدوار v2** | RBAC | 🟡 متوسطة | عمق واجهة |
+| 10 | VIS-003 routing · VIS-004 maturity · إسقاط umrah_attachments القديم · توحيد الكتالوجين | متعدد | 🟢 منخفضة | تحسينات/نظافة |
 
 ---
 
 ## 8. ملاحظة صدق
 الأرقام والأدلة من فحص الكود الفعلي (7 وكلاء). تقييمات "🟡/عيب" المالية والأسطول مصدرها `docs/audit/inventory/CROSS_TRACK_ANALYSIS.md` + فحص موضعي — **تحتاج تحقق تشغيلي** لتأكيدها النهائي (تعذّر تشغيل التطبيق في الجلسة). البنود 🔴 الكبيرة (توحيد GL، الوقود) إعادة هيكلة مالية لا تُنفَّذ بلا CI/staging.
+
+**ضبط ادّعاءات الوكلاء (تحقّقتُ منها قبل الإدراج):**
+- ادّعى وكيل الرحلات أن CRUD المصروفات **مفقود** → **خطأ**: موجود في `finance-journal.ts:402/659/752` (الوكيل بحث في `finance-invoices/purchase` فقط ولم يفحص `finance-journal`). أُبقي التقييم ✅.
+- ادّعى وكيل المالية تجاوزًا حرجًا لنطاق الفرع (`branchId` يُقبل عشوائيًا) → **مُبالَغ**: الكود يتحقق من `branchId` الجسم مقابل `scope.allowedBranches` (`finance-purchase.ts:712`) ويستخدم `enforceBranchScope:true`. أُبقي عزل المستأجر 🟡 (لا 🔴) مع توضيح الملفات الأربعة بلا `buildScopedWhere`.
+- الدرس: قاعدة "افحص لا تفترض" أوقفت تخفيضين خاطئين في التقييم.
 </content>
