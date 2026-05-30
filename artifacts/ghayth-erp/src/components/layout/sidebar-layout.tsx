@@ -658,6 +658,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     filteredBranches,
     canAccessModule,
     canAccessSubPage,
+    isFeatureEnabled,
     can,
     roleLevel,
     effectiveRoleLevel,
@@ -735,6 +736,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       .map((item): NavItem | null => {
         const mod = item.module ?? parentModule;
         if (item.module && !canAccessModule(item.module)) return null;
+        // VIS-002: partial activation. Hide a track when the company disabled
+        // its feature. Default-ON (empty disabled set) ⇒ no change.
+        if (item.module && !isFeatureEnabled(item.module)) return null;
         if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
         if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
         if (!itemPermAllowed(item)) return null;

@@ -108,10 +108,13 @@ function AccessDenied() {
 }
 
 function ModuleRoute({ Component, module, subKey, minRoleLevel }: { Component: React.LazyExoticComponent<any>; module?: ModuleType; subKey?: string; minRoleLevel?: number }) {
-  const { canAccessModule, canAccessSubPage, roleLevel } = useAppContext();
+  const { canAccessModule, canAccessSubPage, roleLevel, isFeatureEnabled } = useAppContext();
 
   const blocked =
     (module && !canAccessModule(module)) ||
+    // VIS-002: partial activation — block routes of a track the company
+    // disabled. Default-ON (empty disabled set) ⇒ no behaviour change.
+    (module && !isFeatureEnabled(module)) ||
     (subKey && module && !canAccessSubPage(module, subKey)) ||
     (minRoleLevel !== undefined && roleLevel < minRoleLevel);
 
