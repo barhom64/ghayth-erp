@@ -2072,6 +2072,76 @@ router.get("/unassigned", authorize({ feature: "umrah", action: "list" }), async
   } catch (err) { handleRouteError(err, res, "List unassigned error"); }
 });
 
+// Bulk status transition — flight-landing flow.
+// A landing pilgrimage flight brings 50+ pilgrims who all need to flip
+// pending → arrived in one operator action. Pre-PR the only path was
+// PATCH /pilgrims/:id per row, which is 50 round-trips + 50 audit
+// rows. This endpoint validates EVERY row's current status against
+// PILGRIM_TRANSITIONS before flipping, so an already-departed pilgrim
+// in the batch is skipped (not silently regressed).
+const bulkStatusSchema = z.object({
+  pilgrimIds: z.array(z.coerce.number()).min(1, "يجب تحديد معتمر واحد على الأقل"),
+  status: z.enum(PILGRIM_STATUSES),
+});
+
+router.post("/pilgrims/status-bulk", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const { pilgrimIds, status: toStatus } = zodParse(bulkStatusSchema.safeParse(req.body));
+
+    // Compute the legal from-states for the requested toStatus by
+    // inverting the transitions map. If toStatus has no legal source
+    // (e.g. operator picked "pending" which nothing transitions INTO),
+    // refuse early — otherwise the UPDATE would touch zero rows and
+    // the operator would mistake the no-op for success.
+    const fromStates = Object.entries(PILGRIM_TRANSITIONS)
+      .filter(([, targets]) => targets.includes(toStatus))
+      .map(([from]) => from);
+    if (fromStates.length === 0) {
+      throw new ValidationError(`لا يمكن الانتقال إلى الحالة "${toStatus}" من أي حالة حالية`, {
+        field: "status",
+        fix: "اختر حالة مسموح بها كهدف (مثل arrived أو departed)",
+      });
+    }
+
+    // Two-pass count so we can report what actually changed vs what
+    // was skipped. The skip count is what the operator actually wants
+    // to see — "47 / 50 marked, 3 already departed" surfaces the
+    // discrepancy without forcing them to compare counts manually.
+    const [{ c: targetedCount }] = await rawQuery<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM umrah_pilgrims
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND id = ANY($2)`,
+      [scope.companyId, pilgrimIds],
+    );
+
+    const updated = await rawQuery<{ id: number }>(
+      `UPDATE umrah_pilgrims
+       SET status=$1, "updatedAt"=NOW()
+       WHERE "companyId"=$2
+         AND "deletedAt" IS NULL
+         AND id = ANY($3)
+         AND status = ANY($4)
+       RETURNING id`,
+      [toStatus, scope.companyId, pilgrimIds, fromStates],
+    );
+    const updatedCount = updated.length;
+    const skippedCount = Math.max(0, Number(targetedCount) - updatedCount);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "umrah_pilgrims", entityId: 0,
+      after: { bulkStatusTo: toStatus, updated: updatedCount, skipped: skippedCount },
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.pilgrims.bulk_status_changed", entity: "umrah_pilgrims", entityId: 0,
+      details: JSON.stringify({ toStatus, requested: pilgrimIds.length, updated: updatedCount, skipped: skippedCount }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+
+    res.json({ updated: updatedCount, skipped: skippedCount, toStatus });
+  } catch (err) { handleRouteError(err, res, "Bulk status update error"); }
+});
+
 router.post("/assign-bulk", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
