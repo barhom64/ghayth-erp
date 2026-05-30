@@ -58,7 +58,13 @@ const allModuleRoutes: RouteConfig[] = [
   ...tagRoutes(commsRoutes, "comms"),
   ...tagRoutes(adminRoutes, "admin", 90),
   ...tagRoutes(settingsRoutes, "settings", 70),
-  ...umrahRoutes,
+  // VIS-001 (Ghaith Operating Foundation): umrah is a leader track and must be
+  // gated by its own module exactly like fleet/property/finance. It was
+  // previously spread raw (no module gate), so any authenticated user could
+  // reach /umrah/* directly. featureCatalog defines umrah under moduleKey
+  // "umrah", so umrah-granted users carry "umrah" in allowedModules; owners/GM
+  // keep ALL_MODULES. See docs/frontend/PAGE_VISIBILITY_INVENTORY.md.
+  ...tagRoutes(umrahRoutes, "umrah"),
   ...miscRoutes,
 ];
 
