@@ -2,7 +2,9 @@
 FROM node:24-alpine AS build
 RUN corepack enable
 WORKDIR /app
-ENV npm_config_user_agent=pnpm/docker
+ENV npm_config_user_agent=pnpm/docker \
+    PNPM_CONFIG_IGNORE_SCRIPTS=true \
+    CI=true
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY artifacts/ghayth-erp/package.json artifacts/ghayth-erp/
 COPY lib/api-client-react/package.json lib/api-client-react/
@@ -15,7 +17,7 @@ COPY tsconfig.base.json tsconfig.json ./
 COPY lib/ ./lib/
 COPY artifacts/ghayth-erp/ ./artifacts/ghayth-erp/
 ENV PORT=5173 BASE_PATH=/ NODE_ENV=production
-RUN pnpm --filter @workspace/ghayth-erp run build
+RUN PNPM_CONFIG_IGNORE_SCRIPTS=true CI=true pnpm --filter @workspace/ghayth-erp run build
 FROM nginx:1.27-alpine AS runtime
 ENV API_UPSTREAM=http://api:8080
 COPY --from=build /app/artifacts/ghayth-erp/dist/public /usr/share/nginx/html
