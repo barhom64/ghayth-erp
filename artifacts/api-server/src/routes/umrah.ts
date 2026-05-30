@@ -2566,4 +2566,78 @@ router.post("/penalties", authorize({ feature: "umrah", action: "create" }), asy
   } catch (err) { handleRouteError(err, res, "Create penalty error"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTINGS — per-company configuration that drives umrah↔finance integration
+// ─────────────────────────────────────────────────────────────────────────────
+// Lives under /umrah (not /settings) so the operator finds it where they
+// expect — alongside the rest of the umrah module. Reads/writes a tiny
+// projection of the companies row (just the umrah-relevant columns) so
+// adding future settings is one zod field + one SET clause.
+
+const umrahSettingsPatchSchema = z.object({
+  // Empty string ("") and explicit null both map to "unset" — matches
+  // the pattern PR #1428 introduced for the pilgrim-reassign modal.
+  // When unset, the vendor-statement endpoint skips its umrah branch
+  // (gracefully — no broken queries).
+  nuskSupplierId: z.preprocess(
+    (v) => (v === "" || v === undefined ? null : v),
+    z.coerce.number().nullable(),
+  ).optional(),
+});
+
+router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    // JOIN suppliers so the UI can show the supplier name without
+    // a second fetch. LEFT JOIN — `nuskSupplierId` may be null on a
+    // freshly-installed company.
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT c."nuskSupplierId",
+              s.name  AS "nuskSupplierName",
+              s.code  AS "nuskSupplierCode"
+         FROM companies c
+         LEFT JOIN suppliers s
+                ON s.id = c."nuskSupplierId"
+               AND s."companyId" = c.id
+               AND s."deletedAt" IS NULL
+        WHERE c.id = $1`,
+      [scope.companyId],
+    );
+    res.json(row ?? { nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null });
+  } catch (err) { handleRouteError(err, res, "Get umrah settings error"); }
+});
+
+router.patch("/settings", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(umrahSettingsPatchSchema.safeParse(req.body));
+    // Validate the supplier (if provided) belongs to THIS company —
+    // defence in depth so a cross-tenant id can't be silently
+    // accepted via API.
+    if (b.nuskSupplierId != null) {
+      const [supplier] = await rawQuery<{ id: number }>(
+        `SELECT id FROM suppliers
+          WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [b.nuskSupplierId, scope.companyId],
+      );
+      if (!supplier) {
+        throw new ValidationError(`المورد رقم ${b.nuskSupplierId} غير موجود`, {
+          field: "nuskSupplierId",
+          fix: "اختر مورداً مسجلاً لهذه الشركة أو اتركه فارغاً",
+        });
+      }
+    }
+    await rawExecute(
+      `UPDATE companies SET "nuskSupplierId" = $1 WHERE id = $2`,
+      [b.nuskSupplierId ?? null, scope.companyId],
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "umrah.settings.updated", entity: "companies", entityId: scope.companyId,
+      after: { nuskSupplierId: b.nuskSupplierId ?? null },
+    }).catch((e) => logger.error(e, "umrah settings audit failed"));
+    res.json({ success: true, nuskSupplierId: b.nuskSupplierId ?? null });
+  } catch (err) { handleRouteError(err, res, "Update umrah settings error"); }
+});
+
 export default router;
