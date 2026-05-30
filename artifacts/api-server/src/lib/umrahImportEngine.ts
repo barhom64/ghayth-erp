@@ -292,7 +292,24 @@ export interface ImportDiff {
   newRows: ParsedRow[];
   updatedRows: { row: ParsedRow; changes: { field: string; oldValue: any; newValue: any }[] }[];
   skippedCount: number;
-  errorRows: { rowIndex: number; error: string }[];
+  /**
+   * Each rejected row carries:
+   *   - rowIndex: 0-based position in the parsed sheet (UI adds +1 for
+   *     "Row N" display so it lines up with Excel's row numbers).
+   *   - error: human-readable Arabic reason.
+   *   - fieldName: which engine field failed (lets the UI pinpoint the
+   *     column that the operator needs to fix in the source file).
+   *   - sample: a few operator-recognizable values from the row so the
+   *     reviewer can locate it in Excel without re-cross-referencing
+   *     by row number alone (helpful when the source file has been
+   *     sorted or filtered between export + import).
+   */
+  errorRows: {
+    rowIndex: number;
+    error: string;
+    fieldName?: string;
+    sample?: Record<string, unknown>;
+  }[];
   unlinkedSubAgents: { nuskCode: string; name: string; rowCount: number }[];
   /**
    * Primary agents that will be **auto-created** on confirm because the
@@ -335,16 +352,21 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
 
   if (fileType === "mutamers") {
     const nuskNumbers = rows.map((r) => r.nuskNumber).filter(Boolean) as string[];
-    if (nuskNumbers.length === 0) return diff;
 
-    const existing = await rawQuery<Record<string, unknown>>(
-      `SELECT id, "nuskNumber", "fullName", nationality, status, "passportNumber",
-              "entryPort", "exitPort", "overstayDays", "actualStayDays",
-              "entryDate", "exitDate"
-       FROM umrah_pilgrims
-       WHERE "companyId" = $1 AND "nuskNumber" = ANY($2) AND "deletedAt" IS NULL`,
-      [scope.companyId, nuskNumbers]
-    );
+    // Skip the round-trip when no row carries a nuskNumber, but DO NOT
+    // skip the error-bucketing loop below — the operator needs to see
+    // a rejection row for every missing-key entry, not a silent
+    // "0 new / 0 errors" result.
+    const existing = nuskNumbers.length === 0
+      ? []
+      : await rawQuery<Record<string, unknown>>(
+          `SELECT id, "nuskNumber", "fullName", nationality, status, "passportNumber",
+                  "entryPort", "exitPort", "overstayDays", "actualStayDays",
+                  "entryDate", "exitDate"
+           FROM umrah_pilgrims
+           WHERE "companyId" = $1 AND "nuskNumber" = ANY($2) AND "deletedAt" IS NULL`,
+          [scope.companyId, nuskNumbers]
+        );
     const existMap = new Map(existing.map((e: any) => [e.nuskNumber, e]));
 
     const subAgentCodes = new Set<string>();
@@ -392,7 +414,16 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!;
       if (!row.nuskNumber) {
-        diff.errorRows.push({ rowIndex: i, error: "رقم المعتمر مفقود" });
+        diff.errorRows.push({
+          rowIndex: i,
+          error: "رقم المعتمر مفقود",
+          fieldName: "nuskNumber",
+          sample: {
+            fullName: row.fullName ?? null,
+            passportNumber: row.passportNumber ?? null,
+            nationality: row.nationality ?? null,
+          },
+        });
         continue;
       }
       const ex = existMap.get(String(row.nuskNumber));
@@ -457,14 +488,18 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     }));
   } else {
     const invoiceNumbers = rows.map((r) => r.nuskInvoiceNumber).filter(Boolean) as string[];
-    if (invoiceNumbers.length === 0) return diff;
 
-    const existing = await rawQuery<Record<string, unknown>>(
-      `SELECT id, "nuskInvoiceNumber", "totalAmount", "netCost", "nuskStatus"
-       FROM umrah_nusk_invoices
-       WHERE "companyId" = $1 AND "nuskInvoiceNumber" = ANY($2) AND "deletedAt" IS NULL`,
-      [scope.companyId, invoiceNumbers]
-    );
+    // Same shape as the mutamers branch — skip the round-trip when no
+    // row has an invoice number, but still walk the loop so each
+    // missing-key row gets surfaced to the operator as a rejection.
+    const existing = invoiceNumbers.length === 0
+      ? []
+      : await rawQuery<Record<string, unknown>>(
+          `SELECT id, "nuskInvoiceNumber", "totalAmount", "netCost", "nuskStatus"
+           FROM umrah_nusk_invoices
+           WHERE "companyId" = $1 AND "nuskInvoiceNumber" = ANY($2) AND "deletedAt" IS NULL`,
+          [scope.companyId, invoiceNumbers]
+        );
     const existMap = new Map(existing.map((e: any) => [e.nuskInvoiceNumber, e]));
 
     const COMPARE_FIELDS = ["totalAmount", "netCost", "nuskStatus", "mutamerCount"];
@@ -472,7 +507,16 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!;
       if (!row.nuskInvoiceNumber) {
-        diff.errorRows.push({ rowIndex: i, error: "رقم الفاتورة مفقود" });
+        diff.errorRows.push({
+          rowIndex: i,
+          error: "رقم الفاتورة مفقود",
+          fieldName: "nuskInvoiceNumber",
+          sample: {
+            totalAmount: row.totalAmount ?? null,
+            mutamerCount: row.mutamerCount ?? null,
+            nuskStatus: row.nuskStatus ?? null,
+          },
+        });
         continue;
       }
       const ex = existMap.get(String(row.nuskInvoiceNumber));
