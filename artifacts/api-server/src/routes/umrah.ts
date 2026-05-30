@@ -235,6 +235,12 @@ const patchPilgrimSchema = z.object({
   roomNumber: z.string().optional().nullable(),
   transportAssigned: z.boolean().optional(),
   notes: z.string().optional().nullable(),
+  // Overstay-exemption knobs (migration 242 / PR #1481). When the
+  // operator flips overstayExempt=true, the cron skips this pilgrim
+  // entirely. Reason is required by the API guard below so a
+  // compliance reviewer can see WHY each exemption was granted.
+  overstayExempt: z.boolean().optional(),
+  overstayExemptReason: z.string().optional().nullable(),
 });
 
 // `columnMapping` lets the wizard's column-mapping step override the
@@ -1008,6 +1014,22 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
     const scope = req.scope!;
     const b = zodParse(patchPilgrimSchema.safeParse(req.body));
     const pilgrimId = parseId(req.params.id, "id");
+
+    // Overstay-exemption invariants (PR #1481): setting exempt=true
+    // REQUIRES a reason so compliance can audit WHY. Without it the
+    // operator could silently skip the cron for arbitrary pilgrims.
+    // Setting exempt=false (un-exempting) DOESN'T require a reason —
+    // the operator's removing the exemption, not adding one.
+    if (b.overstayExempt === true) {
+      const reason = (b.overstayExemptReason ?? "").trim();
+      if (!reason) {
+        throw new ValidationError("سبب الاستثناء مطلوب — لا يمكن استثناء معتمر بدون مبرّر مكتوب", {
+          field: "overstayExemptReason",
+          fix: "اكتب سبباً واضحاً (مثل: تأخّر مستشفى، اتفاق وكيل، تأخّر طيران)",
+        });
+      }
+    }
+
     const fieldKeys = ["agentId","subAgentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
 
     const encryptIfSensitive = (key: string, val: any): any => {
@@ -1052,6 +1074,29 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
           sets.push(`"${key}"=$${params.length}`);
           if (key === "passportNumber") { params.push(blindIndex(String(b[key]).trim())); sets.push(`"passportNumber_hash"=$${params.length}`); }
           if (key === "visaNumber") { params.push(blindIndex(String(b[key]).trim())); sets.push(`"visaNumber_hash"=$${params.length}`); }
+        }
+      }
+      // Overstay-exemption columns (migration 242). Written together
+      // with the standard fields so a single PATCH can flip the flag
+      // + update other state in one transaction. We track WHO + WHEN
+      // server-side so the audit trail can't be forged via API body.
+      if (b.overstayExempt !== undefined) {
+        params.push(b.overstayExempt);
+        sets.push(`"overstayExempt"=$${params.length}`);
+        if (b.overstayExempt) {
+          // Exempting → record the operator + timestamp + reason.
+          params.push(b.overstayExemptReason!.trim());
+          sets.push(`"overstayExemptReason"=$${params.length}`);
+          params.push(scope.userId);
+          sets.push(`"overstayExemptBy"=$${params.length}`);
+          sets.push(`"overstayExemptAt"=NOW()`);
+        } else {
+          // Un-exempting → clear the metadata so a re-exemption
+          // gets a fresh by/at trail instead of inheriting stale
+          // values from a prior exemption.
+          sets.push(`"overstayExemptReason"=NULL`);
+          sets.push(`"overstayExemptBy"=NULL`);
+          sets.push(`"overstayExemptAt"=NULL`);
         }
       }
       if (sets.length === 0) {
