@@ -24,6 +24,7 @@ import {
   createAuditLog,
   todayISO,
 } from "../lib/businessHelpers.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
@@ -2178,6 +2179,38 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.created", entity: "umrah_transport", entityId: rows[0]?.id, details: JSON.stringify({ fromLocation: b.fromLocation, toLocation: b.toLocation, cost: b.cost }) }).catch((e) => logger.error(e, "umrah background task failed"));
+
+    // Mirror the WhatsApp dispatch path that fleet trip-create uses
+    // (#1354 — driver_assigned). umrah_transport is a parallel trip
+    // surface that historically left drivers in the dark — they could
+    // only know about an umrah trip if they happened to log into the
+    // ERP. Drivers on this surface usually don't have ERP accounts at
+    // all, so WhatsApp is the only realistic channel.
+    if (b.driverId) {
+      try {
+        const [driverInfo] = await rawQuery<{ phone: string | null; name: string | null }>(
+          `SELECT phone, name FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+          [b.driverId, scope.companyId]
+        );
+        if (driverInfo?.phone) {
+          await sendMessage({
+            channel: "whatsapp",
+            recipient: driverInfo.phone,
+            recipientName: driverInfo.name,
+            body: `رحلة عمرة جديدة مسندة إليك:\nمن ${b.fromLocation || 'غير محدد'} إلى ${b.toLocation || 'غير محدد'}\nالتاريخ: ${b.tripDate}\nعدد المعتمرين: ${b.pilgrimCount || 0}\nالرجاء الاطلاع على تفاصيل الرحلة في النظام.`,
+            companyId: scope.companyId,
+            userId: scope.userId,
+            relatedType: "umrah_transport",
+            relatedId: rows[0].id,
+            templateKey: "umrah.transport.driver_assigned",
+            eventAction: "umrah.transport.driver_notified",
+          });
+        }
+      } catch (sendErr) {
+        logger.error({ err: sendErr, transportId: rows[0].id, driverId: b.driverId }, "[umrah] transport driver WhatsApp dispatch failed");
+      }
+    }
+
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create transport error"); }
 });
