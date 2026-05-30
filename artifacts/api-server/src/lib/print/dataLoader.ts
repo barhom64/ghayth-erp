@@ -550,7 +550,11 @@ async function loadPurchaseOrder(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   if (!po) return { entity: { id } };
-  const items = await rawQuery(`SELECT * FROM purchase_order_lines WHERE "purchaseOrderId" = $1`, [id]).catch(() => []);
+  // The line table renamed from purchase_order_lines → purchase_order_items
+  // around migration 202 (#1418 GAP_MATRIX item #4). The loader was still
+  // SELECTing from the old name, so PO prints rendered with an empty items
+  // array and the universal template showed "بلا بنود".
+  const items = await rawQuery(`SELECT * FROM purchase_order_items WHERE "purchaseOrderId" = $1`, [id]).catch(() => []);
   // The column on purchase_orders is "supplierId" (it was renamed from
   // "vendorId" before #1084 but the loader never caught up). Reading
   // `po.vendorId` returned undefined so the supplier name never loaded.

@@ -88,6 +88,7 @@ import notificationEngineRouter from "./notification-engine.js";
 import printRouter from "./print.js";
 import printVerifyRouter from "./printVerify.js";
 import { requireModule, requireMinLevel } from "../middlewares/roleGuard.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { csrfMiddleware } from "../middlewares/csrfMiddleware.js";
 import rateLimit from "express-rate-limit";
@@ -415,7 +416,11 @@ router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90)
 // and is defence-in-depth against any future unguarded route.
 router.use("/permissions", requireMinLevel(90), permissionsRouter);
 router.use("/rbac/v2", requireMinLevel(90), rbacV2Router);
-router.use("/audit-logs", requireMinLevel(70), auditLogsRouter);
+// GAP_MATRIX item #16 — sidebar advertises this with perm=audit:read but
+// the mount only checked level≥70. Add requirePermission so direct-URL
+// access matches what the sidebar promises and lift the level to 90 to
+// align with /admin/* policy.
+router.use("/audit-logs", requireMinLevel(90), requirePermission("audit:read"), auditLogsRouter);
 router.use("/search", searchRouter);
 router.use("/activity-log", requireMinLevel(70), activityLogRouter);
 router.use("/approval-actions", approvalActionsRouter);
@@ -446,8 +451,14 @@ router.use("/export", requireMinLevel(30), exportRouter);
 router.use("/import", requireMinLevel(50), importRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
 router.use("/notification-engine", requireModule("notifications"), notificationEngineRouter);
-router.use("/gov-integrations", govIntegrationsRouter);
-router.use("/digital-signature", digitalSignatureRouter);
+// GAP_MATRIX item #18 — both mounts handle government / security data
+// (ZATCA, GOSI, Absher endpoints + digital signing). The sidebar advertises
+// these at admin role-level (90); the routes themselves had no min-level
+// floor, so a misconfigured perm grant could expose them. Floor at 70 as
+// defence-in-depth (lower than 90 because some non-admin tenants legitimately
+// use ZATCA submission flows).
+router.use("/gov-integrations", requireMinLevel(70), govIntegrationsRouter);
+router.use("/digital-signature", requireMinLevel(70), digitalSignatureRouter);
 // FND-004 / FND-005 — events.ts exposes only read-only event-log and
 // event-catalog endpoints, none of which carried an authorize() check.
 // Event-log access is audit-level; gate the mount at 70 (as /audit-logs).

@@ -12,6 +12,7 @@ import { FINANCE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
@@ -2095,7 +2096,10 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
   return { revenues, expenses, totalRevenue, totalExpense, netIncome, lines };
 }
 
-journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+// GAP_MATRIX item #2 — year-end close is permanent: it generates the
+// closing journal and locks every period in the year. Floor at level 70
+// (CFO/controller) on top of the per-feature authorize check.
+journalRouter.post("/fiscal-periods/:period/year-end-close", requireMinLevel(70), authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
