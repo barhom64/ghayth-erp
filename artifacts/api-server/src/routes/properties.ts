@@ -1957,7 +1957,9 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
     const { row, journalEntryId: finalJournalId } = await withTransaction(async (client) => {
       // Lock the payment row to prevent concurrent pay requests.
       const lockRes = await client.query(
-        `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId", u."unitNumber", u."buildingName", u.id AS "unitId"
+        `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId",
+                c."branchId" AS "contractBranchId",
+                u."unitNumber", u."buildingName", u.id AS "unitId", u."branchId" AS "unitBranchId"
            FROM rent_payments rp
            JOIN rental_contracts c ON c.id = rp."contractId"
            LEFT JOIN property_units u ON u.id = c."unitId" AND u."deletedAt" IS NULL
@@ -1991,8 +1993,16 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
       let journalEntryId: number | null = null;
       try {
         const { propertiesEngine } = await import("../lib/engines/index.js");
+        // Rent revenue JE lands on the contract/unit's branch, not the
+        // operator's. Pre-fix the JE used scope.branchId so a unit in
+        // Branch A, paid for by a session working Branch B, silently
+        // booked revenue to Branch B and broke per-branch property
+        // P&L forever.
+        const rentBranchId = (existing.contractBranchId as number | null)
+          ?? (existing.unitBranchId as number | null)
+          ?? scope.branchId;
         const glResult = await propertiesEngine.postRentRevenueGL(
-          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+          { companyId: scope.companyId, branchId: rentBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
           { id: Number(id), contractId: existing.contractId, propertyId: existing.unitId, amount: paidAmount, tenantId: existing.tenantId }
         );
         journalEntryId = glResult.journalId;
