@@ -90,7 +90,10 @@ describe("settings page UI", () => {
   it("save button disabled when no change (dirty flag)", () => {
     // Without this, hitting Save on an unchanged form would PATCH
     // anyway and trigger a no-op audit log on every page visit.
-    expect(PAGE).toMatch(/const dirty = selectedSupplierId !== \(settings\?\.nuskSupplierId/);
+    // PR #1470 extended the dirty check to span all 4 settings; pin
+    // the leading clause + the gate on the save button so future
+    // additions don't churn this assertion.
+    expect(PAGE).toMatch(/const dirty =\s*[\s\S]{0,200}selectedSupplierId !==/);
     expect(PAGE).toMatch(/disabled=\{!dirty \|\| saving\}/);
   });
 
@@ -100,6 +103,12 @@ describe("settings page UI", () => {
   });
 
   it("empty selection maps to null on save (clears the link)", () => {
-    expect(PAGE).toMatch(/nuskSupplierId: selectedSupplierId === "" \? null : Number\(selectedSupplierId\)/);
+    // PR #1470 refactored the inline `"" ? null : Number(v)` expr
+    // into a shared toPatchValue helper used by all 4 fields. Pin
+    // both the helper definition and that nuskSupplierId routes
+    // through it (the contract — clearing on empty string — is
+    // unchanged).
+    expect(PAGE).toMatch(/const toPatchValue = \(v: string\): number \| null => \(v === "" \? null : Number\(v\)\)/);
+    expect(PAGE).toMatch(/nuskSupplierId: toPatchValue\(selectedSupplierId\)/);
   });
 });
