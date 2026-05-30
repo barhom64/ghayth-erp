@@ -23,13 +23,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 export default function UmrahPilgrims() {
   const [, navigate] = useLocation();
+  // useFilters tracks search/status; extraFilters (season/group) ride
+  // along on the same values dict via dynamic keys.
   const [filters, setFilters] = useFilters();
   const [page, setPage] = useState(1);
   const pageSize = 20;
+  const seasonId = (filters as Record<string, string>).seasonId || "";
+  const groupId = (filters as Record<string, string>).groupId || "";
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["umrah-pilgrims", filters.search, filters.status, String(page)],
-    `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&page=${page}&limit=${pageSize}`
+    ["umrah-pilgrims", filters.search, filters.status, seasonId, groupId, String(page)],
+    `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&page=${page}&limit=${pageSize}`,
   );
+
+  // Seasons + groups feed the extraFilters dropdowns so operators can
+  // narrow the pilgrim list by the two most common scopes (this season,
+  // this group). The lists are small + cached, so an unconditional fetch
+  // is fine.
+  const { data: seasonsResp } = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
+  const seasons = asList(seasonsResp?.data || seasonsResp);
+  const { data: groupsResp } = useApiQuery<{ data: any[] }>(["umrah-groups"], "/umrah/groups");
+  const groups = asList(groupsResp?.data || groupsResp);
   const items = resp?.data || [];
   const total = resp?.total || 0;
 
@@ -183,7 +196,9 @@ export default function UmrahPilgrims() {
 
       <AdvancedFilters
         config={{
-          searchPlaceholder: "بحث بالاسم أو رقم الجواز...",
+          // Placeholder enumerates everything the search box hits so the
+          // operator stops asking "can I search by NUSK?" — answer is yes.
+          searchPlaceholder: "بحث بالاسم / الجواز / التأشيرة / رقم نسك...",
           statuses: [
             { value: "pending", label: "لم يصل" },
             { value: "arrived", label: "وصل" },
@@ -192,6 +207,18 @@ export default function UmrahPilgrims() {
             { value: "departed", label: "غادر" },
             { value: "violated", label: "مخالف" },
             { value: "cancelled", label: "ملغي" },
+          ],
+          extraFilters: [
+            {
+              key: "seasonId",
+              label: "الموسم",
+              options: seasons.map((s: any) => ({ value: String(s.id), label: s.name })),
+            },
+            {
+              key: "groupId",
+              label: "المجموعة",
+              options: groups.map((g: any) => ({ value: String(g.id), label: g.name })),
+            },
           ],
         }}
         values={filters}
