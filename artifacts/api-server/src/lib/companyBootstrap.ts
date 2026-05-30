@@ -6,12 +6,28 @@ async function exec(client: pg.PoolClient, sql: string, params: unknown[] = []) 
   return client.query(sql, params);
 }
 
-export async function bootstrapCompany(companyId: number, companyName: string) {
+export async function bootstrapCompany(
+  companyId: number,
+  companyName: string,
+  creatorEmployeeId?: number | null,
+) {
   const client = await pool.connect();
   await client.query("BEGIN");
 
   try {
     const branchId = await createDefaultBranch(client, companyId, companyName);
+    // Link the creating user to the company they just made. Company access
+    // is derived in authMiddleware from active employee_assignments rows, so
+    // without an owner assignment here the creator cannot see, switch into,
+    // or operate the new company at all (user-reported: "عند فتح شركة جديدة
+    // لا تُربط تلقائيًا بالمنشئ"). role='owner' makes authMiddleware's
+    // owner-expansion add this company to allowedCompanies. isPrimary stays
+    // false so the creator's primary assignment in their original company is
+    // untouched. Skipped only when the user has no employee record (rare —
+    // e.g. a bare super-admin), in which case there is nothing to link.
+    if (creatorEmployeeId) {
+      await createCreatorOwnerAssignment(client, companyId, branchId, creatorEmployeeId);
+    }
     await createDefaultLeaveTypes(client, companyId);
     await createDefaultViolationTypes(client, companyId);
     await createDefaultShifts(client, companyId, branchId);
@@ -42,6 +58,24 @@ async function createDefaultBranch(client: pg.PoolClient, companyId: number, com
     [`الفرع الرئيسي - ${companyName}`, "Main Branch", companyId, "الرياض"]
   );
   return res.rows[0].id;
+}
+
+// Grant the user who created the company an owner assignment so it shows up
+// in their allowedCompanies (see authMiddleware owner-expansion). Mirrors the
+// owner assignment minted by bootstrapAdmin for the very first company.
+async function createCreatorOwnerAssignment(
+  client: pg.PoolClient,
+  companyId: number,
+  branchId: number,
+  employeeId: number,
+) {
+  await exec(
+    client,
+    `INSERT INTO employee_assignments
+       ("employeeId", "companyId", "branchId", "jobTitle", role, salary, "isPrimary", status)
+     VALUES ($1, $2, $3, 'مالك', 'owner', 0, false, 'active')`,
+    [employeeId, companyId, branchId]
+  );
 }
 
 async function createDefaultLeaveTypes(client: pg.PoolClient, companyId: number) {

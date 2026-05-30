@@ -592,7 +592,7 @@ router.post("/companies", authorize({ feature: "settings", action: "update" }), 
     let branchId: number | undefined;
     let bootstrapped = false;
     try {
-      const result = await bootstrapCompany(companyId, name);
+      const result = await bootstrapCompany(companyId, name, scope.employeeId);
       branchId = result.branchId;
       bootstrapped = true;
       emitEvent({
