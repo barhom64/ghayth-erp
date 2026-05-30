@@ -266,6 +266,17 @@ const importVouchersSchema = z.object({
   /** Override umrah_nusk_cost DR account code (gap #3). */
   purchaseAccountCode: z.string().trim().min(1).optional().nullable(),
   columnMapping: columnMappingSchema,
+  /**
+   * Explicit override for the wallet-overdraft guardrail. By default
+   * the engine refuses an import that would push the NUSK supplier
+   * wallet (PR #1464) below zero — matching the operator rule
+   * "لا يمكن نشتري تأشيرة الا وفي فلوس في الحساب". Setting
+   * allowOverdraft=true bypasses the check for cases where the
+   * operator KNOWS a top-up is on its way and wants to record the
+   * NUSK invoices anyway. The audit log captures the override so
+   * compliance can review.
+   */
+  allowOverdraft: z.boolean().optional().default(false),
 });
 
 const importSchema = z.object({
@@ -1224,7 +1235,7 @@ router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }
 router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping } =
+    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping, allowOverdraft } =
       zodParse(importVouchersSchema.safeParse(req.body));
     await requireOpenSeason(seasonId, scope.companyId);
     // Wire vouchers through the dedicated engine so they actually create
@@ -1246,7 +1257,7 @@ router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }
     // `row.nuskInvoiceNumber === undefined` and bucket every row as an
     // error — the same bug the preview route hit before normalization.
     const normalizedRows = normalizeImportRows(importRows, "vouchers", columnMapping);
-    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers");
+    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers", { allowOverdraft });
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
 });
@@ -2645,6 +2656,94 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
     }).catch((e) => logger.error(e, "umrah settings audit failed"));
     res.json({ success: true, nuskSupplierId: b.nuskSupplierId ?? null });
   } catch (err) { handleRouteError(err, res, "Update umrah settings error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NUSK WALLET — derived view over the existing AP system
+// ─────────────────────────────────────────────────────────────────────────────
+// The "NUSK wallet" the operator thinks about is NOT a new table — it's the
+// running balance of the NUSK supplier in the standard AP ledger:
+//
+//   walletBalance = (deposits TO NUSK)  -  (NUSK invoice obligations net of refunds)
+//
+//   Positive → operator has prepaid credit with NUSK (can buy more visas)
+//   Zero     → fully reconciled
+//   Negative → operator owes NUSK (must top up before next invoice)
+//
+// Computation reuses the same shapes used by the vendor-statement endpoint
+// (PR #1453), so the wallet display and the supplier statement converge on
+// the same number — no drift, no parallel system.
+
+router.get("/nusk-wallet", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const [companyCfg] = await rawQuery<{ nuskSupplierId: number | null }>(
+      `SELECT "nuskSupplierId" FROM companies WHERE id = $1`,
+      [scope.companyId],
+    );
+    const nuskSupplierId = companyCfg?.nuskSupplierId ?? null;
+    if (nuskSupplierId == null) {
+      // Settings unset — return null balance with a configured: false
+      // flag so the UI can render the "configure NUSK first" CTA
+      // instead of misleading zeroes.
+      res.json({
+        configured: false,
+        nuskSupplierId: null,
+        walletBalance: 0,
+        totalDeposits: 0,
+        totalObligations: 0,
+        totalRefunds: 0,
+      });
+      return;
+    }
+
+    // Deposits TO NUSK — payment-voucher allocations against POs owned by
+    // the NUSK supplier. Same JE filters the vendor-statement uses
+    // (balancesApplied + not reversed + soft-delete guards) so the
+    // numbers reconcile across both reports.
+    const [depositsRow] = await rawQuery<{ total: string }>(
+      `SELECT COALESCE(SUM(spa.amount), 0) AS total
+         FROM supplier_payment_allocations spa
+         JOIN journal_entries je ON je.id = spa."journalEntryId"
+         JOIN purchase_orders po ON po.id = spa."obligationId"
+        WHERE spa."companyId" = $1
+          AND spa."deletedAt" IS NULL
+          AND spa."obligationType" = 'purchase_order'
+          AND po."supplierId" = $2
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL`,
+      [scope.companyId, nuskSupplierId],
+    );
+
+    // NUSK obligations — net of refunds, excluding cancelled rows. Same
+    // shape as the cost-basis fix in PR #1457 so this view's "owed to
+    // NUSK" number matches what's used as cost for margin VAT.
+    const [obligationsRow] = await rawQuery<{ total: string; refunds: string }>(
+      `SELECT COALESCE(SUM("totalAmount"), 0) AS total,
+              COALESCE(SUM("refundAmount"), 0) AS refunds
+         FROM umrah_nusk_invoices
+        WHERE "companyId" = $1
+          AND "deletedAt" IS NULL
+          AND "nuskStatus" NOT IN ('cancelled')`,
+      [scope.companyId],
+    );
+
+    const totalDeposits = Number(depositsRow?.total ?? 0);
+    const grossObligations = Number(obligationsRow?.total ?? 0);
+    const totalRefunds = Number(obligationsRow?.refunds ?? 0);
+    const totalObligations = grossObligations - totalRefunds;
+    const walletBalance = totalDeposits - totalObligations;
+
+    res.json({
+      configured: true,
+      nuskSupplierId,
+      walletBalance,
+      totalDeposits,
+      totalObligations,
+      totalRefunds,
+    });
+  } catch (err) { handleRouteError(err, res, "Get NUSK wallet error"); }
 });
 
 export default router;

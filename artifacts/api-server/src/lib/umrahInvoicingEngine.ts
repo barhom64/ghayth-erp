@@ -48,6 +48,24 @@ interface InvoiceLineItem {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  // Per-line financial-routing fields — applied to umrah following the
+  // finance `invoice_items` pattern (PR #1466 / migration 240). Phase 1:
+  // persist them on the row so the data is captured. Phase 2: the GL
+  // posting will split revenue + VAT credits by accountCode + vatRate
+  // buckets instead of one lump JE line.
+  //
+  //   productId   — links the line to its product (carries
+  //                 defaultTaxCode + defaultRevenueAccountId)
+  //   vatRate     — 0 for visa pass-through, 15 for standard services
+  //   vatAmount   — persisted so SUM(line vatAmount) reconciles to
+  //                 the invoice header's vatAmount when all lines use
+  //                 line-level VAT
+  //   accountCode — optional GL revenue-account override (null → use
+  //                 the umrah_invoice_revenue resolver fallback)
+  productId?: number | null;
+  vatRate?: number;
+  vatAmount?: number;
+  accountCode?: string | null;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -279,17 +297,36 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     );
 
     if (lineItems.length > 0) {
-      const cols = 8;
+      // Migration 240 added 4 per-line columns — productId / vatRate /
+      // vatAmount / accountCode — for the finance-style per-line
+      // routing (visa zero-rated, services standard 15%, etc.).
+      // Phase 1 persists them as defaults; Phase 2 will source from
+      // a per-itemType resolver. Until then:
+      //   - vatRate defaults to invoice.vatRate (typically 15)
+      //   - vatAmount = lineTotal × vatRate / 100 (tax-exclusive)
+      //   - productId / accountCode left null until a resolver lookup
+      //     is wired up
+      // The aggregate vatAmount on the invoice header still drives
+      // the GL posting today; the per-line values are an additive
+      // richer source ready for the Phase 2 GL split.
+      const cols = 12;
       const valuesSql: string[] = [];
       const params: unknown[] = [];
       for (const li of lineItems) {
+        const lineVatRate = li.vatRate ?? vatRate;
+        const lineVatAmount = li.vatAmount ?? roundTo2(li.lineTotal * lineVatRate / 100);
         const base = params.length;
         valuesSql.push(`(${Array.from({ length: cols }, (_, i) => `$${base + i + 1}`).join(",")})`);
-        params.push(invoiceId, li.itemType, li.groupId, li.violationId, li.description, li.quantity, li.unitPrice, li.lineTotal);
+        params.push(
+          invoiceId, li.itemType, li.groupId, li.violationId,
+          li.description, li.quantity, li.unitPrice, li.lineTotal,
+          li.productId ?? null, lineVatRate, lineVatAmount, li.accountCode ?? null,
+        );
       }
       await client.query(
         `INSERT INTO umrah_sales_invoice_items
-         ("invoiceId","itemType","groupId","violationId",description,quantity,"unitPrice","lineTotal")
+         ("invoiceId","itemType","groupId","violationId",description,quantity,"unitPrice","lineTotal",
+          "productId","vatRate","vatAmount","accountCode")
          VALUES ${valuesSql.join(",")}`,
         params
       );
@@ -336,8 +373,36 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     umrahSeasonId?: number;
   }> = [
     { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}`, ...umrahDims },
-    { accountCode: revCode, debit: 0, credit: subtotal, description: `إيراد خدمات عمرة — ${ref}`, ...umrahDims },
   ];
+
+  // Phase 2 — bucket revenue by accountCode. Currently every 'group'
+  // line uses null accountCode (no Phase 3 resolver yet), so this
+  // produces ONE entry with the default revCode and the output JE is
+  // byte-identical to Phase 1. When the operator-facing product
+  // mapping lands (visa→revenue-visa, services→revenue-services,
+  // transport→revenue-transport), the same code will emit a separate
+  // CR Revenue per account without further changes.
+  //
+  // Penalties stay on their own line via penaltiesTotal — same as
+  // before, since penalty rows already use a distinct revenue
+  // account (umrah_penalty_revenue / 4210).
+  const revenueByAccount = new Map<string, number>();
+  for (const li of lineItems) {
+    if (li.itemType !== "group") continue;
+    const code = li.accountCode ?? revCode;
+    revenueByAccount.set(code, (revenueByAccount.get(code) ?? 0) + li.lineTotal);
+  }
+  for (const [code, amount] of revenueByAccount) {
+    glLines.push({
+      accountCode: code,
+      debit: 0,
+      credit: amount,
+      description: code === revCode
+        ? `إيراد خدمات عمرة — ${ref}`
+        : `إيراد عمرة (${code}) — ${ref}`,
+      ...umrahDims,
+    });
+  }
   if (penaltiesTotal > 0) {
     glLines.push({ accountCode: penaltyRevCode, debit: 0, credit: penaltiesTotal, description: `إيراد غرامات — ${ref}`, ...umrahDims });
   }
