@@ -17061,6 +17061,7 @@ CREATE TABLE public.umrah_penalties (
     "createdBy" integer,
     "updatedBy" integer,
     "branchId" integer,
+    "journalEntryId" integer,
     CONSTRAINT umrah_penalties_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('invoiced'::character varying)::text, ('paid'::character varying)::text, ('waived'::character varying)::text]))),
     CONSTRAINT umrah_penalties_type_check CHECK (((type)::text = ANY (ARRAY[('overstay'::character varying)::text, ('violation'::character varying)::text, ('lost'::character varying)::text, ('regulatory'::character varying)::text])))
 );
