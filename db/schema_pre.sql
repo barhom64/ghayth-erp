@@ -5856,6 +5856,45 @@ CREATE TABLE public.document_entity_links (
 
 
 --
+-- Name: document_access_log; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 234_document_access_log.sql (per-access compliance log for downloads/previews).
+--
+
+CREATE TABLE public.document_access_log (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "documentId" integer NOT NULL,
+    "userId" integer,
+    "accessType" text NOT NULL,
+    "accessedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "ipAddress" text,
+    "userAgent" text,
+    CONSTRAINT document_access_log_access_type_check
+      CHECK (("accessType" = ANY (ARRAY['download'::text, 'preview'::text, 'view'::text, 'sign'::text])))
+);
+
+
+--
+-- Name: document_access_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.document_access_log_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: document_access_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.document_access_log_id_seq OWNED BY public.document_access_log.id;
+
+
+--
 -- Name: document_entity_links_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 

@@ -47,13 +47,15 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الإصلاح**: provider حقيقي لـFatoora API (Phase 2 invoicing).
 **Severity**: 🚨 BLOCKER إن كان المالك يصدر فواتير B2B.
 
-### M2. HR End-of-Service GL لا يُسجَّل
-**الموقع**: `hrEngine.ts:132` (engine موجود) vs `routes/hr-exit.ts` (لا يستدعيه)
+### M2. HR End-of-Service GL — Non-Blocking خارج الـTransaction
+**الموقع**: `hr-exit.ts:650-656`
 **الوصف**: 
-- `postExitSettlementGL` كامل ومحكم: DR eos_expense + leave_settlement_expense / CR settlement_payable
-- لكن `routes/hr-exit.ts processExit` يـemit event ولا يستدعي الـengine
-**الأثر**: إنهاء خدمة موظف **لا يُنشئ JE المكافأة المالية**. المحاسب يحتاج إدخالها يدوياً → ثغرة dual-entry.
-**الإصلاح**: في `hr-exit.ts:processExit`، استدعاء `hrEngine.postExitSettlementGL(...)` داخل `withTransaction` قبل emit.
+- `postExitSettlementGL` **مستدعى فعلاً** في الـroute (السطر 652)
+- لكن مع `.catch(...)` non-blocking، **خارج** الـtransaction، **بعد** نقل lifecycle
+- إذا فشل GL post: lifecycle جرى، assignment تم terminated، لكن لا JE
+**الأثر**: نافذة سباق (race window) — إنهاء خدمة بدون JE المكافأة. ثغرة dual-entry في حال GL crash.
+**الإصلاح**: نقل `postExitSettlementGL` داخل الـ`withTransaction` block + جعله blocking مع rollback عند الفشل.
+**تصحيح**: التقييم الأصلي كان "engine غير مستدعى". الواقع: مستدعى لكن fire-and-forget.
 
 ### M3. Print Templates بدون Audit Log
 **الموقع**: `routes/print.ts:328+` — كامل الملف
@@ -63,17 +65,14 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الأثر**: تعديل letterhead = ZATCA QR placement = totals layout كل ذلك صامت. **ثغرة compliance**.
 **الإصلاح**: إضافة `createAuditLog({entity:"document_templates", ...})` + `emitEvent({action:"print.template.updated"})` على كل mutation.
 
-### M4. Document Access Log غير موجود
+### M4. Document Access Log غير موجود ✅ FIXED in PR #1410
 **الموقع**: `routes/documents.ts` — endpoints الـdownload/preview
-**الوصف**: 
-- لا `document_access_log` table
-- downloads/previews لا تُسجَّل في audit
-- لا per-document ACL — فقط feature-level RBAC
-**الأثر**: شخص بصلاحية `documents:list` يقدر يحمّل كل مستندات الشركة بدون أي أثر. لـbig 4 audit هذا غير مقبول.
-**الإصلاح**:
-1. migration ينشئ `document_access_log` table
-2. كل GET على document content يكتب row
-3. retention policy column على documents
+**الإصلاح المنفذ**: 
+- migration 234 أنشأ `document_access_log` table مع indexes
+- `/documents/:id/download` يكتب row بـaccessType='download'
+- `/documents/:id/preview` يكتب row بـaccessType='preview'
+- endpoint جديد `GET /documents/:id/access-log` للمراجعة
+**الأثر بعد الإصلاح**: كل وصول لمستند يُسجَّل (compliance-ready).
 
 ### M5. Document Retention Policy غير موجودة
 **الموقع**: `documents.ts` 
@@ -101,13 +100,13 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الأثر**: عملية أساسية مكسورة لـLegal Manager.
 **الإصلاح**: إضافة `'legal_case'` للـwhitelist في `documents.ts:269`.
 
-### M9. Umrah Agent Invoice GL Non-Blocking
-**الموقع**: `umrah.ts:1508-1510`
-**الوصف**: 
-- Sales invoice path: blocking GL ✅
-- **Agent invoice path**: `.catch(...)` non-blocking — invoice قد يُحفظ بدون JE
-**الأثر**: نافذة سباق (race window) حيث فاتورة وكيل عمولة موجودة بدون قيد محاسبي → ميزان مراجعة off.
-**الإصلاح**: تحويل لـblocking pattern + reconciliation listener.
+### M9. Umrah Agent Invoice GL Non-Blocking ✅ FIXED in follow-up PR
+**الموقع**: `umrah.ts:1623+` + `eventListeners.ts`
+**الإصلاح المنفذ**: 
+- الـroute الآن يُطلق `umrah.agent_invoice.created` event دائماً (نجاح GL أو فشل)
+- اكتُشف bug إضافي: الكود الأصلي يمرر `GLPostingResult` ككائن للـSQL — يخزن JSON في عمود integer
+- listener جديد في `eventListeners.ts` يتحقق من غياب `journalEntryId` ويُعيد إنشاء الـJE عبر `createGuardedJournalEntry` (نفس نمط الـsales invoice)
+**الأثر**: فاتورة وكيل عمرة لا يمكن أن توجد بدون JE صالح. الـrecovery يضمن المحاسبة المزدوجة حتى عند فشل الـinline GL.
 
 ### M10. CMSV6 Wialon/Teltonika Stubs
 **الموقع**: `lib/integrations/cmsv6Adapter.ts:35` (enum) + `fleet-telematics.ts:251` (`buildAdapter` returns null)
@@ -124,10 +123,9 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الوصف**: 3 حقول فقط (name، nameEn، manager). لا parent-department، لا cost-center binding.
 **الإصلاح**: tab dedicated بنمط BranchesTab.
 
-### N2. RBAC v2 mutations لا تظهر في `/admin/logs`
-**الموقع**: `rbacV2.ts:128`
-**الوصف**: يكتب فقط لـ`rbac_role_history`، لا `createAuditLog` للـunified feed.
-**الإصلاح**: إضافة `createAuditLog` بجانب `recordHistory`.
+### N2. RBAC v2 mutations لا تظهر في `/admin/logs` ✅ FIXED in PR #1410
+**الموقع**: `rbacV2.ts:128, 180, 209`
+**الإصلاح المنفذ**: إضافة `createAuditLog` + `emitEvent` بجانب `recordHistory` على create/update/delete.
 
 ### N3. Numbering لا يُصدر events
 **الموقع**: `numbering.ts:170-184`
@@ -159,10 +157,9 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الوصف**: `tenantId` على الـJE فقط، لا UPDATE لـ`clients.lastPaymentAt`.
 **الإصلاح**: listener `rent_payment.received` يحدث `clients.lastPaymentAt`.
 
-### N9. Legal Session → Tasks (لا task row)
-**الموقع**: `routes/legal.ts:961-980`
-**الوصف**: يُنشئ notification + obligation لكن لا task.
-**الإصلاح**: إضافة `INSERT INTO tasks` بجانب notification.
+### N9. Legal Session → Tasks (لا task row) ✅ FIXED in PR #1410
+**الموقع**: `routes/legal.ts:1079`
+**الإصلاح المنفذ**: `INSERT INTO tasks` للجلسات المستقبلية مع linkedEntityType='legal_sessions'، priority حسب priority القضية.
 
 ### N10. Inbox Auto-Classify → Task محدود
 **الموقع**: `communications.ts:502`
@@ -179,10 +176,12 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الوصف**: classification field نص حر، لا taxonomy enforcement.
 **الإصلاح**: enum + dropdown.
 
-### N13. HR Org Structure RBAC Misalignment
-**الموقع**: `hr/organization-structure.tsx` → `settings.ts:525`
-**الوصف**: HR Director بدون `settings:update` لا يقدر يدير org structure.
-**الإصلاح**: تحويل الـpermission إلى `hr.organization` أو منح Director الـdual.
+### N13. HR Org Structure RBAC Misalignment ✅ FIXED in follow-up PR
+**الموقع**: `settings.ts:525,542,560` + `authorize.ts`
+**الإصلاح المنفذ**: 
+- helper جديد `authorizeAny()` يقبل عدة specs ويسمح إذا أي منها يمنح الصلاحية
+- `/settings/departments` POST/PUT/DELETE الآن مفتوحة لـ`settings:update` OR `hr.organization:create|update|delete`
+**الأثر**: HR Director يقدر إدارة الهيكل التنظيمي من صفحته دون الحاجة لـSysAdmin.
 
 ### N14. Create User بدون "إنشاء موظف" Shortcut
 **الموقع**: `users-tab.tsx:46`
