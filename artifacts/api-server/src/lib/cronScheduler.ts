@@ -3123,6 +3123,10 @@ async function umrahDailyOverstayScan(): Promise<string> {
           AND p."deletedAt" IS NULL
           AND COALESCE(p."isInsideKingdom", true) = true
           AND p.status NOT IN ('departed','cancelled','violated')
+          -- Operator-flipped exemption (migration 242). NOT COALESCE
+          -- treats NULL as the regular non-exempt path so pre-migration
+          -- rows don't accidentally skip the scan.
+          AND NOT COALESCE(p."overstayExempt", false)
           AND COALESCE(p."actualStayDays",0) > COALESCE(p."programDuration",0)
           AND COALESCE(p."programDuration",0) > 0
           AND NOT EXISTS (
