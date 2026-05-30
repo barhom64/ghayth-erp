@@ -36,7 +36,11 @@ export default function Communications() {
   const [tab, setTab] = useState("monitor");
   if (roleLevel < 40) return null;
   return (
-    <PageShell title="الاتصالات">
+    <PageShell title="الاتصالات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "الاتصالات" },
+      ]}>
       <StatsCards />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-5">

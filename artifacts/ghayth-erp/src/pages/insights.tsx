@@ -173,6 +173,10 @@ export default function Insights() {
   return (
     <PageShell
       title="رؤى ذكية"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "رؤى ذكية" },
+      ]}
       actions={
         <GuardedButton perm="bi:export" variant="outline" size="sm" onClick={handleRecalculate} disabled={recalculating}>
           <RefreshCw className={`h-4 w-4 me-2 ${recalculating ? "animate-spin" : ""}`} />

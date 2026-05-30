@@ -80,6 +80,10 @@ export default function Notifications() {
   return (
     <PageShell
       title="مركز الإشعارات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مركز الإشعارات" },
+      ]}
       loading={isLoading}
       actions={
         <div className="flex items-center gap-2">

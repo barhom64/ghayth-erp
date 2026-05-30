@@ -105,6 +105,10 @@ export default function Mailboxes() {
   return (
     <PageShell
       title="الصناديق المتصلة"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "الصناديق المتصلة" },
+      ]}
       subtitle="مزامنة الإيميل من Microsoft 365 أو Hostinger أو IMAP عام"
       actions={
         <Button onClick={() => setOpenConnect(true)} className="gap-2">

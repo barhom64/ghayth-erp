@@ -196,6 +196,10 @@ export default function Inbox() {
   return (
     <PageShell
       title="صندوقي الموحّد"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "صندوقي الموحّد" },
+      ]}
       subtitle="بريد إلكتروني، واتساب، رسائل نصية، ومكالمات — كلها في مكان واحد، مع إمكانية الإرسال والرد"
       actions={
         <div className="flex items-center gap-2">

@@ -452,7 +452,11 @@ function CampaignsTab() {
 
 export default function MarketingPage() {
   return (
-    <PageShell title="التسويق والمبيعات">
+    <PageShell title="التسويق والمبيعات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "التسويق والمبيعات" },
+      ]}>
       <Tabs defaultValue="campaigns">
         <TabsList>
           <TabsTrigger value="campaigns"><Megaphone className="h-4 w-4 me-1.5" />الحملات</TabsTrigger>

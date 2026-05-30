@@ -64,6 +64,10 @@ export default function DailyClose() {
   return (
     <PageShell
       title="الإقفال اليومي"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "الإقفال اليومي" },
+      ]}
       subtitle={`تحقق من اكتمال جميع العمليات قبل إغلاق اليوم — ${closeDate}`}
       loading={isLoading}
       actions={
