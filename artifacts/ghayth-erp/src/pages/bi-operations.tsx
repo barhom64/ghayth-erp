@@ -469,6 +469,10 @@ export default function BiOperationsPage() {
   return (
     <PageShell
       title="تحليل الأداء التشغيلي"
+      breadcrumbs={[
+        { href: "/bi", label: "الذكاء التحليلي" },
+        { label: "تحليل الأداء التشغيلي" },
+      ]}
       subtitle="تحليل شامل للاختناقات والإنتاجية وأداء العمليات"
       actions={null}
     >

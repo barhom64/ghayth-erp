@@ -26,7 +26,11 @@ export default function MyDocuments() {
   const documents: any[] = data?.data ?? [];
 
   return (
-    <PageShell title="مستنداتي" subtitle="المستندات والملفات المرتبطة بك" loading={isLoading}>
+    <PageShell title="مستنداتي"
+      breadcrumbs={[
+        { href: "/my-space", label: "مساحاتي" },
+        { label: "مستنداتي" },
+      ]} subtitle="المستندات والملفات المرتبطة بك" loading={isLoading}>
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="animate-spin text-primary" size={32} />

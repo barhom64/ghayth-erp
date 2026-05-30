@@ -375,6 +375,10 @@ export default function AdminObservability() {
   return (
     <PageShell
       title="مرصد المراقبة الموحّد"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مرصد المراقبة الموحّد" },
+      ]}
       subtitle="رؤية موحّدة للطوابير، التكاملات، العمّال، خروقات الـ SLA، والشذوذات النشطة"
       loading={isLoading}
       actions={

@@ -21,6 +21,10 @@ export default function AdminLifecycleMonitor() {
   return (
     <PageShell
       title="محرك دورة الحياة"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "محرك دورة الحياة" },
+      ]}
       subtitle="آلات الحالة (State Machines) لجميع كيانات النظام"
       loading={isLoading}
       actions={

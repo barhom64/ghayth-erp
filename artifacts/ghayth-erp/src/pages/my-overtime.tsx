@@ -73,7 +73,11 @@ export default function MyOvertime() {
   const pendingCount = records.filter((r: any) => r.status === "pending").length;
 
   return (
-    <PageShell title="ساعاتي الإضافية" subtitle="متابعة ساعات العمل الإضافية والتعويضات">
+    <PageShell title="ساعاتي الإضافية"
+      breadcrumbs={[
+        { href: "/my-space", label: "مساحاتي" },
+        { label: "ساعاتي الإضافية" },
+      ]} subtitle="متابعة ساعات العمل الإضافية والتعويضات">
       <div className="flex items-center gap-3 mb-6">
         <label className="text-sm font-medium text-status-neutral-foreground">الشهر:</label>
         <input

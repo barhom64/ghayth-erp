@@ -66,6 +66,10 @@ export default function MySpace() {
   return (
     <PageShell
       title="مساحتي"
+      breadcrumbs={[
+        { href: "/my-space", label: "مساحاتي" },
+        { label: "مساحتي" },
+      ]}
       subtitle={`مرحباً ${user?.name || "موظف"} — ${selectedRoleLabel}`}
       actions={
         role !== "employee" && (

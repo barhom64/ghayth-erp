@@ -68,6 +68,10 @@ export default function AdminPolicyEngine() {
   return (
     <PageShell
       title="محرك السياسات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "محرك السياسات" },
+      ]}
       subtitle="سياسات الصلاحيات وفصل المهام والعمليات الحساسة"
       loading={isLoading}
       actions={

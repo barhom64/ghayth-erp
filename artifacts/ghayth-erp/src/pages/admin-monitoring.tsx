@@ -397,6 +397,10 @@ export default function AdminMonitoring() {
   return (
     <PageShell
       title="مركز المراقبة"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مركز المراقبة" },
+      ]}
       subtitle="مراقبة صحة النظام والخدمات"
       loading={isLoading}
       actions={

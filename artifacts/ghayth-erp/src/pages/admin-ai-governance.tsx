@@ -340,6 +340,10 @@ export default function AdminAiGovernance() {
   return (
     <PageShell
       title="حوكمة الذكاء الاصطناعي"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "حوكمة الذكاء الاصطناعي" },
+      ]}
       subtitle="سجلّ المزوّدات، كتالوج الـ prompts، ومركز المراجعة"
       actions={
         <Button variant="outline" size="sm" onClick={refreshAll}>

@@ -154,6 +154,10 @@ export default function AdminSystemGovernor() {
   return (
     <PageShell
       title="حاكم النظام"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "حاكم النظام" },
+      ]}
       subtitle="الحراسات المركزية التي تتحكم في تشغيل العمليات"
       loading={isLoading}
       actions={

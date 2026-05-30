@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { useFormContext } from "react-hook-form";
 import { Calendar, Lock, Unlock, AlertTriangle } from "lucide-react";
 
@@ -29,6 +29,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useApiQuery, useApiMutation, ApiError } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
@@ -264,18 +274,50 @@ function DirtyTracker({ onChange }: { onChange: (dirty: boolean) => void }) {
   return null;
 }
 
-/** Confirm-on-dismiss guard. Returns a handler suitable for `onOpenChange`. */
-function makeDirtyGuardedClose(
+/**
+ * Hook variant of the confirm-on-dismiss guard. Replaces the synchronous
+ * `window.confirm` call that previously blocked the dismiss handler — the
+ * native prompt looked out of place on top of the form dialog and broke
+ * keyboard-trap testing. Returns:
+ *   - `guardedClose`: drop-in replacement for the parent's onOpenChange
+ *   - `confirmDialog`: an AlertDialog the parent must render as a sibling
+ */
+function useDirtyGuard(
   isDirty: boolean,
   onClose: (open: boolean) => void,
-): (open: boolean) => void {
-  return (next) => {
+): { guardedClose: (open: boolean) => void; confirmDialog: ReactElement } {
+  const [pending, setPending] = useState(false);
+  const guardedClose = (next: boolean) => {
     if (!next && isDirty) {
-      const ok = window.confirm("لديك تغييرات لم تُحفظ بعد. هل تريد المغادرة وتجاهل التعديلات؟");
-      if (!ok) return;
+      setPending(true);
+      return;
     }
     onClose(next);
   };
+  const confirmDialog = (
+    <AlertDialog open={pending} onOpenChange={setPending}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>تغييرات لم تُحفظ</AlertDialogTitle>
+          <AlertDialogDescription>
+            لديك تغييرات لم تُحفظ بعد. هل تريد المغادرة وتجاهل التعديلات؟
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>متابعة التحرير</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              setPending(false);
+              onClose(false);
+            }}
+          >
+            تجاهل وأغلق
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+  return { guardedClose, confirmDialog };
 }
 
 // ─── Create dialog ────────────────────────────────────────────────────
@@ -294,40 +336,44 @@ function CreateDialog({
     "POST",
     [[...QUERY_KEY]],
   );
+  const { guardedClose, confirmDialog } = useDirtyGuard(isDirty, onOpenChange);
 
   return (
-    <Dialog open={open} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>فترة مالية جديدة</DialogTitle>
-          <DialogDescription>
-            عرّف اسم الفترة وبداية ونهاية تواريخها. يمكنك إقفالها لاحقًا من
-            صفحة القائمة.
-          </DialogDescription>
-        </DialogHeader>
-        <FormShell
-          schema={createSchema}
-          defaultValues={{ name: "", startDate: "", endDate: "", notes: "" }}
-          submitLabel="إنشاء"
-          onSubmit={async (values, { setFieldError }) => {
-            try {
-              await create.mutateAsync(values);
-              toast({ title: "تم إنشاء الفترة المالية" });
-              setIsDirty(false); // submitted, no longer dirty
-              onOpenChange(false);
-            } catch (err) {
-              handleFormError(err, setFieldError, toast);
-            }
-          }}
-        >
-          <DirtyTracker onChange={setIsDirty} />
-          <FormTextField name="name" label="اسم الفترة" required />
-          <FormDateField name="startDate" label="تاريخ البداية" required />
-          <FormDateField name="endDate" label="تاريخ النهاية" required />
-          <FormTextareaField name="notes" label="ملاحظات (اختياري)" rows={2} />
-        </FormShell>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={guardedClose}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>فترة مالية جديدة</DialogTitle>
+            <DialogDescription>
+              عرّف اسم الفترة وبداية ونهاية تواريخها. يمكنك إقفالها لاحقًا من
+              صفحة القائمة.
+            </DialogDescription>
+          </DialogHeader>
+          <FormShell
+            schema={createSchema}
+            defaultValues={{ name: "", startDate: "", endDate: "", notes: "" }}
+            submitLabel="إنشاء"
+            onSubmit={async (values, { setFieldError }) => {
+              try {
+                await create.mutateAsync(values);
+                toast({ title: "تم إنشاء الفترة المالية" });
+                setIsDirty(false); // submitted, no longer dirty
+                onOpenChange(false);
+              } catch (err) {
+                handleFormError(err, setFieldError, toast);
+              }
+            }}
+          >
+            <DirtyTracker onChange={setIsDirty} />
+            <FormTextField name="name" label="اسم الفترة" required />
+            <FormDateField name="startDate" label="تاريخ البداية" required />
+            <FormDateField name="endDate" label="تاريخ النهاية" required />
+            <FormTextareaField name="notes" label="ملاحظات (اختياري)" rows={2} />
+          </FormShell>
+        </DialogContent>
+      </Dialog>
+      {confirmDialog}
+    </>
   );
 }
 
@@ -348,15 +394,14 @@ function CloseDialog({
     "POST",
     [[...QUERY_KEY]],
   );
+  const { guardedClose, confirmDialog } = useDirtyGuard(isDirty, (open) => {
+    if (!open) setPendingCount(null);
+    onOpenChange(open);
+  });
 
   return (
-    <Dialog
-      open={!!target}
-      onOpenChange={makeDirtyGuardedClose(isDirty, (open) => {
-        if (!open) setPendingCount(null);
-        onOpenChange(open);
-      })}
-    >
+    <>
+    <Dialog open={!!target} onOpenChange={guardedClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>إقفال الفترة المالية</DialogTitle>
@@ -424,6 +469,8 @@ function CloseDialog({
         </FormShell>
       </DialogContent>
     </Dialog>
+    {confirmDialog}
+    </>
   );
 }
 
@@ -443,9 +490,11 @@ function ReopenDialog({
     "POST",
     [[...QUERY_KEY]],
   );
+  const { guardedClose, confirmDialog } = useDirtyGuard(isDirty, onOpenChange);
 
   return (
-    <Dialog open={!!target} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
+    <>
+    <Dialog open={!!target} onOpenChange={guardedClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>إعادة فتح الفترة المالية</DialogTitle>
@@ -483,6 +532,8 @@ function ReopenDialog({
         </FormShell>
       </DialogContent>
     </Dialog>
+    {confirmDialog}
+    </>
   );
 }
 
@@ -505,9 +556,11 @@ function LockDialog({
     "POST",
     [[...QUERY_KEY]],
   );
+  const { guardedClose, confirmDialog } = useDirtyGuard(isDirty, onOpenChange);
 
   return (
-    <Dialog open={!!target} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
+    <>
+    <Dialog open={!!target} onOpenChange={guardedClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>قفل نهائي للفترة المالية</DialogTitle>
@@ -546,6 +599,8 @@ function LockDialog({
         </FormShell>
       </DialogContent>
     </Dialog>
+    {confirmDialog}
+    </>
   );
 }
 
