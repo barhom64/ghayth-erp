@@ -47,6 +47,17 @@ const ENTITY_MAP: Record<string, string> = {
   "/communications": "communication",
   "/correspondence": "correspondence",
   "/properties": "property",
+  // FND-006 (Ghaith Operating Foundation): these leader/governance tracks were
+  // mounted with auditMiddleware active but had no ENTITY_MAP entry, so their
+  // mutations produced no audit.{entity}.{action} event. Added so the audit
+  // trail is complete. See docs/architecture/NOTIFICATION_EVENT_MATRIX.md.
+  "/legal/contracts": "legal_contract",
+  "/legal/cases": "legal_case",
+  "/governance": "governance_item",
+  "/automation": "automation_rule",
+  "/marketing": "marketing_campaign",
+  "/store": "store_order",
+  "/bi": "bi_object",
 };
 
 const ENTITY_TABLE_MAP: Record<string, string> = {
@@ -88,6 +99,13 @@ const ENTITY_TABLE_MAP: Record<string, string> = {
   request: "requests",
   communication: "communications_log",
   property: "property_units",
+  // FND-006: before-state tables for the legal track (confirmed via the
+  // route-level authorize `resource.table`). The other newly-audited tracks
+  // (governance/automation/marketing/store/bi) intentionally omit a table
+  // here — fetchBeforeState safely returns null, so the action is still
+  // audited (after-state only) without risking a bad table reference.
+  legal_contract: "legal_contracts",
+  legal_case: "legal_cases",
 };
 
 function resolveEntity(path: string): string | null {
@@ -191,6 +209,10 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
           companyId: scope.companyId,
           branchId: scope.branchId,
           userId: scope.userId,
+          // RBAC-001 (#1413 §9): record the capacity (role) the action was
+          // performed under. A user may hold several roles; selectedRoleKey is
+          // the active one for this request. See RBAC_AUDIT_CONTEXT_SPEC.md.
+          activeRoleKey: scope.selectedRoleKey ?? null,
           entity,
           entityId: entityId ? Number(entityId) : undefined,
           action,
