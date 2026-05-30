@@ -81,7 +81,12 @@ describe("umrahInvoicingEngine.generateSalesInvoice", () => {
     const arLine = UMRAH_INVOICING.match(/accountCode: arCode[\s\S]{0,200}/);
     expect(arLine).not.toBeNull();
     expect(arLine![0]).toContain("...umrahDims");
-    const revLine = UMRAH_INVOICING.match(/accountCode: revCode[\s\S]{0,200}/);
+    // Phase 2 (PR #1468) refactored the single hardcoded CR Revenue
+    // line into a bucketing loop over revenueByAccount. The literal
+    // is now `accountCode: code` (the loop variable that defaults to
+    // revCode when no override is set). The dimension contract is
+    // unchanged — every bucket emission still spreads umrahDims.
+    const revLine = UMRAH_INVOICING.match(/for \(const \[code, amount\] of revenueByAccount\)[\s\S]{0,500}glLines\.push\(\{[\s\S]{0,400}\}\);/);
     expect(revLine).not.toBeNull();
     expect(revLine![0]).toContain("...umrahDims");
   });
