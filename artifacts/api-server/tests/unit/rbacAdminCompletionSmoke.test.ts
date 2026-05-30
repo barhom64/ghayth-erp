@@ -95,20 +95,20 @@ describe("RBAC-004 — GET /admin/users/:id/effective-permissions", () => {
   it("mounts gated + enforces admin level", () => {
     expect(ADMIN).toMatch(/router\.get\("\/users\/:id\/effective-permissions", authorize\(\{ feature: "admin", action: "view" \}\)/);
     const idx = ADMIN.indexOf('"/users/:id/effective-permissions"');
-    const section = ADMIN.slice(idx, idx + 2600);
+    const section = ADMIN.slice(idx, idx + 3400);
     expect(section).toMatch(/await assertAdmin\(req\)/);
   });
 
   it("isolates by the actor's company via employee_assignments", () => {
     const idx = ADMIN.indexOf('"/users/:id/effective-permissions"');
-    const section = ADMIN.slice(idx, idx + 2600);
+    const section = ADMIN.slice(idx, idx + 3400);
     expect(section).toMatch(/employee_assignments ea ON ea\."employeeId" = u\."employeeId"/);
     expect(section).toMatch(/ea\."companyId" = \$2/);
   });
 
   it("returns each grant WITH its source role (joins user-roles → roles → grants)", () => {
     const idx = ADMIN.indexOf('"/users/:id/effective-permissions"');
-    const section = ADMIN.slice(idx, idx + 2600);
+    const section = ADMIN.slice(idx, idx + 3400);
     expect(section).toMatch(/FROM rbac_user_roles ur/);
     expect(section).toMatch(/JOIN rbac_roles r ON r\.id = ur\.role_id/);
     expect(section).toMatch(/JOIN rbac_role_grants g ON g\.role_id = r\.id/);
@@ -118,7 +118,7 @@ describe("RBAC-004 — GET /admin/users/:id/effective-permissions", () => {
 
   it("includes per-user overrides (grant/deny) and respects expiry", () => {
     const idx = ADMIN.indexOf('"/users/:id/effective-permissions"');
-    const section = ADMIN.slice(idx, idx + 2600);
+    const section = ADMIN.slice(idx, idx + 3400);
     expect(section).toMatch(/FROM rbac_user_grants/);
     expect(section).toMatch(/expires_at IS NULL OR expires_at > NOW\(\)/);
   });
@@ -128,13 +128,13 @@ describe("RBAC-004 — POST /admin/permissions/explain", () => {
   it("mounts gated + enforces admin level", () => {
     expect(ADMIN).toMatch(/router\.post\("\/permissions\/explain", authorize\(\{ feature: "admin", action: "view" \}\)/);
     const idx = ADMIN.indexOf('"/permissions/explain"');
-    const section = ADMIN.slice(idx, idx + 2200);
+    const section = ADMIN.slice(idx, idx + 3600);
     expect(section).toMatch(/await assertAdmin\(req\)/);
   });
 
   it("resolves the decision from the user's real grants (same tables the engine reads)", () => {
     const idx = ADMIN.indexOf('"/permissions/explain"');
-    const section = ADMIN.slice(idx, idx + 2200);
+    const section = ADMIN.slice(idx, idx + 3600);
     expect(section).toMatch(/FROM rbac_user_roles ur/);
     expect(section).toMatch(/JOIN rbac_role_grants g ON g\.role_id = r\.id/);
     expect(section).toMatch(/g\.feature_key = \$3/);
@@ -144,7 +144,7 @@ describe("RBAC-004 — POST /admin/permissions/explain", () => {
 
   it("explicit per-user deny overrides any allow (#1413 §8)", () => {
     const idx = ADMIN.indexOf('"/permissions/explain"');
-    const section = ADMIN.slice(idx, idx + 2200);
+    const section = ADMIN.slice(idx, idx + 3600);
     expect(section).toMatch(/type = 'revoke'/);
     expect(section).toMatch(/const denied =/);
     expect(section).toMatch(/allowed = !!granting && !denied/);
@@ -152,7 +152,7 @@ describe("RBAC-004 — POST /admin/permissions/explain", () => {
 
   it("returns the human Arabic answer + source role + scope", () => {
     const idx = ADMIN.indexOf('"/permissions/explain"');
-    const section = ADMIN.slice(idx, idx + 2200);
+    const section = ADMIN.slice(idx, idx + 3600);
     expect(section).toMatch(/allowed,/);
     expect(section).toMatch(/reason,/);
     expect(section).toMatch(/sourceRole:/);
@@ -162,7 +162,7 @@ describe("RBAC-004 — POST /admin/permissions/explain", () => {
 
   it("scopes the target user lookup by company (tenant isolation)", () => {
     const idx = ADMIN.indexOf('"/permissions/explain"');
-    const section = ADMIN.slice(idx, idx + 2200);
+    const section = ADMIN.slice(idx, idx + 3600);
     expect(section).toMatch(/ea\."companyId" = \$2/);
   });
 });
