@@ -518,6 +518,37 @@ router.get("/agents/:id", authorize({ feature: "umrah", action: "view" }), async
   } catch (err) { handleRouteError(err, res, "Get agent error"); }
 });
 
+// Recent invoices for an agent — makes the statement (PR #1438)
+// actionable by showing WHICH invoices are unpaid so the operator
+// can follow up on a specific ref, not just an abstract balance.
+// `limit` is clamped to [1, 100] so the dropdown can't accidentally
+// pull the full season.
+router.get("/agents/:id/invoices", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 10));
+    // Existence check up-front so a wrong agent id surfaces a 404
+    // instead of "data: []" — operators have hit that ambiguity on
+    // other detail endpoints and assumed "nothing invoiced" when
+    // really the URL was wrong.
+    const [agent] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId]
+    );
+    if (!agent) throw new NotFoundError("الوكيل غير موجود");
+    const rows = await rawQuery(
+      `SELECT id, ref, type, "pilgrimCount", total, status, "dueDate", "createdAt"
+         FROM umrah_agent_invoices
+        WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        ORDER BY "createdAt" DESC
+        LIMIT $3`,
+      [id, scope.companyId, limit]
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
+});
+
 router.post("/agents", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
