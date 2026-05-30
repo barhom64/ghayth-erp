@@ -191,6 +191,10 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
           companyId: scope.companyId,
           branchId: scope.branchId,
           userId: scope.userId,
+          // RBAC-001 (#1413 §9): record the capacity (role) the action was
+          // performed under. A user may hold several roles; selectedRoleKey is
+          // the active one for this request. See RBAC_AUDIT_CONTEXT_SPEC.md.
+          activeRoleKey: scope.selectedRoleKey ?? null,
           entity,
           entityId: entityId ? Number(entityId) : undefined,
           action,

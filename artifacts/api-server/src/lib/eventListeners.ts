@@ -38,9 +38,13 @@ async function logAudit(event: string, payload: EventPayload) {
       ? JSON.stringify({ approvalStep, workflowId })
       : null;
 
+    // RBAC-001 (#1413 §9): persist the role (capacity) the action was
+    // performed under, supplied by auditMiddleware from scope.selectedRoleKey.
+    const activeRoleKey = (payload.activeRoleKey as string) ?? null;
+
     await pool.query(
-      `INSERT INTO audit_logs ("companyId","branchId","userId",action,entity,"entityId","before","after","changes","reason","scope")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      `INSERT INTO audit_logs ("companyId","branchId","userId",action,entity,"entityId","before","after","changes","reason","scope","active_role_key")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [
         payload.companyId ?? null,
         payload.branchId ?? null,
@@ -53,6 +57,7 @@ async function logAudit(event: string, payload: EventPayload) {
         changes && (Array.isArray(changes) ? changes.length > 0 : true) ? JSON.stringify(changes) : null,
         reason,
         scope,
+        activeRoleKey,
       ]
     );
   } catch (err) {
