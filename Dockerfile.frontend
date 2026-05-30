@@ -1,21 +1,8 @@
 # Dockerfile.frontend
-# ----------------------------------------------------------------------------
-# Two-stage build for @workspace/ghayth-erp.
-# Stage 1 produces the static Vite bundle, stage 2 serves it from nginx with
-# /api proxied to the api-server container.
-# ----------------------------------------------------------------------------
-
 FROM node:24-alpine AS build
-
 RUN corepack enable
-
 WORKDIR /app
-
-# Some CI/container environments do not expose pnpm's user-agent to npm
-# lifecycle scripts. The root preinstall guard requires it, so set it
-# explicitly for Docker builds.
 ENV npm_config_user_agent=pnpm/docker
-
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY artifacts/ghayth-erp/package.json artifacts/ghayth-erp/
 COPY lib/api-client-react/package.json lib/api-client-react/
@@ -23,27 +10,15 @@ COPY lib/api-spec/package.json lib/api-spec/
 COPY lib/api-zod/package.json lib/api-zod/
 COPY lib/object-storage-web/package.json lib/object-storage-web/
 COPY scripts/package.json scripts/
-
-RUN pnpm install --frozen-lockfile
-
+RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY tsconfig.base.json tsconfig.json ./
 COPY lib/ ./lib/
 COPY artifacts/ghayth-erp/ ./artifacts/ghayth-erp/
-
-ENV PORT=5173 \
-    BASE_PATH=/ \
-    NODE_ENV=production
-
+ENV PORT=5173 BASE_PATH=/ NODE_ENV=production
 RUN pnpm --filter @workspace/ghayth-erp run build
-
 FROM nginx:1.27-alpine AS runtime
-
 ENV API_UPSTREAM=http://api:8080
-
 COPY --from=build /app/artifacts/ghayth-erp/dist/public /usr/share/nginx/html
 COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
-
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost/healthz || exit 1
-
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget --quiet --tries=1 --spider http://localhost/healthz || exit 1
 EXPOSE 80
