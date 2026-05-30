@@ -9,7 +9,7 @@
 
 ## 0. الخلاصة التنفيذية
 
-غيث يطبّق **انضباطًا معماريًا عاليًا** على الخدمات العابرة: **13 من 14** خدمة مركزية يعاد استخدامها عبر نمط `entityType + entityId` (لا نسخ لكل مسار). **الاستثناء الوحيد: المرفقات/الوثائق** — توجد جدولان خاصان بمسارين (`umrah_attachments`, `employee_documents`) يتوازيان مع الخدمة المشتركة `documents` ويجب دمجهما.
+غيث يطبّق **انضباطًا معماريًا عاليًا** على الخدمات العابرة: **13 من 14** خدمة مركزية يعاد استخدامها عبر نمط `entityType + entityId` (لا نسخ لكل مسار). **الاستثناء الوحيد بعد التحقق: `umrah_attachments`** — نظام مرفقات يعمل يتوازى مع `documents` (مرشّح توحيد محتوى). أما `employee_documents` فهو — بعد فحص المخطط — **جدول امتثال domain يُبقى، لا تكرار** (تصحيح لتصنيف الجرد الأولي — انظر §2).
 
 > **القرار الأعلى:** كل عمل قادم يستهلك هذه الخدمات بعقدها الموحّد (تُكتب عقودها في المرحلة 5). ممنوع بناء بديل.
 
@@ -22,7 +22,7 @@
 | 1 | المهام Tasks | `routes/tasks.ts`، `shared/linked-tasks.tsx` | `tasks` (+ `linkedEntityType/Id`) | ✅ نعم | **يُستخدم** — لا نظام مهام لكل مسار |
 | 2 | الاعتماد/القرار Decisions | `routes/approvalActions.ts`، `routes/governance.ts`، `lib/businessHelpers.requestApproval` | `approval_actions` (+ `approval_chains`) | ✅ نعم (نواة عامة) | **يُستخدم** — `budget_approval_requests` تخصّص مالي لا نظام موازٍ |
 | 3 | الإشعارات Notifications | `lib/notificationEngine.ts`، `lib/notificationService.ts`، `routes/notifications.ts` | `notifications` | ✅ نعم | **يُستخدم** — محرّك واحد |
-| 4 | الوثائق/المرفقات Documents | `routes/documents.ts`، `shared/entity-documents.tsx` | `documents` + `document_entity_links` | ⚠️ **مختلط** | **يُدمَج** — `umrah_attachments`+`employee_documents` (DOC-VIOLATION) |
+| 4 | الوثائق/المرفقات Documents | `routes/documents.ts`، `shared/entity-documents.tsx` | `documents` + `document_entity_links` | ⚠️ **مختلط** | **يُوحَّد** `umrah_attachments` (تحقّق staging)؛ `employee_documents` يُبقى (امتثال domain — تصحيح §2) |
 | 5 | المراسلات Correspondence | `routes/correspondence.ts`، `lib/messageSender.ts`، `routes/inbox.ts` | `message_log` (+ `outbound_queue`) | ✅ نعم | **يُستخدم** — المسارات القديمة قيد الإنهاء (`communications-unification.md`) |
 | 6 | التدقيق Audit | `routes/auditLogs.ts`، `lib/businessHelpers.createAuditLog` | `audit_logs` | ✅ نعم | **يُستخدم ويُطوَّر** — إضافة الدور النشط (RBAC-001) |
 | 7 | التعليقات Comments | `routes/entityMeta.ts`، `shared/entity-comments.tsx` | `entity_comments` (+ `entityType/Id`) | ✅ نعم | **يُستخدم** |
@@ -40,14 +40,16 @@
 
 ## 2. التكرار المرصود — يجب دمجه
 
-### DOC-VIOLATION — مرفقات لكل مسار تتوازى مع الخدمة المشتركة
+### DOC-VIOLATION — تحقّق مخطط محدّث (يصحّح تصنيف الجرد)
 
-| التكرار | الموقع | المشكلة | القرار |
-|---|---|---|---|
-| `umrah_attachments` | `migrations/154_umrah_attachments.sql` + endpoints في `umrah-entities.ts` | مسار مرفقات ثانٍ لمجموعات العمرة (FK مباشر لـ `umrah_groups`) خارج `document_entity_links` | **يُدمَج** في `documents` بـ `entityType='umrah_group'` (ترحيل + إهلاك بعد فترة) |
-| `employee_documents` | `migrations/083_*` + endpoints في `hr.ts` | جدول خاص بوثائق الموظف المتتبّعة الانتهاء (إقامة/رخصة) خارج الخدمة المشتركة | **يُدمَج** في `documents` + جدول `document_metadata` (انتهاء/امتثال) |
+فحص المخططات والمستهلكين الفعليين في مرحلة التنفيذ صحّح التصنيف الأولي:
 
-> هذان **أثرٌ تاريخي** (بُنيا قبل نضج النمط الموحّد) لا انتهاك تصميمي حالي؛ لا يمنعان استخدام الخدمة المشتركة لكنهما يضيفان جدولين زائدين. **الدمج منخفض المخاطر، عالي النظافة** — يُجدوَل في مرحلة التنفيذ مع توثيق السبب.
+| الجدول | الحقيقة بعد التحقق | القرار المصحّح |
+|---|---|---|
+| `employee_documents` (083) | **ليس** تكرار مرفقات — جدول **امتثال/انتهاء domain** (documentType/Number/issueDate/expiryDate/issuingAuthority/reminderDays/status) يستهلكه **8 ملفات** (cron تذكيرات الانتهاء، bi، calendar، dashboard، operationsCenter، mySpace، hr، employees) | **يُبقى كما هو** — دمجه يكسر تتبّع الانتهاء. تصنيفه كتكرار كان **خطأ من وكيل الجرد** |
+| `umrah_attachments` (154) | متعدد الأشكال فعلًا (`entityType`+`entityId`، **لا FK لـ umrah_groups** خلافًا للجرد الأولي)؛ مستهلك واحد (`umrah-entities.ts`) | **مرشّح توحيد حقيقي محتوى** — لكنه نظام **يعمل**، فالتوحيد تحسين نظافة لا إصلاح؛ يتطلب تحقق UI تشغيلي. الخطة الدقيقة في `DOCUMENT_SERVICE_CONTRACT.md` |
+
+> الخلاصة المصحّحة: التكرار الفعلي **واحد فقط** (`umrah_attachments`)، وهو نظام يعمل؛ توحيده يُنفَّذ كـ PR يُتحقَّق منه في staging قبل الدمج (يمسّ ميزة حيّة)، لا "أعمى". `employee_documents` كيان امتثال مشروع يُبقى. أي الانضباط المعماري الفعلي **أعلى** مما قدّره الجرد الأولي.
 
 ### تكرار آخر مرصود (من جرد سابق — يُحال لا يُكرَّر)
 - **كتالوجا RBAC** (rbacCatalog مسطّح ↔ featureCatalog شجري) — FND-010، انظر `RBAC_EXISTING_ASSETS_AUDIT.md` (RBAC-003).
@@ -72,7 +74,7 @@
 
 - **يُستخدم بعقده الموحّد:** المهام، الاعتماد، الإشعارات، المراسلات، التدقيق، التعليقات، الطباعة/التصدير، BI، التقويم، AI، الترقيم، الأحداث.
 - **يُطوَّر:** التدقيق (الدور النشط RBAC-001)؛ SLA/التصعيد (تعميمه من تذاكر الدعم إلى الاعتمادات العامة).
-- **يُدمَج:** `umrah_attachments` + `employee_documents` ← `documents` (DOC-VIOLATION)؛ المراسلات القديمة ← `message_log`.
+- **يُدمَج (تحسين نظافة، تحقّق staging):** `umrah_attachments` ← `documents` فقط؛ `employee_documents` **يُبقى** (امتثال domain، تصحيح). المراسلات القديمة ← `message_log`.
 - **يُبنى:** لا خدمة مشتركة جديدة مطلوبة — كلها موجودة.
 - **لا حذف الآن:** الدمج يسبق الحذف، وبتوثيق السبب.
 
