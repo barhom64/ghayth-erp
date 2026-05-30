@@ -1674,11 +1674,19 @@ router.post("/maintenance/:id/complete", authorize({ feature: "fleet.maintenance
 
     // Auto journal entry for maintenance cost
     if (finalCost > 0) {
-      const [vehicle] = await rawQuery<Record<string, unknown>>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [m.vehicleId, scope.companyId]);
+      // Maintenance JE lands on the vehicle's branch, not the operator's.
+      // Pre-fix the cost JE used scope.branchId, so a vehicle assigned to
+      // Branch A but serviced by a session working Branch B silently
+      // booked the cost to Branch B and broke per-branch fleet P&L.
+      const [vehicle] = await rawQuery<{ plateNumber?: string; branchId?: number | null }>(
+        `SELECT "plateNumber", "branchId" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [m.vehicleId, scope.companyId]
+      );
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
+      const vehicleBranchId = vehicle?.branchId ?? scope.branchId;
       const { fleetEngine } = await import("../lib/engines/index.js");
       await fleetEngine.postMaintenanceGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { companyId: scope.companyId, branchId: vehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id, vehicleId: m.vehicleId as number, totalCost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
       ).catch((e: unknown) => logger.error(e, "Maintenance GL failed:"));
     }
@@ -2163,13 +2171,17 @@ router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }
     );
     assertInsert(insertId, "fleet_fuel_logs");
 
-    // Auto journal entry for fuel cost
+    // Auto journal entry for fuel cost (vehicle's branch, not operator's)
     if (totalCost > 0) {
-      const [vehicle] = await rawQuery<Record<string, unknown>>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [resolvedVehicleId, scope.companyId]);
+      const [vehicle] = await rawQuery<{ plateNumber?: string; branchId?: number | null }>(
+        `SELECT "plateNumber", "branchId" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [resolvedVehicleId, scope.companyId]
+      );
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
+      const vehicleBranchId = vehicle?.branchId ?? scope.branchId;
       const { fleetEngine } = await import("../lib/engines/index.js");
       await fleetEngine.postFuelExpenseGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { companyId: scope.companyId, branchId: vehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id: insertId, vehicleId: resolvedVehicleId, amount: totalCost, description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}` }
       ).catch((e: unknown) => logger.error(e, "Fuel GL failed:"));
     }
@@ -2256,15 +2268,19 @@ router.post("/insurance", authorize({ feature: "fleet.vehicles", action: "create
     );
     assertInsert(insertId, "fleet_insurance");
 
-    // Auto journal entry for insurance premium
+    // Auto journal entry for insurance premium (vehicle's branch).
     if (premium > 0) {
-      const [vehicle] = await rawQuery<Record<string, unknown>>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
+      const [vehicle] = await rawQuery<{ plateNumber?: string; branchId?: number | null }>(
+        `SELECT "plateNumber", "branchId" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.vehicleId, scope.companyId]
+      );
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
+      const insuranceVehicleBranchId = vehicle?.branchId ?? scope.branchId;
       const insuranceType = b.type || b.insuranceType || 'comprehensive';
       const insuranceTypeLabel = insuranceType === 'comprehensive' ? 'شامل' : insuranceType === 'third_party' ? 'طرف ثالث' : insuranceType;
       const { fleetEngine } = await import("../lib/engines/index.js");
       await fleetEngine.postInsuranceGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { companyId: scope.companyId, branchId: insuranceVehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
         { id: insertId, vehicleId: Number(b.vehicleId), premium, description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}` }
       ).catch((e: unknown) => logger.error(e, "Insurance GL failed:"));
     }
@@ -3124,9 +3140,18 @@ router.post("/traffic-violations", authorize({ feature: "fleet.vehicles", action
     let journalEntryId: number | null = null;
     if (fineAmount > 0 && liability === 'company') {
       try {
+        // Violation JE lands on the vehicle's branch when known.
+        let violationBranchId: number | null | undefined = scope.branchId;
+        if (b.vehicleId) {
+          const [v] = await rawQuery<{ branchId?: number | null }>(
+            `SELECT "branchId" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+            [b.vehicleId, scope.companyId]
+          ).catch(() => [] as { branchId?: number | null }[]);
+          violationBranchId = v?.branchId ?? scope.branchId;
+        }
         const { fleetEngine } = await import("../lib/engines/index.js");
         const glResult = await fleetEngine.postTrafficViolationGL(
-          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+          { companyId: scope.companyId, branchId: violationBranchId, createdBy: scope.userId },
           {
             id: insertId,
             vehicleId: b.vehicleId ? Number(b.vehicleId) : 0,
