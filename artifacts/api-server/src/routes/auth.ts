@@ -328,7 +328,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     // V2 ids are negated to keep React keys unique against legacy ids.
     const userRoles = await rawQuery<UserRoleRow>(
       `SELECT id, "roleKey", label, modules, level, source FROM (
-         SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source
+         SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source, FALSE AS is_primary
            FROM user_roles WHERE "userId" = $1
          UNION ALL
          SELECT
@@ -342,7 +342,8 @@ router.post("/login", loginLimiter, async (req, res) => {
            ) AS modules,
            r.level,
            2 AS source_order,
-           'v2' AS source
+           'v2' AS source,
+           COALESCE(ur.is_primary, FALSE) AS is_primary
           FROM rbac_user_roles ur
           JOIN rbac_roles r ON r.id = ur.role_id
          WHERE ur."userId" = $1 AND ur."companyId" = $2
@@ -597,7 +598,7 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
     // Union legacy `user_roles` with v2 `rbac_user_roles`. See /login for rationale.
     const userRoles = await rawQuery<UserRoleRow>(
       `SELECT id, "roleKey", label, modules, level, source FROM (
-         SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source
+         SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source, FALSE AS is_primary
            FROM user_roles WHERE "userId" = $1
          UNION ALL
          SELECT
@@ -611,7 +612,8 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
            ) AS modules,
            r.level,
            2 AS source_order,
-           'v2' AS source
+           'v2' AS source,
+           COALESCE(ur.is_primary, FALSE) AS is_primary
           FROM rbac_user_roles ur
           JOIN rbac_roles r ON r.id = ur.role_id
          WHERE ur."userId" = $1 AND ur."companyId" = $2
