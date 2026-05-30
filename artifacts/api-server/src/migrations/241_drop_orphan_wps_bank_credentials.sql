@@ -1,0 +1,47 @@
+-- GAP_MATRIX item #19 — drop orphan `wps_bank_credentials` table.
+--
+-- @rollback: re-run migration 176_wps_bank_credentials.sql verbatim. The
+--   original schema is preserved at that path; this migration only drops
+--   the table itself, no data referenced anywhere else. If a re-implementation
+--   ships later it should use a fresh schema number (likely a different
+--   column set) and the migration history will show the table was once
+--   present.
+-- @policy:destructive — DROP TABLE on a credential-bearing table. Verified
+--   orphan: zero references in routes/, lib/, tests/, scripts/ outside the
+--   defining migration 176 itself. AES-encrypted secrets become
+--   unrecoverable; nothing live reads them.
+--
+-- BACKGROUND
+-- Migration 176 introduced this table for per-company WPS bank
+-- delivery credentials (Task #329). The auditing sweep that produced
+-- `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md` flagged it as a hardening
+-- risk: a table holding AES-256-GCM-encrypted bank secrets with
+-- ZERO live readers (grep -r 'wps_bank_credentials' against the
+-- routes/lib tree returned nothing outside migration 176 itself).
+-- A secret store with no consumer is a quiet liability — credentials
+-- accumulate in `encryptedFields`, no one rotates them, and the
+-- attack surface keeps growing alongside the encryption-key blast
+-- radius.
+--
+-- The original code path that was meant to consume this table
+-- (`lib/delivery.ts` reading bank creds from DB instead of env)
+-- never landed. The downstream WPS bank-delivery integration moved
+-- to per-tenant SFTP/HTTPS config wired through Mudad / WPS hub
+-- routes, which never adopted this schema. After re-confirming with
+-- the sweep audit (no consumer in src/, no consumer in lib/, no
+-- consumer in tests, no consumer in scripts/), the table is genuinely
+-- abandoned.
+--
+-- ACTION
+-- 1. Drop the unique index `uq_wps_bank_credentials_company_bank`
+--    (idempotent — IF EXISTS).
+-- 2. Drop the table itself (idempotent — IF EXISTS).
+-- 3. No rollback migration ships because there's nothing live to
+--    roll back to: the table never had real production rows on any
+--    audited environment. If a future re-implementation needs the
+--    same shape it should ship its own migration with a fresh schema
+--    (likely a different column set than 176's) and tracked-up
+--    rotation policy.
+
+DROP INDEX IF EXISTS uq_wps_bank_credentials_company_bank;
+DROP TABLE IF EXISTS wps_bank_credentials;
