@@ -15,6 +15,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -1238,25 +1239,48 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
 
     if (selectedDriverId) {
       try {
-        const [driverEmp] = await rawQuery<Record<string, unknown>>(
-          `SELECT d."employeeId", ea.id AS "assignmentId" FROM fleet_drivers d
+        const [driverInfo] = await rawQuery<{ employeeId: number | null; assignmentId: number | null; phone: string | null; name: string | null }>(
+          `SELECT d."employeeId", d.phone, d.name, ea.id AS "assignmentId" FROM fleet_drivers d
            LEFT JOIN employee_assignments ea ON ea."employeeId"=d."employeeId" AND ea.status='active' AND ea."companyId"=$2
            WHERE d.id=$1 AND d."companyId"=$2 AND d."deletedAt" IS NULL`, [selectedDriverId, scope.companyId]);
-        if (driverEmp?.assignmentId) {
+        const tripSummary = `رحلة من ${b.fromLocation || 'غير محدد'} إلى ${b.toLocation || 'غير محدد'} — المسافة التقديرية: ${estimatedDistanceKm.toFixed(1)} كم`;
+        // In-system notification — only for drivers linked to an active
+        // employee assignment (i.e. drivers who are also staff with an
+        // ERP login). The badge appears in the regular notifications inbox.
+        if (driverInfo?.assignmentId) {
           createNotification({
             companyId: scope.companyId,
-            assignmentId: driverEmp.assignmentId as number,
+            assignmentId: driverInfo.assignmentId,
             type: "fleet_trip",
             title: "رحلة جديدة مسندة إليك",
-            body: `رحلة من ${b.fromLocation || 'غير محدد'} إلى ${b.toLocation || 'غير محدد'} — المسافة: ${estimatedDistanceKm.toFixed(1)} كم`,
+            body: tripSummary,
             priority: "normal",
             refType: "fleet_trips",
             refId: insertId,
           }).catch((e) => logger.error(e, "fleet background task failed"));
         }
+        // WhatsApp dispatch — reaches drivers regardless of employee
+        // linkage as long as the driver row has a phone number. Routes
+        // through messageSender (DLP-scanned, audited, queued in
+        // outbound_queue). Best-effort: any send failure logs but
+        // doesn't fail the trip creation.
+        if (driverInfo?.phone) {
+          sendMessage({
+            channel: "whatsapp",
+            recipient: driverInfo.phone,
+            recipientName: driverInfo.name,
+            body: `رحلة جديدة #${insertId} مسندة إليك:\n${tripSummary}\nالرجاء الاطلاع على تفاصيل الرحلة في النظام.`,
+            companyId: scope.companyId,
+            userId: scope.userId,
+            relatedType: "fleet_trips",
+            relatedId: insertId,
+            templateKey: "fleet.trip.driver_assigned",
+            eventAction: "fleet.trip.driver_notified",
+          }).catch((e) => logger.error({ err: e, driverId: selectedDriverId, tripId: insertId }, "[fleet] driver WhatsApp dispatch failed"));
+        } else {
+          logger.info({ driverId: selectedDriverId, tripId: insertId }, "[fleet] driver has no phone — WhatsApp dispatch skipped");
+        }
       } catch (notifErr) { logger.error(notifErr, "Trip notification error:"); }
-
-      logger.info({ tripId: insertId, clientId: b.clientId || "N/A" }, "New trip SMS notification for client");
     }
 
     createAuditLog({

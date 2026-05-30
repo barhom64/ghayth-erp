@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { formatNumber } from "@/lib/formatters";
+import { formatNumber, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   PageStatusBadge,
   DataTable,
@@ -12,18 +14,41 @@ import {
   applyFilters,
   PageShell,
 } from "@workspace/ui-core";
-import { Plus, Route, Navigation, CheckCircle, MapPin } from "lucide-react";
+import { Plus, Route, Navigation, CheckCircle, MapPin, List, CalendarDays } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { cn } from "@/lib/utils";
+
+type ViewMode = "list" | "schedule";
 
 export default function TripsPage() {
   const [, navigate] = useLocation();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["trips"], "/fleet/trips");
   const items: any[] = data?.data || [];
   const [filters, setFilters] = useFilters();
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
+
+  // Group trips by tripDate (or startTime fallback) for the schedule
+  // view. ISO date as key keeps the sort stable; the bucket order is
+  // chronologically descending (most-imminent first) which matches
+  // how dispatchers scan a day-board.
+  const groupedByDate = (() => {
+    const buckets = new Map<string, any[]>();
+    for (const t of (applyFilters(items, filters, {
+      searchFields: ["driverName", "vehiclePlate", "origin", "destination"],
+      statusField: "status",
+      dateField: "tripDate",
+    }) as any[])) {
+      const raw = t.tripDate || t.startTime;
+      const dayKey = raw ? new Date(raw).toISOString().slice(0, 10) : "غير محدد";
+      if (!buckets.has(dayKey)) buckets.set(dayKey, []);
+      buckets.get(dayKey)!.push(t);
+    }
+    return [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  })();
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["driverName", "vehiclePlate", "origin", "destination"],
@@ -59,9 +84,29 @@ export default function TripsPage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "الرحلات" }]}
       loading={isLoading}
       actions={
-        <Link href="/fleet/trips/create">
-          <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />رحلة جديدة</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border bg-surface-subtle p-0.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("h-7", viewMode === "list" && "bg-background shadow-sm")}
+              onClick={() => setViewMode("list")}
+            >
+              <List className="h-3.5 w-3.5 me-1" />قائمة
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("h-7", viewMode === "schedule" && "bg-background shadow-sm")}
+              onClick={() => setViewMode("schedule")}
+            >
+              <CalendarDays className="h-3.5 w-3.5 me-1" />جدول يومي
+            </Button>
+          </div>
+          <Link href="/fleet/trips/create">
+            <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />رحلة جديدة</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <FleetTabsNav />
@@ -109,17 +154,58 @@ export default function TripsPage() {
         csvFileName="رحلات_الأسطول"
       />
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        isLoading={isLoading}
-        isError={isError}
-        error={error as Error | null}
-        onRetry={() => refetch()}
-        emptyMessage="لا توجد رحلات"
-        noToolbar
-        onRowClick={(t) => navigate(`/fleet/trips/${t.id}`)}
-      />
+      {viewMode === "list" ? (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          isLoading={isLoading}
+          isError={isError}
+          error={error as Error | null}
+          onRetry={() => refetch()}
+          emptyMessage="لا توجد رحلات"
+          noToolbar
+          onRowClick={(t) => navigate(`/fleet/trips/${t.id}`)}
+        />
+      ) : (
+        <div className="space-y-3">
+          {groupedByDate.length === 0 ? (
+            <Card><CardContent className="p-8 text-center text-muted-foreground">لا رحلات تطابق المرشحات</CardContent></Card>
+          ) : groupedByDate.map(([day, trips]) => (
+            <Card key={day}>
+              <CardContent className="p-0">
+                <div className="border-b bg-surface-subtle/50 px-4 py-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <CalendarDays className="h-4 w-4 text-status-info-foreground" />
+                    {day === "غير محدد" ? day : formatDateAr(day)}
+                  </div>
+                  <span className="text-xs text-muted-foreground">{trips.length} رحلة</span>
+                </div>
+                <div className="divide-y">
+                  {trips.map((t: any) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => navigate(`/fleet/trips/${t.id}`)}
+                      className="w-full text-start px-4 py-3 hover:bg-surface-subtle/40 flex items-center justify-between gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {t.origin || t.fromLocation || "—"} → {t.destination || t.toLocation || "—"}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {t.driverName || "بلا سائق"} · {t.vehiclePlate || "بلا مركبة"}
+                          {t.distance ? ` · ${t.distance} كم` : ""}
+                        </div>
+                      </div>
+                      <PageStatusBadge status={t.status} />
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </PageShell>
   );
 }
