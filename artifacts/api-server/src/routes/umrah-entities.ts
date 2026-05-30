@@ -278,16 +278,74 @@ router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), a
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Defence-in-depth: the umrah_agents JOIN previously matched only
+    // sa."agentId" = a.id (no companyId / deletedAt guards) — a stale
+    // FK could surface another tenant's agent name. Adding the same
+    // pattern used by GET /umrah/pilgrims/:id (PR #1425).
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
          FROM umrah_sub_agents sa
-         LEFT JOIN umrah_agents a ON sa."agentId" = a.id
-         LEFT JOIN clients c ON sa."clientId" = c.id AND c."companyId" = sa."companyId" AND c."deletedAt" IS NULL
+         LEFT JOIN umrah_agents a
+                ON sa."agentId" = a.id
+               AND a."companyId" = sa."companyId"
+               AND a."deletedAt" IS NULL
+         LEFT JOIN clients c
+                ON sa."clientId" = c.id
+               AND c."companyId" = sa."companyId"
+               AND c."deletedAt" IS NULL
         WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
-    res.json(maskFields(req, row));
+
+    // Statement aggregates — mirrors the agent statement (PR #1438) so
+    // sub-agents get the same one-pane view. Three queries run in
+    // parallel via Promise.all so adding them doesn't double the
+    // detail-fetch latency.
+    //
+    //   - pilgrimCount        : how many pilgrims this sub-agent sent
+    //   - statusBreakdown     : dict keyed by pilgrim status
+    //   - totalPaid           : SUM(sarAmount) from umrah_payments —
+    //                            real receipts table (unlike agents
+    //                            where we approximate via invoice
+    //                            status). Sub-agents are the actual
+    //                            money sources in most umrah setups,
+    //                            so the payments table IS the source
+    //                            of truth.
+    const [statsResult, statusBreakdownResult, paymentResult] = await Promise.all([
+      rawQuery<{ pilgrimCount: number; overstayedCount: number }>(
+        `SELECT COUNT(*)::int AS "pilgrimCount",
+                COUNT(*) FILTER (WHERE status='overstayed')::int AS "overstayedCount"
+           FROM umrah_pilgrims
+          WHERE "subAgentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+      rawQuery<{ status: string; c: number }>(
+        `SELECT status, COUNT(*)::int AS c
+           FROM umrah_pilgrims
+          WHERE "subAgentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          GROUP BY status`,
+        [id, scope.companyId]
+      ),
+      rawQuery<{ totalPaid: string }>(
+        `SELECT COALESCE(SUM("sarAmount"), 0)::numeric AS "totalPaid"
+           FROM umrah_payments
+          WHERE "subAgentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+    ]);
+    const stats = statsResult[0] || { pilgrimCount: 0, overstayedCount: 0 };
+    const totalPaid = Number(paymentResult[0]?.totalPaid ?? 0);
+    const statusBreakdown = Object.fromEntries(
+      statusBreakdownResult.map((r) => [r.status, Number(r.c)])
+    );
+
+    res.json(maskFields(req, {
+      ...row,
+      ...stats,
+      totalPaid,
+      statusBreakdown,
+    }));
   } catch (err) { handleRouteError(err, res, "Get sub-agent"); }
 });
 
