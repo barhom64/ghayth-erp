@@ -44,9 +44,14 @@ export default function UmrahPilgrims() {
   const pageSize = 20;
   const seasonId = (filters as Record<string, string>).seasonId || "";
   const groupId = (filters as Record<string, string>).groupId || "";
+  // Flight number rides on the same dynamic-keys pattern (no shared-
+  // component change). Free text — operators paste partial numbers
+  // like "PIA-310" / "SV-471" / "EK" depending on what their carrier
+  // file printed.
+  const flight = (filters as Record<string, string>).flight || "";
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["umrah-pilgrims", filters.search, filters.status, seasonId, groupId, String(page)],
-    `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&page=${page}&limit=${pageSize}`,
+    ["umrah-pilgrims", filters.search, filters.status, seasonId, groupId, flight, String(page)],
+    `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&flight=${encodeURIComponent(flight)}&page=${page}&limit=${pageSize}`,
   );
 
   // Seasons + groups feed the extraFilters dropdowns so operators can
@@ -237,6 +242,24 @@ export default function UmrahPilgrims() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Flight number — free-text input alongside the AdvancedFilters
+          dropdowns since extraFilters only supports option lists. Paired
+          with bulk-status flip (PR #1430), this is the operator's
+          flight-day landing flow: type "PIA-310" → pick all → mark
+          arrived in one click. */}
+      <div className="flex items-center gap-2 -mb-3">
+        <label className="text-xs text-muted-foreground whitespace-nowrap" htmlFor="pilgrims-flight-filter">رقم الرحلة:</label>
+        <input
+          id="pilgrims-flight-filter"
+          data-testid="pilgrims-flight-filter"
+          type="text"
+          value={flight}
+          onChange={(e) => { setFilters({ ...filters, flight: e.target.value } as any); setPage(1); }}
+          placeholder="مثال: PIA-310"
+          className="h-8 w-40 text-xs rounded border border-input bg-background px-2"
+        />
       </div>
 
       <AdvancedFilters
