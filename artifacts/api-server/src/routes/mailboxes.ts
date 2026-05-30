@@ -45,6 +45,8 @@ type MailboxRow = {
   provider: string;
   displayName: string | null;
   emailAddress: string;
+  branchId: number | null;
+  branchName?: string | null;
   tenantId: string | null;
   imapHost: string | null;
   imapPort: number | null;
@@ -64,7 +66,7 @@ type MailboxRow = {
 // Never return token/password columns even masked. Callers don't need
 // them and we don't want them in audit log payloads either.
 const PUBLIC_COLUMNS = `
-  id, "companyId", "userId", provider, "displayName", "emailAddress",
+  id, "companyId", "userId", "branchId", provider, "displayName", "emailAddress",
   "tenantId", "imapHost", "imapPort", "imapUsername",
   "smtpHost", "smtpPort", "smtpUsername",
   "syncEnabled", "syncFolders",
@@ -76,13 +78,30 @@ const PUBLIC_COLUMNS = `
 router.get("/", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Personal mailboxes (mine) + any branch-scoped shared mailbox in my
+    // company. Branch-shared rows (branchId IS NOT NULL) are visible to the
+    // whole company team, not just the user who connected them.
     const rows = await rawQuery<MailboxRow>(
       `SELECT ${PUBLIC_COLUMNS}
          FROM mailbox_accounts
-        WHERE "companyId" = $1 AND "userId" = $2 AND "deletedAt" IS NULL
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL
+          AND ("userId" = $2 OR "branchId" IS NOT NULL)
         ORDER BY "createdAt" ASC`,
       [scope.companyId, scope.userId]
     );
+    const branchIds = [
+      ...new Set(rows.map((r) => r.branchId).filter((x): x is number => x != null)),
+    ];
+    if (branchIds.length > 0) {
+      const branches = await rawQuery<{ id: number; name: string }>(
+        `SELECT id, name FROM branches WHERE id = ANY($1) AND "companyId" = $2`,
+        [branchIds, scope.companyId]
+      );
+      const nameById = new Map(branches.map((b) => [b.id, b.name]));
+      for (const r of rows) {
+        r.branchName = r.branchId != null ? nameById.get(r.branchId) ?? null : null;
+      }
+    }
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "mailboxes/list");
@@ -94,7 +113,7 @@ router.post("/", authorize({ feature: "communications", action: "create" }), asy
   try {
     const scope = req.scope!;
     const {
-      provider, displayName, emailAddress,
+      provider, displayName, emailAddress, branchId,
       // microsoft365
       accessToken, refreshToken, tokenExpiresAt, tenantId,
       // imap/hostinger
@@ -109,6 +128,16 @@ router.post("/", authorize({ feature: "communications", action: "create" }), asy
     if (!emailAddress || typeof emailAddress !== "string") {
       throw new ValidationError("emailAddress مطلوب");
     }
+    // Optional branch scoping — must reference a branch in the caller's company.
+    let resolvedBranchId: number | null = null;
+    if (branchId != null && branchId !== "") {
+      const [branch] = await rawQuery<{ id: number }>(
+        `SELECT id FROM branches WHERE id = $1 AND "companyId" = $2`,
+        [Number(branchId), scope.companyId]
+      );
+      if (!branch) throw new ValidationError("الفرع غير موجود ضمن شركتك");
+      resolvedBranchId = branch.id;
+    }
     if (provider === "microsoft365" && (!accessToken || !refreshToken)) {
       throw new ValidationError("accessToken و refreshToken مطلوبان لمزود Microsoft 365");
     }
@@ -122,9 +151,9 @@ router.post("/", authorize({ feature: "communications", action: "create" }), asy
           "accessToken", "refreshToken", "tokenExpiresAt", "tenantId",
           "imapHost", "imapPort", "imapUsername", "imapPassword",
           "smtpHost", "smtpPort", "smtpUsername", "smtpPassword",
-          "syncFolders", "syncEnabled", "createdAt", "updatedAt")
+          "syncFolders", "branchId", "syncEnabled", "createdAt", "updatedAt")
        VALUES ($1,$2,$3,$4,$5, $6,$7,$8,$9, $10,$11,$12,$13, $14,$15,$16,$17,
-               $18, true, NOW(), NOW())`,
+               $18, $19, true, NOW(), NOW())`,
       [
         scope.companyId, scope.userId, provider, displayName ?? null, emailAddress,
         accessToken ? encryptSecret(accessToken) : null,
@@ -135,6 +164,7 @@ router.post("/", authorize({ feature: "communications", action: "create" }), asy
         smtpHost ?? null, smtpPort ?? null, smtpUsername ?? null,
         smtpPassword ? encryptSecret(smtpPassword) : null,
         Array.isArray(syncFolders) ? syncFolders : null,
+        resolvedBranchId,
       ]
     );
     assertInsert(insertId, "mailbox_accounts");
