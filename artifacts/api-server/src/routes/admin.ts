@@ -6,6 +6,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, pool } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { logger } from "../lib/logger.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
@@ -1884,6 +1885,276 @@ router.patch("/system-stops/:id/deactivate", authorize({ feature: "admin", actio
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch((e) => logger.error(e, "emit event failed"));
     res.json({ message: "تم إلغاء تفعيل الإيقاف" });
   } catch (err) { handleRouteError(err, res, "Deactivate system stop"); }
+});
+
+// ============================================================================
+// RBAC v2 admin completion — Ghaith Operating Foundation (#1413 §6/§8/§18)
+//   - RBAC-002: POST /onboard — atomic employee + user account + roles
+//   - RBAC-004: GET /users/:id/effective-permissions — grants + source role
+//   - RBAC-004: POST /permissions/explain — why a user can / can't do X
+// Built on the existing tables + patterns (employees / employee_assignments /
+// users / rbac_user_roles). No new RBAC system. See docs/rbac/*.
+// ============================================================================
+
+// ── RBAC-002: POST /admin/onboard ───────────────────────────────────────────
+const onboardSchema = z.object({
+  // employee (mirrors createEmployeeSchema requireds in employees.ts)
+  name: z.string().min(1, "اسم الموظف مطلوب"),
+  phone: z.string().min(1, "الجوال مطلوب"),
+  nationalId: z.string().min(1, "رقم الهوية مطلوب"),
+  nationality: z.string().min(1, "الجنسية مطلوبة"),
+  email: z.string().email("بريد إلكتروني غير صحيح"),
+  branchId: z.coerce.number().int().positive().optional().nullable(),
+  departmentId: z.coerce.number().int().positive().optional().nullable(),
+  jobTitle: z.string().optional(),
+  salary: z.coerce.number().optional(),
+  // account
+  password: z.string().min(8, "كلمة المرور 8 أحرف على الأقل").optional(),
+  // roles — one user, MULTIPLE roles, each with its own scope (#1413 core rule)
+  roles: z
+    .array(
+      z.object({
+        roleKey: z.string().min(1),
+        branchId: z.coerce.number().int().positive().optional().nullable(),
+        departmentId: z.coerce.number().int().positive().optional().nullable(),
+      }),
+    )
+    .min(1, "يجب اختيار دور واحد على الأقل"),
+});
+
+router.post("/onboard", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    await assertAdmin(req);
+    const scope = req.scope!;
+    const d = zodParse(onboardSchema.safeParse(req.body));
+    const companyId = scope.companyId;
+    const defaultBranchId = d.branchId ?? scope.branchId ?? null;
+
+    // Fast-fail: the user account is keyed by email (no username column).
+    const existing = await rawQuery<{ id: number }>(
+      `SELECT id FROM users WHERE email = $1 LIMIT 1`,
+      [d.email],
+    );
+    if (existing.length > 0) {
+      throw new ConflictError("البريد الإلكتروني مستخدم مسبقاً");
+    }
+
+    // Resolve EVERY role key to an rbac_roles.id up front so a bad key fails
+    // the whole request instead of half-onboarding the person (#1413 §6).
+    const resolvedRoles: { roleId: number; roleKey: string; branchId: number | null; departmentId: number | null }[] = [];
+    for (const r of d.roles) {
+      const roleRow = await rawQuery<{ id: number }>(
+        `SELECT id FROM rbac_roles WHERE role_key = $1 AND ("companyId" = $2 OR "companyId" IS NULL) ORDER BY "companyId" NULLS LAST LIMIT 1`,
+        [r.roleKey, companyId],
+      );
+      if (roleRow.length === 0) {
+        throw new ValidationError(`الدور غير موجود: ${r.roleKey}`);
+      }
+      resolvedRoles.push({
+        roleId: roleRow[0].id,
+        roleKey: r.roleKey,
+        branchId: r.branchId ?? defaultBranchId,
+        departmentId: r.departmentId ?? d.departmentId ?? null,
+      });
+    }
+
+    const empNum = await issueNumber({
+      companyId,
+      branchId: defaultBranchId,
+      module: "hr",
+      entity: "employee",
+      format: "EMP-{seq:5}",
+    });
+    const tempPassword = d.password || crypto.randomBytes(16).toString("hex");
+    const hashed = await hashPassword(tempPassword);
+    const primaryRole = resolvedRoles[0].roleKey;
+
+    // Atomic: employee + assignment + user + N role bindings. Any failure rolls
+    // it all back — never a person with an account but no role, nor a user row
+    // pointing at an employee that didn't get created (#1413 §6).
+    const out = await withTransaction(async (tx) => {
+      const empRes = await tx.query(
+        `INSERT INTO employees (name, phone, email, "empNumber", "nationalId", nationality, status, "companyId", "branchId")
+         VALUES ($1,$2,$3,$4,$5,$6,'active',$7,$8) RETURNING id`,
+        [d.name, d.phone, d.email, empNum, d.nationalId, d.nationality, companyId, defaultBranchId],
+      );
+      const employeeId = empRes.rows[0].id;
+
+      await tx.query(
+        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle",role,salary,"hireDate","isPrimary",status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,'active')`,
+        [employeeId, companyId, defaultBranchId, d.departmentId ?? null, d.jobTitle || "موظف", primaryRole, d.salary ?? 0, todayISO()],
+      );
+
+      const userRes = await tx.query(
+        `INSERT INTO users (email, "passwordHash", role, "employeeId", "isActive")
+         VALUES ($1,$2,$3,$4,true) RETURNING id`,
+        [d.email, hashed, primaryRole, employeeId],
+      );
+      const userId = userRes.rows[0].id;
+
+      for (let i = 0; i < resolvedRoles.length; i++) {
+        const rr = resolvedRoles[i];
+        await tx.query(
+          `INSERT INTO rbac_user_roles ("userId","companyId",role_id,"branchId","departmentId",is_primary,"assignedBy","createdAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+           ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
+          [userId, companyId, rr.roleId, rr.branchId, rr.departmentId, i === 0, scope.userId],
+        );
+      }
+      return { employeeId, userId };
+    });
+
+    // RBAC-001: record WHICH role the actor performed this under.
+    createAuditLog({
+      companyId, userId: scope.userId, action: "create", entity: "users", entityId: out.userId,
+      after: { email: d.email, employeeId: out.employeeId, roles: resolvedRoles.map((r) => r.roleKey) },
+      activeRoleKey: scope.selectedRoleKey ?? null,
+    }).catch((e) => logger.error(e, "onboard audit failed"));
+    emitEvent({
+      companyId, userId: scope.userId, action: "admin.user.onboarded", entity: "users", entityId: out.userId,
+      details: JSON.stringify({ email: d.email, employeeId: out.employeeId, roleCount: resolvedRoles.length }),
+    }).catch((e) => logger.error(e, "onboard event failed"));
+
+    res.status(201).json({
+      employeeId: out.employeeId,
+      userId: out.userId,
+      empNumber: empNum,
+      roles: resolvedRoles.map((r) => r.roleKey),
+      message: "تم إنشاء الموظف والحساب والأدوار بنجاح",
+    });
+  } catch (e) { logger.error(e, "onboard error"); handleRouteError(e, res, "فشل إنشاء الموظف والحساب"); }
+});
+
+// ── RBAC-004: GET /admin/users/:id/effective-permissions ────────────────────
+// The merged permission set with the SOURCE role per grant — answers
+// "what can this user do, and where did each grant come from?" (#1413 §8).
+router.get("/users/:id/effective-permissions", authorize({ feature: "admin", action: "view" }), async (req, res) => {
+  try {
+    await assertAdmin(req);
+    const scope = req.scope!;
+    const targetUserId = parseId(req.params.id, "id");
+
+    // Tenant isolation: only users whose employee belongs to the actor's company.
+    const u = await rawQuery<{ id: number; email: string }>(
+      `SELECT u.id, u.email
+         FROM users u
+         LEFT JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
+        WHERE u.id = $1 AND (ea."companyId" = $2 OR u."employeeId" IS NULL)
+        LIMIT 1`,
+      [targetUserId, scope.companyId],
+    );
+    if (u.length === 0) throw new NotFoundError("المستخدم غير موجود");
+
+    // Grants from the user's assigned roles (the primary source).
+    const roleGrants = await rawQuery<{
+      feature_key: string; actions: string[]; scope: string; conditions: unknown;
+      role_key: string; label_ar: string; is_primary: boolean;
+    }>(
+      `SELECT g.feature_key, g.actions, g.scope, g.conditions,
+              r.role_key, r.label_ar, ur.is_primary
+         FROM rbac_user_roles ur
+         JOIN rbac_roles r ON r.id = ur.role_id
+         JOIN rbac_role_grants g ON g.role_id = r.id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+        ORDER BY g.feature_key`,
+      [targetUserId, scope.companyId],
+    );
+
+    // Per-user overrides (JIT grant / explicit deny) — Deny wins (#1413 §8).
+    const userGrants = await rawQuery<{ feature_key: string; action: string | null; scope: string | null; type: string }>(
+      `SELECT feature_key, action, scope, type
+         FROM rbac_user_grants
+        WHERE "userId" = $1 AND "companyId" = $2
+          AND (expires_at IS NULL OR expires_at > NOW())`,
+      [targetUserId, scope.companyId],
+    ).catch(() => [] as { feature_key: string; action: string | null; scope: string | null; type: string }[]);
+
+    res.json({
+      userId: targetUserId,
+      email: u[0].email,
+      permissions: roleGrants.map((g) => ({
+        feature: g.feature_key,
+        actions: g.actions,
+        scope: g.scope,
+        conditions: g.conditions ?? null,
+        source: { roleKey: g.role_key, roleLabel: g.label_ar, isPrimary: g.is_primary },
+      })),
+      overrides: userGrants.map((g) => ({ feature: g.feature_key, action: g.action, scope: g.scope, type: g.type })),
+    });
+  } catch (e) { logger.error(e, "effective-permissions error"); handleRouteError(e, res, "فشل جلب الصلاحيات النهائية"); }
+});
+
+// ── RBAC-004: POST /admin/permissions/explain ───────────────────────────────
+// "Why can / can't this user do feature+action?" — resolved from the user's
+// actual grants (same tables the engine reads), with the source role and the
+// explicit-deny that would override it (#1413 §8). Arabic answer for non-tech.
+const explainSchema = z.object({
+  userId: z.coerce.number().int().positive(),
+  feature: z.string().min(1),
+  action: z.string().min(1),
+});
+
+router.post("/permissions/explain", authorize({ feature: "admin", action: "view" }), async (req, res) => {
+  try {
+    await assertAdmin(req);
+    const scope = req.scope!;
+    const { userId: targetUserId, feature, action } = zodParse(explainSchema.safeParse(req.body));
+
+    const u = await rawQuery<{ id: number }>(
+      `SELECT u.id FROM users u
+         LEFT JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
+        WHERE u.id = $1 AND (ea."companyId" = $2 OR u."employeeId" IS NULL)
+        LIMIT 1`,
+      [targetUserId, scope.companyId],
+    );
+    if (u.length === 0) throw new NotFoundError("المستخدم غير موجود");
+
+    // Grants that match this feature, with their source role.
+    const matches = await rawQuery<{ actions: string[]; scope: string; role_key: string; label_ar: string }>(
+      `SELECT g.actions, g.scope, r.role_key, r.label_ar
+         FROM rbac_user_roles ur
+         JOIN rbac_roles r ON r.id = ur.role_id
+         JOIN rbac_role_grants g ON g.role_id = r.id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2 AND g.feature_key = $3
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+      [targetUserId, scope.companyId, feature],
+    );
+    const granting = matches.find((m) => Array.isArray(m.actions) && m.actions.includes(action));
+
+    // Explicit per-user deny overrides any allow (#1413 §8).
+    const denies = await rawQuery<{ action: string | null }>(
+      `SELECT action FROM rbac_user_grants
+        WHERE "userId" = $1 AND "companyId" = $2 AND feature_key = $3 AND type = 'revoke'
+          AND (expires_at IS NULL OR expires_at > NOW())`,
+      [targetUserId, scope.companyId, feature],
+    ).catch(() => [] as { action: string | null }[]);
+    const denied = denies.some((d) => d.action === null || d.action === action);
+
+    const allowed = !!granting && !denied;
+    let reason: string;
+    if (denied) {
+      reason = `ممنوع صراحةً: توجد قاعدة منع على «${feature}» تتفوّق على أي صلاحية ممنوحة.`;
+    } else if (granting) {
+      reason = `مسموح: الدور «${granting.label_ar}» يمنح «${action}» على «${feature}» ضمن النطاق «${granting.scope}».`;
+    } else if (matches.length > 0) {
+      reason = `غير مسموح: لدى المستخدم صلاحيات على «${feature}» لكن ليس الإجراء «${action}».`;
+    } else {
+      reason = `غير مسموح: لا يملك المستخدم أي صلاحية على «${feature}».`;
+    }
+
+    res.json({
+      userId: targetUserId,
+      feature,
+      action,
+      allowed,
+      reason,
+      sourceRole: granting ? { roleKey: granting.role_key, roleLabel: granting.label_ar } : null,
+      scope: granting ? granting.scope : null,
+      deniedByRule: denied,
+    });
+  } catch (e) { logger.error(e, "permission explain error"); handleRouteError(e, res, "فشل تفسير الصلاحية"); }
 });
 
 export default router;
