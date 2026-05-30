@@ -2,7 +2,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { useRoute, useLocation } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Save, User, Calendar, AlertTriangle, Trash2, Edit } from "lucide-react";
+import { Save, User, Calendar, AlertTriangle, Trash2, Edit, UserCog } from "lucide-react";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -59,6 +59,16 @@ const pilgrimEditSchema = z.object({
 });
 type PilgrimEditForm = z.infer<typeof pilgrimEditSchema>;
 
+// Reassign schema: keeps both ids as strings on the wire. Empty string
+// means "no agent / no sub-agent" — the backend's patchPilgrimSchema
+// pre-processes "" → null before zod's coerce.number, so an explicit
+// unassign survives the round-trip.
+const pilgrimReassignSchema = z.object({
+  agentId: z.string().optional().default(""),
+  subAgentId: z.string().optional().default(""),
+});
+type PilgrimReassignForm = z.input<typeof pilgrimReassignSchema>;
+
 export default function PilgrimDetail() {
   const [, params] = useRoute("/umrah/pilgrims/:id");
   const id = params?.id || "";
@@ -67,8 +77,16 @@ export default function PilgrimDetail() {
   const [newStatus, setNewStatus] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [reassignOpen, setReassignOpen] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+
+  // Agents + sub-agents for the reassign modal dropdowns. Both list
+  // endpoints already scope by company in the backend.
+  const { data: agentsResp } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
+  const agents = asList(agentsResp?.data || agentsResp) as Array<{ id: number; name: string }>;
+  const { data: subAgentsResp } = useApiQuery<any>(["umrah-sub-agents"], "/umrah/sub-agents");
+  const subAgents = asList(subAgentsResp?.data || subAgentsResp) as Array<{ id: number; name: string }>;
 
   // DELETE /umrah/pilgrims/:id soft-delete. Edit happens through the
   // status select above, so we only expose delete here.
@@ -129,6 +147,12 @@ export default function PilgrimDetail() {
     { label: "تاريخ المغادرة المخطط", value: data?.departureDate ? formatDateAr(data.departureDate) : "-" },
     { label: "الوصول الفعلي", value: data?.actualArrival ? formatDateAr(data.actualArrival) : "-" },
     { label: "المغادرة الفعلية", value: data?.actualDeparture ? formatDateAr(data.actualDeparture) : "-" },
+    // Flight numbers — pair with the pilgrims-list flight filter
+    // (?flight=) and bulk-status flip for the canonical flight-day
+    // workflow: search "PIA-310" → select all → mark arrived in one
+    // click. Pre-PR the columns existed in DB but were invisible.
+    { label: "رحلة الوصول", value: data?.entryFlight },
+    { label: "رحلة المغادرة", value: data?.exitFlight },
     { label: "الفندق", value: data?.hotelName },
     { label: "رقم الغرفة", value: data?.roomNumber },
   ];
@@ -211,6 +235,17 @@ export default function PilgrimDetail() {
         disabled={!data}
       >
         <Edit className="h-4 w-4" />تعديل
+      </GuardedButton>
+      <GuardedButton
+        perm="umrah:update"
+        variant="outline"
+        size="sm"
+        className="gap-2"
+        onClick={() => setReassignOpen(true)}
+        disabled={!data}
+        data-testid="pilgrim-reassign-button"
+      >
+        <UserCog className="h-4 w-4" />إعادة إسناد
       </GuardedButton>
       <GuardedButton
         perm="umrah:delete"
@@ -296,6 +331,44 @@ export default function PilgrimDetail() {
           <FormTextField name="hotelName" label="الفندق" />
           <FormTextField name="roomNumber" label="رقم الغرفة" />
           <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    {id && data && (
+      <EntityEditDialog<PilgrimReassignForm>
+        open={reassignOpen}
+        onClose={() => setReassignOpen(false)}
+        title="إعادة إسناد المعتمر"
+        schema={pilgrimReassignSchema}
+        // Pre-fill with the current assignment so the operator sees the
+        // existing values; if they hit Save unchanged, the PATCH is a
+        // no-op. The select's empty-string value maps to "no agent"
+        // (transformed to null on submit).
+        defaultValues={{
+          agentId: data.agentId != null ? String(data.agentId) : "",
+          subAgentId: data.subAgentId != null ? String(data.subAgentId) : "",
+        }}
+        endpoint={`/umrah/pilgrims/${id}`}
+        invalidateKeys={[["umrah-pilgrim", id], ["umrah-pilgrims"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={1}>
+          <FormSelectField
+            name="agentId"
+            label="الوكيل الرئيسي"
+            options={[
+              { value: "", label: "— لا وكيل —" },
+              ...agents.map((a) => ({ value: String(a.id), label: a.name })),
+            ]}
+          />
+          <FormSelectField
+            name="subAgentId"
+            label="الوكيل الفرعي"
+            options={[
+              { value: "", label: "— لا وكيل فرعي —" },
+              ...subAgents.map((a) => ({ value: String(a.id), label: a.name })),
+            ]}
+          />
         </FormGrid>
       </EntityEditDialog>
     )}

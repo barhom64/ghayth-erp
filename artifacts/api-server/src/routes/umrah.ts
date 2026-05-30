@@ -206,10 +206,20 @@ const patchPackageSchema = z.object({
   description: z.string().optional(),
 });
 
+// Lets the reassign modal (pilgrim-detail.tsx) ship an empty string
+// to mean "unassign", instead of having to remember to send literal
+// null from the frontend. Without this, z.coerce.number("") returns 0
+// and the FK insert would fail against the non-existent agent id 0.
+const nullableFkId = z.preprocess(
+  (v) => (v === "" || v === undefined ? null : v),
+  z.coerce.number().nullable(),
+);
+
 const patchPilgrimSchema = z.object({
   status: z.enum(["pending", "arrived", "active", "overstayed", "departed", "violated", "cancelled"]).optional(),
-  agentId: z.coerce.number().optional().nullable(),
-  packageId: z.coerce.number().optional().nullable(),
+  agentId: nullableFkId.optional(),
+  subAgentId: nullableFkId.optional(),
+  packageId: nullableFkId.optional(),
   fullName: z.string().optional(),
   passportNumber: z.string().optional(),
   visaNumber: z.string().optional().nullable(),
@@ -456,13 +466,55 @@ router.get("/agents/:id", authorize({ feature: "umrah", action: "view" }), async
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery(`SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) { throw new NotFoundError("الوكيل غير موجود"); }
-    const stats = await rawQuery(
-      `SELECT COUNT(*)::int AS "pilgrimCount",
-              COUNT(*) FILTER (WHERE status='overstayed')::int AS "overstayedCount"
-       FROM umrah_pilgrims WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
+    // Operator statement — answers "how many pilgrims has this agent
+    // sent? what's their balance?" without a second round-trip. Three
+    // aggregate queries (pilgrim counts, status breakdown, finance) run
+    // in parallel via Promise.all so adding them doesn't double the
+    // latency of the detail fetch.
+    const [statsResult, statusBreakdownResult, financeResult] = await Promise.all([
+      rawQuery(
+        `SELECT COUNT(*)::int AS "pilgrimCount",
+                COUNT(*) FILTER (WHERE status='overstayed')::int AS "overstayedCount"
+         FROM umrah_pilgrims WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+      rawQuery<{ status: string; c: number }>(
+        `SELECT status, COUNT(*)::int AS c
+         FROM umrah_pilgrims WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+         GROUP BY status`,
+        [id, scope.companyId]
+      ),
+      rawQuery(
+        // 'cancelled' is excluded from totalInvoiced — operators don't
+        // include voided invoices in the "owed" number. totalPaid uses
+        // status='paid'; partial payments will undercount slightly but
+        // the operator overhead of tracking allocations per invoice is
+        // larger than the rounding gain — left for a follow-up that
+        // joins umrah_payments + umrah_payment_allocations.
+        `SELECT COALESCE(SUM(total) FILTER (WHERE status <> 'cancelled'), 0)::numeric AS "totalInvoiced",
+                COALESCE(SUM(total) FILTER (WHERE status = 'paid'), 0)::numeric         AS "totalPaid"
+         FROM umrah_agent_invoices
+         WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+    ]);
+    const stats = statsResult[0] || { pilgrimCount: 0, overstayedCount: 0 };
+    const finance = financeResult[0] as { totalInvoiced: string; totalPaid: string } | undefined;
+    const totalInvoiced = Number(finance?.totalInvoiced ?? 0);
+    const totalPaid = Number(finance?.totalPaid ?? 0);
+    // statusBreakdown shipped as a dict keyed by status so the UI can
+    // pluck specific buckets without sorting.
+    const statusBreakdown = Object.fromEntries(
+      (statusBreakdownResult as Array<{ status: string; c: number }>).map((r) => [r.status, Number(r.c)])
     );
-    res.json(maskFields(req, { ...row, ...(stats[0] || {}) }));
+    res.json(maskFields(req, {
+      ...row,
+      ...stats,
+      totalInvoiced,
+      totalPaid,
+      totalOutstanding: Math.max(0, totalInvoiced - totalPaid),
+      statusBreakdown,
+    }));
   } catch (err) { handleRouteError(err, res, "Get agent error"); }
 });
 
@@ -626,7 +678,7 @@ router.delete("/packages/:id", authorize({ feature: "umrah", action: "delete" })
 router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId, status, agentId, groupId, nationality, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
+    const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, visaExpiringWithin, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
     let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
@@ -638,6 +690,37 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
     // — because the import file may write "SA" or "SAUDI" or "Saudi
     // Arabia" depending on the source.
     if (nationality) { params.push(`%${nationality}%`); where += ` AND p.nationality ILIKE $${params.length}`; }
+    // Flight filter — the daily flight-day workflow. Matches either
+    // entryFlight OR exitFlight via ILIKE so a single search hits both
+    // arrival + departure manifests. Pair with the bulk-status flip
+    // (PR #1430) for the canonical pattern: filter flight → select all
+    // → mark arrived/departed in one click.
+    if (flight) {
+      params.push(`%${flight}%`);
+      where += ` AND (p."entryFlight" ILIKE $${params.length} OR p."exitFlight" ILIKE $${params.length})`;
+    }
+    // Exact-date filters — the morning "who's coming in today / leaving
+    // today" question. arrivalDate / departureDate are `date` columns,
+    // so an equality match against a YYYY-MM-DD string works without
+    // cast. Operators pass the Riyadh-local date from the UI (the
+    // todayLocal() helper) so they don't accidentally query UTC.
+    if (arrivalDate) { params.push(arrivalDate); where += ` AND p."arrivalDate" = $${params.length}`; }
+    if (departureDate) { params.push(departureDate); where += ` AND p."departureDate" = $${params.length}`; }
+    // Visa-expiring window — surfaces compliance risk before it
+    // becomes a KSA overstay fine. Range: [today, today + N days];
+    // also excludes already-departed/cancelled rows since their visa
+    // status is operationally irrelevant. The UI dashboard banner +
+    // chip filter clicks set N=7 by default. Date arithmetic uses
+    // CURRENT_DATE so the boundary tracks the server's date — same
+    // source todayISO() reads.
+    if (visaExpiringWithin) {
+      const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
+      params.push(days);
+      where += ` AND p."visaExpiry" IS NOT NULL
+                 AND p."visaExpiry" >= CURRENT_DATE
+                 AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
+                 AND p.status NOT IN ('departed','cancelled')`;
+    }
     if (search) {
       // Search hits four columns:
       //   - fullName              (plaintext, ILIKE)
@@ -672,6 +755,126 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
     logSensitiveAccess({ companyId: scope.companyId, userId: scope.userId, action: "list", entity: "umrah_pilgrims", ipAddress: req.ip, userAgent: req.headers["user-agent"], details: { count: rows.length, search: search || null } });
     res.json(maskFields(req, { data: rows.map(decryptPilgrimRow), total: Number(countQ[0]?.c || 0), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "List pilgrims error"); }
+});
+
+// CSV export of the FULL filtered set (no pagination). The list page's
+// existing exportToCSV() only grabs the current page (~20 rows), which
+// is useless for handing manifests to MOFA / hotels / bus drivers. This
+// endpoint mirrors the list filters and streams every match.
+//
+// Defence-in-depth: every JOIN matches BOTH id AND companyId so a
+// mistyped FK can't lift another tenant's name onto an exported row
+// (same pattern as PR #1425 added to GET /pilgrims/:id).
+router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, visaExpiringWithin, search } = req.query as Record<string, string | undefined>;
+    let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
+    const params: unknown[] = [scope.companyId];
+    if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
+    if (status) { params.push(status); where += ` AND p.status=$${params.length}`; }
+    if (agentId) { params.push(agentId); where += ` AND p."agentId"=$${params.length}`; }
+    if (groupId) { params.push(groupId); where += ` AND p."groupId"=$${params.length}`; }
+    if (nationality) { params.push(`%${nationality}%`); where += ` AND p.nationality ILIKE $${params.length}`; }
+    if (flight) {
+      params.push(`%${flight}%`);
+      where += ` AND (p."entryFlight" ILIKE $${params.length} OR p."exitFlight" ILIKE $${params.length})`;
+    }
+    if (arrivalDate) { params.push(arrivalDate); where += ` AND p."arrivalDate" = $${params.length}`; }
+    if (departureDate) { params.push(departureDate); where += ` AND p."departureDate" = $${params.length}`; }
+    // Visa-expiring window — surfaces compliance risk before it
+    // becomes a KSA overstay fine. Range: [today, today + N days];
+    // also excludes already-departed/cancelled rows since their visa
+    // status is operationally irrelevant. The UI dashboard banner +
+    // chip filter clicks set N=7 by default. Date arithmetic uses
+    // CURRENT_DATE so the boundary tracks the server's date — same
+    // source todayISO() reads.
+    if (visaExpiringWithin) {
+      const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
+      params.push(days);
+      where += ` AND p."visaExpiry" IS NOT NULL
+                 AND p."visaExpiry" >= CURRENT_DATE
+                 AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
+                 AND p.status NOT IN ('departed','cancelled')`;
+    }
+    if (search) {
+      const searchHash = blindIndex(String(search));
+      params.push(`%${search}%`);
+      const likePh = params.length;
+      params.push(searchHash);
+      const hashPh = params.length;
+      where += ` AND (p."fullName" ILIKE $${likePh} OR p."nuskNumber" ILIKE $${likePh} OR p."passportNumber_hash" = $${hashPh} OR p."visaNumber_hash" = $${hashPh})`;
+    }
+
+    const rows = await rawQuery(
+      `SELECT p.*,
+              a.name  as "agentName",
+              pkg.name as "packageName",
+              s.title  as "seasonTitle",
+              g.name  as "groupName",
+              sa.name as "subAgentName"
+       FROM umrah_pilgrims p
+       LEFT JOIN umrah_agents     a   ON p."agentId"=a.id      AND a."companyId"=p."companyId"  AND a."deletedAt" IS NULL
+       LEFT JOIN umrah_packages   pkg ON p."packageId"=pkg.id  AND pkg."companyId"=p."companyId" AND pkg."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons    s   ON p."seasonId"=s.id     AND s."companyId"=p."companyId"  AND s."deletedAt" IS NULL
+       LEFT JOIN umrah_groups     g   ON p."groupId"=g.id      AND g."companyId"=p."companyId"  AND g."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa  ON p."subAgentId"=sa.id  AND sa."companyId"=p."companyId" AND sa."deletedAt" IS NULL
+       WHERE ${where}
+       ORDER BY p."createdAt" DESC`,
+      params
+    );
+
+    // Audit trail — exports of identifying info are sensitive.
+    logSensitiveAccess({
+      companyId: scope.companyId, userId: scope.userId, action: "export_csv",
+      entity: "umrah_pilgrims", ipAddress: req.ip, userAgent: req.headers["user-agent"],
+      details: { count: rows.length, filters: { seasonId, status, agentId, groupId, flight, arrivalDate, departureDate, search: search || null } },
+    });
+
+    // RFC 4180 escape — quote when the cell contains the delimiter,
+    // a quote, or any newline; double internal quotes.
+    const csvEscape = (v: unknown): string => {
+      if (v === null || v === undefined) return "";
+      const s = String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    // Manifest columns operators routinely need. Order matches what
+    // MOFA / hotel / bus driver handouts use: identity → trip → flight.
+    const headers = [
+      ["nuskNumber", "رقم نسك"],
+      ["fullName", "الاسم"],
+      ["passportNumber", "رقم الجواز"],
+      ["nationality", "الجنسية"],
+      ["gender", "الجنس"],
+      ["phone", "الهاتف"],
+      ["visaNumber", "رقم التأشيرة"],
+      ["visaExpiry", "صلاحية التأشيرة"],
+      ["mofaNumber", "رقم الموفا"],
+      ["borderNumber", "رقم الحدود"],
+      ["status", "الحالة"],
+      ["arrivalDate", "تاريخ الوصول"],
+      ["departureDate", "تاريخ المغادرة"],
+      ["entryFlight", "رحلة الوصول"],
+      ["exitFlight", "رحلة المغادرة"],
+      ["hotelName", "الفندق"],
+      ["roomNumber", "رقم الغرفة"],
+      ["seasonTitle", "الموسم"],
+      ["groupName", "المجموعة"],
+      ["agentName", "الوكيل الرئيسي"],
+      ["subAgentName", "الوكيل الفرعي"],
+    ] as const;
+    const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
+    const decrypted = rows.map(decryptPilgrimRow) as Array<Record<string, unknown>>;
+    const dataRows = decrypted.map((r) => headers.map(([key]) => csvEscape(r[key])).join(","));
+    // BOM so Excel detects UTF-8 Arabic — without it the file opens as
+    // mojibake (same lesson as PR #1420's rejected-rows CSV).
+    const BOM = "﻿";
+    const csv = BOM + [headerRow, ...dataRows].join("\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="umrah-pilgrims-${todayISO()}.csv"`);
+    res.send(csv);
+  } catch (err) { handleRouteError(err, res, "Export pilgrims CSV error"); }
 });
 
 router.post("/pilgrims", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
@@ -763,7 +966,7 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
     const scope = req.scope!;
     const b = zodParse(patchPilgrimSchema.safeParse(req.body));
     const pilgrimId = parseId(req.params.id, "id");
-    const fieldKeys = ["agentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
+    const fieldKeys = ["agentId","subAgentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
 
     const encryptIfSensitive = (key: string, val: any): any => {
       if (!val) return val;
@@ -2060,6 +2263,76 @@ router.get("/unassigned", authorize({ feature: "umrah", action: "list" }), async
     const rows = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE ${where} ORDER BY "createdAt" DESC LIMIT 1000`, params);
     res.json(maskFields(req, { data: rows.map(decryptPilgrimRow) }));
   } catch (err) { handleRouteError(err, res, "List unassigned error"); }
+});
+
+// Bulk status transition — flight-landing flow.
+// A landing pilgrimage flight brings 50+ pilgrims who all need to flip
+// pending → arrived in one operator action. Pre-PR the only path was
+// PATCH /pilgrims/:id per row, which is 50 round-trips + 50 audit
+// rows. This endpoint validates EVERY row's current status against
+// PILGRIM_TRANSITIONS before flipping, so an already-departed pilgrim
+// in the batch is skipped (not silently regressed).
+const bulkStatusSchema = z.object({
+  pilgrimIds: z.array(z.coerce.number()).min(1, "يجب تحديد معتمر واحد على الأقل"),
+  status: z.enum(PILGRIM_STATUSES),
+});
+
+router.post("/pilgrims/status-bulk", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const { pilgrimIds, status: toStatus } = zodParse(bulkStatusSchema.safeParse(req.body));
+
+    // Compute the legal from-states for the requested toStatus by
+    // inverting the transitions map. If toStatus has no legal source
+    // (e.g. operator picked "pending" which nothing transitions INTO),
+    // refuse early — otherwise the UPDATE would touch zero rows and
+    // the operator would mistake the no-op for success.
+    const fromStates = Object.entries(PILGRIM_TRANSITIONS)
+      .filter(([, targets]) => targets.includes(toStatus))
+      .map(([from]) => from);
+    if (fromStates.length === 0) {
+      throw new ValidationError(`لا يمكن الانتقال إلى الحالة "${toStatus}" من أي حالة حالية`, {
+        field: "status",
+        fix: "اختر حالة مسموح بها كهدف (مثل arrived أو departed)",
+      });
+    }
+
+    // Two-pass count so we can report what actually changed vs what
+    // was skipped. The skip count is what the operator actually wants
+    // to see — "47 / 50 marked, 3 already departed" surfaces the
+    // discrepancy without forcing them to compare counts manually.
+    const [{ c: targetedCount }] = await rawQuery<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM umrah_pilgrims
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND id = ANY($2)`,
+      [scope.companyId, pilgrimIds],
+    );
+
+    const updated = await rawQuery<{ id: number }>(
+      `UPDATE umrah_pilgrims
+       SET status=$1, "updatedAt"=NOW()
+       WHERE "companyId"=$2
+         AND "deletedAt" IS NULL
+         AND id = ANY($3)
+         AND status = ANY($4)
+       RETURNING id`,
+      [toStatus, scope.companyId, pilgrimIds, fromStates],
+    );
+    const updatedCount = updated.length;
+    const skippedCount = Math.max(0, Number(targetedCount) - updatedCount);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "umrah_pilgrims", entityId: 0,
+      after: { bulkStatusTo: toStatus, updated: updatedCount, skipped: skippedCount },
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.pilgrims.bulk_status_changed", entity: "umrah_pilgrims", entityId: 0,
+      details: JSON.stringify({ toStatus, requested: pilgrimIds.length, updated: updatedCount, skipped: skippedCount }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+
+    res.json({ updated: updatedCount, skipped: skippedCount, toStatus });
+  } catch (err) { handleRouteError(err, res, "Bulk status update error"); }
 });
 
 router.post("/assign-bulk", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
