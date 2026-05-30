@@ -4811,6 +4811,7 @@ CREATE TABLE public.companies (
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "functionalCurrency" character(3) DEFAULT 'SAR'::bpchar,
     "presentationCurrency" character(3),
+    "nuskSupplierId" integer,
     CONSTRAINT chk_companies_functional_currency_iso CHECK (("functionalCurrency" ~ '^[A-Z]{3}$'::text))
 );
 
