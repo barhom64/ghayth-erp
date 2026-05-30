@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { exportRowsToCsv } from "@/lib/unified-export";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -136,34 +138,38 @@ export default function FixedAssetRegisterPage() {
     return out;
   }, [filtered, today]);
 
-  const exportCSV = () => {
-    const lines: string[] = [];
-    lines.push("الرمز,الاسم,الفئة,تاريخ الشراء,التكلفة,قيمة الإنقاذ,العمر الإنتاجي,طريقة الإهلاك,الإهلاك المتراكم,القيمة الدفترية,الحالة,نسبة الإهلاك");
-    for (const a of filtered) {
-      const dep = Number(a.accumulatedDepreciation);
-      const depPct = Number(a.purchaseCost) > 0 ? (dep / Number(a.purchaseCost)) * 100 : 0;
-      lines.push([
-        a.code ?? "",
-        a.name.replace(/,/g, "،"),
-        (a.category ?? "").replace(/,/g, "،"),
-        a.purchaseDate.split("T")[0],
-        Number(a.purchaseCost).toFixed(2),
-        Number(a.salvageValue).toFixed(2),
-        a.usefulLifeYears.toString(),
-        a.depreciationMethod,
-        dep.toFixed(2),
-        Number(a.currentBookValue).toFixed(2),
-        STATUS_LABELS[a.status]?.label ?? a.status,
-        `${depPct.toFixed(1)}%`,
-      ].join(","));
+  // GAP_MATRIX item #7 — was building CSV client-side via Blob +
+  // createObjectURL, bypassing print_jobs / letterhead / RBAC re-check.
+  // Routed through the unified export helper so the download appears
+  // in /reports/print-log with entity=report_fixed_assets.
+  const { toast } = useToast();
+  const exportCSV = async () => {
+    try {
+      await exportRowsToCsv({
+        entityType: "report_fixed_assets",
+        title: `سجل الأصول الثابتة — ${today}`,
+        rows: filtered as unknown as Record<string, unknown>[],
+        columns: [
+          { key: "code",                    label: "الرمز",            format: (v) => String(v ?? "") },
+          { key: "name",                    label: "الاسم" },
+          { key: "category",                label: "الفئة",            format: (v) => String(v ?? "") },
+          { key: "purchaseDate",            label: "تاريخ الشراء",     format: (v) => String(v).split("T")[0] },
+          { key: "purchaseCost",            label: "التكلفة",          format: (v) => Number(v).toFixed(2) },
+          { key: "salvageValue",            label: "قيمة الإنقاذ",      format: (v) => Number(v).toFixed(2) },
+          { key: "usefulLifeYears",         label: "العمر الإنتاجي",    format: (v) => String(v) },
+          { key: "depreciationMethod",      label: "طريقة الإهلاك" },
+          { key: "accumulatedDepreciation", label: "الإهلاك المتراكم",  format: (v) => Number(v).toFixed(2) },
+          { key: "currentBookValue",        label: "القيمة الدفترية",   format: (v) => Number(v).toFixed(2) },
+          { key: "status",                  label: "الحالة",            format: (v) => STATUS_LABELS[v as keyof typeof STATUS_LABELS]?.label ?? String(v) },
+        ],
+      });
+    } catch (err) {
+      toast({
+        title: "تعذّر تصدير CSV",
+        description: (err as { message?: string })?.message ?? "خطأ غير متوقع",
+        variant: "destructive",
+      });
     }
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `fixed-assets-register-${today}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   return (

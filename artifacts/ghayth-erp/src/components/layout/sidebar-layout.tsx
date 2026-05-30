@@ -442,7 +442,13 @@ const allNavSections: NavSection[] = [
         { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
         { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
       ]},
-      { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, module: "umrah", children: [
+      // GAP_MATRIX item #20 — backend mounts /umrah under
+      // requireModule("operations") and ROLE_DEFAULT_MODULES doesn't
+      // contain "umrah" as a key at all. Setting module: "umrah" on the
+      // sidebar entry meant the filter checked an access flag the
+      // backend never granted, so the entry collapsed for everyone
+      // except owner/GM (who get every module).
+      { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, module: "operations", children: [
         { label: "لوحة التشغيل", path: "/umrah", icon: LayoutDashboard },
         { label: "المعتمرين", path: "/umrah/pilgrims", icon: Users },
         { label: "الوكلاء الرئيسيين", path: "/umrah/agents", icon: Building2 },
