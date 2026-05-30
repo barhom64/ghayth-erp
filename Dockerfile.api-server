@@ -1,16 +1,18 @@
 # Dockerfile.api-server
-# Production Docker build for @workspace/api-server.
-# Single-node VPS mode runs the server bundle directly and skips the OpenTelemetry
-# preload until runtime dependency packaging is hardened separately.
+# Reliable single-node VPS image for Ghayth ERP API.
+# Keeps a full workspace install at runtime to avoid missing external packages.
 
-FROM node:24-alpine AS deps
-RUN corepack enable
+FROM node:24-alpine AS app
+RUN apk add --no-cache tini wget && corepack enable
 WORKDIR /app
 ENV npm_config_user_agent=pnpm/docker \
     PNPM_CONFIG_IGNORE_SCRIPTS=true \
-    CI=true
+    CI=true \
+    NODE_ENV=production \
+    PORT=8080 \
+    LOG_LEVEL=info
 
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json tsconfig.json ./
 COPY artifacts/api-server/package.json artifacts/api-server/
 COPY lib/api-spec/package.json lib/api-spec/
 COPY lib/api-zod/package.json lib/api-zod/
@@ -18,27 +20,13 @@ COPY lib/api-client-react/package.json lib/api-client-react/
 COPY lib/db/package.json lib/db/
 COPY lib/object-storage-web/package.json lib/object-storage-web/
 COPY scripts/package.json scripts/
-
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
-FROM deps AS build
-WORKDIR /app
-COPY tsconfig.base.json tsconfig.json ./
 COPY lib/ ./lib/
 COPY artifacts/api-server/ ./artifacts/api-server/
-
 RUN PNPM_CONFIG_IGNORE_SCRIPTS=true CI=true pnpm --filter @workspace/api-server run build
 
-FROM node:24-alpine AS runtime
-RUN apk add --no-cache tini && corepack enable
-WORKDIR /app
-USER node
-COPY --from=build --chown=node:node /app/artifacts/api-server/dist ./dist
-COPY --from=build --chown=node:node /app/artifacts/api-server/package.json ./package.json
-COPY --from=build --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/lib ./lib
-COPY --from=build --chown=node:node /app/artifacts/api-server/src/migrations ./dist/migrations
-ENV NODE_ENV=production PORT=8080 LOG_LEVEL=info
+WORKDIR /app/artifacts/api-server
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD wget --quiet --tries=1 --spider http://localhost:${PORT}/api/healthz || exit 1
 ENTRYPOINT ["/sbin/tini", "--"]
