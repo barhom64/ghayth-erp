@@ -19,7 +19,12 @@ const SRC = readFileSync(ENGINE_PATH, "utf8");
 
 describe("umrahInvoicingEngine — VAT margin scheme (KSA travel agent)", () => {
   it("pulls cost basis from umrah_nusk_invoices joined on the same groups", () => {
-    expect(SRC).toMatch(/SUM\("totalAmount"\)[^)]*\)\s+AS\s+cost_basis/);
+    // The cost-basis aggregation lives somewhere in this file and
+    // pulls from umrah_nusk_invoices scoped by group + tenant. Tight
+    // SUM-shape pinning lives in umrahInvoicingMarginVatSmoke now
+    // (PR #1458 added refund-net + cancelled-exclude); this test
+    // just asserts the source-table + scope contract stays intact.
+    expect(SRC).toMatch(/SUM\(.+\)[^)]*\)\s+AS\s+cost_basis/);
     expect(SRC).toMatch(/FROM\s+umrah_nusk_invoices/);
     expect(SRC).toMatch(/"groupId"\s*=\s*ANY\(\$2\)/);
     expect(SRC).toMatch(/"deletedAt"\s+IS\s+NULL/);
