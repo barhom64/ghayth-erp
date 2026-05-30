@@ -1076,6 +1076,34 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
       }
     }
 
+    // N9 fix: surface the hearing in the unified tasks queue so it
+    // appears alongside everything else the lawyer/responsible owes.
+    // Previously the obligation + notification chain was the only
+    // signal; tasks dashboards stayed empty even on a busy day in court.
+    try {
+      const sessionDate = new Date(b.sessionDate);
+      if (sessionDate > new Date()) {
+        await rawExecute(
+          `INSERT INTO tasks (
+             title, description, status, priority, "dueDate",
+             "linkedEntityType", "linkedEntityId",
+             "companyId", "branchId", "createdBy"
+           )
+           VALUES ($1,$2,'open',$3,$4,'legal_sessions',$5,$6,$7,$8)`,
+          [
+            `جلسة قضائية: ${legalCase.title}`,
+            `جلسة بتاريخ ${b.sessionDate} — ${b.location || legalCase.court || ''}${b.judge ? ` — القاضي ${b.judge}` : ''}`,
+            legalCase.priority === 'high' ? 'high' : 'normal',
+            b.sessionDate,
+            insertId,
+            scope.companyId,
+            scope.branchId ?? null,
+            scope.userId,
+          ]
+        );
+      }
+    } catch (taskErr) { logger.error(taskErr, "legal session task creation failed:"); }
+
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "legal_case_sessions", entityId: insertId,

@@ -91,6 +91,7 @@ const ALLOWLIST = new Map([
 // signed webhook is auth even though no user identity exists.
 const RBAC_PATTERNS = [
   /\bauthorize\s*\(/,
+  /\bauthorizeAny\s*\(/,
   /\brequirePermission\s*\(/,
   /\brequireAnyPermission\s*\(/,
   /\brequireMinLevel\s*\(/,
