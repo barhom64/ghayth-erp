@@ -216,6 +216,32 @@ function SalesInvoicesTab() {
     { key: "clientName", header: "العميل", render: (r) => r.clientName || "—" },
     { key: "subAgentName", header: "الوكيل الفرعي", render: (r) => r.subAgentName || "—" },
     { key: "total", header: "الإجمالي (ريال)", render: (r) => <span className="font-bold">{formatCurrency(Number(r.total || r.totalAmount || 0))}</span> },
+    {
+      // Margin column — populated by umrahInvoicingEngine since PR #1457
+      // (costBasis - sale = marginBase). RED when below zero (the
+      // sellingBelowCost case from the engine) so loss situations are
+      // visually obvious in the list. Falls back to "—" when the row
+      // is from a pre-PR import that never wrote the column.
+      key: "marginBase",
+      header: "الهامش (ريال)",
+      render: (r) => {
+        if (r.marginBase == null) return <span className="text-muted-foreground">—</span>;
+        const m = Number(r.marginBase);
+        const t = Number(r.total || 0);
+        const pct = t > 0 ? (m / t) * 100 : 0;
+        const tone = m < 0
+          ? "text-status-error-foreground"
+          : m === 0
+            ? "text-muted-foreground"
+            : "text-status-success-foreground";
+        return (
+          <span className={`font-semibold ${tone}`} data-testid={`invoice-margin-${r.id}`}>
+            {formatCurrency(m)}
+            <span className="text-xs text-muted-foreground mr-1">({pct.toFixed(1)}%)</span>
+          </span>
+        );
+      },
+    },
     { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
     { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => (r.createdAt ? formatDateAr(r.createdAt) : "—") },
     {
