@@ -122,7 +122,12 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   "warehouse-category":{ attachments: false, tags: false, tasks: false },
   "warehouse-movement":{ attachments: false },
   "warehouse-supplier":{},
-  "project-costing":  { financialImpact: true },
+  // project-costing rolls up under the parent project — its JEs are
+  // posted via projectsEngine.postProjectCostGL (which writes projectId
+  // on every line). The detail page reuses the project's financial
+  // profile tab via projectId rather than introducing a duplicate
+  // costing entity-type that has no dedicated GL drilldown.
+  "project-costing":  { financialImpact: true, financialEntityType: "project" },
   "evaluation-360":   { attachments: false },
   "hr-evaluation-360":{ attachments: false },
   // Pilgrims are clients in the GL — every umrah invoice AR DR

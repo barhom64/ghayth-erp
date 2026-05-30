@@ -52,6 +52,11 @@ export function buildLotWriteoffEntryInput(opts: {
   status: LotWriteoffStatus;
   accounts: LotWriteoffAccounts;
   lotId: number;
+  /** Product the lot belongs to — every line carries productId so the
+   *  warehouse_product entity-360 financial profile picks up the writeoff
+   *  alongside COGS + receipts. Without it, lot writeoffs vanished from
+   *  per-product margin reports. */
+  productId?: number;
 }): BuildEntryInput {
   const lines: BuildEntryInput["lines"] = [];
   const value = round2dp(opts.writeoffValue);
@@ -65,6 +70,9 @@ export function buildLotWriteoffEntryInput(opts: {
     description: `Lot ${reason} loss (${opts.accounts.loss.accountCode})`,
     referenceType: "warehouse_stock_lots",
     referenceId: opts.lotId,
+    productId: opts.productId,
+    sourceLineTable: "warehouse_stock_lots",
+    sourceLineId: opts.lotId,
   });
   lines.push({
     accountId: opts.accounts.inventory.accountId,
@@ -72,6 +80,9 @@ export function buildLotWriteoffEntryInput(opts: {
     description: `Lot ${reason} inventory release (${opts.accounts.inventory.accountCode})`,
     referenceType: "warehouse_stock_lots",
     referenceId: opts.lotId,
+    productId: opts.productId,
+    sourceLineTable: "warehouse_stock_lots",
+    sourceLineId: opts.lotId,
   });
 
   return { description: opts.description, lines };
@@ -194,6 +205,7 @@ export async function postLotWriteoffJournal(
       status,
       accounts: { inventory, loss },
       lotId: opts.lotId,
+      productId: lot.productId,
     });
     if (buildInput.lines.length === 0) {
       return {

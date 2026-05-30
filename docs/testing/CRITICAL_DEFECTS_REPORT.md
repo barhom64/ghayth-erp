@@ -152,10 +152,9 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الوصف**: قرار تصميمي (يحتاج password).
 **الإصلاح اختياري**: auto-generate temp password + email.
 
-### N8. Property Rent Payment لا يحدث CRM Client Ledger
-**الموقع**: `properties.ts:1992-2005`
-**الوصف**: `tenantId` على الـJE فقط، لا UPDATE لـ`clients.lastPaymentAt`.
-**الإصلاح**: listener `rent_payment.received` يحدث `clients.lastPaymentAt`.
+### N8. Property Rent Payment لا يحدث CRM Client Ledger ✅ FIXED in PR #1426 follow-up
+**الموقع**: `eventListeners.ts rent_payment.received listener`
+**الإصلاح المنفذ**: الـlistener يحدث `clients.lastPaymentAt` و `lastActivityAt` على رحلة rent_payments → rental_contracts.tenantId → tenants.clientId → clients.id.
 
 ### N9. Legal Session → Tasks (لا task row) ✅ FIXED in PR #1410
 **الموقع**: `routes/legal.ts:1079`
@@ -172,9 +171,8 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الإصلاح**: entity جديد + audit chain.
 
 ### N12. Documents Classification Free-String
-**الموقع**: `documents.ts`
-**الوصف**: classification field نص حر، لا taxonomy enforcement.
-**الإصلاح**: enum + dropdown.
+**الموقع**: `documents.ts:99-107`, `documents.ts:139-147` ✅ FIXED in PR #1426 follow-up
+**الإصلاح المنفذ**: `DOCUMENT_CATEGORIES` enum ثابت (11 تصنيف: hr, finance, legal, contracts, compliance, operations, fleet, properties, umrah, marketing, general). Zod validators على createDocumentSchema + uploadDocumentSchema يرفضون أي قيمة خارج القائمة.
 
 ### N13. HR Org Structure RBAC Misalignment ✅ FIXED in follow-up PR
 **الموقع**: `settings.ts:525,542,560` + `authorize.ts`

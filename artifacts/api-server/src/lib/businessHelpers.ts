@@ -581,6 +581,14 @@ export async function createJournalEntry(params: {
       // payload is what makes per-vehicle / per-property / per-project /
       // per-season profitability reports computable straight from
       // journal_lines without joining back to the source document.
+      // branchId per line. Defaults to the entry header's branchId
+      // (params.branchId), but the caller can override per line to land a
+      // single logical operation across multiple branches in the same
+      // company (the multi-branch split the user asked for: "auto-post
+      // across multiple branches in the same company" or "manually
+      // allocate by lines / percentages"). Backfill on existing rows
+      // happened in migration 236.
+      const lineBranchId = (line as any).branchId ?? params.branchId ?? null;
       await client.query(
         `INSERT INTO journal_lines (
           "journalId","accountCode","accountId",debit,credit,description,"costCenter",
@@ -588,14 +596,14 @@ export async function createJournalEntry(params: {
           "activityType","templateId",
           "productId","clientId","vendorId","driverId",
           "costCenterId","unitId","assetId","umrahSeasonId","umrahAgentId",
-          "sourceLineTable","sourceLineId","dimensionJson"
+          "sourceLineTable","sourceLineId","dimensionJson","branchId"
          ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,
           $8,$9,$10,$11,$12,$13,
           $14,$15,
           $16,$17,$18,$19,
           $20,$21,$22,$23,$24,
-          $25,$26,$27
+          $25,$26,$27,$28
          )`,
         [
           jId, line.accountCode, accountId, line.debit, line.credit,
@@ -608,6 +616,7 @@ export async function createJournalEntry(params: {
           line.umrahSeasonId ?? null, line.umrahAgentId ?? null,
           line.sourceLineTable ?? null, line.sourceLineId ?? null,
           line.dimensionJson ? JSON.stringify(line.dimensionJson) : null,
+          lineBranchId,
         ]
       );
     }

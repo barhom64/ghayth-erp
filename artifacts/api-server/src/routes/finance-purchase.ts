@@ -22,6 +22,7 @@ import {
   updateBudgetUsed,
   checkFinancialPeriodOpen,
   computeVat,
+  getCompanyVatRate,
   roundTo2,
   currentYear,
   todayISO,
@@ -32,7 +33,9 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
+import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
+import { internalTechRef } from "../lib/internalRef.js";
+import { assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { z } from "zod";
 
 export const purchaseRouter = Router();
@@ -148,6 +151,39 @@ const schedulePaymentSchema = z.object({
   amount: z.coerce.number({ required_error: "المبلغ مطلوب" }),
   method: z.string().optional(),
   notes: z.string().optional(),
+});
+
+// Vendor advance / credit-memo — the AP mirror of customer-advance +
+// credit-memo. Previously the only path for a supplier prepayment was
+// "create AR invoice with negative amount" (semantically wrong, broke
+// AP aging). And vendor returns had to be entered as customer credit
+// memos against an AR invoice — corrupting both subledgers.
+const createVendorAdvanceSchema = z.object({
+  supplierId: z.coerce.number({ required_error: "المورد مطلوب" }),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+  method: z.string().optional(),
+  reference: z.string().optional(),
+  notes: z.string().optional(),
+  paidDate: z.string().optional(),
+});
+
+const applyVendorAdvanceSchema = z.object({
+  poId: z.coerce.number({ required_error: "أمر الشراء مطلوب" }),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+});
+
+const createVendorCreditSchema = z.object({
+  supplierId: z.coerce.number({ required_error: "المورد مطلوب" }),
+  poId: z.coerce.number().optional(),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+  reason: z.string().min(3, "سبب الإشعار الدائن مطلوب"),
+  memoDate: z.string().optional(),
+  vatIncluded: z.boolean().optional(),
+});
+
+const applyVendorCreditSchema = z.object({
+  poId: z.coerce.number({ required_error: "أمر الشراء مطلوب" }),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
 });
 
 // Impact preview — shows what will happen when the purchase request is created
@@ -883,6 +919,22 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       throw new ValidationError("يمكن استلام الطلبات المعتمدة فقط");
     }
 
+    // GRN lands on the PO's branch, not the operator's working branch.
+    // Pre-fix the receipt JE used scope.branchId — a PO created in Branch
+    // A but received by a user logged into Branch B silently posted the
+    // inventory + GRNI to Branch B, then the 3-way match split GL across
+    // branches forever. Assert the operator has access to the PO's branch
+    // before proceeding.
+    const poBranchId = (po.branchId as number | null) ?? null;
+    if (poBranchId != null) {
+      assertDocumentBranchAccess(poBranchId, {
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        allowedBranches: scope.allowedBranches,
+      });
+    }
+    const grnBranchId = poBranchId ?? scope.branchId;
+
     const receiptDate = receivedDate || new Date().toISOString();
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, receiptDate);
     if (!periodCheck.open) {
@@ -938,7 +990,11 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     }
     subtotal = roundTo2(subtotal);
     const poTotal = Number(po.totalAmount);
-    const defaultVatRate = 0.15;
+    // Per-company VAT rate via system_settings.vat_rate (default 15%).
+    // Pre-fix the GRN VAT-ratio split hardcoded 0.15 → a tenant on 5%
+    // VAT would back-derive the wrong VAT-vs-subtotal split on every
+    // GRN, then post the wrong amounts to inventory + VAT input.
+    const defaultVatRate = (await getCompanyVatRate(scope.companyId)) / 100;
     const poSubtotal = roundTo2(poTotal / (1 + defaultVatRate));
     const poVatAmount = roundTo2(poTotal - poSubtotal);
     const vatRatio = poSubtotal > 0 ? poVatAmount / poSubtotal : 0;
@@ -950,9 +1006,37 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // SELECT … FOR UPDATE inside its own transaction (joining ours via
     // SAVEPOINT) to serialise allocators, so concurrent receipts on the
     // same PO queue on the counter row instead of racing.
+    // Pre-INSERT idempotency: hash the receipt date + per-line digest
+    // (poItemId × qty) so a retried request from the SAME operator on
+    // the SAME PO with the SAME lines collapses into the existing GRN
+    // row via the partial UNIQUE index on goods_receipts.sourceKey
+    // (migration 231). Different qty / different lines → different
+    // hash → new GRN, which is the desired behaviour (a partial
+    // top-up receipt). Including X-Idempotency-Token in the hash too
+    // lets clients force a new GRN by rotating the token.
+    const grnLineDigest = inputLines
+      .map((l) => `${l.poItemId}:${l.receivedQty.toFixed(4)}`)
+      .sort()
+      .join("|");
+    const grnIdempotencyToken = requestIdempotencyToken(req);
+    const grnSourceKey = `finance:grn:${id}:${receiptDate}:${grnIdempotencyToken}:${grnLineDigest}`;
+
+    // Check for a pre-existing GRN with this sourceKey; if present,
+    // short-circuit to the existing row.
+    const [existingGrn] = await rawQuery<{ id: number; ref: string }>(
+      `SELECT id, ref FROM goods_receipts
+        WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, grnSourceKey]
+    );
+
     let grnId: number | undefined;
     let grnRef!: string;
-    {
+    if (existingGrn) {
+      grnId = existingGrn.id;
+      grnRef = existingGrn.ref;
+      markIdempotencyReplay(req, res, true);
+    } else {
       try {
         grnId = await withTransaction(async (client) => {
           const issuedGrn = await issueNumber({
@@ -967,9 +1051,9 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
           });
           grnRef = issuedGrn.number;
           const grnRes = await client.query(
-            `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes)
-             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-            [scope.companyId, scope.branchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null]
+            `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes,"sourceKey")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+            [scope.companyId, grnBranchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null, grnSourceKey]
           );
           const newGrnId = grnRes.rows[0].id;
           await client.query(
@@ -1328,7 +1412,9 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     let journalId: number | null = null;
     const grnJournalResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
-      branchId: scope.branchId,
+      // GRN JE lands on the PO's branch (grnBranchId), not the operator's
+      // working branch. See branch-resolution rationale at the SELECT above.
+      branchId: grnBranchId,
       createdBy: scope.activeAssignmentId,
       ref: grnRef,
       description: `استلام بضاعة ${grnRef} - أمر ${po.ref}`,
@@ -1687,12 +1773,36 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
       });
       runRef = issuedRun.number;
     }
+
+    // Pre-INSERT idempotency for payment_runs (migration 231 adds the
+    // sourceKey column + partial unique index). The key is the
+    // (idempotency-token, payDate, poIds-sorted-digest), so a retried
+    // request with the same token + same selection collapses into the
+    // existing run row. Different selection / different date → new
+    // sourceKey → new run, which is what the operator wants when
+    // genuinely executing a second batch.
+    const runIdempotencyToken = requestIdempotencyToken(req);
+    const runPoDigest = [...pos].map((p) => p.id).sort().join(",");
+    const runSourceKey = `finance:payment_run:${payDate}:${runIdempotencyToken}:${runPoDigest}`;
+
+    const [existingRun] = await rawQuery<{ id: number; ref: string }>(
+      `SELECT id, ref FROM payment_runs
+        WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, runSourceKey]
+    ).catch(() => [] as { id: number; ref: string }[]);
+
+    if (existingRun) {
+      runId = existingRun.id;
+      runRef = existingRun.ref;
+      markIdempotencyReplay(req, res, true);
+    } else {
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
-          `INSERT INTO payment_runs ("companyId","branchId",ref,"paymentDate",method,"bankAccount","totalAmount","poCount","createdBy",status)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'executed') RETURNING id`,
-          [scope.companyId, scope.branchId, runRef, payDate, method, bankAccount ?? null, totalPayment, pos.length, scope.activeAssignmentId]
+          `INSERT INTO payment_runs ("companyId","branchId",ref,"paymentDate",method,"bankAccount","totalAmount","poCount","createdBy",status,"sourceKey")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'executed',$10) RETURNING id`,
+          [scope.companyId, scope.branchId, runRef, payDate, method, bankAccount ?? null, totalPayment, pos.length, scope.activeAssignmentId, runSourceKey]
         );
         runId = ins.rows[0].id;
       } catch (e: any) {
@@ -1723,9 +1833,9 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
              )`
           );
           const ins2 = await client.query(
-            `INSERT INTO payment_runs ("companyId","branchId",ref,"paymentDate",method,"bankAccount","totalAmount","poCount","createdBy",status)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'executed') RETURNING id`,
-            [scope.companyId, scope.branchId, runRef, payDate, method, bankAccount ?? null, totalPayment, pos.length, scope.activeAssignmentId]
+            `INSERT INTO payment_runs ("companyId","branchId",ref,"paymentDate",method,"bankAccount","totalAmount","poCount","createdBy",status,"sourceKey")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'executed',$10) RETURNING id`,
+            [scope.companyId, scope.branchId, runRef, payDate, method, bankAccount ?? null, totalPayment, pos.length, scope.activeAssignmentId, runSourceKey]
           );
           runId = ins2.rows[0].id;
         } else {
@@ -1746,6 +1856,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
         );
       }
     });
+    }
 
     // Mark each PO as paid via the lifecycle engine (outside the
     // payment_runs transaction so each gets its own audit/event trail).
@@ -1783,16 +1894,49 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     //        CR Cash           total − wht
     let journalId: number | null = null;
     const lines: any[] = [];
+    // Multi-branch payment run: each per-PO AP debit line carries the
+    // PO's own branchId so per-branch AP aging stays accurate even when
+    // a single run consolidates POs from multiple branches in the same
+    // company. The aggregated WHT + cash CR lines carry the dominant
+    // branch (the one with the most POs in this run) so single-branch
+    // runs work exactly as before; multi-branch runs leave the credit
+    // side on the dominant branch (the per-PO DR lines anchor the
+    // per-branch subledger).
+    const branchCounts = new Map<number, number>();
     for (const po of pos) {
-      lines.push({ accountCode: apAccount, debit: Number(po.totalAmount), credit: 0, vendorId: po.supplierId });
+      const poBranchId = po.branchId as number | null;
+      lines.push({
+        accountCode: apAccount,
+        debit: Number(po.totalAmount),
+        credit: 0,
+        vendorId: po.supplierId,
+        branchId: poBranchId ?? undefined,
+      });
+      if (poBranchId != null) {
+        branchCounts.set(poBranchId, (branchCounts.get(poBranchId) ?? 0) + 1);
+      }
     }
+    const dominantBranchId = Array.from(branchCounts.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] ?? scope.branchId;
+    // When the payment run covers exactly ONE vendor, carry vendorId
+    // on the WHT-payable and cash CR lines too so the vendor subledger
+    // reconciles cleanly. With multiple vendors the credit side is an
+    // aggregate (one line per WHT account / one cash line) so there's
+    // no single vendor to attribute — leave NULL in that case (the
+    // per-PO DR lines still carry vendorId, so the AP subledger ties).
+    const uniqueSupplierIds = Array.from(new Set(pos.map(po => Number(po.supplierId)).filter(Boolean)));
+    const singleVendorId = uniqueSupplierIds.length === 1 ? uniqueSupplierIds[0] : undefined;
     for (const [code, amount] of whtCreditByAccount) {
-      lines.push({ accountCode: code, debit: 0, credit: amount });
+      lines.push({ accountCode: code, debit: 0, credit: amount, vendorId: singleVendorId, branchId: dominantBranchId ?? undefined });
     }
-    lines.push({ accountCode: cashAccount, debit: 0, credit: netCashOut });
+    lines.push({ accountCode: cashAccount, debit: 0, credit: netCashOut, vendorId: singleVendorId, branchId: dominantBranchId ?? undefined });
     const paymentRunJournalResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
-      branchId: scope.branchId,
+      // Header branch = dominant branch from the PO mix. When the run
+      // spans multiple branches, per-line branchId on the AP debits keeps
+      // per-branch AR/AP reports accurate; the header just anchors the
+      // primary owning branch for permission scoping.
+      branchId: dominantBranchId ?? scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref: runRef,
       description: totalWht > 0
@@ -2122,14 +2266,23 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
       if (prRow) prTotal = Number(prRow.totalAmount);
     }
 
+    // Read received total from goods_receipts (the source of truth for GRN
+    // amounts) instead of warehouse_movements. The previous shape joined
+    // by `warehouse_movements.reference = 'GR-' + po.ref`, which silently
+    // fell back to poTotal when the WMS hadn't synced — masking the
+    // mismatch and letting the 3-way match pass on a stale receipt total.
+    // goods_receipts.totalAmount is set inside the same transaction as
+    // the GRN JE, so it's always consistent with the GL.
     let receivedTotal = poTotal;
-    const grMovements = await rawQuery<Record<string, unknown>>(
-      `SELECT COALESCE(SUM(quantity * "unitCost"), 0) AS total
-       FROM warehouse_movements
-       WHERE "companyId" = $1 AND reference = $2 AND type = 'in'`,
-      [scope.companyId, `GR-${po.ref}`]
+    const grnRows = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM("totalAmount"), 0) AS total
+         FROM goods_receipts
+        WHERE "companyId" = $1 AND "poId" = $2 AND "deletedAt" IS NULL`,
+      [scope.companyId, id]
     );
-    if (grMovements[0]?.total) receivedTotal = Number(grMovements[0].total);
+    if (grnRows[0]?.total && Number(grnRows[0].total) > 0) {
+      receivedTotal = Number(grnRows[0].total);
+    }
 
     const poVariance = Math.abs(poTotal - invAmount);
     const poVariancePct = poTotal > 0 ? (poVariance / poTotal) * 100 : 0;
@@ -2139,6 +2292,24 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
     const grVariancePct = receivedTotal > 0 ? (grVariance / receivedTotal) * 100 : 0;
 
     const isMatched = poVariancePct <= 5 && prVariancePct <= 5 && grVariancePct <= 5;
+
+    // FIN-AUD-08 — 3-way match posts DR GRNI / CR AP when matched, so
+    // matching an invoice into a closed period would land AP recognition
+    // inside that period. Other AP entry points (GRN receipt, vendor
+    // payment, payment run) all gate their post on checkFinancialPeriodOpen;
+    // the match handler was the lone gap. Reject the match up front so the
+    // PO status doesn't get transitioned to invoice_matched without the GL
+    // entry. Note: we always check, even for mismatches, because rejecting
+    // the match in a closed period preserves the operator's chance to fix
+    // the period and retry once the gate is clean.
+    const matchDateForPeriod = (invoicedDate as string | undefined) ?? todayISO();
+    const matchPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, matchDateForPeriod);
+    if (!matchPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن مطابقة فاتورة في فترة مُقفلة: ${matchPeriodCheck.periodName ?? ""}`,
+        { field: "invoicedDate", meta: { periodName: matchPeriodCheck.periodName } },
+      );
+    }
 
     const matchStatus = isMatched ? "invoice_matched" : "invoice_mismatch";
     const matchNote = ` | مطابقة ثلاثية: فاتورة=${invAmount} طلب=${prTotal} أمر=${poTotal} استلام=${receivedTotal}`;
@@ -2321,3 +2492,705 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
   }
 });
 
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VENDOR ADVANCES + VENDOR CREDIT MEMOS
+// AP mirror of customer-advances / credit-memos. Same shape, same
+// idempotency model, same atomic GL+counter update pattern. Without
+// these, supplier prepayments had no clean place to land and supplier
+// returns corrupted AR by going through the customer credit-memo path.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// POST /vendor-advances — record a prepayment to a supplier.
+//   DR Vendor advance receivable (1420)
+//        CR Cash (1100)
+purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createVendorAdvanceSchema.safeParse(req.body));
+    const { supplierId, amount, method = "bank_transfer", reference, notes, paidDate } = b;
+
+    const [supplier] = await rawQuery<{ id: number; name: string }>(
+      `SELECT id, name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [supplierId, scope.companyId]
+    );
+    if (!supplier) {
+      throw new ValidationError("المورد غير موجود", { field: "supplierId", fix: "اختر مورداً من قائمة الموردين." });
+    }
+
+    const recvDate = paidDate || todayISO();
+    const advPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, recvDate);
+    if (!advPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسجيل دفعة مقدمة لمورد في فترة مُقفلة: ${advPeriodCheck.periodName ?? ""}`,
+        { field: "paidDate", meta: { periodName: advPeriodCheck.periodName } },
+      );
+    }
+
+    const amt = roundTo2(Number(amount));
+    const advRef = reference || internalTechRef(`VENDOR-ADV-${supplierId}`);
+    const advSourceKey = `finance:vendor_advance:${supplierId}:${recvDate}:${requestIdempotencyToken(req)}`;
+
+    // Idempotency: short-circuit on retry.
+    const [existingAdv] = await rawQuery<{ id: number; ref: string }>(
+      `SELECT id, ref FROM vendor_advances
+        WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, advSourceKey]
+    ).catch(() => [] as { id: number; ref: string }[]);
+    if (existingAdv) {
+      markIdempotencyReplay(req, res, true);
+      res.status(200).json({ advanceId: existingAdv.id, ref: existingAdv.ref, supplierId, amount: amt, replayed: true });
+      return;
+    }
+
+    let advanceId: number | null = null;
+    await withTransaction(async (client: any) => {
+      try {
+        const ins = await client.query(
+          `INSERT INTO vendor_advances ("companyId","branchId","supplierId",ref,amount,"appliedAmount",method,"paidDate",notes,"createdBy",status,"sourceKey")
+           VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,'open',$10) RETURNING id`,
+          [scope.companyId, scope.branchId, supplierId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId, advSourceKey]
+        );
+        advanceId = ins.rows[0].id;
+      } catch (e: any) {
+        if (e?.code === "42P01") {
+          await client.query(
+            `CREATE TABLE IF NOT EXISTS vendor_advances (
+               id SERIAL PRIMARY KEY,
+               "companyId" INTEGER NOT NULL,
+               "branchId" INTEGER,
+               "supplierId" INTEGER NOT NULL,
+               ref TEXT NOT NULL,
+               amount NUMERIC(18,2) NOT NULL,
+               "appliedAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               method TEXT,
+               "paidDate" DATE NOT NULL,
+               notes TEXT,
+               status TEXT NOT NULL DEFAULT 'open',
+               "journalId" INTEGER,
+               "sourceKey" VARCHAR(128),
+               "createdBy" INTEGER,
+               "createdAt" TIMESTAMP DEFAULT NOW(),
+               "deletedAt" TIMESTAMP
+             );
+             CREATE UNIQUE INDEX IF NOT EXISTS idx_vendor_advances_source_key
+               ON vendor_advances ("companyId", "sourceKey")
+               WHERE "sourceKey" IS NOT NULL;`
+          );
+          const ins2 = await client.query(
+            `INSERT INTO vendor_advances ("companyId","branchId","supplierId",ref,amount,"appliedAmount",method,"paidDate",notes,"createdBy",status,"sourceKey")
+             VALUES ($1,$2,$3,$4,$5,0,$6,$7,$8,$9,'open',$10) RETURNING id`,
+            [scope.companyId, scope.branchId, supplierId, advRef, amt, method, recvDate, notes ?? null, scope.activeAssignmentId, advSourceKey]
+          );
+          advanceId = ins2.rows[0].id;
+        } else {
+          throw e;
+        }
+      }
+    });
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [advReceivableCode, cashCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "debit", "1420"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_cash", "credit", "1100"),
+    ]);
+
+    let journalId: number | null = null;
+    try {
+      const advResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: advRef,
+        description: `دفعة مقدمة للمورد ${supplier.name} (#${supplierId}): ${amt}`,
+        sourceType: "vendor_advance",
+        sourceId: advanceId ?? 0,
+        sourceKey: `finance:vendor_advance:${advanceId}`,
+        lines: [
+          { accountCode: advReceivableCode, debit: amt, credit: 0, vendorId: supplierId },
+          { accountCode: cashCode, debit: 0, credit: amt, vendorId: supplierId },
+        ],
+        guardTable: "vendor_advances",
+        guardId: advanceId ?? 0,
+      });
+      journalId = advResult.journalId;
+      markIdempotencyReplay(req, res, advResult.alreadyExists);
+      if (journalId && advanceId) {
+        await rawExecute(`UPDATE vendor_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, advanceId, scope.companyId]);
+      }
+    } catch (glErr) {
+      if (advanceId) {
+        await rawExecute(`DELETE FROM vendor_advances WHERE id = $1 AND "companyId" = $2`, [advanceId, scope.companyId]);
+      }
+      throw glErr;
+    }
+
+    res.status(201).json({ advanceId, ref: advRef, supplierId, amount: amt, journalId, status: "open" });
+  } catch (err) {
+    handleRouteError(err, res, "Vendor advance create error:");
+  }
+});
+
+// POST /vendor-advances/:id/apply — apply a vendor advance against an AP open balance.
+//   DR Vendor AP (2100)
+//        CR Vendor advance receivable (1420)
+purchaseRouter.post("/vendor-advances/:id/apply", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const advanceId = parseId(req.params.id, "id");
+    const { poId, amount } = zodParse(applyVendorAdvanceSchema.safeParse(req.body ?? {}));
+    const applyAmt = roundTo2(Number(amount));
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [apCode, advReceivableCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "credit", "1420"),
+    ]);
+
+    let advance: any;
+    let po: any;
+    let applyResult: { journalId: number; alreadyExists: boolean } | null = null;
+    await withTransaction(async (client: any) => {
+      const advRes = await client.query(
+        `SELECT id, "supplierId", amount, "appliedAmount", "branchId", status
+           FROM vendor_advances WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+        [advanceId, scope.companyId]
+      );
+      advance = advRes.rows[0];
+      if (!advance) throw new NotFoundError("الدفعة المقدمة للمورد غير موجودة");
+      const remaining = Number(advance.amount) - Number(advance.appliedAmount);
+      if (applyAmt > remaining + 0.01) {
+        throw new ValidationError(`المبلغ يتجاوز المتبقي من الدفعة المقدمة (${remaining})`);
+      }
+
+      const poRes = await client.query(
+        `SELECT id, ref, "supplierId", "totalAmount", "paidAmount" FROM purchase_orders
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [poId, scope.companyId]
+      );
+      po = poRes.rows[0];
+      if (!po) throw new NotFoundError("أمر الشراء غير موجود");
+      if (po.supplierId !== advance.supplierId) {
+        throw new ValidationError("المورد في أمر الشراء لا يطابق المورد في الدفعة المقدمة");
+      }
+      const poOpen = Number(po.totalAmount) - Number(po.paidAmount ?? 0);
+      if (applyAmt > poOpen + 0.01) {
+        throw new ValidationError(`المبلغ يتجاوز الرصيد المفتوح لأمر الشراء (${poOpen})`);
+      }
+
+      await client.query(
+        `UPDATE vendor_advances SET "appliedAmount" = COALESCE("appliedAmount",0) + $1,
+           status = CASE WHEN COALESCE("appliedAmount",0) + $1 >= amount THEN 'applied' ELSE status END
+         WHERE id = $2`,
+        [applyAmt, advanceId]
+      );
+      await client.query(
+        `UPDATE purchase_orders SET "paidAmount" = COALESCE("paidAmount",0) + $1
+         WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [applyAmt, poId, scope.companyId]
+      );
+
+      applyResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: advance.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `VENDOR-ADV-APPLY-${advanceId}-${poId}`,
+        description: `تطبيق دفعة مقدمة على أمر شراء ${po.ref}`,
+        sourceType: "vendor_advance_application",
+        sourceId: advanceId,
+        sourceKey: `finance:vendor_advance_apply:${advanceId}:${poId}`,
+        lines: [
+          { accountCode: apCode, debit: applyAmt, credit: 0, vendorId: advance.supplierId },
+          { accountCode: advReceivableCode, debit: 0, credit: applyAmt, vendorId: advance.supplierId },
+        ],
+        guardTable: "vendor_advances",
+        guardId: advanceId,
+      });
+    });
+
+    const journalId = applyResult!.journalId;
+    markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+    res.json({ advanceId, poId, amount: applyAmt, journalId });
+  } catch (err) {
+    handleRouteError(err, res, "Apply vendor advance error:");
+  }
+});
+
+// POST /vendor-credits — vendor credit memo (supplier return / pricing
+// adjustment in the buyer's favour).
+//   DR Vendor AP (2100)             ← amount + VAT
+//        CR Sales returns / Inventory (5550 or 1151)
+//        CR VAT input reversal (1400)
+// Net effect: reduces our payable to the supplier.
+purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createVendorCreditSchema.safeParse(req.body));
+    const { supplierId, poId, amount, reason, memoDate, vatIncluded = true } = b;
+
+    const [supplier] = await rawQuery<{ id: number; name: string }>(
+      `SELECT id, name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [supplierId, scope.companyId]
+    );
+    if (!supplier) {
+      throw new ValidationError("المورد غير موجود", { field: "supplierId" });
+    }
+
+    const memoDateStr = memoDate || todayISO();
+    const creditPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
+    if (!creditPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسجيل إشعار دائن مورد في فترة مُقفلة: ${creditPeriodCheck.periodName ?? ""}`,
+        { field: "memoDate", meta: { periodName: creditPeriodCheck.periodName } },
+      );
+    }
+
+    const totalAmt = roundTo2(Number(amount));
+    // Per-company VAT rate via system_settings (default 15%). Pre-fix
+    // vendor credit memo hardcoded 0.15 → tenant on 5% computed the
+    // wrong VAT input reversal.
+    const vatRate = (await getCompanyVatRate(scope.companyId)) / 100;
+    const subtotal = vatIncluded ? roundTo2(totalAmt / (1 + vatRate)) : totalAmt;
+    const vatAmount = roundTo2(vatIncluded ? totalAmt - subtotal : totalAmt * vatRate);
+    const fullAmount = vatIncluded ? totalAmt : roundTo2(totalAmt + vatAmount);
+
+    const creditRef = internalTechRef(`VCM-${supplierId}`);
+    const creditSourceKey = `finance:vendor_credit:${supplierId}:${memoDateStr}:${requestIdempotencyToken(req)}`;
+
+    let memoId: number | null = null;
+    await withTransaction(async (client: any) => {
+      try {
+        const ins = await client.query(
+          `INSERT INTO vendor_credit_memos ("companyId","branchId","supplierId","poId",ref,amount,"vatAmount","totalAmount","appliedAmount","memoDate",reason,status,"createdBy","sourceKey")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10,'open',$11,$12) RETURNING id`,
+          [scope.companyId, scope.branchId, supplierId, poId ?? null, creditRef, subtotal, vatAmount, fullAmount, memoDateStr, reason, scope.activeAssignmentId, creditSourceKey]
+        );
+        memoId = ins.rows[0].id;
+      } catch (e: any) {
+        if (e?.code === "42P01") {
+          await client.query(
+            `CREATE TABLE IF NOT EXISTS vendor_credit_memos (
+               id SERIAL PRIMARY KEY,
+               "companyId" INTEGER NOT NULL,
+               "branchId" INTEGER,
+               "supplierId" INTEGER NOT NULL,
+               "poId" INTEGER,
+               ref TEXT NOT NULL,
+               amount NUMERIC(18,2) NOT NULL,
+               "vatAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               "totalAmount" NUMERIC(18,2) NOT NULL,
+               "appliedAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               "memoDate" DATE NOT NULL,
+               reason TEXT NOT NULL,
+               status TEXT NOT NULL DEFAULT 'open',
+               "journalId" INTEGER,
+               "sourceKey" VARCHAR(128),
+               "createdBy" INTEGER,
+               "createdAt" TIMESTAMP DEFAULT NOW(),
+               "deletedAt" TIMESTAMP
+             );
+             CREATE UNIQUE INDEX IF NOT EXISTS idx_vendor_credit_memos_source_key
+               ON vendor_credit_memos ("companyId", "sourceKey")
+               WHERE "sourceKey" IS NOT NULL;`
+          );
+          const ins2 = await client.query(
+            `INSERT INTO vendor_credit_memos ("companyId","branchId","supplierId","poId",ref,amount,"vatAmount","totalAmount","appliedAmount","memoDate",reason,status,"createdBy","sourceKey")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10,'open',$11,$12) RETURNING id`,
+            [scope.companyId, scope.branchId, supplierId, poId ?? null, creditRef, subtotal, vatAmount, fullAmount, memoDateStr, reason, scope.activeAssignmentId, creditSourceKey]
+          );
+          memoId = ins2.rows[0].id;
+        } else {
+          throw e;
+        }
+      }
+    });
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [apCode, returnsCode, vatInputCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5550"),
+      financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1400"),
+    ]);
+
+    let journalId: number | null = null;
+    try {
+      const memoResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: creditRef,
+        description: `إشعار دائن من المورد ${supplier.name}: ${reason}`,
+        sourceType: "vendor_credit_memo",
+        sourceId: memoId ?? 0,
+        sourceKey: `finance:vendor_credit_memo:${memoId}`,
+        lines: [
+          { accountCode: apCode, debit: fullAmount, credit: 0, vendorId: supplierId, description: `تخفيض ذمم — إشعار دائن` },
+          { accountCode: returnsCode, debit: 0, credit: subtotal, vendorId: supplierId, description: `مرتجع/تخفيض مشتريات` },
+          ...(vatAmount > 0 ? [{ accountCode: vatInputCode, debit: 0, credit: vatAmount, vendorId: supplierId, description: `عكس ضريبة مدخلات` }] : []),
+        ],
+        guardTable: "vendor_credit_memos",
+        guardId: memoId ?? 0,
+      });
+      journalId = memoResult.journalId;
+      markIdempotencyReplay(req, res, memoResult.alreadyExists);
+      if (journalId && memoId) {
+        await rawExecute(`UPDATE vendor_credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
+      }
+    } catch (glErr) {
+      if (memoId) {
+        await rawExecute(`DELETE FROM vendor_credit_memos WHERE id = $1 AND "companyId" = $2`, [memoId, scope.companyId]);
+      }
+      throw glErr;
+    }
+
+    res.status(201).json({ memoId, ref: creditRef, supplierId, amount: subtotal, vatAmount, totalAmount: fullAmount, journalId, status: "open" });
+  } catch (err) {
+    handleRouteError(err, res, "Vendor credit memo create error:");
+  }
+});
+
+// POST /vendor-credits/:id/apply — apply a vendor credit memo against
+// an open PO. Same shape as advance-apply.
+purchaseRouter.post("/vendor-credits/:id/apply", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const memoId = parseId(req.params.id, "id");
+    const { poId, amount } = zodParse(applyVendorCreditSchema.safeParse(req.body ?? {}));
+    const applyAmt = roundTo2(Number(amount));
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [apCode, creditClearingCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_credit_clearing", "credit", "2110"),
+    ]);
+
+    let memo: any;
+    let po: any;
+    let applyResult: { journalId: number; alreadyExists: boolean } | null = null;
+    await withTransaction(async (client: any) => {
+      const memoRes = await client.query(
+        `SELECT id, "supplierId", "totalAmount", "appliedAmount", "branchId", status
+           FROM vendor_credit_memos WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+        [memoId, scope.companyId]
+      );
+      memo = memoRes.rows[0];
+      if (!memo) throw new NotFoundError("الإشعار الدائن غير موجود");
+      const remaining = Number(memo.totalAmount) - Number(memo.appliedAmount);
+      if (applyAmt > remaining + 0.01) {
+        throw new ValidationError(`المبلغ يتجاوز المتبقي من الإشعار الدائن (${remaining})`);
+      }
+
+      const poRes = await client.query(
+        `SELECT id, ref, "supplierId", "totalAmount", "paidAmount" FROM purchase_orders
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [poId, scope.companyId]
+      );
+      po = poRes.rows[0];
+      if (!po) throw new NotFoundError("أمر الشراء غير موجود");
+      if (po.supplierId !== memo.supplierId) {
+        throw new ValidationError("المورد في أمر الشراء لا يطابق المورد في الإشعار الدائن");
+      }
+
+      await client.query(
+        `UPDATE vendor_credit_memos SET "appliedAmount" = COALESCE("appliedAmount",0) + $1,
+           status = CASE WHEN COALESCE("appliedAmount",0) + $1 >= "totalAmount" THEN 'applied' ELSE status END
+         WHERE id = $2`,
+        [applyAmt, memoId]
+      );
+      await client.query(
+        `UPDATE purchase_orders SET "paidAmount" = COALESCE("paidAmount",0) + $1
+         WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [applyAmt, poId, scope.companyId]
+      );
+
+      applyResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: memo.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `VCM-APPLY-${memoId}-${poId}`,
+        description: `تطبيق إشعار دائن على أمر شراء ${po.ref}`,
+        sourceType: "vendor_credit_application",
+        sourceId: memoId,
+        sourceKey: `finance:vendor_credit_apply:${memoId}:${poId}`,
+        lines: [
+          { accountCode: apCode, debit: applyAmt, credit: 0, vendorId: memo.supplierId },
+          { accountCode: creditClearingCode, debit: 0, credit: applyAmt, vendorId: memo.supplierId },
+        ],
+        guardTable: "vendor_credit_memos",
+        guardId: memoId,
+      });
+    });
+
+    const journalId = applyResult!.journalId;
+    markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+    res.json({ memoId, poId, amount: applyAmt, journalId });
+  } catch (err) {
+    handleRouteError(err, res, "Apply vendor credit error:");
+  }
+});
+
+// GET /vendor-advances — list vendor advances for AP module.
+purchaseRouter.get("/vendor-advances", authorize({ feature: "finance.purchase", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const supplierId = req.query.supplierId ? Number(req.query.supplierId) : undefined;
+    const status = req.query.status as string | undefined;
+    const params: any[] = [scope.companyId];
+    const conds: string[] = [`va."companyId" = $1`, `va."deletedAt" IS NULL`];
+    if (supplierId) { params.push(supplierId); conds.push(`va."supplierId" = $${params.length}`); }
+    if (status) { params.push(status); conds.push(`va.status = $${params.length}`); }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT va.*, s.name AS "supplierName"
+         FROM vendor_advances va
+         LEFT JOIN suppliers s ON s.id = va."supplierId"
+        WHERE ${conds.join(" AND ")}
+        ORDER BY va.id DESC
+        LIMIT 500`,
+      params
+    ).catch(() => [] as Record<string, unknown>[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "List vendor advances error:");
+  }
+});
+
+// GET /vendor-credits — list vendor credit memos.
+purchaseRouter.get("/vendor-credits", authorize({ feature: "finance.purchase", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const supplierId = req.query.supplierId ? Number(req.query.supplierId) : undefined;
+    const status = req.query.status as string | undefined;
+    const params: any[] = [scope.companyId];
+    const conds: string[] = [`vcm."companyId" = $1`, `vcm."deletedAt" IS NULL`];
+    if (supplierId) { params.push(supplierId); conds.push(`vcm."supplierId" = $${params.length}`); }
+    if (status) { params.push(status); conds.push(`vcm.status = $${params.length}`); }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT vcm.*, s.name AS "supplierName"
+         FROM vendor_credit_memos vcm
+         LEFT JOIN suppliers s ON s.id = vcm."supplierId"
+        WHERE ${conds.join(" AND ")}
+        ORDER BY vcm.id DESC
+        LIMIT 500`,
+      params
+    ).catch(() => [] as Record<string, unknown>[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "List vendor credits error:");
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VENDOR INVOICES — supplier-issued invoices entered as AP documents
+// Separate from /invoices (AR). vendor_invoices share schema with
+// the invoices table conceptually (header + lines) but the entry
+// goes through the AP subledger: clientId column unused, supplierId
+// is the key. Approval posts DR Expense / DR VAT input / CR AP.
+// Without this, supplier invoices had to be entered as AR invoices
+// with the vendor's name in a fake "client" record, corrupting both
+// subledgers.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const createVendorInvoiceSchema = z.object({
+  supplierId: z.coerce.number({ required_error: "المورد مطلوب" }),
+  ref: z.string().min(1, "رقم فاتورة المورد مطلوب"),
+  invoiceDate: z.string().min(1, "تاريخ الفاتورة مطلوب"),
+  dueDate: z.string().optional(),
+  poId: z.coerce.number().optional(),
+  subtotal: z.coerce.number().nonnegative("المبلغ مطلوب"),
+  vatAmount: z.coerce.number().nonnegative().default(0),
+  description: z.string().optional(),
+  expenseAccountCode: z.string().optional(),
+  costCenterId: z.coerce.number().optional(),
+  projectId: z.coerce.number().optional(),
+  departmentId: z.coerce.number().optional(),
+});
+
+// POST /vendor-invoices — create a supplier-issued invoice (AP).
+// Posts immediately to the AP subledger; no separate approval cycle
+// (mirror customer-advances model). Per-line allocation comes later
+// via /vendor-invoices/:id/allocate if needed.
+purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createVendorInvoiceSchema.safeParse(req.body));
+
+    const [supplier] = await rawQuery<{ id: number; name: string }>(
+      `SELECT id, name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [b.supplierId, scope.companyId]
+    );
+    if (!supplier) throw new ValidationError("المورد غير موجود", { field: "supplierId" });
+
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, b.invoiceDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسجيل فاتورة مورد في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "invoiceDate", meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
+    const subtotal = roundTo2(b.subtotal);
+    const vatAmount = roundTo2(b.vatAmount);
+    const total = roundTo2(subtotal + vatAmount);
+    const sourceKey = `finance:vendor_invoice:${b.supplierId}:${b.ref}:${requestIdempotencyToken(req)}`;
+
+    // Pre-INSERT idempotency: same supplier + same supplier-issued
+    // ref + same idempotency token = same invoice.
+    const [existingInv] = await rawQuery<{ id: number; ref: string }>(
+      `SELECT id, ref FROM vendor_invoices
+        WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, sourceKey]
+    ).catch(() => [] as { id: number; ref: string }[]);
+    if (existingInv) {
+      markIdempotencyReplay(req, res, true);
+      res.status(200).json({ invoiceId: existingInv.id, ref: existingInv.ref, supplierId: b.supplierId, total, replayed: true });
+      return;
+    }
+
+    let invoiceId: number | null = null;
+    await withTransaction(async (client: any) => {
+      try {
+        const ins = await client.query(
+          `INSERT INTO vendor_invoices ("companyId","branchId","supplierId",ref,"invoiceDate","dueDate","poId",subtotal,"vatAmount",total,"paidAmount",description,"createdBy",status,"sourceKey")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,'approved',$13) RETURNING id`,
+          [scope.companyId, scope.branchId, b.supplierId, b.ref, b.invoiceDate, b.dueDate ?? null,
+           b.poId ?? null, subtotal, vatAmount, total, b.description ?? null, scope.activeAssignmentId, sourceKey]
+        );
+        invoiceId = ins.rows[0].id;
+      } catch (e: any) {
+        if (e?.code === "42P01") {
+          await client.query(
+            `CREATE TABLE IF NOT EXISTS vendor_invoices (
+               id SERIAL PRIMARY KEY,
+               "companyId" INTEGER NOT NULL,
+               "branchId" INTEGER,
+               "supplierId" INTEGER NOT NULL,
+               ref TEXT NOT NULL,
+               "invoiceDate" DATE NOT NULL,
+               "dueDate" DATE,
+               "poId" INTEGER,
+               subtotal NUMERIC(18,2) NOT NULL,
+               "vatAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               total NUMERIC(18,2) NOT NULL,
+               "paidAmount" NUMERIC(18,2) NOT NULL DEFAULT 0,
+               description TEXT,
+               status TEXT NOT NULL DEFAULT 'approved',
+               "journalId" INTEGER,
+               "sourceKey" VARCHAR(128),
+               "createdBy" INTEGER,
+               "createdAt" TIMESTAMP DEFAULT NOW(),
+               "deletedAt" TIMESTAMP
+             );
+             CREATE UNIQUE INDEX IF NOT EXISTS idx_vendor_invoices_source_key
+               ON vendor_invoices ("companyId", "sourceKey")
+               WHERE "sourceKey" IS NOT NULL;
+             CREATE INDEX IF NOT EXISTS idx_vendor_invoices_supplier_status
+               ON vendor_invoices ("companyId", "supplierId", status)
+               WHERE "deletedAt" IS NULL;`
+          );
+          const ins2 = await client.query(
+            `INSERT INTO vendor_invoices ("companyId","branchId","supplierId",ref,"invoiceDate","dueDate","poId",subtotal,"vatAmount",total,"paidAmount",description,"createdBy",status,"sourceKey")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,'approved',$13) RETURNING id`,
+            [scope.companyId, scope.branchId, b.supplierId, b.ref, b.invoiceDate, b.dueDate ?? null,
+             b.poId ?? null, subtotal, vatAmount, total, b.description ?? null, scope.activeAssignmentId, sourceKey]
+          );
+          invoiceId = ins2.rows[0].id;
+        } else {
+          throw e;
+        }
+      }
+    });
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const expenseCode = b.expenseAccountCode
+      ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5400");
+    const [vatInputCode, apCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1400"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+    ]);
+
+    let journalId: number | null = null;
+    try {
+      const invResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `VINV-${invoiceId}`,
+        description: `فاتورة مورد ${supplier.name} (${b.ref}): ${b.description ?? ""}`,
+        type: "vendor_invoice",
+        sourceType: "vendor_invoice",
+        sourceId: invoiceId ?? 0,
+        sourceKey: `finance:vendor_invoice_je:${invoiceId}`,
+        lines: [
+          { accountCode: expenseCode, debit: subtotal, credit: 0, vendorId: b.supplierId,
+            costCenterId: b.costCenterId, projectId: b.projectId, departmentId: b.departmentId,
+            description: `مصروف فاتورة مورد` },
+          ...(vatAmount > 0 ? [{ accountCode: vatInputCode, debit: vatAmount, credit: 0, vendorId: b.supplierId, description: `ضريبة مدخلات` }] : []),
+          { accountCode: apCode, debit: 0, credit: total, vendorId: b.supplierId, description: `ذمم دائنة — ${supplier.name}` },
+        ],
+        guardTable: "vendor_invoices",
+        guardId: invoiceId ?? 0,
+      });
+      journalId = invResult.journalId;
+      markIdempotencyReplay(req, res, invResult.alreadyExists);
+      if (journalId && invoiceId) {
+        await rawExecute(`UPDATE vendor_invoices SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, invoiceId, scope.companyId]);
+      }
+    } catch (glErr) {
+      if (invoiceId) {
+        await rawExecute(`DELETE FROM vendor_invoices WHERE id = $1 AND "companyId" = $2`, [invoiceId, scope.companyId]);
+      }
+      throw glErr;
+    }
+
+    res.status(201).json({ invoiceId, ref: b.ref, supplierId: b.supplierId, subtotal, vatAmount, total, journalId, status: "approved" });
+  } catch (err) {
+    handleRouteError(err, res, "Vendor invoice create error:");
+  }
+});
+
+// GET /vendor-invoices — list with optional supplier / status filter
+purchaseRouter.get("/vendor-invoices", authorize({ feature: "finance.purchase", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const supplierId = req.query.supplierId ? Number(req.query.supplierId) : undefined;
+    const status = req.query.status as string | undefined;
+    const params: any[] = [scope.companyId];
+    const conds: string[] = [`vi."companyId" = $1`, `vi."deletedAt" IS NULL`];
+    if (supplierId) { params.push(supplierId); conds.push(`vi."supplierId" = $${params.length}`); }
+    if (status) { params.push(status); conds.push(`vi.status = $${params.length}`); }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT vi.*, s.name AS "supplierName"
+         FROM vendor_invoices vi
+         LEFT JOIN suppliers s ON s.id = vi."supplierId"
+        WHERE ${conds.join(" AND ")}
+        ORDER BY vi.id DESC
+        LIMIT 500`,
+      params
+    ).catch(() => [] as Record<string, unknown>[]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "List vendor invoices error:");
+  }
+});
+
+// GET /vendor-invoices/:id — detail
+purchaseRouter.get("/vendor-invoices/:id", authorize({ feature: "finance.purchase", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [inv] = await rawQuery<Record<string, unknown>>(
+      `SELECT vi.*, s.name AS "supplierName", s.phone AS "supplierPhone", s.email AS "supplierEmail"
+         FROM vendor_invoices vi
+         LEFT JOIN suppliers s ON s.id = vi."supplierId"
+        WHERE vi.id = $1 AND vi."companyId" = $2 AND vi."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!inv) throw new NotFoundError("فاتورة المورد غير موجودة");
+    res.json(inv);
+  } catch (err) {
+    handleRouteError(err, res, "Get vendor invoice error:");
+  }
+});

@@ -192,7 +192,9 @@ describe("Exit completion flow", () => {
 
   it("complete uses applyTransition approved → completed", () => {
     const idx = EXIT_ROUTE.indexOf('"/exit/:id/complete"');
-    const section = EXIT_ROUTE.slice(idx, idx + 1500);
+    // Widened from 1500 → 3500 chars after FIN-AUD-09 added an up-front
+    // period-gate + comment block before the lifecycle transition.
+    const section = EXIT_ROUTE.slice(idx, idx + 3500);
     expect(section).toContain("applyTransition");
     expect(section).toContain('"approved"');
     expect(section).toContain('"completed"');
@@ -200,13 +202,13 @@ describe("Exit completion flow", () => {
 
   it("complete terminates the employee assignment", () => {
     const idx = EXIT_ROUTE.indexOf('"/exit/:id/complete"');
-    const section = EXIT_ROUTE.slice(idx, idx + 2000);
+    const section = EXIT_ROUTE.slice(idx, idx + 4000);
     expect(section).toContain("UPDATE employee_assignments SET status = 'terminated'");
   });
 
   it("complete posts GL settlement via hrEngine", () => {
     const idx = EXIT_ROUTE.indexOf('"/exit/:id/complete"');
-    const section = EXIT_ROUTE.slice(idx, idx + 2000);
+    const section = EXIT_ROUTE.slice(idx, idx + 4500);
     expect(section).toContain("hrEngine.postExitSettlementGL");
   });
 });
