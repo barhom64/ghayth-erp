@@ -65,7 +65,7 @@ SELECT
   ua."createdAt"
 FROM umrah_attachments ua
 WHERE ua."deletedAt" IS NULL
-ON CONFLICT (legacy_umrah_attachment_id) DO NOTHING;
+ON CONFLICT (legacy_umrah_attachment_id) WHERE legacy_umrah_attachment_id IS NOT NULL DO NOTHING;
 
 -- 2) Link each backfilled document to its umrah owner (namespaced entityType).
 INSERT INTO document_entity_links ("documentId", "entityType", "entityId")
