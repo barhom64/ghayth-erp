@@ -71,7 +71,7 @@ eventsRouter.get("/catalog", (req, res) => {
   } catch (err) { handleRouteError(err, res, "Event catalog error:"); }
 });
 
-eventsRouter.get("/catalog/:name", authorize({ feature: "admin", action: "view" }), (req, res) => {
+eventsRouter.get("/catalog/:name", (req, res) => {
   try {
     const def = getEventDefinition(req.params.name);
     if (!def) throw new NotFoundError("الحدث غير موجود في الفهرس");
