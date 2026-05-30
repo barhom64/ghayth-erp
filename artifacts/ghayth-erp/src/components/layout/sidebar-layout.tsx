@@ -1263,6 +1263,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                     size="icon"
                     className="lg:hidden h-8 w-8"
                     onClick={() => setIsSidebarOpen(false)}
+                    title="إغلاق القائمة"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -1336,6 +1337,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
               size="icon"
               className="lg:hidden h-8 w-8"
               onClick={() => setIsSidebarOpen(true)}
+              title="فتح القائمة"
             >
               <Menu className="h-5 w-5" />
             </Button>
