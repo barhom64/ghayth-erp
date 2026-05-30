@@ -1,4 +1,1 @@
-$(python3 - <<'PY'
-from pathlib import Path
-p=Path('/tmp/sidebar-layout.tsx')
-PY)
+$(git show origin/main:artifacts/ghayth-erp/src/components/layout/sidebar-layout.tsx)
