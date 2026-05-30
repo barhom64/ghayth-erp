@@ -1426,10 +1426,22 @@ router.get("/invoices", authorize({ feature: "umrah", action: "list" }), async (
     if (subAgentId) { params.push(subAgentId); where += ` AND si."subAgentId" = $${params.length}`; }
     if (status) { params.push(status); where += ` AND si.status = $${params.length}`; }
     const rows = await rawQuery(
+      // Defence-in-depth on the sub-agents JOIN — it previously matched
+      // only on id, so a stale FK could lift another tenant's name into
+      // the response. Matches the pattern PR #1425 added to GET
+      // /umrah/pilgrims/:id. Selecting si.* surfaces the costBasis +
+      // marginBase columns (populated by umrahInvoicingEngine since
+      // PR #1457) so the UI can display gross profit per row.
       `SELECT si.*, sa.name AS "subAgentName", c.name AS "clientName"
        FROM umrah_sales_invoices si
-       LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
-       LEFT JOIN clients c ON c.id = si."clientId" AND c."companyId" = si."companyId" AND c."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa
+              ON sa.id = si."subAgentId"
+             AND sa."companyId" = si."companyId"
+             AND sa."deletedAt" IS NULL
+       LEFT JOIN clients c
+              ON c.id = si."clientId"
+             AND c."companyId" = si."companyId"
+             AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY si."createdAt" DESC
        LIMIT 500`,
