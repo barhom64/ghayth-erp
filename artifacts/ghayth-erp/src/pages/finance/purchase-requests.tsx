@@ -3,6 +3,11 @@ import { Link } from "wouter";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
   PageShell,
   DataTable,
   type DataTableColumn,
@@ -104,13 +109,23 @@ export default function PurchaseRequestsPage() {
     { successMessage: "تم التحويل (المسار القديم)" },
   );
 
+  // Dialog state for the convert-to-PO action — replaces window.prompt
+  // so the optional notes field has a proper labeled Textarea.
+  const [convertTarget, setConvertTarget] = useState<number | null>(null);
+  const [convertNotes, setConvertNotes] = useState("");
   const handleConvert = (id: number, useLegacy = false) => {
     if (useLegacy) {
       convertLegacyMut.mutate({ id });
       return;
     }
-    const notes = window.prompt("ملاحظات (اختياري):") ?? "";
-    convertMut.mutate({ id, notes: notes.trim() || undefined });
+    setConvertNotes("");
+    setConvertTarget(id);
+  };
+  const confirmConvert = () => {
+    if (convertTarget == null) return;
+    const notes = convertNotes.trim() || undefined;
+    convertMut.mutate({ id: convertTarget, notes });
+    setConvertTarget(null);
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -335,6 +350,26 @@ export default function PurchaseRequestsPage() {
           />
         </CardContent>
       </Card>
+      <Dialog open={convertTarget !== null} onOpenChange={(o) => !o && setConvertTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>تحويل الطلب إلى أمر شراء</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label className="text-xs">ملاحظات (اختياري)</Label>
+            <Textarea
+              value={convertNotes}
+              onChange={(e) => setConvertNotes(e.target.value)}
+              placeholder="…"
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConvertTarget(null)}>إلغاء</Button>
+            <Button onClick={confirmConvert} disabled={convertMut.isPending} rateLimitAware>تحويل</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

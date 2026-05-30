@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
@@ -86,6 +87,7 @@ export default function UmrahTransport() {
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "النقل والمواصلات" }]}
       actions={<GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />رحلة جديدة</GuardedButton>}
     >
+      <UmrahTabsNav />
       {showForm && (
         <Card>
           <CardContent className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">

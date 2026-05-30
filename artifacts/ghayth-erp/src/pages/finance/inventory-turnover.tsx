@@ -12,6 +12,7 @@ import {
 import { Download, RefreshCw, Calendar, Layers } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * Inventory turnover ratio — consumes #1036's
  * /reports/inventory-turnover endpoint.
@@ -194,6 +195,7 @@ export default function InventoryTurnoverPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       {/* KPIs */}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         <Card>

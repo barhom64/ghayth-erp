@@ -145,6 +145,10 @@ export default function GlAnomalyDetectorPage() {
   return (
     <PageShell
       title="كاشف الشذوذ في القيود"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "كاشف الشذوذ في القيود" },
+      ]}
       subtitle="فحص آلي للقيود حسب 6 أنماط للمراجعة الدورية"
       actions={
         <div className="flex gap-2">

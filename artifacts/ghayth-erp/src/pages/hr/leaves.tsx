@@ -233,27 +233,25 @@ export default function LeavesPage() {
           </Link>
         </div>
       }
-      filters={
-        <AdvancedFilters
-          config={{
-            searchPlaceholder: "بحث بالاسم...",
-            statuses: [
-              { value: "pending", label: "معلقة" },
-              { value: "approved", label: "موافق عليها" },
-              { value: "rejected", label: "مرفوضة" },
-              { value: "returned", label: "مُرجعة" },
-              { value: "cancelled", label: "ملغية" },
-            ],
-            showDateRange: true,
-          }}
-          values={filters}
-          onChange={setFilters}
-          resultCount={filtered?.length}
-        />
-      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بالاسم...",
+          statuses: [
+            { value: "pending", label: "معلقة" },
+            { value: "approved", label: "موافق عليها" },
+            { value: "rejected", label: "مرفوضة" },
+            { value: "returned", label: "مُرجعة" },
+            { value: "cancelled", label: "ملغية" },
+          ],
+          showDateRange: true,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered?.length}
+      />
 
       <BulkActionsBar
         entityType="leave-request"

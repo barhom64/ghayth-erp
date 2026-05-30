@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
 import { PlaneTakeoff, PlaneLanding, AlertTriangle, RefreshCw } from "lucide-react";
@@ -93,12 +94,11 @@ export default function UmrahDailyRunsheet() {
   ];
 
   return (
-    <div dir="rtl" lang="ar" className="space-y-6 p-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">كشف اليوم التشغيلي — عمرة</h1>
-          <p className="text-sm text-muted-foreground">وصول، مغادرة، ومتجاوزون لتاريخ التشغيل المختار</p>
-        </div>
+    <PageShell
+      title="كشف اليوم التشغيلي — عمرة"
+      subtitle="وصول، مغادرة، ومتجاوزون لتاريخ التشغيل المختار"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "كشف اليوم" }]}
+      actions={
         <div className="flex flex-wrap items-end gap-2">
           <div>
             <Label htmlFor="runsheet-date" className="text-xs">تاريخ التشغيل</Label>
@@ -130,8 +130,9 @@ export default function UmrahDailyRunsheet() {
             }}
           />
         </div>
-      </header>
-
+      }
+    >
+      <UmrahTabsNav />
       <div className="grid gap-3 md:grid-cols-3">
         {kpis.map((k) => (
           <Card key={k.label}>
@@ -162,6 +163,6 @@ export default function UmrahDailyRunsheet() {
         <h2 className="mb-2 text-lg font-semibold">المتجاوزون حالياً ({overstays.length})</h2>
         <DataTable data={overstays} columns={overstayCols} emptyMessage="لا متجاوزون نشطون" />
       </section>
-    </div>
+    </PageShell>
   );
 }

@@ -36,7 +36,11 @@ export default function Communications() {
   const [tab, setTab] = useState("monitor");
   if (roleLevel < 40) return null;
   return (
-    <PageShell title="الاتصالات">
+    <PageShell title="الاتصالات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "الاتصالات" },
+      ]}>
       <StatsCards />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-5">
@@ -495,7 +499,7 @@ function CommLogActions({ logEntry, onSuccess }: { logEntry: any; onSuccess: () 
             {COMM_LOG_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button variant="ghost" size="sm" className="h-7 px-2" disabled={busy} onClick={save}><Check className="h-3 w-3" /></Button>
+        <Button variant="ghost" size="sm" className="h-7 px-2" disabled={busy} onClick={save} title="تمييز"><Check className="h-3 w-3" /></Button>
         <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setEditing(false)}><X className="h-3 w-3" /></Button>
       </div>
     );

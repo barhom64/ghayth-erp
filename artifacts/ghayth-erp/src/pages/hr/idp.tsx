@@ -34,6 +34,7 @@ import {
 
 import { IDP_STATUS } from "@/lib/hr-type-maps";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const idpSchema = z.object({
   employeeId: z.string().min(1, "الموظف مطلوب"),
   title: z.string().trim(),
@@ -234,6 +235,7 @@ export default function IDPPage() {
         </GuardedButton>
       }
     >
+      <HrTabsNav />
       {/* KPI cards */}
       <KpiGrid items={kpis} />
 

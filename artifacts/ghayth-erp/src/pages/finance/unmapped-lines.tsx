@@ -10,6 +10,7 @@ import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { Download, CheckCircle2, AlertTriangle, FileSearch } from "lucide-react";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 interface UnmappedRow {
   id: number;
   invoiceId?: number;
@@ -184,6 +185,7 @@ export default function UnmappedLinesPage() {
         ) : null
       }
     >
+      <FinanceTabsNav />
       <Card className={isClean
         ? "border-emerald-300 bg-emerald-50/40"
         : "border-amber-400 bg-status-warning-surface/40"}>

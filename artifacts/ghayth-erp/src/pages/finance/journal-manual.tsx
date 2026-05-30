@@ -17,6 +17,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { formatDateAr as formatDate } from "@/lib/formatters";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -167,6 +168,7 @@ export default function JournalManualPage() {
           { href: "/finance", label: "المالية" },
           { label: "القيود اليدوية" },
         ]}
+        tabsNav={<FinanceTabsNav />}
         queryKey={queryKey}
         endpoint={endpoint}
         printEntityType="journal_entry"

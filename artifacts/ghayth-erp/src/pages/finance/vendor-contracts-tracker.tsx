@@ -136,6 +136,10 @@ export default function VendorContractsTrackerPage() {
   return (
     <PageShell
       title="متابعة عقود الموردين"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "متابعة عقود الموردين" },
+      ]}
       subtitle="عقود تنتهي قريباً — لا تترك مورداً يجدد تلقائياً أو ينتهي بدون تخطيط"
     >
       <FinanceTabsNav />
@@ -330,10 +334,8 @@ export default function VendorContractsTrackerPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            <Link href={`/finance/contracts/${c.id}`}>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <ExternalLink className="w-4 h-4" />
-                              </Button>
+                            <Link href="/finance/contracts">
+                              <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-8 w-8"><ExternalLink className="w-4 h-4" /></Button>
                             </Link>
                             {c.vendorId && (
                               <Link href={`/finance/vendor-360-sheet?vendorId=${c.vendorId}`}>

@@ -20,6 +20,7 @@ import { HOLIDAY_TYPES, HOLIDAY_COLORS, MONTHS_AR } from "@/lib/hr-type-maps";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { currentYearRiyadh } from "@/lib/formatters";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 // HOLIDAY_TYPES has a fixed set of keys — `national`, `religious`,
 // `company`, etc. Use them as the closed enum source. type stays a
 // string in the schema (rather than z.enum) because the labels come
@@ -132,6 +133,7 @@ export default function PublicHolidaysPage() {
         </>
       }
     >
+      <HrTabsNav />
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2">

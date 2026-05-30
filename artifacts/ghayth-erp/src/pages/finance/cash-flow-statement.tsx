@@ -141,6 +141,10 @@ export default function CashFlowStatementPage() {
   return (
     <PageShell
       title="قائمة التدفقات النقدية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "قائمة التدفقات النقدية" },
+      ]}
       subtitle={`الطريقة المباشرة — ${label}`}
       actions={
         <div className="flex gap-2">
@@ -474,9 +478,7 @@ function SectionDetail({
                   </td>
                   <td className="py-2 px-2">
                     <Link href={`/finance/journal/${item.id}`}>
-                      <Button variant="ghost" size="icon" className="h-7 w-7">
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
+                      <Button variant="ghost" size="icon" title="التالي" className="h-7 w-7"><ChevronRight className="w-4 h-4" /></Button>
                     </Link>
                   </td>
                 </tr>

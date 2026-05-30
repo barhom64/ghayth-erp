@@ -21,6 +21,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { useDirtyGuard } from "@/hooks/use-dirty-guard";
 import { useApiQuery, useApiMutation, ApiError } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
@@ -143,6 +145,7 @@ export default function FiscalPeriodsV2Page() {
         { href: "/finance", label: "المالية" },
         { label: "إقفال الفترات" },
       ]}
+      tabsNav={<FinanceTabsNav />}
       queryKey={[...QUERY_KEY]}
       endpoint="/finance/fiscal-periods-v2"
       printEntityType="report_fiscal_periods"
@@ -262,20 +265,6 @@ function DirtyTracker({ onChange }: { onChange: (dirty: boolean) => void }) {
   return null;
 }
 
-/** Confirm-on-dismiss guard. Returns a handler suitable for `onOpenChange`. */
-function makeDirtyGuardedClose(
-  isDirty: boolean,
-  onClose: (open: boolean) => void,
-): (open: boolean) => void {
-  return (next) => {
-    if (!next && isDirty) {
-      const ok = window.confirm("لديك تغييرات لم تُحفظ بعد. هل تريد المغادرة وتجاهل التعديلات؟");
-      if (!ok) return;
-    }
-    onClose(next);
-  };
-}
-
 // ─── Create dialog ────────────────────────────────────────────────────
 
 function CreateDialog({
@@ -292,40 +281,44 @@ function CreateDialog({
     "POST",
     [[...QUERY_KEY]],
   );
+  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, onOpenChange);
 
   return (
-    <Dialog open={open} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>فترة مالية جديدة</DialogTitle>
-          <DialogDescription>
-            عرّف اسم الفترة وبداية ونهاية تواريخها. يمكنك إقفالها لاحقًا من
-            صفحة القائمة.
-          </DialogDescription>
-        </DialogHeader>
-        <FormShell
-          schema={createSchema}
-          defaultValues={{ name: "", startDate: "", endDate: "", notes: "" }}
-          submitLabel="إنشاء"
-          onSubmit={async (values, { setFieldError }) => {
-            try {
-              await create.mutateAsync(values);
-              toast({ title: "تم إنشاء الفترة المالية" });
-              setIsDirty(false); // submitted, no longer dirty
-              onOpenChange(false);
-            } catch (err) {
-              handleFormError(err, setFieldError, toast);
-            }
-          }}
-        >
-          <DirtyTracker onChange={setIsDirty} />
-          <FormTextField name="name" label="اسم الفترة" required />
-          <FormDateField name="startDate" label="تاريخ البداية" required />
-          <FormDateField name="endDate" label="تاريخ النهاية" required />
-          <FormTextareaField name="notes" label="ملاحظات (اختياري)" rows={2} />
-        </FormShell>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={guardedClose}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>فترة مالية جديدة</DialogTitle>
+            <DialogDescription>
+              عرّف اسم الفترة وبداية ونهاية تواريخها. يمكنك إقفالها لاحقًا من
+              صفحة القائمة.
+            </DialogDescription>
+          </DialogHeader>
+          <FormShell
+            schema={createSchema}
+            defaultValues={{ name: "", startDate: "", endDate: "", notes: "" }}
+            submitLabel="إنشاء"
+            onSubmit={async (values, { setFieldError }) => {
+              try {
+                await create.mutateAsync(values);
+                toast({ title: "تم إنشاء الفترة المالية" });
+                setIsDirty(false); // submitted, no longer dirty
+                onOpenChange(false);
+              } catch (err) {
+                handleFormError(err, setFieldError, toast);
+              }
+            }}
+          >
+            <DirtyTracker onChange={setIsDirty} />
+            <FormTextField name="name" label="اسم الفترة" required />
+            <FormDateField name="startDate" label="تاريخ البداية" required />
+            <FormDateField name="endDate" label="تاريخ النهاية" required />
+            <FormTextareaField name="notes" label="ملاحظات (اختياري)" rows={2} />
+          </FormShell>
+        </DialogContent>
+      </Dialog>
+      {discardDialog}
+    </>
   );
 }
 
@@ -346,15 +339,14 @@ function CloseDialog({
     "POST",
     [[...QUERY_KEY]],
   );
+  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, (open) => {
+    if (!open) setPendingCount(null);
+    onOpenChange(open);
+  });
 
   return (
-    <Dialog
-      open={!!target}
-      onOpenChange={makeDirtyGuardedClose(isDirty, (open) => {
-        if (!open) setPendingCount(null);
-        onOpenChange(open);
-      })}
-    >
+    <>
+    <Dialog open={!!target} onOpenChange={guardedClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>إقفال الفترة المالية</DialogTitle>
@@ -422,6 +414,8 @@ function CloseDialog({
         </FormShell>
       </DialogContent>
     </Dialog>
+    {discardDialog}
+    </>
   );
 }
 
@@ -441,9 +435,11 @@ function ReopenDialog({
     "POST",
     [[...QUERY_KEY]],
   );
+  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, onOpenChange);
 
   return (
-    <Dialog open={!!target} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
+    <>
+    <Dialog open={!!target} onOpenChange={guardedClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>إعادة فتح الفترة المالية</DialogTitle>
@@ -481,6 +477,8 @@ function ReopenDialog({
         </FormShell>
       </DialogContent>
     </Dialog>
+    {discardDialog}
+    </>
   );
 }
 
@@ -503,9 +501,11 @@ function LockDialog({
     "POST",
     [[...QUERY_KEY]],
   );
+  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, onOpenChange);
 
   return (
-    <Dialog open={!!target} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
+    <>
+    <Dialog open={!!target} onOpenChange={guardedClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>قفل نهائي للفترة المالية</DialogTitle>
@@ -544,6 +544,8 @@ function LockDialog({
         </FormShell>
       </DialogContent>
     </Dialog>
+    {discardDialog}
+    </>
   );
 }
 

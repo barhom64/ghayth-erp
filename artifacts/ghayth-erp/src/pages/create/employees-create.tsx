@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { ROLES } from "@/lib/constants";
+import { NATIONALITIES } from "@/lib/nationalities";
 import { CheckCircle, AlertCircle, User, Briefcase, FileText, Calendar, Shield, DollarSign, Clock, Building2, CreditCard, Users, ArrowRight } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -262,17 +263,13 @@ export default function EmployeesCreate() {
         <TextField label="رقم الهوية / الإقامة" required dir="ltr" value={form.nationalId} onChange={(v) => setForm((f) => ({ ...f, nationalId: v }))} placeholder="مثال: 1234567890" error={fieldErrors.nationalId} />
         <FormFieldWrapper label="الجنسية" required error={fieldErrors.nationality}>
           <Select value={form.nationality} onValueChange={(v) => setForm((f) => ({ ...f, nationality: v }))}>
-            <SelectTrigger className={fieldErrorClass(fieldErrors.nationality)}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="سعودي">سعودي</SelectItem>
-              <SelectItem value="يمني">يمني</SelectItem>
-              <SelectItem value="مصري">مصري</SelectItem>
-              <SelectItem value="سوداني">سوداني</SelectItem>
-              <SelectItem value="باكستاني">باكستاني</SelectItem>
-              <SelectItem value="بنغلاديشي">بنغلاديشي</SelectItem>
-              <SelectItem value="هندي">هندي</SelectItem>
-              <SelectItem value="فلبيني">فلبيني</SelectItem>
-              <SelectItem value="أخرى">أخرى</SelectItem>
+            <SelectTrigger className={fieldErrorClass(fieldErrors.nationality)}>
+              <SelectValue placeholder="اختر الجنسية" />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {NATIONALITIES.map((n) => (
+                <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </FormFieldWrapper>
@@ -358,44 +355,42 @@ export default function EmployeesCreate() {
 
         <FormFieldWrapper label="المسمى الوظيفي" error={fieldErrors.jobTitle}>
           <Select value={form.jobTitle || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, jobTitle: v === "_none" ? "" : v }))}>
-            <SelectTrigger className={fieldErrorClass(fieldErrors.jobTitle)}><SelectValue placeholder="اختر المسمى الوظيفي" /></SelectTrigger>
+            <SelectTrigger className={fieldErrorClass(fieldErrors.jobTitle)}>
+              <SelectValue placeholder="اختر المسمى الوظيفي" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر المسمى الوظيفي</SelectItem>
-              {jobTitles.length > 0
-                ? jobTitles.map((jt: { id: number; name: string }) => <SelectItem key={jt.id} value={jt.name}>{jt.name}</SelectItem>)
-                : <>
-                    <SelectItem value="مدير عام">مدير عام</SelectItem>
-                    <SelectItem value="مدير قسم">مدير قسم</SelectItem>
-                    <SelectItem value="محاسب">محاسب</SelectItem>
-                    <SelectItem value="مهندس">مهندس</SelectItem>
-                    <SelectItem value="فني">فني</SelectItem>
-                    <SelectItem value="سائق">سائق</SelectItem>
-                    <SelectItem value="موظف استقبال">موظف استقبال</SelectItem>
-                    <SelectItem value="مندوب مبيعات">مندوب مبيعات</SelectItem>
-                    <SelectItem value="أخصائي موارد بشرية">أخصائي موارد بشرية</SelectItem>
-                  </>
-              }
+              {jobTitles.map((jt: { id: number; name: string }) => (
+                <SelectItem key={jt.id} value={jt.name}>{jt.name}</SelectItem>
+              ))}
+              {jobTitles.length === 0 && (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  لا توجد مسميات وظيفية معرَّفة. ستظهر هنا بعد إضافة أول موظف بمسمى جديد.
+                </div>
+              )}
             </SelectContent>
           </Select>
         </FormFieldWrapper>
         <FormFieldWrapper label="القسم" error={fieldErrors.department}>
           <Select value={form.department || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, department: v === "_none" ? "" : v }))}>
-            <SelectTrigger className={fieldErrorClass(fieldErrors.department)}><SelectValue placeholder="اختر القسم" /></SelectTrigger>
+            <SelectTrigger className={fieldErrorClass(fieldErrors.department)}>
+              <SelectValue placeholder={isLoading ? "جاري التحميل..." : "اختر القسم"} />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر القسم</SelectItem>
-              {departments.length > 0
-                ? departments.map((d: { id: number; name: string }) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)
-                : <>
-                    <SelectItem value="تقنية المعلومات">تقنية المعلومات</SelectItem>
-                    <SelectItem value="الموارد البشرية">الموارد البشرية</SelectItem>
-                    <SelectItem value="المالية">المالية</SelectItem>
-                    <SelectItem value="التسويق">التسويق</SelectItem>
-                    <SelectItem value="العمليات">العمليات</SelectItem>
-                    <SelectItem value="المبيعات">المبيعات</SelectItem>
-                    <SelectItem value="القانونية">القانونية</SelectItem>
-                    <SelectItem value="الإدارة العامة">الإدارة العامة</SelectItem>
-                  </>
-              }
+              {departments.map((d: { id: number; name: string }) => (
+                <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+              ))}
+              {!isLoading && departments.length === 0 && (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  لا توجد أقسام مُعرَّفة. أضف الأقسام من <a href="/settings/departments" className="text-status-info-foreground hover:underline">الإعدادات ← الأقسام</a> أولاً.
+                </div>
+              )}
+              {isError && (
+                <div className="px-3 py-2 text-xs text-status-error-foreground">
+                  تعذر تحميل قائمة الأقسام
+                </div>
+              )}
             </SelectContent>
           </Select>
         </FormFieldWrapper>

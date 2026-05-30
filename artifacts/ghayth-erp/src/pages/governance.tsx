@@ -34,6 +34,10 @@ export default function GovernancePage() {
   return (
     <PageShell
       title="الحوكمة والامتثال"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "الحوكمة والامتثال" },
+      ]}
       subtitle="إدارة السياسات والمخاطر والتدقيق والامتثال"
     >
       <StatsCards stats={stats} />

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency, currentPeriodRiyadh } from "@/lib/formatters";
 import { AlertCircle, Play } from "lucide-react";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 /**
  * HR-010 — Monthly accruals page. Previews the leave + EOS accruals for a
  * period via GET /hr/accruals/preview, then posts them with
@@ -85,6 +86,7 @@ export default function AccrualsPage() {
         </div>
       }
     >
+      <HrTabsNav />
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (

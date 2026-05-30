@@ -333,7 +333,7 @@ function ListInput({ label, value, placeholder, onChange }: {
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
           className="h-7 text-xs"
         />
-        <Button size="sm" variant="outline" onClick={add} className="h-7" disabled={!input.trim()}>
+        <Button size="sm" variant="outline" onClick={add} className="h-7" disabled={!input.trim()} title="إضافة">
           <Plus className="h-3 w-3" />
         </Button>
       </div>

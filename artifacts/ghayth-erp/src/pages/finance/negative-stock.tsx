@@ -11,6 +11,7 @@ import {
 import { Download, AlertTriangle, ShieldAlert } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * Negative stock outliers — consumes #1035's
  * /reports/negative-stock. Lot.quantity < 0 should NEVER happen;
@@ -209,6 +210,7 @@ export default function NegativeStockPage() {
         ) : null
       }
     >
+      <FinanceTabsNav />
       {/* Hero state — green vs red */}
       <Card className={isClean ? "border-emerald-300 bg-emerald-50/40" : "border-destructive/40 bg-destructive/5"}>
         <CardContent className="p-4 flex items-start gap-3">

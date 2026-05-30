@@ -134,6 +134,10 @@ export default function VehiclePortfolioDashboardPage() {
   return (
     <PageShell
       title="لوحة محفظة المركبات"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "لوحة محفظة المركبات" },
+      ]}
       subtitle={`ربحية كل مركبة نشطة في ${year} — حدد المركبات الرابحة من الخاسرة`}
     >
       <FinanceTabsNav />
@@ -349,10 +353,8 @@ export default function VehiclePortfolioDashboardPage() {
                           {p.margin.toFixed(1)}%
                         </td>
                         <td className="py-1.5 px-2">
-                          <Link href={`/fleet/vehicles/${p.id}`}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <ExternalLink className="w-3 h-3" />
-                            </Button>
+                          <Link href={`/fleet/${p.id}`}>
+                            <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                           </Link>
                         </td>
                       </tr>

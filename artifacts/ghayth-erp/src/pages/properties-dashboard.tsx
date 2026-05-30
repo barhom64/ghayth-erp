@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -191,6 +192,7 @@ export default function PropertiesDashboard() {
       actions={actions}
       contentClassName="space-y-6"
     >
+      <PropertyTabsNav />
       <KpiGrid items={kpiItems} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -12,6 +12,7 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { Download, FileSpreadsheet } from "lucide-react";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 interface Movement {
   id: number;
   ref: string;
@@ -170,6 +171,7 @@ export default function AccountStatementPage({ entityType }: Props) {
         </div>
       }
     >
+      <FinanceTabsNav />
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
         <div className="md:col-span-2 flex items-end gap-2">
           <div className="flex-1">

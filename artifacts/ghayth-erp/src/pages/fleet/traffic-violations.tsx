@@ -2,6 +2,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -181,6 +182,7 @@ export default function TrafficViolationsPage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "المخالفات المرورية" }]}
       actions={
         <GuardedButton perm="fleet:create" onClick={() => setShowForm(!showForm)} size="sm">
+      <FleetTabsNav />
           <Plus className="w-4 h-4 me-1" /> تسجيل مخالفة
         </GuardedButton>
       }

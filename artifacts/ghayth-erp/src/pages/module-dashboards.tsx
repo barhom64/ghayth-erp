@@ -683,6 +683,10 @@ export default function ModuleDashboardsPage() {
   return (
     <PageShell
       title="لوحات مؤشرات المسارات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "لوحات مؤشرات المسارات" },
+      ]}
       subtitle="مؤشرات أداء مخصصة لكل مسار تشغيلي"
     >
       <Tabs defaultValue={validTab} dir="rtl">

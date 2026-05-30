@@ -11,6 +11,7 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh, todayLocal } from "@/lib/formatters";
 import { Download, Receipt } from "lucide-react";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 interface DetailRow {
   allocationId: number;
   journalEntryId: number;
@@ -193,6 +194,7 @@ export default function WhtSummaryPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         <div className="md:col-span-3 flex items-end gap-2 flex-wrap">
           <div>

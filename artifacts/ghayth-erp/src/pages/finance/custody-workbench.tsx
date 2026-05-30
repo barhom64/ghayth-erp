@@ -183,6 +183,10 @@ export default function CustodyWorkbenchPage() {
   return (
     <PageShell
       title="منضدة عمل العُهد"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "منضدة عمل العُهد" },
+      ]}
       subtitle="عُهد الموظفين النشطة مجمّعة لكل موظف — تتبّع، تسوية، أعمار"
     >
       <FinanceTabsNav />
@@ -378,9 +382,7 @@ export default function CustodyWorkbenchPage() {
                                   </td>
                                   <td className="py-1.5 px-2">
                                     <Link href={`/finance/custodies/${c.id}`}>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7">
-                                        <ExternalLink className="w-3 h-3" />
-                                      </Button>
+                                      <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                                     </Link>
                                   </td>
                                 </tr>

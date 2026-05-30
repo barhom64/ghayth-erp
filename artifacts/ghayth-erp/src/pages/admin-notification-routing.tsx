@@ -171,6 +171,10 @@ export default function AdminNotificationRouting() {
   return (
     <PageShell
       title="توجيه الإشعارات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "توجيه الإشعارات" },
+      ]}
       subtitle="قواعد توجيه الإشعارات حسب فئة الحدث + سلاسل التصعيد الاحتياطية"
       actions={
         <Button variant="outline" size="sm" onClick={refreshAll}>

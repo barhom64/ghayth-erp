@@ -22,6 +22,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 interface OwnerOption {
   id: number;
   name: string;
@@ -144,13 +145,11 @@ export default function PropertiesOwnerStatement() {
     ? ownersResp
     : (ownersResp?.data ?? []);
 
-  const queryUrl = ownerId
-    ? `/properties/owners/${ownerId}/statement?from=${from}&to=${to}${commissionOverride ? `&commissionRate=${commissionOverride}` : ""}`
-    : null;
-
   const { data, isLoading, isError, error, refetch } = useApiQuery<OwnerStatement>(
     ["owner-statement", ownerId, from, to, commissionOverride],
-    queryUrl,
+    ownerId
+      ? `/properties/owners/${ownerId}/statement?from=${from}&to=${to}${commissionOverride ? `&commissionRate=${commissionOverride}` : ""}`
+      : null,
   );
 
   const { data: payoutsResp, refetch: refetchPayouts } = useApiQuery<{ data: PayoutRow[] }>(
@@ -247,6 +246,7 @@ export default function PropertiesOwnerStatement() {
         { label: "كشف حساب المالك" },
       ]}
     >
+      <PropertyTabsNav />
       <Card className="mb-6">
         <CardContent className="py-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">

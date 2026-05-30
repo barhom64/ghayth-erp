@@ -14,6 +14,7 @@ import {
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ACTIVITY_TYPES, ACTIVITY_STATUS } from "@/lib/crm-type-maps";
 
+import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
 const TYPE_OPTIONS = Object.entries(ACTIVITY_TYPES).map(([value, label]) => ({ value, label }));
 
 const STATUS_OPTIONS = [
@@ -108,6 +109,7 @@ export default function CrmActivities() {
       title="أنشطة إدارة العملاء"
       breadcrumbs={[{ href: "/crm", label: "إدارة العلاقات" }]}
     >
+      <CrmTabsNav />
       <KpiGrid items={kpis} />
 
       <AdvancedFilters

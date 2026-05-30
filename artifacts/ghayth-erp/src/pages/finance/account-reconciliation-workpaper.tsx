@@ -207,6 +207,10 @@ export default function AccountReconciliationWorkpaperPage() {
   return (
     <PageShell
       title="ورقة عمل تسوية حساب"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "ورقة عمل تسوية حساب" },
+      ]}
       subtitle="تسوية أي حساب GL إلى مصدر خارجي (كشف بنك، مساعد، إقرار ضريبي)"
     >
       <FinanceTabsNav />
@@ -403,7 +407,7 @@ export default function AccountReconciliationWorkpaperPage() {
                               <td className="py-1 px-2">
                                 <Button
                                   variant="ghost"
-                                  size="icon"
+                                  size="icon" title="حذف"
                                   className="h-7 w-7 text-status-danger-foreground"
                                   onClick={() => removeItem(it.id)}
                                 >

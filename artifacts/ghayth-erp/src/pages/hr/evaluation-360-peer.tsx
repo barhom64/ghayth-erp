@@ -12,6 +12,7 @@ import { ArrowRight, Users, Target, CheckCircle, Clock, Star } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { PageShell } from "@workspace/ui-core";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const EVAL_CRITERIA = [
   { key: "technical_skills", label: "المهارات التقنية والمهنية" },
   { key: "communication", label: "التواصل والتعاون" },
@@ -94,6 +95,7 @@ export default function Evaluation360PeerPage() {
         </Link>
       }
     >
+      <HrTabsNav />
       {/* Identity note */}
       <Card className="border-0 shadow-sm bg-slate-50 border border-slate-200">
         <CardContent className="p-4 flex items-start gap-3">

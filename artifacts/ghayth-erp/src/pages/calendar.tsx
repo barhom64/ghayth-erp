@@ -259,11 +259,11 @@ function MonthGrid({ year, month, events, onPrev, onNext, onToday }: MonthGridPr
           {ARABIC_MONTHS[month]} {year}
         </CardTitle>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onPrev}>
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onPrev} title="التالي">
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onToday}>اليوم</Button>
-          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onNext}>
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onNext} title="السابق">
             <ChevronLeft className="h-4 w-4" />
           </Button>
         </div>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, asList, useApiMutation } from "@/lib/api";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -245,6 +246,7 @@ export default function PreventivePlansPage() {
         </>
       }
     >
+      <FleetTabsNav />
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">خطة صيانة وقائية جديدة</CardTitle></CardHeader>

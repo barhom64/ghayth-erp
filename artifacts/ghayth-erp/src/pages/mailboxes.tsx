@@ -60,6 +60,17 @@ export default function Mailboxes() {
     { onSuccess: () => { toast({ title: "تم فصل الصندوق" }); } }
   );
 
+  // PATCH /mailboxes/:id — flips active / display name / per-mailbox
+  // settings without re-running OAuth. Drives the "إعدادات" inline action.
+  const patchMut = useApiMutation<unknown, { _id: number; syncEnabled?: boolean; displayName?: string }>(
+    (body) => `/mailboxes/${body._id}`,
+    "PATCH",
+    [["mailboxes"]],
+    {
+      successMessage: "تم تحديث إعدادات الصندوق",
+    },
+  );
+
   const syncMut = useApiMutation<{ data: { status: string; messagesFetched: number; error?: string } }, { _id: number }>(
     (body) => `/mailboxes/${body._id}/sync`,
     "POST",
@@ -94,6 +105,10 @@ export default function Mailboxes() {
   return (
     <PageShell
       title="الصناديق المتصلة"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "الصناديق المتصلة" },
+      ]}
       subtitle="مزامنة الإيميل من Microsoft 365 أو Hostinger أو IMAP عام"
       actions={
         <Button onClick={() => setOpenConnect(true)} className="gap-2">
@@ -165,6 +180,16 @@ export default function Mailboxes() {
                   <Button size="sm" variant="outline" className="gap-1" onClick={() => syncMut.mutate({ _id: m.id })}>
                     <RefreshCw className="w-3 h-3" />
                     مزامنة الآن
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1"
+                    onClick={() => patchMut.mutate({ _id: m.id, syncEnabled: !m.syncEnabled })}
+                    disabled={patchMut.isPending}
+                    rateLimitAware
+                  >
+                    {m.syncEnabled ? "إيقاف المزامنة" : "تفعيل المزامنة"}
                   </Button>
                   <Button
                     size="sm"

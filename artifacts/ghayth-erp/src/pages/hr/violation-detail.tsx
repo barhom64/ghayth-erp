@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { SEVERITY_LEVELS, INCIDENT_LABELS } from "@/lib/hr-type-maps";
 import { PrintButton } from "@/components/shared/print-button";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 
 const VIOLATION_LIFECYCLE = [
   { key: "draft",               label: "مسودة" },
@@ -255,6 +256,17 @@ export default function ViolationDetail() {
       actions={
         <div className="flex items-center gap-2">
           <Badge className={cn("text-sm px-3 py-1", severity.color)}>{severity.label}</Badge>
+          {item?.employeeId && (
+            <ImpactPreviewButton
+              endpoint="/hr/impact-preview/violation"
+              payload={{
+                employeeId: item.employeeId,
+                deduction: Number(item.deduction ?? 0),
+                severity: item.severity ?? "minor",
+              }}
+              label="معاينة أثر الخصم"
+            />
+          )}
           <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} label="طباعة" />
           <DetailActionButtons hook={editDelete} editPerm="hr:approve" deletePerm="hr:delete" />
         </div>

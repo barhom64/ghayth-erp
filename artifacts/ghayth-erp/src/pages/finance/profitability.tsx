@@ -12,6 +12,7 @@ import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, todayLocal, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import { Download, ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 type ProfitabilityType = "vehicle" | "property" | "project" | "umrah-agent";
 
 interface AccountRow {
@@ -222,6 +223,7 @@ export default function ProfitabilityPage({ entityType }: Props) {
         </div>
       }
     >
+      <FinanceTabsNav />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         <div className="md:col-span-3 flex items-end gap-2 flex-wrap">
           <div>

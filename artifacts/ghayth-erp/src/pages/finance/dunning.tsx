@@ -13,6 +13,7 @@ import { formatCurrency, formatNumber, formatDateAr } from "@/lib/formatters";
 import { Send, Mail, MessageSquare, Clock, AlertTriangle, Gavel } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 interface OverdueInvoice {
   invoiceId: number;
   invoiceNumber: string;
@@ -232,6 +233,7 @@ export default function DunningPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <div className="flex items-end gap-3 mb-4">
         <div>
           <label className="text-xs text-muted-foreground mb-1 block">الحد الأدنى لأيام التأخر</label>

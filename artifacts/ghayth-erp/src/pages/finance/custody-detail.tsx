@@ -1,4 +1,10 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { useRoute } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,19 +96,26 @@ export default function CustodyDetailPage() {
     { successMessage: "تمت التسوية", onSuccess: () => refetch() },
   );
 
+  // Settlement amount dialog state — replaces window.prompt so the form
+  // is styled and the input has proper numeric validation + RTL labels.
+  const [settleOpen, setSettleOpen] = useState(false);
+  const [settleAmount, setSettleAmount] = useState("");
+  const remaining = Number(data?.remainingAmount || (Number(data?.amount || 0) - Number(data?.settledAmount || 0)));
   const handleSettleRemaining = () => {
-    const remaining = Number(data?.remainingAmount || (Number(data?.amount || 0) - Number(data?.settledAmount || 0)));
     if (remaining <= 0) {
       toast({ title: "لا يوجد رصيد متبقٍ للتسوية" });
       return;
     }
-    const amountStr = window.prompt(`مبلغ التسوية (المتبقي: ${remaining})`, String(remaining));
-    if (amountStr === null) return;
-    const amount = Number(amountStr);
+    setSettleAmount(String(remaining));
+    setSettleOpen(true);
+  };
+  const confirmSettle = () => {
+    const amount = Number(settleAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
       toast({ variant: "destructive", title: "مبلغ غير صالح" });
       return;
     }
+    setSettleOpen(false);
     settleMut.mutate({ amount });
   };
 
@@ -366,7 +379,34 @@ export default function CustodyDetailPage() {
       isLoading={isLoading}
       error={isError ? true : undefined}
       onRetry={() => refetch()}
-      overview={overview}
+      overview={
+        <>
+          {overview}
+          <Dialog open={settleOpen} onOpenChange={setSettleOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>تسوية العهدة</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <p className="text-xs text-muted-foreground">المتبقي: <span className="font-mono">{formatCurrency(remaining)}</span></p>
+                <div className="space-y-1">
+                  <Label className="text-xs">مبلغ التسوية</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={settleAmount}
+                    onChange={(e) => setSettleAmount(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSettleOpen(false)}>إلغاء</Button>
+                <Button onClick={confirmSettle} disabled={settleMut.isPending} rateLimitAware>تأكيد التسوية</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      }
       extraTabs={registryExtraTabs}
       hideTabs={registryHideTabs}
     />

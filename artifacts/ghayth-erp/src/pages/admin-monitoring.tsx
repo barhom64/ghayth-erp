@@ -18,6 +18,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
@@ -56,18 +60,29 @@ function SystemStopsCard() {
   const [newReason, setNewReason] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
+  // Confirmation state replaces window.confirm for create + deactivate flows.
+  // `confirmCreate` true ⇒ show the "activate system stop" confirm dialog;
+  // `confirmDeactivateId` non-null ⇒ show the "deactivate" confirm dialog
+  // for that specific stop row.
+  const [confirmCreate, setConfirmCreate] = useState(false);
+  const [confirmDeactivateId, setConfirmDeactivateId] = useState<number | null>(null);
 
   const refreshAll = () => {
     refetch();
     qc.invalidateQueries({ queryKey: ["system-health"] });
   };
 
-  const createStop = async () => {
+  // Validates the form fields and opens the confirm dialog. Actual POST
+  // happens in confirmedCreateStop after the operator confirms.
+  const requestCreateStop = () => {
     if (!newReason.trim()) {
       toast({ variant: "destructive", title: "سبب الإيقاف مطلوب" });
       return;
     }
-    if (!window.confirm(`سيتم تفعيل إيقاف النظام للنطاق "${newScope}". متابعة؟`)) return;
+    setConfirmCreate(true);
+  };
+  const confirmedCreateStop = async () => {
+    setConfirmCreate(false);
     setBusy(true);
     try {
       await apiFetch("/admin/system-stops", {
@@ -85,8 +100,10 @@ function SystemStopsCard() {
     }
   };
 
-  const deactivateStop = async (id: number) => {
-    if (!window.confirm("تأكيد إلغاء تفعيل الإيقاف؟")) return;
+  const confirmedDeactivateStop = async () => {
+    const id = confirmDeactivateId;
+    if (!id) return;
+    setConfirmDeactivateId(null);
     setDeactivatingId(id);
     try {
       await apiFetch(`/admin/system-stops/${id}/deactivate`, { method: "PATCH" });
@@ -149,7 +166,7 @@ function SystemStopsCard() {
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2 text-xs"
-                    onClick={() => deactivateStop(r.id)}
+                    onClick={() => setConfirmDeactivateId(r.id)}
                     disabled={deactivatingId === r.id}
                     title="إلغاء التفعيل"
                   >
@@ -204,7 +221,7 @@ function SystemStopsCard() {
             <Button
               variant="destructive"
               disabled={busy || !newReason.trim()}
-              onClick={createStop}
+              onClick={requestCreateStop}
               rateLimitAware
             >
               تفعيل الإيقاف
@@ -212,6 +229,38 @@ function SystemStopsCard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Replaces window.confirm() for the activate stop flow */}
+      <AlertDialog open={confirmCreate} onOpenChange={(o) => !o && setConfirmCreate(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد تفعيل الإيقاف</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم تفعيل إيقاف النظام للنطاق &quot;{newScope}&quot;. متابعة؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmedCreateStop}>تأكيد التفعيل</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Replaces window.confirm() for the deactivate flow */}
+      <AlertDialog open={confirmDeactivateId !== null} onOpenChange={(o) => !o && setConfirmDeactivateId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد إلغاء التفعيل</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم إلغاء تفعيل إيقاف النظام. متابعة؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmedDeactivateStop}>تأكيد الإلغاء</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -253,6 +302,11 @@ interface DependencyNode {
 
 export default function AdminMonitoring() {
   const { data: health, isLoading, error, refetch } = useApiQuery<any>(["system-health"], "/admin/system-health");
+  // Lightweight rolled-up widget — GET /admin/api-health returns
+  // uptime + per-service ok/degraded summary. Surfaced as a small badge
+  // strip at the top of the page; fast to load and good as a "is the API
+  // up at all?" quick check.
+  const apiHealthQ = useApiQuery<any>(["admin-api-health"], "/admin/api-health");
   // Lower-level operational endpoints under /health/* — schema integrity,
   // raw Prometheus counters, environment-config dump, system tuning.
   // Rendered as a tabbed "snapshot" panel for SRE-level debugging.
@@ -343,6 +397,10 @@ export default function AdminMonitoring() {
   return (
     <PageShell
       title="مركز المراقبة"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مركز المراقبة" },
+      ]}
       subtitle="مراقبة صحة النظام والخدمات"
       loading={isLoading}
       actions={
@@ -353,6 +411,23 @@ export default function AdminMonitoring() {
     >
       <PageStateWrapper isLoading={isLoading && !health} error={error} onRetry={refetch}>
       <div className="space-y-6">
+
+      {/* الرولد-أب API health (نقطة بسيطة "هل الـ API يعمل؟") */}
+      {apiHealthQ.data && (
+        <div className="flex items-center gap-2 text-xs border rounded p-2 bg-muted/30">
+          <Badge variant={apiHealthQ.data.status === "ok" ? "default" : "destructive"} className="text-[10px]">
+            {apiHealthQ.data.status}
+          </Badge>
+          <span className="text-muted-foreground">
+            uptime: <span className="font-mono">{Math.round(Number(apiHealthQ.data.uptime ?? 0))}s</span>
+          </span>
+          {apiHealthQ.data.services && Object.entries(apiHealthQ.data.services).map(([k, v]) => (
+            <span key={k} className="text-muted-foreground">
+              {k}: <span className={String(v) === "ok" ? "text-status-success-foreground font-medium" : "text-status-error-foreground"}>{String(v)}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Low-level health probes — these are SRE-facing snapshots. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">

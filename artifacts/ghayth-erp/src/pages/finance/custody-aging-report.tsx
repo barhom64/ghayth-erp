@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, AlertTriangle, DollarSign, Users, KeyRound, ChevronDown, ChevronRight } from "lucide-react";
 import { formatCurrency, formatNumber , formatDateAr } from "@/lib/formatters";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   PageShell,
   DataTable,
@@ -36,6 +37,7 @@ export default function CustodyAgingReportPage() {
         </Link>
       }
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-orange-100 rounded-lg"><DollarSign className="h-5 w-5 text-orange-600" /></div>
