@@ -70,14 +70,15 @@ describe("Phase 3c — group lineItem consumes the resolved services mapping", (
     expect(ENGINE).toMatch(/const servicesAccountCode = productMap\?\.servicesAccountCode \?\? null/);
   });
 
-  it("group lineItem maps 'zero' / 'exempt' tax codes to vatRate=0", () => {
+  it("'zero' / 'exempt' tax codes resolve to vatRate=0 via the taxCodeToVat helper", () => {
     // The contract the user described:
     //   تأشيرة 422 — بدون ضريبة (zero-rated)
-    // The services product is typically standard 15% but operators
-    // CAN configure it as zero/exempt for special cases. Pin the
-    // exact mapping so a future enum addition doesn't silently
-    // default to standard for new codes.
-    expect(ENGINE).toMatch(/productMap\?\.servicesTaxCode === "zero" \|\| productMap\?\.servicesTaxCode === "exempt"\s*\?\s*0\s*:\s*undefined/);
+    // Phase 3d (PR #1474) hoisted the inline ternary into a shared
+    // `taxCodeToVat` helper used by all 3 sub-lines (visa /
+    // transport / services) + the bundled fallback. Pin the helper's
+    // shape so future enum additions can't silently default to
+    // standard for new codes.
+    expect(ENGINE).toMatch(/const taxCodeToVat = \(code: string \| null \| undefined\): number \| undefined =>\s*\(code === "zero" \|\| code === "exempt" \? 0 : undefined\)/);
   });
 
   it("group lineItem.push includes the per-line fields from the resolver", () => {
@@ -97,17 +98,14 @@ describe("Phase 3c — group lineItem consumes the resolved services mapping", (
 });
 
 describe("Phase 3c — Phase 3d foundation", () => {
-  it("visa + transport mappings are RESOLVED but not yet CONSUMED on the group line", () => {
-    // Pin the resolver's read so Phase 3d can pick them up. The
-    // group lineItem deliberately doesn't reference them yet —
-    // they need the per-NUSK split to be useful.
+  it("visa + transport mappings are RESOLVED for Phase 3d's per-NUSK split", () => {
+    // Phase 3c originally pinned that visa+transport were NOT yet
+    // consumed; Phase 3d (PR #1474) now USES them in the split
+    // branch. Pin only that the resolver still surfaces the
+    // fields — the consumption assertions live in
+    // umrahInvoiceSplitSmoke.
     expect(ENGINE).toMatch(/productMap\?\.servicesProductId/);
-    // The visa + transport references should NOT appear inside the
-    // group lineItem push block — Phase 3d will add them when the
-    // engine splits each group into 3 sub-lines.
-    const groupPush = ENGINE.match(/lineItems\.push\(\{\s*itemType: "group"[\s\S]{1,1000}\}\);/);
-    expect(groupPush).not.toBeNull();
-    expect(groupPush![0]).not.toMatch(/visaProductId/);
-    expect(groupPush![0]).not.toMatch(/transportProductId/);
+    expect(ENGINE).toMatch(/productMap!\.visaProductId/);
+    expect(ENGINE).toMatch(/productMap!\.transportProductId/);
   });
 });
