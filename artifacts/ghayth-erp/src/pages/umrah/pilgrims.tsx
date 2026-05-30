@@ -18,8 +18,24 @@ import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { BulkCheckbox } from "@/components/shared/bulk-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+
+// PILGRIM_STATUSES is mirrored from the backend enum in routes/umrah.ts;
+// the bulk-status dropdown should match the same option set so an
+// operator picking a state can never send something the backend
+// rejects.
+const PILGRIM_STATUS_OPTIONS = [
+  { value: "pending", label: "لم يصل" },
+  { value: "arrived", label: "وصل" },
+  { value: "active", label: "نشط" },
+  { value: "overstayed", label: "متأخر" },
+  { value: "departed", label: "غادر" },
+  { value: "violated", label: "مخالف" },
+  { value: "cancelled", label: "ملغي" },
+];
 
 export default function UmrahPilgrims() {
+  const { toast } = useToast();
   const [, navigate] = useLocation();
   // useFilters tracks search/status; extraFilters (season/group) ride
   // along on the same values dict via dynamic keys.
@@ -74,6 +90,38 @@ export default function UmrahPilgrims() {
       },
     },
   );
+
+  // Bulk status — the flight-landing flow. Operator selects every
+  // pilgrim on the arriving flight, picks "وصل" once. Backend
+  // validates each row's current status against the transition map,
+  // so an already-departed row in the selection is skipped (not
+  // silently regressed). Toast shows updated + skipped counts.
+  const [bulkStatus, setBulkStatus] = useState<string>("");
+  const bulkStatusMut = useApiMutation<
+    { updated: number; skipped: number; toStatus: string },
+    { pilgrimIds: number[]; status: string }
+  >(
+    "/umrah/pilgrims/status-bulk",
+    "POST",
+    [["umrah-pilgrims"]],
+    {
+      onSuccess: (r) => {
+        toast({
+          title: "تم تحديث الحالة دفعةً",
+          description: r.skipped > 0
+            ? `تم تحديث ${r.updated} | تخطّي ${r.skipped} (انتقال غير مسموح من حالتهم الحالية)`
+            : `تم تحديث ${r.updated} معتمر`,
+        });
+        setSelectedIds(new Set());
+        setBulkStatus("");
+        refetch();
+      },
+    },
+  );
+  const submitBulkStatus = () => {
+    if (!bulkStatus || selectedIds.size === 0) return;
+    bulkStatusMut.mutate({ pilgrimIds: Array.from(selectedIds), status: bulkStatus });
+  };
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -253,6 +301,32 @@ export default function UmrahPilgrims() {
             >
               <UserPlus className="h-3.5 w-3.5" />
               {bulkAssignMut.isPending ? "جاري الإسناد..." : "إسناد دفعة"}
+            </GuardedButton>
+            {/* Bulk status flip — picks the target state once, server-side
+                transition map silently skips rows whose current state
+                doesn't allow it (toast surfaces the skip count). */}
+            <span className="mx-1 text-muted-foreground text-xs">|</span>
+            <Select value={bulkStatus} onValueChange={setBulkStatus}>
+              <SelectTrigger className="w-44 h-8 text-xs" data-testid="bulk-status-select">
+                <SelectValue placeholder="تغيير الحالة دفعةً" />
+              </SelectTrigger>
+              <SelectContent>
+                {PILGRIM_STATUS_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <GuardedButton
+              perm="umrah:update"
+              size="sm"
+              disabled={!bulkStatus || bulkStatusMut.isPending}
+              onClick={submitBulkStatus}
+              rateLimitAware
+              className="gap-1"
+              data-testid="bulk-status-apply"
+            >
+              <Plane className="h-3.5 w-3.5" />
+              {bulkStatusMut.isPending ? "جاري التحديث..." : "تطبيق الحالة"}
             </GuardedButton>
             <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => setSelectedIds(new Set())}>
               <X className="h-3 w-3" /> إلغاء التحديد
