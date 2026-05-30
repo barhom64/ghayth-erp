@@ -96,11 +96,36 @@ interface BranchContext extends Record<string, unknown> {
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
 
+// N12 fix: taxonomy enforcement on document classification. Previously
+// `category` was a free string, so /documents could end up with rows
+// like "hr", "HR", "Hr", "human resources", "إدارة الموارد البشرية" all
+// nominally meaning the same thing — making any "documents grouped by
+// category" report or search filter useless.
+//
+// The enum below is the canonical list. Existing rows with non-enum
+// values are untouched (old DB writes were not validated); the
+// validator below catches new writes only. To rename a category later,
+// migrate the data first, then add an `.transform()` here.
+export const DOCUMENT_CATEGORIES = [
+  "hr",
+  "finance",
+  "legal",
+  "contracts",
+  "compliance",
+  "operations",
+  "fleet",
+  "properties",
+  "umrah",
+  "marketing",
+  "general",
+] as const;
+const documentCategorySchema = z.enum(DOCUMENT_CATEGORIES).optional();
+
 const createDocumentSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   type: z.string().optional(),
-  category: z.string().optional(),
+  category: documentCategorySchema,
   status: z.enum(["draft", "active", "archived"]).optional().default("draft"),
   department: z.string().optional(),
   folder: z.string().optional(),
@@ -117,7 +142,7 @@ const uploadDocumentSchema = z.object({
   fileName: z.string().min(1),
   fileSize: z.coerce.number().optional(),
   mimeType: z.string().optional(),
-  category: z.string().optional(),
+  category: documentCategorySchema,
   storageKey: z.string().min(1),
   entityLinks: z.array(entityLinkItem).optional(),
 });
