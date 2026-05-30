@@ -147,6 +147,12 @@ export default function PilgrimDetail() {
     { label: "تاريخ المغادرة المخطط", value: data?.departureDate ? formatDateAr(data.departureDate) : "-" },
     { label: "الوصول الفعلي", value: data?.actualArrival ? formatDateAr(data.actualArrival) : "-" },
     { label: "المغادرة الفعلية", value: data?.actualDeparture ? formatDateAr(data.actualDeparture) : "-" },
+    // Flight numbers — pair with the pilgrims-list flight filter
+    // (?flight=) and bulk-status flip for the canonical flight-day
+    // workflow: search "PIA-310" → select all → mark arrived in one
+    // click. Pre-PR the columns existed in DB but were invisible.
+    { label: "رحلة الوصول", value: data?.entryFlight },
+    { label: "رحلة المغادرة", value: data?.exitFlight },
     { label: "الفندق", value: data?.hotelName },
     { label: "رقم الغرفة", value: data?.roomNumber },
   ];
