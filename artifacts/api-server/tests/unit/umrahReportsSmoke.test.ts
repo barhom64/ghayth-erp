@@ -70,19 +70,29 @@ describe("umrah-entities — attachments (PR #312)", () => {
     expect(section).toMatch(/"deletedAt"\s+IS\s+NULL/i);
   });
 
-  it("DELETE is soft (deletedAt = NOW(), no hard DELETE)", () => {
+  // DOC-VIOLATION unification (migration 237): attachments now live in the
+  // shared `documents` store. DELETE is still a soft delete, but on `documents`
+  // (scoped to umrah-linked rows), not the legacy umrah_attachments table.
+  it("DELETE is soft (deletedAt = NOW() on documents, no hard DELETE)", () => {
     const idx = UMRAH_ENTITIES.indexOf('.delete("/attachments/:id"');
     const section = UMRAH_ENTITIES.slice(idx, idx + 1200);
-    expect(section).toMatch(/UPDATE\s+umrah_attachments[\s\S]*?"deletedAt"\s*=\s*NOW\(\)/);
-    // Negative: no `DELETE FROM umrah_attachments` inside this handler.
-    expect(section).not.toMatch(/DELETE\s+FROM\s+umrah_attachments/i);
+    expect(section).toMatch(/UPDATE\s+documents\s+SET\s+"deletedAt"\s*=\s*NOW\(\)/);
+    // Only umrah-linked documents are deletable through this handler.
+    expect(section).toMatch(/del\."entityType"\s+LIKE\s+'umrah/i);
+    // Negative: no hard DELETE of any kind inside this handler.
+    expect(section).not.toMatch(/DELETE\s+FROM\s+(umrah_attachments|documents)/i);
   });
 
-  it("LIST scopes by companyId AND deletedAt IS NULL", () => {
+  // LIST reads from documents joined to document_entity_links, still scoped by
+  // companyId + soft delete, filtered to umrah-namespaced owners.
+  it("LIST scopes by companyId AND deletedAt IS NULL (documents store)", () => {
     const idx = UMRAH_ENTITIES.indexOf('.get("/attachments"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 1500);
+    const section = UMRAH_ENTITIES.slice(idx, idx + 1800);
+    expect(section).toMatch(/FROM\s+documents\b/);
+    expect(section).toMatch(/document_entity_links/);
     expect(section).toMatch(/"companyId"\s*=\s*\$1/);
     expect(section).toMatch(/"deletedAt"\s+IS\s+NULL/i);
+    expect(section).toMatch(/del\."entityType"\s+LIKE\s+'umrah/i);
   });
 
   it("emits audit + event on create and audit on delete", () => {
