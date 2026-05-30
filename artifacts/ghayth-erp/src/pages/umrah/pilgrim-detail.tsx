@@ -98,9 +98,19 @@ export default function PilgrimDetail() {
   };
 
   const personalFields = [
+    // NUSK is the primary operator-facing identifier — NUSK + MOFA both
+    // print it on every official document. Goes FIRST so it's the eye's
+    // landing point when the page opens.
+    { label: "رقم نسك", value: data?.nuskNumber },
     { label: "الاسم الكامل", value: data?.fullName },
     { label: "رقم الجواز", value: data?.passportNumber },
     { label: "رقم التأشيرة", value: data?.visaNumber },
+    // visaExpiry / mofaNumber / borderNumber surfaced because operators
+    // routinely field calls asking these exact values — pre-PR they had
+    // to drop the call and re-open the source Excel file to answer.
+    { label: "صلاحية التأشيرة", value: data?.visaExpiry ? formatDateAr(data.visaExpiry) : "-" },
+    { label: "رقم الموفا", value: data?.mofaNumber },
+    { label: "رقم الحدود", value: data?.borderNumber },
     { label: "الجنسية", value: data?.nationality },
     { label: "الجنس", value: data?.gender === "male" ? "ذكر" : data?.gender === "female" ? "أنثى" : "-" },
     { label: "الهاتف", value: data?.phone },
@@ -108,7 +118,12 @@ export default function PilgrimDetail() {
 
   const tripFields = [
     { label: "الموسم", value: data?.seasonTitle },
-    { label: "الوكيل", value: data?.agentName },
+    // Group + sub-agent complete the 3-tier organisational chain so the
+    // operator sees who's responsible for the pilgrim end-to-end:
+    //   pilgrim → sub-agent → primary agent → company group.
+    { label: "المجموعة", value: data?.groupName },
+    { label: "الوكيل الرئيسي", value: data?.agentName },
+    { label: "الوكيل الفرعي", value: data?.subAgentName },
     { label: "الباقة", value: data?.packageName },
     { label: "تاريخ الوصول المخطط", value: data?.arrivalDate ? formatDateAr(data.arrivalDate) : "-" },
     { label: "تاريخ المغادرة المخطط", value: data?.departureDate ? formatDateAr(data.departureDate) : "-" },
