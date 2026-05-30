@@ -183,42 +183,128 @@ export function authorize(opts: AuthorizeOptions) {
  * the SysAdmin "settings" feature AND the HR Director "hr.organization"
  * feature — both should be allowed to maintain the org structure).
  *
- * Semantics: the first matching feature populates `req.access` (so the
- * downstream handler still has field-policy + scope checks). On no
- * match, the LAST 403 from the last attempted spec is returned.
+ * Semantics:
+ *   - The first matching spec populates `req.access` (downstream handler
+ *     still has field-policy + scope checks).
+ *   - On no match, exactly ONE security_log denial is written (for the
+ *     last spec attempted). We deliberately do NOT write per-spec
+ *     denials — that would fire false "permission denied" SIEM alerts
+ *     every time a user with role B hits an endpoint open to roles A+B.
+ *   - On no match, the response is a 403 with the last spec's diagnostic.
  *
- * NOTE: this composes individual authorize() middlewares — each one
- * runs through the same checkAccess + scope + amount-limit pipeline.
- * There's no shortcut path that bypasses scope checks.
+ * Implementation note: composes `checkAccess` directly, not `authorize()`.
+ * Wrapping middlewares with a fake `res` would write a security_log
+ * denial for every miss and double-count amount-limit enforcement.
  */
 export function authorizeAny(...specs: AuthorizeOptions[]) {
   if (specs.length === 0) {
     throw new Error("authorizeAny requires at least one spec");
   }
-  const handlers = specs.map((s) => authorize(s));
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    let lastStatus = 403;
-    let lastError: unknown = null;
-    for (const handler of handlers) {
-      // Capture the response shape but don't send it — we want to know
-      // if this spec passed or failed without committing the response.
-      let passed = false;
-      const fakeRes = {
-        status: (code: number) => {
-          lastStatus = code;
-          return { json: (body: unknown) => { lastError = body; }, end: () => undefined };
-        },
-        json: (body: unknown) => { lastError = body; },
-      } as unknown as Response;
-      await new Promise<void>((resolve) => {
-        handler(req, fakeRes, () => { passed = true; resolve(); }).then(() => resolve()).catch(() => resolve());
-      });
-      if (passed) {
+    const scope = req.scope;
+    if (!scope) {
+      res.status(401).json({ error: "غير مصرح", code: "AUTH_MISSING", fix: "يرجى تسجيل الدخول" });
+      return;
+    }
+
+    const ipAddress =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      null;
+
+    let lastDeniedSpec: AuthorizeOptions | null = null;
+    let lastDeniedResult: { code?: string; reasonAr?: string; diagnostics?: unknown } | null = null;
+
+    for (const opts of specs) {
+      const accessSpec: AccessSpec = {
+        feature: opts.feature,
+        action: opts.action,
+        ipAddress,
+      };
+
+      // Resource lookup — short-circuits to 404 on cross-tenant access
+      // (same guard authorize() applies). The 404 is a deliberate leak
+      // boundary and is identical across all specs, so apply it ONCE
+      // on the FIRST spec with a resource clause. Subsequent specs
+      // reuse the same record.
+      if (opts.resource?.table && opts.resource.idParam) {
+        const recordId = Number(req.params[opts.resource.idParam]);
+        if (recordId && !isNaN(recordId)) {
+          const cols = opts.resource.columns?.join(", ") || `"companyId", "branchId", "departmentId", "createdBy", "employeeId", "managerId", "assigneeId"`;
+          const safeTable = opts.resource.table.replace(/[^a-zA-Z0-9_]/g, "");
+          const [record] = await rawQuery<ResourceRecord>(
+            `SELECT ${cols} FROM "${safeTable}" WHERE id = $1 LIMIT 1`,
+            [recordId]
+          ).catch(() => [] as ResourceRecord[]);
+          if (record) {
+            const recCompany = (record as { companyId?: number | null }).companyId;
+            if (recCompany != null && recCompany !== scope.companyId) {
+              res.status(404).json({ error: "السجل غير موجود", code: "NOT_FOUND" });
+              return;
+            }
+            accessSpec.resource = { record };
+          }
+        }
+      }
+
+      if (opts.amount) {
+        let src: any;
+        if (opts.amount.from === "resource") src = accessSpec.resource?.record;
+        else if (opts.amount.from === "body") src = req.body;
+        else if (opts.amount.from === "params") src = req.params;
+        else src = req.query;
+        const value = Number(src?.[opts.amount.field]);
+        if (!isNaN(value)) accessSpec.amount = { value, currency: opts.amount.currency || "SAR" };
+      }
+
+      const result = await checkAccess(scope, accessSpec);
+      if (result.allowed) {
+        req.access = result;
         next();
         return;
       }
+      lastDeniedSpec = opts;
+      lastDeniedResult = result;
     }
-    res.status(lastStatus).json(lastError ?? { error: "غير مصرح" });
+
+    // All specs denied — write ONE audit row + return 403 with the last
+    // spec's diagnostic. Forwarding to SIEM also happens once.
+    const opts = lastDeniedSpec!;
+    const result = lastDeniedResult!;
+    void rawExecute(
+      `INSERT INTO security_log ("userId","companyId",role,path,method,"requiredPerms",reason,ip,"createdAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
+      [
+        scope.userId, scope.companyId, scope.role,
+        req.path, req.method,
+        JSON.stringify(specs.map((s) => `${s.feature}:${s.action}`)),
+        result.code || "denied",
+        ipAddress,
+      ]
+    ).catch(() => undefined);
+    forwardDenial({
+      userId: scope.userId,
+      companyId: scope.companyId,
+      role: scope.role,
+      path: req.path,
+      method: req.method,
+      feature: opts.feature,
+      action: opts.action,
+      reason: result.code || "denied",
+      ip: ipAddress,
+      meta: { diagnostics: result.diagnostics, triedSpecs: specs.length },
+    });
+    res.status(403).json({
+      error: result.reasonAr || "لا تملك الصلاحية اللازمة",
+      code: result.code || "FORBIDDEN",
+      fix: result.diagnostics && (result.diagnostics as { requiredFix?: string }).requiredFix || "اطلب من المسؤول منحك هذه الصلاحية",
+      meta: {
+        feature: opts.feature,
+        action: opts.action,
+        triedFeatures: specs.map((s) => s.feature),
+        diagnostics: result.diagnostics,
+      },
+    });
   };
 }
 
