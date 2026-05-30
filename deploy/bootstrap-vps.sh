@@ -129,6 +129,42 @@ sudo -u "${APP_USER}" API_PORT="${API_PORT}" WEB_ROOT="${WEB_ROOT}" bash "${APP_
 sudo -u "${APP_USER}" pm2 save
 env PATH="$PATH:/usr/bin" pm2 startup systemd -u "${APP_USER}" --hp "${APP_HOME}" | tail -1 | bash || true
 
+# --- 8. Auto-deploy timer (poll main → deploy on change) -------------------
+# The repo is public, so the server can pull main with no credentials. Install
+# a systemd timer that runs auto-deploy.sh every 2 min: it deploys ONLY when
+# main has new commits. Result: every merge to main goes live within minutes,
+# with no inbound connection and no secrets stored anywhere. Disable with
+# AUTO_DEPLOY=0 before running this script.
+if [[ "${AUTO_DEPLOY:-1}" == "1" ]]; then
+  log "Installing auto-deploy timer (polls main every 2 min)…"
+  cat > /etc/systemd/system/ghayth-autodeploy.service <<UNIT
+[Unit]
+Description=Ghayth ERP auto-deploy (pull main and deploy on change)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=${APP_USER}
+WorkingDirectory=${APP_DIR}
+ExecStart=/usr/bin/env bash ${APP_DIR}/deploy/auto-deploy.sh
+UNIT
+  cat > /etc/systemd/system/ghayth-autodeploy.timer <<UNIT
+[Unit]
+Description=Run Ghayth ERP auto-deploy every 2 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Unit=ghayth-autodeploy.service
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now ghayth-autodeploy.timer
+fi
+
 cat <<DONE
 
 ============================================================================
@@ -146,6 +182,9 @@ cat <<DONE
    4. Open the firewall:
         ufw allow 'Nginx Full' && ufw allow OpenSSH && ufw --force enable
 
- To update later (after pushing to main): deploy/deploy.sh
+ AUTO-DEPLOY is ON: after step 2, every merge to main deploys itself within
+ ~2 min. Watch it with:  tail -f ${APP_DIR}/auto-deploy.log
+ Timer status:           systemctl status ghayth-autodeploy.timer
+ To update manually any time:  deploy/deploy.sh
 ============================================================================
 DONE
