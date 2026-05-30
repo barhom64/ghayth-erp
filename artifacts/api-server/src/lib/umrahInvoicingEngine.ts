@@ -112,6 +112,64 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     throw new ConflictError(`بعض المجموعات مفوترة مسبقاً في: ${refs}`);
   }
 
+  // Phase 3c — resolve the service-products mapping the operator
+  // configured at /umrah/settings (migration 241 + PR #1469/1470).
+  // For this PR we surface ALL 3 (visa / services / transport) so
+  // Phase 3d's NUSK-driven split can populate them; the IMMEDIATE
+  // effect today is just that every 'group' line gets routed to
+  // the SERVICES product + its account when configured. When the
+  // operator hasn't configured services (or any mapping is unset),
+  // the line's accountCode falls back to null and Phase 2's
+  // bucketing routes it to the default umrah_invoice_revenue —
+  // current behaviour unchanged.
+  //
+  // One JOIN-heavy query rather than 6 round-trips. Each LEFT JOIN
+  // gates on `companyId = c.id` so a stale FK can't lift another
+  // tenant's product into the mapping (defence in depth, matches
+  // the pattern PR #1425 introduced).
+  const [productMap] = await rawQuery<{
+    visaProductId: number | null;
+    visaTaxCode: string | null;
+    visaAccountCode: string | null;
+    servicesProductId: number | null;
+    servicesTaxCode: string | null;
+    servicesAccountCode: string | null;
+    transportProductId: number | null;
+    transportTaxCode: string | null;
+    transportAccountCode: string | null;
+  }>(
+    `SELECT c."umrahVisaProductId"      AS "visaProductId",
+            pv."defaultTaxCode"          AS "visaTaxCode",
+            av.code                      AS "visaAccountCode",
+            c."umrahServicesProductId"   AS "servicesProductId",
+            ps."defaultTaxCode"          AS "servicesTaxCode",
+            asv.code                     AS "servicesAccountCode",
+            c."umrahTransportProductId"  AS "transportProductId",
+            pt."defaultTaxCode"          AS "transportTaxCode",
+            at.code                      AS "transportAccountCode"
+       FROM companies c
+       LEFT JOIN products pv
+              ON pv.id = c."umrahVisaProductId"
+             AND pv."companyId" = c.id
+       LEFT JOIN chart_of_accounts av
+              ON av.id = pv."defaultRevenueAccountId"
+             AND av."companyId" = c.id
+       LEFT JOIN products ps
+              ON ps.id = c."umrahServicesProductId"
+             AND ps."companyId" = c.id
+       LEFT JOIN chart_of_accounts asv
+              ON asv.id = ps."defaultRevenueAccountId"
+             AND asv."companyId" = c.id
+       LEFT JOIN products pt
+              ON pt.id = c."umrahTransportProductId"
+             AND pt."companyId" = c.id
+       LEFT JOIN chart_of_accounts at
+              ON at.id = pt."defaultRevenueAccountId"
+             AND at."companyId" = c.id
+      WHERE c.id = $1`,
+    [scope.companyId],
+  );
+
   const lineItems: InvoiceLineItem[] = [];
   let subtotal = 0;
   let totalPilgrims = 0;
@@ -153,6 +211,22 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     totalPilgrims += mutamerCount;
     groupRefs.push(grp.nuskGroupNumber as string);
 
+    // Phase 3c — when the operator configured a services product at
+    // /umrah/settings, each 'group' line gets routed to its account +
+    // taxCode. Visa + transport mappings are NOT consumed yet — those
+    // require Phase 3d's per-NUSK split. Pulling the productId etc.
+    // from the resolved map (productMap) keeps the lookup cost at
+    // one query for the whole invoice instead of one per group.
+    const servicesProductId = productMap?.servicesProductId ?? null;
+    const servicesAccountCode = productMap?.servicesAccountCode ?? null;
+    // defaultTaxCode 'zero' / 'exempt' resolve to 0 VAT on the line;
+    // 'standard' (or anything else, or null) falls back to the
+    // invoice-level vatRate. Pin this in the smoke so a future map
+    // refactor can't silently change the contract.
+    const servicesVatRate =
+      productMap?.servicesTaxCode === "zero" || productMap?.servicesTaxCode === "exempt"
+        ? 0
+        : undefined;
     lineItems.push({
       itemType: "group",
       groupId: grp.id as number,
@@ -161,6 +235,12 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
       quantity: mutamerCount,
       unitPrice: price,
       lineTotal,
+      // Optional fields — fall back to null/undefined when no
+      // services product is configured (the engine then uses the
+      // invoice-header defaults established in PR #1467).
+      productId: servicesProductId,
+      accountCode: servicesAccountCode,
+      vatRate: servicesVatRate,
     });
 
     const nuskInvs = await rawQuery<Record<string, unknown>>(
