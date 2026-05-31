@@ -89,13 +89,15 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الأثر**: مستند سري يمكن وصول إليه من كل من له `documents:list`.
 **الإصلاح**: implement document-level grant table.
 
-### M7. Fuel Double-Counting Risk في الأسطول
-**الموقع**: `fleet.ts:2096` (fuel-log) vs `fleet.ts:1283` (trip-complete)
-**الوصف**: 
-1. السائق يسجل دفعة وقود → `fleet_fuel_logs` + JE fuel expense
-2. عند إقفال الرحلة، الـengine يحسب وقود تقديري من المسافة + كفاءة → JE ثاني لـfuel expense على نفس الرحلة
-**الأثر**: تضخم مصروف الوقود في الـGL.
-**الإصلاح**: ربط `fleet_fuel_logs.tripId` وخصم الـactual من الـtrip-complete estimate.
+### M7. Fuel Double-Counting Risk في الأسطول ✅ FIXED in PR #1490 follow-up
+**الموقع**: migration 243 + `fleet.ts:1338-1365` (trip-complete) + `fleet.ts:2128+` (fuel-log)
+**الإصلاح المنفذ**:
+- migration 243 يضيف `tripId` (nullable integer) إلى `fleet_fuel_logs` + partial index
+- `POST /fleet/fuel-logs` يقبل `tripId` اختياري ويفحص: الرحلة موجودة + المركبة متطابقة
+- `POST /fleet/trips/:id/complete` يحسب `actualFuelFromLogs = SUM(totalCost)` للـfuel logs المرتبطة بالرحلة
+- إذا `actualFuelFromLogs > 0`: trip-complete يستخدمه بدل التقدير، **وأيضاً** يمرر `glFuelCost = 0` للـtrip-completion GL post (لتجنب تكرار سطر fuel expense — fuel-log JE الأصلي يبقى وحده)
+- إذا `actualFuelFromLogs = 0`: السلوك القديم (تقدير من distance/efficiency)
+- **النتيجة**: لا يمكن تكرار قيد وقود لنفس الرحلة عند ربط fuel logs بـtripId.
 
 ### M8. legal_case لا يمكن إرفاق مستندات له
 **الموقع**: `documents.ts:269` — allowed-type whitelist لا يشمل `legal_case`
