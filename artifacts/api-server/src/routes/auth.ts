@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, ForbiddenError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, zodParse } from "../lib/errorHandler.js";
 import { Router, type Response as ExpressResponse } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -228,7 +228,148 @@ const registerLimiter = rateLimit({
 router.post("/register", registerLimiter, async (_req, res) => {
   emitEvent({ companyId: 0, userId: 0, action: "auth.register", entity: "users", entityId: 0 }).catch((e) => logger.error(e, "auth background task failed"));
   createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "users", entityId: 0, after: { blocked: true, reason: "self_registration_not_permitted" } }).catch((e) => logger.error(e, "auth background task failed"));
-  res.status(405).json({ error: "إنشاء الحسابات يتم بواسطة المسؤول فقط — Self-registration is not permitted" });
+  res.status(405).json({
+    error: "إنشاء الحسابات يتم بواسطة المسؤول فقط — Self-registration is not permitted",
+    fix: "إذا كنت تُؤسِّس شركة جديدة لأول مرة، استخدم /api/auth/bootstrap-tenant على نظام جديد",
+  });
+});
+
+// B1 + B3 fix from CRITICAL_DEFECTS_REPORT.md — public setup-state
+// probe. Returns whether ANY company exists. The login page polls this
+// on mount to decide whether to show the "إعداد النظام لأول مرة" link.
+// Unauthenticated by design: the answer is YES (setup needed) or NO
+// (login as usual), and neither leaks anything sensitive. Rate-limited
+// to deter bots that would otherwise probe to figure out if a fresh
+// install exists.
+router.get("/setup-state", registerLimiter, async (_req, res) => {
+  try {
+    const [row] = await rawQuery<{ companyCount: string }>(
+      `SELECT COUNT(*)::text AS "companyCount" FROM companies`,
+      []
+    );
+    const needsSetup = Number(row?.companyCount ?? "0") === 0;
+    res.json({ needsSetup, hasAnyCompany: !needsSetup });
+  } catch (err) {
+    // On error, default to "no setup needed" so a broken DB doesn't
+    // suddenly let anyone bootstrap. Operator sees the real error in
+    // server logs.
+    logger.error(err, "setup-state probe failed");
+    res.json({ needsSetup: false, hasAnyCompany: true });
+  }
+});
+
+const bootstrapTenantSchema = z.object({
+  email: z.string().email("بريد إلكتروني غير صالح"),
+  password: z.string().min(8, "كلمة المرور 8 أحرف على الأقل"),
+  companyName: z.string().min(2, "اسم الشركة مطلوب"),
+  companyNameEn: z.string().optional(),
+  ownerName: z.string().min(2, "اسم المالك مطلوب"),
+  branchName: z.string().optional(),
+});
+
+// B1 + B3 — atomic first-tenant bootstrap. Allows ONLY when the
+// companies table is empty (fresh deploy). After the first call,
+// every subsequent attempt returns 409. Creates: company, primary
+// branch, owner employee + assignment, owner user, owner role grant.
+// Wrapped in a transaction so a partial failure leaves no orphan rows
+// for the second attempt to trip over.
+router.post("/bootstrap-tenant", registerLimiter, async (req, res) => {
+  try {
+    const parsed = zodParse(bootstrapTenantSchema.safeParse(req.body));
+    const { email, password, companyName, companyNameEn, ownerName, branchName } = parsed;
+
+    const [countRow] = await rawQuery<{ companyCount: string }>(
+      `SELECT COUNT(*)::text AS "companyCount" FROM companies`,
+      []
+    );
+    if (Number(countRow?.companyCount ?? "0") > 0) {
+      // After bootstrap, every call returns 409 — the only path to
+      // create more companies is via /settings/companies as an admin.
+      res.status(409).json({
+        error: "النظام مُعَد مسبقاً — استخدم تسجيل الدخول",
+        code: "ALREADY_BOOTSTRAPPED",
+      });
+      return;
+    }
+
+    const hashed = await hashPassword(password);
+
+    let newOwnerUserId = 0;
+    let newCompanyId = 0;
+    await withTransaction(async (client) => {
+      // 1. Company. Trial expiry = 30 days from now.
+      const compRes = await client.query(
+        `INSERT INTO companies (name, "nameEn", status, "subscriptionStatus", "subscriptionPlan", "trialExpiresAt")
+         VALUES ($1, $2, 'active', 'trial', 'trial', NOW() + INTERVAL '30 days')
+         RETURNING id`,
+        [companyName, companyNameEn || null]
+      );
+      newCompanyId = compRes.rows[0].id as number;
+
+      // 2. Primary branch — uses the company name if no branch name given.
+      const branchRes = await client.query(
+        `INSERT INTO branches (name, "companyId") VALUES ($1, $2) RETURNING id`,
+        [branchName || `${companyName} — الرئيسي`, newCompanyId]
+      );
+      const newBranchId = branchRes.rows[0].id as number;
+
+      // 3. Owner employee + assignment so the user row can FK to a
+      //    real employeeId (matches the existing /admin/users contract).
+      const empRes = await client.query(
+        `INSERT INTO employees (name, "companyId", email, status)
+         VALUES ($1, $2, $3, 'active') RETURNING id`,
+        [ownerName, newCompanyId, email]
+      );
+      const newEmployeeId = empRes.rows[0].id as number;
+      await client.query(
+        `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", status, "startDate")
+         VALUES ($1, $2, $3, 'active', CURRENT_DATE)`,
+        [newEmployeeId, newCompanyId, newBranchId]
+      );
+
+      // 4. Owner user. role='owner' is the wildcard grant — every
+      //    feature passes the authorize() gate for this role.
+      const userRes = await client.query(
+        `INSERT INTO users (email, "passwordHash", role, "employeeId", "isActive")
+         VALUES ($1, $2, 'owner', $3, true) RETURNING id`,
+        [email, hashed, newEmployeeId]
+      );
+      newOwnerUserId = userRes.rows[0].id as number;
+
+      // 5. user_roles row makes the owner show up in the RBAC matrix.
+      await client.query(
+        `INSERT INTO user_roles ("userId", "companyId", role)
+         VALUES ($1, $2, 'owner')
+         ON CONFLICT DO NOTHING`,
+        [newOwnerUserId, newCompanyId]
+      );
+    });
+
+    // Bootstrap helpers (CoA seed, leave types, numbering prefixes,
+    // default settings) run on first /settings/companies POST today.
+    // Replicating that wiring here would couple two flows; let the
+    // existing helper run on the FIRST UI-driven settings save. For
+    // now the owner sees a working but empty workspace and can finish
+    // setup from /settings.
+
+    await createAuditLog({
+      companyId: newCompanyId, userId: newOwnerUserId,
+      action: "bootstrap", entity: "companies", entityId: newCompanyId,
+      after: { companyName, ownerName, email },
+    }).catch(() => undefined);
+    await emitEvent({
+      companyId: newCompanyId, userId: newOwnerUserId,
+      action: "tenant.bootstrapped", entity: "companies", entityId: newCompanyId,
+    }).catch(() => undefined);
+
+    res.status(201).json({
+      ok: true,
+      message: "تم إعداد النظام بنجاح. سجّل الدخول بالبريد وكلمة المرور التي أدخلتها.",
+      companyId: newCompanyId,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Bootstrap tenant failed");
+  }
 });
 
 router.post("/login", loginLimiter, async (req, res) => {
