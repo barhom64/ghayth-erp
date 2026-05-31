@@ -4,6 +4,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -11,13 +12,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Download, RefreshCw } from "lucide-react";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
 // Compliance rollup for the per-pilgrim exemption flag (PRs #1482-1484).
@@ -97,6 +108,10 @@ export default function UmrahExemptPilgrims() {
 
   const qc = useQueryClient();
   const [unexemptingId, setUnexemptingId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ ok: number; failed: number } | null>(null);
 
   // Body mirrors the pilgrim-detail toggle path — the server clears
   // the overstayExempt{Reason,By,At} metadata when the flag flips
@@ -117,6 +132,61 @@ export default function UmrahExemptPilgrims() {
     }
   };
 
+  // Bulk un-exempt — sequential PATCH (no batch endpoint exists; the
+  // per-row PATCH path already audits + emits the event each time, so
+  // sequencing keeps the audit log readable in chronological order
+  // and avoids a thundering-herd against the server). The result
+  // tally lets the operator see partial failures explicitly rather
+  // than a single toast.
+  const runBulkUnExempt = async () => {
+    setBulkRunning(true);
+    setBulkResult(null);
+    let ok = 0;
+    let failed = 0;
+    for (const id of Array.from(selectedIds)) {
+      try {
+        await apiFetch(`/umrah/pilgrims/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ overstayExempt: false }),
+        });
+        ok += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setBulkResult({ ok, failed });
+    setBulkRunning(false);
+    qc.invalidateQueries({ queryKey: ["umrah-exempt-pilgrims"] });
+    setSelectedIds(new Set());
+    if (failed === 0) {
+      toast({ title: `تم إلغاء استثناء ${ok} معتمر` });
+    } else {
+      toast({
+        variant: "destructive",
+        title: `إلغاء جزئي: ${ok} نجحت، ${failed} فشلت`,
+        description: "افتح كل صف فاشل من قائمة المعتمرين لمعرفة السبب",
+      });
+    }
+  };
+
+  const toggleSelectAll = (visibleIds: number[]) => {
+    const allSelected = visibleIds.every((i) => selectedIds.has(i));
+    const next = new Set(selectedIds);
+    if (allSelected) {
+      visibleIds.forEach((i) => next.delete(i));
+    } else {
+      visibleIds.forEach((i) => next.add(i));
+    }
+    setSelectedIds(next);
+  };
+
+  const toggleSelectOne = (id: number) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
 
@@ -124,7 +194,29 @@ export default function UmrahExemptPilgrims() {
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
 
+  const visibleIds = rows.map((r) => r.id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((i) => selectedIds.has(i));
+
   const cols: DataTableColumn<ExemptRow>[] = [
+    {
+      key: "select" as any,
+      header: (
+        <Checkbox
+          checked={allVisibleSelected}
+          onCheckedChange={() => toggleSelectAll(visibleIds)}
+          data-testid="exempt-select-all"
+        />
+      ) as any,
+      render: (p) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={selectedIds.has(p.id)}
+            onCheckedChange={() => toggleSelectOne(p.id)}
+            data-testid={`exempt-select-${p.id}`}
+          />
+        </div>
+      ),
+    },
     {
       key: "fullName",
       header: "الاسم",
@@ -239,7 +331,7 @@ export default function UmrahExemptPilgrims() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `exempt-pilgrims-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `exempt-pilgrims-${todayLocal()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -251,6 +343,19 @@ export default function UmrahExemptPilgrims() {
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "استثناءات التأخّر" }]}
       actions={
         <div className="flex gap-2">
+          {selectedIds.size > 0 && (
+            <GuardedButton
+              perm="umrah:update"
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkConfirmOpen(true)}
+              className="gap-1"
+              data-testid="exempt-bulk-unexempt-button"
+              rateLimitAware
+            >
+              إلغاء استثناء {selectedIds.size}
+            </GuardedButton>
+          )}
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1">
             <RefreshCw className="h-3 w-3" /> تحديث
           </Button>
@@ -322,6 +427,36 @@ export default function UmrahExemptPilgrims() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={bulkConfirmOpen} onOpenChange={(o) => { if (!o && !bulkRunning) setBulkConfirmOpen(false); }}>
+        <AlertDialogContent data-testid="exempt-bulk-confirm-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد إلغاء الاستثناء الجماعي</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم إلغاء استثناء {selectedIds.size} معتمر من مسح التأخّر اليومي. كل سطر سيتم تسجيله في سجل التدقيق.
+              {bulkResult && (
+                <span className="block mt-2 text-xs">
+                  آخر تشغيل: نجحت {bulkResult.ok} — فشلت {bulkResult.failed}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkRunning}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async (e: React.MouseEvent) => {
+                e.preventDefault();
+                await runBulkUnExempt();
+                setBulkConfirmOpen(false);
+              }}
+              disabled={bulkRunning}
+              data-testid="exempt-bulk-confirm-button"
+            >
+              {bulkRunning ? "جاري المعالجة…" : "تأكيد"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }
