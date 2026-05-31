@@ -518,6 +518,13 @@ ALTER TABLE ONLY public.document_entity_links ALTER COLUMN id SET DEFAULT nextva
 
 
 --
+-- Name: document_acls id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_acls ALTER COLUMN id SET DEFAULT nextval('public.document_acls_id_seq'::regclass);
+
+
+--
 -- Name: document_access_log id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3257,6 +3264,42 @@ ALTER TABLE ONLY public.document_entity_links
 
 ALTER TABLE ONLY public.document_entity_links
     ADD CONSTRAINT document_entity_links_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: document_acls document_acls_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_acls
+    ADD CONSTRAINT document_acls_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_document_acls_doc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_document_acls_doc ON public.document_acls USING btree ("companyId", "documentId");
+
+
+--
+-- Name: idx_document_acls_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_document_acls_user ON public.document_acls USING btree ("companyId", "userId") WHERE ("userId" IS NOT NULL);
+
+
+--
+-- Name: idx_document_acls_role; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_document_acls_role ON public.document_acls USING btree ("companyId", "roleKey") WHERE ("roleKey" IS NOT NULL);
+
+
+--
+-- Name: idx_document_acls_dept; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_document_acls_dept ON public.document_acls USING btree ("companyId", "departmentId") WHERE ("departmentId" IS NOT NULL);
 
 
 --
