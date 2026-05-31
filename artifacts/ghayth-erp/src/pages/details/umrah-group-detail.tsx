@@ -69,6 +69,7 @@ interface GroupDetail {
   agentId: number | null;
   subAgentId: number | null;
   seasonId: number | null;
+  salesInvoiceId: number | null;
   createdAt: string;
   updatedAt: string;
   pilgrims: PilgrimRow[];
@@ -304,6 +305,57 @@ export default function UmrahGroupDetail() {
           + selling expenses is the symptom the user explicitly asked
           us to surface). Numbers come from the same endpoint, so no
           extra round-trip. */}
+      {/* Invoice action — closes the loop between the group detail page
+          and the sales-wizard. Before this card the operator had to
+          navigate away to /umrah/sales-wizard and re-find the group;
+          now: either jump straight to the existing invoice OR open
+          the wizard (sub-agent context fills in there since umrah_groups
+          carries subAgentId already). */}
+      <Card className="md:col-span-3" data-testid="group-invoice-action-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-muted-foreground" />
+            الفوترة
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data?.salesInvoiceId ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                هذه المجموعة مفوترة على الفاتورة <span className="font-mono">#{data.salesInvoiceId}</span>
+              </p>
+              <Link
+                href={`/umrah/invoices/${data.salesInvoiceId}`}
+                data-testid="group-invoice-view-link"
+              >
+                <span className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline">
+                  عرض الفاتورة ←
+                </span>
+              </Link>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                هذه المجموعة لم تُفوتر بعد.
+                {data?.subAgentId == null && (
+                  <span className="block text-xs text-status-warning-foreground mt-1">
+                    ⚠ المجموعة بدون وكيل فرعي — حدد وكيلًا أولاً عبر «تعديل».
+                  </span>
+                )}
+              </p>
+              <Link
+                href={`/umrah/sales-wizard`}
+                data-testid="group-invoice-create-link"
+              >
+                <span className="inline-flex items-center gap-1 text-sm font-medium px-3 py-1.5 rounded bg-primary text-primary-foreground hover:opacity-90">
+                  إنشاء فاتورة عبر المعالج
+                </span>
+              </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="md:col-span-3" data-testid="group-finance-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
