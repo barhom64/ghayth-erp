@@ -903,6 +903,13 @@ ALTER TABLE ONLY public.fleet_trips ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
+-- Name: fleet_tires id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_tires ALTER COLUMN id SET DEFAULT nextval('public.fleet_tires_id_seq'::regclass);
+
+
+--
 -- Name: fleet_vehicles id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3831,6 +3838,28 @@ ALTER TABLE ONLY public.fleet_traffic_violations
 
 ALTER TABLE ONLY public.fleet_trips
     ADD CONSTRAINT fleet_trips_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_tires fleet_tires_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_tires
+    ADD CONSTRAINT fleet_tires_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_fleet_tires_vehicle; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_tires_vehicle ON public.fleet_tires USING btree ("companyId", "vehicleId") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: idx_fleet_tires_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_tires_status ON public.fleet_tires USING btree ("companyId", status) WHERE (("deletedAt" IS NULL) AND ((status)::text = 'active'::text));
 
 
 --

@@ -3457,4 +3457,119 @@ router.get("/vehicles/:id/tco", authorize({ feature: "fleet.vehicles", action: "
   } catch (err) { handleRouteError(err, res, "TCO analysis error:"); }
 });
 
+// ─── N4 — Tires CRUD ─────────────────────────────────────────────────────────
+// Per-vehicle tire inventory. Closes N4 from
+// docs/testing/CRITICAL_DEFECTS_REPORT.md (pre-fix: tires existed only
+// as a preventive-plan task type and an alert reason — no entity, no
+// stock tracking, no per-position lifecycle).
+const createTireSchema = z.object({
+  vehicleId: z.coerce.number().int().positive(),
+  position: z.enum(["front_left", "front_right", "rear_left", "rear_right", "spare", "extra"]),
+  brand: z.string().max(80).optional(),
+  size: z.string().max(40).optional(),
+  installMileage: z.coerce.number().int().optional(),
+  installDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const updateTireSchema = createTireSchema.partial().extend({
+  status: z.enum(["active", "rotated", "replaced", "discarded"]).optional(),
+  replaceMileage: z.coerce.number().int().optional(),
+  replaceDate: z.string().optional(),
+});
+
+router.get("/tires", authorize({ feature: "fleet.maintenance", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const vehicleId = req.query.vehicleId ? Number(req.query.vehicleId) : null;
+    const status = req.query.status ? String(req.query.status) : null;
+    const params: unknown[] = [scope.companyId];
+    let sql = `SELECT t.*, v."plateNumber"
+                 FROM fleet_tires t
+                 LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId" AND v."deletedAt" IS NULL
+                WHERE t."companyId" = $1 AND t."deletedAt" IS NULL`;
+    if (vehicleId) { params.push(vehicleId); sql += ` AND t."vehicleId" = $${params.length}`; }
+    if (status) { params.push(status); sql += ` AND t.status = $${params.length}`; }
+    sql += ` ORDER BY t."vehicleId", t."position", t.id DESC LIMIT 500`;
+    const rows = await rawQuery(sql, params).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "tires list error"); }
+});
+
+router.post("/tires", authorize({ feature: "fleet.maintenance", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createTireSchema.safeParse(req.body));
+    const [v] = await rawQuery<{ id: number; branchId: number | null }>(
+      `SELECT id, "branchId" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [b.vehicleId, scope.companyId]
+    );
+    if (!v) throw new ValidationError("المركبة غير موجودة", { field: "vehicleId" });
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_tires ("companyId","branchId","vehicleId","position",brand,size,"installMileage","installDate",notes,status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active')`,
+      [scope.companyId, v.branchId, b.vehicleId, b.position, b.brand ?? null, b.size ?? null, b.installMileage ?? null, b.installDate ?? null, b.notes ?? null]
+    );
+    createAuditLog({
+      companyId: scope.companyId, branchId: v.branchId ?? undefined, userId: scope.userId,
+      action: "create", entity: "fleet_tires", entityId: insertId,
+      after: { vehicleId: b.vehicleId, position: b.position, brand: b.brand },
+    }).catch((e) => logger.error(e, "tires audit failed"));
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.tire.installed", entity: "fleet_tires", entityId: insertId,
+    }).catch((e) => logger.error(e, "tires event failed"));
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "tires create error"); }
+});
+
+router.patch("/tires/:id", authorize({ feature: "fleet.maintenance", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updateTireSchema.safeParse(req.body));
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    const set = (col: string, val: unknown) => { params.push(val); sets.push(`"${col}" = $${params.length}`); };
+    if (b.position !== undefined) set("position", b.position);
+    if (b.brand !== undefined) set("brand", b.brand);
+    if (b.size !== undefined) set("size", b.size);
+    if (b.installMileage !== undefined) set("installMileage", b.installMileage);
+    if (b.installDate !== undefined) set("installDate", b.installDate);
+    if (b.status !== undefined) set("status", b.status);
+    if (b.replaceMileage !== undefined) set("replaceMileage", b.replaceMileage);
+    if (b.replaceDate !== undefined) set("replaceDate", b.replaceDate);
+    if (b.notes !== undefined) set("notes", b.notes);
+    if (!sets.length) { res.json({ ok: true, updated: 0 }); return; }
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(id, scope.companyId);
+    await rawExecute(
+      `UPDATE fleet_tires SET ${sets.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
+      params
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "fleet_tires", entityId: id,
+      after: b,
+    }).catch((e) => logger.error(e, "tires audit failed"));
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "tires update error"); }
+});
+
+router.delete("/tires/:id", authorize({ feature: "fleet.maintenance", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(
+      `UPDATE fleet_tires SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "fleet_tires", entityId: id,
+    }).catch((e) => logger.error(e, "tires audit failed"));
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "tires delete error"); }
+});
+
 export default router;

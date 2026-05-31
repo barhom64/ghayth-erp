@@ -154,10 +154,14 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الموقع**: `numbering.ts:180-190`
 **الإصلاح المنفذ**: إضافة `emitEvent({action:"numbering.scheme.updated", entity:"numbering_schemes"})` بعد كل UPDATE على scheme. الـaudit channels الـ2 (numbering_audit_logs + createAuditLog) موجودة من قبل — هذا يضيف الـevent bus للـdownstream consumers.
 
-### N4. Tires UI مفقود
-**الموقع**: لا توجد `pages/fleet/tires.tsx`
-**الوصف**: تظهر فقط كـpreventive task type
-**الإصلاح**: بناء صفحة + entity.
+### N4. Tires UI ✅ FIXED in batch9 PR
+**الموقع**: migration 245 + `fleet.ts /tires/*` + `pages/fleet/tires.tsx`
+**الإصلاح المنفذ**:
+- migration 245 يُنشئ `fleet_tires` table (vehicleId + position + brand + size + installMileage + installDate + status)
+- CHECK constraints: position من 6 قيم (front_left/right, rear_left/right, spare, extra)، status من 4 (active/rotated/replaced/discarded)
+- partial indexes على (companyId, vehicleId) و (companyId, status='active')
+- 4 endpoints: `GET /fleet/tires`, `POST /fleet/tires`, `PATCH /fleet/tires/:id`, `DELETE /fleet/tires/:id` كلها gated بـ`fleet.maintenance` feature
+- صفحة `/fleet/tires` كاملة بـDataTable + inline create modal + tab في FleetTabsNav.
 
 ### N5. Vehicle Rental Contracts غير موجودة
 **الموقع**: لا UI، لا handler
@@ -209,10 +213,13 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 - `/settings/departments` POST/PUT/DELETE الآن مفتوحة لـ`settings:update` OR `hr.organization:create|update|delete`
 **الأثر**: HR Director يقدر إدارة الهيكل التنظيمي من صفحته دون الحاجة لـSysAdmin.
 
-### N14. Create User بدون "إنشاء موظف" Shortcut
-**الموقع**: `users-tab.tsx:46`
-**الوصف**: يطلب employeeId موجود — لا inline modal لإنشاء موظف.
-**الإصلاح**: button "+ موظف جديد" في الـdropdown.
+### N14. Create User Shortcut ✅ FIXED in batch9 PR
+**الموقع**: `users-tab.tsx:53-180`
+**الإصلاح المنفذ**:
+- زر "موظف جديد بنقرة واحدة" أسفل dropdown اختيار الموظف
+- يفتح inline panel مع 4 حقول مطلوبة (name + phone + nationalId + nationality)
+- على submit يستدعي `POST /employees`، يـrefresh dropdown، ويُبرز اسم الموظف الجديد للاختيار
+- SysAdmin يقدر ينشئ موظف+مستخدم في تدفّق واحد بدون مغادرة الصفحة.
 
 ### N15. Ejar Integration Fields-Only
 **الموقع**: `properties.ts:1155-1378` (يخزن `ejarNumber` وغيره)
