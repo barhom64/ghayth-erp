@@ -4815,7 +4815,12 @@ CREATE TABLE public.companies (
     "umrahVisaProductId" integer,
     "umrahServicesProductId" integer,
     "umrahTransportProductId" integer,
-    CONSTRAINT chk_companies_functional_currency_iso CHECK (("functionalCurrency" ~ '^[A-Z]{3}$'::text))
+    "subscriptionStatus" character varying(20) DEFAULT 'trial' NOT NULL,
+    "trialExpiresAt" timestamp with time zone,
+    "subscriptionPlan" character varying(40) DEFAULT 'trial' NOT NULL,
+    CONSTRAINT chk_companies_functional_currency_iso CHECK (("functionalCurrency" ~ '^[A-Z]{3}$'::text)),
+    CONSTRAINT companies_subscription_status_check
+      CHECK (("subscriptionStatus"::text = ANY (ARRAY['trial'::text, 'active'::text, 'expired'::text, 'cancelled'::text])))
 );
 
 

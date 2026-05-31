@@ -2391,6 +2391,89 @@ router.get("/reports/group-portfolio", authorize({ feature: "umrah", action: "li
   } catch (err) { handleRouteError(err, res, "Group portfolio report"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Season portfolio P&L — "which seasons make money?". Companion to
+// /reports/group-portfolio (PR #1495) at the season grain. Operators
+// compare seasons across years/durations without opening each season
+// detail one by one.
+//
+// Revenue per season: SUM(umrah_sales_invoices.total) — invoice header
+// carries seasonId directly (unlike groups where we JOIN through items).
+// Cost per season: SUM(umrah_nusk_invoices.netCost) reached through
+// the group's seasonId since nusk has no seasonId column.
+//
+// Single roundtrip — no per-row fan-out. Tenant-scoped on every reach.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/season-portfolio", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status, limit: limitStr } = req.query as Record<string, string | undefined>;
+    const limit = Math.min(Math.max(Number(limitStr ?? "50") || 50, 1), 200);
+
+    const params: unknown[] = [scope.companyId];
+    let statusClause = "";
+    if (status) { params.push(status); statusClause = ` AND s.status = $${params.length}`; }
+    params.push(limit);
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT s.id, s.title, s.status, s."hijriYear", s."startDate", s."endDate",
+              (SELECT COUNT(*)::int FROM umrah_pilgrims p
+                WHERE p."seasonId" = s.id AND p."companyId" = s."companyId" AND p."deletedAt" IS NULL
+              ) AS "pilgrimsCount",
+              (SELECT COUNT(*)::int FROM umrah_groups g
+                WHERE g."seasonId" = s.id AND g."companyId" = s."companyId" AND g."deletedAt" IS NULL
+              ) AS "groupsCount",
+              COALESCE(sales.revenue, 0) AS revenue,
+              COALESCE(sales.paid, 0)    AS paid,
+              COALESCE(nusk.cost, 0)     AS cost,
+              (COALESCE(sales.revenue, 0) - COALESCE(nusk.cost, 0))::numeric(12,2) AS margin
+         FROM umrah_seasons s
+    LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(total), 0) AS revenue,
+                  COALESCE(SUM("paidAmount"), 0) AS paid
+             FROM umrah_sales_invoices
+            WHERE "seasonId"  = s.id
+              AND "companyId" = s."companyId"
+              AND "deletedAt" IS NULL
+              AND status <> 'cancelled'
+         ) sales ON true
+    LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(ni."netCost"), 0) AS cost
+             FROM umrah_nusk_invoices ni
+            WHERE ni."companyId" = s."companyId"
+              AND ni."deletedAt" IS NULL
+              AND ni."nuskStatus" <> 'cancelled'
+              AND ni."groupId" IN (
+                SELECT id FROM umrah_groups
+                 WHERE "seasonId" = s.id
+                   AND "companyId" = s."companyId"
+                   AND "deletedAt" IS NULL
+              )
+         ) nusk ON true
+        WHERE s."companyId" = $1 AND s."deletedAt" IS NULL${statusClause}
+        ORDER BY margin DESC
+        LIMIT $${params.length}`,
+      params,
+    );
+
+    const totals = rows.reduce<{ revenue: number; cost: number; paid: number; margin: number }>(
+      (acc, r) => ({
+        revenue: acc.revenue + Number(r.revenue ?? 0),
+        cost:    acc.cost    + Number(r.cost ?? 0),
+        paid:    acc.paid    + Number(r.paid ?? 0),
+        margin:  acc.margin  + Number(r.margin ?? 0),
+      }),
+      { revenue: 0, cost: 0, paid: 0, margin: 0 },
+    );
+
+    res.json(maskFields(req, {
+      data: rows,
+      total: rows.length,
+      totals,
+    }));
+  } catch (err) { handleRouteError(err, res, "Season portfolio report"); }
+});
+
 // ============================================================================
 // DASHBOARD
 // ============================================================================

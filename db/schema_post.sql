@@ -3002,6 +3002,13 @@ ALTER TABLE ONLY public.companies
 
 
 --
+-- Name: idx_companies_subscription_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_companies_subscription_status ON public.companies USING btree ("subscriptionStatus");
+
+
+--
 -- Name: company_documents company_documents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 

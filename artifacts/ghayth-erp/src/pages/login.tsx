@@ -245,6 +245,9 @@ export default function Login() {
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [employeeOfMonth, setEmployeeOfMonth] = useState<EmployeeOfMonth | null>(null);
+  // B1 + B3 — when true, login page renders an "إعداد النظام لأول مرة"
+  // link below the forgot-password CTA. Driven by /auth/setup-state.
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -262,6 +265,15 @@ export default function Login() {
       .then(r => r.ok ? r.json() : { data: null })
       .then(d => setEmployeeOfMonth(d.data || null))
       .catch(() => {});
+
+    // B1 + B3 — probe setup-state to decide whether to surface the
+    // "إعداد النظام لأول مرة" link. Quiet failure is fine; if the
+    // probe doesn't respond, the link just stays hidden — login form
+    // works as before.
+    fetch(`${BASE}/api/auth/setup-state`)
+      .then(r => r.ok ? r.json() : { needsSetup: false })
+      .then(d => setNeedsSetup(Boolean(d.needsSetup)))
+      .catch(() => setNeedsSetup(false));
   }, []);
 
   const handleLogin = async (values: LoginForm) => {
@@ -479,7 +491,7 @@ export default function Login() {
 
                   <LoginFields isCoolingDown={cooldown.isCoolingDown} cooldownLabel={cooldown.label} />
 
-                  <div className="flex justify-start">
+                  <div className="flex justify-between items-center">
                     <button
                       type="button"
                       onClick={() => { setCurrentView("forgot"); setLoginError(""); setForgotSuccessEmail(null); setForgotError(""); }}
@@ -487,6 +499,15 @@ export default function Login() {
                     >
                       نسيت كلمة المرور؟
                     </button>
+                    {needsSetup && (
+                      <a
+                        href="/setup"
+                        className="text-sm font-semibold text-status-success-foreground hover:underline transition-colors"
+                        data-testid="link-setup"
+                      >
+                        إعداد النظام لأول مرة ←
+                      </a>
+                    )}
                   </div>
                 </FormShell>
               </>

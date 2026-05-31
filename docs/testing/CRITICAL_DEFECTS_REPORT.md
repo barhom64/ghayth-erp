@@ -8,28 +8,43 @@
 
 ## 🚨 BLOCKERS — يجب الإصلاح قبل الإطلاق التجاري
 
-### B1. لا يوجد Sign-Up UI
-**الموقع**: `artifacts/ghayth-erp/src/pages/login.tsx:316`
-**الوصف**: صفحة الدخول لا تحتوي أي زر "إنشاء حساب" أو "اشتراك جديد".
-**الـbackend**: `auth.ts:228` (`/auth/register`) يرد **HTTP 405** ثابت: `"إنشاء الحسابات يتم بواسطة المسؤول فقط"`.
-**الأثر**: مالك جديد **لا يستطيع** تأسيس شركته بدون مطور.
-**الإصلاح**: بناء صفحة sign-up + backend handler للـself-registration.
-**المُلَّاك المتأثرون**: 100% من العملاء الجدد.
+### B1. Sign-Up UI ✅ FIXED in batch8 PR
+**الموقع**: `login.tsx:268` (setup-state probe) + `pages/setup.tsx` (new wizard) + `App.tsx:155-159` (`/setup` route)
+**الإصلاح المنفذ**:
+- صفحة `login.tsx` تستدعي `GET /api/auth/setup-state` على mount
+- إذا `needsSetup=true`: يظهر رابط "إعداد النظام لأول مرة" أسفل "نسيت كلمة المرور؟"
+- صفحة `/setup` كاملة (4 حقول شركة + 4 حقول مالك) بـRTL design
+- الـbackend `POST /api/auth/bootstrap-tenant` atomically ينشئ company + branch + employee + assignment + user + user_role في transaction واحدة
+- بعد bootstrap الأول، subsequent calls يرجعون 409 ALREADY_BOOTSTRAPPED
+- guard على `/setup` page نفسها: تتحقق من setup-state وتعيد توجيه إلى login إن كان النظام مُعد مسبقاً
+- `/auth/register` يبقى يرد 405 (الـpath الصحيح هو `/setup` للـowner، و `/admin/users` للـadmin)
 
-### B2. لا توجد وحدة Subscription / Activation
-**الموقع**: ولا في أي مكان من `artifacts/`
-**الوصف**: لا UI page، لا API route، لا DB schema لـsubscription/billing/plan.
-**الأثر**: النظام يفترض ضمنياً أن كل tenant مفعَّل دائماً. لا "trial expired"، لا حدود، لا upgrade path.
-**الإصلاح**: بناء وحدة كاملة (subscription_plans + customer_subscriptions + activation flow).
-**خيار قصير المدى**: ربط بـStripe/Tap/HyperPay كـMVP.
+### B2. Subscription Scaffolding ✅ FIXED (lightweight) in batch8 PR
+**الموقع**: migration 244 + `middlewares/subscriptionGate.ts` + `routes/admin.ts /subscription/*`
+**الإصلاح المنفذ**:
+- migration 244 يضيف `subscriptionStatus` (enum: trial/active/expired/cancelled) + `trialExpiresAt` + `subscriptionPlan` + partial index على `companies`
+- الـmigration يـbackfill كل الـtenants القائمين بـ`status='active'` و `plan='legacy'` (لا أحد يُحجَب فجأة)
+- bootstrap-tenant الجديد يضع trial expiry = 30 يوم
+- `subscriptionGate` middleware mounted بعد `authMiddleware` وقبل كل module routes:
+  - `trial` صالح: pass
+  - `trial` منتهي: auto-flip لـ`expired` + cache invalidate + block
+  - `expired`/`cancelled`: owners يمرون (للوصول لـadmin/subscription)، non-owners يحصلون على 402
+- in-memory cache بـTTL 60 ثانية لتقليل cost
+- endpoints الـadmin: `GET /subscription` + `POST /subscription/activate` + `POST /subscription/extend-trial`
+**ما تبقى لـPhase 2**: payment provider integration (Stripe/Tap/HyperPay) — الـscaffolding جاهز لاستقباله. الـactivate الحالي manual.
 
-### B3. لا يوجد First-Time Setup Wizard
-**الموقع**: `bootstrapAdmin.ts:151-159`
-**الوصف**: عند DB فارغة، `bootstrapAdminUser()` يخرج بدون إنشاء owner. لا UI لكسر الـloop.
-**الأثر**: deployment جديد على PostgreSQL فارغة → لا أحد يقدر يدخل، لا أحد يقدر ينشئ شركة → دورة معطلة.
-**الإصلاح**: 
-- Option A: واجهة setup wizard تظهر عند الـDB فارغة
-- Option B: provisioning script يُنشئ owner + company واحد كـbootstrap
+### B3. First-Time Setup Wizard ✅ FIXED in batch8 PR
+**الموقع**: `pages/setup.tsx` + `/api/auth/setup-state` + `/api/auth/bootstrap-tenant`
+**الإصلاح المنفذ** (نفس B1):
+- الـuser flow على DB فارغ:
+  1. مالك يفتح `/` → login.tsx يستدعي `/auth/setup-state` → يرى needsSetup=true
+  2. يظهر رابط "إعداد النظام لأول مرة ←" → يضغط
+  3. `/setup` يعرض النموذج
+  4. submit يستدعي `/auth/bootstrap-tenant` في transaction واحدة
+  5. company + branch + employee + assignment + user + user_role كلها تُنشأ atomically أو لا شيء (rollback)
+  6. trial expiry = 30 يوم + status='trial'
+  7. redirect لـlogin → المالك يدخل ببياناته الجديدة
+- bootstrapAdmin.ts السابق يبقى للـSEED_DEMO_DATA flow، لكن لم يعد الـonly path.
 
 ---
 
@@ -241,28 +256,27 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 
 ## ملخص
 
-| Severity | العدد |
-|---|---|
 | Severity | الأصلي | مُغلَق | متبقي |
 |---|---|---|---|
-| 🚨 BLOCKER | 3 | 0 | 3 (B1/B2/B3 — يحتاج spec المالك) |
+| 🚨 BLOCKER | 3 | **3 ✅** (batch8: B1/B2/B3) | 0 |
 | ⚠ MAJOR | 10 | 8 | 2 (M1 ZATCA، M10 Wialon — vendor integrations) |
 | 📝 MINOR | 19 | 9 (+3 WAI = 12) | 7 (UI work + 4 vendor integrations) |
-| **المجموع** | **32** | **20** | **12** |
+| **المجموع** | **32** | **23** | **9** |
 
 ### مُغلَقة بإصلاحات كود
+- **BLOCKERs (3) — batch8**: B1 Sign-up UI، B2 Subscription scaffolding، B3 First-time setup
 - **MAJORs (8)**: M2 ✅ (سابق)، M3، M4، M5، M6، M7، M8، M9
 - **MINORs (9)**: N2، N3، N8، N9، N10، N11، N12، N13، N18
-- **MINORs مُعلَّمة WAI (3)**: N7، N19، (... راجع الأقسام التفصيلية)
+- **MINORs مُعلَّمة WAI (3)**: N7، N19، M2 reconcile
 
-### قبل الإطلاق التجاري (المتبقي الحرج)
-يجب إصلاح: B1, B2, B3 (Onboarding + Subscription) — يحتاج spec من المالك
-ينبغي قبل الإطلاق: M1 (ZATCA real provider)
+### قبل الإطلاق التجاري (المتبقي)
+- M1 (ZATCA real provider) — يحتاج payment provider credentials
 
 ### يمكن تأجيله للـPhase 2
 - M10 (Wialon/Teltonika telematics): vendor adapters
 - N15 (Ejar)، N16 (Sadad)، N17 (Nusk): integrations سعودية
-- N1، N4، N5، N6، N14 (UI work): backlog product
+- N1، N4، N5، N6، N14 (UI polish): backlog product
+- B2 payment provider integration (Stripe/Tap/HyperPay): الـscaffolding جاهز
 
 ---
 
