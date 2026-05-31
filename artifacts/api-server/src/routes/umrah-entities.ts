@@ -2305,6 +2305,92 @@ router.get("/reports/exempt-pilgrims", authorize({ feature: "umrah", action: "li
   } catch (err) { handleRouteError(err, res, "Exempt pilgrims report"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Group portfolio P&L — "which groups make money?". Mirrors the agent
+// portfolio page (PR #1222) but at the group granularity. Operators wanted a
+// rollup that answers "is this season profitable?" without opening every group
+// detail one by one.
+//
+// Revenue per group: SUM(umrah_sales_invoice_items.lineTotal) for non-
+// cancelled invoices — items table holds the groupId (header doesn't).
+// Cost per group: SUM(umrah_nusk_invoices.netCost) for non-cancelled rows
+// directly linked via groupId. Margin = revenue − cost.
+//
+// Single query with two LATERAL subqueries so even a 500-group season returns
+// in one roundtrip. Tenant-scoped at every JOIN.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/group-portfolio", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, limit: limitStr } = req.query as Record<string, string | undefined>;
+    const limit = Math.min(Math.max(Number(limitStr ?? "50") || 50, 1), 500);
+
+    const params: unknown[] = [scope.companyId];
+    let seasonClause = "";
+    if (seasonId) { params.push(Number(seasonId)); seasonClause = ` AND g."seasonId" = $${params.length}`; }
+    params.push(limit);
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT g.id, g.name, g."nuskGroupNumber", g.status, g."seasonId",
+              s.title AS "seasonTitle",
+              g."agentId", a.name AS "agentName",
+              g."mutamerCount" AS "expectedPilgrims",
+              (SELECT COUNT(*)::int FROM umrah_pilgrims p
+                WHERE p."groupId" = g.id AND p."companyId" = g."companyId" AND p."deletedAt" IS NULL
+              ) AS "actualPilgrims",
+              COALESCE(sales.revenue, 0) AS revenue,
+              COALESCE(sales.paid, 0)    AS paid,
+              COALESCE(nusk.cost, 0)     AS cost,
+              (COALESCE(sales.revenue, 0) - COALESCE(nusk.cost, 0))::numeric(12,2) AS margin
+         FROM umrah_groups g
+    LEFT JOIN umrah_seasons s
+           ON s.id = g."seasonId" AND s."companyId" = g."companyId" AND s."deletedAt" IS NULL
+    LEFT JOIN umrah_agents a
+           ON a.id = g."agentId" AND a."companyId" = g."companyId" AND a."deletedAt" IS NULL
+    LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(DISTINCT si.total), 0) AS revenue,
+                  COALESCE(SUM(DISTINCT si."paidAmount"), 0) AS paid
+             FROM umrah_sales_invoice_items it
+             JOIN umrah_sales_invoices si
+               ON si.id = it."invoiceId" AND si."companyId" = g."companyId" AND si."deletedAt" IS NULL
+            WHERE it."groupId" = g.id
+              AND it."companyId" = g."companyId"
+              AND it."deletedAt" IS NULL
+              AND si.status <> 'cancelled'
+         ) sales ON true
+    LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM("netCost"), 0) AS cost
+             FROM umrah_nusk_invoices ni
+            WHERE ni."groupId" = g.id
+              AND ni."companyId" = g."companyId"
+              AND ni."deletedAt" IS NULL
+              AND ni."nuskStatus" <> 'cancelled'
+         ) nusk ON true
+        WHERE g."companyId" = $1
+          AND g."deletedAt" IS NULL${seasonClause}
+        ORDER BY margin DESC
+        LIMIT $${params.length}`,
+      params,
+    );
+
+    const totals = rows.reduce<{ revenue: number; cost: number; paid: number; margin: number }>(
+      (acc, r) => ({
+        revenue: acc.revenue + Number(r.revenue ?? 0),
+        cost:    acc.cost    + Number(r.cost ?? 0),
+        paid:    acc.paid    + Number(r.paid ?? 0),
+        margin:  acc.margin  + Number(r.margin ?? 0),
+      }),
+      { revenue: 0, cost: 0, paid: 0, margin: 0 },
+    );
+
+    res.json(maskFields(req, {
+      data: rows,
+      total: rows.length,
+      totals,
+    }));
+  } catch (err) { handleRouteError(err, res, "Group portfolio report"); }
+});
+
 // ============================================================================
 // DASHBOARD
 // ============================================================================
