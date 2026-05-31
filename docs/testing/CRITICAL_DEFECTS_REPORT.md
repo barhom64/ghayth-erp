@@ -56,13 +56,14 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 - التعليق في الكود يوضح الحالة: "Catching here would put us right back in the silent-swallow trap"
 **تصحيح من التقرير الأصلي**: التقييم كان "engine غير مستدعى" — في الواقع كان مستدعى لكن fire-and-forget في وقت الفحص. الكود الحالي هو blocking + propagating ولا يحتاج تدخل إضافي.
 
-### M3. Print Templates بدون Audit Log
-**الموقع**: `routes/print.ts:328+` — كامل الملف
-**الوصف**: 
-- POST `/print/templates`, PATCH, DELETE كلها يحفظون بدون `createAuditLog` أو `emitEvent`
-- 0 hits لـ audit في الـ1100+ سطر من print.ts
-**الأثر**: تعديل letterhead = ZATCA QR placement = totals layout كل ذلك صامت. **ثغرة compliance**.
-**الإصلاح**: إضافة `createAuditLog({entity:"document_templates", ...})` + `emitEvent({action:"print.template.updated"})` على كل mutation.
+### M3. Print Templates بدون Audit Log ✅ FIXED in PR #1426
+**الموقع**: `routes/print.ts:362+`
+**الإصلاح المنفذ**:
+- POST `/print/templates` يستدعي `createAuditLog({action:"print.template.created"})` + `emitEvent`
+- PATCH `/print/templates/:id` يكتب before/after diff في audit + يُطلق `print.template.updated`
+- DELETE `/print/templates/:id` يُسجَّل بـ`print.template.deleted` event
+- كل الـ3 عمليات تحمل `entity:"document_templates"` للمتابعة
+**الأثر بعد الإصلاح**: تعديل letterhead/ZATCA QR placement/totals layout يُسجَّل في `/admin/logs` و event bus.
 
 ### M4. Document Access Log غير موجود ✅ FIXED in PR #1410
 **الموقع**: `routes/documents.ts` — endpoints الـdownload/preview
@@ -102,11 +103,10 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 - إذا `actualFuelFromLogs = 0`: السلوك القديم (تقدير من distance/efficiency)
 - **النتيجة**: لا يمكن تكرار قيد وقود لنفس الرحلة عند ربط fuel logs بـtripId.
 
-### M8. legal_case لا يمكن إرفاق مستندات له
-**الموقع**: `documents.ts:269` — allowed-type whitelist لا يشمل `legal_case`
-**الوصف**: محامي يحاول رفع PDF حكم لقضية → الـvalidator يرفض.
-**الأثر**: عملية أساسية مكسورة لـLegal Manager.
-**الإصلاح**: إضافة `'legal_case'` للـwhitelist في `documents.ts:269`.
+### M8. legal_case في documents whitelist ✅ FIXED in PR #1426
+**الموقع**: `documents.ts:269` — ALLOWED_ENTITY_TYPES
+**الإصلاح المنفذ**: توسيع whitelist لتشمل: `legal_case`, `legal_contract`, `rental_contract`, `property_building`, `property_unit`, `umrah_pilgrim`, `umrah_invoice`, `purchase_order`, `expense` بجانب الأصلية (employee, client, project, invoice, vehicle).
+**الأثر بعد الإصلاح**: محامي يستطيع إرفاق PDF حكم لقضية. property manager يربط عقد بمستند. والـrest of operational entities الآن لها attachments.
 
 ### M9. Umrah Agent Invoice GL Non-Blocking ✅ FIXED in follow-up PR
 **الموقع**: `umrah.ts:1623+` + `eventListeners.ts`
@@ -135,10 +135,9 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الموقع**: `rbacV2.ts:128, 180, 209`
 **الإصلاح المنفذ**: إضافة `createAuditLog` + `emitEvent` بجانب `recordHistory` على create/update/delete.
 
-### N3. Numbering لا يُصدر events
-**الموقع**: `numbering.ts:170-184`
-**الوصف**: audit ✅ event ❌
-**الإصلاح**: `emitEvent({action:"numbering.scheme.updated"})` بعد UPDATE.
+### N3. Numbering لا يُصدر events ✅ FIXED in PR #1426
+**الموقع**: `numbering.ts:180-190`
+**الإصلاح المنفذ**: إضافة `emitEvent({action:"numbering.scheme.updated", entity:"numbering_schemes"})` بعد كل UPDATE على scheme. الـaudit channels الـ2 (numbering_audit_logs + createAuditLog) موجودة من قبل — هذا يضيف الـevent bus للـdownstream consumers.
 
 ### N4. Tires UI مفقود
 **الموقع**: لا توجد `pages/fleet/tires.tsx`
