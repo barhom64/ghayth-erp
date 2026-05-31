@@ -29,7 +29,7 @@ import {
   PrintTemplateMissingError,
   type PrintScope,
 } from "../lib/print/printService.js";
-import { listTemplates } from "../lib/print/templateResolver.js";
+import { listTemplates, listPrintableEntityTypes } from "../lib/print/templateResolver.js";
 import { fetchPrintArtifact } from "../lib/print/printStorage.js";
 import { logger } from "../lib/logger.js";
 import { todayISO, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -284,6 +284,20 @@ router.post(
     }
   }
 );
+
+// ─── Printable-entity catalogue ────────────────────────────────────────────
+// Returns every entityType the engine can render — used by the template
+// editor's entity dropdown and the per-branch assignment grid so the SPA
+// doesn't carry a hand-maintained list that drifts every time we add a
+// preset. Gated on the same templates:read perm as listing templates
+// because both surfaces are admin/settings-only.
+router.get("/entity-types", requirePermission("templates:read"), async (_req: Request, res: Response) => {
+  try {
+    res.json({ items: listPrintableEntityTypes() });
+  } catch (err) {
+    return handleRouteError(err, res, "print");
+  }
+});
 
 // ─── Templates CRUD ─────────────────────────────────────────────────────────
 

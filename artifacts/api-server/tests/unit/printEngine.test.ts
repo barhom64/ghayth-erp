@@ -736,6 +736,54 @@ describe("Print Engine v2 — preset contract (every BESPOKE_PRESETS entry retur
   });
 });
 
+describe("Print Engine v2 — listPrintableEntityTypes (catalogue endpoint)", () => {
+  // The /api/print/entity-types endpoint feeds the SPA template-editor
+  // dropdown. The old editor shipped a hand-maintained list of 24 entities
+  // even after the engine grew to 100+, so half the entities had no UI
+  // to edit a template for. Backend now owns the catalogue and the SPA
+  // pulls it live.
+  it("exports listPrintableEntityTypes and the helper returns a sorted catalogue", async () => {
+    const mod = await import("../../src/lib/print/templateResolver.js");
+    const list = (mod as { listPrintableEntityTypes?: () => Array<{ id: string; label: string; hasBespokePreset: boolean }> })
+      .listPrintableEntityTypes;
+    expect(typeof list, "listPrintableEntityTypes must be exported").toBe("function");
+    const items = list!();
+    // The catalogue must cover the 100+ types after the closing sweep
+    // (BESPOKE_PRESETS ∪ ARABIC_TITLES). Test conservatively for "much
+    // more than the old 24" so a future shrink trips this.
+    expect(items.length, "catalogue should expose 50+ printable entity types").toBeGreaterThan(50);
+    // Every entry shaped { id, label, hasBespokePreset }.
+    for (const item of items.slice(0, 5)) {
+      expect(item).toHaveProperty("id");
+      expect(item).toHaveProperty("label");
+      expect(item).toHaveProperty("hasBespokePreset");
+      expect(typeof item.id).toBe("string");
+      expect(typeof item.label).toBe("string");
+      expect(typeof item.hasBespokePreset).toBe("boolean");
+    }
+    // Synthetic report_ types are filtered out — they're not user-editable
+    // templates (the SPA payload owns the rendering).
+    expect(items.some((i) => i.id.startsWith("report_"))).toBe(false);
+    // A representative sample of business-critical types must appear with
+    // their Arabic labels (not the raw slug).
+    const byId = new Map(items.map((i) => [i.id, i]));
+    for (const slug of ["invoice", "quotation", "receipt_voucher", "payroll", "tenant", "umrah_pilgrim"]) {
+      const found = byId.get(slug);
+      expect(found, `catalogue must include ${slug}`).toBeTruthy();
+      expect(found?.label, `${slug} label must be Arabic`).toMatch(/[؀-ۿ]/);
+    }
+  });
+
+  it("/api/print/entity-types is registered behind requirePermission(templates:read)", () => {
+    const src = read(ROUTES_FILE);
+    expect(src).toMatch(/router\.get\(\s*"\/entity-types"/);
+    expect(src).toMatch(/listPrintableEntityTypes/);
+    // Same gate as listTemplates — both surfaces are admin/settings-only.
+    const match = src.match(/router\.get\(\s*"\/entity-types"[^)]*requirePermission\("templates:read"\)/s);
+    expect(match, "endpoint must require templates:read").toBeTruthy();
+  });
+});
+
 describe("Print Engine v2 — retention legal hold", () => {
   // These document types are the legal artifact under Saudi tax / commercial
   // record retention. Dropping any of them silently from the retention list
