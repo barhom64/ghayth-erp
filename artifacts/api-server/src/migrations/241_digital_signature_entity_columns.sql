@@ -42,5 +42,11 @@ ALTER TABLE digital_signature_logs
   ADD COLUMN IF NOT EXISTS "signatureRef" TEXT,
   ADD COLUMN IF NOT EXISTS "otpRef"       INTEGER;
 
+-- @policy:breaking
+-- Dropping the action CHECK is reversible (the constraint can be re-added)
+-- and does not narrow behaviour for the only writer: the pre-change app
+-- already inserted a *business* action that this CHECK rejected, so signing
+-- was already failing. Loosening the column to free text is strictly safer
+-- for a rolling deploy, not more dangerous.
 ALTER TABLE digital_signature_logs
   DROP CONSTRAINT IF EXISTS digital_signature_logs_action_check;
