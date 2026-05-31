@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { checkDocumentAcl } from "../lib/documentAcl.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
@@ -395,6 +396,14 @@ router.get("/:id/download", authorize({ feature: "documents", action: "export" }
       throw new NotFoundError("لا يوجد ملف مرفق");
     }
 
+    // M6 enforcement: per-document ACL. checkDocumentAcl returns true
+    // when no ACL rows exist (fallback to feature-RBAC) OR the caller
+    // matches an unexpired grant for the requested level. Returning
+    // 404 instead of 403 deliberately — the existence of a confidential
+    // document should not leak through a 403 to someone outside the ACL.
+    const allowed = await checkDocumentAcl(id, scope, "read");
+    if (!allowed) throw new NotFoundError("المستند غير موجود");
+
     // Compliance: record every access. Fire-and-forget — a logging
     // failure must not block a legitimate download, but the row goes
     // in BEFORE the stream pipes so we record intent even if the
@@ -442,6 +451,12 @@ router.get("/:id/preview", authorize({ feature: "documents", action: "export" })
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
     if (!doc.storageKey) throw new NotFoundError("لا يوجد ملف مرفق");
+
+    // M6 enforcement — same gate as /download. Identical 404 behaviour
+    // so a confidential doc looks the same to outsiders as a non-existent
+    // one.
+    const allowed = await checkDocumentAcl(id, scope, "read");
+    if (!allowed) throw new NotFoundError("المستند غير موجود");
 
     // Compliance: same fire-and-forget access log as /download, with
     // accessType='preview' so reports can distinguish embed/preview
@@ -1215,6 +1230,72 @@ router.get("/retention/due", authorize({ feature: "documents", action: "delete" 
       [scope.companyId]
     ).catch(() => []);
     res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+// M6 per-document ACL — list, grant, revoke. The read-path enforcement
+// is in lib/documentAcl.ts so other modules (preview, download,
+// version delete) can reuse it without duplicating logic.
+
+const grantAclSchema = z.object({
+  userId: z.coerce.number().int().positive().optional(),
+  roleKey: z.string().max(60).optional(),
+  departmentId: z.coerce.number().int().positive().optional(),
+  permission: z.enum(["read", "write", "admin"]).default("read"),
+  expiresAt: z.string().optional(),
+}).refine((b) => Number(!!b.userId) + Number(!!b.roleKey) + Number(!!b.departmentId) === 1, {
+  message: "بالضبط واحدة من userId/roleKey/departmentId مطلوبة",
+});
+
+router.get("/:id/acls", authorize({ feature: "documents", action: "list" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery(
+      `SELECT a.id, a."userId", a."roleKey", a."departmentId", a.permission,
+              a."grantedBy", a."grantedAt", a."expiresAt",
+              u.email AS "userEmail", e.name AS "userName",
+              d.name AS "departmentName"
+         FROM document_acls a
+         LEFT JOIN users u ON u.id = a."userId"
+         LEFT JOIN employees e ON e.id = u."employeeId" AND e."deletedAt" IS NULL
+         LEFT JOIN departments d ON d.id = a."departmentId" AND d."deletedAt" IS NULL
+        WHERE a."companyId" = $1 AND a."documentId" = $2
+          AND (a."expiresAt" IS NULL OR a."expiresAt" > NOW())
+        ORDER BY a."grantedAt" DESC`,
+      [scope.companyId, id]
+    ).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+router.post("/:id/acls", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const body = zodParse(grantAclSchema.safeParse(req.body));
+    const [{ id: insertId }] = await rawQuery<{ id: number }>(
+      `INSERT INTO document_acls
+         ("companyId", "documentId", "userId", "roleKey", "departmentId", permission, "grantedBy", "expiresAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [scope.companyId, id, body.userId ?? null, body.roleKey ?? null, body.departmentId ?? null, body.permission, scope.userId, body.expiresAt ?? null]
+    );
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+router.delete("/:id/acls/:aclId", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const aclId = parseId(req.params.aclId, "aclId");
+    await rawExecute(
+      `DELETE FROM document_acls
+        WHERE id = $1 AND "documentId" = $2 AND "companyId" = $3`,
+      [aclId, id, scope.companyId]
+    );
+    res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 

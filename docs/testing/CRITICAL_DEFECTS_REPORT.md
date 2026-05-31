@@ -83,11 +83,15 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 - `GET /documents/retention/due` يعرض المستندات المنتهية الفترة (للـcron أو الـadmin)
 - الـhard delete يبقى عملية يدوية مراجعة (لا تلقائية صامتة).
 
-### M6. Per-Document ACL غير موجود
-**الموقع**: `documents.ts` — صلاحية على مستوى feature فقط
-**الوصف**: لا `document_acls` table، لا per-document permissions.
-**الأثر**: مستند سري يمكن وصول إليه من كل من له `documents:list`.
-**الإصلاح**: implement document-level grant table.
+### M6. Per-Document ACL ✅ FIXED in PR #1489 follow-up
+**الموقع**: migration 242 + `lib/documentAcl.ts` + `documents.ts /:id/acls`
+**الإصلاح المنفذ**:
+- جدول `document_acls` يدعم 3 أنواع principal: `userId` أو `roleKey` أو `departmentId` (واحد بالضبط لكل صف عبر CHECK constraint)
+- 3 مستويات صلاحية: `read` / `write` / `admin` مع hierarchy (admin يشمل الأقل)
+- `expiresAt` اختياري للوصول المؤقت
+- `checkDocumentAcl()` helper: لا ACL = fallback لـfeature-RBAC (لا breaking change)؛ وجود ACL = narrowing فقط للمصرح لهم؛ owner/isOwner دائماً يمر
+- enforcement في `GET /:id/download` و `GET /:id/preview` (يرد 404 لإخفاء وجود مستند سري)
+- endpoints: `GET /:id/acls`, `POST /:id/acls`, `DELETE /:id/acls/:aclId`.
 
 ### M7. Fuel Double-Counting Risk في الأسطول ✅ FIXED in PR #1490 follow-up
 **الموقع**: migration 243 + `fleet.ts:1338-1365` (trip-complete) + `fleet.ts:2128+` (fuel-log)
