@@ -36,10 +36,7 @@ import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 
 
 const STEP_IMPACTS: Record<string, { icon: string; title: string; description: string; severity: "info" | "warning" | "danger" | "success" }> = {
@@ -911,20 +908,15 @@ export default function LegalCaseDetail() {
       extraTabs={[...extraTabs, ...registryExtraTabs]}
       hideTabs={registryHideTabs}
     />
-    <AlertDialog open={confirmCloseCase} onOpenChange={(o) => !o && setConfirmCloseCase(false)}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>تأكيد إغلاق القضية</AlertDialogTitle>
-          <AlertDialogDescription>
-            سيتم إغلاق القضية وتشغيل side-effects (إشعار المحامي، إغلاق المخاطر، تسجيل audit row). متابعة؟
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>إلغاء</AlertDialogCancel>
-          <AlertDialogAction onClick={confirmedClose}>تأكيد الإغلاق</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmActionDialog
+      open={confirmCloseCase}
+      onOpenChange={(o) => !o && setConfirmCloseCase(false)}
+      variant="destructive"
+      title="تأكيد إغلاق القضية"
+      description="سيتم إغلاق القضية وتشغيل side-effects (إشعار المحامي، إغلاق المخاطر، تسجيل audit row). متابعة؟"
+      confirmLabel="تأكيد الإغلاق"
+      onConfirm={confirmedClose}
+    />
     </>
   );
 }

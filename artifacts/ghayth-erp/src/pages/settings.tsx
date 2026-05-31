@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import {
+  PageShell,
   FormShell,
   FormTextField,
   FormEmailField,
@@ -322,7 +323,11 @@ export default function SettingsPage() {
   const [location] = useLocation();
   const initialTab = SETTINGS_PATH_TAB[location] ?? "general";
   return (
-    <div className="space-y-6">
+    <PageShell
+      title="الإعدادات"
+      subtitle="ضبط الإعدادات العامة، الفروع، الأقسام، الموافقات، والتكاملات"
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { label: "الإعدادات" }]}
+    >
       <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="flex flex-wrap gap-1">
           <TabsTrigger value="general">عام</TabsTrigger>
@@ -359,7 +364,7 @@ export default function SettingsPage() {
         <TabsContent value="zatca"><ZatcaSettingsTab /></TabsContent>
         <TabsContent value="gov"><GovIntegrationsTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 

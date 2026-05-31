@@ -110,7 +110,7 @@ candidates (not blocking):
 - Migrate the 63 manual-scope route files individually per the
   ranking in `SCOPE_HELPER_ADOPTION_AUDIT.md` (most are correct-by-design;
   ratchet catches new regressions).
-- Address the "feature build" items from `docs/audit/RESCAN_2026-05-22-v3.md`
+- Address the "feature build" items from `docs/audit/archive/RESCAN_2026-05-22-v3.md`
   (FLT-006 alerts UI, FIN-013–016 finance UI gaps, CRM-004 activities,
   COM-001/002 comms UIs, UMR-005/016 umrah invoicing pages,
   HR-010/013 attendance/discipline UIs) — each is a small project on

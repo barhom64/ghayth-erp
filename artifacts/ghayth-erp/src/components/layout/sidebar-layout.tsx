@@ -132,7 +132,10 @@ const allNavSections: NavSection[] = [
   {
     title: "الموارد البشرية",
     items: [
-      { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "hr" },
+      // Agent-5 (route↔backend consistency): /api/module-dashboards is gated
+      // by module="bi"; the frontend route registry tags it module="bi" too.
+      // Sidebar module key changed from "hr" → "bi" so visibility matches.
+      { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "bi" },
       { label: "التوظيف", path: "/hr/recruitment", icon: Briefcase, module: "hr", children: [
         { label: "الوظائف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
         { label: "التوظيف المتقدم", path: "/hr/recruitment/advanced", icon: BarChart3, subKey: "recruitment" },
@@ -392,7 +395,8 @@ const allNavSections: NavSection[] = [
         { label: "المهام", path: "/tasks", icon: ListTodo },
       ]},
       { label: "إدارة الأسطول", path: "/fleet", icon: Truck, module: "fleet", children: [
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard },
+        // Agent-5: explicit module="bi" matches backend gate.
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard, module: "bi" },
         { label: "السائقين", path: "/fleet/drivers", icon: User },
         { label: "الرحلات", path: "/fleet/trips", icon: Navigation },
         { label: "الصيانة", path: "/fleet/maintenance", icon: Wrench },
@@ -414,7 +418,8 @@ const allNavSections: NavSection[] = [
         { label: "التقارير", path: "/fleet/reports", icon: FileBarChart },
       ]},
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard },
+        // Agent-5: explicit module="bi" matches backend gate.
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard, module: "bi" },
         { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
         { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
         { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
@@ -422,7 +427,8 @@ const allNavSections: NavSection[] = [
         { label: "عمليات متقدّمة (دفعات/تسلسلات/ABC)", path: "/warehouse/advanced", icon: BarChart3 },
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard },
+        // Agent-5: explicit module="bi" matches backend gate.
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard, module: "bi" },
         { label: "المنتجات", path: "/store/products", icon: Package },
         { label: "الطلبات", path: "/store/orders", icon: ShoppingCart },
       ]},
@@ -480,13 +486,15 @@ const allNavSections: NavSection[] = [
     title: "العلاقات",
     items: [
       { label: "العملاء والمبيعات", path: "/clients", icon: Target, module: "crm", children: [
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=crm", icon: LayoutDashboard },
+        // Agent-5: explicit module="bi" matches backend gate.
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=crm", icon: LayoutDashboard, module: "bi" },
         { label: "الفرص التجارية", path: "/crm", icon: Target },
         { label: "قمع المبيعات", path: "/crm/pipeline", icon: TrendingUp },
         { label: "أنشطة علاقات العملاء", path: "/crm/activities", icon: Activity },
       ]},
       { label: "الدعم الفني", path: "/support", icon: Headphones, module: "support", children: [
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=support", icon: LayoutDashboard },
+        // Agent-5: explicit module="bi" matches backend gate.
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=support", icon: LayoutDashboard, module: "bi" },
         { label: "التذاكر", path: "/support", icon: Headphones },
         { label: "قاعدة المعرفة", path: "/support/kb", icon: BookOpen },
         { label: "الردود الجاهزة", path: "/support/replies", icon: MessageSquare },
@@ -611,7 +619,12 @@ const allNavSections: NavSection[] = [
           { label: "سجل الحركات", path: "/activity-log", icon: Activity },
         ]},
       ]},
-      { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60, perm: ["admin:update", "automation:write"], permMode: "any" },
+      // Agent 7 (visibility consistency) — dropped "automation:write"
+      // from the perm list: it isn't in FEATURE_PERMISSIONS or in legacy
+      // PERMISSIONS, so it can never be granted and the OR branch was
+      // dead. Backend routes/automation.ts authorizes on admin:list /
+      // admin:update, so admin:update is the only meaningful gate here.
+      { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60, perm: "admin:update" },
       { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 50, perm: ["bi:read", "reports:read"], permMode: "any" },
       { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 40, perm: "print_jobs:read" },
       { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 40, perm: "print:reprint:approve" },

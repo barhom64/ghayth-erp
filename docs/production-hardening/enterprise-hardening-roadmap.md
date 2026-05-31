@@ -67,7 +67,7 @@
 
 ### 3. قائمة عمل RESCAN v3 — صفحات UI جديدة
 
-من `docs/audit/RESCAN_2026-05-22-v3.md` §2، هذه الصفحات ستُبنى قريبًا:
+من `docs/audit/archive/RESCAN_2026-05-22-v3.md` §2، هذه الصفحات ستُبنى قريبًا:
 
 - FIN-013 (journal-manual approval buttons)
 - FIN-014 (period close UI)
@@ -391,5 +391,5 @@ hardening:
 - `docs/ARCHITECTURE.md` — البنية الحالية
 - `docs/MONITORING.md` — observability stack
 - `docs/audit/inventory/foundation.md` — سجل FND النشط
-- `docs/audit/RESCAN_2026-05-22-v3.md` — حالة موجة الإصلاحات الثانية
+- `docs/audit/archive/RESCAN_2026-05-22-v3.md` — حالة موجة الإصلاحات الثانية (مؤرشف)
 - `docs/audit/inventory/finance.md` — سجل FIN النشط
