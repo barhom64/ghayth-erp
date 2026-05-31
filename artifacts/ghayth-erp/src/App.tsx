@@ -34,6 +34,7 @@ const Dashboard = lazy(() => import("@/pages/dashboard"));
 const PrintVerify = lazy(() => import("@/pages/print-verify"));
 const DriverPortalLogin = lazy(() => import("@/pages/driver-portal/login"));
 const DriverPortalMyTrips = lazy(() => import("@/pages/driver-portal/my-trips"));
+const DriverPortalMyCargo = lazy(() => import("@/pages/driver-portal/my-cargo"));
 const DriverPortalProfile = lazy(() => import("@/pages/driver-portal/profile"));
 
 interface RouteConfig {
@@ -176,6 +177,9 @@ function Router() {
       </Route>
       <Route path="/driver-portal/my-trips">
         <Suspense fallback={<PageLoader />}><DriverPortalMyTrips /></Suspense>
+      </Route>
+      <Route path="/driver-portal/my-cargo">
+        <Suspense fallback={<PageLoader />}><DriverPortalMyCargo /></Suspense>
       </Route>
       <Route path="/driver-portal/profile">
         <Suspense fallback={<PageLoader />}><DriverPortalProfile /></Suspense>

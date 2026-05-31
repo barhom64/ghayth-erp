@@ -5,50 +5,52 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Truck, MapPin, Route as RouteIcon, RefreshCw, LogOut, User as UserIcon,
-  Clock, AlertCircle, Package,
+  Truck, Package, RefreshCw, LogOut, User as UserIcon,
+  AlertCircle, Route as RouteIcon, Weight,
 } from "lucide-react";
 import { driverFetch, getDriverToken, getDriverProfile, clearDriverSession, type DriverPortalDriver } from "./lib";
 
-interface DriverTripRow {
+interface DriverCargoRow {
   id: number;
+  manifestNumber: string;
   status: string;
-  tripDate: string | null;
-  startTime: string | null;
-  endTime: string | null;
   fromLocation: string | null;
   toLocation: string | null;
-  distance: number | null;
-  cost: number | null;
-  notes: string | null;
+  pickupDate: string | null;
+  deliveryDate: string | null;
+  customerName: string | null;
+  totalWeight: number;
   vehiclePlate: string | null;
 }
 
 const STATUS_TONE: Record<string, string> = {
-  scheduled: "bg-status-info-surface text-status-info-foreground",
-  in_progress: "bg-status-warning-surface text-status-warning-foreground",
-  completed: "bg-status-success-surface text-status-success-foreground",
-  cancelled: "bg-surface-subtle text-muted-foreground",
+  draft: "bg-surface-subtle text-muted-foreground",
+  confirmed: "bg-status-info-surface text-status-info-foreground",
+  loading: "bg-purple-50 text-purple-700",
+  in_transit: "bg-status-warning-surface text-status-warning-foreground",
+  delivered: "bg-status-success-surface text-status-success-foreground",
+  closed: "bg-status-success-surface text-status-success-foreground",
+  cancelled: "bg-rose-100 text-rose-700",
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  scheduled: "مجدولة",
-  in_progress: "جارية",
-  completed: "مكتملة",
+  draft: "مسودة",
+  confirmed: "مؤكدة",
+  loading: "تحميل",
+  in_transit: "في الطريق",
+  delivered: "مسلّمة",
+  closed: "مغلقة",
   cancelled: "ملغاة",
 };
 
-export default function DriverPortalMyTrips() {
+export default function DriverPortalMyCargo() {
   const [, navigate] = useLocation();
   const [driver, setDriver] = useState<DriverPortalDriver | null>(null);
-  const [trips, setTrips] = useState<DriverTripRow[]>([]);
+  const [rows, setRows] = useState<DriverCargoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
 
-  // Bounce-to-login gate. We can't use the main app's `useAuth` here
-  // because the driver portal has its own JWT in localStorage —
-  // independent of the ERP session.
   useEffect(() => {
     if (!getDriverToken()) {
       navigate("/driver-portal/login");
@@ -62,10 +64,10 @@ export default function DriverPortalMyTrips() {
     setError(null);
     try {
       const qs = filter !== "all" ? `?status=${encodeURIComponent(filter)}` : "";
-      const resp = await driverFetch<{ data: DriverTripRow[] }>(`/driver-portal/me/trips${qs}`);
-      setTrips(resp.data || []);
+      const resp = await driverFetch<{ data: DriverCargoRow[] }>(`/driver-portal/me/cargo${qs}`);
+      setRows(resp.data || []);
     } catch (err: any) {
-      setError(err?.message || "تعذّر تحميل الرحلات");
+      setError(err?.message || "تعذّر تحميل البوالص");
     } finally {
       setLoading(false);
     }
@@ -94,8 +96,8 @@ export default function DriverPortalMyTrips() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/driver-portal/my-cargo")}>
-              <Package className="h-4 w-4 me-1" />البضائع
+            <Button variant="ghost" size="sm" onClick={() => navigate("/driver-portal/my-trips")}>
+              <RouteIcon className="h-4 w-4 me-1" />الرحلات
             </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate("/driver-portal/profile")}>
               <UserIcon className="h-4 w-4 me-1" />الملف
@@ -110,8 +112,8 @@ export default function DriverPortalMyTrips() {
       <main className="max-w-4xl mx-auto p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold flex items-center gap-2">
-            <RouteIcon className="h-5 w-5 text-status-info-foreground" />
-            رحلاتي
+            <Package className="h-5 w-5 text-status-info-foreground" />
+            بوالص الشحن
           </h1>
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className="h-4 w-4 me-1" />تحديث
@@ -121,9 +123,10 @@ export default function DriverPortalMyTrips() {
         <Tabs value={filter} onValueChange={setFilter}>
           <TabsList>
             <TabsTrigger value="all">الكل</TabsTrigger>
-            <TabsTrigger value="scheduled">مجدولة</TabsTrigger>
-            <TabsTrigger value="in_progress">جارية</TabsTrigger>
-            <TabsTrigger value="completed">مكتملة</TabsTrigger>
+            <TabsTrigger value="confirmed">مؤكدة</TabsTrigger>
+            <TabsTrigger value="loading">تحميل</TabsTrigger>
+            <TabsTrigger value="in_transit">في الطريق</TabsTrigger>
+            <TabsTrigger value="delivered">مسلّمة</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -136,49 +139,46 @@ export default function DriverPortalMyTrips() {
               <p className="text-sm text-rose-700">{error}</p>
             </CardContent>
           </Card>
-        ) : trips.length === 0 ? (
+        ) : rows.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-muted-foreground">
-              <RouteIcon className="h-10 w-10 mx-auto opacity-30 mb-2" />
-              <p>لا توجد رحلات في هذه الفئة</p>
+              <Package className="h-10 w-10 mx-auto opacity-30 mb-2" />
+              <p>لا توجد بوالص شحن في هذه الفئة</p>
             </CardContent>
           </Card>
         ) : (
-          trips.map((t) => (
-            <Card key={t.id}>
+          rows.map((m) => (
+            <Card key={m.id}>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between text-base">
-                  <span className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-status-info-foreground" />
-                    {t.fromLocation || "—"} → {t.toLocation || "—"}
-                  </span>
-                  <Badge variant="outline" className={STATUS_TONE[t.status] || "bg-surface-subtle"}>
-                    {STATUS_LABEL[t.status] || t.status}
+                  <span className="font-mono text-sm">{m.manifestNumber}</span>
+                  <Badge variant="outline" className={STATUS_TONE[m.status] || "bg-surface-subtle"}>
+                    {STATUS_LABEL[m.status] || m.status}
                   </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
+                <p className="text-sm mb-2">
+                  {m.fromLocation || "—"} <span className="text-muted-foreground">→</span> {m.toLocation || "—"}
+                </p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   <div>
-                    <p className="text-xs text-muted-foreground inline-flex items-center gap-1"><Clock className="h-3 w-3" />بدء</p>
-                    <p>{t.startTime ? new Date(t.startTime).toLocaleString("ar-SA") : "—"}</p>
+                    <p className="text-xs text-muted-foreground">العميل</p>
+                    <p>{m.customerName || "—"}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">المركبة</p>
-                    <p className="font-mono">{t.vehiclePlate || "—"}</p>
+                    <p className="font-mono">{m.vehiclePlate || "—"}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">المسافة</p>
-                    <p>{t.distance != null ? `${Number(t.distance).toFixed(1)} كم` : "—"}</p>
+                    <p className="text-xs text-muted-foreground">التحميل</p>
+                    <p className="text-xs">{m.pickupDate || "—"}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">الحالة</p>
-                    <p>{STATUS_LABEL[t.status] || t.status}</p>
+                    <p className="text-xs text-muted-foreground inline-flex items-center gap-1"><Weight className="h-3 w-3" />الوزن</p>
+                    <p>{m.totalWeight ? `${Number(m.totalWeight).toFixed(0)} كغ` : "—"}</p>
                   </div>
                 </div>
-                {t.notes && (
-                  <p className="text-xs text-muted-foreground mt-2 border-t pt-2">{t.notes}</p>
-                )}
               </CardContent>
             </Card>
           ))

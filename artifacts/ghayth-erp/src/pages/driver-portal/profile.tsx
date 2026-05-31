@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Truck, RefreshCw, LogOut, KeyRound, Activity, AlertCircle, CheckCircle, Route as RouteIcon } from "lucide-react";
+import { Truck, RefreshCw, LogOut, KeyRound, Activity, AlertCircle, CheckCircle, Route as RouteIcon, Package } from "lucide-react";
 import { driverFetch, getDriverToken, clearDriverSession } from "./lib";
 
 interface DriverMe {
@@ -127,6 +127,9 @@ export default function DriverPortalProfile() {
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigate("/driver-portal/my-trips")}>
               <RouteIcon className="h-4 w-4 me-1" />رحلاتي
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/driver-portal/my-cargo")}>
+              <Package className="h-4 w-4 me-1" />البضائع
             </Button>
             <Button variant="ghost" size="sm" onClick={logout}>
               <LogOut className="h-4 w-4 me-1" />خروج
