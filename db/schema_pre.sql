@@ -7944,7 +7944,8 @@ CREATE TABLE public.fleet_fuel_logs (
     "mileageAtFuel" integer,
     "stationName" character varying(200),
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "tripId" integer
 );
 
 
