@@ -14,11 +14,11 @@
 | 3 | `pages/admin/rbac-v2-conditions-editor.tsx` dead-vs-partial | **Keep (sub-component)** | JSDoc at `artifacts/ghayth-erp/src/pages/admin/rbac-v2-conditions-editor.tsx:1-13` |
 | 4 | `bi/shared.tsx` + `my-space/shared.ts` + `governance/stats-cards.tsx` placement | **Keep in place** | JSDoc anchors in each file |
 | 5 | Umrah module key (sidebar `umrah` ↔ backend `operations`) | **Sidebar aligned to backend** | Resolved by slice 4/N (commit was squash-merged in PR #1463) |
-| 6 | `/admin` hub — needs API or cosmetic | ⏳ Needs Admin/Platform sign-off | See below |
+| 6 | `/admin` hub — needs API or cosmetic | **Resolved — keep, wire cards to tabs** | `pages/admin.tsx` (7 overview cards now `setActiveTab` instead of dead) |
 | 7 | `idempotency_keys` orphan-vs-live | **Live (via `lib/requestIdempotency`)** | Doc comment at `artifacts/api-server/src/middlewares/idempotencyMiddleware.ts:7-19` |
-| 8 | HR pairs duplication (recruitment / training / performance / shifts / leaves / violations) | ⏳ Needs HR/UX sign-off | See below |
-| 9 | `finance/dashboard.tsx` ready-vs-deprecate | ⏳ Needs Finance sign-off | See below |
-| 10 | `pages/hr.tsx`, `fleet.tsx`, `legal.tsx` legacy hubs | ⏳ Needs Platform sign-off | See below |
+| 8 | HR pairs duplication (recruitment / training / performance / shifts / leaves / violations) | **Resolved — keep separate** | JSDoc anchor on `hr/recruitment.tsx:1-25` documents the contract for all 6 pairs |
+| 9 | `finance/dashboard.tsx` ready-vs-deprecate | **Resolved — keep** | JSDoc anchor at `pages/finance/dashboard.tsx:1-14` — has 5 distinct domain queries that `/module-dashboards` doesn't surface |
+| 10 | `pages/hr.tsx`, `fleet.tsx`, `legal.tsx` legacy hubs | **Resolved — keep** | JSDoc anchors on each — same rationale: domain-specific landings, not duplicates of module-dashboards |
 
 ## Resolved (5 / 10)
 
