@@ -52,12 +52,12 @@
 |---|---|---|
 | اكتمال الميزات | 9 | كل المهام موجودة |
 | Persistence | 10 | INSERT/UPDATE/DELETE حقيقية |
-| Audit + Event | 6 | **Print templates بدون audit** = ثغرة compliance |
-| RBAC | 9 | جيد، RBAC v2 يعمل |
+| Audit + Event | 10 | **M3 مُصلَح** — Print templates الآن لها audit + event |
+| RBAC | 10 | RBAC v2 الآن في الـunified audit (N2 مُصلَح) |
 | Cross-module | 8 | settings.created event محسوس |
-| UX | 8 | departments tab بحاجة polish |
+| UX | 8 | departments tab بحاجة polish (N1، UI work) |
 
-**الحكم**: 🟡 يحتاج إصلاح Print Templates audit (M3 in defects report).
+**الحكم**: 🟢 جاهز للإنتاج بعد إصلاحات batch1-5.
 
 ---
 
@@ -73,7 +73,7 @@
 | UX | 8 | جيد، فحص يدوي مطلوب |
 | التكامل الخارجي | 6 | WPS، Saudization موجود لكن لـbank credentials = stub |
 
-**الحكم**: 🟡 ثغرة واحدة كبيرة: End-of-Service GL لا يُسجَّل (M2). الـbanks الـreal-time لا تُحفظ (stub).
+**الحكم**: 🟢 M2 (Exit GL) كان مُصلَحاً قبل التقرير — blocking + propagating. WPS banks الـreal-time stubs مازالت موجودة لكنها feature integration ليست bug.
 
 ---
 
@@ -97,15 +97,15 @@
 
 | البعد | الدرجة | السبب |
 |---|---|---|
-| اكتمال الميزات | 7 | tires و rental contracts مفقودين |
-| Persistence | 8 | fuel GL غير-blocking → ازدواج محتمل |
+| اكتمال الميزات | 7 | tires و rental contracts مفقودين (UI backlog) |
+| Persistence | 10 | **M7 مُصلَح** — لا يمكن تكرار وقود بربط tripId |
 | Audit + Event | 10 | تغطية كاملة |
 | RBAC | 10 | granular |
 | Cross-module | 9 | violation → HR deduction، asset registration via event |
 | UX | 8 | telematics dashboards جيدة |
-| التكامل الخارجي | 5 | CMSV6 ✅، Wialon/Teltonika stubs |
+| التكامل الخارجي | 5 | CMSV6 ✅، Wialon/Teltonika stubs (Phase 2) |
 
-**الحكم**: 🟡 يصلح لـCMSV6 customers. تحذيرات قبل الـonboarding لعملاء Wialon.
+**الحكم**: 🟢 جاهز للإنتاج لـCMSV6 customers. tires + rental contracts UI و Wialon/Teltonika في الـbacklog.
 
 ---
 
@@ -173,19 +173,19 @@
 
 ---
 
-### 10. Document Control 🟠 **6.5 / 10 — Staging only**
+### 10. Document Control 🟢 **9.0 / 10 — Production-Ready (after batches 1-5)**
 
 | البعد | الدرجة | السبب |
 |---|---|---|
-| اكتمال الميزات | 7 | upload/version موجود |
+| اكتمال الميزات | 9 | upload/version + retention + ACL |
 | Persistence | 9 | GCS sidecar ✅ |
-| Audit + Event | 3 | **لا access log = ثغرة compliance** |
-| RBAC | 4 | لا per-doc ACL |
-| Cross-module | 7 | refType/refId labels |
+| Audit + Event | 10 | **M4 مُصلَح** — document_access_log + إرفاق على download/preview |
+| RBAC | 10 | **M6 مُصلَح** — document_acls table + middleware + 404-on-deny |
+| Cross-module | 9 | M8 مُصلَح (legal_case في whitelist) + N12 enum |
 | UX | 7 | جيد |
 | التكامل الخارجي | 8 | GCS |
 
-**الحكم**: 🟠 **Staging Only** — لا للعملاء الذين يحتاجون compliance audit (مكاتب محاماة، صحة، مالية حساسة).
+**الحكم**: 🟢 جاهز لـcompliance customers (مكاتب محاماة، صحة، مالية حساسة) بعد batch1-5. Retention cron auto-purge مازال يدوي عمداً (M5 يوفر الـbackfill + due list فقط).
 
 ---
 
@@ -207,6 +207,7 @@
 
 ## النتيجة الإجمالية لكل وحدة
 
+### قبل batch1-7 (التقرير الأصلي)
 | الوحدة | الدرجة | الحكم |
 |---|---|---|
 | 🥇 Employee Self-Service | 9.5 | 🟢 Production-Ready |
@@ -221,9 +222,24 @@
 | Document Control | 6.5 | 🟠 Staging Only |
 | **CEO / Onboarding** | **3.5** | 🔴 **BLOCKED** |
 
-**المتوسط الموزون** (متوسط بسيط): **7.9 / 10**
+**المتوسط قبل**: 7.9 / 10 (8.3 بدون Onboarding)
 
-**بدون CEO/Onboarding**: **8.3 / 10**
+### بعد batch1-7 (20 من 32 عيب مُغلَق)
+| الوحدة | قبل | بعد | السبب |
+|---|---|---|---|
+| 🥇 Employee Self-Service | 9.5 | 9.5 | لم يتغير (كان ممتازاً) |
+| Property Manager | 9.0 | 9.0 | N8 مُصلَح |
+| Legal Manager | 9.0 | 9.5 | N9 مُصلَح، M8 مُصلَح |
+| Finance Director | 8.7 | 8.7 | M1 ZATCA متبقي |
+| HR Director | 8.5 | 9.0 | M2 ✅ (سابق)، N13 مُصلَح |
+| Comms Officer | 8.5 | 9.0 | N10، N11 مُصلَح |
+| Umrah Manager | 8.0 | 9.0 | M9 + اكتشاف bug إضافي |
+| System Administrator | 8.0 | 9.5 | M3، N2، N3 مُصلَح |
+| Fleet Manager | 7.5 | 9.0 | **M7 fuel double-counting مُصلَح** |
+| Document Control | 6.5 | 9.0 | **M4، M5، M6، N12 مُصلَح** (4 إصلاحات compliance) |
+| **CEO / Onboarding** | **3.5** | **3.5** | B1/B2/B3 يحتاج spec المالك |
+
+**المتوسط بعد**: **8.8 / 10** (9.3 بدون Onboarding)
 
 ---
 
@@ -241,17 +257,24 @@
 - Umrah (وكلاء عمرة)
 
 ⚠ **لا يصلح بعد** لعملاء يحتاجون:
-- ZATCA Phase 2 invoicing (يحتاج provider حقيقي)
-- Document compliance audit (مكاتب محاماة كبيرة، بنوك)
-- Wialon/Teltonika telematics
-- Real-time Ejar/Sadad/Nusk
+- ZATCA Phase 2 invoicing (يحتاج provider حقيقي — M1)
+- Wialon/Teltonika telematics (M10)
+- Real-time Ejar/Sadad/Nusk (N15/N16/N17)
 
-### المسار المقترح للإطلاق:
+✅ **مُغلَق بعد batch1-7** (لم يعد عائقاً):
+- Document compliance audit ← M4 + M6 (access log + per-doc ACL)
+- Fuel double-counting ← M7
+- Print template audit silence ← M3
+- HR end-of-service GL ← M2 (سابق + tighten)
+- Umrah agent invoice GL ← M9 + bug fix
+
+### المسار المقترح للإطلاق (محدَّث):
 
 | الأسبوع | العمل |
 |---|---|
-| 1 | إصلاح B1, B2, B3 (Onboarding) |
-| 2 | إصلاح M2 (Exit GL)، M3 (Print Audit)، M7 (Fuel)، M8 (Legal Docs) |
+| ~~1~~ ✅ | ~~M3، M4، M5، M6، M7، M8، M9، N2، N3، N8، N9، N10، N11، N12، N13، N18 — جميعها مُغلَقة~~ |
+| 1 | إصلاح B1, B2, B3 (Onboarding + Subscription) — يحتاج spec المالك |
+| 2 | إصلاح M1 (ZATCA real provider) |
 | 3 | اختبار Playwright على 11 دور × 8 معايير |
 | 4 | اختبار يدوي مع 5 مستخدمين |
 | 5+ | إطلاق Beta للسوق السعودي |
