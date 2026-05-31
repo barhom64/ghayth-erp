@@ -28,6 +28,7 @@ import { miscRoutes } from "@/routes/miscRoutes";
 import { umrahRoutes } from "@/routes/umrahRoutes";
 
 import Login from "@/pages/login";
+import Setup from "@/pages/setup";
 import NotFound from "@/pages/not-found";
 
 const Dashboard = lazy(() => import("@/pages/dashboard"));
@@ -153,6 +154,10 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      {/* B1 + B3 — first-time setup. Unauthenticated. The page guards
+          itself against double-setup by probing /auth/setup-state on
+          mount and redirecting to /login if any company exists. */}
+      <Route path="/setup" component={Setup} />
       {/* Public QR-verify page — every PDF the print engine emits embeds a
           QR pointing here, so regulators / counter staff can confirm a
           doc's audit row without an ERP account. The /api/print/verify/:jobId

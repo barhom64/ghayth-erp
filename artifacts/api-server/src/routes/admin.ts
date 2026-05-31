@@ -12,6 +12,7 @@ import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { integrationService } from "../lib/integrationService.js";
 import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
+import { invalidateSubscriptionCache } from "../middlewares/subscriptionGate.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { sendMessage } from "../lib/messageSender.js";
@@ -2160,6 +2161,84 @@ router.post("/permissions/explain", authorize({ feature: "admin", action: "view"
       deniedByRule: denied,
     });
   } catch (e) { logger.error(e, "permission explain error"); handleRouteError(e, res, "فشل تفسير الصلاحية"); }
+});
+
+// B2 subscription status — owner-facing. Returns the current
+// subscriptionStatus, trial expiry, and a derived `daysRemaining`
+// so the UI banner can say "تجربتك تنتهي خلال 7 أيام".
+router.get("/subscription", authorize({ feature: "admin", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery<{
+      subscriptionStatus: string;
+      subscriptionPlan: string;
+      trialExpiresAt: string | null;
+    }>(
+      `SELECT "subscriptionStatus", "subscriptionPlan", "trialExpiresAt"
+         FROM companies WHERE id = $1`,
+      [scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الشركة غير موجودة");
+    const daysRemaining = row.trialExpiresAt
+      ? Math.max(0, Math.ceil(
+          (new Date(row.trialExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        ))
+      : null;
+    res.json({
+      subscriptionStatus: row.subscriptionStatus,
+      subscriptionPlan: row.subscriptionPlan,
+      trialExpiresAt: row.trialExpiresAt,
+      daysRemaining,
+    });
+  } catch (err) { handleRouteError(err, res, "subscription status fetch failed"); }
+});
+
+// B2 subscription extend / activate — admin-only. Until a real
+// billing provider is wired, owners can manually flip status to
+// 'active' (e.g. after off-platform payment) or extend the trial.
+// This is the manual placeholder for the future Stripe/Tap/HyperPay
+// webhook handler. Gated by `admin:update` (owner-equivalent).
+router.post("/subscription/activate", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const planName = String(req.body?.plan ?? "active");
+    await rawExecute(
+      `UPDATE companies
+          SET "subscriptionStatus" = 'active',
+              "subscriptionPlan" = $1,
+              "trialExpiresAt" = NULL
+        WHERE id = $2`,
+      [planName, scope.companyId]
+    );
+    invalidateSubscriptionCache(scope.companyId);
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "subscription.activated", entity: "companies", entityId: scope.companyId,
+      after: { subscriptionStatus: "active", plan: planName },
+    }).catch(() => undefined);
+    res.json({ ok: true, subscriptionStatus: "active", subscriptionPlan: planName });
+  } catch (err) { handleRouteError(err, res, "activate subscription failed"); }
+});
+
+router.post("/subscription/extend-trial", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const days = Math.max(1, Math.min(365, Number(req.body?.days ?? 30)));
+    await rawExecute(
+      `UPDATE companies
+          SET "subscriptionStatus" = 'trial',
+              "trialExpiresAt" = COALESCE("trialExpiresAt", NOW()) + ($1 * INTERVAL '1 day')
+        WHERE id = $2`,
+      [days, scope.companyId]
+    );
+    invalidateSubscriptionCache(scope.companyId);
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "subscription.trial_extended", entity: "companies", entityId: scope.companyId,
+      after: { days },
+    }).catch(() => undefined);
+    res.json({ ok: true, daysExtended: days });
+  } catch (err) { handleRouteError(err, res, "extend trial failed"); }
 });
 
 export default router;
