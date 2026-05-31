@@ -26,6 +26,7 @@ import {
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 // Zod schema enforces what the old `disabled={!form.name || ...}` guard
 // only half-checked. value is coerced from the <input type="number">
 // string back to a number (same pattern as inspections/deposits #287).
@@ -155,6 +156,7 @@ export default function SalaryComponentsPage() {
         </GuardedButton>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={[
         { label: "إجمالي المكونات", value: items.length, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "البدلات", value: allowances.length, icon: TrendingUp, color: "text-status-success-foreground bg-status-success-surface" },

@@ -90,6 +90,10 @@ export default function Workspace() {
   return (
     <PageShell
       title="مساحة العمل"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مساحة العمل" },
+      ]}
       subtitle={`صباحك خير ${user?.name || ""} — هذا برنامج يومك`}
       actions={
         <Link href="/manager-board">

@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
@@ -65,6 +66,7 @@ export default function LegalJudgments() {
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الأحكام القضائية" }]}
       loading={isLoading}
     >
+      <LegalTabsNav />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">إجمالي المبالغ</p><p className="text-xl font-bold">{formatCurrency(Number(totalAmount))}</p></CardContent></Card>
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المدفوع</p><p className="text-xl font-bold text-status-success-foreground">{formatCurrency(Number(totalPaid))}</p></CardContent></Card>

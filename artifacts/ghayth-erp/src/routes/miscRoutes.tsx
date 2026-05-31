@@ -38,9 +38,9 @@ const AiWorkbench = lazy(() => import("@/pages/ai-workbench"));
 const Insights = lazy(() => import("@/pages/insights"));
 const Automation = lazy(() => import("@/pages/automation"));
 const ActivityLog = lazy(() => import("@/pages/activity-log"));
+const Services = lazy(() => import("@/pages/services"));
 const MySpace = lazy(() => import("@/pages/my-space"));
 const MyRequests = lazy(() => import("@/pages/my-requests"));
-const MyLeaveRequest = lazy(() => import("@/pages/my-leave-request"));
 const MyAttendance = lazy(() => import("@/pages/my-attendance"));
 const MyPayslip = lazy(() => import("@/pages/my-payslip"));
 const MyPerformance = lazy(() => import("@/pages/my-performance"));
@@ -60,15 +60,16 @@ const ExecDashboard = lazy(() => import("@/pages/exec-dashboard"));
 const ProjectGantt = lazy(() => import("@/pages/projects/gantt"));
 const ProjectRisks = lazy(() => import("@/pages/projects/risks"));
 const InventoryCount = lazy(() => import("@/pages/warehouse/inventory-count"));
+const WarehouseAdvanced = lazy(() => import("@/pages/warehouse-advanced"));
 const Obligations = lazy(() => import("@/pages/obligations"));
 const CalendarPage = lazy(() => import("@/pages/calendar"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 
 export const miscRoutes: { path: string; component: any; module?: ModuleType; minRoleLevel?: number }[] = [
   { path: "/dashboard", component: Dashboard },
+  { path: "/services", component: Services },
   { path: "/my-space", component: MySpace },
   { path: "/my-requests", component: MyRequests },
-  { path: "/my-leave-request", component: MyLeaveRequest },
   { path: "/my-attendance", component: MyAttendance },
   { path: "/my-payslip", component: MyPayslip },
   { path: "/my-performance", component: MyPerformance },
@@ -112,6 +113,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/warehouse/suppliers/:id", component: WarehouseSupplierDetail, module: "warehouse" },
   { path: "/warehouse/movements", component: Warehouse, module: "warehouse" },
   { path: "/warehouse/categories", component: Warehouse, module: "warehouse" },
+  { path: "/warehouse/advanced", component: WarehouseAdvanced, module: "warehouse" },
   { path: "/warehouse/suppliers", component: Warehouse, module: "warehouse" },
   { path: "/warehouse/inventory-count", component: InventoryCount, module: "warehouse" },
   { path: "/support/create", component: SupportCreate, module: "support" },

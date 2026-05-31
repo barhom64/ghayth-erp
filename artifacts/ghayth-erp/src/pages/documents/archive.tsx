@@ -5,6 +5,7 @@ import {
   PageStatusBadge,
   DataTable,
   type DataTableColumn,
+  PageShell,
 } from "@workspace/ui-core";
 import { Archive, FileText, Calendar, FolderArchive } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -57,9 +58,10 @@ export default function DocumentsArchive() {
   ];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">الأرشيف</h1>
-
+    <PageShell
+      title="الأرشيف"
+      breadcrumbs={[{ href: "/documents", label: "المستندات" }, { label: "الأرشيف" }]}
+    >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -82,6 +84,6 @@ export default function DocumentsArchive() {
         searchPlaceholder="بحث في الأرشيف..."
         emptyMessage="لا توجد مستندات"
       />
-    </div>
+    </PageShell>
   );
 }

@@ -9,6 +9,7 @@ import { SEVERITY_LEVELS } from "@/lib/hr-type-maps";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 // The discipline regulation (hr_discipline_regulation) escalates every
 // article across four occurrence levels — penalty1..penalty4. That four-
 // step structure IS the escalation ladder; this page surfaces it instead
@@ -66,6 +67,7 @@ export default function PenaltyEscalationPage() {
         { label: "تصعيد الجزاءات" },
       ]}
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <Card>

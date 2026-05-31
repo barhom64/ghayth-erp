@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
 import { formatDateAr } from "@/lib/formatters";
 import {
   DataTable,
@@ -62,6 +63,7 @@ export default function LegalSessions() {
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الجلسات القادمة" }]}
       loading={isLoading}
     >
+      <LegalTabsNav />
       <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
       <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} onRowClick={(s) => navigate(`/legal/sessions/${s.id}`)} />
     </PageShell>

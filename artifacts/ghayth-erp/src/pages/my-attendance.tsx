@@ -97,7 +97,11 @@ export default function MyAttendance() {
   const totalOvertimeMinutes = monthly?.overtimeMinutes ?? records.reduce((sum: number, r: any) => sum + (Number(r.overtimeMinutes) || 0), 0);
 
   return (
-    <PageShell title="حضوري وانصرافي" subtitle="سجل الحضور والانصراف الشهري">
+    <PageShell title="حضوري وانصرافي"
+      breadcrumbs={[
+        { href: "/my-space", label: "مساحاتي" },
+        { label: "حضوري وانصرافي" },
+      ]} subtitle="سجل الحضور والانصراف الشهري">
       <div className="flex items-center gap-3 mb-6">
         <label className="text-sm font-medium text-status-neutral-foreground">الشهر:</label>
         <input

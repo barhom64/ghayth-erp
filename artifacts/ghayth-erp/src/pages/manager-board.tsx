@@ -193,6 +193,10 @@ export default function ManagerBoard() {
   return (
     <PageShell
       title="لوحة المدير"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "لوحة المدير" },
+      ]}
       subtitle="إشراف على الفريق والطلبات المعلقة واتخاذ قرارات سريعة"
       actions={
         <Link href="/action-center">

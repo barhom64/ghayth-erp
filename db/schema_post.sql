@@ -518,6 +518,13 @@ ALTER TABLE ONLY public.document_entity_links ALTER COLUMN id SET DEFAULT nextva
 
 
 --
+-- Name: document_access_log id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_access_log ALTER COLUMN id SET DEFAULT nextval('public.document_access_log_id_seq'::regclass);
+
+
+--
 -- Name: document_folders id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3243,6 +3250,28 @@ ALTER TABLE ONLY public.document_entity_links
 
 ALTER TABLE ONLY public.document_entity_links
     ADD CONSTRAINT document_entity_links_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: document_access_log document_access_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_access_log
+    ADD CONSTRAINT document_access_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_doc_access_log_doc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_doc_access_log_doc ON public.document_access_log USING btree ("companyId", "documentId", "accessedAt" DESC);
+
+
+--
+-- Name: idx_doc_access_log_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_doc_access_log_user ON public.document_access_log USING btree ("companyId", "userId", "accessedAt" DESC);
 
 
 --

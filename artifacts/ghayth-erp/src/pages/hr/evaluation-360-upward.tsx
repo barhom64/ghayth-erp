@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const UPWARD_CRITERIA = [
   { key: "leadership", label: "القيادة وتوزيع المهام" },
   { key: "communication", label: "التواصل والشفافية" },
@@ -129,6 +130,7 @@ export default function Evaluation360UpwardPage() {
         </Link>
       }
     >
+      <HrTabsNav />
       {/* Privacy guarantee */}
       <Card className="border-0 shadow-sm bg-purple-50 border border-purple-200">
         <CardContent className="p-4">

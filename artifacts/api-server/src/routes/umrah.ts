@@ -24,6 +24,7 @@ import {
   createAuditLog,
   todayISO,
 } from "../lib/businessHelpers.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
@@ -206,10 +207,20 @@ const patchPackageSchema = z.object({
   description: z.string().optional(),
 });
 
+// Lets the reassign modal (pilgrim-detail.tsx) ship an empty string
+// to mean "unassign", instead of having to remember to send literal
+// null from the frontend. Without this, z.coerce.number("") returns 0
+// and the FK insert would fail against the non-existent agent id 0.
+const nullableFkId = z.preprocess(
+  (v) => (v === "" || v === undefined ? null : v),
+  z.coerce.number().nullable(),
+);
+
 const patchPilgrimSchema = z.object({
   status: z.enum(["pending", "arrived", "active", "overstayed", "departed", "violated", "cancelled"]).optional(),
-  agentId: z.coerce.number().optional().nullable(),
-  packageId: z.coerce.number().optional().nullable(),
+  agentId: nullableFkId.optional(),
+  subAgentId: nullableFkId.optional(),
+  packageId: nullableFkId.optional(),
   fullName: z.string().optional(),
   passportNumber: z.string().optional(),
   visaNumber: z.string().optional().nullable(),
@@ -225,6 +236,12 @@ const patchPilgrimSchema = z.object({
   roomNumber: z.string().optional().nullable(),
   transportAssigned: z.boolean().optional(),
   notes: z.string().optional().nullable(),
+  // Overstay-exemption knobs (migration 242 / PR #1481). When the
+  // operator flips overstayExempt=true, the cron skips this pilgrim
+  // entirely. Reason is required by the API guard below so a
+  // compliance reviewer can see WHY each exemption was granted.
+  overstayExempt: z.boolean().optional(),
+  overstayExemptReason: z.string().optional().nullable(),
 });
 
 // `columnMapping` lets the wizard's column-mapping step override the
@@ -256,6 +273,17 @@ const importVouchersSchema = z.object({
   /** Override umrah_nusk_cost DR account code (gap #3). */
   purchaseAccountCode: z.string().trim().min(1).optional().nullable(),
   columnMapping: columnMappingSchema,
+  /**
+   * Explicit override for the wallet-overdraft guardrail. By default
+   * the engine refuses an import that would push the NUSK supplier
+   * wallet (PR #1464) below zero — matching the operator rule
+   * "لا يمكن نشتري تأشيرة الا وفي فلوس في الحساب". Setting
+   * allowOverdraft=true bypasses the check for cases where the
+   * operator KNOWS a top-up is on its way and wants to record the
+   * NUSK invoices anyway. The audit log captures the override so
+   * compliance can review.
+   */
+  allowOverdraft: z.boolean().optional().default(false),
 });
 
 const importSchema = z.object({
@@ -456,14 +484,87 @@ router.get("/agents/:id", authorize({ feature: "umrah", action: "view" }), async
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery(`SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) { throw new NotFoundError("الوكيل غير موجود"); }
-    const stats = await rawQuery(
-      `SELECT COUNT(*)::int AS "pilgrimCount",
-              COUNT(*) FILTER (WHERE status='overstayed')::int AS "overstayedCount"
-       FROM umrah_pilgrims WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    // Operator statement — answers "how many pilgrims has this agent
+    // sent? what's their balance?" without a second round-trip. Three
+    // aggregate queries (pilgrim counts, status breakdown, finance) run
+    // in parallel via Promise.all so adding them doesn't double the
+    // latency of the detail fetch.
+    const [statsResult, statusBreakdownResult, financeResult] = await Promise.all([
+      rawQuery(
+        `SELECT COUNT(*)::int AS "pilgrimCount",
+                COUNT(*) FILTER (WHERE status='overstayed')::int AS "overstayedCount"
+         FROM umrah_pilgrims WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+      rawQuery<{ status: string; c: number }>(
+        `SELECT status, COUNT(*)::int AS c
+         FROM umrah_pilgrims WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+         GROUP BY status`,
+        [id, scope.companyId]
+      ),
+      rawQuery(
+        // 'cancelled' is excluded from totalInvoiced — operators don't
+        // include voided invoices in the "owed" number. totalPaid uses
+        // status='paid'; partial payments will undercount slightly but
+        // the operator overhead of tracking allocations per invoice is
+        // larger than the rounding gain — left for a follow-up that
+        // joins umrah_payments + umrah_payment_allocations.
+        `SELECT COALESCE(SUM(total) FILTER (WHERE status <> 'cancelled'), 0)::numeric AS "totalInvoiced",
+                COALESCE(SUM(total) FILTER (WHERE status = 'paid'), 0)::numeric         AS "totalPaid"
+         FROM umrah_agent_invoices
+         WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+    ]);
+    const stats = statsResult[0] || { pilgrimCount: 0, overstayedCount: 0 };
+    const finance = financeResult[0] as { totalInvoiced: string; totalPaid: string } | undefined;
+    const totalInvoiced = Number(finance?.totalInvoiced ?? 0);
+    const totalPaid = Number(finance?.totalPaid ?? 0);
+    // statusBreakdown shipped as a dict keyed by status so the UI can
+    // pluck specific buckets without sorting.
+    const statusBreakdown = Object.fromEntries(
+      (statusBreakdownResult as Array<{ status: string; c: number }>).map((r) => [r.status, Number(r.c)])
+    );
+    res.json(maskFields(req, {
+      ...row,
+      ...stats,
+      totalInvoiced,
+      totalPaid,
+      totalOutstanding: Math.max(0, totalInvoiced - totalPaid),
+      statusBreakdown,
+    }));
+  } catch (err) { handleRouteError(err, res, "Get agent error"); }
+});
+
+// Recent invoices for an agent — makes the statement (PR #1438)
+// actionable by showing WHICH invoices are unpaid so the operator
+// can follow up on a specific ref, not just an abstract balance.
+// `limit` is clamped to [1, 100] so the dropdown can't accidentally
+// pull the full season.
+router.get("/agents/:id/invoices", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 10));
+    // Existence check up-front so a wrong agent id surfaces a 404
+    // instead of "data: []" — operators have hit that ambiguity on
+    // other detail endpoints and assumed "nothing invoiced" when
+    // really the URL was wrong.
+    const [agent] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [id, scope.companyId]
     );
-    res.json(maskFields(req, { ...row, ...(stats[0] || {}) }));
-  } catch (err) { handleRouteError(err, res, "Get agent error"); }
+    if (!agent) throw new NotFoundError("الوكيل غير موجود");
+    const rows = await rawQuery(
+      `SELECT id, ref, type, "pilgrimCount", total, status, "dueDate", "createdAt"
+         FROM umrah_agent_invoices
+        WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        ORDER BY "createdAt" DESC
+        LIMIT $3`,
+      [id, scope.companyId, limit]
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
 });
 
 router.post("/agents", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
@@ -626,7 +727,7 @@ router.delete("/packages/:id", authorize({ feature: "umrah", action: "delete" })
 router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId, status, agentId, groupId, nationality, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
+    const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, visaExpiringWithin, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
     let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
@@ -638,6 +739,37 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
     // — because the import file may write "SA" or "SAUDI" or "Saudi
     // Arabia" depending on the source.
     if (nationality) { params.push(`%${nationality}%`); where += ` AND p.nationality ILIKE $${params.length}`; }
+    // Flight filter — the daily flight-day workflow. Matches either
+    // entryFlight OR exitFlight via ILIKE so a single search hits both
+    // arrival + departure manifests. Pair with the bulk-status flip
+    // (PR #1430) for the canonical pattern: filter flight → select all
+    // → mark arrived/departed in one click.
+    if (flight) {
+      params.push(`%${flight}%`);
+      where += ` AND (p."entryFlight" ILIKE $${params.length} OR p."exitFlight" ILIKE $${params.length})`;
+    }
+    // Exact-date filters — the morning "who's coming in today / leaving
+    // today" question. arrivalDate / departureDate are `date` columns,
+    // so an equality match against a YYYY-MM-DD string works without
+    // cast. Operators pass the Riyadh-local date from the UI (the
+    // todayLocal() helper) so they don't accidentally query UTC.
+    if (arrivalDate) { params.push(arrivalDate); where += ` AND p."arrivalDate" = $${params.length}`; }
+    if (departureDate) { params.push(departureDate); where += ` AND p."departureDate" = $${params.length}`; }
+    // Visa-expiring window — surfaces compliance risk before it
+    // becomes a KSA overstay fine. Range: [today, today + N days];
+    // also excludes already-departed/cancelled rows since their visa
+    // status is operationally irrelevant. The UI dashboard banner +
+    // chip filter clicks set N=7 by default. Date arithmetic uses
+    // CURRENT_DATE so the boundary tracks the server's date — same
+    // source todayISO() reads.
+    if (visaExpiringWithin) {
+      const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
+      params.push(days);
+      where += ` AND p."visaExpiry" IS NOT NULL
+                 AND p."visaExpiry" >= CURRENT_DATE
+                 AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
+                 AND p.status NOT IN ('departed','cancelled')`;
+    }
     if (search) {
       // Search hits four columns:
       //   - fullName              (plaintext, ILIKE)
@@ -672,6 +804,126 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
     logSensitiveAccess({ companyId: scope.companyId, userId: scope.userId, action: "list", entity: "umrah_pilgrims", ipAddress: req.ip, userAgent: req.headers["user-agent"], details: { count: rows.length, search: search || null } });
     res.json(maskFields(req, { data: rows.map(decryptPilgrimRow), total: Number(countQ[0]?.c || 0), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "List pilgrims error"); }
+});
+
+// CSV export of the FULL filtered set (no pagination). The list page's
+// existing exportToCSV() only grabs the current page (~20 rows), which
+// is useless for handing manifests to MOFA / hotels / bus drivers. This
+// endpoint mirrors the list filters and streams every match.
+//
+// Defence-in-depth: every JOIN matches BOTH id AND companyId so a
+// mistyped FK can't lift another tenant's name onto an exported row
+// (same pattern as PR #1425 added to GET /pilgrims/:id).
+router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, visaExpiringWithin, search } = req.query as Record<string, string | undefined>;
+    let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
+    const params: unknown[] = [scope.companyId];
+    if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
+    if (status) { params.push(status); where += ` AND p.status=$${params.length}`; }
+    if (agentId) { params.push(agentId); where += ` AND p."agentId"=$${params.length}`; }
+    if (groupId) { params.push(groupId); where += ` AND p."groupId"=$${params.length}`; }
+    if (nationality) { params.push(`%${nationality}%`); where += ` AND p.nationality ILIKE $${params.length}`; }
+    if (flight) {
+      params.push(`%${flight}%`);
+      where += ` AND (p."entryFlight" ILIKE $${params.length} OR p."exitFlight" ILIKE $${params.length})`;
+    }
+    if (arrivalDate) { params.push(arrivalDate); where += ` AND p."arrivalDate" = $${params.length}`; }
+    if (departureDate) { params.push(departureDate); where += ` AND p."departureDate" = $${params.length}`; }
+    // Visa-expiring window — surfaces compliance risk before it
+    // becomes a KSA overstay fine. Range: [today, today + N days];
+    // also excludes already-departed/cancelled rows since their visa
+    // status is operationally irrelevant. The UI dashboard banner +
+    // chip filter clicks set N=7 by default. Date arithmetic uses
+    // CURRENT_DATE so the boundary tracks the server's date — same
+    // source todayISO() reads.
+    if (visaExpiringWithin) {
+      const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
+      params.push(days);
+      where += ` AND p."visaExpiry" IS NOT NULL
+                 AND p."visaExpiry" >= CURRENT_DATE
+                 AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
+                 AND p.status NOT IN ('departed','cancelled')`;
+    }
+    if (search) {
+      const searchHash = blindIndex(String(search));
+      params.push(`%${search}%`);
+      const likePh = params.length;
+      params.push(searchHash);
+      const hashPh = params.length;
+      where += ` AND (p."fullName" ILIKE $${likePh} OR p."nuskNumber" ILIKE $${likePh} OR p."passportNumber_hash" = $${hashPh} OR p."visaNumber_hash" = $${hashPh})`;
+    }
+
+    const rows = await rawQuery(
+      `SELECT p.*,
+              a.name  as "agentName",
+              pkg.name as "packageName",
+              s.title  as "seasonTitle",
+              g.name  as "groupName",
+              sa.name as "subAgentName"
+       FROM umrah_pilgrims p
+       LEFT JOIN umrah_agents     a   ON p."agentId"=a.id      AND a."companyId"=p."companyId"  AND a."deletedAt" IS NULL
+       LEFT JOIN umrah_packages   pkg ON p."packageId"=pkg.id  AND pkg."companyId"=p."companyId" AND pkg."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons    s   ON p."seasonId"=s.id     AND s."companyId"=p."companyId"  AND s."deletedAt" IS NULL
+       LEFT JOIN umrah_groups     g   ON p."groupId"=g.id      AND g."companyId"=p."companyId"  AND g."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa  ON p."subAgentId"=sa.id  AND sa."companyId"=p."companyId" AND sa."deletedAt" IS NULL
+       WHERE ${where}
+       ORDER BY p."createdAt" DESC`,
+      params
+    );
+
+    // Audit trail — exports of identifying info are sensitive.
+    logSensitiveAccess({
+      companyId: scope.companyId, userId: scope.userId, action: "export_csv",
+      entity: "umrah_pilgrims", ipAddress: req.ip, userAgent: req.headers["user-agent"],
+      details: { count: rows.length, filters: { seasonId, status, agentId, groupId, flight, arrivalDate, departureDate, search: search || null } },
+    });
+
+    // RFC 4180 escape — quote when the cell contains the delimiter,
+    // a quote, or any newline; double internal quotes.
+    const csvEscape = (v: unknown): string => {
+      if (v === null || v === undefined) return "";
+      const s = String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    // Manifest columns operators routinely need. Order matches what
+    // MOFA / hotel / bus driver handouts use: identity → trip → flight.
+    const headers = [
+      ["nuskNumber", "رقم نسك"],
+      ["fullName", "الاسم"],
+      ["passportNumber", "رقم الجواز"],
+      ["nationality", "الجنسية"],
+      ["gender", "الجنس"],
+      ["phone", "الهاتف"],
+      ["visaNumber", "رقم التأشيرة"],
+      ["visaExpiry", "صلاحية التأشيرة"],
+      ["mofaNumber", "رقم الموفا"],
+      ["borderNumber", "رقم الحدود"],
+      ["status", "الحالة"],
+      ["arrivalDate", "تاريخ الوصول"],
+      ["departureDate", "تاريخ المغادرة"],
+      ["entryFlight", "رحلة الوصول"],
+      ["exitFlight", "رحلة المغادرة"],
+      ["hotelName", "الفندق"],
+      ["roomNumber", "رقم الغرفة"],
+      ["seasonTitle", "الموسم"],
+      ["groupName", "المجموعة"],
+      ["agentName", "الوكيل الرئيسي"],
+      ["subAgentName", "الوكيل الفرعي"],
+    ] as const;
+    const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
+    const decrypted = rows.map(decryptPilgrimRow) as Array<Record<string, unknown>>;
+    const dataRows = decrypted.map((r) => headers.map(([key]) => csvEscape(r[key])).join(","));
+    // BOM so Excel detects UTF-8 Arabic — without it the file opens as
+    // mojibake (same lesson as PR #1420's rejected-rows CSV).
+    const BOM = "﻿";
+    const csv = BOM + [headerRow, ...dataRows].join("\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="umrah-pilgrims-${todayISO()}.csv"`);
+    res.send(csv);
+  } catch (err) { handleRouteError(err, res, "Export pilgrims CSV error"); }
 });
 
 router.post("/pilgrims", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
@@ -763,7 +1015,23 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
     const scope = req.scope!;
     const b = zodParse(patchPilgrimSchema.safeParse(req.body));
     const pilgrimId = parseId(req.params.id, "id");
-    const fieldKeys = ["agentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
+
+    // Overstay-exemption invariants (PR #1481): setting exempt=true
+    // REQUIRES a reason so compliance can audit WHY. Without it the
+    // operator could silently skip the cron for arbitrary pilgrims.
+    // Setting exempt=false (un-exempting) DOESN'T require a reason —
+    // the operator's removing the exemption, not adding one.
+    if (b.overstayExempt === true) {
+      const reason = (b.overstayExemptReason ?? "").trim();
+      if (!reason) {
+        throw new ValidationError("سبب الاستثناء مطلوب — لا يمكن استثناء معتمر بدون مبرّر مكتوب", {
+          field: "overstayExemptReason",
+          fix: "اكتب سبباً واضحاً (مثل: تأخّر مستشفى، اتفاق وكيل، تأخّر طيران)",
+        });
+      }
+    }
+
+    const fieldKeys = ["agentId","subAgentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
 
     const encryptIfSensitive = (key: string, val: any): any => {
       if (!val) return val;
@@ -807,6 +1075,29 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
           sets.push(`"${key}"=$${params.length}`);
           if (key === "passportNumber") { params.push(blindIndex(String(b[key]).trim())); sets.push(`"passportNumber_hash"=$${params.length}`); }
           if (key === "visaNumber") { params.push(blindIndex(String(b[key]).trim())); sets.push(`"visaNumber_hash"=$${params.length}`); }
+        }
+      }
+      // Overstay-exemption columns (migration 242). Written together
+      // with the standard fields so a single PATCH can flip the flag
+      // + update other state in one transaction. We track WHO + WHEN
+      // server-side so the audit trail can't be forged via API body.
+      if (b.overstayExempt !== undefined) {
+        params.push(b.overstayExempt);
+        sets.push(`"overstayExempt"=$${params.length}`);
+        if (b.overstayExempt) {
+          // Exempting → record the operator + timestamp + reason.
+          params.push(b.overstayExemptReason!.trim());
+          sets.push(`"overstayExemptReason"=$${params.length}`);
+          params.push(scope.userId);
+          sets.push(`"overstayExemptBy"=$${params.length}`);
+          sets.push(`"overstayExemptAt"=NOW()`);
+        } else {
+          // Un-exempting → clear the metadata so a re-exemption
+          // gets a fresh by/at trail instead of inheriting stale
+          // values from a prior exemption.
+          sets.push(`"overstayExemptReason"=NULL`);
+          sets.push(`"overstayExemptBy"=NULL`);
+          sets.push(`"overstayExemptAt"=NULL`);
         }
       }
       if (sets.length === 0) {
@@ -859,6 +1150,47 @@ router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "view" }), asy
     const penalties = await rawQuery(`SELECT * FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [id, scope.companyId]);
     res.json(maskFields(req, { ...decryptPilgrimRow(row), penalties }));
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
+});
+
+// Per-pilgrim activity timeline (PR #1484) — closes the operator's
+// "بمجر يدخل المعتمر او يتم اصدار تأشيرة لابد يكون فيه تحديد يومي
+//  عن بيانات المعتمر دخل خرج" rule. Reads audit_logs scoped to this
+// pilgrim, LEFT JOINs users for the operator's name, returns the
+// last 100 events newest-first.
+//
+// Why not just SELECT *? entityId on audit_logs is `text` (legacy
+// shape, supports composite ids elsewhere). We cast on the WHERE
+// clause and use the index that already covers (entity, entityId).
+router.get("/pilgrims/:id/timeline", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Existence check first — a 404 here means the operator typed
+    // a bad URL, not "no events yet for this pilgrim".
+    const [exists] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId],
+    );
+    if (!exists) throw new NotFoundError("المعتمر غير موجود");
+
+    const events = await rawQuery<Record<string, unknown>>(
+      `SELECT al.id, al.action, al."userId", al.before, al.after, al."createdAt",
+              COALESCE(e.name, u.email) AS "userName"
+         FROM audit_logs al
+         LEFT JOIN users u
+                ON u.id = al."userId"
+         LEFT JOIN employees e
+                ON e.id = u."employeeId"
+        WHERE al.entity = 'umrah_pilgrims'
+          AND al."entityId" = $1::text
+          AND al."companyId" = $2
+        ORDER BY al."createdAt" DESC
+        LIMIT 100`,
+      [String(id), scope.companyId],
+    );
+
+    res.json({ data: events, total: events.length });
+  } catch (err) { handleRouteError(err, res, "Get pilgrim timeline error"); }
 });
 
 router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
@@ -990,7 +1322,7 @@ router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }
 router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping } =
+    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping, allowOverdraft } =
       zodParse(importVouchersSchema.safeParse(req.body));
     await requireOpenSeason(seasonId, scope.companyId);
     // Wire vouchers through the dedicated engine so they actually create
@@ -1012,7 +1344,7 @@ router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }
     // `row.nuskInvoiceNumber === undefined` and bucket every row as an
     // error — the same bug the preview route hit before normalization.
     const normalizedRows = normalizeImportRows(importRows, "vouchers", columnMapping);
-    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers");
+    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers", { allowOverdraft });
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
 });
@@ -1630,16 +1962,23 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
     });
     const rows = [invoiceRow];
 
+    let glJournalId: number | null = null;
     try {
       const { umrahEngine } = await import("../lib/engines/index.js");
-      const journalId = await umrahEngine.postAgentInvoiceGL(
+      // postAgentInvoiceGL returns GLPostingResult ({journalId, sourceKey,
+      // alreadyExists}), NOT a raw number — extract .journalId. The prior
+      // version passed the whole object to SQL and serialised it as JSON
+      // into the "journalEntryId" integer column, which silently failed
+      // (or stored garbage) on every successful GL post.
+      const glResult = await umrahEngine.postAgentInvoiceGL(
         { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
         { id: rows[0].id, ref, agentName: agent.name, agentId, total, servicesTotal, penaltiesTotal, commission }
       );
+      glJournalId = glResult.journalId;
 
       await rawExecute(
         `UPDATE umrah_agent_invoices SET "journalEntryId"=$1 WHERE id=$2 AND "companyId"=$3`,
-        [journalId, rows[0].id, scope.companyId]
+        [glJournalId, rows[0].id, scope.companyId]
       ).catch((e) => logger.error(e, "umrah background task failed"));
 
       emitEvent({
@@ -1648,11 +1987,32 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
         action: "umrah.invoice.gl_posted",
         entity: "umrah_agent_invoices",
         entityId: rows[0].id,
-        details: JSON.stringify({ journalId, total, servicesTotal, penaltiesTotal, commission }),
+        details: JSON.stringify({ journalId: glJournalId, total, servicesTotal, penaltiesTotal, commission }),
       }).catch((e) => logger.error(e, "umrah background task failed"));
     } catch (glErr) {
       logger.error({ err: glErr, invoiceId: rows[0].id }, "[umrah] GL posting failed for agent invoice");
     }
+
+    // M9 fix: always emit umrah.agent_invoice.created, regardless of GL
+    // outcome above. The recovery listener at eventListeners.ts uses this
+    // event to detect invoices with missing journalEntryId and re-post.
+    // Without this, a GL failure leaves the invoice orphaned (no JE,
+    // no signal, no reconciliation path).
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "umrah.agent_invoice.created",
+      entity: "umrah_agent_invoices",
+      entityId: rows[0].id,
+      details: JSON.stringify({
+        invoiceId: rows[0].id,
+        ref,
+        agentId,
+        agentName: agent.name,
+        total, servicesTotal, penaltiesTotal, commission,
+        journalEntryId: glJournalId,
+      }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agent_invoices", entityId: rows[0]?.id, after: { agentId, seasonId, total } }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
@@ -1800,10 +2160,17 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
     const tripCost = Number(b.cost || 0);
     if (tripCost > 0) {
       try {
+        // Resolve the season's branch so the transport expense lands on
+        // the right branch instead of the operator's working branch.
+        const [season] = await rawQuery<{ branchId?: number | null }>(
+          `SELECT "branchId" FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+          [b.seasonId, scope.companyId]
+        ).catch(() => [] as { branchId?: number | null }[]);
+        const transportBranchId = season?.branchId ?? scope.branchId ?? 0;
         const { umrahEngine } = await import("../lib/engines/index.js");
         await umrahEngine.postTransportExpenseGL(
-          { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-          { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined }
+          { companyId: scope.companyId, branchId: transportBranchId, createdBy: scope.userId },
+          { id: rows[0].id, cost: tripCost, fromLocation: b.fromLocation, toLocation: b.toLocation, vehicleId: b.vehicleId || undefined, driverId: b.driverId || undefined, umrahSeasonId: b.seasonId || null }
         );
       } catch (glErr) {
         logger.error(glErr, "Transport GL posting failed:");
@@ -1812,6 +2179,38 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.created", entity: "umrah_transport", entityId: rows[0]?.id, details: JSON.stringify({ fromLocation: b.fromLocation, toLocation: b.toLocation, cost: b.cost }) }).catch((e) => logger.error(e, "umrah background task failed"));
+
+    // Mirror the WhatsApp dispatch path that fleet trip-create uses
+    // (#1354 — driver_assigned). umrah_transport is a parallel trip
+    // surface that historically left drivers in the dark — they could
+    // only know about an umrah trip if they happened to log into the
+    // ERP. Drivers on this surface usually don't have ERP accounts at
+    // all, so WhatsApp is the only realistic channel.
+    if (b.driverId) {
+      try {
+        const [driverInfo] = await rawQuery<{ phone: string | null; name: string | null }>(
+          `SELECT phone, name FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+          [b.driverId, scope.companyId]
+        );
+        if (driverInfo?.phone) {
+          await sendMessage({
+            channel: "whatsapp",
+            recipient: driverInfo.phone,
+            recipientName: driverInfo.name,
+            body: `رحلة عمرة جديدة مسندة إليك:\nمن ${b.fromLocation || 'غير محدد'} إلى ${b.toLocation || 'غير محدد'}\nالتاريخ: ${b.tripDate}\nعدد المعتمرين: ${b.pilgrimCount || 0}\nالرجاء الاطلاع على تفاصيل الرحلة في النظام.`,
+            companyId: scope.companyId,
+            userId: scope.userId,
+            relatedType: "umrah_transport",
+            relatedId: rows[0].id,
+            templateKey: "umrah.transport.driver_assigned",
+            eventAction: "umrah.transport.driver_notified",
+          });
+        }
+      } catch (sendErr) {
+        logger.error({ err: sendErr, transportId: rows[0].id, driverId: b.driverId }, "[umrah] transport driver WhatsApp dispatch failed");
+      }
+    }
+
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create transport error"); }
 });
@@ -1962,6 +2361,30 @@ router.get("/import/header-maps", authorize({ feature: "umrah", action: "create"
   } catch (err) { handleRouteError(err, res, "Import header maps error"); }
 });
 
+// ── Smart column-mapping suggestion ──────────────────────────────────
+// Feeds the wizard's column-mapping step with a fuzzy-matched
+// engine-field suggestion per unknown Excel header. Closes the
+// "operator pastes a vendor file with a non-standard header — wizard
+// asks them to manually pick every column" friction that the hardcoded
+// dictionary + saved presets alone don't cover.
+//
+// The engine ALSO returns exact matches with confidence=1 so the
+// wizard can show a "✓ exact" badge — explicit confirmation beats
+// silent auto-mapping for the operator's confidence.
+
+const suggestMappingSchema = z.object({
+  headers: z.array(z.string()).min(1, "أعمدة الملف مطلوبة"),
+  fileType: z.enum(["mutamers", "vouchers"]),
+});
+
+router.post("/import/suggest-mapping", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const { headers, fileType } = zodParse(suggestMappingSchema.safeParse(req.body));
+    const { suggestColumnMapping } = await import("../lib/umrahImportEngine.js");
+    res.json({ suggestions: suggestColumnMapping(headers, fileType) });
+  } catch (err) { handleRouteError(err, res, "Suggest mapping error"); }
+});
+
 // ── Column-mapping presets ───────────────────────────────────────────
 // Operators re-import the same Excel layout every week from the same
 // NUSK/MOFA portal. Saving the mapping per (user, fileType) lets the
@@ -2060,6 +2483,76 @@ router.get("/unassigned", authorize({ feature: "umrah", action: "list" }), async
     const rows = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE ${where} ORDER BY "createdAt" DESC LIMIT 1000`, params);
     res.json(maskFields(req, { data: rows.map(decryptPilgrimRow) }));
   } catch (err) { handleRouteError(err, res, "List unassigned error"); }
+});
+
+// Bulk status transition — flight-landing flow.
+// A landing pilgrimage flight brings 50+ pilgrims who all need to flip
+// pending → arrived in one operator action. Pre-PR the only path was
+// PATCH /pilgrims/:id per row, which is 50 round-trips + 50 audit
+// rows. This endpoint validates EVERY row's current status against
+// PILGRIM_TRANSITIONS before flipping, so an already-departed pilgrim
+// in the batch is skipped (not silently regressed).
+const bulkStatusSchema = z.object({
+  pilgrimIds: z.array(z.coerce.number()).min(1, "يجب تحديد معتمر واحد على الأقل"),
+  status: z.enum(PILGRIM_STATUSES),
+});
+
+router.post("/pilgrims/status-bulk", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const { pilgrimIds, status: toStatus } = zodParse(bulkStatusSchema.safeParse(req.body));
+
+    // Compute the legal from-states for the requested toStatus by
+    // inverting the transitions map. If toStatus has no legal source
+    // (e.g. operator picked "pending" which nothing transitions INTO),
+    // refuse early — otherwise the UPDATE would touch zero rows and
+    // the operator would mistake the no-op for success.
+    const fromStates = Object.entries(PILGRIM_TRANSITIONS)
+      .filter(([, targets]) => targets.includes(toStatus))
+      .map(([from]) => from);
+    if (fromStates.length === 0) {
+      throw new ValidationError(`لا يمكن الانتقال إلى الحالة "${toStatus}" من أي حالة حالية`, {
+        field: "status",
+        fix: "اختر حالة مسموح بها كهدف (مثل arrived أو departed)",
+      });
+    }
+
+    // Two-pass count so we can report what actually changed vs what
+    // was skipped. The skip count is what the operator actually wants
+    // to see — "47 / 50 marked, 3 already departed" surfaces the
+    // discrepancy without forcing them to compare counts manually.
+    const [{ c: targetedCount }] = await rawQuery<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM umrah_pilgrims
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND id = ANY($2)`,
+      [scope.companyId, pilgrimIds],
+    );
+
+    const updated = await rawQuery<{ id: number }>(
+      `UPDATE umrah_pilgrims
+       SET status=$1, "updatedAt"=NOW()
+       WHERE "companyId"=$2
+         AND "deletedAt" IS NULL
+         AND id = ANY($3)
+         AND status = ANY($4)
+       RETURNING id`,
+      [toStatus, scope.companyId, pilgrimIds, fromStates],
+    );
+    const updatedCount = updated.length;
+    const skippedCount = Math.max(0, Number(targetedCount) - updatedCount);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "umrah_pilgrims", entityId: 0,
+      after: { bulkStatusTo: toStatus, updated: updatedCount, skipped: skippedCount },
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.pilgrims.bulk_status_changed", entity: "umrah_pilgrims", entityId: 0,
+      details: JSON.stringify({ toStatus, requested: pilgrimIds.length, updated: updatedCount, skipped: skippedCount }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+
+    res.json({ updated: updatedCount, skipped: skippedCount, toStatus });
+  } catch (err) { handleRouteError(err, res, "Bulk status update error"); }
 });
 
 router.post("/assign-bulk", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
@@ -2232,6 +2725,333 @@ router.post("/penalties", authorize({ feature: "umrah", action: "create" }), asy
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty.created", entity: "umrah_penalties", entityId: rows[0]?.id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create penalty error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTINGS — per-company configuration that drives umrah↔finance integration
+// ─────────────────────────────────────────────────────────────────────────────
+// Lives under /umrah (not /settings) so the operator finds it where they
+// expect — alongside the rest of the umrah module. Reads/writes a tiny
+// projection of the companies row (just the umrah-relevant columns) so
+// adding future settings is one zod field + one SET clause.
+
+// Shared nullable-FK preprocessor — "" → null, undefined stays
+// undefined so the PATCH handler can distinguish "field omitted"
+// (preserve existing value via COALESCE) from "field set to null"
+// (explicit clear). Then coerce to number when present.
+const nullableFkPreproc = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.coerce.number().nullable().optional(),
+);
+
+// Penalty knobs are non-negative numbers (or null = "reset to global
+// default"). Same preprocess pattern as the FK fields — "" treated as
+// null, undefined preserves existing value.
+const nullableNumberPreproc = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.coerce.number().nonnegative({ message: "القيمة يجب أن تكون ≥ 0" }).nullable().optional(),
+);
+
+const umrahSettingsPatchSchema = z.object({
+  // When unset, the vendor-statement endpoint skips its umrah branch
+  // (gracefully — no broken queries).
+  nuskSupplierId: nullableFkPreproc,
+  // Service-type → product mapping (migration 241). When all 3 are
+  // set, the Phase 3b engine will split each group's lineTotal into
+  // visa / services / transport lines. When any is unset, the engine
+  // falls back to the single bundled line — no error, just no split.
+  umrahVisaProductId: nullableFkPreproc,
+  umrahServicesProductId: nullableFkPreproc,
+  umrahTransportProductId: nullableFkPreproc,
+  // Overstay penalty knobs (PR #1477). Stored as system_settings rows
+  // keyed per company. Send null to clear (reverts to the global
+  // default from key=… companyId IS NULL).
+  umrahOverstayDailyPenalty: nullableNumberPreproc,
+  umrahOverstayTierDays: nullableNumberPreproc,
+  umrahOverstayTierAmount: nullableNumberPreproc,
+});
+
+router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    // JOIN suppliers so the UI can show the supplier name without
+    // a second fetch. LEFT JOIN — `nuskSupplierId` may be null on a
+    // freshly-installed company. The 3 product joins follow the same
+    // pattern (migration 241).
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT c."nuskSupplierId",
+              s.name  AS "nuskSupplierName",
+              s.code  AS "nuskSupplierCode",
+              c."umrahVisaProductId",
+              pv.name AS "umrahVisaProductName",
+              c."umrahServicesProductId",
+              ps.name AS "umrahServicesProductName",
+              c."umrahTransportProductId",
+              pt.name AS "umrahTransportProductName"
+         FROM companies c
+         LEFT JOIN suppliers s
+                ON s.id = c."nuskSupplierId"
+               AND s."companyId" = c.id
+               AND s."deletedAt" IS NULL
+         LEFT JOIN products pv
+                ON pv.id = c."umrahVisaProductId"
+               AND pv."companyId" = c.id
+         LEFT JOIN products ps
+                ON ps.id = c."umrahServicesProductId"
+               AND ps."companyId" = c.id
+         LEFT JOIN products pt
+                ON pt.id = c."umrahTransportProductId"
+               AND pt."companyId" = c.id
+        WHERE c.id = $1`,
+      [scope.companyId],
+    );
+    // Overstay-penalty settings live in system_settings (not
+    // companies) because they're tunable per-company without a
+    // migration per knob. PR #1477 added the tiered model
+    // (tier_days / tier_amount); this endpoint surfaces the three
+    // existing knobs to the UI so the operator can edit them
+    // without opening a DB console.
+    const penaltyRows = await rawQuery<{ key: string; value: string }>(
+      `SELECT key, value FROM system_settings
+        WHERE key IN ('umrah.overstay_daily_penalty',
+                      'umrah.overstay_tier_days',
+                      'umrah.overstay_tier_amount')
+          AND ( ("companyId" IS NULL AND "branchId" IS NULL)
+                OR ("companyId" = $1 AND "branchId" IS NULL) )
+        ORDER BY "companyId" NULLS FIRST`,
+      [scope.companyId],
+    );
+    // Same NULLS-FIRST precedence the cron uses (PR #1477) — the
+    // company-scoped value overwrites the global default in the
+    // dict assignment loop.
+    const penaltyByKey: Record<string, number | null> = {
+      "umrah.overstay_daily_penalty": null,
+      "umrah.overstay_tier_days": null,
+      "umrah.overstay_tier_amount": null,
+    };
+    for (const r of penaltyRows) {
+      const v = Number(r.value);
+      penaltyByKey[r.key] = Number.isFinite(v) ? v : null;
+    }
+
+    res.json({
+      ...(row ?? {
+        nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null,
+        umrahVisaProductId: null, umrahVisaProductName: null,
+        umrahServicesProductId: null, umrahServicesProductName: null,
+        umrahTransportProductId: null, umrahTransportProductName: null,
+      }),
+      umrahOverstayDailyPenalty: penaltyByKey["umrah.overstay_daily_penalty"],
+      umrahOverstayTierDays: penaltyByKey["umrah.overstay_tier_days"],
+      umrahOverstayTierAmount: penaltyByKey["umrah.overstay_tier_amount"],
+    });
+  } catch (err) { handleRouteError(err, res, "Get umrah settings error"); }
+});
+
+router.patch("/settings", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(umrahSettingsPatchSchema.safeParse(req.body));
+    // Validate the supplier (if provided) belongs to THIS company —
+    // defence in depth so a cross-tenant id can't be silently
+    // accepted via API.
+    if (b.nuskSupplierId != null) {
+      const [supplier] = await rawQuery<{ id: number }>(
+        `SELECT id FROM suppliers
+          WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [b.nuskSupplierId, scope.companyId],
+      );
+      if (!supplier) {
+        throw new ValidationError(`المورد رقم ${b.nuskSupplierId} غير موجود`, {
+          field: "nuskSupplierId",
+          fix: "اختر مورداً مسجلاً لهذه الشركة أو اتركه فارغاً",
+        });
+      }
+    }
+    // Validate each product FK belongs to THIS company — defence in
+    // depth identical to the supplier check above. Products list is
+    // shared across modules so a cross-tenant id leaking through
+    // settings would silently mis-route revenue on future invoices.
+    const productChecks: Array<[number | null | undefined, "umrahVisaProductId" | "umrahServicesProductId" | "umrahTransportProductId"]> = [
+      [b.umrahVisaProductId, "umrahVisaProductId"],
+      [b.umrahServicesProductId, "umrahServicesProductId"],
+      [b.umrahTransportProductId, "umrahTransportProductId"],
+    ];
+    for (const [value, field] of productChecks) {
+      if (value == null) continue;
+      const [product] = await rawQuery<{ id: number }>(
+        `SELECT id FROM products WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+        [value, scope.companyId],
+      );
+      if (!product) {
+        throw new ValidationError(`المنتج رقم ${value} غير موجود`, {
+          field,
+          fix: "اختر منتجاً مسجلاً لهذه الشركة أو اتركه فارغاً",
+        });
+      }
+    }
+    // Dynamic SET clause — proper PATCH semantics. A field absent
+    // from the body is PRESERVED (not touched), a field set to null
+    // is CLEARED, a field set to a value is UPDATED. SQL COALESCE
+    // can't express the "explicit clear" path, so we build the
+    // statement based on what zod actually parsed.
+    const sets: string[] = [];
+    const params: unknown[] = [scope.companyId];
+    const fields: Array<["nuskSupplierId" | "umrahVisaProductId" | "umrahServicesProductId" | "umrahTransportProductId", number | null | undefined]> = [
+      ["nuskSupplierId", b.nuskSupplierId],
+      ["umrahVisaProductId", b.umrahVisaProductId],
+      ["umrahServicesProductId", b.umrahServicesProductId],
+      ["umrahTransportProductId", b.umrahTransportProductId],
+    ];
+    const auditAfter: Record<string, number | null> = {};
+    for (const [field, value] of fields) {
+      if (value === undefined) continue;
+      params.push(value);
+      sets.push(`"${field}" = $${params.length}`);
+      auditAfter[field] = value;
+    }
+    if (sets.length > 0) {
+      await rawExecute(
+        `UPDATE companies SET ${sets.join(", ")} WHERE id = $1`,
+        params,
+      );
+    }
+
+    // Overstay-penalty knobs live in system_settings (not companies).
+    // Same omit/null/value semantics as the FK fields above. We UPSERT
+    // when the value is non-null, DELETE the company-scoped row when
+    // the value is explicitly null — clearing reverts to the global
+    // default (key with companyId IS NULL).
+    const penaltyFields: Array<[string, number | null | undefined]> = [
+      ["umrah.overstay_daily_penalty", b.umrahOverstayDailyPenalty],
+      ["umrah.overstay_tier_days", b.umrahOverstayTierDays],
+      ["umrah.overstay_tier_amount", b.umrahOverstayTierAmount],
+    ];
+    const keyToAuditField: Record<string, string> = {
+      "umrah.overstay_daily_penalty": "umrahOverstayDailyPenalty",
+      "umrah.overstay_tier_days": "umrahOverstayTierDays",
+      "umrah.overstay_tier_amount": "umrahOverstayTierAmount",
+    };
+    for (const [key, value] of penaltyFields) {
+      if (value === undefined) continue;
+      if (value === null) {
+        await rawExecute(
+          `DELETE FROM system_settings WHERE key = $1 AND "companyId" = $2 AND "branchId" IS NULL`,
+          [key, scope.companyId],
+        );
+      } else {
+        // UPSERT — UPDATE first; INSERT only if no row exists.
+        // Matches the pattern in routes/settings.ts so a future
+        // shared helper can replace both call sites.
+        const result = await rawExecute(
+          `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3 AND "branchId" IS NULL`,
+          [String(value), key, scope.companyId],
+        );
+        if (!result.affectedRows) {
+          await rawExecute(
+            `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
+            [key, String(value), scope.companyId],
+          );
+        }
+      }
+      auditAfter[keyToAuditField[key]!] = value;
+    }
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "umrah.settings.updated", entity: "companies", entityId: scope.companyId,
+      after: auditAfter,
+    }).catch((e) => logger.error(e, "umrah settings audit failed"));
+    res.json({ success: true, ...auditAfter });
+  } catch (err) { handleRouteError(err, res, "Update umrah settings error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NUSK WALLET — derived view over the existing AP system
+// ─────────────────────────────────────────────────────────────────────────────
+// The "NUSK wallet" the operator thinks about is NOT a new table — it's the
+// running balance of the NUSK supplier in the standard AP ledger:
+//
+//   walletBalance = (deposits TO NUSK)  -  (NUSK invoice obligations net of refunds)
+//
+//   Positive → operator has prepaid credit with NUSK (can buy more visas)
+//   Zero     → fully reconciled
+//   Negative → operator owes NUSK (must top up before next invoice)
+//
+// Computation reuses the same shapes used by the vendor-statement endpoint
+// (PR #1453), so the wallet display and the supplier statement converge on
+// the same number — no drift, no parallel system.
+
+router.get("/nusk-wallet", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const [companyCfg] = await rawQuery<{ nuskSupplierId: number | null }>(
+      `SELECT "nuskSupplierId" FROM companies WHERE id = $1`,
+      [scope.companyId],
+    );
+    const nuskSupplierId = companyCfg?.nuskSupplierId ?? null;
+    if (nuskSupplierId == null) {
+      // Settings unset — return null balance with a configured: false
+      // flag so the UI can render the "configure NUSK first" CTA
+      // instead of misleading zeroes.
+      res.json({
+        configured: false,
+        nuskSupplierId: null,
+        walletBalance: 0,
+        totalDeposits: 0,
+        totalObligations: 0,
+        totalRefunds: 0,
+      });
+      return;
+    }
+
+    // Deposits TO NUSK — payment-voucher allocations against POs owned by
+    // the NUSK supplier. Same JE filters the vendor-statement uses
+    // (balancesApplied + not reversed + soft-delete guards) so the
+    // numbers reconcile across both reports.
+    const [depositsRow] = await rawQuery<{ total: string }>(
+      `SELECT COALESCE(SUM(spa.amount), 0) AS total
+         FROM supplier_payment_allocations spa
+         JOIN journal_entries je ON je.id = spa."journalEntryId"
+         JOIN purchase_orders po ON po.id = spa."obligationId"
+        WHERE spa."companyId" = $1
+          AND spa."deletedAt" IS NULL
+          AND spa."obligationType" = 'purchase_order'
+          AND po."supplierId" = $2
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL`,
+      [scope.companyId, nuskSupplierId],
+    );
+
+    // NUSK obligations — net of refunds, excluding cancelled rows. Same
+    // shape as the cost-basis fix in PR #1457 so this view's "owed to
+    // NUSK" number matches what's used as cost for margin VAT.
+    const [obligationsRow] = await rawQuery<{ total: string; refunds: string }>(
+      `SELECT COALESCE(SUM("totalAmount"), 0) AS total,
+              COALESCE(SUM("refundAmount"), 0) AS refunds
+         FROM umrah_nusk_invoices
+        WHERE "companyId" = $1
+          AND "deletedAt" IS NULL
+          AND "nuskStatus" NOT IN ('cancelled')`,
+      [scope.companyId],
+    );
+
+    const totalDeposits = Number(depositsRow?.total ?? 0);
+    const grossObligations = Number(obligationsRow?.total ?? 0);
+    const totalRefunds = Number(obligationsRow?.refunds ?? 0);
+    const totalObligations = grossObligations - totalRefunds;
+    const walletBalance = totalDeposits - totalObligations;
+
+    res.json({
+      configured: true,
+      nuskSupplierId,
+      walletBalance,
+      totalDeposits,
+      totalObligations,
+      totalRefunds,
+    });
+  } catch (err) { handleRouteError(err, res, "Get NUSK wallet error"); }
 });
 
 export default router;

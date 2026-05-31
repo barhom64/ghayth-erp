@@ -1,3 +1,11 @@
+/**
+ * StatsCards — sub-component for the governance landing page. Not a
+ * routed page; receives `stats` as a prop from its parent.
+ *
+ * Conflict #4 in `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md`. Resolved
+ * here as **keep in place** alongside `bi/shared.tsx` and
+ * `my-space/shared.ts`.
+ */
 import { Card, CardContent } from "@/components/ui/card";
 import { Shield, FileCheck, AlertTriangle, ClipboardCheck, CheckCircle2, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";

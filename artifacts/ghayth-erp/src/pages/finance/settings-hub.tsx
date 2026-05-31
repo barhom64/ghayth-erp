@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   BookOpen, Percent, Receipt, Workflow, Package, Eye, Globe, RefreshCw,
   Calendar, Wallet, Settings as SettingsIcon, Layers, Handshake, ClipboardList,
@@ -293,6 +294,7 @@ export default function FinanceSettingsHubPage() {
         { label: "الإعدادات" },
       ]}
     >
+      <FinanceTabsNav />
       <EnforceLineAllocationToggle />
 
       <Card className="mb-6 border-status-info-surface bg-status-info-surface/30">

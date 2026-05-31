@@ -100,6 +100,16 @@ function parseRoutesIndex() {
     }
     if (depth !== 0) continue;
     const argsBlob = src.slice(startArgs, j - 1);
+    // Skip mounts that rewrite req.url inside an inline middleware — they
+    // alias a single underlying handler, not the whole sub-router. The
+    // /request-catalog mount in routes/index.ts is a real example:
+    //   router.use("/request-catalog", requireModule(...), (req, _r, next) => {
+    //     req.url = "/catalog"; requestsRouter(req, _r, next);
+    //   });
+    // Treating this mount as a full prefix for requestsRouter inflates
+    // the unused list with phantom routes (/request-catalog/types etc.)
+    // that never actually resolve.
+    if (/\breq\.url\s*=/.test(argsBlob)) { i = j; continue; }
     // Pull the leading string-literal path (if any).
     const pathMatch = argsBlob.match(/^\s*["']([^"']*)["']\s*,?\s*/);
     const mountPath = pathMatch ? pathMatch[1] : "";
@@ -155,11 +165,29 @@ function buildBackendRoutes() {
   const files = fs
     .readdirSync(ROUTES_DIR)
     .filter((f) => f.endsWith(".ts") && f !== "index.ts");
+  // Route files explicitly out-of-scope for the main ERP UI's wiring audit.
+  // Both are separate apps with their own clients (mobile / candidate
+  // portal). Counting their endpoints inflates the "unused" list with
+  // routes the main UI was never going to call — and conversely, sham
+  // pages in the main UI that probe them are mis-credited as coverage
+  // (they fail at runtime because the JWT type doesn't match).
+  const SEPARATE_APP_STEMS = new Set([
+    "clientPortal",
+    "careersPortal",
+  ]);
+  // wiring-stubs.ts hosts placeholder routes for tables that don't exist
+  // yet; calling them returns canned data and writes nothing. We still
+  // emit them so frontend calls can resolve (no false orphans), but we
+  // tag them so the reverse-direction "unused" report skips them — they
+  // shouldn't pad the unused list and they shouldn't pad the covered list.
+  const STUB_FILE_STEMS = new Set(["wiring-stubs"]);
   const routes = [];
   for (const f of files) {
     const stem = f.replace(/\.ts$/, "");
+    if (SEPARATE_APP_STEMS.has(stem)) continue;
     const imps = stemToImports.get(stem);
     if (!imps) continue;
+    const isStub = STUB_FILE_STEMS.has(stem);
     // Resolve the export name(s) from the file: usually `routerVar`
     // matches the imported name 1:1, or maps via `export {x as y}`.
     // Cheap approach: for each call whose varName appears in any of
@@ -168,15 +196,28 @@ function buildBackendRoutes() {
     // mounted import (covers the case where the file defines the
     // router locally as `myRouter` and exports it).
     const callsBy = extractRouterCalls(path.join(ROUTES_DIR, f));
-    // Emit each call once per mount prefix the file's exported router(s)
-    // are mounted on. When a router is mounted at /requests AND
-    // /request-catalog, both prefixes are real backend URLs.
-    const prefixes = [...new Set(imps.map((i) => i.mountPrefix))];
+    // Build varName → mountPrefixes (one router var may be mounted at multiple prefixes).
+    // A file can export several routers — each one mounts on its own prefix. We MUST
+    // honour the call's varName so that e.g. `warehouseStubsRouter.get("/x")` is
+    // emitted only under /warehouse, not also under /hr/finance/admin where the
+    // OTHER routers exported by the same file are mounted.
+    const varToPrefixes = new Map();
+    for (const i of imps) {
+      if (!varToPrefixes.has(i.varName)) varToPrefixes.set(i.varName, new Set());
+      varToPrefixes.get(i.varName).add(i.mountPrefix);
+    }
+    const allPrefixes = [...new Set(imps.map((i) => i.mountPrefix))];
     for (const c of callsBy) {
+      // If the call's varName matches a known export, only use that export's prefixes.
+      // Otherwise (local `router` var or unrecognised name), fall back to all prefixes
+      // — the original behaviour for files that define exactly one router locally.
+      const prefixes = varToPrefixes.has(c.varName)
+        ? [...varToPrefixes.get(c.varName)]
+        : allPrefixes;
       for (const mountPrefix of prefixes) {
         const localPath = c.path.startsWith("/") ? c.path : "/" + c.path;
         const full = ("/api" + mountPrefix + localPath).replace(/\/+$/, "") || "/";
-        routes.push({ method: c.method.toUpperCase(), path: full });
+        routes.push({ method: c.method.toUpperCase(), path: full, isStub });
       }
     }
   }
@@ -282,6 +323,25 @@ function extractFrontendCalls() {
     // `useApiMutation<T, Record<string, unknown>>(...)` call would parse
     // as `<T, Record<string, unknown>` then fail to reach the `(`,
     // hiding every typed-mutation call with a Record/Array/Map generic.
+    // apiUrl("/x") — direct URL builder used in <a href={apiUrl(...)} download>
+    // and `<img src={apiUrl(...)}>`. Always a GET (browser navigation/fetch).
+    // Detected first so it doesn't get caught by the broader helper regex.
+    const apiUrlRe = /\bapiUrl\s*\(\s*(?:["']([^"']+)["']|`([^`$]+)`)/g;
+    for (const m of src.matchAll(apiUrlRe)) {
+      const url = (m[1] ?? m[2] ?? "").trim();
+      if (url.startsWith("/")) {
+        calls.push({ file: rel, url, line: lineOf(src, m.index), method: "GET", source: "apiUrl" });
+      }
+    }
+    // apiUrl(`/x/${id}/y`) — template-literal form with interpolation.
+    const apiUrlTplRe = /\bapiUrl\s*\(\s*`/g;
+    for (const m of src.matchAll(apiUrlTplRe)) {
+      const start = m.index + m[0].length - 1;
+      const lit = readString(src, start);
+      if (lit && lit.value.startsWith("/")) {
+        calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "apiUrl" });
+      }
+    }
     const re = /\b(apiFetch|apiPatch|apiPost|apiPut|apiDelete|useApiQuery|useApiMutation)\b\s*(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(/g;
     for (const m of src.matchAll(re)) {
       const helper = m[1];
@@ -658,6 +718,27 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: `${lit.value}/:param`, line, method: "DELETE", source: "prop" });
     }
 
+    // <EntityEditDialog endpoint={`/finance/vouchers/${id}`} method="PATCH" /> —
+    // the standard inline-edit dialog used by detail pages. Default
+    // method is PATCH; allow PUT via the `method` prop. The URL lives
+    // in a JSX brace expression so we read it via the
+    // `endpoint\s*=\s*\{` opener and walk the template literal.
+    // 1500-char window: EntityEditDialog blocks routinely span >400 chars
+    // when `defaultValues={{ ... }}` is multi-line, putting `endpoint=` past
+    // the 200-char fence and hiding ~15 real wirings (property-maintenance,
+    // hr-violation edits, etc.).
+    const entityEditRe = /\bEntityEditDialog[\s\S]{0,1500}?\bendpoint\s*=\s*\{/g;
+    for (const m of src.matchAll(entityEditRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      const lookahead = src.slice(m.index, m.index + 1700);
+      const verb = /method\s*=\s*["']PUT["']/.test(lookahead) ? "PUT" : "PATCH";
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: verb, source: "prop" });
+    }
+
     // useDetailEditDelete({ patchPath, deletePath }) — the shared hook in
     // components/shared/detail-edit-delete-actions.tsx that backs the
     // canonical inline-edit + soft-delete pattern on detail pages
@@ -825,8 +906,12 @@ function normaliseFrontendUrl(url) {
 }
 
 function normaliseBackendUrl(url) {
-  // Backend uses :param. Strip trailing slash.
-  return url.replace(/\/+$/, "") || "/";
+  // Backend uses :param OR Express wildcard `*name` for filesystem paths.
+  // Treat both as :param-equivalent placeholders so a frontend `${path}`
+  // resolves against either form.
+  let u = url.replace(/\/\*[A-Za-z_][\w]*/g, "/:param");
+  // Strip trailing slash.
+  return u.replace(/\/+$/, "") || "/";
 }
 
 /**
@@ -889,10 +974,17 @@ export function runAudit() {
   // resource), so a path-only match isn't enough — we also need to
   // confirm the method.
   const backendPaths = new Map(); // path -> Set<method>
+  // Stub-flagged (path, method) pairs — excluded from both the covered
+  // count and the unused list because they represent placeholder routes
+  // that return canned data without real DB interaction. Resolution still
+  // works (frontend calls aren't orphaned), the audit just doesn't credit
+  // either side.
+  const stubEndpoints = new Set();
   for (const r of backend) {
     const p = normaliseBackendUrl(r.path);
     if (!backendPaths.has(p)) backendPaths.set(p, new Set());
     backendPaths.get(p).add(r.method);
+    if (r.isStub) stubEndpoints.add(`${p}|${r.method}`);
   }
   const frontend = extractFrontendCalls();
 
@@ -1026,18 +1118,32 @@ export function runAudit() {
   const unusedBackend = [];
   for (const [bePath, methods] of backendPaths) {
     for (const method of methods) {
-      if (!touchedByFrontend.has(`${bePath}|${method}`)) {
+      const key = `${bePath}|${method}`;
+      if (stubEndpoints.has(key)) continue;
+      if (!touchedByFrontend.has(key)) {
         unusedBackend.push({ path: bePath, method });
       }
     }
   }
 
+  // Total backend (path, method) pairs the audit was run against — used
+  // by the test's canary assertion to verify `unusedBackend` can't grow
+  // to cover every endpoint (which would indicate a bookkeeping bug).
+  let backendEndpointCount = 0;
+  for (const methods of backendPaths.values()) backendEndpointCount += methods.size;
+  // Real (non-stub) endpoints — the denominator that should drive the
+  // coverage percentage. Stub endpoints don't represent real DB-backed
+  // features so they shouldn't pad either numerator or denominator.
+  const realEndpointCount = backendEndpointCount - stubEndpoints.size;
   return {
     resolved,
     orphans,
     methodMismatches,
     unusedBackend,
     backendPaths,
+    backendEndpointCount,
+    realEndpointCount,
+    stubEndpointCount: stubEndpoints.size,
     frontend,
   };
 }
@@ -1048,25 +1154,26 @@ export function runAudit() {
 export { normaliseFrontendUrl, urlsMatch, methodsMatch, readString, inferMethod };
 
 function main() {
-  const { resolved, orphans, methodMismatches, unusedBackend, backendPaths, frontend } = runAudit();
+  const { resolved, orphans, methodMismatches, unusedBackend, backendPaths, realEndpointCount, stubEndpointCount, frontend } = runAudit();
 
-  // Count total backend (path, method) endpoints — many paths serve
-  // 3-5 methods each, so this is the right denominator for "what %
-  // of the backend surface does the UI cover?".
+  // Count total backend (path, method) endpoints, then subtract the stub
+  // pool so the percentage reflects coverage of REAL DB-backed features
+  // only. Stubs are reachable but write nothing, so crediting them is
+  // misleading.
   let totalEndpoints = 0;
   for (const ms of backendPaths.values()) totalEndpoints += ms.size;
-  const usedEndpoints = totalEndpoints - unusedBackend.length;
-  const coveragePercent = totalEndpoints === 0
+  const usedRealEndpoints = realEndpointCount - unusedBackend.length;
+  const coveragePercent = realEndpointCount === 0
     ? 0
-    : Math.round((usedEndpoints / totalEndpoints) * 1000) / 10;
+    : Math.round((usedRealEndpoints / realEndpointCount) * 1000) / 10;
 
   console.log(`# frontend ↔ backend route wiring audit\n`);
-  console.log(`backend routes (mounted):         ${backendPaths.size} paths, ${totalEndpoints} (path,method) endpoints`);
+  console.log(`backend routes (mounted):         ${backendPaths.size} paths, ${totalEndpoints} (path,method) endpoints (${stubEndpointCount} stubs excluded)`);
   console.log(`frontend API call-sites scanned:  ${frontend.length}`);
   console.log(`resolved → real backend route:    ${resolved.length}`);
   console.log(`orphan (no backend match):        ${orphans.length}`);
   console.log(`method mismatch (path ok, verb wrong): ${methodMismatches.length}`);
-  console.log(`backend coverage by UI:           ${usedEndpoints}/${totalEndpoints} (${coveragePercent}%)`);
+  console.log(`backend coverage by UI:           ${usedRealEndpoints}/${realEndpointCount} (${coveragePercent}%) — stubs excluded`);
   console.log(`unused backend endpoints:         ${unusedBackend.length}\n`);
 
   let failed = false;

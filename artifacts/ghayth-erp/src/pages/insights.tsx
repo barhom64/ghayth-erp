@@ -104,6 +104,21 @@ export default function Insights() {
   );
   const seasonalPatternsLive = seasonalResp?.data ?? seasonalResp;
 
+  // GET /intelligence/activity/stats + /intelligence/company-kpis — rolled-up
+  // org-wide activity counters and the canonical KPI tile set. Surfaced as a
+  // compact "live snapshot" strip above the qualitative insights.
+  const { data: activityStatsResp } = useApiQuery<any>(
+    ["intelligence-activity-stats"],
+    "/intelligence/activity/stats"
+  );
+  const activityStats = activityStatsResp?.data ?? activityStatsResp;
+
+  const { data: companyKpisResp } = useApiQuery<any>(
+    ["intelligence-company-kpis"],
+    "/intelligence/company-kpis"
+  );
+  const liveCompanyKpis = companyKpisResp?.data ?? companyKpisResp;
+
   const handleRecalculate = async () => {
     setRecalculating(true);
     try {
@@ -158,6 +173,10 @@ export default function Insights() {
   return (
     <PageShell
       title="رؤى ذكية"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "رؤى ذكية" },
+      ]}
       actions={
         <GuardedButton perm="bi:export" variant="outline" size="sm" onClick={handleRecalculate} disabled={recalculating}>
           <RefreshCw className={`h-4 w-4 me-2 ${recalculating ? "animate-spin" : ""}`} />
@@ -165,6 +184,26 @@ export default function Insights() {
         </GuardedButton>
       }
     >
+      {/* Live snapshot strip — activity stats + canonical company KPIs */}
+      {(activityStats || liveCompanyKpis) && (
+        <div className="flex flex-wrap gap-2 text-xs border rounded p-2 bg-muted/30">
+          {activityStats && Object.entries(activityStats).slice(0, 6).map(([k, v]) => (
+            typeof v !== "object" && (
+              <span key={k} className="text-muted-foreground">
+                {k}: <span className="font-mono font-medium">{String(v)}</span>
+              </span>
+            )
+          ))}
+          {liveCompanyKpis && Object.entries(liveCompanyKpis).slice(0, 6).map(([k, v]) => (
+            typeof v !== "object" && (
+              <span key={k} className="text-muted-foreground">
+                {k}: <span className="font-mono font-medium">{String(v)}</span>
+              </span>
+            )
+          ))}
+        </div>
+      )}
+
       {/* Overview KPIs */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>

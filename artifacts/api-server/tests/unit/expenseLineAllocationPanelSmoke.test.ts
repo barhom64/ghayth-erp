@@ -27,7 +27,10 @@ describe("expense schema accepts lineAllocation", () => {
   it("lineAllocation supports every LineAllocationPanel field", () => {
     const idx = ROUTE.indexOf("lineAllocation: z.object({");
     expect(idx).toBeGreaterThan(-1);
-    const block = ROUTE.slice(idx, idx + 800);
+    // Widened from 800 → 2000 chars after the schema grew to cover the 7
+    // dims (client/vendor/driver/product/umrahSeason/department/employee)
+    // that LineAllocationPanel had been submitting silently.
+    const block = ROUTE.slice(idx, idx + 2000);
     for (const field of [
       "accountCode",
       "costCenterId",
@@ -61,7 +64,9 @@ describe("expense handler applies the overrides", () => {
   it("every dimension field flows into entityLink when supplied", () => {
     const idx = ROUTE.indexOf("if (lineAllocation) {");
     expect(idx).toBeGreaterThan(-1);
-    const block = ROUTE.slice(idx, idx + 1400);
+    // Widened from 1400 → 3000 after wiring the 7 newly accepted fields
+    // (client/vendor/driver/product/umrahSeason/department/employee).
+    const block = ROUTE.slice(idx, idx + 3000);
     for (const [key, sink] of [
       ["costCenterId", "entityLink.costCenterId"],
       ["activityType", "entityLink.activityType"],

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
@@ -141,18 +142,33 @@ export default function BankAccountsWatchPage() {
         a.entriesCount.toString(),
       ].join(","));
     }
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `bank-accounts-watch-${today}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+    // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+    // Routed through unified export helper for audit + letterhead.
+    {
+      const _allLines = lines;
+      const _headers = (_allLines[0] ?? "").split(",");
+      const _rows = _allLines.slice(1).map((line) => {
+        const parts = line.split(",");
+        const obj: Record<string, string> = {};
+        _headers.forEach((h, i) => { obj[h] = parts[i] ?? ""; });
+        return obj;
+      });
+      void exportRowsToCsv({
+        entityType: "report_bank_accounts_watch",
+        title: String(`bank-accounts-watch-${today}.csv`).replace(/\.csv$/i, ""),
+        rows: _rows,
+        columns: _headers.map((h) => ({ key: h, label: h })),
+      }).catch((err) => console.error("[export] failed", err));
+    }
+};
 
   return (
     <PageShell
       title="مراقبة الحسابات البنكية"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "مراقبة الحسابات البنكية" },
+      ]}
       subtitle="نظرة فورية على رصيد كل حساب نقدي/بنكي + حركة آخر 30 يوم"
       actions={
         <div className="flex gap-2">
@@ -361,9 +377,7 @@ export default function BankAccountsWatchPage() {
                         </td>
                         <td className="py-2 px-2">
                           <Link href={`/finance/journal/${e.id}`}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <ChevronRight className="w-3 h-3" />
-                            </Button>
+                            <Button variant="ghost" size="icon" title="التالي" className="h-7 w-7"><ChevronRight className="w-3 h-3" /></Button>
                           </Link>
                         </td>
                       </tr>

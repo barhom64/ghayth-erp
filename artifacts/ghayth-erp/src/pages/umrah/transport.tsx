@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
@@ -10,6 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLocation } from "wouter";
@@ -17,6 +25,9 @@ import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Plus } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
+
+interface VehicleOption { id: number; plateNumber: string; }
+interface DriverOption { id: number; name: string; status?: string; }
 
 interface TransportEntry {
   id: number;
@@ -64,6 +75,27 @@ export default function UmrahTransport() {
   const [form, setForm] = useState<Record<string, any>>({});
   const { toast } = useToast();
 
+  // Vehicle + driver pickers: load lazily when the form opens so the
+  // hot transport list doesn't pay for the join on every page view.
+  const { data: vehiclesResp } = useApiQuery<{ data: VehicleOption[] }>(
+    ["fleet-vehicles-options"],
+    "/fleet/vehicles?limit=500",
+    showForm,
+  );
+  const vehicleOptions = asList(vehiclesResp) as VehicleOption[];
+  const { data: driversResp } = useApiQuery<{ data: DriverOption[] }>(
+    ["fleet-drivers-options"],
+    "/fleet/drivers?limit=500",
+    showForm,
+  );
+  // Filter out drivers that are not bookable (off_duty/suspended) —
+  // the dispatcher can override by editing the trip later, but the
+  // default picker keeps the UI honest about who's actually available.
+  const allDrivers = asList(driversResp) as DriverOption[];
+  const driverOptions = allDrivers.filter(
+    (d) => d.status === "available" || d.status === "on_trip" || !d.status,
+  );
+
   const save = async () => {
     try {
       await apiFetch("/umrah/transport", { method: "POST", body: JSON.stringify(form) });
@@ -86,12 +118,45 @@ export default function UmrahTransport() {
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "النقل والمواصلات" }]}
       actions={<GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />رحلة جديدة</GuardedButton>}
     >
+      <UmrahTabsNav />
       {showForm && (
         <Card>
           <CardContent className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
             <div><Label>تاريخ الرحلة *</Label><UnifiedDateInput value={form.tripDate || ""} onChange={v => setForm({ ...form, tripDate: v })} showDualCalendar showPresets /></div>
             <div><Label>من *</Label><Input value={form.fromLocation || ""} onChange={e => setForm({ ...form, fromLocation: e.target.value })} placeholder="مكة" /></div>
             <div><Label>إلى *</Label><Input value={form.toLocation || ""} onChange={e => setForm({ ...form, toLocation: e.target.value })} placeholder="المدينة" /></div>
+            <div>
+              <Label>المركبة</Label>
+              <Select
+                value={form.vehicleId ? String(form.vehicleId) : "none"}
+                onValueChange={(v) => setForm({ ...form, vehicleId: v === "none" ? undefined : Number(v) })}
+              >
+                <SelectTrigger><SelectValue placeholder="بدون تعيين" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون تعيين</SelectItem>
+                  {vehicleOptions.map((v) => (
+                    <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>السائق</Label>
+              <Select
+                value={form.driverId ? String(form.driverId) : "none"}
+                onValueChange={(v) => setForm({ ...form, driverId: v === "none" ? undefined : Number(v) })}
+              >
+                <SelectTrigger><SelectValue placeholder="بدون تعيين" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون تعيين</SelectItem>
+                  {driverOptions.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.name}{d.status === "on_trip" ? " (في رحلة)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label>السعة</Label><Input type="number" value={form.capacity || ""} onChange={e => setForm({ ...form, capacity: e.target.value ? Number(e.target.value) : undefined })} placeholder="45" /></div>
             <div><Label>عدد المعتمرين</Label><Input type="number" value={form.pilgrimCount || ""} onChange={e => setForm({ ...form, pilgrimCount: e.target.value ? Number(e.target.value) : undefined })} /></div>
             <div><Label>التكلفة</Label><Input type="number" value={form.cost || ""} onChange={e => setForm({ ...form, cost: e.target.value ? Number(e.target.value) : undefined })} /></div>

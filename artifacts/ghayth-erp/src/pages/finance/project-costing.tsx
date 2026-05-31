@@ -24,6 +24,7 @@ import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 // projectId stays a string until the submit handler casts to number.
 // amount uses z.coerce.number().positive() — was tracked as string
 // and Number()-coerced; schema now blocks 0 / negative submissions.
@@ -141,6 +142,7 @@ export default function ProjectCostingPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card><CardContent className="p-4">
           <div className="text-sm text-muted-foreground">عدد المشاريع</div>

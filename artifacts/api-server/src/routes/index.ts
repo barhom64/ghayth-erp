@@ -88,6 +88,7 @@ import notificationEngineRouter from "./notification-engine.js";
 import printRouter from "./print.js";
 import printVerifyRouter from "./printVerify.js";
 import { requireModule, requireMinLevel } from "../middlewares/roleGuard.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { csrfMiddleware } from "../middlewares/csrfMiddleware.js";
 import rateLimit from "express-rate-limit";
@@ -95,6 +96,7 @@ import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { rawQuery } from "../lib/rawdb.js";
 import clientPortalRouter from "./clientPortal.js";
+import driverPortalRouter from "./driverPortal.js";
 import publicDataRouter from "./publicData.js";
 import careersPortalRouter from "./careersPortal.js";
 import { exportRouter } from "./export.js";
@@ -160,6 +162,12 @@ router.use("/auth", authRouter);
 // middleware on the rest, so adding a router-wide IP limiter here would
 // double-cap authenticated portal users. Skip it.
 router.use("/portal", clientPortalRouter);
+// /driver-portal — same shape as /portal but for fleet drivers
+// (driver_portal_accounts table, JWT type='driver_portal'). The portal
+// is the only surface a non-employee driver has to see their trips
+// and self-mark availability. Same anonymous-login + JWT structure
+// → same skip-the-router-wide-cap reasoning.
+router.use("/driver-portal", driverPortalRouter);
 // /careers mixes anonymous applicant flows with authenticated ones
 // behind a careers JWT. Same reasoning as /portal — don't add a
 // router-wide IP cap; portalLimiter inside careersPortal.ts handles the
@@ -415,7 +423,11 @@ router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90)
 // and is defence-in-depth against any future unguarded route.
 router.use("/permissions", requireMinLevel(90), permissionsRouter);
 router.use("/rbac/v2", requireMinLevel(90), rbacV2Router);
-router.use("/audit-logs", requireMinLevel(70), auditLogsRouter);
+// GAP_MATRIX item #16 — sidebar advertises this with perm=audit:read but
+// the mount only checked level≥70. Add requirePermission so direct-URL
+// access matches what the sidebar promises and lift the level to 90 to
+// align with /admin/* policy.
+router.use("/audit-logs", requireMinLevel(90), requirePermission("audit:read"), auditLogsRouter);
 router.use("/search", searchRouter);
 router.use("/activity-log", requireMinLevel(70), activityLogRouter);
 router.use("/approval-actions", approvalActionsRouter);
@@ -436,18 +448,33 @@ router.use("/operations-center", requireModule("operations"), requireMinLevel(40
 // Wiring stubs — fills the 42 frontend↔backend orphans surfaced by
 // scripts/src/check-frontend-backend-wiring.mjs. Mounted at /api root because
 // the routes carry their full domain prefix internally.
-router.use("/warehouse", requireModule("warehouse"), warehouseStubsRouter);
-router.use("/documents", requireModule("documents"), documentsStubsRouter);
-router.use("/hr", requireModule("hr"), hrStubsRouter);
-router.use("/finance", requireModule("finance"), financeStubsRouter);
+// GAP_MATRIX item #17 — wiring stubs return canned envelopes for routes
+// the frontend is wired to but the backend hasn't fully implemented yet.
+// The stubs router had module gates but no min-level floor, so any
+// authenticated user with the module bit set could enumerate them.
+// Floor at level 20 (employee+) — same as exportRouter, deliberately
+// low because stubs are read-only stand-ins. As each stub is replaced
+// by a real implementation it should pick up the destination route's
+// own gates (authorize/requireMinLevel) and this floor becomes
+// belt-and-braces.
+router.use("/warehouse", requireModule("warehouse"), requireMinLevel(20), warehouseStubsRouter);
+router.use("/documents", requireModule("documents"), requireMinLevel(20), documentsStubsRouter);
+router.use("/hr", requireModule("hr"), requireMinLevel(20), hrStubsRouter);
+router.use("/finance", requireModule("finance"), requireMinLevel(20), financeStubsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminStubsRouter);
 router.use(wiringScopeErrorHandler);
 router.use("/export", requireMinLevel(30), exportRouter);
 router.use("/import", requireMinLevel(50), importRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
 router.use("/notification-engine", requireModule("notifications"), notificationEngineRouter);
-router.use("/gov-integrations", govIntegrationsRouter);
-router.use("/digital-signature", digitalSignatureRouter);
+// GAP_MATRIX item #18 — both mounts handle government / security data
+// (ZATCA, GOSI, Absher endpoints + digital signing). The sidebar advertises
+// these at admin role-level (90); the routes themselves had no min-level
+// floor, so a misconfigured perm grant could expose them. Floor at 70 as
+// defence-in-depth (lower than 90 because some non-admin tenants legitimately
+// use ZATCA submission flows).
+router.use("/gov-integrations", requireMinLevel(70), govIntegrationsRouter);
+router.use("/digital-signature", requireMinLevel(70), digitalSignatureRouter);
 // FND-004 / FND-005 — events.ts exposes only read-only event-log and
 // event-catalog endpoints, none of which carried an authorize() check.
 // Event-log access is audit-level; gate the mount at 70 (as /audit-logs).

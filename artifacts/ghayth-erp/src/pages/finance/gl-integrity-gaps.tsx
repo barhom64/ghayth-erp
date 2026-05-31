@@ -1,4 +1,5 @@
 import { useApiQuery } from "@/lib/api";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { CheckCircle2, AlertTriangle, Download, FileWarning } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * GL integrity gaps — period-close pre-flight UI.
  * Consumes /reports/gl-integrity-gaps (#1043).
@@ -86,12 +88,14 @@ function exportCSV(sections: GapsResponse["sections"], filename: string) {
       ]);
     }
   }
-  const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
+  // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+  // Routed through unified export helper for audit + letterhead.
+  void exportRowsToCsv({
+    entityType: "report_gl_integrity_gaps",
+    title: String(filename).replace(/\.csv$/i, ""),
+    rows: rows.map((row: any) => Object.fromEntries(headers.map((h: string, i: number) => [h, Array.isArray(row) ? row[i] : (row?.[h] ?? "")]))),
+    columns: headers.map((h: string) => ({ key: h, label: h })),
+  }).catch((err) => console.error("[export] failed", err));
 }
 
 export default function GlIntegrityGapsPage() {
@@ -213,6 +217,7 @@ export default function GlIntegrityGapsPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       {/* Hero state */}
       <Card className={summary.isClean
         ? "border-emerald-300 bg-emerald-50/40"

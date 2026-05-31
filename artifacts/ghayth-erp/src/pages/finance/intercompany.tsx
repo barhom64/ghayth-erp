@@ -22,6 +22,7 @@ import { ArrowLeftRight, Layers } from "lucide-react";
 import { Link } from "wouter";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 // toCompanyId is a string in the form; the submit handler converts
 // to number for the API. amount coerced via z.coerce.
 const intercompanySchema = z.object({
@@ -134,6 +135,7 @@ export default function IntercompanyPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       <div className="rounded-xl border border-status-info-surface bg-status-info-surface p-4 text-sm text-status-info-foreground">
         <div className="font-semibold mb-1">آلية العمل التلقائية</div>
         عند تسجيل معاملة بينية، يُنشئ النظام تلقائياً:

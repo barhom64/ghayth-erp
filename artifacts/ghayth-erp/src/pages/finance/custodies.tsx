@@ -2,6 +2,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -238,6 +239,7 @@ export default function CustodiesPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <KpiGrid items={[
         { label: "عدد العهد", value: summary.total || 0, icon: KeyRound, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "المتبقي (قائمة)", value: formatCurrency(Number(summary.totalRemaining || 0)), icon: AlertCircle, color: "text-status-warning-foreground bg-status-warning-surface" },

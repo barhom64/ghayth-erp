@@ -133,6 +133,10 @@ export default function AdminVendorSettings() {
   return (
     <PageShell
       title="إعدادات المزوّدات الخارجية"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "إعدادات المزوّدات الخارجية" },
+      ]}
       subtitle="كل التكاملات الخارجية في مكان واحد — PBX، WhatsApp، Email، Push، SIEM، ZATCA. الأسرار مشفّرة في DB، تُقرأ من البيئة عند فقدان السجل."
       actions={
         <Button variant="outline" size="sm" onClick={() => refetch()}>

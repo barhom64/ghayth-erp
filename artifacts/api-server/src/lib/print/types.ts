@@ -3,7 +3,7 @@
  * See artifacts/api-server/src/migrations/171_print_engine_foundations.sql
  */
 
-export type PrintFormat = "a4" | "thermal_80" | "thermal_58" | "label" | "excel";
+export type PrintFormat = "a4" | "thermal_80" | "thermal_58" | "label" | "excel" | "csv";
 
 export type PaperSize =
   | "A4"

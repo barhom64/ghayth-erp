@@ -130,7 +130,7 @@ export default function AllocationOverrideLogPage() {
       subtitle="كل اعتماد تجاوز enforce_line_allocation بصلاحية finance.allocation.override — للحوكمة والمراجعة"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
-        { href: "/finance/settings-hub", label: "الإعدادات" },
+        { href: "/finance/settings", label: "الإعدادات" },
         { label: "تجاوزات التخصيص" },
       ]}
     >

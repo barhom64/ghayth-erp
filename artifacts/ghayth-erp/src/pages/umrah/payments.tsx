@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -159,6 +160,7 @@ export default function UmrahPayments() {
           perm="umrah:create"
           onClick={() => setCreateOpen(true)}
         >
+      <UmrahTabsNav />
           <Plus className="h-4 w-4 ml-1" /> تسجيل دفعة
         </GuardedButton>
       }

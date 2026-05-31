@@ -145,8 +145,8 @@ export default function UmrahPackages() {
     {
       key: "id" as any, header: "", render: (r) => (
         <div className="flex gap-1">
-          <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="icon" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-status-error" /></Button>
+          <Button variant="ghost" size="icon" title="تعديل" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" title="حذف" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-status-error" /></Button>
         </div>
       ),
     },

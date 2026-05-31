@@ -52,6 +52,10 @@ export default function AdminPostingFailures() {
   return (
     <PageShell
       title="فشل القيود المالية"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "فشل القيود المالية" },
+      ]}
       subtitle="عمليات القيد في دفتر الأستاذ التي فشلت وتحتاج معالجة"
       loading={isLoading}
       actions={

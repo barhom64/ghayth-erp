@@ -62,7 +62,11 @@ export default function MyRequests() {
   const leaveRequests: any[] = data?.leaveRequests ?? [];
 
   return (
-    <PageShell title="طلباتي" subtitle="تتبع حالة طلباتك المقدمة">
+    <PageShell title="طلباتي"
+      breadcrumbs={[
+        { href: "/my-space", label: "مساحاتي" },
+        { label: "طلباتي" },
+      ]} subtitle="تتبع حالة طلباتك المقدمة">
       <div className="flex gap-2 mb-6 border-b border-border">
         <button
           onClick={() => setActiveTab("workflow")}

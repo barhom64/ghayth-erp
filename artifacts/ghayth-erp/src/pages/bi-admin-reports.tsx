@@ -350,6 +350,10 @@ export default function BiAdminReportsPage() {
   return (
     <PageShell
       title="التقارير الإدارية"
+      breadcrumbs={[
+        { href: "/bi", label: "الذكاء التحليلي" },
+        { label: "التقارير الإدارية" },
+      ]}
       subtitle="تقارير يومية وأسبوعية وشهرية شاملة"
       actions={null}
     >

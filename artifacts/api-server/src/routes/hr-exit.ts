@@ -74,6 +74,8 @@ import {
   roundTo2,
   toDateISO,
   currentDateInTz,
+  checkFinancialPeriodOpen,
+  todayISO,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -624,6 +626,22 @@ router.patch("/exit/:id/complete", authorize({ feature: "hr.exit", action: "upda
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (!item.clearanceCompleted) throw new ConflictError("يجب إكمال إخلاء الطرف أولاً");
 
+    // FIN-AUD-09 — exit settlement posts EOS + leave-compensation expense
+    // and matching liability/cash CRs. Without an up-front period gate,
+    // the route would transition the exit to "completed" and disable the
+    // assignment, then hand off GL posting in a fire-and-forget .catch().
+    // A closed-period failure was silently swallowed (logger.error only),
+    // leaving the employee terminated with no EOS liability on the
+    // balance sheet. Check now so a closed period blocks the whole flow.
+    const exitSettlementDate = todayISO();
+    const exitPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, exitSettlementDate);
+    if (!exitPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن إتمام نهاية الخدمة في فترة مُقفلة: ${exitPeriodCheck.periodName ?? ""}`,
+        { field: "settlementDate", meta: { periodName: exitPeriodCheck.periodName } },
+      );
+    }
+
     await applyTransition({
       entity: "hr_exit_requests",
       id: item.id,
@@ -649,10 +667,26 @@ router.patch("/exit/:id/complete", authorize({ feature: "hr.exit", action: "upda
     const totalSettlement = Number(item.netSettlement || 0);
     if (totalSettlement > 0) {
       const { hrEngine } = await import("../lib/engines/index.js");
-      hrEngine.postExitSettlementGL(
+      // Pull the employee's department so EOS + leave-compensation JE
+      // lines carry the dim. Per-dept labour-cost reports group these
+      // alongside monthly payroll — without departmentId, exit
+      // settlements vanished from the per-dept roll-up.
+      const [assignmentRow] = await rawQuery<{ departmentId: number | null }>(
+        `SELECT "departmentId" FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
+        [item.assignmentId, scope.companyId]
+      );
+      const exitDepartmentId = assignmentRow?.departmentId ?? null;
+      // Await + propagate the GL failure so the operator sees the real
+      // error instead of "تم إتمام نهاية الخدمة" while the balance sheet
+      // silently lost the EOS / leave liability. The status transition
+      // above already moved the exit to "completed" — if the GL post
+      // fails, the operator must reopen the exit (closed period, missing
+      // account mapping) and retry. Catching here would put us right back
+      // in the silent-swallow trap that hid the bug for so long.
+      await hrEngine.postExitSettlementGL(
         { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
-        { id: item.id, employeeId: item.employeeId ?? 0, eosAmount, remainingLeaveAmount, totalSettlement },
-      ).catch((e: unknown) => logger.error(e, "Exit settlement GL error:"));
+        { id: item.id, employeeId: item.employeeId ?? 0, eosAmount, remainingLeaveAmount, totalSettlement, departmentId: exitDepartmentId },
+      );
     }
 
     res.json({ success: true, message: "تم إتمام نهاية الخدمة وتعطيل التعيين" });

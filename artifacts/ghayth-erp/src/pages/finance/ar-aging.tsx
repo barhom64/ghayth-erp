@@ -15,25 +15,27 @@ import { Download, AlertTriangle, Clock, Users } from "lucide-react";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
 
-function csvEscape(val: string): string {
-  if (val.includes(",") || val.includes('"') || val.includes("\n")) {
-    return `"${val.replace(/"/g, '""')}"`;
-  }
-  return val;
-}
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { exportRowsToCsv } from "@/lib/unified-export";
 
-function exportCSV(data: any[], filename: string) {
-  const headers = ["العميل", "حالي", "1-30 يوم", "31-60 يوم", "61-90 يوم", "أكثر من 90", "الإجمالي"];
-  const rows = data.map((c: any) => [
-    csvEscape(c.clientName ?? ""), c.current.toFixed(2), c["1_30"].toFixed(2),
-    c["31_60"].toFixed(2), c["61_90"].toFixed(2), c.over90.toFixed(2), c.total.toFixed(2),
-  ]);
-  const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
+// GAP_MATRIX item #7 — was a local Blob+createObjectURL CSV builder.
+// Routed through the unified export helper so the download appears in
+// /reports/print-log with entity=report_ar_aging.
+async function exportCSV(data: any[], title: string) {
+  await exportRowsToCsv({
+    entityType: "report_ar_aging",
+    title,
+    rows: data,
+    columns: [
+      { key: "clientName", label: "العميل",      format: (v) => String(v ?? "") },
+      { key: "current",    label: "حالي",        format: (v) => Number(v).toFixed(2) },
+      { key: "1_30",       label: "1-30 يوم",    format: (v) => Number(v).toFixed(2) },
+      { key: "31_60",      label: "31-60 يوم",   format: (v) => Number(v).toFixed(2) },
+      { key: "61_90",      label: "61-90 يوم",   format: (v) => Number(v).toFixed(2) },
+      { key: "over90",     label: "أكثر من 90",  format: (v) => Number(v).toFixed(2) },
+      { key: "total",      label: "الإجمالي",   format: (v) => Number(v).toFixed(2) },
+    ],
+  });
 }
 
 const BUCKETS = [
@@ -88,7 +90,7 @@ export default function ArAgingPage() {
       actions={
         <>
           <DatePicker value={asOfDate} onChange={setAsOfDate} className="w-44" placeholder="تاريخ التقرير" />
-          <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(clients, `ar-aging-${asOfDate}.csv`)}>
+          <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => { void exportCSV(clients, `تقادم الذمم المدينة — ${asOfDate}`); }}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </GuardedButton>
           <PrintButton
@@ -115,6 +117,7 @@ export default function ArAgingPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         {BUCKETS.map(b => (
           <Card key={b.key}>

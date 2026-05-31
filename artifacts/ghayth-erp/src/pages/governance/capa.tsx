@@ -1,6 +1,6 @@
 import { useApiQuery, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Wrench } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -43,12 +43,12 @@ export default function GovernanceCapa() {
   if (isError) return <ErrorState />;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Wrench className="h-6 w-6" /> الإجراءات التصحيحية والوقائية (CAPA)</h1>
-        <p className="text-muted-foreground mt-1">متابعة الإجراءات التصحيحية والوقائية لضمان الجودة والامتثال</p>
-      </div>
+    <PageShell
+      title="الإجراءات التصحيحية والوقائية (CAPA)"
+      subtitle="متابعة الإجراءات التصحيحية والوقائية لضمان الجودة والامتثال"
+      breadcrumbs={[{ label: "الحوكمة" }, { label: "CAPA" }]}
+    >
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
-    </div>
+    </PageShell>
   );
 }

@@ -1,6 +1,7 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency } from "@/lib/formatters";
 import { Scale, Users, AlertTriangle } from "lucide-react";
@@ -133,13 +134,12 @@ export default function UmrahReconciliation() {
   ];
 
   return (
-    <div dir="rtl" lang="ar" className="space-y-6 p-6">
-      <header>
-        <h1 className="text-2xl font-bold">تقرير المطابقة — نسك ↔ النظام</h1>
-        <p className="text-sm text-muted-foreground">
-          ثلاثة فحوصات للكشف عن انحرافات الاستيراد: مبالغ الفواتير، أعداد المعتمرين، تجاوزات بلا مخالفة مفتوحة
-        </p>
-      </header>
+    <PageShell
+      title="تقرير المطابقة — نسك ↔ النظام"
+      subtitle="ثلاثة فحوصات للكشف عن انحرافات الاستيراد: مبالغ الفواتير، أعداد المعتمرين، تجاوزات بلا مخالفة مفتوحة"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المطابقة" }]}
+    >
+      <UmrahTabsNav />
 
       <div className="grid gap-3 md:grid-cols-3">
         {kpis.map((k) => (
@@ -180,6 +180,6 @@ export default function UmrahReconciliation() {
         </p>
         <DataTable data={overstayGaps} columns={overstayCols} emptyMessage="لا تجاوزات بلا مخالفة" />
       </section>
-    </div>
+    </PageShell>
   );
 }

@@ -1,4 +1,10 @@
+import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -170,22 +176,30 @@ export default function ContractDetailPage() {
     }
   };
 
-  const handleTerminate = async () => {
-    // PROP-001: contract termination goes through the dedicated /terminate
-    // endpoint — the server rejects a terminal status set via raw PATCH with
-    // 409. /terminate runs the audited applyTransition (frees the unit,
-    // settles early-termination fees) and requires a non-empty reason.
-    const reason = window.prompt("سبب إنهاء العقد:");
-    if (reason === null) return; // user dismissed the prompt
-    if (!reason.trim()) {
+  // Termination dialog state — replaces window.prompt with a styled
+  // Textarea since the reason becomes part of the audit trail.
+  const [terminateOpen, setTerminateOpen] = useState(false);
+  const [terminateReason, setTerminateReason] = useState("");
+  const handleTerminate = () => {
+    setTerminateReason("");
+    setTerminateOpen(true);
+  };
+  const confirmTerminate = async () => {
+    if (!terminateReason.trim()) {
       toast({ variant: "destructive", title: "سبب الإنهاء مطلوب" });
       return;
     }
+    setTerminateOpen(false);
     try {
+      // PROP-001: contract termination goes through the dedicated /terminate
+      // endpoint — the server rejects a terminal status set via raw PATCH
+      // with 409. /terminate runs the audited applyTransition (frees the
+      // unit, settles early-termination fees) and requires a non-empty
+      // reason — the same constraint enforced client-side above.
       await apiFetch(`/properties/contracts/${id}/terminate`, {
         method: "POST",
         body: JSON.stringify({
-          reason: reason.trim(),
+          reason: terminateReason.trim(),
           terminationDate: todayLocal(),
         }),
       });
@@ -343,6 +357,7 @@ export default function ContractDetailPage() {
   ];
 
   return (
+    <>
     <DetailPageLayout
       title={contract?.ejarNumber ? `عقد ${contract.ejarNumber}` : contract ? `عقد #${contract.id}` : "العقد"}
       subtitle={contract?.tenantName || undefined}
@@ -361,6 +376,27 @@ export default function ContractDetailPage() {
       actions={actions}
       extraTabs={extraTabs}
     />
+    <Dialog open={terminateOpen} onOpenChange={setTerminateOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إنهاء العقد</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">سبب الإنهاء (مطلوب)</Label>
+          <Textarea
+            value={terminateReason}
+            onChange={(e) => setTerminateReason(e.target.value)}
+            rows={3}
+            placeholder="…"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setTerminateOpen(false)}>إلغاء</Button>
+          <Button variant="destructive" onClick={confirmTerminate} rateLimitAware>تأكيد الإنهاء</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

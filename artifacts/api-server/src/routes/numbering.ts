@@ -35,7 +35,7 @@ import {
   backfillAllSchemes,
   previewBackfill,
 } from "../lib/numberingBackfill.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { checkAccess } from "../lib/rbac/authzEngine.js";
 
 const router = Router();
@@ -181,6 +181,13 @@ router.patch(
         companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
         action: "numbering_scheme_updated", entity: "numbering_schemes", entityId: id,
         before: existing, after: updated,
+      });
+      await emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId ?? null,
+        action: "numbering.scheme.updated",
+        entity: "numbering_schemes",
+        entityId: id,
       });
       res.json(updated);
     } catch (err) {

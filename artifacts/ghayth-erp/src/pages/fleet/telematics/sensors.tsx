@@ -59,12 +59,11 @@ export default function FleetTelematicsSensors() {
   );
   const vehicleList = asList(vehicles) as VehicleOption[];
 
-  const path = vehicleId
-    ? `/fleet/telematics/vehicles/${vehicleId}/sensors`
-    : null;
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: SensorReadingRow[] }>(
     ["fleet-telematics-sensors", vehicleId],
-    path ?? "/fleet/telematics/vehicles/0/sensors",
+    vehicleId
+      ? `/fleet/telematics/vehicles/${vehicleId}/sensors`
+      : "/fleet/telematics/vehicles/0/sensors",
     { enabled: Boolean(vehicleId) },
   );
   const rows = (vehicleId ? (asList(data) as SensorReadingRow[]) : []);

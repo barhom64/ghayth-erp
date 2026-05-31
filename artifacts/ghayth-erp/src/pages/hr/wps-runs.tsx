@@ -20,6 +20,7 @@ import { Banknote, Download, Plus, Eye, AlertTriangle, CheckCircle } from "lucid
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const WPS_FORMATS = [
   { value: "generic_pipe", label: "صيغة عامة (Pipe-delimited)" },
   { value: "alrajhi", label: "الراجحي" },
@@ -208,6 +209,7 @@ export default function WpsRunsPage() {
         </GuardedButton>
       }
     >
+      <HrTabsNav />
       {!settings?.isActive && (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-4 mb-4 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />

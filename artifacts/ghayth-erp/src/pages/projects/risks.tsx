@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ShieldAlert, Plus, AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
+import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 import {
   PageShell,
   DataTable,
@@ -210,6 +211,7 @@ export default function RisksPage() {
         </>
       }
     >
+      <ProjectsTabsNav />
       <div className="flex items-center gap-2">
         <Label>المشروع:</Label>
         <Select value={projectId} onValueChange={setProjectId}>

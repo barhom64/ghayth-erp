@@ -249,6 +249,13 @@ function decryptConfigSecrets(config: Record<string, unknown>): Record<string, u
  * the logic was the #6 finding from the engineering review.
  */
 export function buildAdapter(integration: IntegrationRow): CMSV6Adapter | null {
+  // Defense-in-depth complement to the POST/PATCH guards (#1419):
+  // existing rows with a stub provider (e.g., wialon/teltonika
+  // migrated in from before the lockout) would otherwise return a
+  // CMSV6 adapter pointed at a non-CMSV6 endpoint — garbage in,
+  // garbage out. Reject cleanly here so the poll cron, on-demand
+  // sync, and webhook test all share the same boundary.
+  if (integration.provider && integration.provider !== "cmsv6") return null;
   const cfg = decryptConfigSecrets(integration.config ?? {});
   const account = cfg.account as string | undefined;
   const password = cfg.password as string | undefined;

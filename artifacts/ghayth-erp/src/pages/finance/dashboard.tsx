@@ -1,3 +1,17 @@
+/**
+ * Finance landing dashboard. Conflict #9 in
+ * `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md` flagged "ready" vs
+ * "legacy — replaced by /module-dashboards?tab=finance". Resolved
+ * after re-inspection: **keep**.
+ *
+ *   - /module-dashboards is a thin KPI overview (one query, ~12 KPIs).
+ *   - THIS page wires 5 distinct domain queries: /finance/summary,
+ *     bank guarantees, fiscal periods, pending manual journals,
+ *     and recent finance audit-log activity — none of which
+ *     module-dashboards surfaces.
+ *   - The two pages serve different audiences: module-dashboards
+ *     for cross-module managers, finance/dashboard for finance ICs.
+ */
 import { Link } from "wouter";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
@@ -31,6 +45,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { AllocationHealthCard } from "@/components/shared/allocation-health-card";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 /**
  * Finance Dashboard — R.1.5 of the Reference UI/UX phase.
  *
@@ -280,6 +295,7 @@ export default function FinanceDashboard() {
         </div>
       }
     >
+      <FinanceTabsNav />
       {/* ── Allocation engine health — surfaced at the top of finance so the
            enforce flag + coverage % + bypass count are always visible from
            the home page, not buried in settings (integration polish). ── */}

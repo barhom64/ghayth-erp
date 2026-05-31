@@ -21,6 +21,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const EXCUSE_TYPES: Record<string, string> = {
   early_leave: "خروج مبكر",
   late_arrival: "تأخر",
@@ -167,6 +168,7 @@ export default function ExcuseRequestsPage() {
         />
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       <BulkActionsBar

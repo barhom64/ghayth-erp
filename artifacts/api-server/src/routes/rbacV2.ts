@@ -32,7 +32,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
 import { invalidateSodCache } from "../lib/rbac/sodEnforcement.js";
-import { createNotification } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
 import { handleRouteError, ValidationError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 
@@ -126,6 +126,19 @@ router.post("/roles", authorize({ feature: "admin.roles", action: "create" }), a
     );
 
     await recordHistory(result.insertId, scope.companyId, scope.userId, "role.create", null, parsed.data, null);
+    // N2 fix: mirror to unified audit + events bus so RBAC v2 mutations
+    // show up in /admin/logs alongside the classic permission system.
+    // Without this, admins reviewing role history have to know which
+    // RBAC system created the role and switch UIs.
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.role.created", entity: "rbac_roles", entityId: result.insertId,
+      after: parsed.data,
+    }).catch(() => undefined);
+    await emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.role.created", entity: "rbac_roles", entityId: result.insertId,
+    }).catch(() => undefined);
     await bumpCacheVersion(scope.companyId);
     res.status(201).json({ id: result.insertId });
   } catch (err) {
@@ -165,6 +178,15 @@ router.patch("/roles/:id", authorize({ feature: "admin.roles", action: "update" 
     );
 
     await recordHistory(id, scope.companyId, scope.userId, "role.update", before, req.body, null);
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.role.updated", entity: "rbac_roles", entityId: id,
+      before, after: req.body,
+    }).catch(() => undefined);
+    await emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.role.updated", entity: "rbac_roles", entityId: id,
+    }).catch(() => undefined);
     await bumpCacheVersion(scope.companyId);
     res.json({ updated: 1 });
   } catch (err) {
@@ -185,6 +207,15 @@ router.delete("/roles/:id", authorize({ feature: "admin.roles", action: "delete"
 
     await rawExecute(`DELETE FROM rbac_roles WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     await recordHistory(id, scope.companyId, scope.userId, "role.delete", role, null, null);
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.role.deleted", entity: "rbac_roles", entityId: id,
+      before: role,
+    }).catch(() => undefined);
+    await emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.role.deleted", entity: "rbac_roles", entityId: id,
+    }).catch(() => undefined);
     await bumpCacheVersion(scope.companyId);
     res.json({ deleted: 1 });
   } catch (err) {

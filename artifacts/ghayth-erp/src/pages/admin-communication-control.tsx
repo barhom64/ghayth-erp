@@ -243,6 +243,10 @@ export default function AdminCommunicationControl() {
   return (
     <PageShell
       title="مركز التحكّم بالاتصالات"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مركز التحكّم بالاتصالات" },
+      ]}
       subtitle="الـ Unified Inbox، سجل المزوّدات مع الـ failover، وقواعد منع تسريب البيانات (DLP)"
       actions={
         <Button variant="outline" size="sm" onClick={refreshAll}>

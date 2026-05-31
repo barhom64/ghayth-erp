@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const SECTION_LABELS: Record<string, string> = {
   work_time: "مخالفات تتعلق بمواعيد العمل",
   work_organization: "مخالفات تتعلق بتنظيم العمل",
@@ -294,6 +295,7 @@ export default function DisciplineRegulationPage() {
         </div>
       }
     >
+      <HrTabsNav />
       <Tabs defaultValue="work_time" dir="rtl">
         <TabsList>
           {Object.entries(SECTION_LABELS).map(([key, label]) => (

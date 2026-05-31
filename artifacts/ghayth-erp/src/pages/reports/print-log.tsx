@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Repeat, Printer, AlertTriangle, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { PageHeader } from "@workspace/ui-core";
+import { PageShell } from "@workspace/ui-core";
 import { PrintButton } from "@/components/shared/print-button";
 
 interface JobRow {
@@ -119,12 +119,11 @@ export default function PrintLogPage() {
   }
 
   return (
-    <div className="space-y-4 p-4">
-      <PageHeader
-        title="سجل المطبوعات"
-        subtitle="كل طباعة أو إعادة طباعة في النظام، مع الفرع والمستخدم ورقم النسخة."
-      />
-
+    <PageShell
+      title="سجل المطبوعات"
+      subtitle="كل طباعة أو إعادة طباعة في النظام، مع الفرع والمستخدم ورقم النسخة."
+      breadcrumbs={[{ label: "التقارير" }, { label: "سجل المطبوعات" }]}
+    >
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">المرشّحات</CardTitle>
@@ -341,6 +340,6 @@ export default function PrintLogPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

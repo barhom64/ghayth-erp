@@ -13,6 +13,7 @@ import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { AlertTriangle, Calculator, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 interface PreviewResponse {
   asOf: string;
   rates: { current: number; d30: number; d60: number; d90: number; d90plus: number };
@@ -105,6 +106,7 @@ export default function BadDebtPage() {
         { label: "مخصص ديون" },
       ]}
     >
+      <FinanceTabsNav />
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">
           <p className="font-semibold mb-1 flex items-center gap-1">
