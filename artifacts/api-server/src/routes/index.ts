@@ -25,6 +25,7 @@ import tasksRouter from "./tasks.js";
 import fleetRouter from "./fleet.js";
 import fleetTelematicsRouter from "./fleet-telematics.js";
 import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
+import cargoRouter from "./cargo.js";
 import warehouseRouter from "./warehouse.js";
 import propertiesRouter from "./properties.js";
 import legalRouter from "./legal.js";
@@ -363,6 +364,10 @@ router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRo
 // module + financial guard + per-user limiter as the rest of the fleet
 // module, and so URLs stay /fleet/telematics/* in the SPA.
 router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetTelematicsRouter);
+// Cargo / freight (#1354). Same fleet module gate + financial guard.
+// URLs stay /cargo/* at the top level (not /fleet/cargo/*) because
+// cargo is its own RBAC feature (fleet.cargo) and its own SPA tab.
+router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);
