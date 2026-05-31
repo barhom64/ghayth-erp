@@ -1,3 +1,12 @@
+/**
+ * HR module landing page. Conflict #10 in
+ * `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md` flagged this as "legacy
+ * hub — replaced by /module-dashboards?tab=hr". Resolved as **keep**
+ * for the same reason as finance/dashboard (conflict #9): this is a
+ * domain-specific landing with HR-specific queries and quick-link
+ * widgets that the cross-module dashboard doesn't surface. The two
+ * serve different audiences (cross-module managers vs HR ICs).
+ */
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";

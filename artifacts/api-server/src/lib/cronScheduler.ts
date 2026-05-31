@@ -3123,6 +3123,10 @@ async function umrahDailyOverstayScan(): Promise<string> {
           AND p."deletedAt" IS NULL
           AND COALESCE(p."isInsideKingdom", true) = true
           AND p.status NOT IN ('departed','cancelled','violated')
+          -- Operator-flipped exemption (migration 242). NOT COALESCE
+          -- treats NULL as the regular non-exempt path so pre-migration
+          -- rows don't accidentally skip the scan.
+          AND NOT COALESCE(p."overstayExempt", false)
           AND COALESCE(p."actualStayDays",0) > COALESCE(p."programDuration",0)
           AND COALESCE(p."programDuration",0) > 0
           AND NOT EXISTS (
@@ -3132,20 +3136,46 @@ async function umrahDailyOverstayScan(): Promise<string> {
           )`,
       [c.id]
     );
+    // Penalty settings — 3 keys read in one go so the per-pilgrim loop
+    // below doesn't fire 3 queries per row. Backward-compat: when the
+    // operator hasn't set the tiered keys, the existing per-day model
+    // applies unchanged.
+    //
+    // Tiered model (the user's "20 days base + every 10 days = +50 ر.س"
+    // example): when BOTH tier_days > 0 AND tier_amount > 0, the
+    // engine uses ceil(overDays / tier_days) × tier_amount. Example:
+    //   overDays=5  → 1 tier × 50 = 50
+    //   overDays=15 → 2 tiers × 50 = 100
+    //   overDays=20 → 2 tiers × 50 = 100  (NOT 3 — operator's "every 10")
+    //
+    // Per-day fallback: penalty = overDays × per_day. Keeps the
+    // pre-tier behaviour for companies that haven't migrated.
+    const penaltySettings = await rawQuery<{ key: string; value: string }>(
+      `SELECT key, value FROM system_settings
+        WHERE key IN ('umrah.overstay_daily_penalty',
+                      'umrah.overstay_tier_days',
+                      'umrah.overstay_tier_amount')
+          AND ( ("companyId" IS NULL AND "branchId" IS NULL)
+                OR ("companyId" = $1 AND "branchId" IS NULL) )
+        ORDER BY "companyId" NULLS FIRST`,
+      [c.id]
+    );
+    // company-scoped value wins (NULLS FIRST means it comes last → overwrites).
+    const penaltyByKey: Record<string, number> = {};
+    for (const row of penaltySettings) {
+      penaltyByKey[row.key] = Number(row.value ?? 0);
+    }
+    const perDay = penaltyByKey["umrah.overstay_daily_penalty"] ?? 0;
+    const tierDays = penaltyByKey["umrah.overstay_tier_days"] ?? 0;
+    const tierAmount = penaltyByKey["umrah.overstay_tier_amount"] ?? 0;
+    const useTiered = tierDays > 0 && tierAmount > 0;
     for (const o of overstayed) {
-      // Per-day penalty pulled from settings (default 0 — spec leaves it as a
-      // company-set value). The violation row is still created so the agent
-      // sees the breach even if penalty is 0.
-      const [setting] = await rawQuery<{ value: string }>(
-        `SELECT value FROM system_settings
-          WHERE key='umrah.overstay_daily_penalty'
-            AND ( ("companyId" IS NULL AND "branchId" IS NULL)
-                  OR ("companyId" = $1 AND "branchId" IS NULL) )
-          ORDER BY "companyId" NULLS FIRST LIMIT 1`,
-        [c.id]
-      );
-      const perDay = Number(setting?.value ?? 0);
-      const penalty = Math.max(0, Number(o.overDays) || 0) * perDay;
+      const overDays = Math.max(0, Number(o.overDays) || 0);
+      // Tiered: ceil(overDays / tierDays) × tierAmount. Per-day fallback
+      // matches the pre-PR behaviour exactly.
+      const penalty = useTiered
+        ? Math.ceil(overDays / tierDays) * tierAmount
+        : overDays * perDay;
       await rawExecute(
         `INSERT INTO umrah_violations ("companyId","branchId",type,"referenceType","referenceNumber",
           "mutamerId","groupId","subAgentId","penaltyAmount",status,description,"createdAt","updatedAt")

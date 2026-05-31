@@ -13,7 +13,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Calendar, Users, TrendingUp } from "lucide-react";
+import { Edit, Calendar, Users, TrendingUp, Wallet, AlertTriangle, Shield, Layers } from "lucide-react";
+import { Link } from "wouter";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
@@ -24,6 +25,26 @@ const STATUS_LABELS: Record<string, string> = {
   active: "نشط",
   completed: "مكتمل",
   cancelled: "ملغى",
+  open: "مفتوح",
+  closed: "مغلق",
+};
+
+// Pilgrim status → Arabic label. Kept in sync with the constant on
+// the group-detail page; refactor target: lift to a shared module
+// once a 4th caller needs it.
+const PILGRIM_STATUS_LABELS: Record<string, string> = {
+  pending: "لم يصل",
+  arrived: "وصل",
+  active: "نشط",
+  overstayed: "متأخر",
+  overstay_penalized: "متأخر مع غرامة",
+  departed: "غادر",
+  violated: "مخالف",
+  absconded: "هارب",
+  deceased: "متوفى",
+  visa_rejected: "تأشيرة مرفوضة",
+  visa_printed: "تأشيرة مطبوعة",
+  cancelled: "ملغي",
 };
 
 function statusTone(status?: string | null) {
@@ -173,6 +194,152 @@ export default function UmrahSeasonDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Operational stats — answers "how is this season actually
+          performing?". Pulled from the enriched GET /seasons/:id
+          payload (PR-extending the route), so all numbers are a
+          single roundtrip. */}
+      <Card className="md:col-span-3" data-testid="season-status-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            توزيع حالة المعتمرين ({season?.pilgrimsCount ?? 0})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {season?.statusBreakdown && Object.keys(season.statusBreakdown).length > 0 ? (
+            <div className="flex flex-wrap gap-2" data-testid="season-status-breakdown">
+              {Object.entries(season.statusBreakdown as Record<string, number>).map(([status, count]) => (
+                <Badge key={status} variant="outline" className="text-xs">
+                  {PILGRIM_STATUS_LABELS[status] || status}: {count}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">لا يوجد معتمرون بعد.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="season-groups-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Layers className="h-4 w-4 text-muted-foreground" />
+            المجموعات والوكلاء
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">عدد المجموعات</span>
+            <span className="font-semibold" data-testid="season-groups-count">{season?.groupsCount ?? 0}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">عدد الوكلاء النشطين</span>
+            <span className="font-semibold" data-testid="season-agents-count">{season?.agentsCount ?? 0}</span>
+          </div>
+          {id && (season?.groupsCount ?? 0) > 0 && (
+            <Link
+              href={`/umrah/groups?seasonId=${id}`}
+              className="text-xs text-blue-600 hover:underline block pt-1"
+              data-testid="season-groups-link"
+            >
+              فتح المجموعات ←
+            </Link>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="season-alerts-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            تنبيهات
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+              <AlertTriangle className="h-3 w-3" /> تأشيرات تنتهي خلال 7 أيام
+            </span>
+            <span
+              className={`font-semibold ${Number(season?.visaExpiringCount ?? 0) > 0 ? "text-status-warning-foreground" : ""}`}
+              data-testid="season-visa-expiring"
+            >
+              {season?.visaExpiringCount ?? 0}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+              <AlertTriangle className="h-3 w-3" /> متأخرون حالياً
+            </span>
+            <span
+              className={`font-semibold ${Number(season?.overstayCount ?? 0) > 0 ? "text-status-error-foreground" : ""}`}
+              data-testid="season-overstay-count"
+            >
+              {season?.overstayCount ?? 0}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Shield className="h-3 w-3" /> مستثنون من المسح
+            </span>
+            <span className="font-semibold" data-testid="season-exempt-count">
+              {season?.exemptCount ?? 0}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="md:col-span-3" data-testid="season-finance-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-muted-foreground" />
+            الملخص المالي للموسم
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">إجمالي المبيعات ({season?.finance?.invoiceCount ?? 0} فاتورة)</p>
+              <span className="text-lg font-semibold" data-testid="season-invoice-total">
+                {formatCurrency(Number(season?.finance?.invoiceTotal ?? 0))}
+              </span>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">المُحصّل</p>
+              <span className="text-lg font-semibold text-status-success-foreground" data-testid="season-invoice-paid">
+                {formatCurrency(Number(season?.finance?.invoicePaid ?? 0))}
+              </span>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">المتبقي</p>
+              <span
+                className={`text-lg font-semibold ${Number(season?.finance?.invoiceOutstanding ?? 0) > 0 ? "text-status-error-foreground" : ""}`}
+                data-testid="season-invoice-outstanding"
+              >
+                {formatCurrency(Number(season?.finance?.invoiceOutstanding ?? 0))}
+              </span>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">
+                تكلفة نسك ({season?.finance?.nuskCount ?? 0} فاتورة)
+              </p>
+              <span className="text-lg font-semibold" data-testid="season-nusk-cost">
+                {formatCurrency(Number(season?.finance?.nuskNetCost ?? 0))}
+              </span>
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">الهامش (مبيعات − تكلفة نسك)</span>
+            <span
+              className={`text-xl font-bold ${Number(season?.finance?.margin ?? 0) < 0 ? "text-status-error-foreground" : "text-status-success-foreground"}`}
+              data-testid="season-margin"
+            >
+              {formatCurrency(Number(season?.finance?.margin ?? 0))}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
 
       {id && <EntityComments entityType="umrah-season" entityId={id} />}
       {id && <EntityTags entityType="umrah-season" entityId={id} />}

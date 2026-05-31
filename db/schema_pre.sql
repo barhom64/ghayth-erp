@@ -4812,6 +4812,9 @@ CREATE TABLE public.companies (
     "functionalCurrency" character(3) DEFAULT 'SAR'::bpchar,
     "presentationCurrency" character(3),
     "nuskSupplierId" integer,
+    "umrahVisaProductId" integer,
+    "umrahServicesProductId" integer,
+    "umrahTransportProductId" integer,
     CONSTRAINT chk_companies_functional_currency_iso CHECK (("functionalCurrency" ~ '^[A-Z]{3}$'::text))
 );
 
@@ -17186,6 +17189,10 @@ CREATE TABLE public.umrah_pilgrims (
     "visaExpiry" date,
     "entryDate" date,
     "exitDate" date,
+    "overstayExempt" boolean DEFAULT false,
+    "overstayExemptReason" text,
+    "overstayExemptBy" integer,
+    "overstayExemptAt" timestamp with time zone,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('overstay_penalized'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('absconded'::character varying)::text, ('deceased'::character varying)::text, ('visa_rejected'::character varying)::text, ('visa_printed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -17276,6 +17283,10 @@ CREATE TABLE public.umrah_sales_invoice_items (
     "updatedBy" integer,
     "updatedAt" timestamp with time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
+    "productId" integer,
+    "vatRate" numeric(5,2) DEFAULT 15,
+    "vatAmount" numeric(12,2) DEFAULT 0,
+    "accountCode" character varying(20),
     CONSTRAINT "umrah_sales_invoice_items_itemType_check" CHECK ((("itemType")::text = ANY (ARRAY[('group'::character varying)::text, ('penalty'::character varying)::text, ('adjustment'::character varying)::text])))
 );
 

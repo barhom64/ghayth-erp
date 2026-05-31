@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -254,6 +255,11 @@ export default function UmrahGroups() {
       header: "إجراءات",
       render: (g) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Link href={`/umrah/groups/${g.id}`} data-testid={`group-detail-link-${g.id}`}>
+            <Button variant="ghost" size="sm" className="gap-1">
+              تفاصيل
+            </Button>
+          </Link>
           <Button
             variant="ghost"
             size="sm"

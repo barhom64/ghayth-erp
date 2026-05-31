@@ -1,4 +1,23 @@
+/**
+ * Shared base for the per-entity profitability views. Re-exported as the
+ * default by four 6-7 LoC wrappers in this folder:
+ *
+ *   profitability-vehicle.tsx     → <ProfitabilityPage entityType="vehicle">
+ *   profitability-property.tsx    → <ProfitabilityPage entityType="property">
+ *   profitability-project.tsx     → <ProfitabilityPage entityType="project">
+ *   profitability-umrah-agent.tsx → <ProfitabilityPage entityType="umrah-agent">
+ *
+ * This file is NOT registered in any route file because the wrappers
+ * are what bind to the four `/finance/profitability/<kind>/:id` paths.
+ * `SYSTEM_PAGE_INVENTORY` flagged the absence of a direct route as
+ * "dead", while `DEAD_DUPLICATE_PAGE_AUDIT` flagged it as "keep"
+ * because the wrappers import it as a sibling — both readings of
+ * the matrix are recorded as conflict #1 in
+ * `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md`. This JSDoc resolves it:
+ * **keep** — removing the file would break four routed wrappers.
+ */
 import { useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -102,12 +121,14 @@ function exportCSV(label: string, rows: AccountRow[], summary: ProfitabilityResp
   lines.push(["", "إجمالي الإيرادات", "", summary.totalRevenue.toFixed(2), ""]);
   lines.push(["", "إجمالي المصروفات", "", "", summary.totalExpense.toFixed(2)]);
   lines.push(["", "صافي الربح/الخسارة", "", summary.netProfit.toFixed(2), ""]);
-  const csv = [headers, ...lines].map((r) => r.join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `${label}-${todayLocal()}.csv`;
-  link.click();
+  // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+  // Routed through unified export helper for audit + letterhead.
+  void exportRowsToCsv({
+    entityType: "report_profitability",
+    title: String(`${label}-${todayLocal()}.csv`).replace(/\.csv$/i, ""),
+    rows: lines.map((row: any) => Object.fromEntries(headers.map((h: string, i: number) => [h, Array.isArray(row) ? row[i] : (row?.[h] ?? "")]))),
+    columns: headers.map((h: string) => ({ key: h, label: h })),
+  }).catch((err) => console.error("[export] failed", err));
 }
 
 interface Props {

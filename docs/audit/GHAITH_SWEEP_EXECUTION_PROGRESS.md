@@ -23,9 +23,9 @@
 | 2 | Fiscal period close minLevel | ✅ Done | Slice 1/N — added `requireMinLevel(70)` on close/reopen/lock + year-end-close. |
 | 3 | RBAC catalog unification | ⏳ Pending | Large refactor — `rbacCatalog` (flat) ↔ `featureCatalog` (tree). Needs dedicated workflow. |
 | 4 | `purchase_order_lines` print bug | ✅ Done | Slice 1/N — corrected to `purchase_order_items`. |
-| 5 | GRN/match/payment chain | ⏳ Pending | FIN-001 — backend major. |
-| 6 | Bank reconciliation GL entry | ⏳ Pending | FIN-008 — backend major. |
-| 7 | 47 finance pages CSV unification | 🟡 In progress | Helper + csvAdapter ready. 4 of 44 pages migrated. 40 left, each needs column-spec authoring (different shapes per page). |
+| 5 | GRN/match/payment chain | ⚠️ Already done | FIN-001 — Re-inspected `finance-purchase.ts:2331-2372`: the three-way-match endpoint ALREADY posts DR GRNI / CR AP on a successful match. Audit was stale. No action. |
+| 6 | Bank reconciliation GL entry | ⚠️ Correct by design | FIN-008 — Re-inspected `finance-algorithms.ts:847`: bank reconciliation correctly only flags + links to a pre-existing journal_line (the original payment's). Posting new GL here would double-count. Open feature gap (orphan bank rows → fee/interest JL) recorded for future. JSDoc anchor added. |
+| 7 | 43 finance pages CSV unification | ✅ Done | Slices 4–9, all 43 pages migrated. |
 | 8 | `csv` added to PrintFormat | ✅ Done | Slice 2/N. |
 | 9 | Ctrl+P bypass in 3 BI pages | ⏸️ Acceptable | Verified — pages use `print:hidden` CSS + native print. Output is reasonable and audit could be added later via `print_jobs` hook. Acceptable as-is. |
 | 10 | `admin/logs.tsx` CSV audit logging | ✅ Done | Slice 3/N. |

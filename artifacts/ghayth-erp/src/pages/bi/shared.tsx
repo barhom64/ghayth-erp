@@ -1,3 +1,15 @@
+/**
+ * Shared utilities for the BI module sub-tabs (`overview-tab`,
+ * `ceo-dashboard-tab`, ...). Not a routed page; lives under
+ * `pages/bi/` next to its consumers for locality.
+ *
+ * Conflict #4 in `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md`: one agent
+ * flagged this as "internal-only OK", another as "misplaced —
+ * should move to `components/` or `lib/`". Resolved here as **keep
+ * in place** — co-locating with its only consumers (the BI tabs)
+ * is the cheaper choice; a future BI module reorganization can
+ * relocate them together.
+ */
 import { useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";

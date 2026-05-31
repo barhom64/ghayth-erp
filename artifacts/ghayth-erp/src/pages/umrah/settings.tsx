@@ -8,12 +8,43 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { Settings as SettingsIcon, Save, AlertTriangle } from "lucide-react";
+import { Settings as SettingsIcon, Save, AlertTriangle, Wallet, Package, Clock } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { formatCurrency } from "@/lib/formatters";
 
 interface UmrahSettings {
   nuskSupplierId: number | null;
   nuskSupplierName: string | null;
   nuskSupplierCode: string | null;
+  // Phase 3a (PR #1469) — service-type → product mapping. Each may
+  // be null pre-configuration; the Phase 3b engine resolver falls
+  // back to the bundled single-line behaviour in that case.
+  umrahVisaProductId: number | null;
+  umrahVisaProductName: string | null;
+  umrahServicesProductId: number | null;
+  umrahServicesProductName: string | null;
+  umrahTransportProductId: number | null;
+  umrahTransportProductName: string | null;
+  // Overstay-penalty knobs (PR #1477 + this PR). null = use the global
+  // default; explicit number = company-scoped override.
+  umrahOverstayDailyPenalty: number | null;
+  umrahOverstayTierDays: number | null;
+  umrahOverstayTierAmount: number | null;
+}
+
+interface Product {
+  id: number;
+  name: string;
+  defaultTaxCode?: string | null;
+}
+
+interface NuskWallet {
+  configured: boolean;
+  nuskSupplierId: number | null;
+  walletBalance: number;
+  totalDeposits: number;
+  totalObligations: number;
+  totalRefunds: number;
 }
 
 interface Supplier {
@@ -32,6 +63,13 @@ export default function UmrahSettings() {
     ["umrah-settings"],
     "/umrah/settings",
   );
+  // NUSK wallet balance — derived view over the existing AP ledger.
+  // Re-fetched alongside settings so the balance reflects any saves
+  // (though saves don't change wallet balance, defensive consistency).
+  const { data: wallet, refetch: refetchWallet } = useApiQuery<NuskWallet>(
+    ["umrah-nusk-wallet"],
+    "/umrah/nusk-wallet",
+  );
   // Suppliers feed the SearchableSelect — the operator picks the one
   // that represents NUSK. Fetched once and cached.
   const { data: suppliersResp } = useApiQuery<{ data: Supplier[] }>(
@@ -40,20 +78,68 @@ export default function UmrahSettings() {
   );
   const suppliers: Supplier[] = suppliersResp?.data ?? [];
 
+  // Products list feeds the 3 service-type dropdowns (Phase 3a). The
+  // canonical products list endpoint lives under /warehouse/products
+  // — products are warehouse-domain entities (with stock, inventory
+  // account, etc.) even though they're picked here for revenue
+  // routing. The defaultTaxCode (when present) is surfaced in the
+  // option label so the operator can confirm they picked a
+  // zero-rated product for visa, not a 15% one.
+  const { data: productsResp } = useApiQuery<{ data: Product[] }>(
+    ["warehouse-products"],
+    "/warehouse/products",
+  );
+  const products: Product[] = productsResp?.data ?? [];
+
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
+  const [selectedVisaProductId, setSelectedVisaProductId] = useState<string>("");
+  const [selectedServicesProductId, setSelectedServicesProductId] = useState<string>("");
+  const [selectedTransportProductId, setSelectedTransportProductId] = useState<string>("");
+  // Overstay-penalty knobs (PR #1477 + this PR). Stored as strings to
+  // preserve the operator's empty-state distinction ("" = use global
+  // default; "0" = explicit zero penalty).
+  const [penaltyDailyAmount, setPenaltyDailyAmount] = useState<string>("");
+  const [penaltyTierDays, setPenaltyTierDays] = useState<string>("");
+  const [penaltyTierAmount, setPenaltyTierAmount] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
-  // Sync local state when the settings load — keeps the dropdown's
-  // initial value in sync with the server's persisted setting.
+  // Sync local state when the settings load — keeps the dropdowns'
+  // initial values in sync with the server's persisted settings.
+  // Each field has its own effect so that a save of ONE setting
+  // doesn't accidentally re-sync the others (which would lose the
+  // operator's in-flight edits).
   useEffect(() => {
-    if (settings?.nuskSupplierId != null) {
-      setSelectedSupplierId(String(settings.nuskSupplierId));
-    } else if (settings) {
-      // Explicitly empty when settings load and nuskSupplierId is null
-      // — the operator hasn't configured it yet.
-      setSelectedSupplierId("");
-    }
+    if (settings == null) return;
+    setSelectedSupplierId(settings.nuskSupplierId != null ? String(settings.nuskSupplierId) : "");
   }, [settings?.nuskSupplierId]);
+  useEffect(() => {
+    if (settings == null) return;
+    setSelectedVisaProductId(settings.umrahVisaProductId != null ? String(settings.umrahVisaProductId) : "");
+  }, [settings?.umrahVisaProductId]);
+  useEffect(() => {
+    if (settings == null) return;
+    setSelectedServicesProductId(settings.umrahServicesProductId != null ? String(settings.umrahServicesProductId) : "");
+  }, [settings?.umrahServicesProductId]);
+  useEffect(() => {
+    if (settings == null) return;
+    setSelectedTransportProductId(settings.umrahTransportProductId != null ? String(settings.umrahTransportProductId) : "");
+  }, [settings?.umrahTransportProductId]);
+  useEffect(() => {
+    if (settings == null) return;
+    setPenaltyDailyAmount(settings.umrahOverstayDailyPenalty != null ? String(settings.umrahOverstayDailyPenalty) : "");
+  }, [settings?.umrahOverstayDailyPenalty]);
+  useEffect(() => {
+    if (settings == null) return;
+    setPenaltyTierDays(settings.umrahOverstayTierDays != null ? String(settings.umrahOverstayTierDays) : "");
+  }, [settings?.umrahOverstayTierDays]);
+  useEffect(() => {
+    if (settings == null) return;
+    setPenaltyTierAmount(settings.umrahOverstayTierAmount != null ? String(settings.umrahOverstayTierAmount) : "");
+  }, [settings?.umrahOverstayTierAmount]);
+
+  // Helper: convert a SearchableSelect value ("" / "<number>") to the
+  // wire format the PR #1469 PATCH expects ("" → null, value → Number).
+  const toPatchValue = (v: string): number | null => (v === "" ? null : Number(v));
 
   const save = async () => {
     setSaving(true);
@@ -61,12 +147,21 @@ export default function UmrahSettings() {
       await apiFetch("/umrah/settings", {
         method: "PATCH",
         body: JSON.stringify({
-          // Empty string maps to null on the backend — clears the link.
-          nuskSupplierId: selectedSupplierId === "" ? null : Number(selectedSupplierId),
+          // Each field's "" maps to null on the backend (clears the link).
+          // The PATCH handler treats null as "explicit clear" and value
+          // as "update" — see umrahSettingsPatchSchema docstring.
+          nuskSupplierId: toPatchValue(selectedSupplierId),
+          umrahVisaProductId: toPatchValue(selectedVisaProductId),
+          umrahServicesProductId: toPatchValue(selectedServicesProductId),
+          umrahTransportProductId: toPatchValue(selectedTransportProductId),
+          umrahOverstayDailyPenalty: toPatchValue(penaltyDailyAmount),
+          umrahOverstayTierDays: toPatchValue(penaltyTierDays),
+          umrahOverstayTierAmount: toPatchValue(penaltyTierAmount),
         }),
       });
       toast({ title: "تم حفظ إعدادات العمرة" });
       refetch();
+      refetchWallet();
     } catch (e: any) {
       toast({
         variant: "destructive",
@@ -81,7 +176,17 @@ export default function UmrahSettings() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const dirty = selectedSupplierId !== (settings?.nuskSupplierId != null ? String(settings.nuskSupplierId) : "");
+  // Dirty check — any of the 4 fields differs from its loaded value.
+  // The save button stays disabled until SOMETHING changes so we
+  // don't fire useless audit-log entries on every page revisit.
+  const dirty =
+    selectedSupplierId !== (settings?.nuskSupplierId != null ? String(settings.nuskSupplierId) : "") ||
+    selectedVisaProductId !== (settings?.umrahVisaProductId != null ? String(settings.umrahVisaProductId) : "") ||
+    selectedServicesProductId !== (settings?.umrahServicesProductId != null ? String(settings.umrahServicesProductId) : "") ||
+    selectedTransportProductId !== (settings?.umrahTransportProductId != null ? String(settings.umrahTransportProductId) : "") ||
+    penaltyDailyAmount !== (settings?.umrahOverstayDailyPenalty != null ? String(settings.umrahOverstayDailyPenalty) : "") ||
+    penaltyTierDays !== (settings?.umrahOverstayTierDays != null ? String(settings.umrahOverstayTierDays) : "") ||
+    penaltyTierAmount !== (settings?.umrahOverstayTierAmount != null ? String(settings.umrahOverstayTierAmount) : "");
 
   return (
     <PageShell title="إعدادات العمرة" subtitle="ضبط ربط وحدة العمرة بالنظام المالي">
@@ -146,6 +251,275 @@ export default function UmrahSettings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Service-type → product mapping (Phase 3a, PR #1469).
+            Lets the operator pick which products represent visa /
+            services / transport on umrah sales invoices. Phase 3b
+            uses these to split each group line into 3 properly-VAT'd
+            sub-lines so e-invoices show "visa zero-rated" and
+            "services 15%" distinctly — matching ZATCA + the
+            "تأشيرة 422 + خدمات 50 + نقل 200" example. */}
+        <Card data-testid="umrah-service-products-card">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              ربط أنواع الخدمة بالمنتجات
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              يربط كل نوع خدمة بمنتج في سجل المنتجات. الـ
+              <strong> defaultTaxCode </strong>
+              على المنتج هو المصدر الحقيقي لنسبة الضريبة (مثلاً
+              <span dir="ltr"> "zero" </span>
+              للتأشيرة،
+              <span dir="ltr"> "standard" </span>
+              للخدمات والنقل). الفاتورة بعدها تظهر كل بند بنسبته الصحيحة في كشف ZATCA.
+            </p>
+
+            {(settings?.umrahVisaProductId == null
+              || settings?.umrahServicesProductId == null
+              || settings?.umrahTransportProductId == null) && (
+              <div
+                className="rounded-md border border-status-warning-surface bg-status-warning-surface/30 p-3 text-sm text-status-warning-foreground flex items-start gap-2"
+                data-testid="service-products-incomplete-banner"
+              >
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  لم تُكتمل خريطة المنتجات. حتى تربط الثلاثة، يُسجّل المحرّك كل مجموعة كبند واحد دون فصل
+                  (تأشيرة / خدمات / نقل). أكمل الربط ليتم التقسيم تلقائياً.
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2" data-testid="umrah-visa-product-select">
+                <Label>منتج التأشيرة (بدون ضريبة)</Label>
+                <SearchableSelect
+                  value={selectedVisaProductId}
+                  onValueChange={setSelectedVisaProductId}
+                  placeholder="— لم يُحدّد —"
+                  options={[
+                    { value: "", label: "— لا منتج —" },
+                    ...products.map((p) => ({
+                      value: String(p.id),
+                      label: p.defaultTaxCode ? `${p.name} [${p.defaultTaxCode}]` : p.name,
+                    })),
+                  ]}
+                />
+              </div>
+
+              <div className="space-y-2" data-testid="umrah-services-product-select">
+                <Label>منتج الخدمات الأرضية (15%)</Label>
+                <SearchableSelect
+                  value={selectedServicesProductId}
+                  onValueChange={setSelectedServicesProductId}
+                  placeholder="— لم يُحدّد —"
+                  options={[
+                    { value: "", label: "— لا منتج —" },
+                    ...products.map((p) => ({
+                      value: String(p.id),
+                      label: p.defaultTaxCode ? `${p.name} [${p.defaultTaxCode}]` : p.name,
+                    })),
+                  ]}
+                />
+              </div>
+
+              <div className="space-y-2" data-testid="umrah-transport-product-select">
+                <Label>منتج النقل (15%)</Label>
+                <SearchableSelect
+                  value={selectedTransportProductId}
+                  onValueChange={setSelectedTransportProductId}
+                  placeholder="— لم يُحدّد —"
+                  options={[
+                    { value: "", label: "— لا منتج —" },
+                    ...products.map((p) => ({
+                      value: String(p.id),
+                      label: p.defaultTaxCode ? `${p.name} [${p.defaultTaxCode}]` : p.name,
+                    })),
+                  ]}
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              لم تُنشئ المنتجات بعد؟ أنشئها من{" "}
+              <a href="/finance/product-catalog" className="text-status-info-foreground hover:underline">
+                المالية ← كتالوج المنتجات
+              </a>{" "}
+              ثم ارجع هنا للربط.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Overstay-penalty knobs (PR #1477 + #1479). Lets the
+            operator switch between the per-day and the tiered
+            penalty models without opening a DB console. The
+            tiered model takes effect when BOTH tier_days AND
+            tier_amount are > 0 — the cron picks the right formula
+            from the values it reads here. */}
+        <Card data-testid="umrah-overstay-penalty-card">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              نموذج غرامة التأخّر
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              يحدّد كيف يحسب المحرّك غرامة المعتمر المتأخّر بعد انتهاء برنامج العمرة. اترك جميع الحقول
+              فارغة لاستخدام القيمة الافتراضية على مستوى النظام، أو اضبط رقماً لتجاوزها على هذه الشركة.
+            </p>
+
+            {Number(penaltyTierDays) > 0 && Number(penaltyTierAmount) > 0 ? (
+              <div
+                className="rounded-md border border-status-info-surface bg-status-info-surface/30 p-3 text-sm text-status-info-foreground"
+                data-testid="penalty-tiered-active-banner"
+              >
+                النموذج النشط حالياً:
+                <strong className="mx-1">متدرّج</strong>
+                — كل {penaltyTierDays} يوم تأخّر = {penaltyTierAmount} ر.س على الوكيل.
+              </div>
+            ) : Number(penaltyDailyAmount) > 0 ? (
+              <div
+                className="rounded-md border border-muted bg-muted/30 p-3 text-sm text-muted-foreground"
+                data-testid="penalty-per-day-active-banner"
+              >
+                النموذج النشط حالياً:
+                <strong className="mx-1">يومي</strong>
+                — {penaltyDailyAmount} ر.س لكل يوم تأخّر.
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2" data-testid="penalty-tier-days-field">
+                <Label htmlFor="penalty-tier-days">عدد أيام الشريحة</Label>
+                <Input
+                  id="penalty-tier-days"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={penaltyTierDays}
+                  onChange={(e) => setPenaltyTierDays(e.target.value)}
+                  placeholder="مثلاً 10"
+                />
+                <p className="text-xs text-muted-foreground">
+                  كل كم يوم تأخّر = شريحة غرامة واحدة؟
+                </p>
+              </div>
+
+              <div className="space-y-2" data-testid="penalty-tier-amount-field">
+                <Label htmlFor="penalty-tier-amount">قيمة الشريحة (ر.س)</Label>
+                <Input
+                  id="penalty-tier-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={penaltyTierAmount}
+                  onChange={(e) => setPenaltyTierAmount(e.target.value)}
+                  placeholder="مثلاً 50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  المبلغ المضاف على الوكيل لكل شريحة.
+                </p>
+              </div>
+
+              <div className="space-y-2" data-testid="penalty-daily-amount-field">
+                <Label htmlFor="penalty-daily-amount">الغرامة اليومية (ر.س)</Label>
+                <Input
+                  id="penalty-daily-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={penaltyDailyAmount}
+                  onChange={(e) => setPenaltyDailyAmount(e.target.value)}
+                  placeholder="مثلاً 5"
+                />
+                <p className="text-xs text-muted-foreground">
+                  يُستخدم فقط عندما لا تكون قيم الشريحتَين معاً مضبوطة.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              مثال على النموذج المتدرّج (10 / 50): تأخّر 5 أيام = 50 ر.س، 15 يوماً = 100 ر.س، 21 يوماً = 150 ر.س.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* NUSK wallet card — derived view of the operator's prepayment
+            balance with NUSK. NOT a separate wallet system; it's the
+            running balance of the NUSK supplier in the standard AP
+            ledger, so this view stays in sync with the vendor
+            statement (PR #1453) automatically. */}
+        {wallet?.configured && (
+          <Card data-testid="nusk-wallet-card">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wallet className="h-4 w-4" />
+                محفظة نسك
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">الرصيد الحالي</p>
+                <div className="flex items-baseline gap-2">
+                  <span
+                    className={`text-3xl font-bold ${
+                      wallet.walletBalance > 0
+                        ? "text-status-success-foreground"
+                        : wallet.walletBalance === 0
+                          ? "text-muted-foreground"
+                          : "text-status-error-foreground"
+                    }`}
+                    data-testid="nusk-wallet-balance"
+                  >
+                    {formatCurrency(wallet.walletBalance)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">ر.س</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {wallet.walletBalance > 0
+                    ? "رصيد متاح للشراء"
+                    : wallet.walletBalance === 0
+                      ? "متطابق — اشحن المحفظة قبل أي فاتورة جديدة"
+                      : "العمليات تجاوزت الإيداعات — التزام مستحق لنسك"}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 pt-3 border-t text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">إجمالي التحويلات لنسك</p>
+                  <span className="font-semibold" data-testid="nusk-wallet-deposits">
+                    {formatCurrency(wallet.totalDeposits)}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">إجمالي فواتير نسك</p>
+                  <span className="font-semibold" data-testid="nusk-wallet-obligations">
+                    {formatCurrency(wallet.totalObligations)}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">إجمالي المرتجعات</p>
+                  <span className="font-semibold text-status-info-foreground" data-testid="nusk-wallet-refunds">
+                    {formatCurrency(wallet.totalRefunds)}
+                  </span>
+                </div>
+              </div>
+
+              {wallet.walletBalance < 0 && (
+                <div className="rounded-md border border-status-error-surface bg-status-error-surface/30 p-3 text-sm text-status-error-foreground flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div>
+                    التزاماتك تجاوزت تحويلاتك — لا يمكن شراء تأشيرات جديدة قبل تسوية الرصيد. يجب تحويل
+                    {" "}<strong>{formatCurrency(Math.abs(wallet.walletBalance))} ر.س</strong> على الأقل إلى مورد نسك.
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </PageShell>
   );

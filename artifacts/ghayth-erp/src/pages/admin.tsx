@@ -16,23 +16,41 @@ import { UserRoleAssignmentTab } from "./admin/rbac-v2-users-tab";
 import { SodRulesTab } from "./admin/rbac-v2-sod-tab";
 import { JitRequestsTab } from "./admin/rbac-v2-jit-tab";
 import { useLocation } from "wouter";
+import { useState } from "react";
 
 export default function AdminPage() {
   const [, navigate] = useLocation();
+  // GAP_MATRIX conflict #6 resolution — the 7 "intent" cards at the
+  // top of this hub previously had no onClick. SYSTEM_PAGE_INVENTORY
+  // flagged the page as "needs backend wiring"; DEAD_DUPLICATE_PAGE_AUDIT
+  // said "intentional hub". Both were partly right — the cards needed
+  // wiring, but to the tabs already on this page, not to new APIs.
+  // Now each card flips the Tabs state below to the matching section.
+  const [activeTab, setActiveTab] = useState("rbac-v2");
+
+  const overviewCards: { label: string; icon: any; color: string; tab: string }[] = [
+    { label: "المستخدمين",   icon: Users,       color: "text-status-info-foreground bg-status-info-surface",      tab: "users" },
+    { label: "إسناد الأدوار", icon: UserCog,     color: "text-orange-600 bg-orange-50",                              tab: "rbac-users" },
+    { label: "الأدوار المتاحة", icon: KeyRound,  color: "text-purple-600 bg-purple-50",                              tab: "roles" },
+    { label: "سجلات النظام", icon: ScrollText,  color: "text-muted-foreground bg-surface-subtle",                   tab: "logs" },
+    { label: "الصلاحيات",    icon: Lock,        color: "text-emerald-600 bg-emerald-50",                            tab: "permissions" },
+    { label: "سجل الأمن",    icon: ShieldAlert, color: "text-status-error-foreground bg-status-error-surface",      tab: "security" },
+    { label: "سجل المراجعة", icon: FileSearch,  color: "text-status-warning-foreground bg-status-warning-surface", tab: "audit" },
+  ];
 
   return (
     <PageShell title="لوحة الإدارة" breadcrumbs={[{ label: "الإدارة" }]}>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
-        {[
-          { label: "المستخدمين", icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
-          { label: "إسناد الأدوار", icon: UserCog, color: "text-orange-600 bg-orange-50" },
-          { label: "الأدوار المتاحة", icon: KeyRound, color: "text-purple-600 bg-purple-50" },
-          { label: "سجلات النظام", icon: ScrollText, color: "text-muted-foreground bg-surface-subtle" },
-          { label: "الصلاحيات", icon: Lock, color: "text-emerald-600 bg-emerald-50" },
-          { label: "سجل الأمن", icon: ShieldAlert, color: "text-status-error-foreground bg-status-error-surface" },
-          { label: "سجل المراجعة", icon: FileSearch, color: "text-status-warning-foreground bg-status-warning-surface" },
-        ].map((c) => (
-          <Card key={c.label} className="border-0 shadow-sm">
+        {overviewCards.map((c) => (
+          <Card
+            key={c.label}
+            className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => setActiveTab(c.tab)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveTab(c.tab); } }}
+            title={`فتح تبويب ${c.label}`}
+          >
             <CardContent className="p-4 flex items-center gap-3">
               <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", c.color.split(" ")[1])}>
                 <c.icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
@@ -79,7 +97,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="rbac-v2" dir="rtl">
+      <Tabs value={activeTab} onValueChange={setActiveTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 lg:grid-cols-11 h-auto">
           <TabsTrigger value="rbac-v2" className="text-xs sm:text-sm">الصلاحيات الطبقية</TabsTrigger>
           <TabsTrigger value="rbac-users" className="text-xs sm:text-sm">إسناد v2</TabsTrigger>
