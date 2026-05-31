@@ -141,10 +141,15 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 
 ## 📝 MINOR — يمكن تأجيله
 
-### N1. Departments tab يستخدم Generic CrudSection
-**الموقع**: `settings.tsx:348`
-**الوصف**: 3 حقول فقط (name، nameEn، manager). لا parent-department، لا cost-center binding.
-**الإصلاح**: tab dedicated بنمط BranchesTab.
+### N1. Departments dedicated tab ✅ FIXED in batch10 PR
+**الموقع**: `pages/settings/departments-tab.tsx` + `settings.tsx:347`
+**الإصلاح المنفذ**:
+- استبدال الـgeneric CrudSection بـ`DepartmentsTab` component مخصص
+- 5 حقول الآن (بدل 3): name + branchId (dropdown من الفروع) + parentId (تسلسل هرمي) + managerId (dropdown من الموظفين) + status
+- الـtable يعرض القسم الأب + الفرع + المدير بأسماء resolved
+- inline create + edit form
+- self-parent protection (لا يمكن اختيار القسم نفسه كأب)
+- يعمل مع `authorizeAny()` من batch5 — HR Director يقدر يستخدمه مباشرة بدون settings:update.
 
 ### N2. RBAC v2 mutations لا تظهر في `/admin/logs` ✅ FIXED in PR #1410
 **الموقع**: `rbacV2.ts:128, 180, 209`
@@ -164,10 +169,18 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الوصف**: لا يمكن لـFleet Manager أن يؤجر مركبة لعميل.
 **الإصلاح**: entity + UI + GL.
 
-### N6. Accommodation كـEntity في العمرة مفقود
-**الموقع**: `umrah_pilgrims.hotelName` (نص فقط)
-**الوصف**: لا allotment، لا room-block management، لا per-night cost.
-**الإصلاح**: hotels/rooms entities + allocation.
+### N6. Accommodation كـEntity في العمرة ✅ FIXED in batch10 PR
+**الموقع**: migration 246 + `umrah-entities.ts` + `pages/umrah/accommodations.tsx`
+**الإصلاح المنفذ**:
+- migration 246 ينشئ 3 جداول: `umrah_hotels` (catalog) + `umrah_room_blocks` (per-season allotment with rate + dates) + `umrah_room_allocations` (per-pilgrim)
+- `umrah_hotels`: name + city + starRating (1-7) + contact + notes
+- `umrah_room_blocks`: hotelId + seasonId + checkIn/Out dates + roomType (single/double/triple/quad/suite) + totalRooms + ratePerNight
+- `umrah_room_allocations`: blockId + pilgrimId + roomNumber + occupants + checkInAt
+- 8 endpoints: hotels (CRUD) + room-blocks (LIST/CREATE) + allocations (LIST per block + CREATE + DELETE) — كلها gated بـ`umrah` feature
+- Capacity guard: `POST /room-allocations` يرفض إذا allocated count >= totalRooms
+- صفحة `/umrah/accommodations` بـ2-column layout (hotels catalog + room blocks) مع inline create forms
+- Tab "الإقامة" مع Hotel icon في UmrahTabsNav
+- legacy `hotelName` string على umrah_pilgrims يبقى للـback-compat.
 
 ### N7. CRM Client → Portal Account Manual ✅ WAI (قرار تصميمي مقصود)
 **الموقع**: `clients.ts:520` (emit) + `clients.ts:589` (POST /portal-account)
