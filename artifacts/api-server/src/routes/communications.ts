@@ -38,6 +38,7 @@ const sendCommunicationSchema = z.object({
 
 const convertLogSchema = z.object({
   targetType: z.enum(["task", "ticket", "request"], { required_error: "نوع التحويل مطلوب", invalid_type_error: "نوع التحويل غير صالح. المتاح: task, ticket, request" }),
+  reason: z.string().max(500).optional(),
 });
 
 const pushSubscribeSchema = z.object({
@@ -883,6 +884,31 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
         `UPDATE message_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
         [targetType, createdId, logId, scope.companyId]
       );
+
+      // N11 fix: append hop to message_referrals so multi-step routing
+      // history survives. hopNumber = current max + 1 so a later forward
+      // doesn't overwrite this one. The whole table is optional — if the
+      // 240 migration hasn't run yet, the INSERT errors and the outer
+      // catch logs without breaking the conversion.
+      try {
+        const [{ next: nextHop } = { next: 1 }] = await client.query<{ next: number }>(
+          `SELECT COALESCE(MAX("hopNumber"), 0) + 1 AS next
+             FROM message_referrals
+            WHERE "companyId" = $1 AND "sourceLogId" = $2`,
+          [scope.companyId, logId]
+        ).then(r => r.rows as Array<{ next: number }>);
+        await client.query(
+          `INSERT INTO message_referrals
+             ("companyId", "sourceLogId", "hopNumber", "fromUserId", "targetType", "targetId", reason)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [scope.companyId, logId, nextHop, scope.userId, targetType, createdId, parsed.reason ?? null]
+        );
+      } catch (chainErr) {
+        // Soft-fail: chain history is a visibility feature, not part of
+        // the conversion contract. Log and move on.
+        // eslint-disable-next-line no-console
+        console.warn("[message_referrals] failed to record hop:", chainErr);
+      }
     });
 
     const typeLabels: Record<string, string> = { task: "مهمة متابعة", ticket: "تذكرة دعم", request: "طلب داخلي" };
@@ -1120,6 +1146,32 @@ router.post("/push/test", authorize({ feature: "communications", action: "create
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "push_notifications", entityId: 0, after: { type: "test" } }).catch((e) => logger.error(e, "communications background task failed"));
     res.json({ success: true, ...result });
   } catch (err) { handleRouteError(err, res, "Push test error:"); }
+});
+
+// N11 fix: per-message referral chain history. Returns every hop a
+// message was routed through, including any reason text the routing
+// user provided. Gated by the same feature key as the inbox list
+// because reading the chain reveals nothing not already in the inbox.
+router.get("/log/:id/referral-chain", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const logId = parseId(req.params.id, "id");
+    const rows = await rawQuery(
+      `SELECT r.id, r."hopNumber", r."fromUserId", u_from.email AS "fromEmail",
+              e_from.name AS "fromName",
+              r."toUserId", u_to.email AS "toEmail", e_to.name AS "toName",
+              r."toRoleHint", r."targetType", r."targetId", r.reason, r."createdAt"
+         FROM message_referrals r
+         LEFT JOIN users u_from ON u_from.id = r."fromUserId"
+         LEFT JOIN employees e_from ON e_from.id = u_from."employeeId" AND e_from."deletedAt" IS NULL
+         LEFT JOIN users u_to ON u_to.id = r."toUserId"
+         LEFT JOIN employees e_to ON e_to.id = u_to."employeeId" AND e_to."deletedAt" IS NULL
+        WHERE r."companyId" = $1 AND r."sourceLogId" = $2
+        ORDER BY r."hopNumber" ASC`,
+      [scope.companyId, logId]
+    ).catch(() => []);
+    res.json({ data: rows, total: rows.length, logId });
+  } catch (err) { handleRouteError(err, res, "Get referral chain error:"); }
 });
 
 export default router;

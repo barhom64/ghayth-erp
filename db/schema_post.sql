@@ -1379,6 +1379,13 @@ ALTER TABLE ONLY public.marketing_campaigns ALTER COLUMN id SET DEFAULT nextval(
 
 
 --
+-- Name: message_referrals id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_referrals ALTER COLUMN id SET DEFAULT nextval('public.message_referrals_id_seq'::regclass);
+
+
+--
 -- Name: message_log id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3315,6 +3322,13 @@ ALTER TABLE ONLY public.documents
 
 
 --
+-- Name: idx_documents_retention_due; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_documents_retention_due ON public.documents USING btree ("companyId", "retentionUntil") WHERE (("retentionUntil" IS NOT NULL) AND ("deletedAt" IS NULL));
+
+
+--
 -- Name: dunning_letters dunning_letters_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4400,6 +4414,28 @@ ALTER TABLE ONLY public.maintenance_requests
 
 ALTER TABLE ONLY public.marketing_campaigns
     ADD CONSTRAINT marketing_campaigns_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: message_referrals message_referrals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_referrals
+    ADD CONSTRAINT message_referrals_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_message_referrals_chain; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_message_referrals_chain ON public.message_referrals USING btree ("companyId", "sourceLogId", "hopNumber");
+
+
+--
+-- Name: idx_message_referrals_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_message_referrals_user ON public.message_referrals USING btree ("companyId", "fromUserId", "createdAt" DESC);
 
 
 --
