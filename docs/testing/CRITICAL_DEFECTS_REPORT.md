@@ -47,15 +47,14 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الإصلاح**: provider حقيقي لـFatoora API (Phase 2 invoicing).
 **Severity**: 🚨 BLOCKER إن كان المالك يصدر فواتير B2B.
 
-### M2. HR End-of-Service GL — Non-Blocking خارج الـTransaction
-**الموقع**: `hr-exit.ts:650-656`
-**الوصف**: 
-- `postExitSettlementGL` **مستدعى فعلاً** في الـroute (السطر 652)
-- لكن مع `.catch(...)` non-blocking، **خارج** الـtransaction، **بعد** نقل lifecycle
-- إذا فشل GL post: lifecycle جرى، assignment تم terminated، لكن لا JE
-**الأثر**: نافذة سباق (race window) — إنهاء خدمة بدون JE المكافأة. ثغرة dual-entry في حال GL crash.
-**الإصلاح**: نقل `postExitSettlementGL` داخل الـ`withTransaction` block + جعله blocking مع rollback عند الفشل.
-**تصحيح**: التقييم الأصلي كان "engine غير مستدعى". الواقع: مستدعى لكن fire-and-forget.
+### M2. HR End-of-Service GL ✅ FIXED (تم الإصلاح في PRs سابقة قبل هذا التقرير)
+**الموقع**: `hr-exit.ts:686-689`
+**الإصلاح المنفذ** (مدموج قبل تقرير الـacceptance):
+- `postExitSettlementGL` يُستدعى بـ`await` (blocking)، الأخطاء تُنتشر للـoperator (FIN-AUD-09)
+- فحص فترة مالية مغلقة قبل الـtransition (السطر 637-643) يمنع البدء أصلاً إذا الفترة مقفلة
+- `departmentId` يُمرَّر للـJE lines لـper-dept labour cost rollup
+- التعليق في الكود يوضح الحالة: "Catching here would put us right back in the silent-swallow trap"
+**تصحيح من التقرير الأصلي**: التقييم كان "engine غير مستدعى" — في الواقع كان مستدعى لكن fire-and-forget في وقت الفحص. الكود الحالي هو blocking + propagating ولا يحتاج تدخل إضافي.
 
 ### M3. Print Templates بدون Audit Log
 **الموقع**: `routes/print.ts:328+` — كامل الملف
@@ -154,10 +153,11 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الوصف**: لا allotment، لا room-block management، لا per-night cost.
 **الإصلاح**: hotels/rooms entities + allocation.
 
-### N7. CRM Client → Portal Account Manual فقط
-**الموقع**: `clients.ts:520` (emit) — لا listener
-**الوصف**: قرار تصميمي (يحتاج password).
-**الإصلاح اختياري**: auto-generate temp password + email.
+### N7. CRM Client → Portal Account Manual ✅ WAI (قرار تصميمي مقصود)
+**الموقع**: `clients.ts:520` (emit) + `clients.ts:589` (POST /portal-account)
+**الحالة**: العملية المُلكية مقصودة — الـportal account يحتاج email + password يحددهما الـadmin يدوياً.
+**الفرق عن "ثغرة"**: لا يوجد عميل بدون portal-account يخفي مشكلة؛ هو ببساطة flow بنقرتين. المستندات الأصلية ضمنياً اعتبرته automatic — التصحيح هو في التوقع لا في الكود.
+**اختياري مستقبلاً**: auto-generate temp password + welcome email لتقليل النقرات (feature، ليس bug-fix).
 
 ### N8. Property Rent Payment لا يحدث CRM Client Ledger ✅ FIXED in PR #1426 follow-up
 **الموقع**: `eventListeners.ts rent_payment.received listener`
@@ -220,10 +220,14 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 - التواريخ تعتمد على `journal_entries.date` (ليس createdAt) ليأخذ الـback-dated entries في فترتها الصحيحة
 - محمي بـ`requireExec` + `authorize({feature:"dashboard.executive",action:"view"})`.
 
-### N19. Workflow.Approved Event بدون Cross-Domain Listener
-**الموقع**: `workflowEngine.ts handlersByTable` (sync) vs event listener
-**الوصف**: `workflow.approved` event موجود لكن listener فقط audit.
-**الإصلاح**: التأكد ما يُعتمَد عليه (الـsync flip كاف).
+### N19. Workflow.Approved Event بدون Cross-Domain Listener ✅ WAI (تصميم متعمد)
+**الموقع**: `workflowEngine.ts handlersByTable` (sync flip)
+**الحالة**: التصميم متعمَّد — الـtable handler map يُحدِّث status على الـsource row **داخل نفس الـtransaction** التي تعتمد الـworkflow. هذا أقوى من listener:
+- Atomic: لا يمكن أن يُعتمَد workflow بدون نقل source status
+- Synchronous: لا تأخير، الـUI يرى التغيير فوراً
+- لا race conditions مع cron jobs
+**الـevent listener audit-only هو الصحيح** — أي domain-reaction (مثل activate payroll-line بعد قرض موافَق) تجري في الـsync flip، ليس عبر event bus.
+**كل entity جديد**: يضاف لـ`handlersByTable` map في `workflowEngine.ts`، ليس عبر listener.
 
 ---
 
@@ -231,17 +235,26 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 
 | Severity | العدد |
 |---|---|
-| 🚨 BLOCKER | 3 |
-| ⚠ MAJOR | 10 |
-| 📝 MINOR | 19 |
-| **المجموع** | **32** |
+| Severity | الأصلي | مُغلَق | متبقي |
+|---|---|---|---|
+| 🚨 BLOCKER | 3 | 0 | 3 (B1/B2/B3 — يحتاج spec المالك) |
+| ⚠ MAJOR | 10 | 8 | 2 (M1 ZATCA، M10 Wialon — vendor integrations) |
+| 📝 MINOR | 19 | 9 (+3 WAI = 12) | 7 (UI work + 4 vendor integrations) |
+| **المجموع** | **32** | **20** | **12** |
 
-### قبل الإطلاق التجاري
-يجب إصلاح: B1, B2, B3 (Onboarding + Subscription)
-ينبغي إصلاح: M1 (ZATCA)، M2 (Exit GL)، M3 (Print Audit)، M7 (Fuel)، M8 (Legal Docs)
+### مُغلَقة بإصلاحات كود
+- **MAJORs (8)**: M2 ✅ (سابق)، M3، M4، M5، M6، M7، M8، M9
+- **MINORs (9)**: N2، N3، N8، N9، N10، N11، N12، N13، N18
+- **MINORs مُعلَّمة WAI (3)**: N7، N19، (... راجع الأقسام التفصيلية)
 
-### بعد الإطلاق
-كل الـMAJOR + الـMINOR ضمن backlog مرتب حسب الأولوية.
+### قبل الإطلاق التجاري (المتبقي الحرج)
+يجب إصلاح: B1, B2, B3 (Onboarding + Subscription) — يحتاج spec من المالك
+ينبغي قبل الإطلاق: M1 (ZATCA real provider)
+
+### يمكن تأجيله للـPhase 2
+- M10 (Wialon/Teltonika telematics): vendor adapters
+- N15 (Ejar)، N16 (Sadad)، N17 (Nusk): integrations سعودية
+- N1، N4، N5، N6، N14 (UI work): backlog product
 
 ---
 
