@@ -122,6 +122,33 @@ export const DOCUMENT_CATEGORIES = [
 ] as const;
 const documentCategorySchema = z.enum(DOCUMENT_CATEGORIES).optional();
 
+// M5 retention policy enforcement on document write paths. Maps
+// category → default retention horizon (years). The cron at retention-
+// sweep time computes retentionUntil = createdAt + horizon if the
+// document doesn't carry an explicit value.
+//
+// Horizons chosen to match Saudi compliance defaults:
+//   - finance / contracts: 10 years (ZATCA 6y minimum, finance Best
+//     Practice 10y)
+//   - hr / legal / compliance: 7 years (Saudi labour law + statute of
+//     limitations)
+//   - operations / fleet / properties / umrah / marketing: 5 years
+//     (operational reference)
+//   - general: 3 years (no specific legal hold)
+export const RETENTION_HORIZONS_YEARS: Record<string, number> = {
+  finance: 10,
+  contracts: 10,
+  hr: 7,
+  legal: 7,
+  compliance: 7,
+  operations: 5,
+  fleet: 5,
+  properties: 5,
+  umrah: 5,
+  marketing: 5,
+  general: 3,
+};
+
 const createDocumentSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
@@ -130,6 +157,8 @@ const createDocumentSchema = z.object({
   status: z.enum(["draft", "active", "archived"]).optional().default("draft"),
   department: z.string().optional(),
   folder: z.string().optional(),
+  retentionUntil: z.string().optional(),
+  retentionPolicy: z.string().max(40).optional(),
 });
 
 const entityLinkItem = z.object({
@@ -145,6 +174,8 @@ const uploadDocumentSchema = z.object({
   mimeType: z.string().optional(),
   category: documentCategorySchema,
   storageKey: z.string().min(1),
+  retentionUntil: z.string().optional(),
+  retentionPolicy: z.string().max(40).optional(),
   entityLinks: z.array(entityLinkItem).optional(),
 });
 
@@ -1149,6 +1180,54 @@ router.get("/:id/access-log", authorize({ feature: "documents", action: "export"
        ORDER BY l."accessedAt" DESC
        LIMIT 500`,
       [scope.companyId, id]
+    ).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+// M5 retention — backfill helper. Computes retentionUntil for documents
+// that have a category but no explicit policy. Idempotent: skips rows
+// that already carry retentionUntil. Gated by documents:delete because
+// scheduling deletion is effectively the same authority. Result: count
+// of rows updated. The actual purge runs in a separate cron, not here.
+router.post("/retention/backfill", authorize({ feature: "documents", action: "delete" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    let updated = 0;
+    for (const [category, years] of Object.entries(RETENTION_HORIZONS_YEARS)) {
+      const r = await rawExecute(
+        `UPDATE documents
+            SET "retentionUntil" = ("createdAt"::date + (($1::int) * INTERVAL '1 year'))::date,
+                "retentionPolicy" = $2
+          WHERE "companyId" = $3
+            AND category = $2
+            AND "retentionUntil" IS NULL
+            AND "deletedAt" IS NULL`,
+        [years, category, scope.companyId]
+      ).catch(() => ({ affectedRows: 0 }));
+      updated += r.affectedRows ?? 0;
+    }
+    res.json({ ok: true, updated, horizons: RETENTION_HORIZONS_YEARS });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+// M5 retention — list documents whose retention has expired. Cron job
+// (or admin UI button) reads this to decide what to hard-delete next.
+// Returns ids only — actual deletion is a separate action so a human
+// can review the list first.
+router.get("/retention/due", authorize({ feature: "documents", action: "delete" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT id, title, category, "retentionPolicy", "retentionUntil", "createdAt"
+         FROM documents
+        WHERE "companyId" = $1
+          AND "retentionUntil" IS NOT NULL
+          AND "retentionUntil" <= CURRENT_DATE
+          AND "deletedAt" IS NULL
+        ORDER BY "retentionUntil" ASC
+        LIMIT 500`,
+      [scope.companyId]
     ).catch(() => []);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "documents"); }

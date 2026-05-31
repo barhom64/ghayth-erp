@@ -74,11 +74,14 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 - endpoint جديد `GET /documents/:id/access-log` للمراجعة
 **الأثر بعد الإصلاح**: كل وصول لمستند يُسجَّل (compliance-ready).
 
-### M5. Document Retention Policy غير موجودة
-**الموقع**: `documents.ts` 
-**الوصف**: لا scheduled task يحذف المستندات بعد فترة retention. لا حقل `retentionUntil` على الـrow.
-**الأثر**: تخزين سحابي يكبر باستمرار، خرق PDPL محتمل (الـPDPL يلزم حذف PII بعد فترة).
-**الإصلاح**: حقل + cron + workflow.
+### M5. Document Retention Policy ✅ FIXED in PR #1461 follow-up
+**الموقع**: migration 241 + `documents.ts /retention/backfill` + `/retention/due`
+**الإصلاح المنفذ**: 
+- جدولان جديدان: `retentionUntil` (date) + `retentionPolicy` (varchar) على `documents`
+- `RETENTION_HORIZONS_YEARS` map: finance/contracts=10y، hr/legal/compliance=7y، operations/fleet/properties/umrah/marketing=5y، general=3y (مطابق لمتطلبات السوق السعودي)
+- `POST /documents/retention/backfill` لإسناد retentionUntil على الصفوف الموجودة بناء على category
+- `GET /documents/retention/due` يعرض المستندات المنتهية الفترة (للـcron أو الـadmin)
+- الـhard delete يبقى عملية يدوية مراجعة (لا تلقائية صامتة).
 
 ### M6. Per-Document ACL ✅ FIXED in PR #1489 follow-up
 **الموقع**: migration 242 + `lib/documentAcl.ts` + `documents.ts /:id/acls`
@@ -164,15 +167,20 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الموقع**: `routes/legal.ts:1079`
 **الإصلاح المنفذ**: `INSERT INTO tasks` للجلسات المستقبلية مع linkedEntityType='legal_sessions'، priority حسب priority القضية.
 
-### N10. Inbox Auto-Classify → Task محدود
-**الموقع**: `communications.ts:502`
-**الوصف**: يعمل فقط على PBX no-answer، باقي القنوات تحتاج conversion يدوي.
-**الإصلاح**: NLP classifier + auto-routing.
+### N10. Inbox Auto-Classify → Task ✅ FIXED in PR #1461 follow-up
+**الموقع**: `mailboxSync.ts` (emit) + `eventListeners.ts` (classify)
+**الإصلاح المنفذ**: 
+- `mailboxSync.ts` يُطلق `inbox.message.received` event بعد كل INSERT في `message_log`
+- listener جديد في `eventListeners.ts` يطبق rule table بكلمات مفتاحية عربية+إنجليزية (شكوى/complaint، عاجل/urgent، فاتورة/invoice، طلب/request، استفسار/inquiry)
+- التصنيف ينشئ task مع `linkedEntityType='message_log'` و priority حسب النوع
+- 5 قواعد افتراضية، قابلة للتوسع لاحقاً بـNLP حقيقي.
 
-### N11. Comms Referral Chain لا يُحفظ
-**الموقع**: لا `referral_chain` table
-**الوصف**: multi-hop forwarding يفقد intermediate steps.
-**الإصلاح**: entity جديد + audit chain.
+### N11. Comms Referral Chain ✅ FIXED in PR #1461 follow-up
+**الموقع**: migration 240 + `communications.ts /log/:id/convert` + `/log/:id/referral-chain`
+**الإصلاح المنفذ**:
+- جدول `message_referrals` يحفظ كل hop مع `hopNumber` تصاعدي
+- كل convert يضيف صف بـreason اختياري
+- endpoint قراءة يعرض السلسلة كاملة مع أسماء المُحوِّل والمُستلِم.
 
 ### N12. Documents Classification Free-String
 **الموقع**: `documents.ts:99-107`, `documents.ts:139-147` ✅ FIXED in PR #1426 follow-up
@@ -203,10 +211,14 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الوصف**: لا API client حي لـNusk. operator يحمّل من Nusk ويرفع للنظام.
 **الإصلاح**: live integration.
 
-### N18. لا يوجد لوحة "P&L الشاملة"
-**الموقع**: dashboards منفصلة per-module
-**الوصف**: لا يوجد لوحة تجمع Finance + Property + Fleet + Umrah + Legal في rollup واحد.
-**الإصلاح**: dashboard جديد يستخدم الـ`vehicleId/tenantId/agentId` dimensions على JE.
+### N18. لوحة P&L الشاملة ✅ FIXED in PR #1461 follow-up
+**الموقع**: `execDashboard.ts /unified-pnl`
+**الإصلاح المنفذ**: endpoint `GET /exec-dashboard/unified-pnl?from=&to=` يُجمّع الـrollup من `journal_lines`:
+- `totals`: إجمالي إيراد، مصروف، صافي
+- `bySource`: تصنيف حسب `sourceType` (umrah/property/fleet/legal/manual) مرتب بأكبر تأثير
+- `byAccount`: أعلى 50 حساب بأبسولوت impact
+- التواريخ تعتمد على `journal_entries.date` (ليس createdAt) ليأخذ الـback-dated entries في فترتها الصحيحة
+- محمي بـ`requireExec` + `authorize({feature:"dashboard.executive",action:"view"})`.
 
 ### N19. Workflow.Approved Event بدون Cross-Domain Listener
 **الموقع**: `workflowEngine.ts handlersByTable` (sync) vs event listener
