@@ -384,7 +384,7 @@ router.get("/seasons", authorize({ feature: "umrah", action: "list" }), async (r
   } catch (err) { handleRouteError(err, res, "List seasons error"); }
 });
 
-router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -393,7 +393,120 @@ router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), asyn
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الموسم غير موجود");
-    res.json(maskFields(req, row));
+
+    // Fan out the per-season aggregates. The season-detail page was
+    // already reading `revenue` / `registeredPilgrims` from the row,
+    // but the route returned only the raw umrah_seasons row — so
+    // every operational KPI rendered as 0/-. This fold closes that
+    // gap in one roundtrip.
+    const [
+      statusRows,
+      groupsRow,
+      financeRow,
+      nuskRow,
+      visaRow,
+      exemptRow,
+    ] = await Promise.all([
+      rawQuery<{ status: string; count: string }>(
+        `SELECT status, COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          GROUP BY status`,
+        [id, scope.companyId],
+      ),
+      rawQuery<{ groupsCount: string; agentsCount: string }>(
+        `SELECT
+           COUNT(*)::text AS "groupsCount",
+           COUNT(DISTINCT "agentId")::text AS "agentsCount"
+           FROM umrah_groups
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      ),
+      // Sales invoices in this season — header has a seasonId column
+      // (unlike the group-detail case which had to JOIN through items).
+      // Exclude cancelled so the revenue line matches what the operator
+      // actually books.
+      rawQuery<{ count: string; total: string | null; paid: string | null }>(
+        `SELECT COUNT(*)::text AS count,
+                COALESCE(SUM(total), 0)::text AS total,
+                COALESCE(SUM("paidAmount"), 0)::text AS paid
+           FROM umrah_sales_invoices
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+            AND status <> 'cancelled'`,
+        [id, scope.companyId],
+      ),
+      // NUSK invoices reach the season via their linked group (the
+      // nusk header has no seasonId column). Subquery against
+      // umrah_groups to keep tenant scope.
+      rawQuery<{ count: string; netCost: string | null }>(
+        `SELECT COUNT(*)::text AS count,
+                COALESCE(SUM(ni."netCost"), 0)::text AS "netCost"
+           FROM umrah_nusk_invoices ni
+          WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
+            AND ni."nuskStatus" <> 'cancelled'
+            AND ni."groupId" IN (
+              SELECT id FROM umrah_groups
+               WHERE "seasonId" = $2 AND "companyId" = $1 AND "deletedAt" IS NULL
+            )`,
+        [scope.companyId, id],
+      ),
+      // Visa-expiring within 7 days — mirrors the list-page banner +
+      // the per-group card. Excludes pilgrims who already left.
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+            AND "visaExpiry" IS NOT NULL
+            AND "visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
+            AND status NOT IN ('departed', 'cancelled')`,
+        [id, scope.companyId],
+      ),
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+            AND "overstayExempt" = true`,
+        [id, scope.companyId],
+      ),
+    ]);
+
+    const statusBreakdown: Record<string, number> = {};
+    let pilgrimsCount = 0;
+    let overstayCount = 0;
+    for (const r of statusRows) {
+      const n = Number(r.count);
+      statusBreakdown[r.status] = n;
+      pilgrimsCount += n;
+      if (r.status === "overstayed" || r.status === "overstay_penalized") overstayCount += n;
+    }
+
+    const fin = financeRow[0] || { count: "0", total: "0", paid: "0" };
+    const nusk = nuskRow[0] || { count: "0", netCost: "0" };
+    const groups = groupsRow[0] || { groupsCount: "0", agentsCount: "0" };
+
+    res.json(maskFields(req, {
+      ...row,
+      // Operational rollup
+      pilgrimsCount,
+      registeredPilgrims: pilgrimsCount,
+      statusBreakdown,
+      overstayCount,
+      visaExpiringCount: Number(visaRow[0]?.count ?? "0"),
+      exemptCount: Number(exemptRow[0]?.count ?? "0"),
+      groupsCount: Number(groups.groupsCount ?? "0"),
+      agentsCount: Number(groups.agentsCount ?? "0"),
+      // Financial rollup
+      revenue: Number(fin.total ?? "0"),
+      finance: {
+        invoiceCount: Number(fin.count),
+        invoiceTotal: Number(fin.total ?? "0"),
+        invoicePaid: Number(fin.paid ?? "0"),
+        invoiceOutstanding: Number(fin.total ?? "0") - Number(fin.paid ?? "0"),
+        nuskCount: Number(nusk.count),
+        nuskNetCost: Number(nusk.netCost ?? "0"),
+        margin: Number(fin.total ?? "0") - Number(nusk.netCost ?? "0"),
+      },
+    }));
   } catch (err) { handleRouteError(err, res, "Season detail error"); }
 });
 

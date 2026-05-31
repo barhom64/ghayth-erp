@@ -2247,6 +2247,64 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
   } catch (err) { handleRouteError(err, res, "Reconciliation report"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Exempt-pilgrims compliance report — closes the audit-trail gap from PRs
+// #1482-1484. Per-pilgrim exemption is captured (overstayExempt /Reason /By
+// /At) and shown on the pilgrim detail page, but there was no rollup so a
+// compliance officer couldn't answer "who is currently exempt, on whose
+// authority, and why" without grepping audit_logs.
+//
+// Newest exemptions first — typical use case is "did anything change today
+// that I should sign off on?". JOINs users + employees so the response
+// carries `exemptedByName` (employee name preferred, falling back to user
+// email) instead of just an opaque userId. Tenant-scoped + soft-delete
+// filtered on every JOIN.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/exempt-pilgrims", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, agentId, groupId } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let filterClause = "";
+    if (seasonId) { params.push(Number(seasonId)); filterClause += ` AND p."seasonId" = $${params.length}`; }
+    if (agentId)  { params.push(Number(agentId));  filterClause += ` AND p."agentId" = $${params.length}`; }
+    if (groupId)  { params.push(Number(groupId));  filterClause += ` AND p."groupId" = $${params.length}`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.id, p."fullName", p."nuskNumber", p.nationality, p.status,
+              p."overstayExemptReason" AS "reason",
+              p."overstayExemptAt" AS "exemptedAt",
+              p."overstayExemptBy" AS "exemptedById",
+              COALESCE(e.name, u.email) AS "exemptedByName",
+              p."seasonId", p."groupId", p."agentId",
+              s.title AS "seasonTitle",
+              g.name AS "groupName",
+              g."nuskGroupNumber" AS "groupNuskNumber",
+              a.name AS "agentName",
+              p."arrivalDate", p."departureDate", p."overstayDays"
+         FROM umrah_pilgrims p
+    LEFT JOIN users u
+           ON u.id = p."overstayExemptBy"
+    LEFT JOIN employees e
+           ON e.id = u."employeeId"
+    LEFT JOIN umrah_seasons s
+           ON s.id = p."seasonId" AND s."companyId" = p."companyId" AND s."deletedAt" IS NULL
+    LEFT JOIN umrah_groups g
+           ON g.id = p."groupId" AND g."companyId" = p."companyId" AND g."deletedAt" IS NULL
+    LEFT JOIN umrah_agents a
+           ON a.id = p."agentId" AND a."companyId" = p."companyId" AND a."deletedAt" IS NULL
+        WHERE p."companyId" = $1
+          AND p."deletedAt" IS NULL
+          AND p."overstayExempt" = true${filterClause}
+        ORDER BY p."overstayExemptAt" DESC NULLS LAST
+        LIMIT 500`,
+      params,
+    );
+
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "Exempt pilgrims report"); }
+});
+
 // ============================================================================
 // DASHBOARD
 // ============================================================================
