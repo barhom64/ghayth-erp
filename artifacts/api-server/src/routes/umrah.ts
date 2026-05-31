@@ -778,18 +778,73 @@ router.get("/packages/:id", authorize({ feature: "umrah", action: "view" }), asy
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Defence-in-depth on the season JOIN — same pattern landed on
+    // groups/:id and sub-agents/:id. Without companyId a stale row
+    // could leak a title from another tenant.
     const [row] = await rawQuery(
-      `SELECT p.*, s.title AS "seasonTitle" FROM umrah_packages p
-       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id AND s."deletedAt" IS NULL
-       WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+      `SELECT p.*, s.title AS "seasonTitle"
+         FROM umrah_packages p
+    LEFT JOIN umrah_seasons s
+           ON p."seasonId" = s.id
+          AND s."companyId" = p."companyId"
+          AND s."deletedAt" IS NULL
+        WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("الباقة غير موجودة"); }
-    const pilgrims = await rawQuery(
-      `SELECT COUNT(*)::int AS c FROM umrah_pilgrims WHERE "packageId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    res.json(maskFields(req, { ...row, pilgrimCount: pilgrims[0]?.c || 0 }));
+
+    // Aggregates — the page already needs "how many pilgrims on this
+    // package" and "what's its revenue/cost picture". One roundtrip
+    // via Promise.all so loading the detail page stays snappy on
+    // large seasons.
+    const [statusRows, marginRow] = await Promise.all([
+      rawQuery<{ status: string; count: string }>(
+        `SELECT status, COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "packageId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          GROUP BY status`,
+        [id, scope.companyId],
+      ),
+      // Pilgrim count × package sellPrice/costPrice → simple revenue
+      // projection. Real revenue lives on invoices but the package
+      // itself doesn't know about invoices — projection is the right
+      // signal for "is this package priced correctly?".
+      rawQuery<{ count: string; sellPrice: string | null; costPrice: string | null }>(
+        `SELECT (SELECT COUNT(*)::text FROM umrah_pilgrims
+                  WHERE "packageId" = p.id AND "companyId" = p."companyId" AND "deletedAt" IS NULL
+                ) AS count,
+                p."sellPrice"::text AS "sellPrice",
+                p."costPrice"::text AS "costPrice"
+           FROM umrah_packages p
+          WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+        [id, scope.companyId],
+      ),
+    ]);
+
+    const statusBreakdown: Record<string, number> = {};
+    let pilgrimCount = 0;
+    for (const r of statusRows) {
+      const n = Number(r.count);
+      statusBreakdown[r.status] = n;
+      pilgrimCount += n;
+    }
+
+    const sell = Number(marginRow[0]?.sellPrice ?? 0);
+    const cost = Number(marginRow[0]?.costPrice ?? 0);
+
+    res.json(maskFields(req, {
+      ...row,
+      pilgrimCount,
+      statusBreakdown,
+      projection: {
+        sellPerPilgrim: sell,
+        costPerPilgrim: cost,
+        marginPerPilgrim: sell - cost,
+        projectedRevenue: sell * pilgrimCount,
+        projectedCost: cost * pilgrimCount,
+        projectedMargin: (sell - cost) * pilgrimCount,
+      },
+    }));
   } catch (err) { handleRouteError(err, res, "Get package error"); }
 });
 
