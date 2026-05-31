@@ -260,7 +260,7 @@ router.post(
       }).catch((e) => logger.error(e, "cargo background task failed"));
 
       const [row] = await rawQuery(
-        `SELECT * FROM cargo_manifests WHERE id=$1 AND "companyId"=$2`,
+        `SELECT * FROM cargo_manifests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [insertId, scope.companyId],
       );
       res.status(201).json({ data: row });
@@ -332,7 +332,7 @@ router.patch(
       }
 
       const [row] = await rawQuery(
-        `SELECT * FROM cargo_manifests WHERE id=$1 AND "companyId"=$2`,
+        `SELECT * FROM cargo_manifests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [id, scope.companyId],
       );
       res.json({ data: row });
@@ -408,7 +408,7 @@ router.post(
       });
 
       const [row] = await rawQuery(
-        `SELECT * FROM cargo_items WHERE id=$1 AND "companyId"=$2`,
+        `SELECT * FROM cargo_items WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [insertId, scope.companyId],
       );
       res.status(201).json({ data: row });
@@ -461,7 +461,7 @@ router.patch(
 
       await recomputeManifestTotals(item.manifestId, scope.companyId);
       const [row] = await rawQuery(
-        `SELECT * FROM cargo_items WHERE id=$1 AND "companyId"=$2`,
+        `SELECT * FROM cargo_items WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [id, scope.companyId],
       );
       res.json({ data: row });
