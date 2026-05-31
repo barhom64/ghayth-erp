@@ -736,6 +736,95 @@ describe("Print Engine v2 — preset contract (every BESPOKE_PRESETS entry retur
   });
 });
 
+describe("Print Engine v2 — listPrintableEntityTypes (catalogue endpoint)", () => {
+  // The /api/print/entity-types endpoint feeds the SPA template-editor
+  // dropdown. The old editor shipped a hand-maintained list of 24 entities
+  // even after the engine grew to 100+, so half the entities had no UI
+  // to edit a template for. Backend now owns the catalogue and the SPA
+  // pulls it live.
+  it("exports listPrintableEntityTypes and the helper returns a sorted catalogue", async () => {
+    const mod = await import("../../src/lib/print/templateResolver.js");
+    const list = (mod as { listPrintableEntityTypes?: () => Array<{ id: string; label: string; hasBespokePreset: boolean }> })
+      .listPrintableEntityTypes;
+    expect(typeof list, "listPrintableEntityTypes must be exported").toBe("function");
+    const items = list!();
+    // The catalogue must cover the 100+ types after the closing sweep
+    // (BESPOKE_PRESETS ∪ ARABIC_TITLES). Test conservatively for "much
+    // more than the old 24" so a future shrink trips this.
+    expect(items.length, "catalogue should expose 50+ printable entity types").toBeGreaterThan(50);
+    // Every entry shaped { id, label, hasBespokePreset }.
+    for (const item of items.slice(0, 5)) {
+      expect(item).toHaveProperty("id");
+      expect(item).toHaveProperty("label");
+      expect(item).toHaveProperty("hasBespokePreset");
+      expect(typeof item.id).toBe("string");
+      expect(typeof item.label).toBe("string");
+      expect(typeof item.hasBespokePreset).toBe("boolean");
+    }
+    // Synthetic report_ types are filtered out — they're not user-editable
+    // templates (the SPA payload owns the rendering).
+    expect(items.some((i) => i.id.startsWith("report_"))).toBe(false);
+    // A representative sample of business-critical types must appear with
+    // their Arabic labels (not the raw slug).
+    const byId = new Map(items.map((i) => [i.id, i]));
+    for (const slug of ["invoice", "quotation", "receipt_voucher", "payroll", "tenant", "umrah_pilgrim"]) {
+      const found = byId.get(slug);
+      expect(found, `catalogue must include ${slug}`).toBeTruthy();
+      expect(found?.label, `${slug} label must be Arabic`).toMatch(/[؀-ۿ]/);
+    }
+  });
+
+  it("/api/print/entity-types is registered behind requirePermission(templates:read)", () => {
+    const src = read(ROUTES_FILE);
+    expect(src).toMatch(/router\.get\(\s*"\/entity-types"/);
+    expect(src).toMatch(/listPrintableEntityTypes/);
+    // Same gate as listTemplates — both surfaces are admin/settings-only.
+    const match = src.match(/router\.get\(\s*"\/entity-types"[^)]*requirePermission\("templates:read"\)/s);
+    expect(match, "endpoint must require templates:read").toBeTruthy();
+  });
+});
+
+describe("Print Engine v2 — print-grade CSS (browser HTML→PDF quality)", () => {
+  // The HTML-via-browser-print path is the entire render pipeline for A4
+  // + thermal. To produce a real, professionally-paginated PDF the
+  // adapter CSS must carry the @page rules, page-break hints, and
+  // print-colour fidelity. A regression here means split tables, missing
+  // table headers on page 2, totals torn between pages — every complaint
+  // a finance team has filed since the engine launched.
+  it("a4Adapter CSS pins the print contract: @page + page-break rules + thead repeat", () => {
+    const src = read(join(PRINT_LIB, "adapters/a4Adapter.ts"));
+    // @page metadata
+    expect(src).toMatch(/@page\s*\{[\s\S]*size:\s*A4/);
+    // Page counter in footer
+    expect(src).toMatch(/@bottom-center/);
+    expect(src).toMatch(/counter\(page\)/);
+    expect(src).toMatch(/counter\(pages\)/);
+    // Thead repeats on every page
+    expect(src).toMatch(/thead\s*\{\s*display:\s*table-header-group/);
+    // No row split across pages
+    expect(src).toMatch(/page-break-inside:\s*avoid[\s\S]*break-inside:\s*avoid/);
+    // Headings shouldn't trail at the bottom of a page
+    expect(src).toMatch(/h1,?\s*h2,?\s*h3\s*\{[\s\S]*page-break-after:\s*avoid/);
+    // Print colour fidelity (logos, badges, status colours)
+    expect(src).toMatch(/-webkit-print-color-adjust:\s*exact/);
+    expect(src).toMatch(/print-color-adjust:\s*exact/);
+    // Watermark stays fixed across every page
+    expect(src).toMatch(/\.watermark\s*\{[\s\S]*position:\s*fixed/);
+  });
+
+  it("thermalAdapter CSS uses continuous paper sizing + Arabic-aware width", () => {
+    const src = read(join(PRINT_LIB, "adapters/thermalAdapter.ts"));
+    expect(src).toMatch(/@page\s*\{\s*size:\s*\$\{w\}mm\s+auto/);
+    expect(src).toMatch(/font-family:\s*'Noto Naskh Arabic'/);
+    // No paginated counters — receipts are continuous, not pages
+    expect(src).not.toMatch(/@bottom-center/);
+    // Item rows shouldn't split across a tear-off boundary
+    expect(src).toMatch(/tr\s*\{[\s\S]*page-break-inside:\s*avoid/);
+    // Totals/QR block always one piece
+    expect(src).toMatch(/\.t-grand|\.t-totals/);
+  });
+});
+
 describe("Print Engine v2 — retention legal hold", () => {
   // These document types are the legal artifact under Saudi tax / commercial
   // record retention. Dropping any of them silently from the retention list

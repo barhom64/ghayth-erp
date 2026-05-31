@@ -1321,6 +1321,60 @@ export function registerEventListeners() {
     }
   });
 
+  // N10 fix: inbox auto-classifier. Rule-based, deliberately simple:
+  // matches Arabic + English keywords in the subject and decides whether
+  // the message warrants an open `tasks` row so a human picks it up.
+  // For NLP-quality classification we'd plug in a model later; for now
+  // these rules close the gap where messages just sat in /communications/
+  // inbox with no signal to anyone.
+  //
+  // Match the LONGER keywords first — "complaint" is a strict subset of
+  // "complaint received" but we want the more specific category to win.
+  eventBus.on("inbox.message.received", async (payload) => {
+    await logEvent("inbox.message.received", payload);
+    if (!payload.companyId || !payload.entityId) return;
+
+    const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
+    const subject = String(details.subject ?? "").toLowerCase();
+    const fromAddress = String(details.fromAddress ?? "");
+    if (!subject.trim()) return;
+
+    // Rule table — keyword → (taskType, priority, title prefix). Arabic
+    // matching is case-insensitive at the regex level even though
+    // toLowerCase is a no-op for Arabic characters.
+    const RULES: Array<{ patterns: RegExp[]; type: string; priority: string; titlePrefix: string }> = [
+      { patterns: [/شكوى/i, /complaint/i],            type: "complaint",  priority: "high",   titlePrefix: "شكوى من" },
+      { patterns: [/عاجل/i, /urgent/i, /asap/i],      type: "urgent",     priority: "urgent", titlePrefix: "عاجل من" },
+      { patterns: [/فاتورة/i, /invoice/i, /payment/i, /دفع/i], type: "billing",    priority: "normal", titlePrefix: "استفسار فاتورة" },
+      { patterns: [/طلب/i, /request/i, /apply/i],     type: "request",    priority: "normal", titlePrefix: "طلب من" },
+      { patterns: [/استفسار/i, /inquiry/i, /question/i], type: "inquiry", priority: "low",    titlePrefix: "استفسار من" },
+    ];
+
+    let matched: { type: string; priority: string; titlePrefix: string } | null = null;
+    for (const rule of RULES) {
+      if (rule.patterns.some(p => p.test(subject))) {
+        matched = rule;
+        break;
+      }
+    }
+    if (!matched) return;
+
+    try {
+      await rawExecute(
+        `INSERT INTO tasks ("companyId", title, description, type, status, priority, "linkedEntityType", "linkedEntityId", "createdAt")
+         VALUES ($1, $2, $3, $4, 'pending', $5, 'message_log', $6, NOW())`,
+        [
+          payload.companyId,
+          `${matched.titlePrefix} ${fromAddress || "—"}: ${String(details.subject ?? "").slice(0, 120)}`,
+          `رسالة واردة من ${fromAddress}\nالموضوع: ${details.subject}\n\nتم تصنيفها تلقائياً كـ ${matched.type}.`,
+          matched.type,
+          matched.priority,
+          payload.entityId,
+        ]
+      );
+    } catch (e) { logger.error(e, "[EventListener] inbox auto-classifier task insert failed"); }
+  });
+
   // M9 recovery: umrah AGENT invoice (commission billing) — checks for
   // missing journalEntryId on the row and re-posts the GL if absent.
   // The route at umrah.ts:1623+ already posts the JE inline, but with a

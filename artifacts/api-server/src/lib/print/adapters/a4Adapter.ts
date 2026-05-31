@@ -13,23 +13,78 @@
 import { renderContextToHtml } from "../variableSubstitution.js";
 import type { FormatAdapter, RenderContext } from "../types.js";
 
+// Print-grade CSS — tuned so the browser-print path produces a real,
+// professionally-paginated PDF. Without these rules a long invoice would
+// split the totals across pages, repeat-print the header inline, and lose
+// table headers after page 1. The rules below mirror what a Puppeteer
+// HTML→PDF engine would do server-side; once we wire one we keep this CSS
+// because the same rules apply.
 const A4_CSS = `
-@page { size: A4; margin: 16mm 14mm; }
+@page {
+  size: A4;
+  margin: 18mm 14mm 22mm 14mm;
+  /* Page counter rendered in the footer (browser-native) */
+  @bottom-center {
+    content: "صفحة " counter(page) " من " counter(pages);
+    font-family: 'Noto Naskh Arabic', 'Tahoma', sans-serif;
+    font-size: 9pt;
+    color: #64748b;
+  }
+}
 * { box-sizing: border-box; }
 html, body { margin:0; padding:0; font-family: 'Noto Naskh Arabic', 'Tahoma', sans-serif; color:#0f172a; }
 body { direction: rtl; font-size: 11pt; line-height: 1.55; }
 .print-doc { max-width: 100%; }
+
+/* Tables ─ repeat thead on every page + never split a row in two */
 table { width:100%; border-collapse: collapse; margin: 8px 0; }
-th, td { border:1px solid #cbd5e1; padding:6px 8px; text-align:right; }
-th { background:#f1f5f9; }
-.totals { margin-top:12px; display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
+thead { display: table-header-group; }
+tfoot { display: table-footer-group; }
+tr, td, th { page-break-inside: avoid; break-inside: avoid; }
+th, td { border:1px solid #cbd5e1; padding:6px 8px; text-align:right; vertical-align:top; }
+th { background:#f1f5f9; font-weight: 700; }
+
+/* Totals / signatures / verify-block ─ keep them on one page */
+.totals { margin-top:12px; display:flex; flex-direction:column; align-items:flex-start; gap:4px;
+          page-break-inside: avoid; break-inside: avoid; }
 .totals .grand { font-size:13pt; }
-.signatures { display:flex; justify-content:space-around; margin-top:36px; padding-top:16px; border-top:1px dashed #94a3b8; }
+.signatures { display:flex; justify-content:space-around; margin-top:36px; padding-top:16px;
+              border-top:1px dashed #94a3b8;
+              page-break-inside: avoid; break-inside: avoid; page-break-before: auto; }
 .signatures > div { text-align:center; font-size:10pt; color:#475569; padding:0 8px; }
-.meta-grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px 24px; padding:8px 0; }
-.notes { margin-top:12px; padding:8px; background:#fffbeb; border:1px solid #fde68a; border-radius:6px; }
+.verify-block { page-break-inside: avoid; break-inside: avoid; }
+
+/* Meta grid ─ small key/value pairs */
+.meta-grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px 24px; padding:8px 0;
+             page-break-inside: avoid; break-inside: avoid; }
+.notes { margin-top:12px; padding:8px; background:#fffbeb; border:1px solid #fde68a; border-radius:6px;
+         page-break-inside: avoid; break-inside: avoid; }
 .empty { color:#94a3b8; padding:8px; text-align:center; }
-@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* Headings never trail at the bottom of a page */
+h1, h2, h3 { page-break-after: avoid; break-after: avoid-page; }
+
+/* Print colour fidelity + Arabic ligatures + diacritics */
+@media print {
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Hide the auto-print bootstrapper script's potential UI artefacts */
+  a[href]:after { content: ""; }
+  /* Inline images shouldn't break across pages */
+  img { page-break-inside: avoid; }
+}
+
+/* Watermark stays fixed across every page (e.g. نسخة مكررة) */
+.watermark {
+  position: fixed;
+  top: 40%; left: 50%;
+  transform: translate(-50%, -50%) rotate(-30deg);
+  font-size: 84pt;
+  color: rgba(220,38,38,0.16);
+  font-weight: bold;
+  pointer-events: none;
+  z-index: 9999;
+  letter-spacing: 8px;
+}
 `;
 
 function wrapHtml(body: string, ctx: RenderContext): string {
