@@ -1863,12 +1863,23 @@ router.get("/penalties", authorize({ feature: "umrah", action: "list" }), async 
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND pen."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND pen.status=$${params.length}`; }
+    // Tenant-scoped JOINs — without companyId guards a stale FK could
+    // surface a pilgrim / agent name from another tenant. Same pattern
+    // landed on /groups/:id (#1485) and /packages/:id (#1496).
     const rows = await rawQuery(
       `SELECT pen.*, p."fullName" as "pilgrimName", p."passportNumber", a.name as "agentName"
-       FROM umrah_penalties pen
-       LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
-       LEFT JOIN umrah_agents a ON pen."agentId"=a.id
-       WHERE ${where} ORDER BY pen."createdAt" DESC LIMIT 500`, params
+         FROM umrah_penalties pen
+    LEFT JOIN umrah_pilgrims p
+           ON pen."pilgrimId" = p.id
+          AND p."companyId"   = pen."companyId"
+          AND p."deletedAt"   IS NULL
+    LEFT JOIN umrah_agents a
+           ON pen."agentId"   = a.id
+          AND a."companyId"   = pen."companyId"
+          AND a."deletedAt"   IS NULL
+        WHERE ${where}
+        ORDER BY pen."createdAt" DESC
+        LIMIT 500`, params
     );
     res.json(maskFields(req, { data: rows.map(decryptPilgrimRow) }));
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
@@ -1878,12 +1889,19 @@ router.get("/penalties/:id", authorize({ feature: "umrah", action: "view" }), as
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Tenant-scoped JOINs — same defence-in-depth pattern as the list.
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT pen.*, p."fullName" AS "pilgrimName", p."passportNumber", a.name AS "agentName"
-       FROM umrah_penalties pen
-       LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
-       LEFT JOIN umrah_agents a ON pen."agentId"=a.id
-       WHERE pen.id=$1 AND pen."companyId"=$2`,
+         FROM umrah_penalties pen
+    LEFT JOIN umrah_pilgrims p
+           ON pen."pilgrimId" = p.id
+          AND p."companyId"   = pen."companyId"
+          AND p."deletedAt"   IS NULL
+    LEFT JOIN umrah_agents a
+           ON pen."agentId"   = a.id
+          AND a."companyId"   = pen."companyId"
+          AND a."deletedAt"   IS NULL
+        WHERE pen.id = $1 AND pen."companyId" = $2`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("العقوبة غير موجودة");
