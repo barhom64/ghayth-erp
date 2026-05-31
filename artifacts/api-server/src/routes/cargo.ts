@@ -38,6 +38,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -258,6 +259,37 @@ router.post(
         action: "fleet.cargo.manifest.created", entity: "cargo_manifests", entityId: insertId,
         details: JSON.stringify({ manifestNumber: b.manifestNumber, fleetTripId: b.fleetTripId }),
       }).catch((e) => logger.error(e, "cargo background task failed"));
+
+      // Mirror the fleet trips + umrah transport WhatsApp dispatch
+      // path (#1354 — driver_assigned). A cargo manifest is the third
+      // surface that assigns drivers; without this the driver
+      // wouldn't know they had a freight pickup until they checked
+      // the SPA. Best-effort: any send failure logs but doesn't
+      // fail the create.
+      if (b.driverId) {
+        try {
+          const [driverInfo] = await rawQuery<{ phone: string | null; name: string | null }>(
+            `SELECT phone, name FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+            [b.driverId, scope.companyId],
+          );
+          if (driverInfo?.phone) {
+            await sendMessage({
+              channel: "whatsapp",
+              recipient: driverInfo.phone,
+              recipientName: driverInfo.name,
+              body: `بوليصة شحن جديدة #${b.manifestNumber} مسندة إليك:\n${b.fromLocation || 'غير محدد'} → ${b.toLocation || 'غير محدد'}\n${b.pickupDate ? `التحميل: ${b.pickupDate}\n` : ''}الرجاء الاطلاع على تفاصيل البوليصة في النظام.`,
+              companyId: scope.companyId,
+              userId: scope.userId,
+              relatedType: "cargo_manifests",
+              relatedId: insertId,
+              templateKey: "fleet.cargo.driver_assigned",
+              eventAction: "fleet.cargo.driver_notified",
+            });
+          }
+        } catch (sendErr) {
+          logger.error({ err: sendErr, manifestId: insertId, driverId: b.driverId }, "[cargo] driver WhatsApp dispatch failed");
+        }
+      }
 
       const [row] = await rawQuery(
         `SELECT * FROM cargo_manifests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
