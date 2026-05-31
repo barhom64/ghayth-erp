@@ -220,6 +220,15 @@ const previewBody = z.object({
   htmlContent: z.string().max(200_000).optional(),
   presetKey: z.string().max(100).optional(),
   paperSize: z.enum(["A4", "A5", "THERMAL_80", "THERMAL_58", "LABEL_50x30", "LABEL_100x50"]).optional(),
+  // Visual-mode draft. When supplied the engine renders the layout tree
+  // (same shape `document_templates.layoutJson` accepts) without touching
+  // the DB — gives the visual builder live preview during editing.
+  layoutJson: z.array(z.any()).max(200).optional(),
+  // Header/footer overrides — when set, the cliché editor's overrides win
+  // over the branch's default letterhead during preview so the user sees
+  // their unsaved changes (custom logo, override company name, footer text).
+  headerOverride: z.record(z.any()).optional(),
+  footerOverride: z.record(z.any()).optional(),
 });
 
 router.post(
@@ -242,10 +251,13 @@ router.post(
         );
         if (!t) throw new NotFoundError("template");
         overrideTemplate = t as never;
-      } else if (body.htmlContent) {
-        // In-flight HTML preview: build an in-memory template that wraps
-        // the user's draft markup. Skips the DB entirely so editing a
-        // template without saving still produces a faithful preview.
+      } else if (body.htmlContent || body.layoutJson) {
+        // In-flight preview — build an in-memory template that wraps the
+        // user's draft (either raw HTML or a visual-builder layout tree).
+        // Skips the DB entirely so editing without saving still produces a
+        // faithful preview. layoutJson takes precedence when both are
+        // present (visual mode is the higher-level abstraction).
+        const isVisual = Array.isArray(body.layoutJson) && body.layoutJson.length > 0;
         overrideTemplate = {
           id: -999,
           name: "draft-preview",
@@ -253,13 +265,13 @@ router.post(
           branchId: null,
           companyId: null,
           paperSize: body.paperSize ?? "A4",
-          mode: "html",
+          mode: isVisual ? "visual" : "html",
           presetKey: body.presetKey ?? "draft",
-          htmlContent: body.htmlContent,
-          layoutJson: null,
+          htmlContent: isVisual ? null : body.htmlContent,
+          layoutJson: isVisual ? body.layoutJson : null,
           cssOverrides: null,
-          headerOverride: null,
-          footerOverride: null,
+          headerOverride: body.headerOverride ?? null,
+          footerOverride: body.footerOverride ?? null,
           isThermal: body.paperSize === "THERMAL_80" || body.paperSize === "THERMAL_58",
           version: 1,
         } as never;

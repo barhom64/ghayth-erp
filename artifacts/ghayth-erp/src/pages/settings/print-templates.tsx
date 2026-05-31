@@ -285,9 +285,49 @@ export default function PrintTemplatesPage() {
                       </td>
                       <td className="p-2">{t.isDefault ? "✓" : ""}</td>
                       <td className="p-2 text-left">
-                        <Button size="sm" variant="ghost" onClick={() => setEditingId(t.id)}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
+                        <div className="inline-flex gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => setEditingId(t.id)} title="تعديل">
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="استنساخ هذا القالب"
+                            onClick={async () => {
+                              // Quick duplicate — POST a copy of the row with
+                              // "(نسخة)" appended and unset isDefault. Then
+                              // open the duplicated row in the editor so the
+                              // user lands on the edit screen ready to tweak.
+                              try {
+                                const created = await apiFetch<{ id: number }>(
+                                  "/print/templates",
+                                  {
+                                    method: "POST",
+                                    body: JSON.stringify({
+                                      name: `${t.name} (نسخة)`,
+                                      entityType: t.entityType,
+                                      branchId: t.branchId,
+                                      paperSize: t.paperSize,
+                                      mode: t.mode,
+                                      presetKey: t.presetKey,
+                                      htmlContent: t.htmlContent,
+                                      layoutJson: t.layoutJson,
+                                      headerOverride: t.headerOverride,
+                                      footerOverride: t.footerOverride,
+                                      isDefault: false,
+                                      isThermal: t.paperSize.startsWith("THERMAL"),
+                                    }),
+                                  },
+                                );
+                                if (created?.id) setEditingId(created.id);
+                              } catch {
+                                /* fail silently — server logs the error */
+                              }
+                            }}
+                          >
+                            ⎘
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -387,11 +427,26 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
           entityType,
           // Don't reference the saved template — preview the in-flight edits.
           templateId: templateId && mode === "preset" ? templateId : undefined,
-          // Forward the unsaved HTML / presetKey / paperSize so the user
-          // sees exactly what they're about to save.
+          // Forward the unsaved HTML / layout / presetKey / paperSize so
+          // the user sees exactly what they're about to save.
           ...(mode === "html" && htmlContent ? { htmlContent } : {}),
+          ...(mode === "visual" && layout.length > 0 ? { layoutJson: layout } : {}),
           ...(mode === "preset" ? { presetKey } : {}),
           paperSize,
+          // Pass the cliché overrides so the preview reflects the unsaved
+          // letterhead changes (custom logo, override company name, footer).
+          ...((overrideLogoUrl || overrideCompanyName || overrideTaxNumber)
+            ? {
+                headerOverride: {
+                  ...(overrideLogoUrl && { logoUrl: overrideLogoUrl }),
+                  ...(overrideCompanyName && { companyName: overrideCompanyName }),
+                  ...(overrideTaxNumber && { taxNumber: overrideTaxNumber }),
+                },
+              }
+            : {}),
+          ...(overrideFooterText
+            ? { footerOverride: { text: overrideFooterText } }
+            : {}),
           // Use the per-entity sample if we have one, else the generic
           // default payload so the preview is never empty for the 100+
           // entity types that don't ship a hand-tuned sample.
@@ -407,7 +462,10 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
     } finally {
       setPreviewLoading(false);
     }
-  }, [entityType, mode, htmlContent, presetKey, paperSize, templateId, toast]);
+  }, [
+    entityType, mode, htmlContent, presetKey, paperSize, templateId, toast,
+    layout, overrideLogoUrl, overrideCompanyName, overrideTaxNumber, overrideFooterText,
+  ]);
 
   // Debounced auto-preview. Skip while typing fast — only fire 600ms after
   // the user pauses. Disabled when `autoPreview` is off so the user can
@@ -419,6 +477,21 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
   }, [autoPreview, preview]);
 
   async function save() {
+    // Pre-flight validation — catch the obvious template syntax mistakes
+    // BEFORE hitting the server so the user gets an inline error instead of
+    // a generic 500. Detects unclosed `{{...}}` tokens and unclosed
+    // `{{#each}}` / `{{#if}}` blocks.
+    if (mode === "html" && htmlContent) {
+      const issues = validateTemplate(htmlContent);
+      if (issues.length > 0) {
+        toast({
+          title: "أخطاء في القالب",
+          description: issues.slice(0, 3).join(" · ") + (issues.length > 3 ? "…" : ""),
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     setSaving(true);
     try {
       const body = {
@@ -773,6 +846,47 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
 }
 
 // Sample payloads used for the live preview when no real entity is in scope.
+/** Pre-flight check on an HTML template body — catches the common typos
+ *  the substitution layer would silently render as literal text. Returns
+ *  Arabic error messages; empty array = valid. */
+function validateTemplate(html: string): string[] {
+  const issues: string[] = [];
+  // Unmatched {{ and }}. A naked "{{" left in the body would render as
+  // literal text because no closing pair exists.
+  const opens = (html.match(/\{\{/g) ?? []).length;
+  const closes = (html.match(/\}\}/g) ?? []).length;
+  if (opens !== closes) {
+    issues.push(`عدد {{ (${opens}) لا يطابق عدد }} (${closes})`);
+  }
+  // Unbalanced #each / /each
+  const eachOpens = (html.match(/\{\{#each\s+[\w.]+\}\}/g) ?? []).length;
+  const eachCloses = (html.match(/\{\{\/each\}\}/g) ?? []).length;
+  if (eachOpens !== eachCloses) {
+    issues.push(`{{#each}}=${eachOpens} لا تطابق {{/each}}=${eachCloses}`);
+  }
+  // Unbalanced #if / /if
+  const ifOpens = (html.match(/\{\{#if\s+[\w.]+\}\}/g) ?? []).length;
+  const ifCloses = (html.match(/\{\{\/if\}\}/g) ?? []).length;
+  if (ifOpens !== ifCloses) {
+    issues.push(`{{#if}}=${ifOpens} لا تطابق {{/if}}=${ifCloses}`);
+  }
+  // Invalid helper names — only `each` and `if` are implemented today.
+  const badHelpers = Array.from(html.matchAll(/\{\{#(\w+)\s/g))
+    .map((m) => m[1])
+    .filter((h) => h !== "each" && h !== "if");
+  for (const h of new Set(badHelpers)) {
+    issues.push(`المساعد {{#${h}}} غير مدعوم — المتاح: #each / #if`);
+  }
+  // Detect unbalanced <script>/<style> early — the wrapper already
+  // sanitises cssOverrides but the body is rendered verbatim.
+  const scriptOpens = (html.match(/<script\b/gi) ?? []).length;
+  const scriptCloses = (html.match(/<\/script>/gi) ?? []).length;
+  if (scriptOpens !== scriptCloses) {
+    issues.push(`<script>=${scriptOpens} لا تطابق </script>=${scriptCloses}`);
+  }
+  return issues;
+}
+
 // Default payload used when an entity has no bespoke sample below — the
 // preview helper still has something to render so the user sees the
 // canonical fields (ref/date/status) instead of an empty doc.
