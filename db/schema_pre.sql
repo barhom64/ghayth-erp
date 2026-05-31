@@ -5860,6 +5860,53 @@ CREATE TABLE public.document_entity_links (
 
 
 --
+-- Name: document_acls; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 242_document_acl.sql (per-document access control).
+--
+
+CREATE TABLE public.document_acls (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "documentId" integer NOT NULL,
+    "userId" integer,
+    "roleKey" character varying(60),
+    "departmentId" integer,
+    permission character varying(20) DEFAULT 'read'::character varying NOT NULL,
+    "grantedBy" integer,
+    "grantedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "expiresAt" timestamp with time zone,
+    CONSTRAINT document_acls_permission_check
+      CHECK ((permission::text = ANY (ARRAY['read'::text, 'write'::text, 'admin'::text]))),
+    CONSTRAINT document_acls_principal_check
+      CHECK (
+        ((("userId" IS NOT NULL))::int +
+         (("roleKey" IS NOT NULL))::int +
+         (("departmentId" IS NOT NULL))::int) = 1
+      )
+);
+
+
+--
+-- Name: document_acls_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.document_acls_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: document_acls_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.document_acls_id_seq OWNED BY public.document_acls.id;
+
+
+--
 -- Name: document_access_log; Type: TABLE; Schema: public; Owner: -
 -- Source: migration 234_document_access_log.sql (per-access compliance log for downloads/previews).
 --
@@ -6123,7 +6170,9 @@ CREATE TABLE public.documents (
     "ocrEngine" character varying(40),
     "printJobId" uuid,
     "linkedEntityType" character varying(60),
-    "linkedEntityId" character varying(64)
+    "linkedEntityId" character varying(64),
+    "retentionUntil" date,
+    "retentionPolicy" character varying(40)
 );
 
 
@@ -7895,7 +7944,8 @@ CREATE TABLE public.fleet_fuel_logs (
     "mileageAtFuel" integer,
     "stationName" character varying(200),
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "tripId" integer
 );
 
 
@@ -11486,6 +11536,48 @@ ALTER SEQUENCE public.marketing_campaigns_id_seq OWNED BY public.marketing_campa
 --
 -- Name: message_log; Type: TABLE; Schema: public; Owner: -
 --
+
+--
+-- Name: message_referrals; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 240_message_referral_chain.sql (per-hop referral chain on message_log).
+--
+
+CREATE TABLE public.message_referrals (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "sourceLogId" integer NOT NULL,
+    "hopNumber" integer DEFAULT 1 NOT NULL,
+    "fromUserId" integer,
+    "toUserId" integer,
+    "toRoleHint" text,
+    "targetType" text,
+    "targetId" integer,
+    reason text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT message_referrals_target_type_check
+      CHECK (("targetType" IS NULL OR "targetType" = ANY (ARRAY['task'::text, 'ticket'::text, 'request'::text, 'assignment'::text, 'archive'::text])))
+);
+
+
+--
+-- Name: message_referrals_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.message_referrals_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: message_referrals_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.message_referrals_id_seq OWNED BY public.message_referrals.id;
+
 
 CREATE TABLE public.message_log (
     id bigint NOT NULL,

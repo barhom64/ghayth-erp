@@ -107,6 +107,10 @@ describe("frontend — UmrahTabsNav exposes /umrah/sales-wizard", () => {
   });
 
   it("imports the Sparkles icon for the new tab", () => {
-    expect(NAV).toMatch(/Sparkles,?\s*\n\}\s*from\s*"lucide-react"/);
+    // Position-independent — pin only that the symbol is in the
+    // lucide-react import block. Earlier this regex required Sparkles
+    // to be the LAST symbol before `}`, which broke whenever another
+    // tab added a new icon import below it.
+    expect(NAV).toMatch(/Sparkles[\s\S]{0,500}from\s*"lucide-react"/);
   });
 });

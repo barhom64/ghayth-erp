@@ -85,6 +85,11 @@ const createFuelLogSchema = z.object({
   mileageAtFuel: z.coerce.number().optional(),
   stationName: z.string().optional(),
   fuelType: z.string().optional(),
+  // M7 fix: optional link back to the trip the fuel was burned on.
+  // When set, /trips/:id/complete will sum these actual costs instead
+  // of using the estimate, avoiding double-counting fuel expense in
+  // the GL.
+  tripId: z.coerce.number().optional(),
 });
 
 const createInsuranceSchema = z.object({
@@ -1442,7 +1447,27 @@ router.post("/trips/:id/complete", authorize({ feature: "fleet.trips", action: "
     const completeSettings = await getFleetCostSettings(scope.companyId);
     const fuelPricePerLiter = b.fuelPricePerLiter || completeSettings.fuelPricePerLiter;
     const fuelEfficiency = completeSettings.fuelEfficiencyKmPerLiter;
-    const actualFuelCost = (actualDistanceKm / fuelEfficiency) * fuelPricePerLiter;
+    const estimatedFuelCost = (actualDistanceKm / fuelEfficiency) * fuelPricePerLiter;
+    // M7 fix: if any fuel_logs carry tripId = this trip, sum their
+    // actual cost and use THAT instead of the estimate. The fuel-log
+    // route already posted GLs for those rows, so re-posting the
+    // estimate would double-count fuel expense on the same trip.
+    //
+    // Behaviour:
+    //   - No tagged logs (legacy fuel flow): use estimate (status quo).
+    //   - Has tagged logs: use their sum. Estimate is ignored entirely.
+    //   - Mixed (some tagged, some untagged): we treat untagged as
+    //     "different fill-ups, not this trip" and still use the sum
+    //     of the tagged ones. Operators who tag selectively are
+    //     telling us which fills belonged to which trip.
+    const [actualFuelRow] = await rawQuery<{ total: string }>(
+      `SELECT COALESCE(SUM("totalCost"), 0)::text AS total
+         FROM fleet_fuel_logs
+        WHERE "companyId" = $1 AND "tripId" = $2 AND "deletedAt" IS NULL`,
+      [scope.companyId, tripId]
+    ).catch(() => [{ total: "0" }]);
+    const actualFuelFromLogs = Number(actualFuelRow?.total ?? 0);
+    const actualFuelCost = actualFuelFromLogs > 0 ? actualFuelFromLogs : estimatedFuelCost;
     const driverFare = b.driverFare || actualDistanceKm * completeSettings.driverFarePerKm;
     const depreciation = actualDistanceKm * completeSettings.depreciationPerKm;
     const totalCost = actualFuelCost + driverFare + depreciation;
@@ -1468,9 +1493,15 @@ router.post("/trips/:id/complete", authorize({ feature: "fleet.trips", action: "
     });
 
     const { fleetEngine } = await import("../lib/engines/index.js");
+    // M7 fix continued: when actual fuel logs already posted GLs for
+    // this trip, exclude their cost from the trip-completion GL —
+    // posting it again would double-count fuel expense. Driver fare
+    // and depreciation are NOT in any other JE so they always post.
+    const glFuelCost = actualFuelFromLogs > 0 ? 0 : actualFuelCost;
+    const glTotalCost = glFuelCost + driverFare + depreciation;
     const tripGLResult = await fleetEngine.postTripCompletionGL(
       { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
-      { id: tripId, vehicleId: trip.vehicleId as number, fuelCost: actualFuelCost, driverFare, depreciation, totalCost }
+      { id: tripId, vehicleId: trip.vehicleId as number, fuelCost: glFuelCost, driverFare, depreciation, totalCost: glTotalCost }
     );
     const journalEntryId = tripGLResult?.journalId ?? null;
 
@@ -2296,9 +2327,35 @@ router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }
     const fuelDate = b.fuelDate || b.date || todayISO();
     const mileageAtFuel = Number(b.mileageAtFuel || b.mileage) || null;
     const stationName = b.stationName || b.station || null;
+    // M7: validate tripId if provided so a bogus id can't smuggle a
+    // fuel log onto someone else's trip and confuse the dedup logic.
+    let validatedTripId: number | null = null;
+    if (b.tripId) {
+      const [trip] = await rawQuery<{ id: number; vehicleId: number | null }>(
+        `SELECT id, "vehicleId" FROM fleet_trips
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [Number(b.tripId), scope.companyId]
+      );
+      if (!trip) {
+        throw new ValidationError(`الرحلة رقم ${b.tripId} غير موجودة`, {
+          field: "tripId",
+          fix: "اختر رحلة من القائمة",
+        });
+      }
+      // If the trip has a vehicle and the fuel log claims a different
+      // vehicle, the operator probably picked the wrong trip.
+      if (trip.vehicleId && trip.vehicleId !== resolvedVehicleId) {
+        throw new ValidationError("الرحلة المختارة تخص مركبة أخرى", {
+          field: "tripId",
+          fix: "اختر رحلة على نفس المركبة",
+        });
+      }
+      validatedTripId = trip.id;
+    }
+
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, resolvedVehicleId, b.driverId, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName]
+      `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName","tripId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.companyId, resolvedVehicleId, b.driverId, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]
     );
     assertInsert(insertId, "fleet_fuel_logs");
 

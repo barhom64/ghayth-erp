@@ -518,6 +518,13 @@ ALTER TABLE ONLY public.document_entity_links ALTER COLUMN id SET DEFAULT nextva
 
 
 --
+-- Name: document_acls id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_acls ALTER COLUMN id SET DEFAULT nextval('public.document_acls_id_seq'::regclass);
+
+
+--
 -- Name: document_access_log id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1376,6 +1383,13 @@ ALTER TABLE ONLY public.maintenance_requests ALTER COLUMN id SET DEFAULT nextval
 --
 
 ALTER TABLE ONLY public.marketing_campaigns ALTER COLUMN id SET DEFAULT nextval('public.marketing_campaigns_id_seq'::regclass);
+
+
+--
+-- Name: message_referrals id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_referrals ALTER COLUMN id SET DEFAULT nextval('public.message_referrals_id_seq'::regclass);
 
 
 --
@@ -3253,6 +3267,42 @@ ALTER TABLE ONLY public.document_entity_links
 
 
 --
+-- Name: document_acls document_acls_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_acls
+    ADD CONSTRAINT document_acls_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_document_acls_doc; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_document_acls_doc ON public.document_acls USING btree ("companyId", "documentId");
+
+
+--
+-- Name: idx_document_acls_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_document_acls_user ON public.document_acls USING btree ("companyId", "userId") WHERE ("userId" IS NOT NULL);
+
+
+--
+-- Name: idx_document_acls_role; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_document_acls_role ON public.document_acls USING btree ("companyId", "roleKey") WHERE ("roleKey" IS NOT NULL);
+
+
+--
+-- Name: idx_document_acls_dept; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_document_acls_dept ON public.document_acls USING btree ("companyId", "departmentId") WHERE ("departmentId" IS NOT NULL);
+
+
+--
 -- Name: document_access_log document_access_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3312,6 +3362,13 @@ ALTER TABLE ONLY public.document_versions
 
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_documents_retention_due; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_documents_retention_due ON public.documents USING btree ("companyId", "retentionUntil") WHERE (("retentionUntil" IS NOT NULL) AND ("deletedAt" IS NULL));
 
 
 --
@@ -3680,6 +3737,13 @@ ALTER TABLE ONLY public.fleet_drivers
 
 ALTER TABLE ONLY public.fleet_fuel_logs
     ADD CONSTRAINT fleet_fuel_logs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_fleet_fuel_logs_trip; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_fuel_logs_trip ON public.fleet_fuel_logs USING btree ("companyId", "tripId") WHERE (("tripId" IS NOT NULL) AND ("deletedAt" IS NULL));
 
 
 --
@@ -4400,6 +4464,28 @@ ALTER TABLE ONLY public.maintenance_requests
 
 ALTER TABLE ONLY public.marketing_campaigns
     ADD CONSTRAINT marketing_campaigns_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: message_referrals message_referrals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_referrals
+    ADD CONSTRAINT message_referrals_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_message_referrals_chain; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_message_referrals_chain ON public.message_referrals USING btree ("companyId", "sourceLogId", "hopNumber");
+
+
+--
+-- Name: idx_message_referrals_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_message_referrals_user ON public.message_referrals USING btree ("companyId", "fromUserId", "createdAt" DESC);
 
 
 --
