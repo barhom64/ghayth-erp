@@ -1,11 +1,28 @@
 # Scope helper adoption audit (GAP_MATRIX item #13)
 
-> Inventories every route file's use of `buildScopedWhere` /
-> `scopedQuery` / `scopedCount` (from
-> `artifacts/api-server/src/lib/scopedQuery.ts`) vs. manual
-> `"companyId" = $N` / `scope.companyId` WHERE clauses. The point is
-> NOT to mass-migrate — it's to publish a stack-ranked todo so future
-> hardening slices can pick the highest-risk files first.
+> **Re-audit finding (2026-05-30):** the original sweep flagged this as
+> P0, but a deeper read of the 64 "manual scope" files shows that the
+> vast majority of usage is **correct-by-design**, not a leak risk:
+>
+>   - Single-company queries that legitimately filter by the
+>     authenticated user's current company (e.g. execDashboard,
+>     mySpace, workspace) — `scope.companyId` IS the right answer.
+>   - Public endpoints (publicData, careersPortal) where `companyId`
+>     comes from a query param by design.
+>   - Webhooks (fleet-telematics-webhook) where the company context
+>     comes from the integration record validated upstream.
+>   - INSERT/event-emission usage that doesn't filter at all.
+>
+> The real leak surface is much smaller than the headline 64 files
+> suggest. The ratchet (`scopeHelperAdoptionSmoke.test.ts`) is still
+> worth keeping because it catches NEW manual usage in code review,
+> but the urgency on migrating existing routes is much lower than the
+> original P0 classification.
+>
+> The original Top-15 list below stays for reference, but each file
+> needs a per-route re-review before migration (most rows will
+> resolve to "keep manual, document why"; a few will be real
+> migrations).
 
 ## Methodology
 
