@@ -80,11 +80,15 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الأثر**: تخزين سحابي يكبر باستمرار، خرق PDPL محتمل (الـPDPL يلزم حذف PII بعد فترة).
 **الإصلاح**: حقل + cron + workflow.
 
-### M6. Per-Document ACL غير موجود
-**الموقع**: `documents.ts` — صلاحية على مستوى feature فقط
-**الوصف**: لا `document_acls` table، لا per-document permissions.
-**الأثر**: مستند سري يمكن وصول إليه من كل من له `documents:list`.
-**الإصلاح**: implement document-level grant table.
+### M6. Per-Document ACL ✅ FIXED in PR #1489 follow-up
+**الموقع**: migration 242 + `lib/documentAcl.ts` + `documents.ts /:id/acls`
+**الإصلاح المنفذ**:
+- جدول `document_acls` يدعم 3 أنواع principal: `userId` أو `roleKey` أو `departmentId` (واحد بالضبط لكل صف عبر CHECK constraint)
+- 3 مستويات صلاحية: `read` / `write` / `admin` مع hierarchy (admin يشمل الأقل)
+- `expiresAt` اختياري للوصول المؤقت
+- `checkDocumentAcl()` helper: لا ACL = fallback لـfeature-RBAC (لا breaking change)؛ وجود ACL = narrowing فقط للمصرح لهم؛ owner/isOwner دائماً يمر
+- enforcement في `GET /:id/download` و `GET /:id/preview` (يرد 404 لإخفاء وجود مستند سري)
+- endpoints: `GET /:id/acls`, `POST /:id/acls`, `DELETE /:id/acls/:aclId`.
 
 ### M7. Fuel Double-Counting Risk في الأسطول
 **الموقع**: `fleet.ts:2096` (fuel-log) vs `fleet.ts:1283` (trip-complete)
