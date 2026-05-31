@@ -185,6 +185,23 @@ export default function CargoDetail() {
               </Button>
             </Link>
           )}
+          <GuardedButton
+            perm="fleet.cargo:delete"
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              if (!confirm(`حذف البوليصة #${m.manifestNumber}؟`)) return;
+              try {
+                await apiFetch(`/cargo/manifests/${m.id}`, { method: "DELETE" });
+                toast({ title: "تم حذف البوليصة" });
+                navigate("/fleet/cargo");
+              } catch (err: any) {
+                toast({ variant: "destructive", title: "تعذّر الحذف", description: err?.message || "" });
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4 me-1 text-rose-600" />حذف
+          </GuardedButton>
         </div>
       }
     >
