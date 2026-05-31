@@ -6123,7 +6123,9 @@ CREATE TABLE public.documents (
     "ocrEngine" character varying(40),
     "printJobId" uuid,
     "linkedEntityType" character varying(60),
-    "linkedEntityId" character varying(64)
+    "linkedEntityId" character varying(64),
+    "retentionUntil" date,
+    "retentionPolicy" character varying(40)
 );
 
 
@@ -11486,6 +11488,48 @@ ALTER SEQUENCE public.marketing_campaigns_id_seq OWNED BY public.marketing_campa
 --
 -- Name: message_log; Type: TABLE; Schema: public; Owner: -
 --
+
+--
+-- Name: message_referrals; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 240_message_referral_chain.sql (per-hop referral chain on message_log).
+--
+
+CREATE TABLE public.message_referrals (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "sourceLogId" integer NOT NULL,
+    "hopNumber" integer DEFAULT 1 NOT NULL,
+    "fromUserId" integer,
+    "toUserId" integer,
+    "toRoleHint" text,
+    "targetType" text,
+    "targetId" integer,
+    reason text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT message_referrals_target_type_check
+      CHECK (("targetType" IS NULL OR "targetType" = ANY (ARRAY['task'::text, 'ticket'::text, 'request'::text, 'assignment'::text, 'archive'::text])))
+);
+
+
+--
+-- Name: message_referrals_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.message_referrals_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: message_referrals_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.message_referrals_id_seq OWNED BY public.message_referrals.id;
+
 
 CREATE TABLE public.message_log (
     id bigint NOT NULL,
