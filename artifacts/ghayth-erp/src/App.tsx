@@ -32,6 +32,9 @@ import NotFound from "@/pages/not-found";
 
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const PrintVerify = lazy(() => import("@/pages/print-verify"));
+const DriverPortalLogin = lazy(() => import("@/pages/driver-portal/login"));
+const DriverPortalMyTrips = lazy(() => import("@/pages/driver-portal/my-trips"));
+const DriverPortalProfile = lazy(() => import("@/pages/driver-portal/profile"));
 
 interface RouteConfig {
   path: string;
@@ -161,6 +164,21 @@ function Router() {
         <Suspense fallback={<PageLoader />}>
           <PrintVerify />
         </Suspense>
+      </Route>
+      {/* Driver portal — separate auth surface from the main ERP (#1354).
+          Drivers log in with their portal credentials (driver_portal_accounts
+          table), session lives in localStorage, the pages manage their own
+          auth via pages/driver-portal/lib.ts → driverFetch. Routes are
+          anonymous at the SPA boundary; auth is enforced inside each page
+          by the bounce-to-login useEffect. */}
+      <Route path="/driver-portal/login">
+        <Suspense fallback={<PageLoader />}><DriverPortalLogin /></Suspense>
+      </Route>
+      <Route path="/driver-portal/my-trips">
+        <Suspense fallback={<PageLoader />}><DriverPortalMyTrips /></Suspense>
+      </Route>
+      <Route path="/driver-portal/profile">
+        <Suspense fallback={<PageLoader />}><DriverPortalProfile /></Suspense>
       </Route>
       <Route>
         {isAuthenticated ? <ProtectedRoutes /> : <Redirect to="/login" />}
