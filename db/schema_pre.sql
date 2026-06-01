@@ -4815,7 +4815,12 @@ CREATE TABLE public.companies (
     "umrahVisaProductId" integer,
     "umrahServicesProductId" integer,
     "umrahTransportProductId" integer,
-    CONSTRAINT chk_companies_functional_currency_iso CHECK (("functionalCurrency" ~ '^[A-Z]{3}$'::text))
+    "subscriptionStatus" character varying(20) DEFAULT 'trial' NOT NULL,
+    "trialExpiresAt" timestamp with time zone,
+    "subscriptionPlan" character varying(40) DEFAULT 'trial' NOT NULL,
+    CONSTRAINT chk_companies_functional_currency_iso CHECK (("functionalCurrency" ~ '^[A-Z]{3}$'::text)),
+    CONSTRAINT companies_subscription_status_check
+      CHECK (("subscriptionStatus"::text = ANY (ARRAY['trial'::text, 'active'::text, 'expired'::text, 'cancelled'::text])))
 );
 
 
@@ -8423,6 +8428,55 @@ CREATE SEQUENCE public.fleet_trips_id_seq
 --
 
 ALTER SEQUENCE public.fleet_trips_id_seq OWNED BY public.fleet_trips.id;
+
+
+--
+-- Name: fleet_tires; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 245_fleet_tires.sql (per-vehicle tire inventory).
+--
+
+CREATE TABLE public.fleet_tires (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "vehicleId" integer NOT NULL,
+    "position" character varying(20) NOT NULL,
+    brand character varying(80),
+    size character varying(40),
+    "installMileage" integer,
+    "installDate" date,
+    "replaceMileage" integer,
+    "replaceDate" date,
+    status character varying(20) DEFAULT 'active' NOT NULL,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT fleet_tires_position_check
+      CHECK (("position"::text = ANY (ARRAY['front_left'::text, 'front_right'::text, 'rear_left'::text, 'rear_right'::text, 'spare'::text, 'extra'::text]))),
+    CONSTRAINT fleet_tires_status_check
+      CHECK ((status::text = ANY (ARRAY['active'::text, 'rotated'::text, 'replaced'::text, 'discarded'::text])))
+);
+
+
+--
+-- Name: fleet_tires_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_tires_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_tires_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_tires_id_seq OWNED BY public.fleet_tires.id;
 
 
 --
@@ -17181,6 +17235,93 @@ CREATE SEQUENCE public.umrah_penalties_id_seq
 --
 
 ALTER SEQUENCE public.umrah_penalties_id_seq OWNED BY public.umrah_penalties.id;
+
+
+--
+-- Name: umrah_hotels; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 246_umrah_accommodations.sql.
+--
+
+CREATE TABLE public.umrah_hotels (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    name character varying(200) NOT NULL,
+    "nameEn" character varying(200),
+    city character varying(60),
+    address text,
+    "starRating" integer,
+    "contactName" character varying(120),
+    "contactPhone" character varying(40),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_hotels_star_rating_check
+      CHECK (("starRating" IS NULL OR ("starRating" BETWEEN 1 AND 7)))
+);
+
+
+CREATE SEQUENCE public.umrah_hotels_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.umrah_hotels_id_seq OWNED BY public.umrah_hotels.id;
+
+
+--
+-- Name: umrah_room_blocks; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 246_umrah_accommodations.sql.
+--
+
+CREATE TABLE public.umrah_room_blocks (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "hotelId" integer NOT NULL,
+    "seasonId" integer,
+    "checkInDate" date,
+    "checkOutDate" date,
+    "roomType" character varying(40),
+    "totalRooms" integer DEFAULT 0 NOT NULL,
+    "ratePerNight" numeric(10,2),
+    currency character(3) DEFAULT 'SAR',
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_room_blocks_room_type_check
+      CHECK (("roomType" IS NULL OR "roomType"::text = ANY (ARRAY['single'::text, 'double'::text, 'triple'::text, 'quad'::text, 'suite'::text])))
+);
+
+
+CREATE SEQUENCE public.umrah_room_blocks_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.umrah_room_blocks_id_seq OWNED BY public.umrah_room_blocks.id;
+
+
+--
+-- Name: umrah_room_allocations; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 246_umrah_accommodations.sql.
+--
+
+CREATE TABLE public.umrah_room_allocations (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "blockId" integer NOT NULL,
+    "pilgrimId" integer NOT NULL,
+    "roomNumber" character varying(40),
+    occupants integer DEFAULT 1,
+    "checkInAt" timestamp with time zone,
+    "checkOutAt" timestamp with time zone,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_room_allocations_occupants_check
+      CHECK ((occupants > 0 AND occupants < 10))
+);
+
+
+CREATE SEQUENCE public.umrah_room_allocations_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.umrah_room_allocations_id_seq OWNED BY public.umrah_room_allocations.id;
 
 
 --

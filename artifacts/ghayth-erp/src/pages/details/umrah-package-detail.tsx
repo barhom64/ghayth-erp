@@ -7,7 +7,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Package, Star, Bus, Utensils, Calendar } from "lucide-react";
+import { Edit, Package, Star, Bus, Utensils, Calendar, Users, Wallet } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -16,6 +16,23 @@ const STATUS_LABELS: Record<string, string> = {
   active: "متاح",
   inactive: "غير متاح",
   sold_out: "نفذ",
+};
+
+// Pilgrim status → Arabic — same dictionary as group / season detail.
+// Lift to a shared module if a 4th caller needs it.
+const PILGRIM_STATUS_LABELS: Record<string, string> = {
+  pending: "لم يصل",
+  arrived: "وصل",
+  active: "نشط",
+  overstayed: "متأخر",
+  overstay_penalized: "متأخر مع غرامة",
+  departed: "غادر",
+  violated: "مخالف",
+  absconded: "هارب",
+  deceased: "متوفى",
+  visa_rejected: "تأشيرة مرفوضة",
+  visa_printed: "تأشيرة مطبوعة",
+  cancelled: "ملغي",
 };
 
 function statusTone(status?: string | null) {
@@ -206,6 +223,90 @@ export default function UmrahPackageDetail() {
           </Card>
         )}
       </div>
+
+      {/* Status mix card — visible only when the package has actual
+          pilgrims, otherwise the empty chips would imply data we
+          don't have. */}
+      {pkg?.statusBreakdown && Object.keys(pkg.statusBreakdown).length > 0 && (
+        <Card className="md:col-span-3" data-testid="package-status-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              توزيع حالة المعتمرين ({pkg?.pilgrimCount ?? 0})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2" data-testid="package-status-breakdown">
+              {Object.entries(pkg.statusBreakdown as Record<string, number>).map(([status, count]) => (
+                <Badge key={status} variant="outline" className="text-xs">
+                  {PILGRIM_STATUS_LABELS[status] || status}: {count}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Projection card — sellPrice / costPrice × actual count = the
+          best estimate of this package's contribution to the season's
+          P&L. Margin red when negative (the same priced-below-cost
+          signal we surface elsewhere). */}
+      {pkg?.projection && (
+        <Card className="md:col-span-3" data-testid="package-projection-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-muted-foreground" />
+              توقع الإيرادات والتكاليف
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">سعر البيع / معتمر</p>
+                <span className="text-lg font-semibold" data-testid="package-sell-per-pilgrim">
+                  {formatCurrency(Number(pkg.projection.sellPerPilgrim ?? 0))}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">التكلفة / معتمر</p>
+                <span className="text-lg font-semibold" data-testid="package-cost-per-pilgrim">
+                  {formatCurrency(Number(pkg.projection.costPerPilgrim ?? 0))}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">الهامش / معتمر</p>
+                <span
+                  className={`text-lg font-bold ${Number(pkg.projection.marginPerPilgrim ?? 0) < 0 ? "text-status-error-foreground" : "text-status-success-foreground"}`}
+                  data-testid="package-margin-per-pilgrim"
+                >
+                  {formatCurrency(Number(pkg.projection.marginPerPilgrim ?? 0))}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">إيراد متوقع</p>
+                <span className="font-semibold" data-testid="package-projected-revenue">
+                  {formatCurrency(Number(pkg.projection.projectedRevenue ?? 0))}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">تكلفة متوقعة</p>
+                <span className="font-semibold">
+                  {formatCurrency(Number(pkg.projection.projectedCost ?? 0))}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">هامش متوقع</p>
+                <span
+                  className={`font-bold ${Number(pkg.projection.projectedMargin ?? 0) < 0 ? "text-status-error-foreground" : "text-status-success-foreground"}`}
+                  data-testid="package-projected-margin"
+                >
+                  {formatCurrency(Number(pkg.projection.projectedMargin ?? 0))}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {id && <EntityComments entityType="umrah-package" entityId={id} />}
       {id && <EntityTags entityType="umrah-package" entityId={id} />}

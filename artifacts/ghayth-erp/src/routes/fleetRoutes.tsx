@@ -15,6 +15,7 @@ const Fuel = lazy(() => import("@/pages/fleet/fuel"));
 const FuelCreate = lazy(() => import("@/pages/create/fleet/fuel-create"));
 const FuelDetail = lazy(() => import("@/pages/details/fuel-detail"));
 const Insurance = lazy(() => import("@/pages/fleet/insurance"));
+const Tires = lazy(() => import("@/pages/fleet/tires"));
 const InsuranceCreate = lazy(() => import("@/pages/create/fleet/insurance-create"));
 const InsuranceDetail = lazy(() => import("@/pages/details/insurance-detail"));
 const FleetAlerts = lazy(() => import("@/pages/fleet/alerts"));
@@ -51,6 +52,7 @@ export const fleetRoutes = [
   { path: "/fleet/fuel/create", component: FuelCreate },
   { path: "/fleet/fuel/:id", component: FuelDetail },
   { path: "/fleet/insurance", component: Insurance },
+  { path: "/fleet/tires", component: Tires },
   { path: "/fleet/insurance/create", component: InsuranceCreate },
   { path: "/fleet/insurance/:id", component: InsuranceDetail },
   { path: "/fleet/alerts", component: FleetAlerts },

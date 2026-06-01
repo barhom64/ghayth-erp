@@ -1,0 +1,232 @@
+// N4 — Fleet tires inventory page.
+//
+// Closes N4 from docs/testing/CRITICAL_DEFECTS_REPORT.md. Lists all
+// active tires across the fleet with per-vehicle grouping, brand,
+// size, position, install-mileage, install-date. The "Add tire" CTA
+// links to a create form (kept simple — just a modal here so the
+// fleet manager doesn't bounce to another page for a 30-second op).
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { Disc, Plus } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { formatDateAr } from "@/lib/formatters";
+import {
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  PageShell,
+} from "@workspace/ui-core";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { useToast } from "@/hooks/use-toast";
+
+const POSITION_LABEL: Record<string, string> = {
+  front_left: "أمامي يسار",
+  front_right: "أمامي يمين",
+  rear_left: "خلفي يسار",
+  rear_right: "خلفي يمين",
+  spare: "احتياطي",
+  extra: "إضافي",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  active: "نشط",
+  rotated: "تم تدويره",
+  replaced: "تم استبداله",
+  discarded: "خارج الخدمة",
+};
+
+export default function TiresPage() {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const { data: tiresResp, isLoading, isError, refetch } = useApiQuery<any>(
+    ["fleet-tires"], "/fleet/tires"
+  );
+  const { data: vehiclesResp } = useApiQuery<any>(
+    ["fleet-vehicles-for-tires"], "/fleet/vehicles?limit=500"
+  );
+  const tires = asList(tiresResp);
+  const vehicles = asList(vehiclesResp);
+  const [filters, setFilters] = useFilters();
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({
+    vehicleId: "",
+    position: "front_left",
+    brand: "",
+    size: "",
+    installMileage: "",
+    installDate: "",
+    notes: "",
+  });
+
+  const createMut = useApiMutation("/fleet/tires", "POST");
+
+  const filtered = applyFilters(tires, filters, { searchFields: ["plateNumber", "brand", "size"] });
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "plateNumber",
+      header: "المركبة",
+      sortable: true,
+      className: "font-mono",
+      render: (t) => t.plateNumber || `#${t.vehicleId}`,
+    },
+    {
+      key: "position",
+      header: "الموقع",
+      sortable: true,
+      render: (t) => POSITION_LABEL[t.position] || t.position,
+    },
+    { key: "brand", header: "البراند", sortable: true, render: (t) => t.brand || "—" },
+    { key: "size", header: "المقاس", sortable: true, className: "font-mono", render: (t) => t.size || "—" },
+    {
+      key: "installMileage",
+      header: "عند التركيب (كم)",
+      sortable: true,
+      className: "text-end",
+      render: (t) => t.installMileage ? Number(t.installMileage).toLocaleString("ar-SA") : "—",
+    },
+    { key: "installDate", header: "تاريخ التركيب", sortable: true, render: (t) => formatDateAr(t.installDate) },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (t) => STATUS_LABEL[t.status] || t.status,
+    },
+  ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
+
+  return (
+    <PageShell
+      title="إطارات الأسطول"
+      breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "الإطارات" }]}
+      loading={isLoading}
+      actions={
+        <GuardedButton perm="fleet.maintenance:create" onClick={() => setShowCreate((v) => !v)} data-testid="button-add-tire">
+          <Plus className="h-4 w-4 me-1" />
+          {showCreate ? "إلغاء" : "إضافة إطار"}
+        </GuardedButton>
+      }
+    >
+      <FleetTabsNav />
+
+      {showCreate && (
+        <div className="rounded-lg border bg-white p-4 mb-4 space-y-3" data-testid="form-create-tire">
+          <h3 className="text-lg font-semibold">تسجيل إطار جديد</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>المركبة *</Label>
+              <select
+                className="w-full h-10 border rounded-md px-2"
+                data-testid="select-vehicle"
+                value={form.vehicleId}
+                onChange={(e) => setForm((v) => ({ ...v, vehicleId: e.target.value }))}
+              >
+                <option value="">— اختر مركبة —</option>
+                {vehicles.map((v: any) => (
+                  <option key={v.id} value={v.id}>{v.plateNumber} {v.brand ? `(${v.brand})` : ""}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>الموقع *</Label>
+              <select
+                className="w-full h-10 border rounded-md px-2"
+                data-testid="select-position"
+                value={form.position}
+                onChange={(e) => setForm((v) => ({ ...v, position: e.target.value }))}
+              >
+                {Object.entries(POSITION_LABEL).map(([k, lbl]) => (
+                  <option key={k} value={k}>{lbl}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>البراند</Label>
+              <Input data-testid="input-brand" value={form.brand} onChange={(e) => setForm((v) => ({ ...v, brand: e.target.value }))} />
+            </div>
+            <div>
+              <Label>المقاس (مثال 215/65 R16)</Label>
+              <Input data-testid="input-size" value={form.size} onChange={(e) => setForm((v) => ({ ...v, size: e.target.value }))} />
+            </div>
+            <div>
+              <Label>عداد المركبة عند التركيب (كم)</Label>
+              <Input
+                type="number"
+                data-testid="input-install-mileage"
+                value={form.installMileage}
+                onChange={(e) => setForm((v) => ({ ...v, installMileage: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>تاريخ التركيب</Label>
+              <Input
+                type="date"
+                data-testid="input-install-date"
+                value={form.installDate}
+                onChange={(e) => setForm((v) => ({ ...v, installDate: e.target.value }))}
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>ملاحظات</Label>
+              <Input data-testid="input-notes" value={form.notes} onChange={(e) => setForm((v) => ({ ...v, notes: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              data-testid="button-submit-tire"
+              disabled={!form.vehicleId || createMut.isPending}
+              onClick={async () => {
+                try {
+                  await createMut.mutateAsync({
+                    vehicleId: Number(form.vehicleId),
+                    position: form.position,
+                    brand: form.brand || undefined,
+                    size: form.size || undefined,
+                    installMileage: form.installMileage ? Number(form.installMileage) : undefined,
+                    installDate: form.installDate || undefined,
+                    notes: form.notes || undefined,
+                  });
+                  toast({ title: "تم تسجيل الإطار" });
+                  setForm({ vehicleId: "", position: "front_left", brand: "", size: "", installMileage: "", installDate: "", notes: "" });
+                  setShowCreate(false);
+                  await refetch();
+                } catch (err: any) {
+                  toast({ title: "فشل التسجيل", description: err?.message ?? "خطأ", variant: "destructive" });
+                }
+              }}
+            >
+              {createMut.isPending ? "جارٍ الحفظ..." : "حفظ"}
+            </Button>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>
+          </div>
+        </div>
+      )}
+
+      <AdvancedFilters
+        config={{ searchPlaceholder: "ابحث بـ رقم اللوحة، البراند، المقاس..." }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
+
+      <DataTable
+        columns={columns}
+        data={filtered}
+        rowKey={(t: any) => t.id}
+        isLoading={isLoading}
+        isError={isError}
+        emptyMessage="لا توجد إطارات مسجلة. ابدأ بتسجيل أول إطار من زر 'إضافة إطار'."
+        emptyIcon={<Disc className="h-6 w-6 text-slate-400" />}
+      />
+    </PageShell>
+  );
+}

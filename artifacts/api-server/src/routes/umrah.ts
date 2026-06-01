@@ -778,18 +778,73 @@ router.get("/packages/:id", authorize({ feature: "umrah", action: "view" }), asy
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Defence-in-depth on the season JOIN — same pattern landed on
+    // groups/:id and sub-agents/:id. Without companyId a stale row
+    // could leak a title from another tenant.
     const [row] = await rawQuery(
-      `SELECT p.*, s.title AS "seasonTitle" FROM umrah_packages p
-       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id AND s."deletedAt" IS NULL
-       WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+      `SELECT p.*, s.title AS "seasonTitle"
+         FROM umrah_packages p
+    LEFT JOIN umrah_seasons s
+           ON p."seasonId" = s.id
+          AND s."companyId" = p."companyId"
+          AND s."deletedAt" IS NULL
+        WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("الباقة غير موجودة"); }
-    const pilgrims = await rawQuery(
-      `SELECT COUNT(*)::int AS c FROM umrah_pilgrims WHERE "packageId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    res.json(maskFields(req, { ...row, pilgrimCount: pilgrims[0]?.c || 0 }));
+
+    // Aggregates — the page already needs "how many pilgrims on this
+    // package" and "what's its revenue/cost picture". One roundtrip
+    // via Promise.all so loading the detail page stays snappy on
+    // large seasons.
+    const [statusRows, marginRow] = await Promise.all([
+      rawQuery<{ status: string; count: string }>(
+        `SELECT status, COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "packageId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          GROUP BY status`,
+        [id, scope.companyId],
+      ),
+      // Pilgrim count × package sellPrice/costPrice → simple revenue
+      // projection. Real revenue lives on invoices but the package
+      // itself doesn't know about invoices — projection is the right
+      // signal for "is this package priced correctly?".
+      rawQuery<{ count: string; sellPrice: string | null; costPrice: string | null }>(
+        `SELECT (SELECT COUNT(*)::text FROM umrah_pilgrims
+                  WHERE "packageId" = p.id AND "companyId" = p."companyId" AND "deletedAt" IS NULL
+                ) AS count,
+                p."sellPrice"::text AS "sellPrice",
+                p."costPrice"::text AS "costPrice"
+           FROM umrah_packages p
+          WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+        [id, scope.companyId],
+      ),
+    ]);
+
+    const statusBreakdown: Record<string, number> = {};
+    let pilgrimCount = 0;
+    for (const r of statusRows) {
+      const n = Number(r.count);
+      statusBreakdown[r.status] = n;
+      pilgrimCount += n;
+    }
+
+    const sell = Number(marginRow[0]?.sellPrice ?? 0);
+    const cost = Number(marginRow[0]?.costPrice ?? 0);
+
+    res.json(maskFields(req, {
+      ...row,
+      pilgrimCount,
+      statusBreakdown,
+      projection: {
+        sellPerPilgrim: sell,
+        costPerPilgrim: cost,
+        marginPerPilgrim: sell - cost,
+        projectedRevenue: sell * pilgrimCount,
+        projectedCost: cost * pilgrimCount,
+        projectedMargin: (sell - cost) * pilgrimCount,
+      },
+    }));
   } catch (err) { handleRouteError(err, res, "Get package error"); }
 });
 
@@ -1808,27 +1863,76 @@ router.get("/penalties", authorize({ feature: "umrah", action: "list" }), async 
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND pen."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND pen.status=$${params.length}`; }
+    // Tenant-scoped JOINs — without companyId guards a stale FK could
+    // surface a pilgrim / agent name from another tenant. Same pattern
+    // landed on /groups/:id (#1485) and /packages/:id (#1496).
     const rows = await rawQuery(
       `SELECT pen.*, p."fullName" as "pilgrimName", p."passportNumber", a.name as "agentName"
-       FROM umrah_penalties pen
-       LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
-       LEFT JOIN umrah_agents a ON pen."agentId"=a.id
-       WHERE ${where} ORDER BY pen."createdAt" DESC LIMIT 500`, params
+         FROM umrah_penalties pen
+    LEFT JOIN umrah_pilgrims p
+           ON pen."pilgrimId" = p.id
+          AND p."companyId"   = pen."companyId"
+          AND p."deletedAt"   IS NULL
+    LEFT JOIN umrah_agents a
+           ON pen."agentId"   = a.id
+          AND a."companyId"   = pen."companyId"
+          AND a."deletedAt"   IS NULL
+        WHERE ${where}
+        ORDER BY pen."createdAt" DESC
+        LIMIT 500`, params
     );
     res.json(maskFields(req, { data: rows.map(decryptPilgrimRow) }));
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
 });
 
-router.get("/penalties/:id", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+router.get("/penalties/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Tenant-scoped JOINs — same defence-in-depth pattern as the list.
+    // Now enriched with season title + created-by name + journal entry
+    // ref + invoice ref so the operator can see the full audit trail
+    // without opening four separate pages.
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT pen.*, p."fullName" AS "pilgrimName", p."passportNumber", a.name AS "agentName"
-       FROM umrah_penalties pen
-       LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
-       LEFT JOIN umrah_agents a ON pen."agentId"=a.id
-       WHERE pen.id=$1 AND pen."companyId"=$2`,
+      `SELECT pen.*,
+              p."fullName" AS "pilgrimName",
+              p."passportNumber",
+              a.name        AS "agentName",
+              s.title       AS "seasonTitle",
+              COALESCE(emp_c.name, uc.email) AS "createdByName",
+              COALESCE(emp_u.name, uu.email) AS "updatedByName",
+              je."ref"      AS "journalEntryRef",
+              inv.ref       AS "invoiceRef"
+         FROM umrah_penalties pen
+    LEFT JOIN umrah_pilgrims p
+           ON pen."pilgrimId" = p.id
+          AND p."companyId"   = pen."companyId"
+          AND p."deletedAt"   IS NULL
+    LEFT JOIN umrah_agents a
+           ON pen."agentId"   = a.id
+          AND a."companyId"   = pen."companyId"
+          AND a."deletedAt"   IS NULL
+    LEFT JOIN umrah_seasons s
+           ON pen."seasonId"  = s.id
+          AND s."companyId"   = pen."companyId"
+          AND s."deletedAt"   IS NULL
+    LEFT JOIN users uc
+           ON uc.id = pen."createdBy"
+    LEFT JOIN employees emp_c
+           ON emp_c.id = uc."employeeId"
+    LEFT JOIN users uu
+           ON uu.id = pen."updatedBy"
+    LEFT JOIN employees emp_u
+           ON emp_u.id = uu."employeeId"
+    LEFT JOIN journal_entries je
+           ON je.id = pen."journalEntryId"
+          AND je."companyId" = pen."companyId"
+          AND je."deletedAt" IS NULL
+    LEFT JOIN umrah_agent_invoices inv
+           ON inv.id = pen."invoiceId"
+          AND inv."companyId" = pen."companyId"
+          AND inv."deletedAt" IS NULL
+        WHERE pen.id = $1 AND pen."companyId" = $2`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("العقوبة غير موجودة");
@@ -2196,28 +2300,70 @@ router.get("/transport/:id", authorize({ feature: "umrah", action: "view" }), as
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Defence in depth on the cross-domain JOINs — fleet_vehicles /
+    // fleet_drivers are shared tables; a stale FK from another tenant
+    // (or a soft-deleted vehicle/driver) was previously surfacing here.
+    // Season JOIN added too so the page can show the season name.
     const [row] = await rawQuery(
-      `SELECT t.*, v."plateNumber" as "vehiclePlate", v.make as "vehicleMake", v.model as "vehicleModel",
-              d.name as "driverName", d.phone as "driverPhone"
-       FROM umrah_transport t
-       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
-       LEFT JOIN fleet_drivers d ON d.id = t."driverId"
-       WHERE t.id=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL`,
+      `SELECT t.*,
+              v."plateNumber" AS "vehiclePlate",
+              v.make          AS "vehicleMake",
+              v.model         AS "vehicleModel",
+              d.name          AS "driverName",
+              d.phone         AS "driverPhone",
+              s.title         AS "seasonTitle"
+         FROM umrah_transport t
+    LEFT JOIN fleet_vehicles v
+           ON v.id = t."vehicleId"
+          AND v."companyId" = t."companyId"
+          AND v."deletedAt" IS NULL
+    LEFT JOIN fleet_drivers d
+           ON d.id = t."driverId"
+          AND d."companyId" = t."companyId"
+          AND d."deletedAt" IS NULL
+    LEFT JOIN umrah_seasons s
+           ON s.id = t."seasonId"
+          AND s."companyId" = t."companyId"
+          AND s."deletedAt" IS NULL
+        WHERE t.id = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("رحلة النقل غير موجودة");
     // C4 (DT-3): the trip's pilgrims come from the join table — not from
     // every company pilgrim that happens to carry the transportAssigned
-    // flag.
-    const pilgrims = await rawQuery(
+    // flag. p."companyId" guard added (defence in depth — the join
+    // table is already tenant-scoped but a stale row could still slip
+    // through if cleanup ever lags).
+    const pilgrims = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p."fullName", p."passportNumber", p.nationality, p.status
-       FROM umrah_transport_pilgrims tp
-       JOIN umrah_pilgrims p ON p.id = tp."pilgrimId"
-       WHERE tp."transportId"=$1 AND tp."companyId"=$2 AND p."deletedAt" IS NULL
-       ORDER BY p."fullName"`,
+         FROM umrah_transport_pilgrims tp
+         JOIN umrah_pilgrims p
+           ON p.id = tp."pilgrimId"
+          AND p."companyId" = tp."companyId"
+          AND p."deletedAt" IS NULL
+        WHERE tp."transportId" = $1 AND tp."companyId" = $2
+        ORDER BY p."fullName"`,
       [id, scope.companyId]
     );
-    res.json(maskFields(req, { ...row, pilgrims }));
+
+    // Aggregate: status mix for the trip's pilgrims + utilisation % so
+    // the operator sees at a glance "how full is this bus?".
+    const statusBreakdown: Record<string, number> = {};
+    for (const p of pilgrims) {
+      const st = String(p.status ?? "unknown");
+      statusBreakdown[st] = (statusBreakdown[st] ?? 0) + 1;
+    }
+    const cap = Number((row as Record<string, unknown>).capacity ?? 0);
+    const seats = pilgrims.length;
+    const utilisation = cap > 0 ? Math.round((seats / cap) * 100) : 0;
+
+    res.json(maskFields(req, {
+      ...(row as Record<string, unknown>),
+      pilgrims,
+      statusBreakdown,
+      seatsBooked: seats,
+      utilisationPct: utilisation,
+    }));
   } catch (err) { handleRouteError(err, res, "Get transport error"); }
 });
 

@@ -5,6 +5,7 @@ const UmrahDashboard = lazy(() => import("@/pages/umrah/dashboard"));
 const UmrahPilgrims = lazy(() => import("@/pages/umrah/pilgrims"));
 const UmrahAgents = lazy(() => import("@/pages/umrah/agents"));
 const UmrahSeasons = lazy(() => import("@/pages/umrah/seasons"));
+const UmrahAccommodations = lazy(() => import("@/pages/umrah/accommodations"));
 const UmrahPenalties = lazy(() => import("@/pages/umrah/penalties"));
 const UmrahPayments = lazy(() => import("@/pages/umrah/payments"));
 const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
@@ -57,6 +58,9 @@ const UmrahSettings = lazy(() => import("@/pages/umrah/settings"));
 // Compliance rollup for the overstayExempt flag (PR #1482-1484) — shows
 // everyone currently exempt + the authoriser + reason in one screen.
 const UmrahExemptPilgrims = lazy(() => import("@/pages/umrah/exempt-pilgrims"));
+// Compliance dashboard — folds exempt + visa-expiring + overstay +
+// unpaid penalties into 4 KPI tiles + drill-down links.
+const UmrahCompliance = lazy(() => import("@/pages/umrah/compliance"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -71,6 +75,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/agents", component: UmrahAgents, module: "operations" },
   { path: "/umrah/agents/:id", component: UmrahAgentDetail, module: "operations" },
   { path: "/umrah/seasons", component: UmrahSeasons, module: "operations" },
+  { path: "/umrah/accommodations", component: UmrahAccommodations, module: "operations" },
   { path: "/umrah/seasons/:id", component: UmrahSeasonDetail, module: "operations" },
   { path: "/umrah/penalties", component: UmrahPenalties, module: "operations" },
   { path: "/umrah/penalties/:id", component: UmrahPenaltyDetail, module: "operations" },
@@ -97,6 +102,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/import", component: UmrahImportWizard, module: "operations" },
   { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
   { path: "/umrah/exempt-pilgrims", component: UmrahExemptPilgrims, module: "operations" },
+  { path: "/umrah/compliance", component: UmrahCompliance, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },

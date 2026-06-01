@@ -2305,8 +2305,448 @@ router.get("/reports/exempt-pilgrims", authorize({ feature: "umrah", action: "li
   } catch (err) { handleRouteError(err, res, "Exempt pilgrims report"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Group portfolio P&L — "which groups make money?". Mirrors the agent
+// portfolio page (PR #1222) but at the group granularity. Operators wanted a
+// rollup that answers "is this season profitable?" without opening every group
+// detail one by one.
+//
+// Revenue per group: SUM(umrah_sales_invoice_items.lineTotal) for non-
+// cancelled invoices — items table holds the groupId (header doesn't).
+// Cost per group: SUM(umrah_nusk_invoices.netCost) for non-cancelled rows
+// directly linked via groupId. Margin = revenue − cost.
+//
+// Single query with two LATERAL subqueries so even a 500-group season returns
+// in one roundtrip. Tenant-scoped at every JOIN.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/group-portfolio", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, limit: limitStr } = req.query as Record<string, string | undefined>;
+    const limit = Math.min(Math.max(Number(limitStr ?? "50") || 50, 1), 500);
+
+    const params: unknown[] = [scope.companyId];
+    let seasonClause = "";
+    if (seasonId) { params.push(Number(seasonId)); seasonClause = ` AND g."seasonId" = $${params.length}`; }
+    params.push(limit);
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT g.id, g.name, g."nuskGroupNumber", g.status, g."seasonId",
+              s.title AS "seasonTitle",
+              g."agentId", a.name AS "agentName",
+              g."mutamerCount" AS "expectedPilgrims",
+              (SELECT COUNT(*)::int FROM umrah_pilgrims p
+                WHERE p."groupId" = g.id AND p."companyId" = g."companyId" AND p."deletedAt" IS NULL
+              ) AS "actualPilgrims",
+              COALESCE(sales.revenue, 0) AS revenue,
+              COALESCE(sales.paid, 0)    AS paid,
+              COALESCE(nusk.cost, 0)     AS cost,
+              (COALESCE(sales.revenue, 0) - COALESCE(nusk.cost, 0))::numeric(12,2) AS margin
+         FROM umrah_groups g
+    LEFT JOIN umrah_seasons s
+           ON s.id = g."seasonId" AND s."companyId" = g."companyId" AND s."deletedAt" IS NULL
+    LEFT JOIN umrah_agents a
+           ON a.id = g."agentId" AND a."companyId" = g."companyId" AND a."deletedAt" IS NULL
+    LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(DISTINCT si.total), 0) AS revenue,
+                  COALESCE(SUM(DISTINCT si."paidAmount"), 0) AS paid
+             FROM umrah_sales_invoice_items it
+             JOIN umrah_sales_invoices si
+               ON si.id = it."invoiceId" AND si."companyId" = g."companyId" AND si."deletedAt" IS NULL
+            WHERE it."groupId" = g.id
+              AND it."companyId" = g."companyId"
+              AND it."deletedAt" IS NULL
+              AND si.status <> 'cancelled'
+         ) sales ON true
+    LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM("netCost"), 0) AS cost
+             FROM umrah_nusk_invoices ni
+            WHERE ni."groupId" = g.id
+              AND ni."companyId" = g."companyId"
+              AND ni."deletedAt" IS NULL
+              AND ni."nuskStatus" <> 'cancelled'
+         ) nusk ON true
+        WHERE g."companyId" = $1
+          AND g."deletedAt" IS NULL${seasonClause}
+        ORDER BY margin DESC
+        LIMIT $${params.length}`,
+      params,
+    );
+
+    const totals = rows.reduce<{ revenue: number; cost: number; paid: number; margin: number }>(
+      (acc, r) => ({
+        revenue: acc.revenue + Number(r.revenue ?? 0),
+        cost:    acc.cost    + Number(r.cost ?? 0),
+        paid:    acc.paid    + Number(r.paid ?? 0),
+        margin:  acc.margin  + Number(r.margin ?? 0),
+      }),
+      { revenue: 0, cost: 0, paid: 0, margin: 0 },
+    );
+
+    res.json(maskFields(req, {
+      data: rows,
+      total: rows.length,
+      totals,
+    }));
+  } catch (err) { handleRouteError(err, res, "Group portfolio report"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Season portfolio P&L — "which seasons make money?". Companion to
+// /reports/group-portfolio (PR #1495) at the season grain. Operators
+// compare seasons across years/durations without opening each season
+// detail one by one.
+//
+// Revenue per season: SUM(umrah_sales_invoices.total) — invoice header
+// carries seasonId directly (unlike groups where we JOIN through items).
+// Cost per season: SUM(umrah_nusk_invoices.netCost) reached through
+// the group's seasonId since nusk has no seasonId column.
+//
+// Single roundtrip — no per-row fan-out. Tenant-scoped on every reach.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/season-portfolio", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status, limit: limitStr } = req.query as Record<string, string | undefined>;
+    const limit = Math.min(Math.max(Number(limitStr ?? "50") || 50, 1), 200);
+
+    const params: unknown[] = [scope.companyId];
+    let statusClause = "";
+    if (status) { params.push(status); statusClause = ` AND s.status = $${params.length}`; }
+    params.push(limit);
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT s.id, s.title, s.status, s."hijriYear", s."startDate", s."endDate",
+              (SELECT COUNT(*)::int FROM umrah_pilgrims p
+                WHERE p."seasonId" = s.id AND p."companyId" = s."companyId" AND p."deletedAt" IS NULL
+              ) AS "pilgrimsCount",
+              (SELECT COUNT(*)::int FROM umrah_groups g
+                WHERE g."seasonId" = s.id AND g."companyId" = s."companyId" AND g."deletedAt" IS NULL
+              ) AS "groupsCount",
+              COALESCE(sales.revenue, 0) AS revenue,
+              COALESCE(sales.paid, 0)    AS paid,
+              COALESCE(nusk.cost, 0)     AS cost,
+              (COALESCE(sales.revenue, 0) - COALESCE(nusk.cost, 0))::numeric(12,2) AS margin
+         FROM umrah_seasons s
+    LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(total), 0) AS revenue,
+                  COALESCE(SUM("paidAmount"), 0) AS paid
+             FROM umrah_sales_invoices
+            WHERE "seasonId"  = s.id
+              AND "companyId" = s."companyId"
+              AND "deletedAt" IS NULL
+              AND status <> 'cancelled'
+         ) sales ON true
+    LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(ni."netCost"), 0) AS cost
+             FROM umrah_nusk_invoices ni
+            WHERE ni."companyId" = s."companyId"
+              AND ni."deletedAt" IS NULL
+              AND ni."nuskStatus" <> 'cancelled'
+              AND ni."groupId" IN (
+                SELECT id FROM umrah_groups
+                 WHERE "seasonId" = s.id
+                   AND "companyId" = s."companyId"
+                   AND "deletedAt" IS NULL
+              )
+         ) nusk ON true
+        WHERE s."companyId" = $1 AND s."deletedAt" IS NULL${statusClause}
+        ORDER BY margin DESC
+        LIMIT $${params.length}`,
+      params,
+    );
+
+    const totals = rows.reduce<{ revenue: number; cost: number; paid: number; margin: number }>(
+      (acc, r) => ({
+        revenue: acc.revenue + Number(r.revenue ?? 0),
+        cost:    acc.cost    + Number(r.cost ?? 0),
+        paid:    acc.paid    + Number(r.paid ?? 0),
+        margin:  acc.margin  + Number(r.margin ?? 0),
+      }),
+      { revenue: 0, cost: 0, paid: 0, margin: 0 },
+    );
+
+    res.json(maskFields(req, {
+      data: rows,
+      total: rows.length,
+      totals,
+    }));
+  } catch (err) { handleRouteError(err, res, "Season portfolio report"); }
+});
+
 // ============================================================================
 // DASHBOARD
 // ============================================================================
+
+// ============================================================================
+// N6 — UMRAH ACCOMMODATION (hotels, room blocks, room allocations)
+// Closes N6 from CRITICAL_DEFECTS_REPORT.md. Replaces the pre-fix
+// "hotelName free string on umrah_pilgrims" with a real 3-table model.
+// ============================================================================
+
+const createHotelSchema = z.object({
+  name: z.string().min(1).max(200),
+  nameEn: z.string().max(200).optional(),
+  city: z.string().max(60).optional(),
+  address: z.string().optional(),
+  starRating: z.coerce.number().int().min(1).max(7).optional(),
+  contactName: z.string().max(120).optional(),
+  contactPhone: z.string().max(40).optional(),
+  notes: z.string().optional(),
+});
+const updateHotelSchema = createHotelSchema.partial();
+
+router.get("/hotels", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const city = req.query.city ? String(req.query.city) : null;
+    const params: unknown[] = [scope.companyId];
+    let sql = `SELECT * FROM umrah_hotels WHERE "companyId" = $1 AND "deletedAt" IS NULL`;
+    if (city) { params.push(city); sql += ` AND city = $${params.length}`; }
+    sql += ` ORDER BY name ASC LIMIT 500`;
+    const rows = await rawQuery(sql, params).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "hotels list error"); }
+});
+
+router.post("/hotels", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createHotelSchema.safeParse(req.body));
+    const { insertId } = await rawExecute(
+      `INSERT INTO umrah_hotels ("companyId","branchId",name,"nameEn",city,address,"starRating","contactName","contactPhone",notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.companyId, scope.branchId ?? null, b.name, b.nameEn ?? null, b.city ?? null, b.address ?? null, b.starRating ?? null, b.contactName ?? null, b.contactPhone ?? null, b.notes ?? null]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_hotels", entityId: insertId, after: { name: b.name, city: b.city } }).catch(() => undefined);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.hotel.created", entity: "umrah_hotels", entityId: insertId }).catch(() => undefined);
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "hotels create error"); }
+});
+
+router.patch("/hotels/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updateHotelSchema.safeParse(req.body));
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    const set = (col: string, val: unknown) => { params.push(val); sets.push(`"${col}" = $${params.length}`); };
+    for (const k of ["name", "nameEn", "city", "address", "starRating", "contactName", "contactPhone", "notes"] as const) {
+      if ((b as any)[k] !== undefined) set(k, (b as any)[k]);
+    }
+    if (!sets.length) { res.json({ ok: true, updated: 0 }); return; }
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(id, scope.companyId);
+    await rawExecute(
+      `UPDATE umrah_hotels SET ${sets.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
+      params
+    );
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "hotels update error"); }
+});
+
+router.delete("/hotels/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(
+      `UPDATE umrah_hotels SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "hotels delete error"); }
+});
+
+// Room blocks
+
+const createBlockSchema = z.object({
+  hotelId: z.coerce.number().int().positive(),
+  seasonId: z.coerce.number().int().positive().optional(),
+  checkInDate: z.string().optional(),
+  checkOutDate: z.string().optional(),
+  roomType: z.enum(["single", "double", "triple", "quad", "suite"]).optional(),
+  totalRooms: z.coerce.number().int().nonnegative(),
+  ratePerNight: z.coerce.number().nonnegative().optional(),
+  currency: z.string().length(3).optional(),
+  notes: z.string().optional(),
+});
+
+router.get("/room-blocks", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const hotelId = req.query.hotelId ? Number(req.query.hotelId) : null;
+    const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
+    const params: unknown[] = [scope.companyId];
+    let sql = `SELECT b.*, h.name AS "hotelName", h.city AS "hotelCity",
+                      (SELECT COUNT(*) FROM umrah_room_allocations a
+                        WHERE a."blockId" = b.id AND a."deletedAt" IS NULL) AS "allocatedCount"
+                 FROM umrah_room_blocks b
+                 LEFT JOIN umrah_hotels h ON h.id = b."hotelId" AND h."deletedAt" IS NULL
+                WHERE b."companyId" = $1 AND b."deletedAt" IS NULL`;
+    if (hotelId) { params.push(hotelId); sql += ` AND b."hotelId" = $${params.length}`; }
+    if (seasonId) { params.push(seasonId); sql += ` AND b."seasonId" = $${params.length}`; }
+    sql += ` ORDER BY b."checkInDate" DESC NULLS LAST LIMIT 500`;
+    const rows = await rawQuery(sql, params).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "room-blocks list error"); }
+});
+
+router.post("/room-blocks", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createBlockSchema.safeParse(req.body));
+    const [hotel] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_hotels WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [b.hotelId, scope.companyId]
+    );
+    if (!hotel) throw new ValidationError("الفندق غير موجود", { field: "hotelId" });
+    const { insertId } = await rawExecute(
+      `INSERT INTO umrah_room_blocks ("companyId","hotelId","seasonId","checkInDate","checkOutDate","roomType","totalRooms","ratePerNight",currency,notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.companyId, b.hotelId, b.seasonId ?? null, b.checkInDate ?? null, b.checkOutDate ?? null, b.roomType ?? null, b.totalRooms, b.ratePerNight ?? null, b.currency ?? 'SAR', b.notes ?? null]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_room_blocks", entityId: insertId, after: { hotelId: b.hotelId, seasonId: b.seasonId, totalRooms: b.totalRooms } }).catch(() => undefined);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.room_block.created", entity: "umrah_room_blocks", entityId: insertId }).catch(() => undefined);
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "room-blocks create error"); }
+});
+
+// Allocations
+
+const allocateSchema = z.object({
+  blockId: z.coerce.number().int().positive(),
+  pilgrimId: z.coerce.number().int().positive(),
+  roomNumber: z.string().max(40).optional(),
+  occupants: z.coerce.number().int().min(1).max(9).optional(),
+  checkInAt: z.string().optional(),
+});
+
+router.get("/room-blocks/:id/allocations", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery(
+      `SELECT a.*, p.name AS "pilgrimName", p."passportNumber"
+         FROM umrah_room_allocations a
+         LEFT JOIN umrah_pilgrims p ON p.id = a."pilgrimId" AND p."deletedAt" IS NULL
+        WHERE a."companyId" = $1 AND a."blockId" = $2 AND a."deletedAt" IS NULL
+        ORDER BY a."roomNumber" NULLS LAST, a.id`,
+      [scope.companyId, id]
+    ).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "allocations list error"); }
+});
+
+router.post("/room-allocations", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(allocateSchema.safeParse(req.body));
+    // Capacity guard: don't exceed totalRooms for this block.
+    const [stats] = await rawQuery<{ totalRooms: number; allocatedCount: string }>(
+      `SELECT b."totalRooms",
+              (SELECT COUNT(*) FROM umrah_room_allocations a
+                WHERE a."blockId" = b.id AND a."deletedAt" IS NULL)::text AS "allocatedCount"
+         FROM umrah_room_blocks b
+        WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL`,
+      [b.blockId, scope.companyId]
+    );
+    if (!stats) throw new ValidationError("بلوك الغرف غير موجود", { field: "blockId" });
+    if (Number(stats.allocatedCount) >= Number(stats.totalRooms)) {
+      throw new ValidationError("تم استنفاد كل غرف هذا البلوك", { field: "blockId" });
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO umrah_room_allocations ("companyId","blockId","pilgrimId","roomNumber",occupants,"checkInAt")
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [scope.companyId, b.blockId, b.pilgrimId, b.roomNumber ?? null, b.occupants ?? 1, b.checkInAt ?? null]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_room_allocations", entityId: insertId, after: { blockId: b.blockId, pilgrimId: b.pilgrimId } }).catch(() => undefined);
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "allocate error"); }
+});
+
+router.delete("/room-allocations/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(
+      `UPDATE umrah_room_allocations SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "deallocate error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compliance dashboard — one screen, four numbers. Mirrors the existing
+// exempt + visa-expiring + overstay + unpaid-penalties splits that
+// previously lived on four separate pages. Each metric is a COUNT query
+// scoped by tenant + soft-delete; together they answer "what's my
+// compliance exposure today?".
+//
+// Optional ?seasonId narrows every metric to a single season — the audit
+// officer typically reviews the active season's risk.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/compliance", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let seasonP = "";
+    let seasonPenP = "";
+    if (seasonId) {
+      params.push(Number(seasonId));
+      seasonP   = ` AND p."seasonId" = $${params.length}`;
+      seasonPenP = ` AND pen."seasonId" = $${params.length}`;
+    }
+
+    const [exemptRow, visaRow, overstayRow, penaltyRow] = await Promise.all([
+      // Currently exempt (PR #1482-1484 flag)
+      rawQuery<{ c: string }>(
+        `SELECT COUNT(*)::text AS c
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
+            AND p."overstayExempt" = true${seasonP}`,
+        params,
+      ),
+      // Visa-expiring within 7d (same window as the list-page banner)
+      rawQuery<{ c: string }>(
+        `SELECT COUNT(*)::text AS c
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
+            AND p."visaExpiry" IS NOT NULL
+            AND p."visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
+            AND p.status NOT IN ('departed', 'cancelled')${seasonP}`,
+        params,
+      ),
+      // Currently overstaying (status + the auto-flagged penalty status)
+      rawQuery<{ c: string }>(
+        `SELECT COUNT(*)::text AS c
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
+            AND p.status IN ('overstayed', 'overstay_penalized')${seasonP}`,
+        params,
+      ),
+      // Unpaid penalties — anything not paid/waived. Status check uses
+      // the umrah_penalties.status enum (pending/invoiced/paid/waived).
+      rawQuery<{ c: string; total: string }>(
+        `SELECT COUNT(*)::text AS c,
+                COALESCE(SUM(pen.amount), 0)::text AS total
+           FROM umrah_penalties pen
+          WHERE pen."companyId" = $1
+            AND pen.status NOT IN ('paid', 'waived')${seasonPenP}`,
+        params,
+      ),
+    ]);
+
+    res.json(maskFields(req, {
+      exempt: Number(exemptRow[0]?.c ?? "0"),
+      visaExpiringIn7d: Number(visaRow[0]?.c ?? "0"),
+      currentlyOverstaying: Number(overstayRow[0]?.c ?? "0"),
+      unpaidPenaltiesCount: Number(penaltyRow[0]?.c ?? "0"),
+      unpaidPenaltiesTotal: Number(penaltyRow[0]?.total ?? "0"),
+    }));
+  } catch (err) { handleRouteError(err, res, "Compliance dashboard"); }
+});
 
 export default router;

@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Package, Calendar, Receipt, Bus,
   UserCircle, AlertTriangle, Upload, UserPlus, Tag, Briefcase, ShieldAlert,
-  ClipboardList, Scale, Layers, Paperclip, Sparkles, Shield,
+  ClipboardList, Scale, Layers, Paperclip, Sparkles, Shield, Hotel,
 } from "lucide-react";
 
 const TABS = [
@@ -12,6 +12,7 @@ const TABS = [
   { href: "/umrah/groups", label: "المجموعات", icon: Layers, match: ["/umrah/groups"] },
   { href: "/umrah/packages", label: "الباقات", icon: Package, match: ["/umrah/packages"] },
   { href: "/umrah/seasons", label: "المواسم", icon: Calendar, match: ["/umrah/seasons"] },
+  { href: "/umrah/accommodations", label: "الإقامة", icon: Hotel, match: ["/umrah/accommodations"] },
   { href: "/umrah/agents", label: "الوكلاء", icon: UserCircle, match: ["/umrah/agents"] },
   { href: "/umrah/sub-agents", label: "الوكلاء الفرعيون", icon: UserPlus, match: ["/umrah/sub-agents"] },
   { href: "/umrah/pricing", label: "التسعير", icon: Tag, match: ["/umrah/pricing"] },
@@ -24,6 +25,7 @@ const TABS = [
   { href: "/umrah/import", label: "الاستيراد", icon: Upload, match: ["/umrah/import"] },
   { href: "/umrah/daily-runsheet", label: "كشف اليوم", icon: ClipboardList, match: ["/umrah/daily-runsheet"] },
   { href: "/umrah/exempt-pilgrims", label: "المستثنون", icon: Shield, match: ["/umrah/exempt-pilgrims"] },
+  { href: "/umrah/compliance", label: "لوحة الامتثال", icon: AlertTriangle, match: ["/umrah/compliance"] },
   { href: "/umrah/reconciliation", label: "المطابقة", icon: Scale, match: ["/umrah/reconciliation"] },
   { href: "/umrah/attachments", label: "المرفقات", icon: Paperclip, match: ["/umrah/attachments"] },
 ];
