@@ -7,16 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, Pencil, RefreshCw, AlertTriangle, Trash2, Plus, Eye } from "lucide-react";
@@ -398,27 +389,18 @@ export default function DisciplineRegulationPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={reseedAsk} onOpenChange={(v) => { if (!v) setReseedAsk(false); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>استنساخ اللائحة الافتراضية</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم استنساخ اللائحة الافتراضية (49 مادة) للشركة. هل تريد المتابعة؟
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setReseedAsk(false)}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setReseedAsk(false);
-                reseedMut.mutate({});
-              }}
-            >
-              استنساخ
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={reseedAsk}
+        onOpenChange={(v) => { if (!v) setReseedAsk(false); }}
+        variant="caution"
+        title="استنساخ اللائحة الافتراضية"
+        description="سيتم استنساخ اللائحة الافتراضية (49 مادة) للشركة. هل تريد المتابعة؟"
+        confirmLabel="استنساخ"
+        onConfirm={() => {
+          setReseedAsk(false);
+          reseedMut.mutate({});
+        }}
+      />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

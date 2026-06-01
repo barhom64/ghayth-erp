@@ -19263,3 +19263,99 @@ CREATE TABLE public.zatca_submission_log (
     CONSTRAINT "zatca_submission_log_entityType_check" CHECK ((("entityType")::text = ANY (ARRAY[('invoice'::character varying)::text, ('expense'::character varying)::text]))),
     CONSTRAINT zatca_submission_log_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('submitted'::character varying)::text, ('accepted'::character varying)::text, ('rejected'::character varying)::text, ('error'::character varying)::text])))
 );
+
+
+--
+-- Name: cargo_manifests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cargo_manifests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "manifestNumber" character varying(64) NOT NULL,
+    status character varying(24) DEFAULT 'draft'::character varying NOT NULL,
+    "customerId" integer,
+    "customerName" character varying(255),
+    "customerPhone" character varying(64),
+    "fleetTripId" integer,
+    "fromLocation" character varying(255),
+    "toLocation" character varying(255),
+    "pickupDate" date,
+    "deliveryDate" date,
+    "vehicleId" integer,
+    "driverId" integer,
+    "totalWeight" numeric(12,2) DEFAULT 0,
+    "totalDeclaredValue" numeric(14,2) DEFAULT 0,
+    "freightRevenue" numeric(14,2) DEFAULT 0,
+    "freightCost" numeric(14,2) DEFAULT 0,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'confirmed'::character varying, 'loading'::character varying, 'in_transit'::character varying, 'delivered'::character varying, 'closed'::character varying, 'cancelled'::character varying])::text[])))
+);
+
+
+--
+-- Name: cargo_manifests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.cargo_manifests_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: cargo_manifests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.cargo_manifests_id_seq OWNED BY public.cargo_manifests.id;
+
+
+--
+-- Name: cargo_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cargo_items (
+    id integer NOT NULL,
+    "manifestId" integer NOT NULL,
+    "companyId" integer NOT NULL,
+    description character varying(255) NOT NULL,
+    quantity integer DEFAULT 1 NOT NULL,
+    "unitOfMeasure" character varying(32) DEFAULT 'piece'::character varying,
+    weight numeric(12,2) DEFAULT 0,
+    "declaredValue" numeric(14,2) DEFAULT 0,
+    dimensions jsonb,
+    "isHazmat" boolean DEFAULT false NOT NULL,
+    "hazmatClass" character varying(32),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+--
+-- Name: cargo_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.cargo_items_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: cargo_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.cargo_items_id_seq OWNED BY public.cargo_items.id;

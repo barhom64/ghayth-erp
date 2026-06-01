@@ -81,7 +81,9 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 40 },
   { path: "/obligations", component: Obligations, module: "operations" },
   { path: "/calendar", component: CalendarPage },
-  { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 60 },
+  // Agent-5 (route↔backend consistency): /api/exec-dashboard mounts with
+  // requireMinLevel(70). Route gate raised from 60 → 70 to match.
+  { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 70 },
   { path: "/manager-board", component: ManagerBoard, minRoleLevel: 40 },
   { path: "/manager-board/reprint-approvals", component: ReprintApprovals, minRoleLevel: 40 },
   { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 40 },

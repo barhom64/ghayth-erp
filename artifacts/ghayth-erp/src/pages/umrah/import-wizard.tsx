@@ -15,6 +15,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber, todayLocal } from "@/lib/formatters";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { Upload, CheckCircle2, AlertTriangle, Link2, ArrowRight, FileSpreadsheet, AlertOctagon } from "lucide-react";
 
 type FileType = "mutamers" | "vouchers";
@@ -48,40 +49,46 @@ function formatSamplePreview(sample: Record<string, unknown>): string {
   return entries.map(([k, v]) => `${k}: ${String(v)}`).join(" · ");
 }
 
-function csvEscape(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  const s = String(value);
-  // Quote when the cell contains the CSV delimiters, a newline, or the
-  // quote char itself; double internal quotes per RFC 4180.
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-function downloadRejectedRowsCsv(
+/**
+ * Routed through the unified print engine (csvAdapter) so the export
+ * shows up in `/reports/print-log` alongside every other CSV produced
+ * by the platform. The column list is dynamic — sample keys are the
+ * union across all error rows — but the engine expects a fixed
+ * `columns` projection, which we materialize per-call below.
+ */
+async function downloadRejectedRowsCsv(
   errors: NonNullable<PreviewSummary["errors"]>,
   fileType: FileType,
-): void {
-  // CSV is opened in Excel/Sheets, which detect UTF-8 reliably only when
-  // a BOM is present at the start of the file — without it Arabic
-  // headers render as mojibake.
-  const BOM = "﻿";
+): Promise<void> {
   const sampleKeys = Array.from(
     new Set(errors.flatMap((e) => (e.sample ? Object.keys(e.sample) : []))),
   );
-  const header = ["row", "field", "reason", ...sampleKeys].map(csvEscape).join(",");
+  // Flatten each error row into a plain record matching the projection
+  // columns below. csvAdapter handles BOM / RFC 4180 quoting / Arabic
+  // headers on the server side.
   const rows = errors.map((e) => {
-    const sampleCols = sampleKeys.map((k) => csvEscape(e.sample?.[k] ?? ""));
-    return [csvEscape(e.row), csvEscape(e.fieldName ?? ""), csvEscape(e.message), ...sampleCols].join(",");
+    const flat: Record<string, unknown> = {
+      row: e.row,
+      field: e.fieldName ?? "",
+      reason: e.message,
+    };
+    for (const k of sampleKeys) {
+      flat[`sample_${k}`] = e.sample?.[k] ?? "";
+    }
+    return flat;
   });
-  const csv = BOM + [header, ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `umrah-rejected-${fileType}-${todayLocal()}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const columns = [
+    { key: "row", label: "row" },
+    { key: "field", label: "field" },
+    { key: "reason", label: "reason" },
+    ...sampleKeys.map((k) => ({ key: `sample_${k}`, label: k })),
+  ];
+  await exportRowsToCsv({
+    entityType: `report_umrah_rejected_${fileType}`,
+    title: `umrah-rejected-${fileType}-${todayLocal()}`,
+    rows,
+    columns,
+  });
 }
 
 export default function UmrahImportWizard() {

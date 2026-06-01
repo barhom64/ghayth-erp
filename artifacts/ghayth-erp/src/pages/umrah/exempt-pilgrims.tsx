@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -306,34 +307,28 @@ export default function UmrahExemptPilgrims() {
     },
   ];
 
-  // CSV export — same filters as the on-screen table, so the operator
-  // exports exactly what they're looking at. Built client-side from the
-  // already-fetched rows so no extra roundtrip.
+  // GAP_MATRIX item #7 — uses the unified export helper so the
+  // download appears in /reports/print-log with audit + letterhead.
+  // Same filtered rows the operator sees on screen.
   const exportCsv = () => {
-    const header = [
-      "id", "fullName", "nuskNumber", "nationality", "status",
-      "groupName", "agentName", "seasonTitle",
-      "reason", "exemptedByName", "exemptedAt",
-    ];
-    const escape = (v: unknown) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const lines = [
-      header.join(","),
-      ...rows.map((r) => [
-        r.id, r.fullName, r.nuskNumber, r.nationality, r.status,
-        r.groupName, r.agentName, r.seasonTitle,
-        r.reason, r.exemptedByName, r.exemptedAt,
-      ].map(escape).join(",")),
-    ];
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `exempt-pilgrims-${todayLocal()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void exportRowsToCsv({
+      entityType: "report_umrah_exempt_pilgrims",
+      title: `قائمة المعتمرين المعفيين — ${todayLocal()}`,
+      rows: rows as unknown as Record<string, unknown>[],
+      columns: [
+        { key: "id",              label: "id" },
+        { key: "fullName",        label: "fullName" },
+        { key: "nuskNumber",      label: "nuskNumber" },
+        { key: "nationality",     label: "nationality" },
+        { key: "status",          label: "status" },
+        { key: "groupName",       label: "groupName" },
+        { key: "agentName",       label: "agentName" },
+        { key: "seasonTitle",     label: "seasonTitle" },
+        { key: "reason",          label: "reason" },
+        { key: "exemptedByName",  label: "exemptedByName" },
+        { key: "exemptedAt",      label: "exemptedAt" },
+      ],
+    }).catch((err) => console.error("[export] failed", err));
   };
 
   return (

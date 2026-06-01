@@ -15395,6 +15395,55 @@ ALTER TABLE ONLY public.zatca_submission_log
 
 
 --
+-- Cargo / freight module (#1354) — primary keys + sequence defaults
+--
+
+ALTER TABLE ONLY public.cargo_manifests ALTER COLUMN id SET DEFAULT nextval('public.cargo_manifests_id_seq'::regclass);
+ALTER TABLE ONLY public.cargo_items ALTER COLUMN id SET DEFAULT nextval('public.cargo_items_id_seq'::regclass);
+
+ALTER TABLE ONLY public.cargo_manifests
+    ADD CONSTRAINT cargo_manifests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.cargo_items
+    ADD CONSTRAINT cargo_items_pkey PRIMARY KEY (id);
+
+--
+-- Cargo / freight module (#1354) — FKs
+--
+
+ALTER TABLE ONLY public.cargo_manifests
+    ADD CONSTRAINT "cargo_manifests_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.clients(id);
+ALTER TABLE ONLY public.cargo_manifests
+    ADD CONSTRAINT "cargo_manifests_fleetTripId_fkey" FOREIGN KEY ("fleetTripId") REFERENCES public.fleet_trips(id);
+ALTER TABLE ONLY public.cargo_manifests
+    ADD CONSTRAINT "cargo_manifests_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES public.fleet_vehicles(id);
+ALTER TABLE ONLY public.cargo_manifests
+    ADD CONSTRAINT "cargo_manifests_driverId_fkey" FOREIGN KEY ("driverId") REFERENCES public.fleet_drivers(id);
+ALTER TABLE ONLY public.cargo_items
+    ADD CONSTRAINT "cargo_items_manifestId_fkey" FOREIGN KEY ("manifestId") REFERENCES public.cargo_manifests(id) ON DELETE CASCADE;
+
+--
+-- Cargo / freight module (#1354) — indexes
+--
+
+CREATE INDEX idx_cargo_manifests_company
+    ON public.cargo_manifests ("companyId") WHERE "deletedAt" IS NULL;
+CREATE INDEX idx_cargo_manifests_status
+    ON public.cargo_manifests (status, "companyId") WHERE "deletedAt" IS NULL;
+CREATE INDEX idx_cargo_manifests_customer
+    ON public.cargo_manifests ("customerId", "companyId") WHERE "deletedAt" IS NULL;
+CREATE INDEX idx_cargo_manifests_trip
+    ON public.cargo_manifests ("fleetTripId") WHERE "deletedAt" IS NULL AND "fleetTripId" IS NOT NULL;
+CREATE INDEX idx_cargo_manifests_vehicle
+    ON public.cargo_manifests ("vehicleId", "pickupDate" DESC) WHERE "deletedAt" IS NULL AND "vehicleId" IS NOT NULL;
+CREATE INDEX idx_cargo_manifests_driver
+    ON public.cargo_manifests ("driverId", "pickupDate" DESC) WHERE "deletedAt" IS NULL AND "driverId" IS NOT NULL;
+CREATE INDEX idx_cargo_items_manifest
+    ON public.cargo_items ("manifestId") WHERE "deletedAt" IS NULL;
+CREATE INDEX idx_cargo_items_hazmat
+    ON public.cargo_items ("isHazmat", "companyId") WHERE "deletedAt" IS NULL AND "isHazmat" = true;
+
+
+--
 -- PostgreSQL database dump complete
 --
 

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { PageShell } from "@workspace/ui-core";
 import { UserPlus, Shield, HelpCircle, Plus, Trash2, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -137,15 +138,11 @@ export default function UserOnboarding() {
   });
 
   return (
-    <div className="p-6 space-y-6" dir="rtl">
-      <div className="flex items-center gap-3">
-        <UserPlus className="h-7 w-7 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold">مركز المستخدمين والأدوار</h1>
-          <p className="text-muted-foreground text-sm">إنشاء سريع لموظف بحساب وأدوار متعددة، ومراجعة الصلاحيات النهائية، وتفسير القرار</p>
-        </div>
-      </div>
-
+    <PageShell
+      title="مركز المستخدمين والأدوار"
+      subtitle="إنشاء سريع لموظف بحساب وأدوار متعددة، ومراجعة الصلاحيات النهائية، وتفسير القرار"
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/admin", label: "الإدارة" }, { label: "مركز المستخدمين والأدوار" }]}
+    >
       {/* ─── 1) الإنشاء السريع ─── */}
       <Card>
         <CardHeader>
@@ -308,6 +305,6 @@ export default function UserOnboarding() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
