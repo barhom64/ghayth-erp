@@ -133,7 +133,7 @@ export default function TrainingPage() {
     <PageShell
       title="برامج التدريب"
       subtitle="إدارة برامج التدريب وتسجيلات الموظفين"
-      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "برامج التدريب" }]}
       actions={
         <Link href="/hr/training/create">
           <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة برنامج</GuardedButton>

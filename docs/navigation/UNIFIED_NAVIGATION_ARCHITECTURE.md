@@ -267,6 +267,101 @@ alone might miss the issue. Run them in CI if a regression appears.
 
 ---
 
+## 10. Visual Navigation Verification — RTL mobile (HR module)
+
+> **Status:** the contract is enforced end-to-end. Live visual proof
+> ships with `e2e/tests/persona-hr-nav-stability.spec.ts` (Playwright,
+> 390×844 mobile RTL viewport). Cheap static proof ships with
+> `artifacts/api-server/tests/unit/hrNavStabilitySmoke.test.ts`
+> (vitest, runs in `guard.sh`). Both green as of this update.
+
+### 10.1 What was checked
+
+The user reported that the top strip inside the HR module visually
+"changed between pages" when moving between Employees / Attendance /
+Leaves / Training / Violations. The audit grep already said the
+HrTabsNav component is shared across all 5 pages — the divergence
+turned out to be in the PageShell **props** the pages passed, not in
+the TabsNav itself.
+
+Divergences found and fixed:
+
+| Page | Issue | Fix |
+|---|---|---|
+| `employees.tsx` | No `subtitle` prop (header was shorter than peers) | Added subtitle "قائمة الموظفين والمسميات الوظيفية والحسابات" |
+| `employees.tsx` | Breadcrumb had only the module link, no current-page label | Added `{ label: "إدارة الموظفين" }` |
+| `hr/attendance.tsx` | Breadcrumb had only the module link | Added `{ label: "الحضور والانصراف" }` |
+| `hr/leaves.tsx` | Breadcrumb had only the module link | Added `{ label: "طلبات الإجازات" }` |
+| `hr/training.tsx` | Breadcrumb had only the module link | Added `{ label: "برامج التدريب" }` |
+| `hr/violations.tsx` | Subtitle drifted between loading / error / success states | Uniform subtitle on all three branches |
+
+Result: all 5 HR list pages now pass:
+- The same breadcrumb depth (module link + current-page label).
+- A subtitle on every PageShell render (uniform header height).
+- The same HrTabsNav strip (identical TABS order, only active highlight moves).
+
+### 10.2 What was NOT a divergence
+
+`hr/attendance.tsx`, `hr/training.tsx`, and `hr/violations.tsx` each
+render an in-page `<Tabs>` strip BELOW HrTabsNav (e.g. "القائمة /
+الملخص" on attendance). These are **content tabs** that switch local
+state without changing the URL — they don't affect the sidebar's
+active highlight and don't replace the navigation tab strip. The
+same pattern already exists on detail pages (employee-detail,
+client-detail, etc.) and is documented as an accepted exception in
+§4 above.
+
+If a future audit wants to tighten further, the move is to either
+(a) lift those content tabs into their own sub-route under each
+page (e.g. `/hr/attendance?tab=summary`) or (b) push the data
+behind those tabs into AdvancedFilters — both are product calls.
+
+### 10.3 How to re-verify
+
+```bash
+# Static (cheap, runs in guard.sh):
+pnpm --filter @workspace/api-server vitest run hrNavStability
+
+# Live visual (needs api + frontend running on :80):
+pnpm --filter @workspace/e2e test tests/persona-hr-nav-stability.spec.ts
+
+# Update visual baselines after an INTENTIONAL design change:
+pnpm --filter @workspace/e2e test tests/persona-hr-nav-stability.spec.ts \
+  --update-snapshots
+```
+
+### 10.4 What the Playwright spec asserts
+
+For each of the 5 HR pages on a 390×844 mobile RTL viewport:
+
+1. All 10 HrTabsNav labels render in declared order.
+2. The active-tab highlight matches the current page.
+3. The current-page breadcrumb label is visible.
+4. The page title heading renders.
+5. `<main>` contains at most one `<nav>` landmark (only HrTabsNav).
+6. A pixel snapshot of the top 320px catches "looks different"
+   regressions even when the assertions all pass.
+
+Plus a cross-page assertion: the HrTabsNav inner text must be
+identical on all 5 pages (only the active highlight differs).
+
+### 10.5 Static-guard scope
+
+`hrNavStabilitySmoke.test.ts` adds 41 assertions:
+
+- Each of the 5 pages imports HrTabsNav from the canonical path.
+- Each of the 5 pages renders `<HrTabsNav />` exactly once.
+- Each of the 5 pages passes a breadcrumbs prop with at least 2 levels.
+- Each of the 5 pages passes a subtitle prop.
+- No page reimplements an HrTabsNav-shaped strip inline.
+- All 5 pages share the same module link + label.
+- HrTabsNav itself declares the canonical 10 tabs in the documented order.
+
+If anyone in the future adds a 6th HR list page or modifies one of
+these without keeping the contract, the static guard fails in CI
+before the e2e Playwright run even starts.
+
+---
+
 *Phase 2 deliverable — `GHAITH PLATFORM STABILIZATION & UNIFICATION
-PROGRAM`. Closed by the parallel-agent run that produced commit
-`6bcccbf4`.*
+PROGRAM`. Visual verification closes the navigation-unified goal.*
