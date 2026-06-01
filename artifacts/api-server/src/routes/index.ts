@@ -379,20 +379,37 @@ router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);
 router.use("/properties", requireModule("property"), requireGuards("financial"), propertiesRouter);
-router.use("/legal", requireModule("legal"), legalRouter);
+// Agent 7 (visibility consistency sweep) — sidebar gates /legal/cases at
+// level 40 but the mount used to be module-only, so a level-10 employee
+// inside a tenant with the legal module could hit /api/legal/* directly.
+// Floor at 40 mirrors the sidebar promise; per-route authorize() still
+// runs inside legalRouter.
+router.use("/legal", requireModule("legal"), requireMinLevel(40), legalRouter);
 router.use("/projects", requireModule("operations"), projectsRouter);
 router.use("/support", requireModule("support"), supportRouter);
 router.use("/crm", requireModule("crm"), crmRouter);
 router.use("/intelligence", requireModule("bi"), intelligenceRouter);
-router.use("/automation", requireModule("automation"), automationRouter);
-router.use("/communications", requireModule("comms"), communicationsRouter);
+// Agent 7 — sidebar shows الأتمتة only at level 60 + admin:update; the
+// mount used to be module-only. Floor at 60 so direct-URL traffic
+// matches what the menu promises (per-route authorize uses admin:list /
+// admin:update on every call).
+router.use("/automation", requireModule("automation"), requireMinLevel(60), automationRouter);
+// Agent 7 — sidebar gates the comms management surface (مراقبة الاتصالات،
+// محرك الإشعارات) at level 40. /inbox + /mailboxes below stay module-only
+// because their endpoints are still expected to work for every
+// comms-enabled employee; only the broad call/message log needs the
+// manager floor.
+router.use("/communications", requireModule("comms"), requireMinLevel(40), communicationsRouter);
 // User-facing inbox: compose/send + thread view + call log. Lives next
 // to /communications (read-only logs) so the SPA can navigate between
 // them without crossing module boundaries.
 router.use("/inbox", requireModule("comms"), inboxRouter);
 router.use("/mailboxes", requireModule("comms"), mailboxesRouter);
-router.use("/governance", requireModule("governance"), governanceRouter);
-router.use("/bi", requireModule("bi"), biRouter);
+// Agent 7 — sidebar gates الحوكمة والامتثال at level 60 and ذكاء الأعمال
+// at level 40; mounts used to be module-only. Floor both at the sidebar
+// level so direct-URL access matches what the menu shows.
+router.use("/governance", requireModule("governance"), requireMinLevel(60), governanceRouter);
+router.use("/bi", requireModule("bi"), requireMinLevel(40), biRouter);
 router.use("/store", requireModule("store"), requireGuards("financial"), storeRouter);
 router.use("/documents", requireModule("documents"), documentsRouter);
 router.use("/requests", requireModule("requests"), requestsRouter);
@@ -446,7 +463,10 @@ router.use("/approval-actions", approvalActionsRouter);
 router.use("/workflows", workflowsRouter);
 router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
-router.use("/action-center", actionCenterRouter);
+// Agent 7 — sidebar gates مراكز التحكم → مركز القرارات (/action-center)
+// at level 20. Floor the mount to match so a level-10 pre-onboarding
+// account can't reach the action queue via direct URL.
+router.use("/action-center", requireMinLevel(20), actionCenterRouter);
 router.use("/workspace", workspaceRouter);
 router.use("/entity-meta", entityMetaRouter);
 // Mount the umrah limiter once on the /umrah prefix so it runs exactly once per
@@ -492,8 +512,12 @@ router.use("/digital-signature", requireMinLevel(70), digitalSignatureRouter);
 // Event-log access is audit-level; gate the mount at 70 (as /audit-logs).
 router.use("/events", requireMinLevel(70), eventsRouter);
 router.use("/exec-dashboard", requireMinLevel(70), execDashboardRouter);
-router.use("/obligations", obligationsRouter);
-router.use("/calendar", calendarRouter);
+// Agent 7 — sidebar gates مركز الالتزامات (/obligations) at level 30
+// and التقويم الموحد (/calendar) at level 20. Mounts used to have no
+// floor; align them with the sidebar so direct-URL access matches the
+// menu (per-route authorize() inside each router still applies).
+router.use("/obligations", requireMinLevel(30), obligationsRouter);
+router.use("/calendar", requireMinLevel(20), calendarRouter);
 router.use("/hr/contracts", requireModule("hr"), contractsRouter);
 router.use("/correspondence", requireModule("comms"), correspondenceRouter);
 router.use("/print", printRouter);

@@ -116,31 +116,35 @@ describe("import-wizard UI — rejected rows table + CSV download", () => {
     expect(WIZARD).toContain('data-testid="download-rejected-rows-csv"');
   });
 
-  it("CSV helper prepends a UTF-8 BOM so Excel detects Arabic encoding", () => {
-    // Without the BOM, opening the file in Excel garbles Arabic headers
-    // into mojibake — the BOM is the only reliable Excel signal.
-    expect(WIZARD).toMatch(/const BOM = "[﻿]"/);
-    expect(WIZARD).toMatch(/Blob\(\[csv\], \{\s*type: "text\/csv;charset=utf-8"\s*\}\)/);
+  it("CSV download routes through the unified export helper", () => {
+    // The wizard previously hand-rolled BOM + Blob + csvEscape. After the
+    // print/export unification (GAP_MATRIX item #7 + Agent 6 of the
+    // platform-stabilization workflow), all CSV downloads flow through
+    // `exportRowsToCsv`, which centralises BOM prefix, RFC-4180 escaping,
+    // and the `print_jobs` audit row in the csvAdapter.
+    expect(WIZARD).toContain('from "@/lib/unified-export"');
+    expect(WIZARD).toMatch(/exportRowsToCsv\(/);
   });
 
   it("CSV columns: row, field, reason, then every sample key seen in the batch", () => {
-    expect(WIZARD).toMatch(/sampleKeys = Array\.from\(\s*new Set\(errors\.flatMap/);
-    expect(WIZARD).toMatch(/\["row",\s*"field",\s*"reason",\s*\.\.\.sampleKeys\]/);
+    // Helper preserves the column order — first row/field/reason, then
+    // the dynamically-derived sample keys observed across rejected rows.
+    // Post-migration the columns are passed as an array of
+    // `{ key, label }` objects to exportRowsToCsv, not raw strings —
+    // assert the shape of that projection.
+    expect(WIZARD).toMatch(/sampleKeys\s*=\s*Array\.from\(\s*new Set\(/);
+    expect(WIZARD).toMatch(/\{\s*key:\s*"row"/);
+    expect(WIZARD).toMatch(/\{\s*key:\s*"field"/);
+    expect(WIZARD).toMatch(/\{\s*key:\s*"reason"/);
+    expect(WIZARD).toMatch(/\.\.\.sampleKeys\.map/);
   });
 
-  it("csvEscape quotes fields containing the delimiters per RFC 4180", () => {
-    // Operators occasionally have commas or newlines in pilgrim names —
-    // mishandling them silently corrupts the export.
-    expect(WIZARD).toMatch(/csvEscape/);
-    expect(WIZARD).toMatch(/\/\[",\\n\\r\]\//);
-    expect(WIZARD).toMatch(/replace\(\/"\/g,\s*'""'\)/);
-  });
-
-  it("file name encodes fileType + Riyadh-local date so multiple downloads don't collide", () => {
-    // todayLocal() (not new Date().toISOString().slice(0,10)) is the
-    // project's Riyadh-aware day helper — the guard's check:utc-time-drift
-    // step rejects the UTC variant.
-    expect(WIZARD).toMatch(/umrah-rejected-\$\{fileType\}-\$\{todayLocal\(\)\}\.csv/);
+  it("filename encodes fileType + Riyadh-local date", () => {
+    // todayLocal() is the project's Riyadh-aware day helper — the
+    // unified-export `title` propagates it into the print_jobs row and
+    // the saved filename, so multiple downloads on the same day for
+    // different file types don't collide.
+    expect(WIZARD).toMatch(/umrah-rejected-\$\{fileType\}-\$\{todayLocal\(\)\}/);
     expect(WIZARD).toMatch(/import \{[^}]*todayLocal[^}]*\} from "@\/lib\/formatters"/);
   });
 });
