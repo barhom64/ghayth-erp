@@ -15,8 +15,12 @@ describe("companyBootstrap — exported function", () => {
     expect(BOOTSTRAP).toContain("export async function bootstrapCompany");
   });
 
-  it("bootstrapCompany accepts companyId and companyName", () => {
-    expect(BOOTSTRAP).toContain("bootstrapCompany(companyId: number, companyName: string)");
+  it("bootstrapCompany accepts companyId, companyName, and optional creator", () => {
+    expect(BOOTSTRAP).toContain("companyId: number");
+    expect(BOOTSTRAP).toContain("companyName: string");
+    // creator link: an owner assignment is minted for the creating user
+    expect(BOOTSTRAP).toContain("creatorEmployeeId?: number | null");
+    expect(BOOTSTRAP).toContain("createCreatorOwnerAssignment");
   });
 });
 
