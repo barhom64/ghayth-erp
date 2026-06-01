@@ -8435,6 +8435,68 @@ ALTER SEQUENCE public.fleet_trips_id_seq OWNED BY public.fleet_trips.id;
 -- Source: migration 245_fleet_tires.sql (per-vehicle tire inventory).
 --
 
+--
+-- Name: fleet_rental_contracts; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 247_fleet_rental_contracts.sql.
+--
+
+CREATE TABLE public.fleet_rental_contracts (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    ref character varying(80),
+    "vehicleId" integer NOT NULL,
+    "clientId" integer NOT NULL,
+    "startDate" date NOT NULL,
+    "endDate" date,
+    "dailyRate" numeric(12,2),
+    "totalAmount" numeric(15,2),
+    "securityDeposit" numeric(12,2) DEFAULT 0,
+    "paymentTerms" character varying(40) DEFAULT 'monthly',
+    status character varying(20) DEFAULT 'draft' NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT fleet_rental_contracts_status_check
+      CHECK ((status::text = ANY (ARRAY['draft'::text, 'active'::text, 'completed'::text, 'cancelled'::text]))),
+    CONSTRAINT fleet_rental_contracts_payment_terms_check
+      CHECK (("paymentTerms"::text = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text, 'quarterly'::text, 'one_time'::text])))
+);
+
+CREATE SEQUENCE public.fleet_rental_contracts_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.fleet_rental_contracts_id_seq OWNED BY public.fleet_rental_contracts.id;
+
+
+--
+-- Name: fleet_rental_payments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_rental_payments (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "contractId" integer NOT NULL,
+    "dueDate" date NOT NULL,
+    amount numeric(12,2) NOT NULL,
+    "paidAmount" numeric(12,2) DEFAULT 0,
+    "paidDate" date,
+    method character varying(30),
+    status character varying(20) DEFAULT 'pending' NOT NULL,
+    "journalEntryId" integer,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fleet_rental_payments_status_check
+      CHECK ((status::text = ANY (ARRAY['pending'::text, 'partial'::text, 'paid'::text, 'overdue'::text])))
+);
+
+CREATE SEQUENCE public.fleet_rental_payments_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.fleet_rental_payments_id_seq OWNED BY public.fleet_rental_payments.id;
+
+
 CREATE TABLE public.fleet_tires (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
