@@ -903,6 +903,13 @@ ALTER TABLE ONLY public.fleet_trips ALTER COLUMN id SET DEFAULT nextval('public.
 
 
 --
+-- Name: fleet_tires id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_tires ALTER COLUMN id SET DEFAULT nextval('public.fleet_tires_id_seq'::regclass);
+
+
+--
 -- Name: fleet_vehicles id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2282,6 +2289,24 @@ ALTER TABLE ONLY public.umrah_pilgrims ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
+-- Name: umrah_hotels id; Type: DEFAULT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_hotels ALTER COLUMN id SET DEFAULT nextval('public.umrah_hotels_id_seq'::regclass);
+
+
+--
+-- Name: umrah_room_blocks id; Type: DEFAULT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_room_blocks ALTER COLUMN id SET DEFAULT nextval('public.umrah_room_blocks_id_seq'::regclass);
+
+
+--
+-- Name: umrah_room_allocations id; Type: DEFAULT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_room_allocations ALTER COLUMN id SET DEFAULT nextval('public.umrah_room_allocations_id_seq'::regclass);
+
+
+--
 -- Name: umrah_pricing id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2992,6 +3017,13 @@ ALTER TABLE ONLY public.communications_log
 
 ALTER TABLE ONLY public.companies
     ADD CONSTRAINT companies_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_companies_subscription_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_companies_subscription_status ON public.companies USING btree ("subscriptionStatus");
 
 
 --
@@ -3824,6 +3856,28 @@ ALTER TABLE ONLY public.fleet_traffic_violations
 
 ALTER TABLE ONLY public.fleet_trips
     ADD CONSTRAINT fleet_trips_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fleet_tires fleet_tires_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fleet_tires
+    ADD CONSTRAINT fleet_tires_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_fleet_tires_vehicle; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_tires_vehicle ON public.fleet_tires USING btree ("companyId", "vehicleId") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: idx_fleet_tires_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_tires_status ON public.fleet_tires USING btree ("companyId", status) WHERE (("deletedAt" IS NULL) AND ((status)::text = 'active'::text));
 
 
 --
@@ -5694,6 +5748,35 @@ ALTER TABLE ONLY public.umrah_penalties
 
 ALTER TABLE ONLY public.umrah_pilgrims
     ADD CONSTRAINT umrah_pilgrims_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: umrah_hotels umrah_hotels_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_hotels
+    ADD CONSTRAINT umrah_hotels_pkey PRIMARY KEY (id);
+
+CREATE INDEX idx_umrah_hotels_city ON public.umrah_hotels USING btree ("companyId", city) WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: umrah_room_blocks umrah_room_blocks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_room_blocks
+    ADD CONSTRAINT umrah_room_blocks_pkey PRIMARY KEY (id);
+
+CREATE INDEX idx_umrah_room_blocks_hotel_season ON public.umrah_room_blocks USING btree ("companyId", "hotelId", "seasonId") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: umrah_room_allocations umrah_room_allocations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_room_allocations
+    ADD CONSTRAINT umrah_room_allocations_pkey PRIMARY KEY (id);
+
+CREATE INDEX idx_umrah_allocations_block ON public.umrah_room_allocations USING btree ("companyId", "blockId") WHERE ("deletedAt" IS NULL);
+
+CREATE INDEX idx_umrah_allocations_pilgrim ON public.umrah_room_allocations USING btree ("companyId", "pilgrimId") WHERE ("deletedAt" IS NULL);
 
 
 --

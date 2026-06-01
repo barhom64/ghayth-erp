@@ -8,28 +8,43 @@
 
 ## 🚨 BLOCKERS — يجب الإصلاح قبل الإطلاق التجاري
 
-### B1. لا يوجد Sign-Up UI
-**الموقع**: `artifacts/ghayth-erp/src/pages/login.tsx:316`
-**الوصف**: صفحة الدخول لا تحتوي أي زر "إنشاء حساب" أو "اشتراك جديد".
-**الـbackend**: `auth.ts:228` (`/auth/register`) يرد **HTTP 405** ثابت: `"إنشاء الحسابات يتم بواسطة المسؤول فقط"`.
-**الأثر**: مالك جديد **لا يستطيع** تأسيس شركته بدون مطور.
-**الإصلاح**: بناء صفحة sign-up + backend handler للـself-registration.
-**المُلَّاك المتأثرون**: 100% من العملاء الجدد.
+### B1. Sign-Up UI ✅ FIXED in batch8 PR
+**الموقع**: `login.tsx:268` (setup-state probe) + `pages/setup.tsx` (new wizard) + `App.tsx:155-159` (`/setup` route)
+**الإصلاح المنفذ**:
+- صفحة `login.tsx` تستدعي `GET /api/auth/setup-state` على mount
+- إذا `needsSetup=true`: يظهر رابط "إعداد النظام لأول مرة" أسفل "نسيت كلمة المرور؟"
+- صفحة `/setup` كاملة (4 حقول شركة + 4 حقول مالك) بـRTL design
+- الـbackend `POST /api/auth/bootstrap-tenant` atomically ينشئ company + branch + employee + assignment + user + user_role في transaction واحدة
+- بعد bootstrap الأول، subsequent calls يرجعون 409 ALREADY_BOOTSTRAPPED
+- guard على `/setup` page نفسها: تتحقق من setup-state وتعيد توجيه إلى login إن كان النظام مُعد مسبقاً
+- `/auth/register` يبقى يرد 405 (الـpath الصحيح هو `/setup` للـowner، و `/admin/users` للـadmin)
 
-### B2. لا توجد وحدة Subscription / Activation
-**الموقع**: ولا في أي مكان من `artifacts/`
-**الوصف**: لا UI page، لا API route، لا DB schema لـsubscription/billing/plan.
-**الأثر**: النظام يفترض ضمنياً أن كل tenant مفعَّل دائماً. لا "trial expired"، لا حدود، لا upgrade path.
-**الإصلاح**: بناء وحدة كاملة (subscription_plans + customer_subscriptions + activation flow).
-**خيار قصير المدى**: ربط بـStripe/Tap/HyperPay كـMVP.
+### B2. Subscription Scaffolding ✅ FIXED (lightweight) in batch8 PR
+**الموقع**: migration 244 + `middlewares/subscriptionGate.ts` + `routes/admin.ts /subscription/*`
+**الإصلاح المنفذ**:
+- migration 244 يضيف `subscriptionStatus` (enum: trial/active/expired/cancelled) + `trialExpiresAt` + `subscriptionPlan` + partial index على `companies`
+- الـmigration يـbackfill كل الـtenants القائمين بـ`status='active'` و `plan='legacy'` (لا أحد يُحجَب فجأة)
+- bootstrap-tenant الجديد يضع trial expiry = 30 يوم
+- `subscriptionGate` middleware mounted بعد `authMiddleware` وقبل كل module routes:
+  - `trial` صالح: pass
+  - `trial` منتهي: auto-flip لـ`expired` + cache invalidate + block
+  - `expired`/`cancelled`: owners يمرون (للوصول لـadmin/subscription)، non-owners يحصلون على 402
+- in-memory cache بـTTL 60 ثانية لتقليل cost
+- endpoints الـadmin: `GET /subscription` + `POST /subscription/activate` + `POST /subscription/extend-trial`
+**ما تبقى لـPhase 2**: payment provider integration (Stripe/Tap/HyperPay) — الـscaffolding جاهز لاستقباله. الـactivate الحالي manual.
 
-### B3. لا يوجد First-Time Setup Wizard
-**الموقع**: `bootstrapAdmin.ts:151-159`
-**الوصف**: عند DB فارغة، `bootstrapAdminUser()` يخرج بدون إنشاء owner. لا UI لكسر الـloop.
-**الأثر**: deployment جديد على PostgreSQL فارغة → لا أحد يقدر يدخل، لا أحد يقدر ينشئ شركة → دورة معطلة.
-**الإصلاح**: 
-- Option A: واجهة setup wizard تظهر عند الـDB فارغة
-- Option B: provisioning script يُنشئ owner + company واحد كـbootstrap
+### B3. First-Time Setup Wizard ✅ FIXED in batch8 PR
+**الموقع**: `pages/setup.tsx` + `/api/auth/setup-state` + `/api/auth/bootstrap-tenant`
+**الإصلاح المنفذ** (نفس B1):
+- الـuser flow على DB فارغ:
+  1. مالك يفتح `/` → login.tsx يستدعي `/auth/setup-state` → يرى needsSetup=true
+  2. يظهر رابط "إعداد النظام لأول مرة ←" → يضغط
+  3. `/setup` يعرض النموذج
+  4. submit يستدعي `/auth/bootstrap-tenant` في transaction واحدة
+  5. company + branch + employee + assignment + user + user_role كلها تُنشأ atomically أو لا شيء (rollback)
+  6. trial expiry = 30 يوم + status='trial'
+  7. redirect لـlogin → المالك يدخل ببياناته الجديدة
+- bootstrapAdmin.ts السابق يبقى للـSEED_DEMO_DATA flow، لكن لم يعد الـonly path.
 
 ---
 
@@ -126,10 +141,15 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 
 ## 📝 MINOR — يمكن تأجيله
 
-### N1. Departments tab يستخدم Generic CrudSection
-**الموقع**: `settings.tsx:348`
-**الوصف**: 3 حقول فقط (name، nameEn، manager). لا parent-department، لا cost-center binding.
-**الإصلاح**: tab dedicated بنمط BranchesTab.
+### N1. Departments dedicated tab ✅ FIXED in batch10 PR
+**الموقع**: `pages/settings/departments-tab.tsx` + `settings.tsx:347`
+**الإصلاح المنفذ**:
+- استبدال الـgeneric CrudSection بـ`DepartmentsTab` component مخصص
+- 5 حقول الآن (بدل 3): name + branchId (dropdown من الفروع) + parentId (تسلسل هرمي) + managerId (dropdown من الموظفين) + status
+- الـtable يعرض القسم الأب + الفرع + المدير بأسماء resolved
+- inline create + edit form
+- self-parent protection (لا يمكن اختيار القسم نفسه كأب)
+- يعمل مع `authorizeAny()` من batch5 — HR Director يقدر يستخدمه مباشرة بدون settings:update.
 
 ### N2. RBAC v2 mutations لا تظهر في `/admin/logs` ✅ FIXED in PR #1410
 **الموقع**: `rbacV2.ts:128, 180, 209`
@@ -139,20 +159,32 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 **الموقع**: `numbering.ts:180-190`
 **الإصلاح المنفذ**: إضافة `emitEvent({action:"numbering.scheme.updated", entity:"numbering_schemes"})` بعد كل UPDATE على scheme. الـaudit channels الـ2 (numbering_audit_logs + createAuditLog) موجودة من قبل — هذا يضيف الـevent bus للـdownstream consumers.
 
-### N4. Tires UI مفقود
-**الموقع**: لا توجد `pages/fleet/tires.tsx`
-**الوصف**: تظهر فقط كـpreventive task type
-**الإصلاح**: بناء صفحة + entity.
+### N4. Tires UI ✅ FIXED in batch9 PR
+**الموقع**: migration 245 + `fleet.ts /tires/*` + `pages/fleet/tires.tsx`
+**الإصلاح المنفذ**:
+- migration 245 يُنشئ `fleet_tires` table (vehicleId + position + brand + size + installMileage + installDate + status)
+- CHECK constraints: position من 6 قيم (front_left/right, rear_left/right, spare, extra)، status من 4 (active/rotated/replaced/discarded)
+- partial indexes على (companyId, vehicleId) و (companyId, status='active')
+- 4 endpoints: `GET /fleet/tires`, `POST /fleet/tires`, `PATCH /fleet/tires/:id`, `DELETE /fleet/tires/:id` كلها gated بـ`fleet.maintenance` feature
+- صفحة `/fleet/tires` كاملة بـDataTable + inline create modal + tab في FleetTabsNav.
 
 ### N5. Vehicle Rental Contracts غير موجودة
 **الموقع**: لا UI، لا handler
 **الوصف**: لا يمكن لـFleet Manager أن يؤجر مركبة لعميل.
 **الإصلاح**: entity + UI + GL.
 
-### N6. Accommodation كـEntity في العمرة مفقود
-**الموقع**: `umrah_pilgrims.hotelName` (نص فقط)
-**الوصف**: لا allotment، لا room-block management، لا per-night cost.
-**الإصلاح**: hotels/rooms entities + allocation.
+### N6. Accommodation كـEntity في العمرة ✅ FIXED in batch10 PR
+**الموقع**: migration 246 + `umrah-entities.ts` + `pages/umrah/accommodations.tsx`
+**الإصلاح المنفذ**:
+- migration 246 ينشئ 3 جداول: `umrah_hotels` (catalog) + `umrah_room_blocks` (per-season allotment with rate + dates) + `umrah_room_allocations` (per-pilgrim)
+- `umrah_hotels`: name + city + starRating (1-7) + contact + notes
+- `umrah_room_blocks`: hotelId + seasonId + checkIn/Out dates + roomType (single/double/triple/quad/suite) + totalRooms + ratePerNight
+- `umrah_room_allocations`: blockId + pilgrimId + roomNumber + occupants + checkInAt
+- 8 endpoints: hotels (CRUD) + room-blocks (LIST/CREATE) + allocations (LIST per block + CREATE + DELETE) — كلها gated بـ`umrah` feature
+- Capacity guard: `POST /room-allocations` يرفض إذا allocated count >= totalRooms
+- صفحة `/umrah/accommodations` بـ2-column layout (hotels catalog + room blocks) مع inline create forms
+- Tab "الإقامة" مع Hotel icon في UmrahTabsNav
+- legacy `hotelName` string على umrah_pilgrims يبقى للـback-compat.
 
 ### N7. CRM Client → Portal Account Manual ✅ WAI (قرار تصميمي مقصود)
 **الموقع**: `clients.ts:520` (emit) + `clients.ts:589` (POST /portal-account)
@@ -194,10 +226,13 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 - `/settings/departments` POST/PUT/DELETE الآن مفتوحة لـ`settings:update` OR `hr.organization:create|update|delete`
 **الأثر**: HR Director يقدر إدارة الهيكل التنظيمي من صفحته دون الحاجة لـSysAdmin.
 
-### N14. Create User بدون "إنشاء موظف" Shortcut
-**الموقع**: `users-tab.tsx:46`
-**الوصف**: يطلب employeeId موجود — لا inline modal لإنشاء موظف.
-**الإصلاح**: button "+ موظف جديد" في الـdropdown.
+### N14. Create User Shortcut ✅ FIXED in batch9 PR
+**الموقع**: `users-tab.tsx:53-180`
+**الإصلاح المنفذ**:
+- زر "موظف جديد بنقرة واحدة" أسفل dropdown اختيار الموظف
+- يفتح inline panel مع 4 حقول مطلوبة (name + phone + nationalId + nationality)
+- على submit يستدعي `POST /employees`، يـrefresh dropdown، ويُبرز اسم الموظف الجديد للاختيار
+- SysAdmin يقدر ينشئ موظف+مستخدم في تدفّق واحد بدون مغادرة الصفحة.
 
 ### N15. Ejar Integration Fields-Only
 **الموقع**: `properties.ts:1155-1378` (يخزن `ejarNumber` وغيره)
@@ -234,28 +269,27 @@ const simulatedSuccess = settings.environment === "sandbox"; // mock
 
 ## ملخص
 
-| Severity | العدد |
-|---|---|
 | Severity | الأصلي | مُغلَق | متبقي |
 |---|---|---|---|
-| 🚨 BLOCKER | 3 | 0 | 3 (B1/B2/B3 — يحتاج spec المالك) |
+| 🚨 BLOCKER | 3 | **3 ✅** (batch8: B1/B2/B3) | 0 |
 | ⚠ MAJOR | 10 | 8 | 2 (M1 ZATCA، M10 Wialon — vendor integrations) |
 | 📝 MINOR | 19 | 9 (+3 WAI = 12) | 7 (UI work + 4 vendor integrations) |
-| **المجموع** | **32** | **20** | **12** |
+| **المجموع** | **32** | **23** | **9** |
 
 ### مُغلَقة بإصلاحات كود
+- **BLOCKERs (3) — batch8**: B1 Sign-up UI، B2 Subscription scaffolding، B3 First-time setup
 - **MAJORs (8)**: M2 ✅ (سابق)، M3، M4، M5، M6، M7، M8، M9
 - **MINORs (9)**: N2، N3، N8، N9، N10، N11، N12، N13، N18
-- **MINORs مُعلَّمة WAI (3)**: N7، N19، (... راجع الأقسام التفصيلية)
+- **MINORs مُعلَّمة WAI (3)**: N7، N19، M2 reconcile
 
-### قبل الإطلاق التجاري (المتبقي الحرج)
-يجب إصلاح: B1, B2, B3 (Onboarding + Subscription) — يحتاج spec من المالك
-ينبغي قبل الإطلاق: M1 (ZATCA real provider)
+### قبل الإطلاق التجاري (المتبقي)
+- M1 (ZATCA real provider) — يحتاج payment provider credentials
 
 ### يمكن تأجيله للـPhase 2
 - M10 (Wialon/Teltonika telematics): vendor adapters
 - N15 (Ejar)، N16 (Sadad)، N17 (Nusk): integrations سعودية
-- N1، N4، N5، N6، N14 (UI work): backlog product
+- N1، N4، N5، N6، N14 (UI polish): backlog product
+- B2 payment provider integration (Stripe/Tap/HyperPay): الـscaffolding جاهز
 
 ---
 

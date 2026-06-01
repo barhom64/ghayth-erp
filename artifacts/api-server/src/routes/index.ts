@@ -91,6 +91,7 @@ import printVerifyRouter from "./printVerify.js";
 import { requireModule, requireMinLevel } from "../middlewares/roleGuard.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { subscriptionGate } from "../middlewares/subscriptionGate.js";
 import { csrfMiddleware } from "../middlewares/csrfMiddleware.js";
 import rateLimit from "express-rate-limit";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
@@ -253,6 +254,12 @@ router.get("/_routes", (req, res, next): void => {
 
 router.use(authMiddleware);
 router.use(csrfMiddleware);
+
+// B2 subscription gate. Mounted after authMiddleware so req.scope is
+// set, before any module router so an expired tenant gets blocked at
+// the edge instead of inside per-domain code. Owners always pass to
+// reach /admin/subscription and pay — non-owners get a 402.
+router.use(subscriptionGate);
 
 // Per-user catch-all limiter for ALL authenticated /api traffic. Replaces
 // the blanket per-IP globalLimiter that used to live in app.ts. Mounted
