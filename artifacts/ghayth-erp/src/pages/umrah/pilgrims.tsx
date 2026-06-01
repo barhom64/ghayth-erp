@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { formatDateAr, todayLocal } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,6 +43,27 @@ export default function UmrahPilgrims() {
   const [filters, setFilters] = useFilters();
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  // Deep-link filter pre-application — compliance dashboard tiles + the
+  // visa-expiring banner navigate here with ?status=… / ?seasonId=… /
+  // ?visaExpiringWithin=7 / ?agentId=…. Without this hook, the URL was
+  // a no-op and the operator landed on an unfiltered list.
+  //
+  // Runs once on mount: the URL is the entry signal, subsequent
+  // navigation within the page rewrites `filters` directly.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const known = ["status", "seasonId", "agentId", "groupId", "flight", "arrivalDate", "departureDate", "visaExpiringWithin", "search"];
+    const next: Record<string, string> = {};
+    let touched = false;
+    for (const k of known) {
+      const v = sp.get(k);
+      if (v) { next[k] = v; touched = true; }
+    }
+    if (touched) setFilters({ ...filters, ...next } as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const seasonId = (filters as Record<string, string>).seasonId || "";
   const groupId = (filters as Record<string, string>).groupId || "";
   // Flight number rides on the same dynamic-keys pattern (no shared-
