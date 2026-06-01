@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -72,35 +73,30 @@ export default function UmrahSeasonPortfolioDashboard() {
     return { best: sorted[0], worst: sorted[sorted.length - 1], winCount: wins, lossCount: losses };
   }, [rows]);
 
+  // GAP_MATRIX item #7 — uses the unified export helper for audit + letterhead.
   const exportCsv = () => {
-    const header = [
-      "id", "title", "status", "hijriYear",
-      "startDate", "endDate",
-      "pilgrimsCount", "groupsCount",
-      "revenue", "paid", "cost", "margin", "marginPct",
-    ];
-    const escape = (v: unknown) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
     const pct = (m: number, r: number) => r > 0 ? ((m / r) * 100).toFixed(1) : "0";
-    const lines = [
-      header.join(","),
-      ...rows.map((r) => [
-        r.id, r.title, r.status, r.hijriYear,
-        r.startDate, r.endDate,
-        r.pilgrimsCount, r.groupsCount,
-        r.revenue, r.paid, r.cost, r.margin,
-        pct(Number(r.margin), Number(r.revenue)),
-      ].map(escape).join(",")),
-    ];
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `umrah-season-portfolio.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void exportRowsToCsv({
+      entityType: "report_umrah_season_portfolio",
+      title: "محفظة مواسم العمرة",
+      rows: rows as unknown as Record<string, unknown>[],
+      columns: [
+        { key: "id",             label: "id" },
+        { key: "title",          label: "title" },
+        { key: "status",         label: "status" },
+        { key: "hijriYear",      label: "hijriYear" },
+        { key: "startDate",      label: "startDate" },
+        { key: "endDate",        label: "endDate" },
+        { key: "pilgrimsCount",  label: "pilgrimsCount" },
+        { key: "groupsCount",    label: "groupsCount" },
+        { key: "revenue",        label: "revenue" },
+        { key: "paid",           label: "paid" },
+        { key: "cost",           label: "cost" },
+        { key: "margin",         label: "margin" },
+        { key: "marginPct",      label: "marginPct",
+          format: (_, row: any) => pct(Number(row.margin), Number(row.revenue)) },
+      ],
+    }).catch((err) => console.error("[export] failed", err));
   };
 
   if (isLoading) return <LoadingSpinner />;

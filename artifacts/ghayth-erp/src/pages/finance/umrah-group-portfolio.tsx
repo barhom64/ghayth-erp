@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { Layers, TrendingUp, TrendingDown, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -86,35 +87,31 @@ export default function UmrahGroupPortfolioDashboard() {
     return { best: sorted[0], worst: sorted[sorted.length - 1], winCount: wins, lossCount: losses };
   }, [rows]);
 
+  // GAP_MATRIX item #7 — uses the unified export helper so the
+  // download appears in /reports/print-log with audit + letterhead.
   const exportCsv = () => {
-    const header = [
-      "id", "name", "nuskGroupNumber", "status",
-      "seasonTitle", "agentName",
-      "expectedPilgrims", "actualPilgrims",
-      "revenue", "paid", "cost", "margin", "marginPct",
-    ];
-    const escape = (v: unknown) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
     const pct = (m: number, r: number) => r > 0 ? ((m / r) * 100).toFixed(1) : "0";
-    const lines = [
-      header.join(","),
-      ...rows.map((r) => [
-        r.id, r.name, r.nuskGroupNumber, r.status,
-        r.seasonTitle, r.agentName,
-        r.expectedPilgrims, r.actualPilgrims,
-        r.revenue, r.paid, r.cost, r.margin,
-        pct(Number(r.margin), Number(r.revenue)),
-      ].map(escape).join(",")),
-    ];
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `umrah-group-portfolio.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void exportRowsToCsv({
+      entityType: "report_umrah_group_portfolio",
+      title: "محفظة مجموعات العمرة",
+      rows: rows as unknown as Record<string, unknown>[],
+      columns: [
+        { key: "id",                label: "id" },
+        { key: "name",              label: "name" },
+        { key: "nuskGroupNumber",   label: "nuskGroupNumber" },
+        { key: "status",            label: "status" },
+        { key: "seasonTitle",       label: "seasonTitle" },
+        { key: "agentName",         label: "agentName" },
+        { key: "expectedPilgrims",  label: "expectedPilgrims" },
+        { key: "actualPilgrims",    label: "actualPilgrims" },
+        { key: "revenue",           label: "revenue" },
+        { key: "paid",              label: "paid" },
+        { key: "cost",              label: "cost" },
+        { key: "margin",            label: "margin" },
+        { key: "marginPct",         label: "marginPct",
+          format: (_, row: any) => pct(Number(row.margin), Number(row.revenue)) },
+      ],
+    }).catch((err) => console.error("[export] failed", err));
   };
 
   if (isLoading) return <LoadingSpinner />;

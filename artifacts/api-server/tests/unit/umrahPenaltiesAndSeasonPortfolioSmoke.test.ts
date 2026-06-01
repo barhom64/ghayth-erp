@@ -143,9 +143,12 @@ describe("UmrahSeasonPortfolio page — registration + UX", () => {
     expect(PAGE).toMatch(/margin < 0 \? "text-status-error-foreground" : "text-status-success-foreground"/);
   });
 
-  it("CSV export builds client-side from the filtered rows (no extra roundtrip)", () => {
+  it("CSV export uses the unified export helper + same filtered rows (no extra roundtrip)", () => {
+    // GAP_MATRIX item #7 — page routes through `exportRowsToCsv`
+    // so the download lands in /reports/print-log with audit.
     expect(PAGE).toContain('data-testid="season-portfolio-export-csv"');
-    expect(PAGE).toMatch(/\.\.\.rows\.map\(\(r\) =>/);
+    expect(PAGE).toContain('exportRowsToCsv');
+    expect(PAGE).toMatch(/rows:\s*rows\s+as\s+unknown/);
     expect(PAGE).toMatch(/disabled=\{rows\.length === 0\}/);
   });
 });
