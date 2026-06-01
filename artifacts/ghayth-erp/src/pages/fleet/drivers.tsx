@@ -1,15 +1,20 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import {
   PageStatusBadge,
   DataTable,
   type DataTableColumn,
   PageShell,
 } from "@workspace/ui-core";
-import { Plus, Eye, Users, UserCheck, UserX, Car } from "lucide-react";
+import { Plus, Eye, Users, UserCheck, UserX, Car, KeyRound, ShieldCheck, ShieldX } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
@@ -23,7 +28,54 @@ export default function DriversPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["drivers"], "/fleet/drivers");
   const items: any[] = data?.data || [];
   const [previewDriver, setPreviewDriver] = useState<any>(null);
+  const [portalForDriver, setPortalForDriver] = useState<any>(null);
+  const [portalEmail, setPortalEmail] = useState("");
+  const [portalPassword, setPortalPassword] = useState("");
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
+
+  // Driver-portal account management — backend in routes/fleet.ts
+  // (POST/PATCH/GET /fleet/drivers/:id/portal-account). The dialog
+  // is lazy: portal status only fetched when the user opens it for
+  // a specific driver, so the hot list query stays cheap.
+  const { data: portalData, refetch: refetchPortal } = useApiQuery<{ data: any }>(
+    ["driver-portal-account", String(portalForDriver?.id ?? 0)],
+    portalForDriver ? `/fleet/drivers/${portalForDriver.id}/portal-account` : null,
+    !!portalForDriver,
+  );
+  const portalAccount = portalData?.data;
+
+  const createPortalMut = useApiMutation<
+    unknown,
+    { id: number; email: string; password: string }
+  >(
+    (body) => `/fleet/drivers/${body.id}/portal-account`,
+    "POST",
+    [["drivers"]],
+    {
+      successMessage: "تم إنشاء حساب بوابة السائق",
+      onSuccess: () => {
+        refetchPortal();
+        setPortalEmail("");
+        setPortalPassword("");
+      },
+    },
+  );
+
+  const patchPortalMut = useApiMutation<
+    unknown,
+    { id: number; isActive?: boolean; password?: string }
+  >(
+    (body) => `/fleet/drivers/${body.id}/portal-account`,
+    "PATCH",
+    [["drivers"]],
+    {
+      successMessage: "تم تحديث حساب البوابة",
+      onSuccess: () => {
+        refetchPortal();
+        setPortalPassword("");
+      },
+    },
+  );
 
   const driverFields: PreviewField[] = [
     { label: "الاسم", key: "name" },
@@ -78,7 +130,8 @@ export default function DriversPage() {
       header: "إجراءات",
       render: (d) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="sm" onClick={() => setPreviewDriver(d)}><Eye className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" onClick={() => setPreviewDriver(d)} title="معاينة سريعة"><Eye className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" onClick={() => { setPortalForDriver(d); setPortalEmail(""); setPortalPassword(""); }} title="بوابة السائق"><KeyRound className="h-4 w-4" /></Button>
           <RowActions
             onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "available" })}
             onDelete={() => startDelete(d.id)}
@@ -157,6 +210,115 @@ export default function DriversPage() {
         }}
       />
       <QuickPreviewDialog open={!!previewDriver} onOpenChange={() => setPreviewDriver(null)} title="تفاصيل السائق" data={previewDriver} fields={driverFields} />
+
+      <Dialog open={!!portalForDriver} onOpenChange={(o) => !o && setPortalForDriver(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" />
+              بوابة السائق — {portalForDriver?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {!portalAccount ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                لا يوجد حساب بوابة لهذا السائق بعد. أنشئ بريداً وكلمة مرور مؤقتة وسيُطلب من السائق تغييرها عند أول تسجيل دخول.
+              </p>
+              <div>
+                <Label>البريد الإلكتروني</Label>
+                <Input
+                  type="email"
+                  value={portalEmail}
+                  onChange={(e) => setPortalEmail(e.target.value)}
+                  placeholder="driver@example.com"
+                  autoComplete="off"
+                />
+              </div>
+              <div>
+                <Label>كلمة المرور المؤقتة</Label>
+                <Input
+                  type="password"
+                  value={portalPassword}
+                  onChange={(e) => setPortalPassword(e.target.value)}
+                  placeholder="6 أحرف على الأقل"
+                  autoComplete="new-password"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPortalForDriver(null)}>إلغاء</Button>
+                <Button
+                  onClick={() => createPortalMut.mutate({
+                    id: portalForDriver.id,
+                    email: portalEmail.trim(),
+                    password: portalPassword,
+                  })}
+                  disabled={!portalEmail || portalPassword.length < 6 || createPortalMut.isPending}
+                >
+                  {createPortalMut.isPending ? "جاري الإنشاء…" : "إنشاء الحساب"}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><p className="text-xs text-muted-foreground">البريد</p><p className="font-mono">{portalAccount.email}</p></div>
+                <div>
+                  <p className="text-xs text-muted-foreground">الحالة</p>
+                  <Badge variant="outline" className={portalAccount.isActive
+                    ? "bg-status-success-surface text-status-success-foreground"
+                    : "bg-rose-100 text-rose-700"}>
+                    {portalAccount.isActive ? "نشط" : "موقوف"}
+                  </Badge>
+                </div>
+                <div><p className="text-xs text-muted-foreground">آخر دخول</p><p className="text-xs">{portalAccount.lastLoginAt ? new Date(portalAccount.lastLoginAt).toLocaleString("ar-SA") : "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">يجب تغيير كلمة المرور</p><p>{portalAccount.mustChangePassword ? "نعم" : "لا"}</p></div>
+              </div>
+              <div className="border-t pt-3 space-y-2">
+                <Label className="text-xs">إعادة تعيين كلمة المرور</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    value={portalPassword}
+                    onChange={(e) => setPortalPassword(e.target.value)}
+                    placeholder="6 أحرف على الأقل"
+                    autoComplete="new-password"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={portalPassword.length < 6 || patchPortalMut.isPending}
+                    onClick={() => patchPortalMut.mutate({ id: portalForDriver.id, password: portalPassword })}
+                  >
+                    إعادة تعيين
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">إعادة التعيين تُلغي جميع الجلسات الحالية فوراً.</p>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setPortalForDriver(null)}>إغلاق</Button>
+                {portalAccount.isActive ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => patchPortalMut.mutate({ id: portalForDriver.id, isActive: false })}
+                    disabled={patchPortalMut.isPending}
+                  >
+                    <ShieldX className="h-4 w-4 me-1" />
+                    تعليق الحساب
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => patchPortalMut.mutate({ id: portalForDriver.id, isActive: true })}
+                    disabled={patchPortalMut.isPending}
+                  >
+                    <ShieldCheck className="h-4 w-4 me-1" />
+                    تفعيل الحساب
+                  </Button>
+                )}
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }
