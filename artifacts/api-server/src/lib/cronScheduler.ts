@@ -1181,7 +1181,7 @@ async function dailyInventoryCheck(): Promise<string> {
               expectedTiming: "on_draft",
             });
             const ins = await client.query(
-              `INSERT INTO purchase_orders ("companyId", title, ref, status, "totalAmount", "createdAt")
+              `INSERT INTO purchase_orders ("companyId", notes, ref, status, "totalAmount", "createdAt")
                VALUES ($1, $2, $3, 'draft', 0, NOW()) RETURNING id`,
               [company.id, `طلب شراء تلقائي: ${p.name} (المخزون ${p.currentStock}/${p.threshold})`, issued.number]
             );
@@ -1790,7 +1790,7 @@ async function yearlyLeaveBalanceRenewal(): Promise<string> {
     );
     for (const b of balances) {
       await rawExecute(
-        `INSERT INTO hr_leave_balances ("companyId", "employeeId", "leaveTypeId", year, total, used, reserved)
+        `INSERT INTO hr_leave_balances ("companyId", "employeeId", "leaveTypeId", year, entitled, used, reserved)
          VALUES ($1, $2, $3, $4, $5, 0, 0)
          ON CONFLICT DO NOTHING`,
         [company.id, b.employeeId, b.leaveTypeId, year, b.annual || 21]
