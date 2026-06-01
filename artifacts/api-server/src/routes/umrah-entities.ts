@@ -2677,4 +2677,76 @@ router.delete("/room-allocations/:id", authorize({ feature: "umrah", action: "de
   } catch (err) { handleRouteError(err, res, "deallocate error"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Compliance dashboard — one screen, four numbers. Mirrors the existing
+// exempt + visa-expiring + overstay + unpaid-penalties splits that
+// previously lived on four separate pages. Each metric is a COUNT query
+// scoped by tenant + soft-delete; together they answer "what's my
+// compliance exposure today?".
+//
+// Optional ?seasonId narrows every metric to a single season — the audit
+// officer typically reviews the active season's risk.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/compliance", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let seasonP = "";
+    let seasonPenP = "";
+    if (seasonId) {
+      params.push(Number(seasonId));
+      seasonP   = ` AND p."seasonId" = $${params.length}`;
+      seasonPenP = ` AND pen."seasonId" = $${params.length}`;
+    }
+
+    const [exemptRow, visaRow, overstayRow, penaltyRow] = await Promise.all([
+      // Currently exempt (PR #1482-1484 flag)
+      rawQuery<{ c: string }>(
+        `SELECT COUNT(*)::text AS c
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
+            AND p."overstayExempt" = true${seasonP}`,
+        params,
+      ),
+      // Visa-expiring within 7d (same window as the list-page banner)
+      rawQuery<{ c: string }>(
+        `SELECT COUNT(*)::text AS c
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
+            AND p."visaExpiry" IS NOT NULL
+            AND p."visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
+            AND p.status NOT IN ('departed', 'cancelled')${seasonP}`,
+        params,
+      ),
+      // Currently overstaying (status + the auto-flagged penalty status)
+      rawQuery<{ c: string }>(
+        `SELECT COUNT(*)::text AS c
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
+            AND p.status IN ('overstayed', 'overstay_penalized')${seasonP}`,
+        params,
+      ),
+      // Unpaid penalties — anything not paid/waived. Status check uses
+      // the umrah_penalties.status enum (pending/invoiced/paid/waived).
+      rawQuery<{ c: string; total: string }>(
+        `SELECT COUNT(*)::text AS c,
+                COALESCE(SUM(pen.amount), 0)::text AS total
+           FROM umrah_penalties pen
+          WHERE pen."companyId" = $1
+            AND pen.status NOT IN ('paid', 'waived')${seasonPenP}`,
+        params,
+      ),
+    ]);
+
+    res.json(maskFields(req, {
+      exempt: Number(exemptRow[0]?.c ?? "0"),
+      visaExpiringIn7d: Number(visaRow[0]?.c ?? "0"),
+      currentlyOverstaying: Number(overstayRow[0]?.c ?? "0"),
+      unpaidPenaltiesCount: Number(penaltyRow[0]?.c ?? "0"),
+      unpaidPenaltiesTotal: Number(penaltyRow[0]?.total ?? "0"),
+    }));
+  } catch (err) { handleRouteError(err, res, "Compliance dashboard"); }
+});
+
 export default router;

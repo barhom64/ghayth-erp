@@ -25,6 +25,7 @@ const TABS = [
   { href: "/umrah/import", label: "الاستيراد", icon: Upload, match: ["/umrah/import"] },
   { href: "/umrah/daily-runsheet", label: "كشف اليوم", icon: ClipboardList, match: ["/umrah/daily-runsheet"] },
   { href: "/umrah/exempt-pilgrims", label: "المستثنون", icon: Shield, match: ["/umrah/exempt-pilgrims"] },
+  { href: "/umrah/compliance", label: "لوحة الامتثال", icon: AlertTriangle, match: ["/umrah/compliance"] },
   { href: "/umrah/reconciliation", label: "المطابقة", icon: Scale, match: ["/umrah/reconciliation"] },
   { href: "/umrah/attachments", label: "المرفقات", icon: Paperclip, match: ["/umrah/attachments"] },
 ];

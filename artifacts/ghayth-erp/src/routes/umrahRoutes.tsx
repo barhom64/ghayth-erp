@@ -58,6 +58,9 @@ const UmrahSettings = lazy(() => import("@/pages/umrah/settings"));
 // Compliance rollup for the overstayExempt flag (PR #1482-1484) — shows
 // everyone currently exempt + the authoriser + reason in one screen.
 const UmrahExemptPilgrims = lazy(() => import("@/pages/umrah/exempt-pilgrims"));
+// Compliance dashboard — folds exempt + visa-expiring + overstay +
+// unpaid penalties into 4 KPI tiles + drill-down links.
+const UmrahCompliance = lazy(() => import("@/pages/umrah/compliance"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -99,6 +102,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/import", component: UmrahImportWizard, module: "operations" },
   { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
   { path: "/umrah/exempt-pilgrims", component: UmrahExemptPilgrims, module: "operations" },
+  { path: "/umrah/compliance", component: UmrahCompliance, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },
