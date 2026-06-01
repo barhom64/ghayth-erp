@@ -35,6 +35,9 @@ const TelematicsSettings = lazy(() => import("@/pages/fleet/telematics/settings"
 const TelematicsOperations = lazy(() => import("@/pages/fleet/telematics/operations"));
 const TelematicsEvidence = lazy(() => import("@/pages/fleet/telematics/evidence"));
 const TelematicsScorecard = lazy(() => import("@/pages/fleet/telematics/scorecard"));
+const CargoList = lazy(() => import("@/pages/fleet/cargo"));
+const CargoCreate = lazy(() => import("@/pages/fleet/cargo-create"));
+const CargoDetail = lazy(() => import("@/pages/fleet/cargo-detail"));
 
 export const fleetRoutes = [
   { path: "/fleet", component: Fleet },
@@ -74,6 +77,10 @@ export const fleetRoutes = [
   { path: "/fleet/telematics/operations", component: TelematicsOperations },
   { path: "/fleet/telematics/evidence", component: TelematicsEvidence },
   { path: "/fleet/telematics/scorecard", component: TelematicsScorecard },
+  // Cargo / freight (#1354 — نقل بري للبضائع). Manifest + items CRUD.
+  { path: "/fleet/cargo", component: CargoList },
+  { path: "/fleet/cargo/create", component: CargoCreate },
+  { path: "/fleet/cargo/:id", component: CargoDetail },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },
 ];

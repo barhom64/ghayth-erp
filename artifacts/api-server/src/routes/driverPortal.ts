@@ -316,6 +316,41 @@ protectedRouter.get(
   }),
 );
 
+// Cargo manifests assigned to THIS driver. cargo_manifests is a
+// peer of fleet_trips at the dispatch surface, so the driver
+// portal exposes it under /me/cargo to match the /me/trips shape.
+// Soft-delete + tenant scope enforced inline (no manifest leakage
+// from outside the driver's company).
+protectedRouter.get(
+  "/me/cargo",
+  withDriverPortalScope(async (req, res) => {
+    try {
+      const scope = req.driverPortalScope;
+      const { status } = req.query as Record<string, string | undefined>;
+      const params: unknown[] = [scope.driverId, scope.companyId];
+      let where = `m."driverId" = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL`;
+      if (status) {
+        params.push(status);
+        where += ` AND m.status = $${params.length}`;
+      }
+      const rows = await rawQuery(
+        `SELECT m.id, m."manifestNumber", m.status, m."fromLocation", m."toLocation",
+                m."pickupDate", m."deliveryDate", m."customerName", m."totalWeight",
+                v."plateNumber" AS "vehiclePlate"
+           FROM cargo_manifests m
+           LEFT JOIN fleet_vehicles v ON v.id = m."vehicleId" AND v."companyId" = m."companyId" AND v."deletedAt" IS NULL
+          WHERE ${where}
+          ORDER BY COALESCE(m."pickupDate", m."createdAt") DESC
+          LIMIT 200`,
+        params,
+      );
+      res.json({ data: rows });
+    } catch (err) {
+      handleRouteError(err, res, "Driver portal cargo error:");
+    }
+  }),
+);
+
 protectedRouter.patch(
   "/me/availability",
   withDriverPortalScope(async (req, res) => {

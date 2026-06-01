@@ -1085,11 +1085,11 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
       if (sessionDate > new Date()) {
         await rawExecute(
           `INSERT INTO tasks (
-             title, description, status, priority, "dueDate",
+             title, description, status, priority, "scheduledDate",
              "linkedEntityType", "linkedEntityId",
-             "companyId", "branchId", "createdBy"
+             "companyId", "branchId"
            )
-           VALUES ($1,$2,'open',$3,$4,'legal_sessions',$5,$6,$7,$8)`,
+           VALUES ($1,$2,'open',$3,$4,'legal_sessions',$5,$6,$7)`,
           [
             `جلسة قضائية: ${legalCase.title}`,
             `جلسة بتاريخ ${b.sessionDate} — ${b.location || legalCase.court || ''}${b.judge ? ` — القاضي ${b.judge}` : ''}`,
@@ -1098,7 +1098,6 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
             insertId,
             scope.companyId,
             scope.branchId ?? null,
-            scope.userId,
           ]
         );
       }
