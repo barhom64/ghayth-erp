@@ -148,6 +148,8 @@ const CashFlowStatement = lazy(() => import("@/pages/finance/cash-flow-statement
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
 const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
 const VehiclePortfolioDashboard = lazy(() => import("@/pages/finance/vehicle-portfolio-dashboard"));
+const UmrahGroupPortfolio = lazy(() => import("@/pages/finance/umrah-group-portfolio"));
+const UmrahSeasonPortfolio = lazy(() => import("@/pages/finance/umrah-season-portfolio"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
 const OpeningBalances = lazy(() => import("@/pages/finance/opening-balances"));
 const OpeningBalancesCreate = lazy(() => import("@/pages/create/finance/opening-balances-create"));
@@ -350,6 +352,8 @@ export const financeRoutes = [
   { path: "/finance/reports/cash-flow-statement", component: CashFlowStatement },
   { path: "/finance/project-costing", component: ProjectCosting },
   { path: "/finance/vehicle-portfolio", component: VehiclePortfolioDashboard },
+  { path: "/finance/umrah-group-portfolio", component: UmrahGroupPortfolio },
+  { path: "/finance/umrah-season-portfolio", component: UmrahSeasonPortfolio },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
   { path: "/finance/opening-balances", component: OpeningBalances },

@@ -10,7 +10,7 @@
  * is scaffolded with a "coming soon" tab so the route is ready.
  */
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Save, Eye, Trash2, Pencil, FileText, Receipt, Tag, Layers } from "lucide-react";
 import { PageHeader, PageShell } from "@workspace/ui-core";
 
-const PRINTABLE_ENTITIES = [
+// Fallback list used while /api/print/entity-types loads. The full catalogue
+// (100+ types — every BESPOKE_PRESETS key + every ARABIC_TITLES key) is
+// fetched at runtime so adding a preset never requires editing this file.
+const PRINTABLE_ENTITIES_FALLBACK = [
   { id: "invoice", label: "فاتورة" },
   { id: "quotation", label: "عرض سعر" },
   { id: "sales_order", label: "أمر بيع" },
@@ -40,22 +43,52 @@ const PRINTABLE_ENTITIES = [
   { id: "pos_receipt", label: "إيصال نقطة بيع" },
   { id: "receipt_voucher", label: "سند قبض" },
   { id: "payment_voucher", label: "سند صرف" },
-  { id: "purchase_request", label: "طلب شراء" },
   { id: "purchase_order", label: "أمر شراء" },
-  { id: "goods_receipt", label: "سند استلام" },
   { id: "journal_entry", label: "قيد محاسبي" },
-  { id: "account_statement", label: "كشف حساب" },
-  { id: "stock_transfer", label: "نقل مخزون" },
-  { id: "stock_adjustment", label: "تسوية مخزون" },
-  { id: "item_barcode_label", label: "ملصق صنف / باركود" },
-  { id: "leave_request", label: "طلب إجازة" },
-  { id: "loan_request", label: "طلب سلفة" },
-  { id: "maintenance_request", label: "طلب صيانة" },
   { id: "payroll", label: "إيصال راتب" },
   { id: "official_letter", label: "خطاب رسمي" },
-  { id: "employee_contract", label: "عقد موظف" },
-  { id: "rental_contract", label: "عقد إيجار" },
-  { id: "legal_contract", label: "عقد قانوني" },
+];
+
+// Tokens the preview helper exposes. Drives a sidebar in the HTML mode so
+// the user can copy a `{{...}}` instead of guessing — solves the "ما فيه
+// دليل" complaint about the editor.
+const PRINT_TOKENS: Array<{ token: string; category: string; description: string }> = [
+  // Branch / company
+  { token: "{{branch.letterhead}}", category: "ترويسة", description: "ترويسة A4 تلقائية (لوغو + اسم الشركة + الفرع + الرقم الضريبي)" },
+  { token: "{{branch.letterheadThermal}}", category: "ترويسة", description: "ترويسة مضغوطة للطباعة الحرارية" },
+  { token: "{{branch.footer}}", category: "ترويسة", description: "تذييل تلقائي" },
+  { token: "{{branch.companyName}}", category: "ترويسة", description: "اسم الشركة" },
+  { token: "{{branch.branchName}}", category: "ترويسة", description: "اسم الفرع" },
+  { token: "{{branch.taxNumber}}", category: "ترويسة", description: "الرقم الضريبي" },
+  { token: "{{branch.crNumber}}", category: "ترويسة", description: "السجل التجاري" },
+  { token: "{{branch.address}}", category: "ترويسة", description: "العنوان" },
+  { token: "{{branch.phone}}", category: "ترويسة", description: "الهاتف" },
+  { token: "{{branch.email}}", category: "ترويسة", description: "البريد الإلكتروني" },
+  // Entity (canonical fields)
+  { token: "{{entity.id}}", category: "بيانات الكيان", description: "المعرّف" },
+  { token: "{{entity.ref}}", category: "بيانات الكيان", description: "المرجع / الرقم المُسلسل" },
+  { token: "{{entity.title}}", category: "بيانات الكيان", description: "عنوان الوثيقة (يُملأ تلقائياً)" },
+  { token: "{{entity.date}}", category: "بيانات الكيان", description: "التاريخ" },
+  { token: "{{entity.status}}", category: "بيانات الكيان", description: "الحالة" },
+  { token: "{{entity.total}}", category: "بيانات الكيان", description: "الإجمالي" },
+  { token: "{{entity.subtotal}}", category: "بيانات الكيان", description: "المجموع قبل الضريبة" },
+  { token: "{{entity.vatAmount}}", category: "بيانات الكيان", description: "قيمة الضريبة" },
+  { token: "{{entity.currency}}", category: "بيانات الكيان", description: "العملة" },
+  { token: "{{entity.notes}}", category: "بيانات الكيان", description: "ملاحظات" },
+  // Auto-built tables
+  { token: "{{entity.itemsTable}}", category: "جداول", description: "جدول البنود تلقائي (يبني الأعمدة من المفاتيح)" },
+  { token: "{{entity.linesTable}}", category: "جداول", description: "جدول السطور (للقيود المحاسبية)" },
+  { token: "{{entity.movementsTable}}", category: "جداول", description: "جدول الحركات (لكشف الحساب)" },
+  // System / verification
+  { token: "{{system.verifyBlock}}", category: "تحقق", description: "صندوق التحقق + QR (يُسجَّل تلقائياً)" },
+  { token: "{{system.verifyQr}}", category: "تحقق", description: "صورة QR فقط" },
+  { token: "{{system.verifyUrl}}", category: "تحقق", description: "رابط التحقق العلني" },
+  // Dates
+  { token: "{{date.today}}", category: "تاريخ", description: "تاريخ اليوم بصيغة عربية" },
+  { token: "{{date.now}}", category: "تاريخ", description: "التاريخ والوقت الآن" },
+  // Helpers
+  { token: "{{#each items}}…{{/each}}", category: "مساعدات", description: "تكرار قائمة عناصر" },
+  { token: "{{#if entity.note}}…{{/if}}", category: "مساعدات", description: "إظهار شرطي" },
 ];
 
 const PAPER_SIZES = [
@@ -141,6 +174,19 @@ export default function PrintTemplatesPage() {
     "/print/templates"
   );
   const { data: branchesData } = useApiQuery<any>(["settings-branches"], "/settings/branches");
+  // Pull the full printable-entity catalogue from the backend so adding a
+  // new preset never requires a SPA release. Falls back to the small
+  // hard-coded list if the endpoint is unreachable (rate-limit, network).
+  const { data: entityTypesResp } = useApiQuery<{ items: Array<{ id: string; label: string; hasBespokePreset: boolean }> }>(
+    ["print-entity-types"],
+    "/print/entity-types"
+  );
+  const PRINTABLE_ENTITIES = useMemo(
+    () => entityTypesResp?.items?.length
+      ? entityTypesResp.items.map((e) => ({ id: e.id, label: e.label }))
+      : PRINTABLE_ENTITIES_FALLBACK,
+    [entityTypesResp],
+  );
   const branches = (branchesData?.data ?? branchesData?.items ?? []) as Array<{ id: number; name: string }>;
   const items = data?.items ?? [];
   const [filterEntity, setFilterEntity] = useState<string>("all");
@@ -157,6 +203,7 @@ export default function PrintTemplatesPage() {
         templateId={editingId === "new" ? null : editingId}
         templates={items}
         branches={branches}
+        entities={PRINTABLE_ENTITIES}
         onClose={() => setEditingId(null)}
       />
     );
@@ -238,9 +285,49 @@ export default function PrintTemplatesPage() {
                       </td>
                       <td className="p-2">{t.isDefault ? "✓" : ""}</td>
                       <td className="p-2 text-left">
-                        <Button size="sm" variant="ghost" onClick={() => setEditingId(t.id)}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
+                        <div className="inline-flex gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => setEditingId(t.id)} title="تعديل">
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="استنساخ هذا القالب"
+                            onClick={async () => {
+                              // Quick duplicate — POST a copy of the row with
+                              // "(نسخة)" appended and unset isDefault. Then
+                              // open the duplicated row in the editor so the
+                              // user lands on the edit screen ready to tweak.
+                              try {
+                                const created = await apiFetch<{ id: number }>(
+                                  "/print/templates",
+                                  {
+                                    method: "POST",
+                                    body: JSON.stringify({
+                                      name: `${t.name} (نسخة)`,
+                                      entityType: t.entityType,
+                                      branchId: t.branchId,
+                                      paperSize: t.paperSize,
+                                      mode: t.mode,
+                                      presetKey: t.presetKey,
+                                      htmlContent: t.htmlContent,
+                                      layoutJson: t.layoutJson,
+                                      headerOverride: t.headerOverride,
+                                      footerOverride: t.footerOverride,
+                                      isDefault: false,
+                                      isThermal: t.paperSize.startsWith("THERMAL"),
+                                    }),
+                                  },
+                                );
+                                if (created?.id) setEditingId(created.id);
+                              } catch {
+                                /* fail silently — server logs the error */
+                              }
+                            }}
+                          >
+                            ⎘
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -258,10 +345,11 @@ interface TemplateEditorProps {
   templateId: number | null;
   templates: TemplateRow[];
   branches: Array<{ id: number; name: string }>;
+  entities: Array<{ id: string; label: string }>;
   onClose: () => void;
 }
 
-function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEditorProps) {
+function TemplateEditor({ templateId, templates, branches, entities, onClose }: TemplateEditorProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const existing = templateId ? templates.find((t) => t.id === templateId) : null;
@@ -273,6 +361,32 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
   const [mode, setMode] = useState<"preset" | "html" | "visual">(existing?.mode ?? "preset");
   const [presetKey, setPresetKey] = useState(existing?.presetKey ?? "classic");
   const [htmlContent, setHtmlContent] = useState(existing?.htmlContent ?? "");
+  // Ref to the HTML <textarea> so the token side-panel can insert a
+  // `{{...}}` at the current caret position instead of just copying to the
+  // clipboard. Solves the "ما أعرف وين أحط المتغير" UX complaint.
+  const htmlEditorRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function insertToken(token: string) {
+    const el = htmlEditorRef.current;
+    if (!el) {
+      // Outside the HTML tab — fall back to clipboard so the click still
+      // does something useful.
+      navigator.clipboard?.writeText(token).catch(() => undefined);
+      toast({ title: "تم النسخ", description: token });
+      return;
+    }
+    const start = el.selectionStart ?? htmlContent.length;
+    const end = el.selectionEnd ?? htmlContent.length;
+    const next = htmlContent.slice(0, start) + token + htmlContent.slice(end);
+    setHtmlContent(next);
+    // Restore caret AFTER the inserted token on next tick (textarea state
+    // updates async via React).
+    requestAnimationFrame(() => {
+      const pos = start + token.length;
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    });
+  }
   const [isDefault, setIsDefault] = useState(existing?.isDefault ?? false);
 
   // Cliché overrides — when set, these win over the branch's letterhead so a
@@ -297,16 +411,46 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
     ];
   });
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [autoPreview, setAutoPreview] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  async function preview() {
+  // Live preview — every relevant edit fires after a 600ms debounce so the
+  // user sees their layout as they type. Solves "أكليك معاينة وأنتظر" UX
+  // complaint about the old manual-button-only flow.
+  const preview = useCallback(async () => {
+    setPreviewLoading(true);
     try {
       const blob = await apiFetch<Blob>(`/print/preview`, {
         method: "POST",
         body: JSON.stringify({
           entityType,
-          templateId: templateId ?? undefined,
-          payload: SAMPLE_PAYLOADS[entityType] ?? {},
+          // Don't reference the saved template — preview the in-flight edits.
+          templateId: templateId && mode === "preset" ? templateId : undefined,
+          // Forward the unsaved HTML / layout / presetKey / paperSize so
+          // the user sees exactly what they're about to save.
+          ...(mode === "html" && htmlContent ? { htmlContent } : {}),
+          ...(mode === "visual" && layout.length > 0 ? { layoutJson: layout } : {}),
+          ...(mode === "preset" ? { presetKey } : {}),
+          paperSize,
+          // Pass the cliché overrides so the preview reflects the unsaved
+          // letterhead changes (custom logo, override company name, footer).
+          ...((overrideLogoUrl || overrideCompanyName || overrideTaxNumber)
+            ? {
+                headerOverride: {
+                  ...(overrideLogoUrl && { logoUrl: overrideLogoUrl }),
+                  ...(overrideCompanyName && { companyName: overrideCompanyName }),
+                  ...(overrideTaxNumber && { taxNumber: overrideTaxNumber }),
+                },
+              }
+            : {}),
+          ...(overrideFooterText
+            ? { footerOverride: { text: overrideFooterText } }
+            : {}),
+          // Use the per-entity sample if we have one, else the generic
+          // default payload so the preview is never empty for the 100+
+          // entity types that don't ship a hand-tuned sample.
+          payload: SAMPLE_PAYLOADS[entityType] ?? DEFAULT_SAMPLE_PAYLOAD,
         }),
         raw: true,
         // as-any-reason: justified-pragmatic - apiClient options bag accepts non-standard `raw` flag not in its TS surface; cast widens to silence excess-property check
@@ -315,10 +459,39 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
       setPreviewHtml(typeof text === "string" ? text : String(blob));
     } catch {
       toast({ title: "تعذرت المعاينة", variant: "destructive" });
+    } finally {
+      setPreviewLoading(false);
     }
-  }
+  }, [
+    entityType, mode, htmlContent, presetKey, paperSize, templateId, toast,
+    layout, overrideLogoUrl, overrideCompanyName, overrideTaxNumber, overrideFooterText,
+  ]);
+
+  // Debounced auto-preview. Skip while typing fast — only fire 600ms after
+  // the user pauses. Disabled when `autoPreview` is off so the user can
+  // edit a long HTML doc without spamming /api/print/preview.
+  useEffect(() => {
+    if (!autoPreview) return;
+    const t = setTimeout(() => { void preview(); }, 600);
+    return () => clearTimeout(t);
+  }, [autoPreview, preview]);
 
   async function save() {
+    // Pre-flight validation — catch the obvious template syntax mistakes
+    // BEFORE hitting the server so the user gets an inline error instead of
+    // a generic 500. Detects unclosed `{{...}}` tokens and unclosed
+    // `{{#each}}` / `{{#if}}` blocks.
+    if (mode === "html" && htmlContent) {
+      const issues = validateTemplate(htmlContent);
+      if (issues.length > 0) {
+        toast({
+          title: "أخطاء في القالب",
+          description: issues.slice(0, 3).join(" · ") + (issues.length > 3 ? "…" : ""),
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     setSaving(true);
     try {
       const body = {
@@ -410,7 +583,7 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
                 <Select value={entityType} onValueChange={setEntityType}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent className="max-h-72">
-                    {PRINTABLE_ENTITIES.map((e) => (
+                    {entities.map((e) => (
                       <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -485,8 +658,26 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
                 </p>
               </TabsContent>
               <TabsContent value="html" className="space-y-2">
-                <Label>محتوى HTML (يدعم {`{{path.to.value}}`} و {`{{branch.letterhead}}`} و {`{{entity.itemsTable}}`})</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label>محتوى HTML</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 text-[10px]"
+                    onClick={() => {
+                      // Quick starter — drop in a sane scaffold the user can
+                      // edit instead of staring at an empty textarea.
+                      setHtmlContent(
+                        `<div class="print-doc">\n{{branch.letterhead}}\n<h2 style="text-align:center;margin:16px 0">{{entity.title}}</h2>\n<div class="meta-grid">\n  <div><strong>المرجع:</strong> {{entity.ref}}</div>\n  <div><strong>التاريخ:</strong> {{entity.date}}</div>\n  <div><strong>الحالة:</strong> {{entity.status}}</div>\n</div>\n{{entity.itemsTable}}\n{{system.verifyBlock}}\n{{branch.footer}}\n</div>`,
+                      );
+                    }}
+                  >
+                    استخدم قالب أولي
+                  </Button>
+                </div>
                 <Textarea
+                  ref={htmlEditorRef}
                   value={htmlContent}
                   onChange={(e) => setHtmlContent(e.target.value)}
                   rows={14}
@@ -495,7 +686,7 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
                   placeholder="<div>{{branch.letterhead}}<h2>{{entity.title}}</h2>{{entity.itemsTable}}{{branch.footer}}</div>"
                 />
                 <p className="text-xs text-muted-foreground">
-                  متغيرات تلقائية: <code>{`{{branch.letterhead}}`}</code>, <code>{`{{branch.footer}}`}</code>, <code>{`{{entity.itemsTable}}`}</code>, <code>{`{{date.today}}`}</code>
+                  انقر متغيراً من اللوحة اليمنى لإدراجه في موضع المؤشر. تتوفر مساعدات: <code>{`{{#each items}}…{{/each}}`}</code> و <code>{`{{#if entity.note}}…{{/if}}`}</code>.
                 </p>
               </TabsContent>
               <TabsContent value="visual">
@@ -577,34 +768,149 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2"><Eye className="h-4 w-4" /> المعاينة</CardTitle>
-          <Button size="sm" variant="outline" onClick={preview}>توليد المعاينة</Button>
-        </CardHeader>
-        <CardContent>
-          {previewHtml ? (
-            <iframe
-              srcDoc={previewHtml}
-              title="preview"
-              className="w-full border rounded bg-white"
-              style={{ minHeight: 600 }}
-            />
-          ) : (
-            <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded">
-              اضغط "توليد المعاينة" لرؤية شكل القالب ببيانات تجريبية.
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Eye className="h-4 w-4" /> المعاينة
+              {previewLoading && <span className="text-xs text-muted-foreground">(جارٍ التحديث…)</span>}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <label className="text-xs flex items-center gap-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoPreview}
+                  onChange={(e) => setAutoPreview(e.target.checked)}
+                  className="h-3 w-3"
+                />
+                معاينة مباشرة
+              </label>
+              <Button size="sm" variant="outline" onClick={preview} disabled={previewLoading}>
+                تحديث
+              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            {previewHtml ? (
+              <iframe
+                srcDoc={previewHtml}
+                title="preview"
+                className="w-full border rounded bg-white"
+                style={{ minHeight: 600 }}
+              />
+            ) : (
+              <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded">
+                {previewLoading
+                  ? "جارٍ توليد المعاينة الأولى…"
+                  : "ستظهر المعاينة هنا بمجرد ما تبدأ التعديل (المعاينة المباشرة مُفعّلة)."}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Tokens reference — clickable insertion into the HTML editor */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="h-4 w-4" /> المتغيرات
+            </CardTitle>
+            <p className="text-[10px] text-muted-foreground pt-1">
+              انقر متغيراً لنسخه، أو اكتب <code className="font-mono">{`{{`}</code> داخل المحرر.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3" style={{ maxHeight: 640, overflowY: "auto" }}>
+            {Array.from(new Set(PRINT_TOKENS.map((t) => t.category))).map((cat) => (
+              <div key={cat}>
+                <div className="text-xs font-semibold text-muted-foreground mb-1">{cat}</div>
+                <div className="space-y-1">
+                  {PRINT_TOKENS.filter((t) => t.category === cat).map((t) => (
+                    <button
+                      key={t.token}
+                      type="button"
+                      onClick={() => insertToken(t.token)}
+                      className="w-full text-right border rounded px-2 py-1.5 hover:bg-muted/60 hover:border-primary group block"
+                      title={mode === "html" ? `إدراج ${t.token} في المحرر` : `نسخ ${t.token} للحافظة`}
+                    >
+                      <div className="font-mono text-[10px] text-status-info-foreground" dir="ltr">{t.token}</div>
+                      <div className="text-[10px] text-muted-foreground">{t.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
 
 // Sample payloads used for the live preview when no real entity is in scope.
+/** Pre-flight check on an HTML template body — catches the common typos
+ *  the substitution layer would silently render as literal text. Returns
+ *  Arabic error messages; empty array = valid. */
+function validateTemplate(html: string): string[] {
+  const issues: string[] = [];
+  // Unmatched {{ and }}. A naked "{{" left in the body would render as
+  // literal text because no closing pair exists.
+  const opens = (html.match(/\{\{/g) ?? []).length;
+  const closes = (html.match(/\}\}/g) ?? []).length;
+  if (opens !== closes) {
+    issues.push(`عدد {{ (${opens}) لا يطابق عدد }} (${closes})`);
+  }
+  // Unbalanced #each / /each
+  const eachOpens = (html.match(/\{\{#each\s+[\w.]+\}\}/g) ?? []).length;
+  const eachCloses = (html.match(/\{\{\/each\}\}/g) ?? []).length;
+  if (eachOpens !== eachCloses) {
+    issues.push(`{{#each}}=${eachOpens} لا تطابق {{/each}}=${eachCloses}`);
+  }
+  // Unbalanced #if / /if
+  const ifOpens = (html.match(/\{\{#if\s+[\w.]+\}\}/g) ?? []).length;
+  const ifCloses = (html.match(/\{\{\/if\}\}/g) ?? []).length;
+  if (ifOpens !== ifCloses) {
+    issues.push(`{{#if}}=${ifOpens} لا تطابق {{/if}}=${ifCloses}`);
+  }
+  // Invalid helper names — only `each` and `if` are implemented today.
+  const badHelpers = Array.from(html.matchAll(/\{\{#(\w+)\s/g))
+    .map((m) => m[1])
+    .filter((h) => h !== "each" && h !== "if");
+  for (const h of new Set(badHelpers)) {
+    issues.push(`المساعد {{#${h}}} غير مدعوم — المتاح: #each / #if`);
+  }
+  // Detect unbalanced <script>/<style> early — the wrapper already
+  // sanitises cssOverrides but the body is rendered verbatim.
+  const scriptOpens = (html.match(/<script\b/gi) ?? []).length;
+  const scriptCloses = (html.match(/<\/script>/gi) ?? []).length;
+  if (scriptOpens !== scriptCloses) {
+    issues.push(`<script>=${scriptOpens} لا تطابق </script>=${scriptCloses}`);
+  }
+  return issues;
+}
+
+// Default payload used when an entity has no bespoke sample below — the
+// preview helper still has something to render so the user sees the
+// canonical fields (ref/date/status) instead of an empty doc.
+const DEFAULT_SAMPLE_PAYLOAD: Record<string, unknown> = {
+  entity: {
+    id: 1,
+    ref: "REF-2026-0001",
+    date: "2026-05-13",
+    status: "active",
+    title: "وثيقة تجريبية",
+    notes: "هذه معاينة فقط — البيانات تجريبية.",
+    currency: "ر.س",
+    amount: 1000,
+    total: 1000,
+  },
+  items: [
+    { name: "بند ١", qty: 1, price: 500, total: 500 },
+    { name: "بند ٢", qty: 2, price: 250, total: 500 },
+  ],
+};
+
 const SAMPLE_PAYLOADS: Record<string, Record<string, unknown>> = {
   invoice: {
-    entity: { ref: "INV-2026-0001", date: "2026-05-13", subtotal: 1000, vat: 150, total: 1150 },
+    entity: { ref: "INV-2026-0001", date: "2026-05-13", subtotal: 1000, vatAmount: 150, total: 1150, status: "posted", currency: "ر.س" },
     client: { name: "عميل تجريبي", taxNumber: "300000000000003" },
     items: [
       { name: "صنف ١", qty: 2, price: 250, total: 500 },
@@ -612,13 +918,72 @@ const SAMPLE_PAYLOADS: Record<string, Record<string, unknown>> = {
     ],
   },
   quotation: {
-    entity: { ref: "QT-2026-0001", date: "2026-05-13", validUntil: "2026-06-13", subtotal: 5000, vat: 750, total: 5750 },
+    entity: { ref: "QT-2026-0001", date: "2026-05-13", validUntil: "2026-06-13", subtotal: 5000, vatAmount: 750, total: 5750, status: "active", currency: "ر.س" },
     client: { name: "شركة الأمل المحدودة" },
     items: [{ name: "خدمة استشارات", qty: 1, price: 5000, total: 5000 }],
   },
   pos_receipt: {
-    entity: { ref: "POS-0042", date: "2026-05-13 11:24", subtotal: 87, vat: 13, total: 100, zatcaQr: "—" },
+    entity: { ref: "POS-0042", date: "2026-05-13 11:24", subtotal: 87, vatAmount: 13, total: 100, status: "paid", currency: "ر.س" },
     items: [{ name: "قهوة سادة", qty: 2, price: 25, total: 50 }, { name: "كيك", qty: 1, price: 50, total: 50 }],
+  },
+  receipt_voucher: {
+    entity: { ref: "RV-2026-0001", date: "2026-05-13", amount: 1500, status: "posted", paymentMethod: "cash", currency: "ر.س" },
+    client: { name: "عميل تجريبي" },
+  },
+  payment_voucher: {
+    entity: { ref: "PV-2026-0001", date: "2026-05-13", amount: 800, status: "posted", paymentMethod: "bank_transfer", currency: "ر.س" },
+    supplier: { name: "مورّد تجريبي" },
+  },
+  purchase_order: {
+    entity: { ref: "PO-2026-0001", date: "2026-05-13", total: 2500, status: "approved", currency: "ر.س" },
+    supplier: { name: "مورّد تجريبي" },
+    items: [{ name: "صنف", qty: 5, price: 500, total: 2500 }],
+  },
+  journal_entry: {
+    entity: { ref: "JE-2026-0001", date: "2026-05-13", status: "posted" },
+    lines: [
+      { accountCode: "1100", description: "بنك الراجحي", debit: 1000, credit: 0 },
+      { accountCode: "4100", description: "إيرادات بيع", debit: 0, credit: 1000 },
+    ],
+  },
+  payroll: {
+    entity: { ref: "PAY-2026-05", period: "2026-05", status: "completed", total: 50000, currency: "ر.س" },
+    items: [
+      { employeeName: "أحمد محمد", basic: 5000, allowances: 1000, deductions: 200, netSalary: 5800 },
+      { employeeName: "خالد عبدالله", basic: 7000, allowances: 1500, deductions: 350, netSalary: 8150 },
+    ],
+  },
+  account_statement: {
+    entity: { ref: "AS-2026-0001", date: "2026-05-13", code: "1100", name: "البنك", currency: "ر.س", currentBalance: 25000 },
+    movements: [
+      { التاريخ: "2026-05-01", المرجع: "INV-101", البيان: "إيراد بيع", مدين: 1000, دائن: 0 },
+      { التاريخ: "2026-05-08", المرجع: "PV-12", البيان: "صرف مصاريف", مدين: 0, دائن: 500 },
+    ],
+  },
+  leave_request: {
+    entity: { ref: "LV-2026-0001", date: "2026-05-13", status: "approved", days: 5, type: "annual", reason: "إجازة سنوية" },
+    employee: { name: "أحمد محمد", empNumber: "EMP-001" },
+  },
+  loan_request: {
+    entity: { ref: "LN-2026-0001", date: "2026-05-13", status: "pending", amount: 10000, installmentCount: 12, type: "personal" },
+    employee: { name: "أحمد محمد", empNumber: "EMP-001" },
+  },
+  official_letter: {
+    entity: { id: "001", subject: "خطاب تجريبي", type: "employment_certificate", date: "2026-05-13", status: "approved", content: "هذا نص خطاب تجريبي لمعاينة القالب." },
+  },
+  rental_contract: {
+    entity: { ref: "RC-2026-0001", date: "2026-05-13", startDate: "2026-05-13", endDate: "2027-05-12", monthlyRent: 3000, status: "active", currency: "ر.س" },
+    client: { name: "مستأجر تجريبي" },
+  },
+  delivery_note: {
+    entity: { ref: "DN-2026-0001", date: "2026-05-13", status: "delivered" },
+    client: { name: "عميل تجريبي" },
+    items: [{ name: "صنف", qty: 10, unit: "قطعة" }],
+  },
+  credit_note: {
+    entity: { ref: "CN-2026-0001", date: "2026-05-13", total: 250, status: "posted", currency: "ر.س" },
+    client: { name: "عميل تجريبي" },
+    items: [{ name: "ارتجاع صنف", qty: 1, price: 250, total: 250 }],
   },
 };
 

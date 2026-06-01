@@ -384,7 +384,7 @@ router.get("/seasons", authorize({ feature: "umrah", action: "list" }), async (r
   } catch (err) { handleRouteError(err, res, "List seasons error"); }
 });
 
-router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -393,7 +393,120 @@ router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), asyn
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الموسم غير موجود");
-    res.json(maskFields(req, row));
+
+    // Fan out the per-season aggregates. The season-detail page was
+    // already reading `revenue` / `registeredPilgrims` from the row,
+    // but the route returned only the raw umrah_seasons row — so
+    // every operational KPI rendered as 0/-. This fold closes that
+    // gap in one roundtrip.
+    const [
+      statusRows,
+      groupsRow,
+      financeRow,
+      nuskRow,
+      visaRow,
+      exemptRow,
+    ] = await Promise.all([
+      rawQuery<{ status: string; count: string }>(
+        `SELECT status, COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          GROUP BY status`,
+        [id, scope.companyId],
+      ),
+      rawQuery<{ groupsCount: string; agentsCount: string }>(
+        `SELECT
+           COUNT(*)::text AS "groupsCount",
+           COUNT(DISTINCT "agentId")::text AS "agentsCount"
+           FROM umrah_groups
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      ),
+      // Sales invoices in this season — header has a seasonId column
+      // (unlike the group-detail case which had to JOIN through items).
+      // Exclude cancelled so the revenue line matches what the operator
+      // actually books.
+      rawQuery<{ count: string; total: string | null; paid: string | null }>(
+        `SELECT COUNT(*)::text AS count,
+                COALESCE(SUM(total), 0)::text AS total,
+                COALESCE(SUM("paidAmount"), 0)::text AS paid
+           FROM umrah_sales_invoices
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+            AND status <> 'cancelled'`,
+        [id, scope.companyId],
+      ),
+      // NUSK invoices reach the season via their linked group (the
+      // nusk header has no seasonId column). Subquery against
+      // umrah_groups to keep tenant scope.
+      rawQuery<{ count: string; netCost: string | null }>(
+        `SELECT COUNT(*)::text AS count,
+                COALESCE(SUM(ni."netCost"), 0)::text AS "netCost"
+           FROM umrah_nusk_invoices ni
+          WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
+            AND ni."nuskStatus" <> 'cancelled'
+            AND ni."groupId" IN (
+              SELECT id FROM umrah_groups
+               WHERE "seasonId" = $2 AND "companyId" = $1 AND "deletedAt" IS NULL
+            )`,
+        [scope.companyId, id],
+      ),
+      // Visa-expiring within 7 days — mirrors the list-page banner +
+      // the per-group card. Excludes pilgrims who already left.
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+            AND "visaExpiry" IS NOT NULL
+            AND "visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
+            AND status NOT IN ('departed', 'cancelled')`,
+        [id, scope.companyId],
+      ),
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+            AND "overstayExempt" = true`,
+        [id, scope.companyId],
+      ),
+    ]);
+
+    const statusBreakdown: Record<string, number> = {};
+    let pilgrimsCount = 0;
+    let overstayCount = 0;
+    for (const r of statusRows) {
+      const n = Number(r.count);
+      statusBreakdown[r.status] = n;
+      pilgrimsCount += n;
+      if (r.status === "overstayed" || r.status === "overstay_penalized") overstayCount += n;
+    }
+
+    const fin = financeRow[0] || { count: "0", total: "0", paid: "0" };
+    const nusk = nuskRow[0] || { count: "0", netCost: "0" };
+    const groups = groupsRow[0] || { groupsCount: "0", agentsCount: "0" };
+
+    res.json(maskFields(req, {
+      ...row,
+      // Operational rollup
+      pilgrimsCount,
+      registeredPilgrims: pilgrimsCount,
+      statusBreakdown,
+      overstayCount,
+      visaExpiringCount: Number(visaRow[0]?.count ?? "0"),
+      exemptCount: Number(exemptRow[0]?.count ?? "0"),
+      groupsCount: Number(groups.groupsCount ?? "0"),
+      agentsCount: Number(groups.agentsCount ?? "0"),
+      // Financial rollup
+      revenue: Number(fin.total ?? "0"),
+      finance: {
+        invoiceCount: Number(fin.count),
+        invoiceTotal: Number(fin.total ?? "0"),
+        invoicePaid: Number(fin.paid ?? "0"),
+        invoiceOutstanding: Number(fin.total ?? "0") - Number(fin.paid ?? "0"),
+        nuskCount: Number(nusk.count),
+        nuskNetCost: Number(nusk.netCost ?? "0"),
+        margin: Number(fin.total ?? "0") - Number(nusk.netCost ?? "0"),
+      },
+    }));
   } catch (err) { handleRouteError(err, res, "Season detail error"); }
 });
 
@@ -665,18 +778,73 @@ router.get("/packages/:id", authorize({ feature: "umrah", action: "view" }), asy
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Defence-in-depth on the season JOIN — same pattern landed on
+    // groups/:id and sub-agents/:id. Without companyId a stale row
+    // could leak a title from another tenant.
     const [row] = await rawQuery(
-      `SELECT p.*, s.title AS "seasonTitle" FROM umrah_packages p
-       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id AND s."deletedAt" IS NULL
-       WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+      `SELECT p.*, s.title AS "seasonTitle"
+         FROM umrah_packages p
+    LEFT JOIN umrah_seasons s
+           ON p."seasonId" = s.id
+          AND s."companyId" = p."companyId"
+          AND s."deletedAt" IS NULL
+        WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("الباقة غير موجودة"); }
-    const pilgrims = await rawQuery(
-      `SELECT COUNT(*)::int AS c FROM umrah_pilgrims WHERE "packageId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    res.json(maskFields(req, { ...row, pilgrimCount: pilgrims[0]?.c || 0 }));
+
+    // Aggregates — the page already needs "how many pilgrims on this
+    // package" and "what's its revenue/cost picture". One roundtrip
+    // via Promise.all so loading the detail page stays snappy on
+    // large seasons.
+    const [statusRows, marginRow] = await Promise.all([
+      rawQuery<{ status: string; count: string }>(
+        `SELECT status, COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "packageId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          GROUP BY status`,
+        [id, scope.companyId],
+      ),
+      // Pilgrim count × package sellPrice/costPrice → simple revenue
+      // projection. Real revenue lives on invoices but the package
+      // itself doesn't know about invoices — projection is the right
+      // signal for "is this package priced correctly?".
+      rawQuery<{ count: string; sellPrice: string | null; costPrice: string | null }>(
+        `SELECT (SELECT COUNT(*)::text FROM umrah_pilgrims
+                  WHERE "packageId" = p.id AND "companyId" = p."companyId" AND "deletedAt" IS NULL
+                ) AS count,
+                p."sellPrice"::text AS "sellPrice",
+                p."costPrice"::text AS "costPrice"
+           FROM umrah_packages p
+          WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+        [id, scope.companyId],
+      ),
+    ]);
+
+    const statusBreakdown: Record<string, number> = {};
+    let pilgrimCount = 0;
+    for (const r of statusRows) {
+      const n = Number(r.count);
+      statusBreakdown[r.status] = n;
+      pilgrimCount += n;
+    }
+
+    const sell = Number(marginRow[0]?.sellPrice ?? 0);
+    const cost = Number(marginRow[0]?.costPrice ?? 0);
+
+    res.json(maskFields(req, {
+      ...row,
+      pilgrimCount,
+      statusBreakdown,
+      projection: {
+        sellPerPilgrim: sell,
+        costPerPilgrim: cost,
+        marginPerPilgrim: sell - cost,
+        projectedRevenue: sell * pilgrimCount,
+        projectedCost: cost * pilgrimCount,
+        projectedMargin: (sell - cost) * pilgrimCount,
+      },
+    }));
   } catch (err) { handleRouteError(err, res, "Get package error"); }
 });
 
@@ -1695,12 +1863,23 @@ router.get("/penalties", authorize({ feature: "umrah", action: "list" }), async 
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND pen."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND pen.status=$${params.length}`; }
+    // Tenant-scoped JOINs — without companyId guards a stale FK could
+    // surface a pilgrim / agent name from another tenant. Same pattern
+    // landed on /groups/:id (#1485) and /packages/:id (#1496).
     const rows = await rawQuery(
       `SELECT pen.*, p."fullName" as "pilgrimName", p."passportNumber", a.name as "agentName"
-       FROM umrah_penalties pen
-       LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
-       LEFT JOIN umrah_agents a ON pen."agentId"=a.id
-       WHERE ${where} ORDER BY pen."createdAt" DESC LIMIT 500`, params
+         FROM umrah_penalties pen
+    LEFT JOIN umrah_pilgrims p
+           ON pen."pilgrimId" = p.id
+          AND p."companyId"   = pen."companyId"
+          AND p."deletedAt"   IS NULL
+    LEFT JOIN umrah_agents a
+           ON pen."agentId"   = a.id
+          AND a."companyId"   = pen."companyId"
+          AND a."deletedAt"   IS NULL
+        WHERE ${where}
+        ORDER BY pen."createdAt" DESC
+        LIMIT 500`, params
     );
     res.json(maskFields(req, { data: rows.map(decryptPilgrimRow) }));
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
@@ -1710,12 +1889,19 @@ router.get("/penalties/:id", authorize({ feature: "umrah", action: "view" }), as
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Tenant-scoped JOINs — same defence-in-depth pattern as the list.
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT pen.*, p."fullName" AS "pilgrimName", p."passportNumber", a.name AS "agentName"
-       FROM umrah_penalties pen
-       LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
-       LEFT JOIN umrah_agents a ON pen."agentId"=a.id
-       WHERE pen.id=$1 AND pen."companyId"=$2`,
+         FROM umrah_penalties pen
+    LEFT JOIN umrah_pilgrims p
+           ON pen."pilgrimId" = p.id
+          AND p."companyId"   = pen."companyId"
+          AND p."deletedAt"   IS NULL
+    LEFT JOIN umrah_agents a
+           ON pen."agentId"   = a.id
+          AND a."companyId"   = pen."companyId"
+          AND a."deletedAt"   IS NULL
+        WHERE pen.id = $1 AND pen."companyId" = $2`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("العقوبة غير موجودة");

@@ -36,6 +36,7 @@ import { rawQuery, rawExecute } from "./rawdb.js";
 import { decryptSecret, encryptSecret } from "./secrets.js";
 import { logger } from "./logger.js";
 import { refreshAccessToken } from "./microsoftOauth.js";
+import { emitEvent } from "./businessHelpers.js";
 
 export type MailboxProvider = "microsoft365" | "imap" | "hostinger";
 
@@ -341,7 +342,20 @@ async function syncMicrosoft365(account: MailboxAccountRow): Promise<SyncResult>
        VALUES ($1, 'email', 'inbound', $2, $3, $4, $5, 'received', 'inbox', $6)`,
       [account.companyId, fromAddress, toAddress, subject, body, receivedAt],
     );
-    if (insertId > 0) messagesFetched++;
+    if (insertId > 0) {
+      messagesFetched++;
+      // N10 fix: emit inbox.message.received so the auto-classifier
+      // listener at eventListeners.ts can decide whether to spawn a
+      // task without the sync code carrying classification rules.
+      emitEvent({
+        companyId: account.companyId,
+        userId: null,
+        action: "inbox.message.received",
+        entity: "message_log",
+        entityId: insertId,
+        details: JSON.stringify({ subject, fromAddress, channel: "email" }),
+      }).catch((e) => logger.warn(e, "[mailboxSync] emit inbox.message.received failed"));
+    }
   }
 
   // Persist the deltaLink so the next sync only fetches new messages.

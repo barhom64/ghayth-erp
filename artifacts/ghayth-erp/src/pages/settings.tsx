@@ -29,6 +29,7 @@ import { ZatcaSettingsTab } from "./settings/zatca-settings-tab";
 import { CommunicationChannelsTab } from "./settings/communication-channels-tab";
 import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { BranchesTab } from "./settings/branches-tab";
+import { DepartmentsTab } from "./settings/departments-tab";
 import { CompaniesTab } from "./settings/companies-tab";
 import { LetterheadSettings } from "./settings/letterhead-tab";
 import { AccountingMappingsTab } from "./settings/accounting-mappings-tab";
@@ -350,7 +351,7 @@ export default function SettingsPage() {
         <TabsContent value="general"><GeneralSettings /></TabsContent>
         <TabsContent value="branches"><BranchesTab /></TabsContent>
         <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
-        <TabsContent value="departments"><CrudSection title="الأقسام" endpoint="/settings/departments" queryKey="settings-departments" fields={[{ name: "name", label: "الاسم" }, { name: "nameEn", label: "الاسم (إنجليزي)" }, { name: "manager", label: "المدير" }]} /></TabsContent>
+        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
         <TabsContent value="companies"><CompaniesTab /></TabsContent>
         <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
         <TabsContent value="controls"><SystemControlsTab /></TabsContent>
