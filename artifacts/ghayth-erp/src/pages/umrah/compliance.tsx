@@ -70,7 +70,10 @@ export default function UmrahComplianceDashboard() {
         tone: (data?.visaExpiringIn7d ?? 0) > 0
           ? "text-status-warning-foreground bg-status-warning-surface"
           : "text-status-neutral-foreground bg-status-neutral-surface",
-        href: `/umrah/pilgrims?visaExpiring=7d${seasonAmp}`,
+        // The list endpoint accepts `visaExpiringWithin` (numeric days),
+        // not `visaExpiring=7d` — original deep-link from #1502 used the
+        // wrong param name + value shape and silently fell through.
+        href: `/umrah/pilgrims?visaExpiringWithin=7${seasonAmp}`,
         testid: "compliance-tile-visa",
       },
       {
