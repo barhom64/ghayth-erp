@@ -1,6 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // JOURNEY ENGINE — محرك الرحلات التشغيلية
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// STATUS: RESERVED / PLANNED ENGINE (not yet wired) — 2026-05-31
+//   This engine is fully implemented but currently has NO callers:
+//   startJourney/advanceJourney are exported via lib/engines/index.ts but
+//   nothing invokes them yet. It is intentionally kept (not dead-code to be
+//   removed) as the planned cross-module journey tracker. Its backing table
+//   `journey_instances` is materialised by migration 248 so a future wiring
+//   has the schema ready on every environment. Do NOT delete without an
+//   explicit product decision to drop the journeys roadmap item.
+//
 // Cross-module work journeys that span multiple domains.  Each journey is a
 // sequence of steps that the system tracks to completion.
 //
