@@ -16,6 +16,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, toDateISO, getCompanyVatRate, computeVat } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { resolveZatcaSettings } from "../lib/zatca/settingsResolver.js";
+import { submitInvoiceToZatca } from "../lib/zatcaClient.js";
 import crypto from "node:crypto";
 import QRCode from "qrcode";
 import { logger } from "../lib/logger.js";
@@ -698,8 +699,48 @@ zatcaRouter.post("/zatca/invoice/:id/submit", authorize({ feature: "finance.zatc
       vatAmount: Number(invoice.vatAmount || 0).toFixed(2),
     });
 
-    const simulatedSuccess = settings.environment === "sandbox";
-    const submissionStatus = simulatedSuccess ? "accepted" : "submitted";
+    // M1 fix from CRITICAL_DEFECTS_REPORT.md: actually call ZATCA
+    // Fatoora when configured. Falls back to ZATCA_TEST_MODE only when
+    // explicitly opted-in via env. Pre-fix, every "sandbox" submission
+    // returned synthetic success without touching the gateway —
+    // operators thought their invoices were cleared when nothing had
+    // happened.
+    const invoiceType: "standard" | "simplified" =
+      ((invoice as { zatcaInvoiceType?: string }).zatcaInvoiceType === "standard")
+        ? "standard"
+        : "simplified";
+
+    let submissionStatus: string = "submitted";
+    let responseBody: unknown = { uuid, hash };
+    let clearedInvoiceB64: string | undefined;
+    try {
+      const zatcaResp = await submitInvoiceToZatca({
+        invoiceHash: hash,
+        uuid,
+        invoiceXmlBase64: Buffer.from(xml, "utf8").toString("base64"),
+        invoiceType,
+        credentials: {
+          binarySecurityToken: (settings as { binarySecurityToken?: string }).binarySecurityToken ?? "",
+          secret: (settings as { zatcaSecret?: string }).zatcaSecret ?? "",
+        },
+      });
+      submissionStatus = zatcaResp.status === "accepted" ? "accepted"
+                       : zatcaResp.status === "warnings" ? "accepted_with_warnings"
+                       : "rejected";
+      clearedInvoiceB64 = zatcaResp.clearedInvoiceBase64;
+      responseBody = {
+        clearanceStatus: zatcaResp.clearanceStatus,
+        reportingStatus: zatcaResp.reportingStatus,
+        validationResults: zatcaResp.validationResults,
+        raw: zatcaResp.rawResponse,
+      };
+    } catch (zatcaErr) {
+      // Network / config failure — DO NOT silently accept. Record the
+      // submission as 'failed' so the operator sees the truth.
+      logger.error(zatcaErr, "[zatca] submission threw");
+      submissionStatus = "failed";
+      responseBody = { error: zatcaErr instanceof Error ? zatcaErr.message : String(zatcaErr) };
+    }
 
     await rawExecute(
       `UPDATE invoices SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
@@ -716,12 +757,19 @@ zatcaRouter.post("/zatca/invoice/:id/submit", authorize({ feature: "finance.zatc
       [scope.companyId, id, invoice.ref, uuid, hash,
         submissionStatus, settings.environment,
         xml.substring(0, 5000),
-        JSON.stringify({ clearanceStatus: simulatedSuccess ? "CLEARED" : "REPORTED", uuid, hash }),
+        JSON.stringify(responseBody).substring(0, 8000),
         scope.activeAssignmentId]
     );
+    void clearedInvoiceB64;
 
     res.json({
-      message: simulatedSuccess ? "تم إرسال الفاتورة بنجاح (محاكاة sandbox)" : "تم تسجيل طلب الإرسال",
+      message: submissionStatus === "accepted"
+        ? "تم إرسال الفاتورة بنجاح إلى ZATCA"
+        : submissionStatus === "accepted_with_warnings"
+        ? "تم إرسال الفاتورة مع تحذيرات"
+        : submissionStatus === "failed"
+        ? "تعذّر إرسال الفاتورة للخادم — يرجى التحقق من إعدادات الاتصال"
+        : "تم رفض الفاتورة من ZATCA",
       status: submissionStatus,
       uuid,
       hash,

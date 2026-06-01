@@ -3679,4 +3679,216 @@ router.delete("/tires/:id", authorize({ feature: "fleet.maintenance", action: "d
   } catch (err) { handleRouteError(err, res, "tires delete error"); }
 });
 
+
+// ─── N5 — Vehicle Rental Contracts ──────────────────────────────────────────
+// External-customer vehicle rental. Closes N5 from
+// CRITICAL_DEFECTS_REPORT.md. Mirrors properties.rental_contracts shape:
+// contract row + payment schedule + GL on payment received.
+const createRentalContractSchema = z.object({
+  vehicleId: z.coerce.number().int().positive(),
+  clientId: z.coerce.number().int().positive(),
+  startDate: z.string().min(1),
+  endDate: z.string().optional(),
+  dailyRate: z.coerce.number().nonnegative().optional(),
+  totalAmount: z.coerce.number().nonnegative().optional(),
+  securityDeposit: z.coerce.number().nonnegative().optional(),
+  paymentTerms: z.enum(["daily", "weekly", "monthly", "quarterly", "one_time"]).optional(),
+  notes: z.string().optional(),
+});
+
+router.get("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const vehicleId = req.query.vehicleId ? Number(req.query.vehicleId) : null;
+    const status = req.query.status ? String(req.query.status) : null;
+    const params: unknown[] = [scope.companyId];
+    let sql = `SELECT c.*, v."plateNumber", cl.name AS "clientName"
+                 FROM fleet_rental_contracts c
+                 LEFT JOIN fleet_vehicles v ON v.id = c."vehicleId" AND v."deletedAt" IS NULL
+                 LEFT JOIN clients cl ON cl.id = c."clientId" AND cl."deletedAt" IS NULL
+                WHERE c."companyId" = $1 AND c."deletedAt" IS NULL`;
+    if (vehicleId) { params.push(vehicleId); sql += ` AND c."vehicleId" = $${params.length}`; }
+    if (status) { params.push(status); sql += ` AND c.status = $${params.length}`; }
+    sql += ` ORDER BY c."startDate" DESC LIMIT 500`;
+    const rows = await rawQuery(sql, params).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "rental contracts list error"); }
+});
+
+router.post("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createRentalContractSchema.safeParse(req.body));
+    const [veh] = await rawQuery<{ id: number; branchId: number | null }>(
+      `SELECT id, "branchId" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [b.vehicleId, scope.companyId]
+    );
+    if (!veh) throw new ValidationError("المركبة غير موجودة", { field: "vehicleId" });
+    const [cli] = await rawQuery<{ id: number }>(
+      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [b.clientId, scope.companyId]
+    );
+    if (!cli) throw new ValidationError("العميل غير موجود", { field: "clientId" });
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_rental_contracts
+         ("companyId","branchId","vehicleId","clientId","startDate","endDate","dailyRate","totalAmount","securityDeposit","paymentTerms",status,notes,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'draft',$11,$12)`,
+      [scope.companyId, veh.branchId, b.vehicleId, b.clientId, b.startDate, b.endDate ?? null, b.dailyRate ?? null, b.totalAmount ?? null, b.securityDeposit ?? 0, b.paymentTerms ?? 'monthly', b.notes ?? null, scope.userId]
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "fleet_rental_contracts", entityId: insertId,
+      after: { vehicleId: b.vehicleId, clientId: b.clientId, totalAmount: b.totalAmount },
+    }).catch((e) => logger.error(e, "fleet rental contract audit failed"));
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.rental_contract.created", entity: "fleet_rental_contracts", entityId: insertId,
+    }).catch((e) => logger.error(e, "fleet rental contract event failed"));
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "rental contract create error"); }
+});
+
+router.post("/rental-contracts/:id/activate", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(
+      `UPDATE fleet_rental_contracts SET status = 'active', "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!affectedRows) throw new NotFoundError("العقد غير موجود أو ليس في حالة مسودّة");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "activate", entity: "fleet_rental_contracts", entityId: id,
+    }).catch((e) => logger.error(e, "fleet rental audit failed"));
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "rental contract activate error"); }
+});
+
+// Schedule a payment row (operator-driven schedule, mirrors property
+// payments' pattern). GL posting happens on the /pay endpoint below.
+router.post("/rental-contracts/:id/payments", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = z.object({
+      dueDate: z.string().min(1),
+      amount: z.coerce.number().positive(),
+      notes: z.string().optional(),
+    }).safeParse(req.body);
+    if (!b.success) throw new ValidationError(b.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const [c] = await rawQuery<{ id: number }>(
+      `SELECT id FROM fleet_rental_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!c) throw new NotFoundError("العقد غير موجود");
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_rental_payments ("companyId","contractId","dueDate",amount,status,notes)
+       VALUES ($1,$2,$3,$4,'pending',$5)`,
+      [scope.companyId, id, b.data.dueDate, b.data.amount, b.data.notes ?? null]
+    );
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "rental schedule error"); }
+});
+
+// Record payment receipt. Posts a real GL JE (Dr Cash / Cr Rental
+// Revenue) so the fleet rental flow has the same financial integrity
+// as the property rental flow.
+router.post("/rental-payments/:id/pay", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = z.object({
+      paidAmount: z.coerce.number().positive(),
+      paidDate: z.string().optional(),
+      method: z.string().optional(),
+    }).safeParse(req.body);
+    if (!b.success) throw new ValidationError(b.error.errors[0]?.message ?? "بيانات غير صالحة");
+
+    let journalEntryId: number | null = null;
+    await withTransaction(async (client) => {
+      const { rows } = await client.query<{ id: number; contractId: number; amount: string; vehicleId: number; branchId: number | null }>(
+        `SELECT p.id, p."contractId", p.amount, c."vehicleId", c."branchId"
+           FROM fleet_rental_payments p
+           JOIN fleet_rental_contracts c ON c.id = p."contractId" AND c."companyId" = $2
+          WHERE p.id = $1 AND p."companyId" = $2
+            AND p.status IN ('pending', 'partial', 'overdue')
+          FOR UPDATE`,
+        [id, scope.companyId]
+      );
+      if (!rows.length) throw new NotFoundError("الدفعة غير موجودة أو مدفوعة");
+      const payment = rows[0];
+      const paidAmount = Math.min(b.data.paidAmount, Number(payment.amount));
+
+      const { fleetEngine } = await import("../lib/engines/index.js");
+      // postRentalRevenueGL — Dr 1100 Cash / Cr 4220 Fleet Rental
+      // Revenue, dimensioned with vehicleId. If the engine doesn't have
+      // this method yet, fall back to a direct call into financial-
+      // Engine.postJournalEntry with the same shape so the GL still posts.
+      try {
+        const [cashCode, revCode] = await Promise.all([
+          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_cash_source", "credit", "1100"),
+          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_rental_revenue", "credit", "4220"),
+        ]);
+        const fe = (await import("../lib/engines/financialEngine.js")).financialEngine;
+        const result = await fe.postJournalEntry({
+          companyId: scope.companyId,
+          branchId: payment.branchId ?? 0,
+          createdBy: scope.userId,
+          ref: `JE-FLEET-RENT-${payment.id}`,
+          description: `إيراد تأجير مركبة — دفعة #${payment.id}`,
+          type: "sales",
+          sourceType: "fleet_rental_payments",
+          sourceId: payment.id,
+          sourceKey: `fleet:rental_payment:${payment.id}`,
+          guardTable: "fleet_rental_payments",
+          guardId: payment.id,
+          lines: [
+            { accountCode: cashCode, debit: paidAmount, credit: 0, vehicleId: payment.vehicleId },
+            { accountCode: revCode, debit: 0, credit: paidAmount, vehicleId: payment.vehicleId },
+          ],
+        });
+        journalEntryId = result.journalId;
+      } catch (glErr) {
+        logger.error(glErr, "fleet rental GL post failed");
+        throw glErr; // block on GL failure — dual-entry invariant
+      }
+
+      const finalStatus = paidAmount >= Number(payment.amount) ? "paid" : "partial";
+      await client.query(
+        `UPDATE fleet_rental_payments
+            SET "paidAmount" = "paidAmount" + $1,
+                "paidDate" = COALESCE($2, CURRENT_DATE),
+                method = COALESCE($3, method),
+                status = $4,
+                "journalEntryId" = $5,
+                "updatedAt" = NOW()
+          WHERE id = $6`,
+        [paidAmount, b.data.paidDate ?? null, b.data.method ?? null, finalStatus, journalEntryId, id]
+      );
+    });
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.rental_payment.received", entity: "fleet_rental_payments", entityId: id,
+      details: JSON.stringify({ journalEntryId }),
+    }).catch((e) => logger.error(e, "fleet rental event failed"));
+    res.json({ ok: true, journalEntryId });
+  } catch (err) { handleRouteError(err, res, "rental pay error"); }
+});
+
+router.get("/rental-contracts/:id/payments", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery(
+      `SELECT * FROM fleet_rental_payments WHERE "companyId" = $1 AND "contractId" = $2 ORDER BY "dueDate" ASC`,
+      [scope.companyId, id]
+    ).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "rental payments list error"); }
+});
+
 export default router;

@@ -182,6 +182,35 @@ const EnvSchema = z.object({
   ZATCA_RETRY_BATCH_SIZE: intEnv(20),
   ZATCA_RETRY_MAX_ATTEMPTS: intEnv(5),
   ZATCA_ALLOW_CSR_GEN: boolEnv(false),
+  /** M1 batch11 — real Fatoora gateway base URL.
+   *  When set, lib/zatcaClient.ts uses it for submission.
+   *  Falls back to ZATCA_FATOORA_PROD_URL / ZATCA_FATOORA_SANDBOX_URL. */
+  ZATCA_API_BASE: optStr(),
+  /** Dev-only escape hatch: when "1", lib/zatcaClient.ts returns
+   *  synthetic accepted responses without network calls. Production
+   *  refuses to read this — see lib/zatcaClient.ts:resolveBaseUrl. */
+  ZATCA_TEST_MODE: optStr(),
+
+  // -- N15 Ejar (Saudi rental registry) -----------------------------------
+  EJAR_API_BASE: optStr(),
+  EJAR_CLIENT_ID: optStr(),
+  EJAR_CLIENT_SECRET: optStr(),
+  EJAR_LANDLORD_NID: optStr(),
+  EJAR_TEST_MODE: optStr(),
+
+  // -- N16 Sadad (SAMA bill payment) --------------------------------------
+  SADAD_API_BASE: optStr(),
+  SADAD_MERCHANT_ID: optStr(),
+  SADAD_API_KEY: optStr(),
+  SADAD_BILLER_CODE: optStr(),
+  SADAD_WEBHOOK_SECRET: optStr(),
+  SADAD_TEST_MODE: optStr(),
+
+  // -- N17 Nusk (Ministry of Hajj live API) -------------------------------
+  NUSK_API_BASE: optStr(),
+  NUSK_API_KEY: optStr(),
+  NUSK_AGENT_ID: optStr(),
+  NUSK_TEST_MODE: optStr(),
 
   // -- mudad ---------------------------------------------------------------
   MUDAD_PROD_URL: optStr(),
@@ -346,6 +375,33 @@ export interface AppConfig {
     readonly retryBatchSize: number;
     readonly retryMaxAttempts: number;
     readonly allowCsrGen: boolean;
+    /** M1 batch11. */
+    readonly apiBase: string | undefined;
+    readonly testMode: boolean;
+  };
+
+  readonly ejar: {
+    readonly apiBase: string | undefined;
+    readonly clientId: string | undefined;
+    readonly clientSecret: string | undefined;
+    readonly landlordNid: string | undefined;
+    readonly testMode: boolean;
+  };
+
+  readonly sadad: {
+    readonly apiBase: string | undefined;
+    readonly merchantId: string | undefined;
+    readonly apiKey: string | undefined;
+    readonly billerCode: string | undefined;
+    readonly webhookSecret: string | undefined;
+    readonly testMode: boolean;
+  };
+
+  readonly nusk: {
+    readonly apiBase: string | undefined;
+    readonly apiKey: string | undefined;
+    readonly agentId: string | undefined;
+    readonly testMode: boolean;
   };
 
   readonly mudad: {
@@ -510,6 +566,32 @@ function buildConfig(env: RawEnv): AppConfig {
       retryBatchSize: env.ZATCA_RETRY_BATCH_SIZE,
       retryMaxAttempts: env.ZATCA_RETRY_MAX_ATTEMPTS,
       allowCsrGen: env.ZATCA_ALLOW_CSR_GEN,
+      apiBase: env.ZATCA_API_BASE,
+      testMode: env.ZATCA_TEST_MODE === "1",
+    },
+
+    ejar: {
+      apiBase: env.EJAR_API_BASE,
+      clientId: env.EJAR_CLIENT_ID,
+      clientSecret: env.EJAR_CLIENT_SECRET,
+      landlordNid: env.EJAR_LANDLORD_NID,
+      testMode: env.EJAR_TEST_MODE === "1",
+    },
+
+    sadad: {
+      apiBase: env.SADAD_API_BASE,
+      merchantId: env.SADAD_MERCHANT_ID,
+      apiKey: env.SADAD_API_KEY,
+      billerCode: env.SADAD_BILLER_CODE,
+      webhookSecret: env.SADAD_WEBHOOK_SECRET,
+      testMode: env.SADAD_TEST_MODE === "1",
+    },
+
+    nusk: {
+      apiBase: env.NUSK_API_BASE,
+      apiKey: env.NUSK_API_KEY,
+      agentId: env.NUSK_AGENT_ID,
+      testMode: env.NUSK_TEST_MODE === "1",
     },
 
     mudad: {
