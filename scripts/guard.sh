@@ -86,6 +86,10 @@ else
 fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
+# Event-bus reconciliation — fails if any eventBus.on() handler can never fire
+# because its event is emitted nowhere (dynamic-dispatch aware). See
+# scripts/src/audit-event-bus.mjs.
+run_step "audit:event-bus"    node scripts/src/audit-event-bus.mjs
 # Stop-Ship gate for #1141: every route that INSERTs into an executive
 # document table must also call `numberingService.issueNumber`. A pure
 # lint regex can't catch a fresh INSERT into invoices/contracts/etc.
