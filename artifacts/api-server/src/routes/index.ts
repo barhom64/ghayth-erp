@@ -60,6 +60,7 @@ import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
 import searchRouter from "./search.js";
+import partiesRouter from "./parties.js";
 import activityLogRouter from "./activityLog.js";
 import approvalActionsRouter from "./approvalActions.js";
 import workflowsRouter from "./workflows.js";
@@ -458,6 +459,9 @@ router.use("/rbac/v2", requireMinLevel(90), rbacV2Router);
 // align with /admin/* policy.
 router.use("/audit-logs", requireMinLevel(90), requirePermission("audit:read"), auditLogsRouter);
 router.use("/search", searchRouter);
+// Party / master-data identity registry (slice 1). Read-only 360 view +
+// resolve + operator-triggered backfill. See lib/partyService.ts.
+router.use("/parties", partiesRouter);
 router.use("/activity-log", requireMinLevel(70), activityLogRouter);
 router.use("/approval-actions", approvalActionsRouter);
 router.use("/workflows", workflowsRouter);
