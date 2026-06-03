@@ -34,6 +34,7 @@ import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
 import { invalidateSodCache } from "../lib/rbac/sodEnforcement.js";
 import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
+import { getPermissionLevelCatalog } from "../lib/rbac/permissionLevels.js";
 import { handleRouteError, ValidationError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 
 const router = Router();
@@ -77,6 +78,19 @@ router.get("/features", authorize({ feature: "admin", action: "list" }), async (
     res.json(maskFields(req, { features: rows.length ? rows : FEATURE_CATALOG }));
   } catch (err) {
     handleRouteError(err, res, "list features");
+  }
+});
+
+// ─── Simplified Arabic permission-level catalog (non-technical UI) ──────────
+// Additive presentation layer over the 5-layer model: collapses the 14 actions
+// + 9 scopes into intuitive Arabic levels/tiers a non-technical owner toggles.
+// See lib/rbac/permissionLevels.ts. The UI renders this; expandLevel() maps a
+// chosen level back to the granular actions the engine enforces.
+router.get("/levels", authorize({ feature: "admin.roles", action: "list" }), async (_req, res) => {
+  try {
+    res.json(getPermissionLevelCatalog());
+  } catch (err) {
+    handleRouteError(err, res, "permission levels");
   }
 });
 
