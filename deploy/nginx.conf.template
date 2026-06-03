@@ -5,11 +5,15 @@
 # request time via Docker's embedded DNS (resolver 127.0.0.11) using a variable
 # proxy_pass. This lets nginx pick up new api replica IPs without a reload, so a
 # rolling api update (>=1 replica always healthy) never drops requests. The
-# proxy_next_upstream block retries the other healthy replica when one replica
-# is mid-restart. `non_idempotent` is required so a POST (e.g. /api/auth/login)
-# is also retried on a connection error during the swap — safe because nginx
-# only retries when it could not get a response (request did not complete on the
-# dropped replica). resolver 127.0.0.11 is Docker-specific (embedded DNS).
+# proxy_next_upstream block retries the healthy replica when one replica is
+# mid-restart. `non_idempotent` is required so a POST (e.g. /api/auth/login) is
+# also retried — without it nginx never retries POSTs even on a connection error.
+# We retry only on `error` (connect refused/reset => backend did NOT process) and
+# `timeout`; http_5xx is intentionally NOT retried so a real app 5xx is not
+# replayed. This is at-least-once for POSTs during the brief swap window: a
+# `timeout` after the backend already processed could in theory replay (low risk,
+# only during the ~seconds-long replica swap). resolver 127.0.0.11 is
+# Docker-specific (embedded DNS).
 
 client_max_body_size 32m;
 
@@ -65,7 +69,7 @@ server {
         proxy_read_timeout 60s;
         proxy_send_timeout 60s;
         proxy_connect_timeout 2s;
-        proxy_next_upstream error timeout http_502 http_503 http_504 non_idempotent;
+        proxy_next_upstream error timeout non_idempotent;
         proxy_next_upstream_tries 2;
         proxy_next_upstream_timeout 8s;
     }
