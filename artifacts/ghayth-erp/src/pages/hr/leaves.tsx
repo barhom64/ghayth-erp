@@ -225,7 +225,7 @@ export default function LeavesPage() {
     <PageShell
       title="طلبات الإجازات"
       subtitle="متابعة وإدارة طلبات إجازات الموظفين"
-      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "طلبات الإجازات" }]}
       actions={
         <div className="flex items-center gap-2">
           <Link href="/hr/leaves/create">

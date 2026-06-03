@@ -238,6 +238,7 @@ export default function AttendancePage() {
       subtitle="تسجيل ومتابعة حضور وانصراف الموظفين"
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
+        { label: "الحضور والانصراف" },
       ]}
       actions={
         <div className="flex items-center gap-2">
