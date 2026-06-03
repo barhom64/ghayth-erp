@@ -10,7 +10,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Users, Calendar } from "lucide-react";
+import { AlertTriangle, Users, Calendar, FileText, Receipt } from "lucide-react";
+import { Link } from "wouter";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -175,6 +176,22 @@ export default function UmrahPenaltyDetail() {
                 {STATUS_LABELS[penalty?.status] || penalty?.status || "-"}
               </Badge>
             </div>
+            {penalty?.seasonTitle && (
+              <div className="flex items-center justify-between pt-2 border-t">
+                <span className="text-xs text-muted-foreground">الموسم</span>
+                {penalty?.seasonId ? (
+                  <Link
+                    href={`/umrah/seasons/${penalty.seasonId}`}
+                    className="text-xs text-blue-600 hover:underline"
+                    data-testid="penalty-season-link"
+                  >
+                    {penalty.seasonTitle}
+                  </Link>
+                ) : (
+                  <span className="text-status-neutral-foreground text-xs">{penalty.seasonTitle}</span>
+                )}
+              </div>
+            )}
             {penalty?.appliedDate && (
               <div className="flex items-center justify-between pt-2 border-t">
                 <span className="text-xs text-muted-foreground">طُبقت في</span>
@@ -185,6 +202,75 @@ export default function UmrahPenaltyDetail() {
             )}
           </CardContent>
         </Card>
+
+        {/* Audit trail card — surfaces the new fields shipped on
+            /umrah/penalties/:id in #1502 (createdByName, updatedByName,
+            journalEntryRef, invoiceRef). Without this card the audit
+            officer would have to grep audit_logs by hand. Hidden when
+            ALL four fields are empty so a brand-new penalty doesn't
+            render an empty box. */}
+        {(penalty?.createdByName || penalty?.updatedByName || penalty?.journalEntryRef || penalty?.invoiceRef) && (
+          <Card data-testid="penalty-audit-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                سجل المراجعة
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {penalty?.createdByName && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">أنشأها</span>
+                  <span
+                    className="text-status-neutral-foreground text-xs"
+                    data-testid="penalty-created-by"
+                  >
+                    {penalty.createdByName}
+                  </span>
+                </div>
+              )}
+              {penalty?.updatedByName && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">آخر تعديل بواسطة</span>
+                  <span
+                    className="text-status-neutral-foreground text-xs"
+                    data-testid="penalty-updated-by"
+                  >
+                    {penalty.updatedByName}
+                  </span>
+                </div>
+              )}
+              {penalty?.journalEntryId && penalty?.journalEntryRef && (
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <FileText className="h-3 w-3" /> القيد المحاسبي
+                  </span>
+                  <Link
+                    href={`/finance/journal-manual/${penalty.journalEntryId}`}
+                    className="text-xs text-blue-600 hover:underline font-mono"
+                    data-testid="penalty-journal-link"
+                  >
+                    {penalty.journalEntryRef}
+                  </Link>
+                </div>
+              )}
+              {penalty?.invoiceId && penalty?.invoiceRef && (
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Receipt className="h-3 w-3" /> الفاتورة
+                  </span>
+                  <Link
+                    href={`/umrah/invoices/${penalty.invoiceId}`}
+                    className="text-xs text-blue-600 hover:underline font-mono"
+                    data-testid="penalty-invoice-link"
+                  >
+                    {penalty.invoiceRef}
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {id && <EntityComments entityType="umrah-penalty" entityId={id} />}

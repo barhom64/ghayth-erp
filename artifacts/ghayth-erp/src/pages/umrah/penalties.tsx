@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/formatters";
@@ -38,6 +38,23 @@ export default function UmrahPenalties() {
   const { toast } = useToast();
   const pageSize = 20;
   const items = resp?.data || [];
+
+  // Deep-link filter pre-application — the compliance dashboard tile
+  // navigates here with ?status=pending&seasonId=… so the audit officer
+  // lands on the filtered slice directly. Without this, the URL would
+  // be a no-op.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const next: Record<string, string> = {};
+    let touched = false;
+    for (const k of ["status", "seasonId"]) {
+      const v = sp.get(k);
+      if (v) { next[k] = v; touched = true; }
+    }
+    if (touched) setFilters({ ...filters, ...next } as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const waiveMutation = useApiMutation<any, { id: number; reason: string }>(
     (body) => `/umrah/penalties/${body.id}/waive`,
