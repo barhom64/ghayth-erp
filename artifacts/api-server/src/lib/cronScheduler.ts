@@ -7,6 +7,7 @@ import { config } from "./config.js";
 import { saveAllCompaniesKPISnapshots } from "./kpiEngine.js";
 import { runSmartAlertsAllCompanies } from "./smartAlerts.js";
 import { runSelfAuditAllCompanies } from "./selfAuditEngine.js";
+import { backfillCompany } from "./partyService.js";
 import {
   createNotification,
   getManagerAssignmentId,
@@ -3787,7 +3788,27 @@ export async function rateLimitFallbackAlertCheck(): Promise<string> {
   return "ok";
 }
 
+// Party registry sync — keeps the master-data identity registry (parties /
+// party_links) current as new entity rows are created. backfillCompany is
+// idempotent and only processes rows not yet linked, so this is cheap after
+// the initial backfill. Eventually-consistent (daily) by design; no per-create
+// hooks needed across the 9 silo tables. See lib/partyService.ts.
+async function partyRegistrySync(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let linked = 0;
+  for (const c of companies) {
+    try {
+      const results = await backfillCompany(c.id);
+      linked += results.reduce((a, r) => a + r.linked, 0);
+    } catch (e) {
+      logger.error(e, `[party_registry_sync] company ${c.id} failed`);
+    }
+  }
+  return `synced ${companies.length} companies · ${linked} new party link(s)`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "party_registry_sync", description: "مزامنة سجل الأطراف (Party) — ربط الكيانات الجديدة", schedule: "30 3 * * *", handler: partyRegistrySync },
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
