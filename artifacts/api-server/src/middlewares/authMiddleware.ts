@@ -11,6 +11,7 @@ export interface RequestScope {
   activeAssignmentId: number;
   allowedCompanies: number[];
   allowedBranches: number[];
+  allowedDepartments: number[];
   allowedAssignments: number[];
   role: string;
   isOwner: boolean;
@@ -106,8 +107,8 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
   // letting writes land on it. employee_assignments.branchId is
   // nullable for owners/general_managers, so the OR clause keeps those
   // rows in.
-  const allAssignments = await rawQuery<{ id: number; companyId: number; branchId: number | null }>(
-    `SELECT ea.id, ea."companyId", ea."branchId"
+  const allAssignments = await rawQuery<{ id: number; companyId: number; branchId: number | null; departmentId: number | null }>(
+    `SELECT ea.id, ea."companyId", ea."branchId", ea."departmentId"
        FROM employee_assignments ea
        LEFT JOIN branches b ON b.id = ea."branchId"
       WHERE ea."employeeId" = $1
@@ -123,6 +124,17 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
       allAssignments
         .map((a) => a.branchId)
         .filter((b): b is number => typeof b === "number"),
+    ),
+  ];
+  // Department-level scoping (org-as-security-boundary, additive). Derived from
+  // the same active assignments as branches; consumed only by routes that
+  // opt in via buildScopedWhere({ enforceDepartmentScope: true }). Owners/GMs
+  // are department-unbounded (empty set ⇒ no department predicate is emitted).
+  const allowedDepartments = [
+    ...new Set(
+      allAssignments
+        .map((a) => a.departmentId)
+        .filter((d): d is number => typeof d === "number"),
     ),
   ];
 
@@ -219,6 +231,7 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
     activeAssignmentId,
     allowedCompanies,
     allowedBranches,
+    allowedDepartments,
     allowedAssignments: allAssignments.map((a) => a.id),
     role: effectiveRole,
     isOwner: effectiveIsOwner,
