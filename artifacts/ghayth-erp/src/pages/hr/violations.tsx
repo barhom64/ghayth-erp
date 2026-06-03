@@ -111,7 +111,7 @@ export default function ViolationsPage() {
     return (
       <PageShell
         title="المخالفات والجزاءات"
-        subtitle="الصفحة الأم لمنظومة الانضباط"
+        subtitle="الصفحة الأم — كل المحاضر، الرصد التلقائي، واللائحة في مكان واحد"
         loading
         breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "المخالفات والجزاءات" }]}
       >
@@ -123,6 +123,7 @@ export default function ViolationsPage() {
     return (
       <PageShell
         title="المخالفات والجزاءات"
+        subtitle="الصفحة الأم — كل المحاضر، الرصد التلقائي، واللائحة في مكان واحد"
         breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "المخالفات والجزاءات" }]}
       >
         <ErrorState />
