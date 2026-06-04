@@ -77,9 +77,6 @@ export default function CustomerAdvancesPage() {
     window.history.replaceState({}, "", url);
   }, [viewMode]);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
 
   const filteredRows = useMemo(() => {
@@ -89,22 +86,6 @@ export default function CustomerAdvancesPage() {
       (r.clientName ?? "").toLowerCase().includes(s) || r.ref.toLowerCase().includes(s),
     );
   }, [rows, searchText]);
-
-  const totalsByStatus = filteredRows.reduce(
-    (acc, r) => {
-      const amt = Number(r.amount);
-      const rem = Number(r.remaining);
-      acc.total += amt;
-      acc.remaining += rem;
-      acc.applied += Number(r.appliedAmount);
-      if (r.status === "open" || r.status === "partially_applied") {
-        acc.openCount += 1;
-        acc.openAmount += rem;
-      }
-      return acc;
-    },
-    { total: 0, remaining: 0, applied: 0, openCount: 0, openAmount: 0 },
-  );
 
   const groups = useMemo<ClientGroup[]>(() => {
     const map = new Map<string, ClientGroup>();
@@ -127,6 +108,25 @@ export default function CustomerAdvancesPage() {
     }
     return Array.from(map.values()).sort((a, b) => b.totalRemaining - a.totalRemaining);
   }, [filteredRows]);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
+
+  const totalsByStatus = filteredRows.reduce(
+    (acc, r) => {
+      const amt = Number(r.amount);
+      const rem = Number(r.remaining);
+      acc.total += amt;
+      acc.remaining += rem;
+      acc.applied += Number(r.appliedAmount);
+      if (r.status === "open" || r.status === "partially_applied") {
+        acc.openCount += 1;
+        acc.openAmount += rem;
+      }
+      return acc;
+    },
+    { total: 0, remaining: 0, applied: 0, openCount: 0, openAmount: 0 },
+  );
 
   const toggle = (key: string) => {
     setExpanded((s) => {
