@@ -475,7 +475,6 @@ const allNavSections: NavSection[] = [
         { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },
         { label: "المرفقات", path: "/umrah/attachments", icon: Paperclip },
         { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
-        { label: "الاستيراد القديم", path: "/umrah/import/legacy", icon: FileText },
       ]},
     ],
   },

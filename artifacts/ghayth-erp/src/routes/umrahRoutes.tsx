@@ -9,7 +9,6 @@ const UmrahAccommodations = lazy(() => import("@/pages/umrah/accommodations"));
 const UmrahPenalties = lazy(() => import("@/pages/umrah/penalties"));
 const UmrahPayments = lazy(() => import("@/pages/umrah/payments"));
 const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
-const UmrahImport = lazy(() => import("@/pages/umrah/import"));
 const UmrahImportWizard = lazy(() => import("@/pages/umrah/import-wizard"));
 const PilgrimCreate = lazy(() => import("@/pages/umrah/pilgrim-create"));
 const PilgrimDetail = lazy(() => import("@/pages/umrah/pilgrim-detail"));
@@ -85,8 +84,6 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/packages/:id", component: UmrahPackageDetail, module: "operations" },
   { path: "/umrah/transport", component: UmrahTransport, module: "operations" },
   { path: "/umrah/transport/:id", component: UmrahTransportDetail, module: "operations" },
-  // Legacy import page kept for backward compat; new wizard registered below
-  { path: "/umrah/import/legacy", component: UmrahImport, module: "operations" },
   // Wave 5 routes
   { path: "/umrah/sub-agents", component: UmrahSubAgents, module: "operations" },
   { path: "/umrah/sub-agents/:id", component: UmrahSubAgentDetail, module: "operations" },
