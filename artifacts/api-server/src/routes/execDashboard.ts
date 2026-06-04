@@ -38,7 +38,7 @@ execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive",
     const companyId = scope.companyId;
 
     // All 12 dashboard sections are independent — run in parallel.
-    const [cashPosition, ar, ap, obligations, slaBreaches, stuckWorkflows, budgetOverages, dunning, expiringContracts, fleetMaintenance, hrDocExpiries, mtd] = await Promise.all([
+    const [cashPosition, ar, ap, obligations, slaBreaches, stuckWorkflows, budgetOverages, dunning, expiringContracts, fleetMaintenance, hrDocExpiries, mtd, umrahSummary, legalSummary] = await Promise.all([
     // ─── 1. CASH POSITION ─────────────────────────────────────────────────
     safe(async () => {
       const rows = await rawQuery<Record<string, unknown>>(
@@ -253,6 +253,40 @@ execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive",
         net: Number(revenue?.v ?? 0) - Number(expense?.v ?? 0),
       };
     }, { revenue: 0, expense: 0, net: 0 }),
+
+    // ─── 13. UMRAH SUMMARY (cross-domain — was missing from CEO view) ──────
+    safe(async () => {
+      const [r] = await rawQuery<Record<string, unknown>>(
+        `SELECT
+           (SELECT COUNT(*)::int FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL) AS "totalPilgrims",
+           (SELECT COUNT(*)::int FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL AND COALESCE("overstayDays",0) > 0) AS overstays,
+           (SELECT COUNT(*)::int FROM umrah_seasons WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active') AS "activeSeasons",
+           (SELECT COUNT(*)::int FROM umrah_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status NOT IN ('resolved','closed','cancelled')) AS "openViolations"`,
+        [companyId]
+      );
+      return {
+        totalPilgrims: Number(r?.totalPilgrims ?? 0),
+        overstays: Number(r?.overstays ?? 0),
+        activeSeasons: Number(r?.activeSeasons ?? 0),
+        openViolations: Number(r?.openViolations ?? 0),
+      };
+    }, { totalPilgrims: 0, overstays: 0, activeSeasons: 0, openViolations: 0 }),
+
+    // ─── 14. LEGAL SUMMARY (cross-domain — was missing from CEO view) ──────
+    safe(async () => {
+      const [r] = await rawQuery<Record<string, unknown>>(
+        `SELECT
+           (SELECT COUNT(*)::int FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status NOT IN ('closed','resolved','cancelled')) AS "openCases",
+           (SELECT COUNT(*)::int FROM legal_judgments WHERE "companyId"=$1 AND COALESCE("paidAmount",0) < amount AND "dueDate" < CURRENT_DATE) AS "overdueJudgments",
+           (SELECT COALESCE(SUM(amount - COALESCE("paidAmount",0)),0) FROM legal_judgments WHERE "companyId"=$1 AND COALESCE("paidAmount",0) < amount) AS "unpaidJudgments"`,
+        [companyId]
+      );
+      return {
+        openCases: Number(r?.openCases ?? 0),
+        overdueJudgments: Number(r?.overdueJudgments ?? 0),
+        unpaidJudgments: roundTo2(Number(r?.unpaidJudgments ?? 0)),
+      };
+    }, { openCases: 0, overdueJudgments: 0, unpaidJudgments: 0 }),
     ]); // end Promise.all
 
     // ─── ROLL-UP RISK SCORE ───────────────────────────────────────────────
@@ -299,6 +333,8 @@ execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive",
       expiringContracts,
       fleetMaintenance,
       hrDocExpiries,
+      umrahSummary,
+      legalSummary,
     }));
   } catch (err) {
     handleRouteError(err, res, "Exec dashboard error:");
