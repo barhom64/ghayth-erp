@@ -242,7 +242,6 @@ const allNavSections: NavSection[] = [
         { label: "صف الإرسال", path: "/finance/invoice-send-queue", icon: Send },
         { label: "السندات", path: "/finance/vouchers", icon: FileText },
         { label: "المصروفات", path: "/finance/expenses", icon: Wallet },
-        { label: "مصروف متعدد البنود", path: "/finance/expenses/multi-line", icon: Layers },
         { label: "اعتماد مصاريف بالجملة", path: "/finance/expense-bulk-approvals", icon: CheckSquare },
         { label: "موزّع التكاليف", path: "/finance/expenses/split", icon: Layers },
         { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
