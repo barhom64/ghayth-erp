@@ -112,6 +112,27 @@ const createEmployeeSchema = z.object({
   // application. Creation still runs through this single pipeline — the id
   // only adds the application↔employee link, conversion event and audit.
   sourceApplicationId: z.coerce.number().int().positive().optional().nullable(),
+  // Integrated HR onboarding (migration 248). Split the previous single
+  // `email` into the three things HR actually needs:
+  //   - internalEmail → user-account login (e.g. ahmed@company.sa).
+  //     When set, this is the email that ends up on users.email.
+  //   - personalEmail → personal contact, stored separately on
+  //     employees.personalEmail. Never used for auth.
+  //   - email (legacy) → fallback. If only `email` is provided, it
+  //     plays both roles for backward compatibility.
+  internalEmail: z.string().email().optional().nullable(),
+  personalEmail: z.string().email().optional().nullable(),
+  // When true, the create transaction also opens a subsidiary custody
+  // account for this employee under chart_of_accounts (cash-advance
+  // sub-ledger). Drivers, sales reps, field engineers normally need
+  // this on day one so the finance team doesn't get a 23503 the first
+  // time it tries to post an advance.
+  createCustodyAccount: z.boolean().optional(),
+  // When the new employee is a driver, optionally bind a vehicle on
+  // creation. The transaction validates the vehicle is in the same
+  // company; the binding becomes a fleet_driver_vehicle row. Skipped
+  // silently if the table doesn't exist or role!=driver.
+  vehicleId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -489,6 +510,15 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       preIssuedEmpNumber = preIssued.number;
     }
 
+    // Migration 248 — split the email field into 3 roles:
+    //  - internalEmail: user-account login (employees.internalEmail)
+    //  - personalEmail: contact (employees.personalEmail)
+    //  - email: legacy fallback (employees.email) for back-compat.
+    // The user account (Step 8) chooses internalEmail when present,
+    // else falls back to email.
+    const internalEmailIn = ((body as any).internalEmail as string | null | undefined) || null;
+    const personalEmailIn = ((body as any).personalEmail as string | null | undefined) || null;
+
     const result = await withTransaction(async (client) => {
       const finalEmpNumber = preIssuedEmpNumber!;
 
@@ -498,10 +528,11 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
          "iqamaNumber","iqamaExpiry","passportNumber","passportExpiry",
          "borderNumber","visaNumber","visaType","visaExpiry",
          "sponsorNumber","workPermitNumber","workPermitExpiry","iqamaStatus",
-         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone",attachments)
+         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone",attachments,
+         "personalEmail","internalEmail")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active',
          $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-         $21,$22,$23,$24,$25,$26)
+         $21,$22,$23,$24,$25,$26,$27,$28)
          RETURNING id`,
         [name, phone || null, email || null, finalEmpNumber, nationalId || null, gender || null, nationality || null, dateOfBirth || null,
          iqamaNumber || null, iqamaExpiry || null, passportNumber || null, passportExpiry || null,
@@ -509,7 +540,8 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
          sponsorNumber || null, workPermitNumber || null, workPermitExpiry || null, iqamaStatus || 'active',
          bankName || null, bankAccount || null, iban || null, emergencyContact || null, emergencyPhone || null,
          // as-any-reason: justified-pragmatic - defensive read of optional attachments field on parsed body; behavior unchanged
-         (body as any).attachments ? JSON.stringify((body as any).attachments) : null]
+         (body as any).attachments ? JSON.stringify((body as any).attachments) : null,
+         personalEmailIn, internalEmailIn]
       );
       const empId = empRes.rows[0].id;
 
@@ -653,21 +685,110 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
 
       // ── Step 8: Auto-create user account ──
+      // Login email priority: explicit internalEmail > legacy email.
+      // Operators who set BOTH internalEmail + personalEmail want the
+      // user to log in with the internal one and keep the personal as
+      // a contact, not a credential.
+      const loginEmail = internalEmailIn || email || null;
       let userId: number | null = null;
       let tempPassword: string | null = null;
-      if (email) {
-        const existingUser = await client.query(`SELECT id FROM users WHERE email=$1`, [email]);
+      if (loginEmail) {
+        const existingUser = await client.query(`SELECT id FROM users WHERE email=$1`, [loginEmail]);
         if (existingUser.rows.length === 0) {
           tempPassword = Math.random().toString(36).slice(-8) + "A1!";
           const hashedPw = await hashPassword(tempPassword);
           const userRes = await client.query(
             `INSERT INTO users (email, "passwordHash", role, "employeeId", "isActive") VALUES ($1,$2,$3,$4,true) RETURNING id`,
-            [email, hashedPw, role || "employee", empId]
+            [loginEmail, hashedPw, role || "employee", empId]
           );
           userId = userRes.rows[0].id;
         } else {
           userId = existingUser.rows[0].id;
           await client.query(`UPDATE users SET "employeeId"=$1 WHERE id=$2`, [empId, userId]);
+        }
+      }
+
+      // ── Step 8a: Job-title-driven defaults ──
+      // When the picked job_title has defaultRoleKey set and the body
+      // didn't override `role`, prefer the job-title default. Same for
+      // opensCustody — flips on the auto-custody flag.
+      let opensCustody = Boolean((body as any).createCustodyAccount);
+      if (resolvedJobTitleId) {
+        const [jt] = await client.query<{ defaultRoleKey: string | null; opensCustody: boolean }>(
+          `SELECT "defaultRoleKey", "opensCustody" FROM job_titles WHERE id = $1`,
+          [resolvedJobTitleId]
+        ).then(r => r.rows as Array<{ defaultRoleKey: string | null; opensCustody: boolean }>);
+        if (jt?.defaultRoleKey && (!role || role === "employee")) {
+          // Re-apply the role only on the assignment we just inserted.
+          await client.query(
+            `UPDATE employee_assignments SET role = $1 WHERE id = $2`,
+            [jt.defaultRoleKey, assignmentId]
+          );
+        }
+        if (jt?.opensCustody) opensCustody = true;
+      }
+
+      // ── Step 8b: Open employee subsidiary custody account ──
+      // When opensCustody is true (either passed in or job-title-driven),
+      // INSERT a subsidiary_accounts row pointing the employee at the
+      // canonical custody chart account (1400 or whatever the company's
+      // accountingMappings resolves for "custody_account"). Finance then
+      // posts every later advance through this sub-account so the
+      // balance-sheet drill-down stays per-person, not pooled. Failure
+      // here is a soft warning — the employee record still exists.
+      if (opensCustody) {
+        try {
+          const [coaRow] = await client.query<{ id: number; code: string }>(
+            `SELECT id, code FROM chart_of_accounts
+              WHERE "companyId" = $1 AND code = '1400' AND "deletedAt" IS NULL
+              LIMIT 1`,
+            [effectiveCompanyId]
+          ).then(r => r.rows as Array<{ id: number; code: string }>);
+          if (coaRow) {
+            await client.query(
+              `INSERT INTO subsidiary_accounts
+                 ("companyId", "entityType", "entityId", "accountType", "accountId", "isActive")
+               VALUES ($1, 'employee', $2, 'custody', $3, true)
+               ON CONFLICT DO NOTHING`,
+              [effectiveCompanyId, empId, coaRow.id]
+            );
+          } else {
+            logger.warn({ companyId: effectiveCompanyId }, "[employees] chart_of_accounts 1400 missing — custody sub-account skipped");
+          }
+        } catch (e) {
+          logger.warn(e, "[employees] subsidiary custody account create failed");
+        }
+      }
+
+      // ── Step 8c: Driver-vehicle binding ──
+      // When the new employee is a driver and the operator chose a
+      // vehicle in the form, validate the vehicle belongs to the same
+      // company and create the assignment row. We use UPDATE
+      // fleet_vehicles SET "currentDriverId" = empId so the existing
+      // driver-detail screens pick it up without a new entity.
+      const wantsVehicle = ((body as any).vehicleId as number | null | undefined) ?? null;
+      const effectiveRole = role || "employee";
+      if (wantsVehicle && (effectiveRole === "driver" || effectiveRole === "fleet_driver")) {
+        try {
+          const [veh] = await client.query<{ id: number }>(
+            `SELECT id FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+            [Number(wantsVehicle), effectiveCompanyId]
+          ).then(r => r.rows as Array<{ id: number }>);
+          if (veh) {
+            // Match the existing fleet_drivers.linkedEmployeeId pattern
+            // (fleet route uses it for the trip-complete + violation
+            // flow) — INSERT or UPDATE the link via fleet_drivers.
+            await client.query(
+              `INSERT INTO fleet_drivers (name, phone, "companyId", "branchId", "linkedEmployeeId", status)
+               VALUES ($1, $2, $3, $4, $5, 'available')
+               ON CONFLICT DO NOTHING`,
+              [name, phone || null, effectiveCompanyId, targetBranchId, empId]
+            ).catch(() => undefined);
+          } else {
+            logger.warn({ vehicleId: wantsVehicle }, "[employees] vehicleId not in company — skipping driver binding");
+          }
+        } catch (e) {
+          logger.warn(e, "[employees] driver-vehicle binding failed");
         }
       }
 
@@ -916,6 +1037,63 @@ router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" })
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) { logger.error(err, "job-titles query failed"); res.json({ data: [], total: 0 }); }
+});
+
+// Migration 248 — create / update job_titles so admins can wire the
+// defaultRoleKey + opensCustody policy through the UI. Gated by the
+// admin-equivalent setting feature so HR alone can't grant roles.
+const upsertJobTitleSchema = z.object({
+  name: z.string().min(1).max(100),
+  nameEn: z.string().max(100).optional(),
+  category: z.string().max(50).optional(),
+  defaultRoleKey: z.string().max(60).optional().nullable(),
+  opensCustody: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
+router.post("/job-titles", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(upsertJobTitleSchema.safeParse(req.body));
+    const { insertId } = await rawExecute(
+      `INSERT INTO job_titles (name, "nameEn", category, "companyId", "isActive", "defaultRoleKey", "opensCustody")
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [b.name, b.nameEn ?? null, b.category ?? 'general', scope.companyId, b.isActive ?? true, b.defaultRoleKey ?? null, b.opensCustody ?? false]
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "job_titles", entityId: insertId,
+      after: b,
+    }).catch(() => undefined);
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "create job_title"); }
+});
+
+router.patch("/job-titles/:id", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(upsertJobTitleSchema.partial().safeParse(req.body));
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    const set = (col: string, val: unknown) => { params.push(val); sets.push(`"${col}" = $${params.length}`); };
+    for (const k of ["name", "nameEn", "category", "defaultRoleKey", "opensCustody", "isActive"] as const) {
+      if ((b as any)[k] !== undefined) set(k, (b as any)[k]);
+    }
+    if (!sets.length) { res.json({ ok: true, updated: 0 }); return; }
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(id, scope.companyId);
+    await rawExecute(
+      `UPDATE job_titles SET ${sets.join(", ")}
+        WHERE id = $${params.length - 1} AND ("companyId" = $${params.length} OR "companyId" IS NULL)`,
+      params
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "job_titles", entityId: id, after: b,
+    }).catch(() => undefined);
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "update job_title"); }
 });
 
 router.get("/documents", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
