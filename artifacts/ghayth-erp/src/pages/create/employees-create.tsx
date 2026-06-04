@@ -52,7 +52,7 @@ export default function EmployeesCreate() {
   const [showManagerDropdown, setShowManagerDropdown] = useState(false);
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("employees_create", {
-    name: "", phone: "", email: "", jobTitle: "", role: "employee", salary: "",
+    name: "", phone: "", email: "", jobTitle: "", jobTitleId: "", role: "employee", salary: "",
     hireDate: todayLocal(),
     nationalId: "", nationality: "سعودي", gender: "male", dateOfBirth: "",
     department: "", contractType: "full_time", branchId: selectedBranchId ? String(selectedBranchId) : "",
@@ -63,7 +63,17 @@ export default function EmployeesCreate() {
     sponsorNumber: "", workPermitNumber: "", workPermitExpiry: "", iqamaStatus: "active",
     bankName: "", bankAccount: "", iban: "",
     emergencyContact: "", emergencyPhone: "",
+    // Integrated HR — three email fields (login vs contact) +
+    // create-custody flag + driver-vehicle binding.
+    internalEmail: "", personalEmail: "",
+    createCustodyAccount: false,
+    vehicleId: "",
   });
+
+  // Fleet vehicles — only fetched when role implies driver, but the
+  // hook needs a stable dependency so we always fetch (light query).
+  const { data: vehiclesData } = useApiQuery<{ data: any[] }>(["fleet-vehicles-employee-create"], "/fleet/vehicles?limit=500");
+  const vehicles = vehiclesData?.data || [];
 
   // HR-005 — when the page is opened from a recruitment application, the
   // application id rides along so the POST links the application, emits
@@ -133,6 +143,12 @@ export default function EmployeesCreate() {
         salary: Number(form.salary) || 0,
         branchId: form.branchId ? Number(form.branchId) : undefined,
         managerId: form.managerId ? Number(form.managerId) : undefined,
+        jobTitleId: form.jobTitleId ? Number(form.jobTitleId) : undefined,
+        // Integrated HR — three email roles + finance hooks.
+        internalEmail: form.internalEmail || undefined,
+        personalEmail: form.personalEmail || undefined,
+        createCustodyAccount: Boolean(form.createCustodyAccount),
+        vehicleId: form.vehicleId ? Number(form.vehicleId) : undefined,
         ...(attachments.length > 0 ? { attachments } : {}),
         ...(sourceApplicationId ? { sourceApplicationId: Number(sourceApplicationId) } : {}),
       });
@@ -217,7 +233,7 @@ export default function EmployeesCreate() {
             setManagerSearch("");
             setShowManagerDropdown(false);
             setForm({
-              name: "", phone: "", email: "", jobTitle: "", role: "employee", salary: "",
+              name: "", phone: "", email: "", jobTitle: "", jobTitleId: "", role: "employee", salary: "",
               hireDate: todayLocal(),
               nationalId: "", nationality: "سعودي", gender: "male", dateOfBirth: "",
               department: "", contractType: "full_time",
@@ -229,6 +245,9 @@ export default function EmployeesCreate() {
               sponsorNumber: "", workPermitNumber: "", workPermitExpiry: "", iqamaStatus: "active",
               bankName: "", bankAccount: "", iban: "",
               emergencyContact: "", emergencyPhone: "",
+              internalEmail: "", personalEmail: "",
+              createCustodyAccount: false,
+              vehicleId: "",
             });
           }}>
             إضافة موظف آخر
@@ -354,14 +373,36 @@ export default function EmployeesCreate() {
         </div>
 
         <FormFieldWrapper label="المسمى الوظيفي" error={fieldErrors.jobTitle}>
-          <Select value={form.jobTitle || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, jobTitle: v === "_none" ? "" : v }))}>
+          <Select
+            value={form.jobTitle || "_none"}
+            onValueChange={(v) => {
+              if (v === "_none") {
+                setForm((f) => ({ ...f, jobTitle: "", jobTitleId: "" }));
+                return;
+              }
+              // Migration 248 — job_titles carries defaultRoleKey +
+              // opensCustody. When the operator picks a title, we
+              // auto-suggest the role and the custody-open flag so the
+              // form below reflects the policy without manual entry.
+              const picked = jobTitles.find((jt: any) => jt.name === v);
+              setForm((f) => ({
+                ...f,
+                jobTitle: v,
+                jobTitleId: picked ? String(picked.id) : "",
+                role: picked?.defaultRoleKey || f.role,
+                createCustodyAccount: Boolean(picked?.opensCustody) || f.createCustodyAccount,
+              }));
+            }}
+          >
             <SelectTrigger className={fieldErrorClass(fieldErrors.jobTitle)}>
               <SelectValue placeholder="اختر المسمى الوظيفي" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">اختر المسمى الوظيفي</SelectItem>
-              {jobTitles.map((jt: { id: number; name: string }) => (
-                <SelectItem key={jt.id} value={jt.name}>{jt.name}</SelectItem>
+              {jobTitles.map((jt: { id: number; name: string; defaultRoleKey?: string | null; opensCustody?: boolean }) => (
+                <SelectItem key={jt.id} value={jt.name}>
+                  {jt.name}{jt.defaultRoleKey ? ` — ${jt.defaultRoleKey}` : ""}{jt.opensCustody ? " · 💰" : ""}
+                </SelectItem>
               ))}
               {jobTitles.length === 0 && (
                 <div className="px-3 py-2 text-xs text-muted-foreground">
@@ -424,6 +465,58 @@ export default function EmployeesCreate() {
         </FormFieldWrapper>
         <NumberField label="الراتب الأساسي" value={form.salary} onChange={(v) => setForm((f) => ({ ...f, salary: v }))} error={fieldErrors.salary} />
         <FormFieldWrapper label="تاريخ التعيين"><DatePicker value={form.hireDate} onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))} /></FormFieldWrapper>
+
+        {/* Integrated HR — accounts + finance binding section. */}
+        <div className="md:col-span-2 border-t pt-4 mt-2">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-1">حسابات الموظف والربط المالي</h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            أدخل بريد المستخدم الداخلي لتسجيل الدخول. البريد الشخصي للتواصل فقط ولا يُستخدم لتسجيل الدخول.
+            ستُفتح عهدة تلقائياً عند تفعيل الخيار أو عند اختيار مسمى وظيفي يفتح عهدة (مثل سائق أو مندوب مبيعات).
+          </p>
+        </div>
+        <TextField
+          label="البريد الإلكتروني للمستخدم الداخلي (للدخول)"
+          type="email" dir="ltr"
+          value={form.internalEmail}
+          onChange={(v) => setForm((f) => ({ ...f, internalEmail: v }))}
+          error={fieldErrors.internalEmail}
+        />
+        <TextField
+          label="البريد الإلكتروني الشخصي (تواصل)"
+          type="email" dir="ltr"
+          value={form.personalEmail}
+          onChange={(v) => setForm((f) => ({ ...f, personalEmail: v }))}
+          error={fieldErrors.personalEmail}
+        />
+        <FormFieldWrapper label="فتح حساب عهدة تلقائياً (حساب فرعي تحت 1400 - العهد)">
+          <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={Boolean(form.createCustodyAccount)}
+              onChange={(e) => setForm((f) => ({ ...f, createCustodyAccount: e.target.checked }))}
+              data-testid="check-create-custody"
+            />
+            <span>نعم — افتح حساب فرعي لعهد هذا الموظف</span>
+          </label>
+        </FormFieldWrapper>
+        {(form.role === "driver" || form.role === "fleet_driver") && (
+          <FormFieldWrapper label="المركبة المرتبطة (للسائقين)">
+            <Select
+              value={form.vehicleId ? String(form.vehicleId) : "_none"}
+              onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v === "_none" ? "" : v }))}
+            >
+              <SelectTrigger><SelectValue placeholder="اختر مركبة" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— بدون ربط الآن —</SelectItem>
+                {vehicles.map((v: { id: number; plateNumber?: string; brand?: string }) => (
+                  <SelectItem key={v.id} value={String(v.id)}>
+                    {v.plateNumber || `#${v.id}`}{v.brand ? ` — ${v.brand}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
+        )}
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
           <h3 className="text-sm font-semibold text-muted-foreground mb-3">بيانات الإقامة والجواز</h3>

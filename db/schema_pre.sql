@@ -7058,6 +7058,8 @@ CREATE TABLE public.employees (
     "companyId" integer,
     "branchId" integer,
     attachments jsonb DEFAULT '[]'::jsonb,
+    "personalEmail" character varying(200),
+    "internalEmail" character varying(200),
     CONSTRAINT chk_employees_status CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('terminated'::character varying)::text, ('on_leave'::character varying)::text, ('suspended'::character varying)::text])))
 );
 
@@ -10716,7 +10718,9 @@ CREATE TABLE public.job_titles (
     "companyId" integer,
     "isActive" boolean DEFAULT true,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "defaultRoleKey" character varying(60),
+    "opensCustody" boolean DEFAULT false NOT NULL
 );
 
 
