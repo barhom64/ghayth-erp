@@ -149,8 +149,11 @@ export const SCOPE_TIERS: ScopeTier[] = [
 /** الكتالوج الكامل الذي تستهلكه الواجهة لعرض مُحدِّد بسيط بالعربية. */
 export function getPermissionLevelCatalog() {
   return {
-    levels: PERMISSION_LEVELS.map(({ key, labelAr, descriptionAr, rank }) => ({ key, labelAr, descriptionAr, rank })),
-    scopeTiers: SCOPE_TIERS.map(({ key, labelAr, rank }) => ({ key, labelAr, rank })),
+    // `actions` per level + `scope` per tier are included so a client can both
+    // render the picker AND infer the current level/tier from a role's existing
+    // grants without re-implementing the mapping.
+    levels: PERMISSION_LEVELS.map(({ key, labelAr, descriptionAr, rank, actions }) => ({ key, labelAr, descriptionAr, rank, actions })),
+    scopeTiers: SCOPE_TIERS.map(({ key, labelAr, rank, scope }) => ({ key, labelAr, rank, scope })),
     actionLabels: ACTION_LABELS_AR,
     scopeLabels: SCOPE_LABELS_AR,
   };
