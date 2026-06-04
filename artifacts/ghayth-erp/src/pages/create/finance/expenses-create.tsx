@@ -333,7 +333,14 @@ export default function ExpensesCreate() {
     });
   };
 
-  const handleSubmit = async () => {
+  // ZATCA-style "Save & add another" — addresses the operator complaint
+  // that the system had two different expense forms (single + multi-line).
+  // One unified form: by default behaves like a single-line submit, but
+  // the secondary button stays on the page and resets ONLY the amount /
+  // description / account / allocation, preserving shared header fields
+  // (date, branch, payment method, source treasury). Operators get the
+  // multi-line workflow without a second form.
+  const handleSubmit = async (opts: { addAnother?: boolean } = {}) => {
     const firstError = validate({
       accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
       amount: form.amount ? null : "المبلغ مطلوب",
@@ -388,6 +395,30 @@ export default function ExpensesCreate() {
       });
       toast({ title: "تم إضافة المصروف بنجاح" });
       clearDraft();
+      if (opts.addAnother) {
+        // Reset only the line-specific fields so the operator can keep
+        // adding expenses against the same date / branch / source /
+        // payment method without re-typing them. Mirrors the multi-line
+        // form's UX in a single page.
+        setForm((f) => ({
+          ...f,
+          accountCode: "",
+          amount: "",
+          description: "",
+          vatRate: "",
+          taxCodeId: "",
+          taxInclusive: false,
+          reference: "",
+          projectId: "",
+          relatedEntityType: "",
+          relatedEntityId: "",
+          relatedEntityName: "",
+          attachmentUrl: "",
+        }));
+        setAllocation({});
+        setAttachments([]);
+        return;
+      }
       setLocation("/finance/expenses");
     } catch (err: any) {
       setApiError(err);
@@ -871,7 +902,10 @@ export default function ExpensesCreate() {
 
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/finance/expenses")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
+          <Button variant="secondary" onClick={() => handleSubmit({ addAnother: true })} disabled={createMut.isPending} rateLimitAware>
+            {createMut.isPending ? "جاري الحفظ..." : "حفظ وإضافة آخر"}
+          </Button>
+          <Button onClick={() => handleSubmit()} disabled={createMut.isPending} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ المصروف"}
           </Button>
         </div>
