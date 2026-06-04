@@ -407,6 +407,15 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   umrah_violation: () => buildUmrahViolationPreset(),
   account_statement: () => buildAccountStatementPreset(),
   crm_lead: () => buildOpportunityPreset(),
+  // Registry aliases — entries below cover entityRegistry rows whose
+  // `print.hasTemplate=true` was set but the BESPOKE_PRESETS map didn't
+  // expose the canonical id (a live-audit gap caught by the printable
+  // contract test). Each one reuses the closest semantic preset so the
+  // printed doc carries the same layout the rest of the domain uses.
+  fleet_driver: () => buildDriverCardPreset(),
+  legal_correspondence: () => buildCorrespondenceCardPreset(),
+  umrah_group: () => buildUmrahPilgrimPreset(),
+  umrah_agent_invoice: () => buildUmrahInvoicePreset(),
   performance: () => buildEvaluationPreset(),
   performance_review: () => buildEvaluationPreset(),
 };
@@ -3506,9 +3515,11 @@ export const ARABIC_TITLES: Record<string, string> = {
   rental_contract: "عقد إيجار", property_unit: "بطاقة وحدة عقارية",
   tenant: "بطاقة مستأجر", building: "بطاقة مبنى",
   legal_contract: "عقد قانوني", legal_judgment: "ملف قضية",
-  legal_session: "محضر جلسة",
+  legal_session: "محضر جلسة", legal_correspondence: "مراسلة قانونية",
   umrah_invoice: "فاتورة عمرة", umrah_statement: "كشف وكيل عمرة",
   umrah_runsheet: "كشف اليوم — عمرة", umrah_agent: "وكيل عمرة",
+  umrah_group: "مجموعة عمرة", umrah_agent_invoice: "فاتورة وكيل عمرة",
+  fleet_driver: "سائق أسطول",
   umrah_sub_agent: "وكيل عمرة فرعي", umrah_pilgrim: "معتمر",
   umrah_package: "باقة عمرة", umrah_season: "موسم عمرة",
   umrah_transport: "نقل عمرة", umrah_penalty: "عقوبة عمرة",
