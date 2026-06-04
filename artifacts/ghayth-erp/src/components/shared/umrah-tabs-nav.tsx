@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Users, Package, Calendar, Receipt, Bus,
   UserCircle, AlertTriangle, Upload, UserPlus, Tag, Briefcase, ShieldAlert,
   ClipboardList, Scale, Layers, Sparkles, Shield, Hotel, Settings, ChevronDown,
+  BarChart3,
 } from "lucide-react";
 
 // نمط جديد للتبويبات — مجموعة من 14 تبويب رئيسي مباشر + dropdown
@@ -38,6 +39,7 @@ const PRIMARY_TABS: Tab[] = [
   { href: "/umrah/violations", label: "المخالفات", icon: ShieldAlert, match: ["/umrah/violations"] },
   { href: "/umrah/penalties", label: "الغرامات", icon: AlertTriangle, match: ["/umrah/penalties"] },
   { href: "/umrah/import", label: "الاستيراد", icon: Upload, match: ["/umrah/import"] },
+  { href: "/umrah/reports", label: "التقارير", icon: BarChart3, match: ["/umrah/reports"] },
 ];
 
 // المجموعة الفرعية — كل صفحات الرقابة والامتثال في dropdown واحد
