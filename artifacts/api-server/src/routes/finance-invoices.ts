@@ -3033,13 +3033,19 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
         throw new ConflictError("الفاتورة تم تعديلها بين قراءة وإقفال — أعد التحميل");
       }
 
-      // ── STEP 3a: Issue the credit memo via the internal helper. We
-      // call the route handler's underlying logic by reusing the same
-      // imports + post pattern. The credit-memo route is its own
-      // endpoint, but for atomicity we replicate its core posting here.
-      // The credit memo's ref comes from the numbering center
-      // (scheme `finance.credit_memo`).
+      // ── STEP 3a: Issue the credit memo. The full reversal must
+      // mirror the standalone POST /credit-memo route — that means
+      // not only the AR/VAT JE lines, but also: revenue counter
+      // decrement on clients.totalRevenue, budgets.used decrement on
+      // the revenue bucket, AND inventory/COGS reversal (DR Inventory
+      // / CR COGS + restock lots) for any product lines. Without the
+      // COGS reversal, an amended invoice would double-draw stock once
+      // the new invoice posts — user explicitly required this
+      // ("ومخزون اذا فيه مخزون").
       const { financialEngine } = await import("../lib/engines/index.js");
+      const { planCogsReversal, applyStockReversals } = await import(
+        "../lib/inventory/cogsPosting.js"
+      );
       const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
         financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4100"),
         financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2300"),
@@ -3069,6 +3075,81 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
         [memoId, memoIssued.assignmentId]
       );
 
+      // Bump paidAmount so the original's open balance becomes zero
+      // (the credit memo settles it). Status is overridden to 'amended'
+      // below — that's a terminal state distinct from 'paid', signalling
+      // the chain.
+      await client.query(
+        `UPDATE invoices SET "paidAmount" = COALESCE("paidAmount",0) + $1
+         WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [originalTotal, id, scope.companyId]
+      );
+
+      // Decrement the denormalised revenue counter the original
+      // invoice approval bumped, so it doesn't inflate forever.
+      if (original.clientId && originalNet > 0) {
+        await client.query(
+          `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) - $1
+           WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [originalNet, original.clientId, scope.companyId]
+        );
+      }
+
+      // Plan + apply COGS reversal for any product lines on the
+      // original. ratio = 1.0 (full reversal). Service-only invoices
+      // get an empty plan and skip the loop.
+      const cogsReversalPlan = await planCogsReversal(client as any, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        ratio: 1.0,
+        memoId,
+      });
+      if (cogsReversalPlan.lineUpdates.length > 0) {
+        await applyStockReversals(
+          client as any, scope.companyId,
+          cogsReversalPlan.stockMovements, scope.activeAssignmentId ?? 0,
+        );
+        for (const u of cogsReversalPlan.lineUpdates) {
+          await client.query(
+            `UPDATE invoice_lines
+                SET "cogsReversedAmount" = $1,
+                    "cogsReversedAt"     = NOW(),
+                    "cogsReversalJson"   = COALESCE("cogsReversalJson", '[]'::jsonb) || $2::jsonb
+              WHERE id = $3`,
+            [u.newReversedAmount, JSON.stringify([u.snapshot]), u.invoiceLineId],
+          );
+        }
+        await client.query(
+          `UPDATE credit_memos SET "cogsReversedTotal" = $1
+            WHERE id = $2 AND "companyId" = $3`,
+          [cogsReversalPlan.totalReversed, memoId, scope.companyId],
+        );
+      }
+
+      // Decrement the budget bucket that the original revenue line
+      // bumped at approval (matched by the approval-period and the
+      // revenue account).
+      if (originalNet > 0) {
+        const origJeRes = await client.query(
+          `SELECT "createdAt" FROM journal_entries
+            WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL
+            LIMIT 1`,
+          [scope.companyId, `JE-${original.ref}`]
+        );
+        const origJe = origJeRes.rows[0];
+        if (origJe && origJe.createdAt) {
+          const invRevenueCode = await financialEngine.resolveAccountCode(
+            scope.companyId, "invoice_revenue", "credit", "4000"
+          );
+          const approvalPeriod = String(origJe.createdAt).slice(0, 7);
+          await client.query(
+            `UPDATE budgets SET used = GREATEST(used - $1, 0)
+             WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+            [originalNet, scope.companyId, invRevenueCode, approvalPeriod]
+          );
+        }
+      }
+
       const memoPost = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: (original.branchId as number | null) ?? scope.branchId,
@@ -3083,12 +3164,35 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
           { accountCode: salesReturnsCode, debit: originalNet, credit: 0, clientId: original.clientId as number | undefined },
           ...(originalVat > 0 ? [{ accountCode: vatPayableCode, debit: originalVat, credit: 0, clientId: original.clientId as number | undefined }] : []),
           { accountCode: arCode, debit: 0, credit: originalTotal, clientId: original.clientId as number | undefined },
+          // COGS reversal lines (DR Inventory / CR COGS) — empty for service-only invoices.
+          ...cogsReversalPlan.journalLines,
         ],
+        guardTable: "credit_memos",
+        guardId: memoId,
       });
 
-      // Mark the original as fully credited (paidAmount stays unchanged
-      // — the credit memo zeroes its outstanding balance) and link to
-      // the upcoming new invoice once we have its ID.
+      // Stamp the JE id back on the memo + on any return-type warehouse
+      // movements applied above, to close the FK invariant.
+      if (memoPost.journalId) {
+        await client.query(
+          `UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [memoPost.journalId, memoId, scope.companyId]
+        );
+        if (cogsReversalPlan.lineUpdates.length > 0) {
+          await client.query(
+            `UPDATE warehouse_movements
+                SET "journalEntryId" = $1
+              WHERE "companyId" = $2
+                AND reference = $3
+                AND type = 'return'
+                AND "journalEntryId" IS NULL`,
+            [memoPost.journalId, scope.companyId, `CM-${memoId}`],
+          );
+        }
+      }
+
+      // Mark the original as amended (terminal state distinct from
+      // 'paid' — chain link is set below once newInvoiceId exists).
       await client.query(
         `UPDATE invoices SET status = 'amended', "amendmentReason" = $1, "amendedAt" = NOW()
          WHERE id = $2 AND "companyId" = $3`,
@@ -3180,7 +3284,7 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
         [newInvoiceId, id, scope.companyId]
       );
 
-      return { memoId, memoRef, creditJournalId: memoPost.journalId, newInvoiceId, newRef, newTotal };
+      return { memoId, memoRef, creditJournalId: memoPost.journalId, newInvoiceId, newRef, newTotal, cogsReversalWarnings: cogsReversalPlan.warnings, cogsReversedTotal: cogsReversalPlan.totalReversed };
     });
 
     // Audit trail + event emission outside the transaction.
@@ -3222,6 +3326,8 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
       newInvoiceId: result.newInvoiceId,
       newInvoiceRef: result.newRef,
       newInvoiceTotal: result.newTotal,
+      cogsReversalWarnings: result.cogsReversalWarnings,
+      cogsReversedTotal: result.cogsReversedTotal,
     });
   } catch (err) {
     handleRouteError(err, res, "Amend invoice error:");
