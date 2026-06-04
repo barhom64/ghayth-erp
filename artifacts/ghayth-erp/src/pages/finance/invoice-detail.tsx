@@ -44,6 +44,7 @@ import {
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
 import { CreditMemoDialog } from "@/components/shared/credit-memo-dialog";
+import { InvoiceAmendDialog } from "@/components/shared/invoice-amend-dialog";
 import { DebitMemoDialog } from "@/components/shared/debit-memo-dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -138,6 +139,7 @@ export default function InvoiceDetailPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [showCreditMemo, setShowCreditMemo] = useState(false);
   const [showDebitMemo, setShowDebitMemo] = useState(false);
+  const [showAmend, setShowAmend] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const [confirmPost, setConfirmPost] = useState(false);
 
@@ -255,6 +257,16 @@ export default function InvoiceDetailPage() {
         <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowDebitMemo(true)}>
           <FilePlus className="h-4 w-4 me-1" />
           إصدار إشعار مدين
+        </GuardedButton>
+      )}
+      {/* ZATCA-compliant edit. Per Saudi tax authority rules, an issued
+          invoice can't be edited in place — the system orchestrates a
+          credit memo + new invoice atomically. Only shown on issued
+          (non-draft, non-cancelled, non-amended) invoices. */}
+      {invoice && invoice.status !== "draft" && invoice.status !== "cancelled" && invoice.status !== "amended" && !invoice.amendedToInvoiceId && (
+        <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowAmend(true)}>
+          <FilePlus className="h-4 w-4 me-1" />
+          تعديل ZATCA
         </GuardedButton>
       )}
       {invoice?.status === "pending" && (
@@ -675,6 +687,13 @@ export default function InvoiceDetailPage() {
             open={showDebitMemo}
             onOpenChange={setShowDebitMemo}
             onIssued={() => { refetch(); refetchMemos(); }}
+          />
+          <InvoiceAmendDialog
+            invoiceId={Number(id)}
+            invoiceRef={invoice.ref}
+            invoiceTotal={Number(invoice.total ?? 0)}
+            open={showAmend}
+            onOpenChange={setShowAmend}
           />
         </>
       )}

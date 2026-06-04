@@ -1023,6 +1023,115 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
+// Integrated HR — finance + accounts + vehicle linkage roll-up for the
+// employee detail page. Returns the subsidiary custody account (if
+// any), the current open-custody balance, the linked vehicle (if any),
+// the user-account email split, and the role / job_title policy.
+// Single round-trip so the detail page renders the "Finance Linkage"
+// card without 5 parallel queries.
+router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: "view", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+
+    const [emp] = await rawQuery<{
+      id: number;
+      personalEmail: string | null;
+      internalEmail: string | null;
+      email: string | null;
+    }>(
+      `SELECT id, "personalEmail", "internalEmail", email
+         FROM employees WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!emp) throw new NotFoundError("الموظف غير موجود");
+
+    const [subsidiaryAccount] = await rawQuery<{ accountCode: string; accountName: string }>(
+      `SELECT coa.code AS "accountCode", coa.name AS "accountName"
+         FROM subsidiary_accounts sa
+         JOIN chart_of_accounts coa ON coa.id = sa."accountId"
+        WHERE sa."companyId" = $1
+          AND sa."entityType" = 'employee'
+          AND sa."entityId" = $2
+          AND sa."accountType" = 'custody'
+          AND sa."isActive" = true
+          AND sa."deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, id]
+    ).catch(() => []);
+
+    // Outstanding custody = SUM(debit on CUSTODY-* JEs) - SUM(credit on
+    // CUSTODY-SETTLE-* JEs) filtered by the employee dimension on the
+    // journal_lines. Pattern mirrors finance-custodies.ts /summary.
+    const [custodyBal] = await rawQuery<{ outstanding: string; openCount: string }>(
+      `WITH advanced AS (
+         SELECT je.id, je.ref, COALESCE(SUM(jl.debit), 0) AS amount
+           FROM journal_entries je
+           JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+            AND je."balancesApplied" = true
+            AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+            AND jl."employeeId" = $2
+          GROUP BY je.id, je.ref
+       ),
+       settled AS (
+         SELECT je2.description AS "originalRef", COALESCE(SUM(jl2.credit), 0) AS settled_amount
+           FROM journal_entries je2
+           JOIN journal_lines jl2 ON jl2."journalId" = je2.id AND jl2.credit > 0
+          WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL
+            AND je2."balancesApplied" = true
+            AND je2.ref LIKE 'CUSTODY-SETTLE%'
+          GROUP BY je2.description
+       )
+       SELECT COALESCE(SUM(GREATEST(a.amount - COALESCE(s.settled_amount, 0), 0)), 0)::text AS outstanding,
+              COUNT(*) FILTER (WHERE a.amount > COALESCE(s.settled_amount, 0))::text AS "openCount"
+         FROM advanced a
+         LEFT JOIN settled s ON s."originalRef" = a.ref`,
+      [scope.companyId, id]
+    ).catch(() => [{ outstanding: "0", openCount: "0" }]);
+
+    // The vehicle ↔ driver link lives on fleet_vehicles.assignedDriverId
+    // (NOT fleet_drivers.currentVehicleId). Join through fleet_drivers
+    // whose employeeId == this employee.
+    const [vehicle] = await rawQuery<{ id: number; plateNumber: string; brand: string | null }>(
+      `SELECT v.id, v."plateNumber", v.brand
+         FROM fleet_drivers d
+         JOIN fleet_vehicles v
+           ON v."assignedDriverId" = d.id AND v."companyId" = d."companyId" AND v."deletedAt" IS NULL
+        WHERE d."companyId" = $1 AND d."employeeId" = $2 AND d."deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, id]
+    ).catch(() => []);
+
+    // User account state.
+    const loginEmail = emp.internalEmail || emp.email;
+    const [user] = loginEmail
+      ? await rawQuery<{ id: number; isActive: boolean; lastLoginAt: string | null }>(
+          `SELECT id, "isActive", "lastLoginAt" FROM users WHERE email = $1 LIMIT 1`,
+          [loginEmail]
+        ).catch(() => [])
+      : [];
+
+    res.json({
+      employeeId: id,
+      emails: {
+        internal: emp.internalEmail,
+        personal: emp.personalEmail,
+        legacy: emp.email,
+        loginEmail,
+      },
+      userAccount: user ? { id: user.id, isActive: user.isActive, lastLoginAt: user.lastLoginAt } : null,
+      custody: {
+        subsidiaryAccountCode: subsidiaryAccount?.accountCode ?? null,
+        subsidiaryAccountName: subsidiaryAccount?.accountName ?? null,
+        outstandingAmount: Number(custodyBal?.outstanding ?? 0),
+        openCount: Number(custodyBal?.openCount ?? 0),
+      },
+      vehicle: vehicle ? { id: vehicle.id, plateNumber: vehicle.plateNumber, brand: vehicle.brand } : null,
+    });
+  } catch (err) { handleRouteError(err, res, "employee finance summary"); }
+});
+
 router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;

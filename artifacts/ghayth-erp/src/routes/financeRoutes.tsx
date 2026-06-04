@@ -55,7 +55,10 @@ const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
 const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
-const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
+// Duplicate multi-line form removed — the unified expenses-create
+// page now handles multi-line via "حفظ وإضافة آخر" button.
+// The /finance/expenses/multi-line route below redirects there.
+
 const CostSplitter = lazy(() => import("@/pages/create/finance/cost-splitter"));
 const AccountTransfer = lazy(() => import("@/pages/create/finance/account-transfer"));
 // Phase D — pages from the enterprise-hardening branch that don't
@@ -242,7 +245,9 @@ export const financeRoutes = [
   { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
   { path: "/finance/expenses/create", component: ExpensesCreate },
-  { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },
+  // Legacy multi-line route now redirects to the unified expenses-create
+  // form, which supports multi-line via the "حفظ وإضافة آخر" button.
+  { path: "/finance/expenses/multi-line", component: ExpensesCreate },
   { path: "/finance/expenses/split", component: CostSplitter },
   { path: "/finance/expenses/:id", component: ExpenseDetail },
   { path: "/finance/budget", component: Budget },

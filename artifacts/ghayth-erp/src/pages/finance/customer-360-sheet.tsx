@@ -454,7 +454,7 @@ export default function Customer360SheetPage() {
                     <ExternalLink className="w-3 h-3 mr-auto" />
                   </Button>
                 </Link>
-                <Link href={`/finance/customer-advances-workbench`}>
+                <Link href={`/finance/customer-advances?view=grouped`}>
                   <Button variant="outline" size="sm" className="w-full justify-start">
                     <FileText className="w-4 h-4 ml-1" />
                     دفعات مقدمة
