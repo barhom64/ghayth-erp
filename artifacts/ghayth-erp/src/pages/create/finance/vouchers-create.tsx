@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
+import { amountTaxSplit } from "@/lib/tax-math";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
@@ -32,19 +33,7 @@ interface TaxCodeOption {
   isActive: boolean;
 }
 
-function roundMoney(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function voucherTaxSplit(amount: number, rate: number, inclusive: boolean) {
-  if (!amount || !rate) return { net: amount || 0, vat: 0, gross: amount || 0 };
-  if (inclusive) {
-    const net = roundMoney(amount / (1 + rate / 100));
-    return { net, vat: roundMoney(amount - net), gross: amount };
-  }
-  const vat = roundMoney(amount * (rate / 100));
-  return { net: amount, vat, gross: roundMoney(amount + vat) };
-}
+const voucherTaxSplit = amountTaxSplit;
 
 const OPERATION_TYPES_RECEIPT = [
   { value: "receipt", label: "قبض إيراد عام" },

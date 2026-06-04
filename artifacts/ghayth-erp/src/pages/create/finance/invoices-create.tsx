@@ -10,6 +10,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
+import { lineTaxSplit } from "@/lib/tax-math";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -29,22 +30,6 @@ interface TaxCode {
   taxType: string;
   isInclusiveDefault?: boolean;
   isActive: boolean;
-}
-
-/**
- * Compute net/vat/gross from a line's quantity × unitPrice + the
- * tax-code's rate, respecting the inclusive/exclusive flag. Mirrors
- * the backend math in computeTaxFromTaxCode (#989).
- */
-function lineTaxSplit(qty: number, unitPrice: number, rate: number, inclusive: boolean) {
-  const amount = roundMoney(qty * unitPrice);
-  if (inclusive) {
-    const net = roundMoney(amount / (1 + rate / 100));
-    const vat = roundMoney(amount - net);
-    return { net, vat, gross: amount };
-  }
-  const vat = roundMoney(amount * (rate / 100));
-  return { net: amount, vat, gross: roundMoney(amount + vat) };
 }
 
 const INVOICE_TYPE_CODES = [

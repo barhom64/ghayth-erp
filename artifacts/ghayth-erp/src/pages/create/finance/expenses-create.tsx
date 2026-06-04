@@ -14,6 +14,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
+import { amountTaxSplit } from "@/lib/tax-math";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
@@ -38,19 +39,7 @@ interface TaxCodeOption {
   isActive: boolean;
 }
 
-function roundMoney(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function expenseTaxSplit(amount: number, rate: number, inclusive: boolean) {
-  if (!amount || !rate) return { net: amount || 0, vat: 0, gross: amount || 0 };
-  if (inclusive) {
-    const net = roundMoney(amount / (1 + rate / 100));
-    return { net, vat: roundMoney(amount - net), gross: amount };
-  }
-  const vat = roundMoney(amount * (rate / 100));
-  return { net: amount, vat, gross: roundMoney(amount + vat) };
-}
+const expenseTaxSplit = amountTaxSplit;
 
 const TAX_TYPE_TO_CATEGORY: Record<string, string> = {
   standard: "standard",
