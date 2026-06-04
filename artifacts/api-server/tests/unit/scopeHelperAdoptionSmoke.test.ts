@@ -49,6 +49,9 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "admin-vendor-settings.ts",
   "admin.ts",
   "approvalActions.ts",
+  // assistant.ts: curated owner Q&A — vetted aggregate queries keyed by
+  // (companyId), not list endpoints; manual companyId scoping is correct here.
+  "assistant.ts",
   "auth.ts",
   "automation.ts",
   "bi.ts",
@@ -187,9 +190,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 105,
+      total: 106,
       helperUsers: 36,
-      manualOnly: 66,
+      manualOnly: 67,
     });
   });
 });

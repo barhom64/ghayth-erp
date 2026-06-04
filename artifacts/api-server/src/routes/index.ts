@@ -122,6 +122,7 @@ import complianceRouter from "./hr-compliance.js";
 import digitalSignatureRouter from "./digital-signature.js";
 import { eventsRouter } from "./events.js";
 import { execDashboardRouter } from "./execDashboard.js";
+import assistantRouter from "./assistant.js";
 import { obligationsRouter } from "./obligations.js";
 import { calendarRouter } from "./calendar.js";
 import contractsRouter from "./hr-contracts.js";
@@ -516,6 +517,9 @@ router.use("/digital-signature", requireMinLevel(70), digitalSignatureRouter);
 // Event-log access is audit-level; gate the mount at 70 (as /audit-logs).
 router.use("/events", requireMinLevel(70), eventsRouter);
 router.use("/exec-dashboard", requireMinLevel(70), execDashboardRouter);
+// Smart assistant — curated Arabic owner questions → vetted parameterized
+// queries (no NL→SQL). Exec-only (cross-domain data). See routes/assistant.ts.
+router.use("/assistant", requireMinLevel(70), assistantRouter);
 // Agent 7 — sidebar gates مركز الالتزامات (/obligations) at level 30
 // and التقويم الموحد (/calendar) at level 20. Mounts used to have no
 // floor; align them with the sidebar so direct-URL access matches the
