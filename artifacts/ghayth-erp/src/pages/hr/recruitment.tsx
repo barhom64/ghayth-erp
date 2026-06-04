@@ -50,6 +50,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { useAppContext } from "@/contexts/app-context";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 const jobStatusMap: Record<string, { label: string; color: string }> = {
   open: { label: "مفتوح", color: "bg-status-success-surface text-status-success-foreground" },
@@ -215,6 +216,28 @@ export default function RecruitmentPage() {
       title="التوظيف والاستقطاب"
       subtitle="إدارة الوظائف المفتوحة وطلبات التوظيف"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_recruitment"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: {
+              title: "تقرير التوظيف والاستقطاب",
+              totalJobs: filteredJobs.length,
+              totalApplicants: filteredApps.length,
+            },
+            items: filteredApps.map((a: any) => ({
+              "المتقدِّم": a.applicantName || a.name || "—",
+              "الوظيفة": a.jobTitle || a.position || "—",
+              "الهاتف": a.phone || "—",
+              "البريد": a.email || "—",
+              "الحالة": a.status || "—",
+              "التاريخ": a.appliedAt || a.createdAt || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />

@@ -19,6 +19,7 @@ import { Package, MapPin, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 
@@ -167,6 +168,11 @@ export default function CargoDetail() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="cargo_manifest"
+            entityId={m.id}
+            label="طباعة البوليصة"
+          />
           <Select
             value={m.status}
             onValueChange={(v) => statusMut.mutate({ status: v })}

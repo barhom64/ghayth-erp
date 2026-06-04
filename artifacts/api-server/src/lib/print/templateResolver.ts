@@ -416,6 +416,9 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   legal_correspondence: () => buildCorrespondenceCardPreset(),
   umrah_group: () => buildUmrahPilgrimPreset(),
   umrah_agent_invoice: () => buildUmrahInvoicePreset(),
+  // Cargo bill of lading — new bespoke preset wired with loadCargoManifest.
+  cargo_manifest: () => buildCargoManifestPreset(),
+  manifest: () => buildCargoManifestPreset(),
   performance: () => buildEvaluationPreset(),
   performance_review: () => buildEvaluationPreset(),
 };
@@ -1585,6 +1588,57 @@ function buildExitRequestPreset(): PrintTemplate {
   <div>المدير المباشر<br/>____________________</div>
   <div>الموارد البشرية<br/>____________________</div>
   <div>الإدارة العليا<br/>____________________</div>
+</div>`,
+  });
+}
+
+// Bill of lading — كل الحقول الأساسية لشحنة بضائع (شاحن، مستلم، مركبة،
+// سائق، أوزان، قيم، أصناف، توقيعات). entityType="cargo_manifest" يربطه
+// بـ loadCargoManifest في dataLoader.
+function buildCargoManifestPreset(): PrintTemplate {
+  return makePreset({
+    id: -98, presetKey: "cargo_manifest_classic", entityType: "cargo_manifest",
+    name: "بوليصة شحن",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بوليصة شحن بضائع</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم البوليصة: <span dir="ltr">{{entity.manifestNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+  <div><strong>تاريخ الإنشاء:</strong> {{entity.createdAt}}</div>
+  <div><strong>الرحلة المرتبطة:</strong> #{{entity.fleetTripId}}</div>
+  <div><strong>من:</strong> {{entity.fromLocation}}</div>
+  <div><strong>إلى:</strong> {{entity.toLocation}}</div>
+  <div><strong>تاريخ التحميل:</strong> {{entity.pickupDate}}</div>
+  <div><strong>تاريخ التسليم:</strong> {{entity.deliveryDate}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">بيانات العميل</div>
+  <div><strong>الاسم:</strong> {{entity.customerName}} {{entity.linkedCustomerName}}</div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.customerPhone}}</span></div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">بيانات النقل</div>
+  <div><strong>المركبة:</strong> <span dir="ltr">{{entity.plateNumber}}</span> — {{entity.vehicleMake}} {{entity.vehicleModel}}</div>
+  <div><strong>السائق:</strong> {{entity.driverName}} — <span dir="ltr">{{entity.driverPhone}}</span></div>
+  <div><strong>رقم رخصة السائق:</strong> <span dir="ltr">{{entity.driverLicense}}</span></div>
+</div>
+<h3 style="margin-top:14px">قائمة البضائع</h3>
+{{entity.itemsTable}}
+<div class="totals">
+  <div><strong>الوزن الكلي:</strong> {{entity.totalWeight}} كغم</div>
+  <div><strong>القيمة المُصرَّح بها:</strong> {{entity.totalDeclaredValue}}</div>
+  <div><strong>قيمة الشحن (إيراد):</strong> {{entity.freightRevenue}}</div>
+  <div class="grand"><strong>تكلفة الشحن:</strong> {{entity.freightCost}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الشاحن<br/>____________________</div>
+  <div>السائق<br/>____________________</div>
+  <div>المستلم<br/>____________________</div>
 </div>`,
   });
 }
@@ -3519,7 +3573,7 @@ export const ARABIC_TITLES: Record<string, string> = {
   umrah_invoice: "فاتورة عمرة", umrah_statement: "كشف وكيل عمرة",
   umrah_runsheet: "كشف اليوم — عمرة", umrah_agent: "وكيل عمرة",
   umrah_group: "مجموعة عمرة", umrah_agent_invoice: "فاتورة وكيل عمرة",
-  fleet_driver: "سائق أسطول",
+  fleet_driver: "سائق أسطول", cargo_manifest: "بوليصة شحن", manifest: "بوليصة",
   umrah_sub_agent: "وكيل عمرة فرعي", umrah_pilgrim: "معتمر",
   umrah_package: "باقة عمرة", umrah_season: "موسم عمرة",
   umrah_transport: "نقل عمرة", umrah_penalty: "عقوبة عمرة",
