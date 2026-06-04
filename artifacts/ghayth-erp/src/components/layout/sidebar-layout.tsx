@@ -207,11 +207,12 @@ const allNavSections: NavSection[] = [
         { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
         { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
       ]},
-      // إعدادات HR — كل ما هو هيكلي/سياساتي: ورديات، سياسات، هيكل، تفويضات.
-      // كانت موزّعة على 4 مجموعات منفصلة في النسخة السابقة.
+      // إعدادات HR — كل ما هو هيكلي/سياساتي: ورديات، سياسات، هيكل، تفويضات،
+      // المسميات الوظيفية (دور + عهدة). كانت موزّعة على 4 مجموعات منفصلة.
       { label: "إعدادات HR", path: "/hr/organization", icon: Cog, module: "hr", children: [
         { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
         { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
+        { label: "المسميات الوظيفية", path: "/hr/job-titles", icon: Briefcase, subKey: "organization" },
         { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
         { label: "الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },

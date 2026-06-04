@@ -90,6 +90,10 @@ const PayrollDetail = lazy(() => import("@/pages/details/payroll-detail"));
 const PerformanceDetail = lazy(() => import("@/pages/details/performance-detail"));
 const TransfersEdit = lazy(() => import("@/pages/create/hr/transfers-edit"));
 const AttendanceEdit = lazy(() => import("@/pages/create/hr/attendance-edit"));
+// Job-titles admin — companion UI to migration 248. Lets HR/admin wire
+// the defaultRoleKey + opensCustody policy per title from the UI so
+// onboarding auto-fills role + auto-opens custody.
+const JobTitlesAdmin = lazy(() => import("@/pages/hr/job-titles"));
 const ExcuseEdit = lazy(() => import("@/pages/create/hr/excuse-edit"));
 const LeavesEdit = lazy(() => import("@/pages/create/hr/leaves-edit"));
 const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
@@ -192,4 +196,5 @@ export const hrRoutes = [
   { path: "/hr/wps/:id", component: WpsRunDetail, subKey: "payroll" },
   { path: "/hr/saudization", component: Saudization, subKey: "employees" },
   { path: "/hr/saudi-compliance", component: SaudiCompliance, subKey: "payroll" },
+  { path: "/hr/job-titles", component: JobTitlesAdmin, subKey: "organization" },
 ];
