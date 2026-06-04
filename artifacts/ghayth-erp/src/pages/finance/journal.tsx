@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Journal entries list — migrated in R.5 iter 5 to the unified template
@@ -210,6 +211,23 @@ export default function JournalPage() {
               قيد جديد
             </Link>
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_journal"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "القيود اليومية", total: filtered.length },
+              items: filtered.map((j: any) => ({
+                "المرجع": j.ref || j.id,
+                "التاريخ": j.date || j.createdAt || "—",
+                "البيان": j.description || "—",
+                "النوع": j.type || "—",
+                "إجمالي المدين": j.totalDebit ?? 0,
+                "إجمالي الدائن": j.totalCredit ?? 0,
+                "الحالة": j.status || "—",
+              })),
+            }}
+          />
         </>
       }
     >
