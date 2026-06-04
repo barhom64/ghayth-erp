@@ -788,6 +788,210 @@ router.get("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "view"
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
 });
 
+// Driver "single-pane-of-glass" aggregator — folds employee + assigned vehicle
+// + custody balance + 30-day operational metrics (trips, fuel, violations)
+// into one round-trip so the driver detail page doesn't need to fire 6 GETs.
+// Mirrors /employees/:id/finance-summary in finance shape so the linkage
+// card on driver-detail can reuse the same rendering primitives.
+router.get("/drivers/:id/integrated-summary", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+
+    const [driver] = await rawQuery<{
+      id: number;
+      name: string;
+      employeeId: number | null;
+      licenseExpiry: string | null;
+      status: string;
+    }>(
+      `SELECT id, name, "employeeId", "licenseExpiry", status
+         FROM fleet_drivers
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!driver) throw new NotFoundError("السائق غير موجود");
+
+    // Linked employee — pulled with the primary assignment row so we get the
+    // current job title + department in one go. Left-join because driver may
+    // not be linked to any employee (sub-contracted / temp driver).
+    const [employee] = driver.employeeId
+      ? await rawQuery<{
+          id: number;
+          name: string;
+          empNumber: string | null;
+          personalEmail: string | null;
+          internalEmail: string | null;
+          email: string | null;
+          jobTitle: string | null;
+          departmentName: string | null;
+        }>(
+          `SELECT e.id, e.name, e."empNumber", e."personalEmail", e."internalEmail", e.email,
+                  ea."jobTitle", d.name AS "departmentName"
+             FROM employees e
+             LEFT JOIN employee_assignments ea
+               ON ea."employeeId" = e.id AND ea."isPrimary" = true AND ea."companyId" = e."companyId"
+             LEFT JOIN departments d ON d.id = ea."departmentId"
+            WHERE e.id = $1 AND (e."companyId" = $2 OR e."companyId" IS NULL) AND e."deletedAt" IS NULL
+            LIMIT 1`,
+          [driver.employeeId, scope.companyId]
+        ).catch(() => [])
+      : [];
+
+    // Assigned vehicle — comes via fleet_vehicles.assignedDriverId (NOT a
+    // column on fleet_drivers).
+    const [vehicle] = await rawQuery<{
+      id: number;
+      plateNumber: string;
+      make: string | null;
+      model: string | null;
+      year: number | null;
+      currentMileage: number | null;
+      status: string;
+    }>(
+      `SELECT id, "plateNumber", make, model, year, "currentMileage", status
+         FROM fleet_vehicles
+        WHERE "assignedDriverId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [id, scope.companyId]
+    ).catch(() => []);
+
+    // Custody balance — match the /employees/:id/finance-summary pattern, but
+    // filter journal_lines by driverId OR (employeeId == linked employee) so
+    // custody given against either dimension is rolled up.
+    const linkedEmpId = driver.employeeId;
+    const [custodyBal] = await rawQuery<{ outstanding: string; openCount: string }>(
+      `WITH advanced AS (
+         SELECT je.id, je.ref, COALESCE(SUM(jl.debit), 0) AS amount
+           FROM journal_entries je
+           JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+            AND je."balancesApplied" = true
+            AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+            AND (jl."driverId" = $2 OR ($3::int IS NOT NULL AND jl."employeeId" = $3))
+          GROUP BY je.id, je.ref
+       ),
+       settled AS (
+         SELECT je2.description AS "originalRef", COALESCE(SUM(jl2.credit), 0) AS settled_amount
+           FROM journal_entries je2
+           JOIN journal_lines jl2 ON jl2."journalId" = je2.id AND jl2.credit > 0
+          WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL
+            AND je2."balancesApplied" = true
+            AND je2.ref LIKE 'CUSTODY-SETTLE%'
+          GROUP BY je2.description
+       )
+       SELECT COALESCE(SUM(GREATEST(a.amount - COALESCE(s.settled_amount, 0), 0)), 0)::text AS outstanding,
+              COUNT(*) FILTER (WHERE a.amount > COALESCE(s.settled_amount, 0))::text AS "openCount"
+         FROM advanced a
+         LEFT JOIN settled s ON s."originalRef" = a.ref`,
+      [scope.companyId, id, linkedEmpId]
+    ).catch(() => [{ outstanding: "0", openCount: "0" }]);
+
+    // 30-day operational metrics. Single CTE-style query is overkill —
+    // three parallel aggregates are clearer + the planner handles them fine
+    // because of (companyId, driverId) indexes already in place.
+    const [trips] = await rawQuery<{
+      totalCount: string;
+      completedCount: string;
+      inProgressCount: string;
+      totalDistance: string;
+    }>(
+      `SELECT COUNT(*)::text AS "totalCount",
+              COUNT(*) FILTER (WHERE status = 'completed')::text AS "completedCount",
+              COUNT(*) FILTER (WHERE status IN ('scheduled','planned','in_progress'))::text AS "inProgressCount",
+              COALESCE(SUM(distance), 0)::text AS "totalDistance"
+         FROM fleet_trips
+        WHERE "driverId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          AND "createdAt" >= NOW() - INTERVAL '30 days'`,
+      [id, scope.companyId]
+    ).catch(() => [{ totalCount: "0", completedCount: "0", inProgressCount: "0", totalDistance: "0" }]);
+
+    const [fuel] = await rawQuery<{ logCount: string; totalCost: string; totalLiters: string }>(
+      `SELECT COUNT(*)::text AS "logCount",
+              COALESCE(SUM("totalCost"), 0)::text AS "totalCost",
+              COALESCE(SUM(liters), 0)::text AS "totalLiters"
+         FROM fleet_fuel_logs
+        WHERE "driverId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          AND "fuelDate" >= CURRENT_DATE - INTERVAL '30 days'`,
+      [id, scope.companyId]
+    ).catch(() => [{ logCount: "0", totalCost: "0", totalLiters: "0" }]);
+
+    const [violations] = await rawQuery<{ openCount: string; totalUnpaid: string; lifetimeCount: string }>(
+      `SELECT COUNT(*) FILTER (WHERE "paidAt" IS NULL)::text AS "openCount",
+              COALESCE(SUM("fineAmount") FILTER (WHERE "paidAt" IS NULL), 0)::text AS "totalUnpaid",
+              COUNT(*)::text AS "lifetimeCount"
+         FROM fleet_traffic_violations
+        WHERE "driverId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    ).catch(() => [{ openCount: "0", totalUnpaid: "0", lifetimeCount: "0" }]);
+
+    // User account state — same shape as /employees/:id/finance-summary.
+    const loginEmail = employee?.internalEmail || employee?.email || null;
+    const [user] = loginEmail
+      ? await rawQuery<{ id: number; isActive: boolean; lastLoginAt: string | null }>(
+          `SELECT id, "isActive", "lastLoginAt" FROM users WHERE email = $1 LIMIT 1`,
+          [loginEmail]
+        ).catch(() => [])
+      : [];
+
+    res.json({
+      driverId: id,
+      driver: {
+        name: driver.name,
+        status: driver.status,
+        licenseExpiry: driver.licenseExpiry,
+      },
+      employee: employee
+        ? {
+            id: employee.id,
+            name: employee.name,
+            empNumber: employee.empNumber,
+            jobTitle: employee.jobTitle,
+            departmentName: employee.departmentName,
+            emails: {
+              internal: employee.internalEmail,
+              personal: employee.personalEmail,
+              legacy: employee.email,
+              loginEmail,
+            },
+          }
+        : null,
+      userAccount: user ? { id: user.id, isActive: user.isActive, lastLoginAt: user.lastLoginAt } : null,
+      vehicle: vehicle
+        ? {
+            id: vehicle.id,
+            plateNumber: vehicle.plateNumber,
+            make: vehicle.make,
+            model: vehicle.model,
+            year: vehicle.year,
+            currentMileage: vehicle.currentMileage,
+            status: vehicle.status,
+          }
+        : null,
+      custody: {
+        outstandingAmount: Number(custodyBal?.outstanding ?? 0),
+        openCount: Number(custodyBal?.openCount ?? 0),
+      },
+      trips30d: {
+        totalCount: Number(trips?.totalCount ?? 0),
+        completedCount: Number(trips?.completedCount ?? 0),
+        inProgressCount: Number(trips?.inProgressCount ?? 0),
+        totalDistance: Number(trips?.totalDistance ?? 0),
+      },
+      fuel30d: {
+        logCount: Number(fuel?.logCount ?? 0),
+        totalCost: Number(fuel?.totalCost ?? 0),
+        totalLiters: Number(fuel?.totalLiters ?? 0),
+      },
+      violations: {
+        openCount: Number(violations?.openCount ?? 0),
+        totalUnpaid: Number(violations?.totalUnpaid ?? 0),
+        lifetimeCount: Number(violations?.lifetimeCount ?? 0),
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "driver integrated summary"); }
+});
+
 router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
