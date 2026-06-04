@@ -13,6 +13,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function FleetMaintenancePage() {
   const [, navigate] = useLocation();
@@ -47,9 +48,28 @@ export default function FleetMaintenancePage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "صيانة المركبات" }]}
       loading={isLoading}
       actions={
-        <Link href="/fleet/maintenance/create">
-          <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة صيانة</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_maintenance"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "سجل صيانة المركبات", total: items.length },
+              items: items.map((m: any) => ({
+                "المركبة": m.plateNumber || m.vehiclePlate || "—",
+                "النوع": m.maintenanceType || m.serviceType || "—",
+                "التاريخ": m.serviceDate || m.date || "—",
+                "ورشة": m.workshopName || "—",
+                "العدّاد": m.odometer ?? "—",
+                "التكلفة": m.totalCost ?? m.cost ?? 0,
+                "الحالة": m.status || "—",
+              })),
+            }}
+          />
+          <Link href="/fleet/maintenance/create">
+            <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة صيانة</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <FleetTabsNav />

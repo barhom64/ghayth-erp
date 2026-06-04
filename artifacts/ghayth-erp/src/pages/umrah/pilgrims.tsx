@@ -20,6 +20,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { BulkCheckbox } from "@/components/shared/bulk-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { PrintButton } from "@/components/shared/print-button";
 
 // PILGRIM_STATUSES is mirrored from the backend enum in routes/umrah.ts;
 // the bulk-status dropdown should match the same option set so an
@@ -257,9 +258,32 @@ export default function UmrahPilgrims() {
       subtitle="متابعة ملفات المعتمرين وحالاتهم"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المعتمرين" }]}
       actions={
-        <Link href="/umrah/pilgrims/create">
-          <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_pilgrims"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: {
+                title: "قائمة المعتمرين",
+                total: items.length,
+                unassigned: unassignedCount,
+              },
+              items: items.map((p: any) => ({
+                "الاسم": p.fullName || p.name || "—",
+                "رقم نسك": p.nuskNumber || "—",
+                "الجواز": p.passportNumber || "—",
+                "الجنسية": p.nationality || "—",
+                "المجموعة": p.groupName || "—",
+                "الوكيل الفرعي": p.subAgentName || "—",
+                "الحالة": p.status || "—",
+              })),
+            }}
+          />
+          <Link href="/umrah/pilgrims/create">
+            <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <UmrahTabsNav />
