@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,7 +68,27 @@ export default function UmrahSeasons() {
       subtitle="إدارة مواسم العمرة"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "مواسم العمرة" }]}
       loading={isLoading}
-      actions={<GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />موسم جديد</GuardedButton>}
+      actions={
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_seasons"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "مواسم العمرة", total: items.length },
+              items: items.map((s: any) => ({
+                "الاسم": s.name || "—",
+                "السنة الهجرية": s.hijriYear || "—",
+                "السنة الميلادية": s.gregorianYear || "—",
+                "تاريخ البدء": s.startDate || "—",
+                "تاريخ النهاية": s.endDate || "—",
+                "الحالة": s.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />موسم جديد</GuardedButton>
+        </div>
+      }
     >
       <UmrahTabsNav />
       <div className="flex gap-3 text-sm text-muted-foreground">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
@@ -116,7 +117,30 @@ export default function UmrahTransport() {
       title="النقل والمواصلات"
       subtitle="إدارة رحلات نقل المعتمرين والمواصلات"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "النقل والمواصلات" }]}
-      actions={<GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />رحلة جديدة</GuardedButton>}
+      actions={
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_transport"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "نقل العمرة", total: rows.length },
+              items: rows.map((t: any) => ({
+                "التاريخ": t.tripDate || "—",
+                "من": t.fromLocation || "—",
+                "إلى": t.toLocation || "—",
+                "المركبة": t.vehiclePlate || t.plateNumber || "—",
+                "السائق": t.driverName || "—",
+                "السعة": t.capacity ?? "—",
+                "عدد المعتمرين": t.pilgrimCount ?? 0,
+                "التكلفة": t.cost ?? 0,
+                "الحالة": t.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />رحلة جديدة</GuardedButton>
+        </div>
+      }
     >
       <UmrahTabsNav />
       {showForm && (

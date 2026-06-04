@@ -22,6 +22,7 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function DriversPage() {
   const [, navigate] = useLocation();
@@ -151,9 +152,29 @@ export default function DriversPage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "السائقين" }]}
       loading={isLoading}
       actions={
-        <Link href="/fleet/drivers/create">
-          <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة سائق</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_drivers"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "سائقو الأسطول", total: items.length },
+              items: items.map((d: any) => ({
+                "الاسم": d.name || "—",
+                "الهاتف": d.phone || "—",
+                "رقم الرخصة": d.licenseNumber || "—",
+                "نوع الرخصة": d.licenseType || "—",
+                "انتهاء الرخصة": d.licenseExpiry || "—",
+                "الرحلات": d.totalTrips ?? 0,
+                "التقييم": d.rating ?? "—",
+                "الحالة": d.status || "—",
+              })),
+            }}
+          />
+          <Link href="/fleet/drivers/create">
+            <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة سائق</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <FleetTabsNav />
