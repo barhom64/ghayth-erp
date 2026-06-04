@@ -1506,6 +1506,27 @@ export function isKnownEvent(name: string): boolean {
   return _eventIndex.has(name);
 }
 
+/**
+ * Human-readable Arabic label for an action/event name, for the activity feed.
+ * Falls back to the catalog label, then a generic verb derived from the last
+ * segment, then the raw action — so the feed is never blank.
+ */
+const _ACTION_VERB_AR: Record<string, string> = {
+  created: "إنشاء", updated: "تعديل", deleted: "حذف", approved: "اعتماد",
+  rejected: "رفض", submitted: "تقديم", cancelled: "إلغاء", closed: "إغلاق",
+  paid: "سداد", posted: "ترحيل", completed: "إكمال", assigned: "تعيين",
+  sent: "إرسال", received: "استلام", returned: "إرجاع", reopened: "إعادة فتح",
+};
+export function eventLabelAr(action: string | null | undefined): string {
+  const a = (action ?? "").trim();
+  if (!a) return "إجراء";
+  const def = _eventIndex.get(a);
+  if (def?.label) return def.label;
+  const verb = _ACTION_VERB_AR[a.split(".").pop() ?? ""];
+  return verb ?? a;
+}
+
+
 export function listEventsByDomain(domain: EventDomain): EventDefinition[] {
   return EVENT_CATALOG.filter((e) => e.domain === domain);
 }
