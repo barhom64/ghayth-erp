@@ -127,85 +127,95 @@ const allNavSections: NavSection[] = [
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
-  // 3. الموارد البشرية (مرتبة حسب دورة حياة الموظف)
+  // 3. الموارد البشرية — أُعيد تنظيمه وفق دورة حياة الموظف:
+  //   لوحة → التوظيف → الموظفون (سجلات + عقود + وثائق + نهاية خدمة) →
+  //   الحضور → الإجازات → الرواتب → الأداء والتطوير → التدريب →
+  //   المخالفات والانضباط → الإعدادات (ورديات/سياسات/هيكل).
+  // أُزيلت "المتقدم" / "إدارة" المكررة من الشريط الجانبي — تبقى متاحة
+  // عبر العنوان المباشر ومن خلال شريط HrTabsNav داخل الصفحة الأم.
   // ══════════════════════════════════════════════════════════════════════
   {
     title: "الموارد البشرية",
     items: [
       // Agent-5 (route↔backend consistency): /api/module-dashboards is gated
       // by module="bi"; the frontend route registry tags it module="bi" too.
-      // Sidebar module key changed from "hr" → "bi" so visibility matches.
       { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "bi" },
+      { label: "صندوق الوارد HR", path: "/hr/approvals", icon: Bell, module: "hr", subKey: "leaves" },
+      // التوظيف — قائمة وظائف + متقدمون. لوحة "المتقدم" أصبحت تبويباً
+      // داخل /hr/recruitment وليست عنصراً منفصلاً.
       { label: "التوظيف", path: "/hr/recruitment", icon: Briefcase, module: "hr", children: [
-        { label: "الوظائف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
-        { label: "التوظيف المتقدم", path: "/hr/recruitment/advanced", icon: BarChart3, subKey: "recruitment" },
+        { label: "الوظائف الشاغرة", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
         { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
       ]},
+      // الموظفون — السجل الشامل + كل ما يلتصق بسجل الموظف نفسه: وثائق،
+      // عقود، خطابات رسمية، نهاية خدمة، نقل، تفعيل، مراجعة تعيين.
       { label: "الموظفون", path: "/employees", icon: Users, module: "hr", children: [
         { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
         { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
-        { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
+        { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, subKey: "employees" },
+        { label: "وثائق الموظفين", path: "/hr/documents", icon: FileText, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
-        { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
-        { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
-        { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
+        { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, subKey: "employees" },
+        { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
+        { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
       ]},
-      { label: "الورديات", path: "/hr/shifts", icon: CalendarClock, module: "hr", children: [
-        { label: "جدول الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
-        { label: "إدارة الورديات", path: "/hr/shifts/management", icon: Cog, subKey: "shifts" },
-      ]},
+      // الحضور والانصراف — موحّد: السجل + الوقت الإضافي + الأعذار.
+      // "تقارير" تبقى تبويب داخل /hr/attendance.
       { label: "الحضور والانصراف", path: "/hr/attendance", icon: Clock, module: "hr", children: [
         { label: "السجل اليومي", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
-        { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3, subKey: "attendance" },
         { label: "التتبع الميداني", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
         { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
         { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
         { label: "طلبات الأعذار", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
-        { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
       ]},
+      // الإجازات — طلبات + سلاسل الموافقات + العطل الرسمية.
+      // "إدارة الإجازات" أصبح تبويب داخل /hr/leaves وليست عنصراً منفصلاً.
       { label: "الإجازات", path: "/hr/leaves", icon: Calendar, module: "hr", children: [
         { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
-        { label: "إدارة الإجازات", path: "/hr/leaves/management", icon: ClipboardList, subKey: "leaves" },
         { label: "سلاسل الموافقات", path: "/hr/leaves/approval-chains", icon: GitBranch, subKey: "leaves" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
       ]},
+      // الرواتب والمستحقات — مسيرات + مكونات + سلف + WPS + استحقاقات
+      // + مكافأة نهاية الخدمة. أضفنا "الامتثال السعودي" داخل هذه المجموعة
+      // لأنه فعلياً يتمحور حول WPS + مدد + بنوك (كان مجموعة منفصلة).
       { label: "الرواتب والمستحقات", path: "/hr/payroll", icon: DollarSign, module: "hr", children: [
         { label: "مسيرات الرواتب", path: "/hr/payroll", icon: DollarSign, subKey: "payroll" },
         { label: "مكونات الرواتب", path: "/hr/payroll/salary-components", icon: Percent, subKey: "payroll" },
         { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
-        { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
+        { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "payroll" },
         { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
+        { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
         { label: "نظام حماية الأجور (WPS)", path: "/hr/wps", icon: Send, subKey: "payroll" },
-      ]},
-      { label: "الامتثال السعودي", path: "/hr/saudization", icon: Flag, module: "hr", children: [
         { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees" },
-        { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll" },
+        { label: "الامتثال السعودي", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll" },
       ]},
+      // الأداء والتطوير — تقييم + 360° + IDP + دوران. "المتقدم" تبويب داخل.
       { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
         { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
-        { label: "التقييم المتقدم", path: "/hr/performance/advanced", icon: BarChart3, subKey: "performance" },
         { label: "التقييم 360°", path: "/hr/evaluation-360", icon: Activity, subKey: "performance" },
         { label: "خطط التطوير الفردية", path: "/hr/idp", icon: BookOpen, subKey: "performance" },
         { label: "تقرير الدوران", path: "/hr/turnover-report", icon: FileBarChart, subKey: "performance" },
       ]},
-      { label: "التدريب", path: "/hr/training", icon: GraduationCap, module: "hr", children: [
-        { label: "البرامج التدريبية", path: "/hr/training", icon: GraduationCap, subKey: "training" },
-        { label: "التدريب المتقدم", path: "/hr/training/advanced", icon: BarChart3, subKey: "training" },
-      ]},
-      { label: "الانضباط والمخالفات", path: "/hr/violations", icon: Scale, module: "hr", children: [
-        { label: "نظرة عامة", path: "/hr/violations", icon: ListChecks, subKey: "violations" },
-        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
-        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations" },
+      // التدريب — البرامج فقط. "المتقدم" تبويب داخل /hr/training.
+      { label: "التدريب", path: "/hr/training", icon: GraduationCap, module: "hr", subKey: "training" },
+      // المخالفات والانضباط — نظرة عامة + رصد تلقائي + تصعيد + لائحة.
+      // "إدارة المخالفات" + "المحاضر التأديبية" تبويبات داخل /hr/violations.
+      { label: "المخالفات والانضباط", path: "/hr/violations", icon: Scale, module: "hr", children: [
+        { label: "سجل المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations" },
         { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
         { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
         { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
       ]},
-      { label: "صناديق الواردات HR", path: "/hr/approvals", icon: Bell, module: "hr", subKey: "leaves" },
-      { label: "وثائق الموظفين", path: "/hr/documents", icon: FileText, module: "hr", subKey: "employees" },
-      { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, module: "hr", subKey: "employees" },
-      { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, module: "hr", subKey: "employees" },
-      { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, module: "hr", subKey: "employees" },
+      // إعدادات HR — كل ما هو هيكلي/سياساتي: ورديات، سياسات، هيكل، تفويضات.
+      // كانت موزّعة على 4 مجموعات منفصلة في النسخة السابقة.
+      { label: "إعدادات HR", path: "/hr/organization", icon: Cog, module: "hr", children: [
+        { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
+        { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
+        { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
+        { label: "الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
+        { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
+      ]},
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
