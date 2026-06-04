@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { eventLabelAr } from "../lib/eventCatalog.js";
 
 const router = Router();
 
@@ -244,6 +245,56 @@ router.get("/summary", authorize({ feature: "admin", action: "list" }), async (r
     }));
   } catch (err) {
     handleRouteError(err, res, "activityLog");
+  }
+});
+
+// GET /activity-log/feed — owner-friendly chronological feed in Arabic.
+// "{من} {فعل عربي} {الكيان} — قبل X". Tenant-scoped, paginated, newest first.
+// Reads audit_logs (the richest source) + actor name; the raw action is mapped
+// to its Arabic label via the event catalog (eventLabelAr), so the feed reads
+// naturally without exposing technical action strings.
+interface FeedRow {
+  id: number;
+  createdAt: string;
+  action: string;
+  entity: string | null;
+  entityId: number | null;
+  branchId: number | null;
+  actorName: string;
+}
+router.get("/feed", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const pageLimit = Math.min(Number(req.query.limit) || 30, 100);
+    const pageOffset = Number(req.query.offset) || 0;
+    const rows = await rawQuery<FeedRow>(
+      `SELECT al.id, al."createdAt", al.action, al.entity, al."entityId", al."branchId",
+              COALESCE(e.name, 'النظام') AS "actorName"
+         FROM audit_logs al
+         LEFT JOIN users u ON u.id = al."userId"
+         LEFT JOIN employees e ON e.id = u."employeeId"
+        WHERE al."companyId" = $1
+        ORDER BY al."createdAt" DESC
+        LIMIT $2 OFFSET $3`,
+      [scope.companyId, pageLimit, pageOffset]
+    );
+    const feed = rows.map((r) => {
+      const label = eventLabelAr(r.action);
+      return {
+        id: r.id,
+        at: r.createdAt,
+        actor: r.actorName,
+        action: r.action,
+        actionLabel: label,
+        entity: r.entity,
+        entityId: r.entityId,
+        // ready-to-render Arabic line: "محمد — اعتماد إجازة"
+        text: `${r.actorName} — ${label}`,
+      };
+    });
+    res.json(maskFields(req, { feed, limit: pageLimit, offset: pageOffset }));
+  } catch (err) {
+    handleRouteError(err, res, "activity feed");
   }
 });
 
