@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   PERMISSION_LEVELS, SCOPE_TIERS, ACTION_LABELS_AR, SCOPE_LABELS_AR,
-  expandLevel, levelOfActions, getPermissionLevelCatalog,
+  expandLevel, levelOfActions, getPermissionLevelCatalog, scopeForTier,
 } from "../../src/lib/rbac/permissionLevels.js";
 import type { Action, Scope } from "../../src/lib/rbac/featureCatalog.js";
 
@@ -60,6 +60,28 @@ describe("permission levels — Arabic unified model", () => {
   it("scope tiers collapse 9 scopes into 5 Arabic tiers", () => {
     expect(SCOPE_TIERS.map((t) => t.key)).toEqual(["self", "department", "branch", "company", "all"]);
     expect(SCOPE_TIERS.find((t) => t.key === "department")!.scope).toBe("department_tree");
+  });
+
+  it("scopeForTier never grants broader than the chosen tier", () => {
+    // feature supports self..company; choosing 'branch' tier → branch (not company)
+    expect(scopeForTier("branch", ["self", "department_tree", "branch", "company"])).toBe("branch");
+    // choosing 'all' but feature maxes at company → company (capped, not over-granted)
+    expect(scopeForTier("all", ["self", "branch", "company"])).toBe("company");
+    // 'self' tier always yields the narrowest
+    expect(scopeForTier("self", ["self", "branch", "company"])).toBe("self");
+  });
+
+  it("scopeForTier falls back to the narrowest available when nothing qualifies", () => {
+    // tier 'self' (rank 0) but feature only supports company (rank 6) → company (fail-safe narrowest available)
+    expect(scopeForTier("self", ["company"])).toBe("company");
+    // empty available → self
+    expect(scopeForTier("branch", [])).toBe("self");
+  });
+
+  it("'department' tier maps to department_tree when available, else closest below", () => {
+    expect(scopeForTier("department", ["self", "department", "department_tree", "branch"])).toBe("department_tree");
+    expect(scopeForTier("department", ["self", "department"])).toBe("department");
+    expect(scopeForTier("department", ["self", "branch", "company"])).toBe("self"); // branch(4) > target(3) → fall to self
   });
 
   it("catalog is fully Arabic + UI-ready", () => {
