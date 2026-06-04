@@ -34,6 +34,7 @@ import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
 import { invalidateSodCache } from "../lib/rbac/sodEnforcement.js";
 import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
+import { getPermissionLevelCatalog, expandLevel, scopeForTier, PERMISSION_LEVELS, SCOPE_TIERS } from "../lib/rbac/permissionLevels.js";
 import { handleRouteError, ValidationError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 
 const router = Router();
@@ -77,6 +78,19 @@ router.get("/features", authorize({ feature: "admin", action: "list" }), async (
     res.json(maskFields(req, { features: rows.length ? rows : FEATURE_CATALOG }));
   } catch (err) {
     handleRouteError(err, res, "list features");
+  }
+});
+
+// ─── Simplified Arabic permission-level catalog (non-technical UI) ──────────
+// Additive presentation layer over the 5-layer model: collapses the 14 actions
+// + 9 scopes into intuitive Arabic levels/tiers a non-technical owner toggles.
+// See lib/rbac/permissionLevels.ts. The UI renders this; expandLevel() maps a
+// chosen level back to the granular actions the engine enforces.
+router.get("/levels", authorize({ feature: "admin.roles", action: "list" }), async (_req, res) => {
+  try {
+    res.json(getPermissionLevelCatalog());
+  } catch (err) {
+    handleRouteError(err, res, "permission levels");
   }
 });
 
@@ -308,6 +322,67 @@ router.put("/roles/:id/grants", authorize({ feature: "admin.roles", action: "upd
     res.json({ updated: parsed.data.grants.length });
   } catch (err) {
     handleRouteError(err, res, "replace grants");
+  }
+});
+
+// ─── Simplified grants (Arabic level + scope tier → granular grants) ────────
+// The non-technical UI sends one { featureKey, level, scopeTier } per feature;
+// the server expands it to the engine's { actions, scope } — feature-aware
+// (never grants an action/scope the feature doesn't support, never broader than
+// the chosen tier). Replaces the role's grants like PUT /grants. level="none"
+// drops the feature.
+const LEVEL_KEYS = PERMISSION_LEVELS.map((l) => l.key) as [string, ...string[]];
+const TIER_KEYS = SCOPE_TIERS.map((t) => t.key) as [string, ...string[]];
+const simpleGrantsSchema = z.object({
+  grants: z.array(z.object({
+    featureKey: z.string().min(1),
+    level: z.enum(LEVEL_KEYS),
+    scopeTier: z.enum(TIER_KEYS),
+  })),
+});
+
+router.put("/roles/:id/grants/simple", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await assertRoleOwned(id, scope.companyId);
+    const parsed = simpleGrantsSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError("بيانات الصلاحيات المبسّطة غير صالحة");
+
+    // Expand each simple choice into a concrete grant, validated by the catalog.
+    const expanded: { featureKey: string; actions: string[]; scope: string }[] = [];
+    for (const g of parsed.data.grants) {
+      const feat = FEATURE_INDEX.get(g.featureKey);
+      if (!feat) throw new ValidationError(`الميزة "${g.featureKey}" غير معروفة`);
+      if (g.level === "none") continue; // no grant for this feature
+      // as-any-reason: justified-pragmatic - permissionLevels uses the same Action/Scope enums as the catalog
+      const actions = expandLevel(g.level as any, feat.availableActions as any);
+      if (actions.length === 0) continue;
+      const resolvedScope = scopeForTier(g.scopeTier as any, feat.availableScopes as any);
+      expanded.push({ featureKey: g.featureKey, actions, scope: resolvedScope });
+    }
+
+    await withTransaction(async (client) => {
+      const before = await client.query(`SELECT feature_key, actions, scope FROM rbac_role_grants WHERE role_id = $1`, [id]);
+      await client.query(`DELETE FROM rbac_role_grants WHERE role_id = $1`, [id]);
+      for (const g of expanded) {
+        await client.query(
+          `INSERT INTO rbac_role_grants (role_id, feature_key, actions, scope, conditions)
+           VALUES ($1, $2, $3, $4, NULL)`,
+          [id, g.featureKey, g.actions, g.scope]
+        );
+      }
+      await client.query(
+        `INSERT INTO rbac_role_history (role_id, "companyId", "changedBy", change_type, before_state, after_state)
+         VALUES ($1, $2, $3, 'grants.replace.simple', $4, $5)`,
+        [id, scope.companyId, scope.userId, JSON.stringify(before.rows), JSON.stringify(parsed.data.grants)]
+      );
+    });
+
+    await bumpCacheVersion(scope.companyId);
+    res.json({ updated: expanded.length });
+  } catch (err) {
+    handleRouteError(err, res, "replace grants (simple)");
   }
 });
 

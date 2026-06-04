@@ -152,7 +152,11 @@ describe("import-wizard UI — column-mapping step", () => {
   it("auto-opens the mapping panel when any column is unmapped", () => {
     // Zero-noise default: panel stays hidden when everything matches a
     // known header; it surfaces only when intervention is needed.
-    expect(WIZARD).toContain("setShowMapping(unmapped > 0)");
+    // PR #1475 renamed `unmapped` → `finalUnmapped` (smart-mapping
+    // can reduce the count after the cascade); pin the rename-tolerant
+    // form so the contract stays "panel shows iff > 0 columns are
+    // still blank after the full priority cascade".
+    expect(WIZARD).toMatch(/setShowMapping\((?:final)?[Uu]nmapped > 0\)/);
   });
 
   it("sends columnMapping on the preview request", () => {

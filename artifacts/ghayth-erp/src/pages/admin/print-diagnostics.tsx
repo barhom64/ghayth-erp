@@ -23,8 +23,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useApiQuery, apiFetch, ApiError } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useQueryClient } from "@tanstack/react-query";
 import { renderDocument, listJobs, listTemplates, type PrintJobRow, type PrintTemplateRow } from "@/lib/print-client";
 import { AlertTriangle, CheckCircle, RotateCw, PlayCircle, ScrollText } from "lucide-react";
@@ -227,11 +229,53 @@ export default function PrintDiagnosticsPage() {
     },
   ];
 
+  // POST /print/jobs/prune — admin maintenance: removes old print-job
+  // rows (older than the configurable retention window) to keep the
+  // audit table bounded. The retention window comes from an inline
+  // Input + GuardedButton next to the action — no native prompt.
+  const [pruneDays, setPruneDays] = useState("90");
+  const handlePruneJobs = async () => {
+    const n = Number(pruneDays);
+    if (!Number.isFinite(n) || n <= 0) {
+      toast({ variant: "destructive", title: "أدخل عدد أيام صحيحاً" });
+      return;
+    }
+    try {
+      await apiFetch("/print/jobs/prune", {
+        method: "POST",
+        body: JSON.stringify({ olderThanDays: n }),
+      });
+      toast({ title: "تم تنظيف السجلات" });
+      jobs.refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل التنظيف", description: err?.message });
+    }
+  };
+
   return (
     <PageShell
       title="تشخيص الطباعة"
+      breadcrumbs={[
+        { href: "/admin", label: "الإدارة" },
+        { label: "تشخيص الطباعة" },
+      ]}
       subtitle="القوالب النشطة، الإسنادات، والمحاولات الأخيرة — مع زر إعادة ضبط لكل إسناد فاسد"
       loading={templates.isLoading || assignments.isLoading || jobs.isLoading}
+      actions={
+        <div className="flex items-center gap-1">
+          <Label className="text-xs whitespace-nowrap">احذف الأقدم من (أيام):</Label>
+          <Input
+            type="number"
+            value={pruneDays}
+            onChange={(e) => setPruneDays(e.target.value)}
+            className="h-7 w-16 text-xs"
+            inputMode="numeric"
+          />
+          <GuardedButton perm="admin:update" size="sm" variant="outline" rateLimitAware onClick={handlePruneJobs}>
+            تنظيف السجلات
+          </GuardedButton>
+        </div>
+      }
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <Card>

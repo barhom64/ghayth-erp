@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -195,18 +196,33 @@ export default function AccountReconciliationWorkpaperPage() {
     lines.push(`الفرق,,,,${variance.toFixed(2)}`);
     lines.push(`الحالة,,,,${reconciled ? "مسوَّاة" : "غير مسوَّاة"}`);
 
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `recon-${accountCode}-${period}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+    // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+    // Routed through unified export helper for audit + letterhead.
+    {
+      const _allLines = lines;
+      const _headers = (_allLines[0] ?? "").split(",");
+      const _rows = _allLines.slice(1).map((line) => {
+        const parts = line.split(",");
+        const obj: Record<string, string> = {};
+        _headers.forEach((h, i) => { obj[h] = parts[i] ?? ""; });
+        return obj;
+      });
+      void exportRowsToCsv({
+        entityType: "report_account_reconciliation_workpaper",
+        title: String(`recon-${accountCode}-${period}.csv`).replace(/\.csv$/i, ""),
+        rows: _rows,
+        columns: _headers.map((h) => ({ key: h, label: h })),
+      }).catch((err) => console.error("[export] failed", err));
+    }
+};
 
   return (
     <PageShell
       title="ورقة عمل تسوية حساب"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "ورقة عمل تسوية حساب" },
+      ]}
       subtitle="تسوية أي حساب GL إلى مصدر خارجي (كشف بنك، مساعد، إقرار ضريبي)"
     >
       <FinanceTabsNav />
@@ -403,7 +419,7 @@ export default function AccountReconciliationWorkpaperPage() {
                               <td className="py-1 px-2">
                                 <Button
                                   variant="ghost"
-                                  size="icon"
+                                  size="icon" title="حذف"
                                   className="h-7 w-7 text-status-danger-foreground"
                                   onClick={() => removeItem(it.id)}
                                 >

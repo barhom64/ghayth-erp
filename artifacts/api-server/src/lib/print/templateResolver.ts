@@ -3584,6 +3584,29 @@ function universalFallback(entityType: string): PrintTemplate {
   };
 }
 
+/** Every entityType the engine has a bespoke preset for, plus its Arabic
+ *  label and whether the preset uses thermal/label-only paper. Drives the
+ *  template-editor entity dropdown and the per-branch assignment grid so
+ *  the SPA no longer carries a hard-coded list that's always stale. */
+export function listPrintableEntityTypes(): Array<{
+  id: string;
+  label: string;
+  hasBespokePreset: boolean;
+}> {
+  const ids = new Set([
+    ...Object.keys(BESPOKE_PRESETS),
+    ...Object.keys(ARABIC_TITLES),
+  ]);
+  return Array.from(ids)
+    .filter((id) => !id.startsWith("report_"))
+    .map((id) => ({
+      id,
+      label: ARABIC_TITLES[id] ?? id,
+      hasBespokePreset: Boolean(BESPOKE_PRESETS[id]),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, "ar"));
+}
+
 export async function listTemplates(opts: {
   companyId: number;
   branchId?: number | null;

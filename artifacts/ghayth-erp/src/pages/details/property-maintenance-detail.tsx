@@ -1,9 +1,15 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { z } from "zod";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -13,7 +19,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Wrench } from "lucide-react";
+import { Edit, Wrench, CheckCircle2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -74,6 +80,46 @@ export default function PropertyMaintenanceDetail() {
   );
 
   const item = data;
+
+  // POST /properties/maintenance-requests/:id/complete — backend requires
+  // closureReport + at least one afterPhoto + a cost (or zeroCostConfirmed)
+  // + materialsUsed. Without those preconditions the request 400s. The
+  // page doesn't yet have a closure form, so the button now opens a
+  // confirm prompt that collects closureReport and zeroCostConfirmed —
+  // the minimum to pass the zero-cost branch — and toasts a clear hint
+  // when photos/materials are still missing.
+  const completeMut = useApiMutation<
+    unknown,
+    { closureReport: string; zeroCostConfirmed: boolean; cost: number }
+  >(
+    `/properties/maintenance-requests/${id}/complete`,
+    "POST",
+    [["property-maintenance", String(id)], ["maintenance-requests"]],
+    { successMessage: "تم إنهاء طلب الصيانة" },
+  );
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [closureReport, setClosureReport] = useState("");
+  const handleComplete = () => {
+    setClosureReport(item?.closureReport ?? "");
+    setCompleteOpen(true);
+  };
+  const confirmComplete = () => {
+    if (!closureReport.trim()) return;
+    setCompleteOpen(false);
+    completeMut.mutate({
+      closureReport: closureReport.trim(),
+      zeroCostConfirmed: true,
+      cost: 0,
+    });
+  };
+
+  // GET /properties/technicians — used to show available technicians the
+  // request can be assigned to. Populates the "إسناد" field on edit.
+  const { data: techniciansResp } = useApiQuery<{ data: Array<{ id: number; name: string }> }>(
+    ["properties-technicians"],
+    "/properties/technicians",
+  );
+  const technicians = techniciansResp?.data ?? [];
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -143,7 +189,9 @@ export default function PropertyMaintenanceDetail() {
             {item?.assignedTo && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">المسؤول</p>
-                <span className="text-status-neutral-foreground">{item.assignedTo}</span>
+                <span className="text-status-neutral-foreground">
+                  {technicians.find((t) => String(t.id) === String(item.assignedTo))?.name ?? item.assignedTo}
+                </span>
               </div>
             )}
             {item?.vendor && (
@@ -237,9 +285,40 @@ export default function PropertyMaintenanceDetail() {
             <Edit className="h-4 w-4 ms-1" />
             تعديل
           </GuardedButton>
+          <GuardedButton
+            perm="properties:update"
+            size="sm"
+            rateLimitAware
+            onClick={handleComplete}
+            disabled={!item || item?.status === "completed" || completeMut.isPending}
+          >
+            <CheckCircle2 className="h-4 w-4 ms-1" />
+            إنهاء الصيانة
+          </GuardedButton>
         </>
       }
     />
+    <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إنهاء طلب الصيانة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">تقرير الإغلاق (ملخّص الأعمال) — مطلوب</Label>
+          <Textarea
+            value={closureReport}
+            onChange={(e) => setClosureReport(e.target.value)}
+            rows={4}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCompleteOpen(false)}>إلغاء</Button>
+          <Button onClick={confirmComplete} disabled={!closureReport.trim() || completeMut.isPending} rateLimitAware>
+            إنهاء الصيانة
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     {item && id && (
       <EntityEditDialog<MaintenanceEditForm>
         open={editOpen}

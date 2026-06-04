@@ -123,7 +123,10 @@ function cssToTypography(css: string | null | undefined): TypographyConfig {
 // for. Trying to design a template for "unknown_entity" prints the
 // universal fallback anyway, so the list is restricted to keep the UI
 // honest.
-const ENTITY_TYPES = [
+// Fallback used while /api/print/entity-types loads. The full 100+ catalogue
+// is fetched at runtime so the dropdown isn't a hand-maintained snapshot
+// that's always missing the latest BESPOKE_PRESETS additions.
+const ENTITY_TYPES_FALLBACK = [
   { value: "invoice", label: "فاتورة مبيعات" },
   { value: "credit_note", label: "إشعار دائن" },
   { value: "receipt_voucher", label: "سند قبض" },
@@ -327,6 +330,10 @@ export default function PrintTemplatesPage() {
   return (
     <PageShell
       title="قوالب الطباعة"
+      breadcrumbs={[
+        { href: "/admin", label: "الإدارة" },
+        { label: "قوالب الطباعة" },
+      ]}
       subtitle="إدارة قوالب المستندات: الخطوط، الألوان، الـ HTML، التذييل والترويسة"
       loading={isLoading}
       actions={
@@ -489,6 +496,16 @@ function TemplateEditor(props: {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Partial<Template>>(initial);
+  // Pull the full catalogue at runtime so the dropdown always reflects the
+  // engine's BESPOKE_PRESETS ∪ ARABIC_TITLES set. Falls back to the small
+  // hand-list when the endpoint is unreachable.
+  const { data: entityTypesResp } = useApiQuery<{ items: Array<{ id: string; label: string }> }>(
+    ["print-entity-types"],
+    "/print/entity-types",
+  );
+  const ENTITY_TYPES = entityTypesResp?.items?.length
+    ? entityTypesResp.items.map((e) => ({ value: e.id, label: e.label }))
+    : ENTITY_TYPES_FALLBACK;
   const [typo, setTypo] = useState<TypographyConfig>(cssToTypography(initial.cssOverrides));
 
   // When typography sliders change, regenerate cssOverrides.

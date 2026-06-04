@@ -14,6 +14,7 @@ import {
 } from "@workspace/ui-core";
 import { Banknote, CheckCircle, AlertTriangle } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 
@@ -97,6 +98,7 @@ export default function PropertiesPayments() {
         </div>
       )}
     >
+      <PropertyTabsNav />
 
       <AdvancedFilters
         config={{

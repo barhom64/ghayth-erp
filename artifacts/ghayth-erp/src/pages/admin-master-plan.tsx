@@ -94,6 +94,10 @@ export default function AdminMasterPlan() {
   return (
     <PageShell
       title="خارطة #1139 — حالة التنفيذ الحيّة"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "خارطة #1139 — حالة التنفيذ الحيّة" },
+      ]}
       subtitle="تتبّع حيّ لخطة Ghaith Enterprise Operating System عبر القنوات الفعلية للنظام"
       loading={isLoading}
       actions={

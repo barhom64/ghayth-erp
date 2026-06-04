@@ -37,7 +37,11 @@ export default function MyPerformance() {
   const latestReview = reviews[0];
 
   return (
-    <PageShell title="تقييمي" subtitle="نتائج تقييمات الأداء الخاصة بك" loading={isLoading}>
+    <PageShell title="تقييمي"
+      breadcrumbs={[
+        { href: "/my-space", label: "مساحاتي" },
+        { label: "تقييمي" },
+      ]} subtitle="نتائج تقييمات الأداء الخاصة بك" loading={isLoading}>
       {reviews.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center text-muted-foreground">

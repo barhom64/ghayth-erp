@@ -16,6 +16,7 @@ import {
 } from "@workspace/ui-core";
 import { formatCurrency, formatDateAr, currentYearRiyadh } from "@/lib/formatters";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
 const REASON_LABELS: Record<string, string> = {
@@ -68,6 +69,7 @@ export default function TurnoverReportPage() {
         </Select>
       }
     >
+      <HrTabsNav />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-4">

@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -78,6 +79,7 @@ export default function FinancialRequestsPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الطلبات المالية" }]}
       loading={isLoading}
     >
+      <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-status-info-surface rounded-lg"><ClipboardCheck className="h-5 w-5 text-status-info-foreground" /></div>

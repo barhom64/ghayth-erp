@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +72,7 @@ export default function PropertiesMaintenance() {
         </Link>
       }
     >
+      <PropertyTabsNav />
       <AdvancedFilters
             config={{
               searchPlaceholder: "بحث بالوحدة أو المبنى أو الوصف...",

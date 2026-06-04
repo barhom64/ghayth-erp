@@ -1,4 +1,6 @@
-import React from "react";
+import { Link } from "wouter";
+import { PageShell } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { formatDateAr, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +13,7 @@ import {
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Users, Plane, AlertTriangle, UserPlus, Play, Zap, TrendingUp, TrendingDown, Wallet, ShieldAlert } from "lucide-react";
+import { Users, Plane, AlertTriangle, UserPlus, Play, Zap, TrendingUp, TrendingDown, Wallet, ShieldAlert, Upload, Sparkles, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -63,16 +65,81 @@ export default function UmrahDashboard() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">لوحة تشغيل العمرة</h1>
-          {activeSeason && <p className="text-sm text-muted-foreground mt-1">الموسم النشط: {activeSeason.title}</p>}
-        </div>
+    <PageShell
+      title="لوحة تشغيل العمرة"
+      subtitle={activeSeason ? `الموسم النشط: ${activeSeason.title}` : undefined}
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "لوحة التشغيل" }]}
+      actions={
         <div className="flex gap-2">
           <GuardedButton perm="umrah:create" variant="outline" onClick={runDaily} className="gap-2"><Play className="h-4 w-4" />تحديث الحالات</GuardedButton>
           <GuardedButton perm="umrah:create" variant="outline" onClick={runPenalties} className="gap-2"><Zap className="h-4 w-4" />تشغيل الغرامات</GuardedButton>
         </div>
+      }
+    >
+      <UmrahTabsNav />
+
+      {/* Quick Actions — أهم 4 إجراءات يومية للعامل، ظاهرة مباشرة
+          بدون ما يضطر يفتح tab. كانت كل وحدة مدفونة في مكان مختلف:
+          - إضافة معتمر: /umrah/pilgrims/create (مخفي)
+          - استيراد ملف: tab "الاستيراد"
+          - إنشاء فاتورة: tab "معالج المبيعات"
+          - تقرير امتثال: tab dropdown */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="umrah-quick-actions">
+        <Link href="/umrah/pilgrims/create" data-testid="quick-action-pilgrim-create">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-info-surface">
+                <UserPlus className="w-5 h-5 text-status-info-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">إضافة معتمر</p>
+                <p className="text-xs text-muted-foreground">تسجيل يدوي جديد</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/umrah/import" data-testid="quick-action-import">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-success-surface">
+                <Upload className="w-5 h-5 text-status-success-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">استيراد ملف</p>
+                <p className="text-xs text-muted-foreground">معالج Excel</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/umrah/sales-wizard" data-testid="quick-action-invoice">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-warning-surface">
+                <Sparkles className="w-5 h-5 text-status-warning-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">إنشاء فاتورة</p>
+                <p className="text-xs text-muted-foreground">معالج المبيعات</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/umrah/compliance" data-testid="quick-action-compliance">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-error-surface">
+                <FileText className="w-5 h-5 text-status-error-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">لوحة الامتثال</p>
+                <p className="text-xs text-muted-foreground">المخاطر الحالية</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -255,6 +322,6 @@ export default function UmrahDashboard() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

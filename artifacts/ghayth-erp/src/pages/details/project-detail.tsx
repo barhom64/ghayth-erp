@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { z } from "zod";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch, getErrorMessage } from "@/lib/api";
@@ -165,13 +169,23 @@ export default function ProjectDetail() {
     { successMessage: "تمت إضافة المورد البشري" },
   );
 
+  // Milestone + resource dialog state — replaces the 5 chained prompts.
+  // A single styled Dialog per action gives the operator a labeled form
+  // with date pickers and numeric inputs instead of plain text fields.
+  const [milestoneOpen, setMilestoneOpen] = useState(false);
+  const [milestoneTitle, setMilestoneTitle] = useState("");
+  const [milestoneDate, setMilestoneDate] = useState("");
   const handleAddMilestone = () => {
-    const title = window.prompt("عنوان المعلم:");
-    if (!title?.trim()) return;
-    const targetDate = window.prompt("التاريخ المستهدف (YYYY-MM-DD، اختياري):") ?? "";
+    setMilestoneTitle("");
+    setMilestoneDate("");
+    setMilestoneOpen(true);
+  };
+  const confirmAddMilestone = () => {
+    if (!milestoneTitle.trim()) return;
+    setMilestoneOpen(false);
     addMilestoneMut.mutate({
-      title: title.trim(),
-      targetDate: targetDate.trim() || undefined,
+      title: milestoneTitle.trim(),
+      targetDate: milestoneDate.trim() || undefined,
     });
   };
 
@@ -179,17 +193,24 @@ export default function ProjectDetail() {
     updateMilestoneMut.mutate({ id: mid, status: "completed" });
   };
 
+  const [resourceOpen, setResourceOpen] = useState(false);
+  const [resourceEmpId, setResourceEmpId] = useState("");
+  const [resourceRole, setResourceRole] = useState("");
+  const [resourceAlloc, setResourceAlloc] = useState("");
   const handleAddResource = () => {
-    const empStr = window.prompt("معرّف الموظف:");
-    if (!empStr) return;
-    const empId = Number(empStr);
+    setResourceEmpId("");
+    setResourceRole("");
+    setResourceAlloc("");
+    setResourceOpen(true);
+  };
+  const confirmAddResource = () => {
+    const empId = Number(resourceEmpId);
     if (!Number.isFinite(empId) || empId <= 0) return;
-    const role = window.prompt("الدور (مثال: مهندس / محاسب):") ?? "";
-    const allocStr = window.prompt("نسبة التخصيص (0-100):") ?? "";
+    setResourceOpen(false);
     addResourceMut.mutate({
       employeeId: empId,
-      role: role.trim() || undefined,
-      allocationPct: allocStr ? Number(allocStr) : undefined,
+      role: resourceRole.trim() || undefined,
+      allocationPct: resourceAlloc ? Number(resourceAlloc) : undefined,
     });
   };
 
@@ -791,6 +812,7 @@ export default function ProjectDetail() {
   ) : null;
 
   return (
+    <>
     <DetailPageLayout
       title={project?.name || "المشروع"}
       subtitle={project?.clientName || undefined}
@@ -818,5 +840,80 @@ export default function ProjectDetail() {
         </div>
       }
     />
+    <Dialog open={milestoneOpen} onOpenChange={setMilestoneOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إضافة معلم جديد</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1">
+            <Label className="text-xs">عنوان المعلم</Label>
+            <input
+              className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background"
+              value={milestoneTitle}
+              onChange={(e) => setMilestoneTitle(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">التاريخ المستهدف (اختياري)</Label>
+            <input
+              type="date"
+              className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background"
+              value={milestoneDate}
+              onChange={(e) => setMilestoneDate(e.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setMilestoneOpen(false)}>إلغاء</Button>
+          <Button onClick={confirmAddMilestone} disabled={!milestoneTitle.trim()} rateLimitAware>إضافة</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={resourceOpen} onOpenChange={setResourceOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إضافة مورد بشري</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1">
+            <Label className="text-xs">معرّف الموظف</Label>
+            <input
+              type="number"
+              inputMode="numeric"
+              className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background"
+              value={resourceEmpId}
+              onChange={(e) => setResourceEmpId(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">الدور (مثال: مهندس / محاسب)</Label>
+            <input
+              className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background"
+              value={resourceRole}
+              onChange={(e) => setResourceRole(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">نسبة التخصيص (0-100)</Label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={100}
+              className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background"
+              value={resourceAlloc}
+              onChange={(e) => setResourceAlloc(e.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setResourceOpen(false)}>إلغاء</Button>
+          <Button onClick={confirmAddResource} disabled={!resourceEmpId} rateLimitAware>إضافة</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

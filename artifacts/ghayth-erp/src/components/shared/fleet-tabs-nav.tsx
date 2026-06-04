@@ -2,16 +2,18 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   Car, Users, Navigation, Wrench, Fuel, Shield, Bell,
-  BarChart3, Calendar, AlertTriangle, Satellite,
+  BarChart3, Calendar, AlertTriangle, Satellite, Package, Disc,
 } from "lucide-react";
 
 const TABS = [
   { href: "/fleet", label: "المركبات", icon: Car, match: ["/fleet"], exact: true },
   { href: "/fleet/drivers", label: "السائقون", icon: Users, match: ["/fleet/drivers"] },
   { href: "/fleet/trips", label: "الرحلات", icon: Navigation, match: ["/fleet/trips"] },
+  { href: "/fleet/cargo", label: "نقل البضائع", icon: Package, match: ["/fleet/cargo"] },
   { href: "/fleet/maintenance", label: "الصيانة", icon: Wrench, match: ["/fleet/maintenance"] },
   { href: "/fleet/fuel", label: "الوقود", icon: Fuel, match: ["/fleet/fuel"] },
   { href: "/fleet/insurance", label: "التأمين", icon: Shield, match: ["/fleet/insurance"] },
+  { href: "/fleet/tires", label: "الإطارات", icon: Disc, match: ["/fleet/tires"] },
   { href: "/fleet/preventive-plans", label: "الصيانة الوقائية", icon: Calendar, match: ["/fleet/preventive-plans"] },
   { href: "/fleet/traffic-violations", label: "المخالفات", icon: AlertTriangle, match: ["/fleet/traffic-violations"] },
   { href: "/fleet/alerts", label: "التنبيهات", icon: Bell, match: ["/fleet/alerts"] },

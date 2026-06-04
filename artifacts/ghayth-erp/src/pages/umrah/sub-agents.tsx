@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import {
   DataTable,
   type DataTableColumn,
@@ -67,6 +68,7 @@ export default function UmrahSubAgents() {
   const [editing, setEditing] = useState<Partial<SubAgent> | null>(null);
   const [linking, setLinking] = useState<SubAgent | null>(null);
   const [linkClientId, setLinkClientId] = useState<string>("");
+  const [deletingSubAgent, setDeletingSubAgent] = useState<SubAgent | null>(null);
 
   const createMut = useApiMutation<any, Partial<SubAgent>>(
     "/umrah/sub-agents",
@@ -209,11 +211,7 @@ export default function UmrahSubAgents() {
             size="sm"
             variant="ghost"
             className="text-status-error-foreground"
-            onClick={() => {
-              if (window.confirm(`حذف الوكيل الفرعي "${s.name}"?`)) {
-                deleteMut.mutate({ id: s.id });
-              }
-            }}
+            onClick={() => setDeletingSubAgent(s)}
             disabled={deleteMut.isPending}
           >
             حذف
@@ -449,6 +447,18 @@ export default function UmrahSubAgents() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {deletingSubAgent && (
+        <ConfirmDeleteDialog
+          open={!!deletingSubAgent}
+          onOpenChange={(o) => !o && setDeletingSubAgent(null)}
+          entity={{ type: "umrah-sub-agent", id: deletingSubAgent.id, name: deletingSubAgent.name }}
+          deletePath={`/umrah/sub-agents/${deletingSubAgent.id}`}
+          invalidateKeys={[["umrah-sub-agents"]]}
+          successMessage="تم حذف الوكيل الفرعي"
+          onDeleted={() => setDeletingSubAgent(null)}
+        />
+      )}
     </PageShell>
   );
 }

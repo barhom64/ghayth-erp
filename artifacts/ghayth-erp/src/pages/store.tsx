@@ -6,6 +6,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
+  PageShell,
   PageStatusBadge,
   DataTable,
   type DataTableColumn,
@@ -222,7 +223,7 @@ function OrdersTab() {
       render: (o) => (
         <div className="flex items-center gap-1">
           <Link href={`/store/orders/${o.id}`}>
-            <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" title="عرض"><Eye className="h-4 w-4" /></Button>
           </Link>
           <RowActions
             onEdit={() => startEdit(o.id, { customerName: o.customerName || "", totalAmount: Number(o.totalAmount) || 0, status: o.status || "pending", notes: o.notes || "" })}
@@ -333,7 +334,11 @@ export default function StorePage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <PageShell
+      title="المتجر"
+      subtitle="إدارة المنتجات والطلبات"
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { label: "المتجر" }]}
+    >
       <StoreTabsNav />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => (
@@ -355,6 +360,6 @@ export default function StorePage() {
         <TabsContent value="products"><ProductsTab /></TabsContent>
         <TabsContent value="orders"><OrdersTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

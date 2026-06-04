@@ -25,6 +25,7 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "in_review",  label: "قيد المراجعة" },
   { value: "probation",  label: "فترة التجربة" },
@@ -191,6 +192,7 @@ export default function OnboardingReviewPage() {
       subtitle="متابعة إجراءات التعيين وتأهيل الموظفين الجدد"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
     >
+      <HrTabsNav />
       {/* KPI cards */}
       <KpiGrid items={kpis} />
 

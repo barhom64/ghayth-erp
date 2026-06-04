@@ -6,6 +6,17 @@ import { config } from "../lib/config.js";
 
 // Idempotency middleware for sensitive financial POSTs.
 //
+// STATUS (#1418 GAP_MATRIX conflict #7): the table `idempotency_keys`
+// (migration 170) appears orphan to grep-based audits because no route
+// file imports `idempotency()` directly. The middleware is intentionally
+// wired through the request-level `requestIdempotency` helper used by
+// individual sensitive endpoints (journal post, payment run, year-end
+// close), NOT mounted at the router level. The grep audit didn't see
+// this indirection, so the conflict resolution is: **table + middleware
+// are LIVE** — invoked from `lib/requestIdempotency.ts` and consumed by
+// finance-hardening.ts (close/lock), payment endpoints, and the journal
+// post path. Keep both.
+//
 // Contract: when the client sends an `Idempotency-Key` header with a POST
 // request to a guarded endpoint, we look up (companyId, userId, method,
 // path, key) in `idempotency_keys`. If a previous request with the SAME

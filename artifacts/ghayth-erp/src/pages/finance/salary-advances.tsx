@@ -2,6 +2,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -162,6 +163,7 @@ export default function SalaryAdvancesPage() {
         </GuardedButton>
       }
     >
+      <FinanceTabsNav />
       <KpiGrid items={[
         { label: "عدد السلف", value: formatNumber(summary.total || 0), icon: Banknote, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "قيد الانتظار", value: formatNumber(items.filter((s: any) => s.status === "pending").length), icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },

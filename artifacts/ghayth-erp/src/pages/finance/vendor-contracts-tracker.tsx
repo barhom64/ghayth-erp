@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
@@ -124,18 +125,33 @@ export default function VendorContractsTrackerPage() {
         c.status,
       ].join(","));
     }
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `vendor-contracts-${today}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+    // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+    // Routed through unified export helper for audit + letterhead.
+    {
+      const _allLines = lines;
+      const _headers = (_allLines[0] ?? "").split(",");
+      const _rows = _allLines.slice(1).map((line) => {
+        const parts = line.split(",");
+        const obj: Record<string, string> = {};
+        _headers.forEach((h, i) => { obj[h] = parts[i] ?? ""; });
+        return obj;
+      });
+      void exportRowsToCsv({
+        entityType: "report_vendor_contracts_tracker",
+        title: String(`vendor-contracts-${today}.csv`).replace(/\.csv$/i, ""),
+        rows: _rows,
+        columns: _headers.map((h) => ({ key: h, label: h })),
+      }).catch((err) => console.error("[export] failed", err));
+    }
+};
 
   return (
     <PageShell
       title="متابعة عقود الموردين"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "متابعة عقود الموردين" },
+      ]}
       subtitle="عقود تنتهي قريباً — لا تترك مورداً يجدد تلقائياً أو ينتهي بدون تخطيط"
     >
       <FinanceTabsNav />
@@ -330,10 +346,8 @@ export default function VendorContractsTrackerPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            <Link href={`/finance/contracts/${c.id}`}>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <ExternalLink className="w-4 h-4" />
-                              </Button>
+                            <Link href="/finance/contracts">
+                              <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-8 w-8"><ExternalLink className="w-4 h-4" /></Button>
                             </Link>
                             {c.vendorId && (
                               <Link href={`/finance/vendor-360-sheet?vendorId=${c.vendorId}`}>

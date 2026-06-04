@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { formatDateAr, todayLocal } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +8,9 @@ import {
   useFilters,
   DataTable,
   type DataTableColumn,
+  PageShell,
 } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Button } from "@/components/ui/button";
 import { Plus, Users, AlertTriangle, Plane, UserPlus, X } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -41,6 +43,27 @@ export default function UmrahPilgrims() {
   const [filters, setFilters] = useFilters();
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  // Deep-link filter pre-application — compliance dashboard tiles + the
+  // visa-expiring banner navigate here with ?status=… / ?seasonId=… /
+  // ?visaExpiringWithin=7 / ?agentId=…. Without this hook, the URL was
+  // a no-op and the operator landed on an unfiltered list.
+  //
+  // Runs once on mount: the URL is the entry signal, subsequent
+  // navigation within the page rewrites `filters` directly.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const known = ["status", "seasonId", "agentId", "groupId", "flight", "arrivalDate", "departureDate", "visaExpiringWithin", "search"];
+    const next: Record<string, string> = {};
+    let touched = false;
+    for (const k of known) {
+      const v = sp.get(k);
+      if (v) { next[k] = v; touched = true; }
+    }
+    if (touched) setFilters({ ...filters, ...next } as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const seasonId = (filters as Record<string, string>).seasonId || "";
   const groupId = (filters as Record<string, string>).groupId || "";
   // Flight number rides on the same dynamic-keys pattern (no shared-
@@ -229,16 +252,17 @@ export default function UmrahPilgrims() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">المعتمرين</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">متابعة ملفات المعتمرين وحالاتهم</p>
-        </div>
+    <PageShell
+      title="المعتمرين"
+      subtitle="متابعة ملفات المعتمرين وحالاتهم"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المعتمرين" }]}
+      actions={
         <Link href="/umrah/pilgrims/create">
           <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
         </Link>
-      </div>
+      }
+    >
+      <UmrahTabsNav />
 
       {unassignedCount > 0 && (
         <div className="rounded-md border border-status-warning-surface bg-status-warning-surface/30 p-3 text-sm text-status-warning-foreground">
@@ -469,6 +493,6 @@ export default function UmrahPilgrims() {
         noToolbar
         onRowClick={(row) => navigate(`/umrah/pilgrims/${row.id}`)}
       />
-    </div>
+    </PageShell>
   );
 }

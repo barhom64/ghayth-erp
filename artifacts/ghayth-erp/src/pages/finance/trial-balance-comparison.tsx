@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
@@ -151,13 +152,25 @@ export default function TbComparisonPage() {
         [r.code, r.name, TYPE_LABEL[r.type] ?? r.type, r.currentBalance, r.priorBalance, r.variance, r.variancePct.toFixed(2)].join(",")
       ),
     ];
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `tb-comparison-${curStart}_${curEnd}-vs-${priorStart}_${priorEnd}.csv`;
-    a.click();
-  };
+    // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+    // Routed through unified export helper for audit + letterhead.
+    {
+      const _allLines = lines;
+      const _headers = (_allLines[0] ?? "").split(",");
+      const _rows = _allLines.slice(1).map((line) => {
+        const parts = line.split(",");
+        const obj: Record<string, string> = {};
+        _headers.forEach((h, i) => { obj[h] = parts[i] ?? ""; });
+        return obj;
+      });
+      void exportRowsToCsv({
+        entityType: "report_trial_balance_comparison",
+        title: String(`tb-comparison-${curStart}_${curEnd}-vs-${priorStart}_${priorEnd}.csv`).replace(/\.csv$/i, ""),
+        rows: _rows,
+        columns: _headers.map((h) => ({ key: h, label: h })),
+      }).catch((err) => console.error("[export] failed", err));
+    }
+};
 
   if (qCurrent.isLoading || qPrior.isLoading) return <LoadingSpinner />;
 

@@ -1,3 +1,10 @@
+/**
+ * Fleet module landing page. Conflict #10 in
+ * `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md`. Resolved as **keep** —
+ * same rationale as finance/dashboard + hr.tsx: domain-specific
+ * landing with fleet-only queries and tab structure, complements
+ * (not duplicates) /module-dashboards?tab=fleet.
+ */
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

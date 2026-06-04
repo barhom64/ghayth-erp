@@ -902,6 +902,38 @@ export function registerEventListeners() {
   eventBus.on("rent_payment.received", async (payload) => {
     await logEvent("rent_payment.received", payload);
     await logAudit("rent_payment.received", { ...payload, action: "receive", entity: "rent_payment" });
+    // N8 fix: cross-module write into CRM client ledger. Without this
+    // the rent payment only touches rent_payments + journal_entries —
+    // the CRM client card never reflects the tenant's latest payment.
+    // Reports that join client_overview pages still query rent_payments
+    // directly, but the badge "Last paid: 12 days ago" on /clients lives
+    // on clients.lastPaymentAt and stays stale forever otherwise.
+    if (payload.companyId && payload.entityId) {
+      try {
+        // rent_payments has no companyId column — scope flows via the
+        // rental_contracts JOIN. The double `companyId = $2` (on
+        // rental_contracts and on the outer UPDATE) is intentional:
+        // it's a defence-in-depth seatbelt against a cross-tenant
+        // payment id (which the route layer already rejects).
+        await rawExecute(
+          `UPDATE clients
+             SET "lastPaymentAt" = NOW(),
+                 "lastActivityAt" = NOW(),
+                 "updatedAt"      = NOW()
+           WHERE id = (
+             SELECT t."clientId"
+               FROM rent_payments rp
+               JOIN rental_contracts rc ON rc.id = rp."contractId" AND rc."companyId" = $2
+               JOIN tenants t           ON t.id  = rc."tenantId"
+              WHERE rp.id = $1
+                AND t."clientId" IS NOT NULL
+              LIMIT 1
+           )
+             AND "companyId" = $2`,
+          [payload.entityId, payload.companyId]
+        );
+      } catch (e) { logger.error(e, "[EventListener] rent_payment.received → clients.lastPaymentAt failed"); }
+    }
   });
   eventBus.on("deposit.received", async (payload) => {
     await logEvent("deposit.received", payload);
@@ -1287,6 +1319,60 @@ export function registerEventListeners() {
         actionUrl: `/umrah/invoices/${payload.entityId}`,
       });
     }
+  });
+
+  // N10 fix: inbox auto-classifier. Rule-based, deliberately simple:
+  // matches Arabic + English keywords in the subject and decides whether
+  // the message warrants an open `tasks` row so a human picks it up.
+  // For NLP-quality classification we'd plug in a model later; for now
+  // these rules close the gap where messages just sat in /communications/
+  // inbox with no signal to anyone.
+  //
+  // Match the LONGER keywords first — "complaint" is a strict subset of
+  // "complaint received" but we want the more specific category to win.
+  eventBus.on("inbox.message.received", async (payload) => {
+    await logEvent("inbox.message.received", payload);
+    if (!payload.companyId || !payload.entityId) return;
+
+    const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
+    const subject = String(details.subject ?? "").toLowerCase();
+    const fromAddress = String(details.fromAddress ?? "");
+    if (!subject.trim()) return;
+
+    // Rule table — keyword → (taskType, priority, title prefix). Arabic
+    // matching is case-insensitive at the regex level even though
+    // toLowerCase is a no-op for Arabic characters.
+    const RULES: Array<{ patterns: RegExp[]; type: string; priority: string; titlePrefix: string }> = [
+      { patterns: [/شكوى/i, /complaint/i],            type: "complaint",  priority: "high",   titlePrefix: "شكوى من" },
+      { patterns: [/عاجل/i, /urgent/i, /asap/i],      type: "urgent",     priority: "urgent", titlePrefix: "عاجل من" },
+      { patterns: [/فاتورة/i, /invoice/i, /payment/i, /دفع/i], type: "billing",    priority: "normal", titlePrefix: "استفسار فاتورة" },
+      { patterns: [/طلب/i, /request/i, /apply/i],     type: "request",    priority: "normal", titlePrefix: "طلب من" },
+      { patterns: [/استفسار/i, /inquiry/i, /question/i], type: "inquiry", priority: "low",    titlePrefix: "استفسار من" },
+    ];
+
+    let matched: { type: string; priority: string; titlePrefix: string } | null = null;
+    for (const rule of RULES) {
+      if (rule.patterns.some(p => p.test(subject))) {
+        matched = rule;
+        break;
+      }
+    }
+    if (!matched) return;
+
+    try {
+      await rawExecute(
+        `INSERT INTO tasks ("companyId", title, description, type, status, priority, "linkedEntityType", "linkedEntityId", "createdAt")
+         VALUES ($1, $2, $3, $4, 'pending', $5, 'message_log', $6, NOW())`,
+        [
+          payload.companyId,
+          `${matched.titlePrefix} ${fromAddress || "—"}: ${String(details.subject ?? "").slice(0, 120)}`,
+          `رسالة واردة من ${fromAddress}\nالموضوع: ${details.subject}\n\nتم تصنيفها تلقائياً كـ ${matched.type}.`,
+          matched.type,
+          matched.priority,
+          payload.entityId,
+        ]
+      );
+    } catch (e) { logger.error(e, "[EventListener] inbox auto-classifier task insert failed"); }
   });
 
   // M9 recovery: umrah AGENT invoice (commission billing) — checks for

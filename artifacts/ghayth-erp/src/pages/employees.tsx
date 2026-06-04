@@ -259,7 +259,7 @@ export default function Employees() {
     <PageShell
       title="إدارة الموظفين"
       subtitle="قائمة الموظفين والمسميات الوظيفية والحسابات"
-      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الموظفين" }]}
       actions={
         (canWrite || canManage) ? (
           <Link href="/employees/create">
@@ -270,43 +270,6 @@ export default function Employees() {
           </Link>
         ) : null
       }
-      filters={
-        <div className="flex-1 flex flex-col gap-3 w-full">
-          <AdvancedFilters
-            config={{
-              searchPlaceholder: "بحث بالاسم أو الرقم الوظيفي...",
-              statuses: [
-                { value: "active", label: "نشط" },
-                { value: "inactive", label: "غير نشط" },
-              ],
-              showDateRange: true,
-            }}
-            values={filters}
-            onChange={setFilters}
-            onExportCSV={() =>
-              exportToCSV(
-                filtered || [],
-                [
-                  { key: "empNumber", label: "الرقم الوظيفي" },
-                  { key: "name", label: "الاسم" },
-                  { key: "jobTitle", label: "المسمى" },
-                  { key: "departmentName", label: "القسم" },
-                  { key: "branchName", label: "الفرع" },
-                  { key: "phone", label: "الجوال" },
-                  { key: "status", label: "الحالة" },
-                ],
-                "الموظفين",
-              )
-            }
-            resultCount={filtered?.length}
-          />
-          <TagFilterSelect
-            tagsList={tagsList}
-            selectedTag={selectedTag}
-            onSelect={setSelectedTag}
-          />
-        </div>
-      }
     >
       <HrTabsNav />
       <KpiGrid items={[
@@ -315,6 +278,42 @@ export default function Employees() {
         { label: "في فترة تجربة", value: employees?.filter((e: any) => e.status === "probation").length || 0, icon: UserX, color: "text-status-warning-foreground bg-status-warning-surface" },
         { label: "جديد هذا الشهر", value: employees?.filter((e: any) => { const d = new Date(e.createdAt); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length || 0, icon: UserPlus, color: "text-purple-600 bg-purple-50" },
       ]} />
+
+      <div className="flex flex-col gap-3 w-full">
+        <AdvancedFilters
+          config={{
+            searchPlaceholder: "بحث بالاسم أو الرقم الوظيفي...",
+            statuses: [
+              { value: "active", label: "نشط" },
+              { value: "inactive", label: "غير نشط" },
+            ],
+            showDateRange: true,
+          }}
+          values={filters}
+          onChange={setFilters}
+          onExportCSV={() =>
+            exportToCSV(
+              filtered || [],
+              [
+                { key: "empNumber", label: "الرقم الوظيفي" },
+                { key: "name", label: "الاسم" },
+                { key: "jobTitle", label: "المسمى" },
+                { key: "departmentName", label: "القسم" },
+                { key: "branchName", label: "الفرع" },
+                { key: "phone", label: "الجوال" },
+                { key: "status", label: "الحالة" },
+              ],
+              "الموظفين",
+            )
+          }
+          resultCount={filtered?.length}
+        />
+        <TagFilterSelect
+          tagsList={tagsList}
+          selectedTag={selectedTag}
+          onSelect={setSelectedTag}
+        />
+      </div>
 
       <DataTable
         columns={columns}

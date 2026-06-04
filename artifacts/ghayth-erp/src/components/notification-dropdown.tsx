@@ -118,6 +118,7 @@ export function NotificationDropdown() {
         size="icon"
         className="relative h-8 w-8"
         onClick={() => setIsOpen(!isOpen)}
+        title="الإشعارات"
       >
         <Bell className="h-4 w-4 text-muted-foreground" />
         {unreadCount > 0 && (

@@ -42,6 +42,10 @@ export default function AdminGlReconciliation() {
   return (
     <PageShell
       title="مطابقة دفتر الأستاذ"
+      breadcrumbs={[
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { label: "مطابقة دفتر الأستاذ" },
+      ]}
       subtitle="مقارنة الأرصدة المخزنة بالأرصدة المحسوبة من القيود"
       loading={isLoading}
       actions={

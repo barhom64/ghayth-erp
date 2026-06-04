@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@workspace/ui-core";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   Receipt, FileBarChart2, Boxes, Layers, Clock,
   AlertTriangle, RefreshCw, ShieldAlert, Percent, Receipt as ReceiptIcon,
@@ -172,6 +173,7 @@ export default function ZatcaReportsHubPage() {
         </div>
       }
     >
+      <FinanceTabsNav />
       <Card className="mb-6 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">
           <p className="font-semibold mb-1">📋 سير العمل المقترح قبل إقفال الشهر</p>

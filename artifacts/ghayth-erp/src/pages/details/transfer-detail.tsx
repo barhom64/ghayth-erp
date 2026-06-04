@@ -8,6 +8,11 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { Edit, ArrowLeftRight, UserCheck, UserX } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
@@ -52,20 +57,29 @@ export default function TransferDetail() {
   const transfer = data;
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("transfer", id ?? 0);
   const [receiving, setReceiving] = useState(false);
+  // Dialog state replaces window.prompt for the receive/reject action.
+  // `confirming` is null when closed, true|false when open (kind of action).
+  const [confirming, setConfirming] = useState<boolean | null>(null);
+  const [receiveNotes, setReceiveNotes] = useState("");
 
-  const handleReceive = async (confirmed: boolean) => {
+  const handleReceive = (confirmed: boolean) => {
     if (!id) return;
-    const notes = window.prompt(confirmed ? "ملاحظات على استقبال الموظف (اختياري):" : "سبب رفض الاستقبال:", "");
-    if (notes === null) return;
-    if (!confirmed && !notes.trim()) {
+    setReceiveNotes("");
+    setConfirming(confirmed);
+  };
+  const submitReceive = async () => {
+    if (!id || confirming === null) return;
+    const confirmed = confirming;
+    if (!confirmed && !receiveNotes.trim()) {
       toast({ variant: "destructive", title: "سبب الرفض مطلوب" });
       return;
     }
+    setConfirming(null);
     setReceiving(true);
     try {
       await apiFetch(`/hr/transfers/${id}/receive`, {
         method: "PATCH",
-        body: JSON.stringify({ confirmed, notes: notes || undefined }),
+        body: JSON.stringify({ confirmed, notes: receiveNotes.trim() || undefined }),
       });
       toast({ title: confirmed ? "تم استقبال الموظف" : "تم رفض الاستقبال" });
       refetch();
@@ -248,6 +262,7 @@ export default function TransferDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={transfer?.employeeName ? `نقل ${transfer.employeeName}` : "تفاصيل النقل"}
       subtitle={
@@ -298,5 +313,27 @@ export default function TransferDetail() {
         </>
       }
     />
+    <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{confirming ? "تأكيد استقبال الموظف" : "رفض الاستقبال"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">{confirming ? "ملاحظات (اختياري)" : "سبب الرفض (مطلوب)"}</Label>
+          <Textarea
+            value={receiveNotes}
+            onChange={(e) => setReceiveNotes(e.target.value)}
+            rows={3}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setConfirming(null)}>إلغاء</Button>
+          <Button onClick={submitReceive} disabled={receiving} rateLimitAware>
+            {confirming ? "تأكيد الاستقبال" : "تأكيد الرفض"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

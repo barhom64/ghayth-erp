@@ -1,3 +1,10 @@
+/**
+ * Legal module landing page. Conflict #10 in
+ * `docs/audit/GHAITH_SYSTEM_GAP_MATRIX.md`. Resolved as **keep** —
+ * same rationale as finance/dashboard + hr.tsx + fleet.tsx: a
+ * domain-specific landing with legal-only queries and tab structure,
+ * not a duplicate of /module-dashboards?tab=legal.
+ */
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

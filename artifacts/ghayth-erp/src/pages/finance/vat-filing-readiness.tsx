@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
@@ -126,18 +127,33 @@ export default function VatFilingReadinessPage() {
     lines.push("");
     lines.push(`الإجمالي,${totals.outputVat.toFixed(2)},${totals.inputVat.toFixed(2)},${totals.netVat.toFixed(2)},${totals.netVat > 0 ? "مستحق الدفع" : "مستحق الاسترداد"}`);
 
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `vat-readiness-${year}-Q${quarter}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+    // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+    // Routed through unified export helper for audit + letterhead.
+    {
+      const _allLines = lines;
+      const _headers = (_allLines[0] ?? "").split(",");
+      const _rows = _allLines.slice(1).map((line) => {
+        const parts = line.split(",");
+        const obj: Record<string, string> = {};
+        _headers.forEach((h, i) => { obj[h] = parts[i] ?? ""; });
+        return obj;
+      });
+      void exportRowsToCsv({
+        entityType: "report_vat_filing_readiness",
+        title: String(`vat-readiness-${year}-Q${quarter}.csv`).replace(/\.csv$/i, ""),
+        rows: _rows,
+        columns: _headers.map((h) => ({ key: h, label: h })),
+      }).catch((err) => console.error("[export] failed", err));
+    }
+};
 
   return (
     <PageShell
       title="جاهزية إقرار ZATCA"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "جاهزية إقرار ZATCA" },
+      ]}
       subtitle={`${periodLabel} — تجميع ضرائب القيمة المضافة الفصلية للإقرار`}
       actions={
         <div className="flex gap-2">

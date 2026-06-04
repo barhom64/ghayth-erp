@@ -24,6 +24,7 @@ import {
   createAuditLog,
   todayISO,
 } from "../lib/businessHelpers.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
@@ -235,6 +236,12 @@ const patchPilgrimSchema = z.object({
   roomNumber: z.string().optional().nullable(),
   transportAssigned: z.boolean().optional(),
   notes: z.string().optional().nullable(),
+  // Overstay-exemption knobs (migration 242 / PR #1481). When the
+  // operator flips overstayExempt=true, the cron skips this pilgrim
+  // entirely. Reason is required by the API guard below so a
+  // compliance reviewer can see WHY each exemption was granted.
+  overstayExempt: z.boolean().optional(),
+  overstayExemptReason: z.string().optional().nullable(),
 });
 
 // `columnMapping` lets the wizard's column-mapping step override the
@@ -266,6 +273,17 @@ const importVouchersSchema = z.object({
   /** Override umrah_nusk_cost DR account code (gap #3). */
   purchaseAccountCode: z.string().trim().min(1).optional().nullable(),
   columnMapping: columnMappingSchema,
+  /**
+   * Explicit override for the wallet-overdraft guardrail. By default
+   * the engine refuses an import that would push the NUSK supplier
+   * wallet (PR #1464) below zero — matching the operator rule
+   * "لا يمكن نشتري تأشيرة الا وفي فلوس في الحساب". Setting
+   * allowOverdraft=true bypasses the check for cases where the
+   * operator KNOWS a top-up is on its way and wants to record the
+   * NUSK invoices anyway. The audit log captures the override so
+   * compliance can review.
+   */
+  allowOverdraft: z.boolean().optional().default(false),
 });
 
 const importSchema = z.object({
@@ -366,7 +384,7 @@ router.get("/seasons", authorize({ feature: "umrah", action: "list" }), async (r
   } catch (err) { handleRouteError(err, res, "List seasons error"); }
 });
 
-router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -375,7 +393,120 @@ router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), asyn
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الموسم غير موجود");
-    res.json(maskFields(req, row));
+
+    // Fan out the per-season aggregates. The season-detail page was
+    // already reading `revenue` / `registeredPilgrims` from the row,
+    // but the route returned only the raw umrah_seasons row — so
+    // every operational KPI rendered as 0/-. This fold closes that
+    // gap in one roundtrip.
+    const [
+      statusRows,
+      groupsRow,
+      financeRow,
+      nuskRow,
+      visaRow,
+      exemptRow,
+    ] = await Promise.all([
+      rawQuery<{ status: string; count: string }>(
+        `SELECT status, COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          GROUP BY status`,
+        [id, scope.companyId],
+      ),
+      rawQuery<{ groupsCount: string; agentsCount: string }>(
+        `SELECT
+           COUNT(*)::text AS "groupsCount",
+           COUNT(DISTINCT "agentId")::text AS "agentsCount"
+           FROM umrah_groups
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      ),
+      // Sales invoices in this season — header has a seasonId column
+      // (unlike the group-detail case which had to JOIN through items).
+      // Exclude cancelled so the revenue line matches what the operator
+      // actually books.
+      rawQuery<{ count: string; total: string | null; paid: string | null }>(
+        `SELECT COUNT(*)::text AS count,
+                COALESCE(SUM(total), 0)::text AS total,
+                COALESCE(SUM("paidAmount"), 0)::text AS paid
+           FROM umrah_sales_invoices
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+            AND status <> 'cancelled'`,
+        [id, scope.companyId],
+      ),
+      // NUSK invoices reach the season via their linked group (the
+      // nusk header has no seasonId column). Subquery against
+      // umrah_groups to keep tenant scope.
+      rawQuery<{ count: string; netCost: string | null }>(
+        `SELECT COUNT(*)::text AS count,
+                COALESCE(SUM(ni."netCost"), 0)::text AS "netCost"
+           FROM umrah_nusk_invoices ni
+          WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
+            AND ni."nuskStatus" <> 'cancelled'
+            AND ni."groupId" IN (
+              SELECT id FROM umrah_groups
+               WHERE "seasonId" = $2 AND "companyId" = $1 AND "deletedAt" IS NULL
+            )`,
+        [scope.companyId, id],
+      ),
+      // Visa-expiring within 7 days — mirrors the list-page banner +
+      // the per-group card. Excludes pilgrims who already left.
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+            AND "visaExpiry" IS NOT NULL
+            AND "visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
+            AND status NOT IN ('departed', 'cancelled')`,
+        [id, scope.companyId],
+      ),
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+            AND "overstayExempt" = true`,
+        [id, scope.companyId],
+      ),
+    ]);
+
+    const statusBreakdown: Record<string, number> = {};
+    let pilgrimsCount = 0;
+    let overstayCount = 0;
+    for (const r of statusRows) {
+      const n = Number(r.count);
+      statusBreakdown[r.status] = n;
+      pilgrimsCount += n;
+      if (r.status === "overstayed" || r.status === "overstay_penalized") overstayCount += n;
+    }
+
+    const fin = financeRow[0] || { count: "0", total: "0", paid: "0" };
+    const nusk = nuskRow[0] || { count: "0", netCost: "0" };
+    const groups = groupsRow[0] || { groupsCount: "0", agentsCount: "0" };
+
+    res.json(maskFields(req, {
+      ...row,
+      // Operational rollup
+      pilgrimsCount,
+      registeredPilgrims: pilgrimsCount,
+      statusBreakdown,
+      overstayCount,
+      visaExpiringCount: Number(visaRow[0]?.count ?? "0"),
+      exemptCount: Number(exemptRow[0]?.count ?? "0"),
+      groupsCount: Number(groups.groupsCount ?? "0"),
+      agentsCount: Number(groups.agentsCount ?? "0"),
+      // Financial rollup
+      revenue: Number(fin.total ?? "0"),
+      finance: {
+        invoiceCount: Number(fin.count),
+        invoiceTotal: Number(fin.total ?? "0"),
+        invoicePaid: Number(fin.paid ?? "0"),
+        invoiceOutstanding: Number(fin.total ?? "0") - Number(fin.paid ?? "0"),
+        nuskCount: Number(nusk.count),
+        nuskNetCost: Number(nusk.netCost ?? "0"),
+        margin: Number(fin.total ?? "0") - Number(nusk.netCost ?? "0"),
+      },
+    }));
   } catch (err) { handleRouteError(err, res, "Season detail error"); }
 });
 
@@ -647,18 +778,73 @@ router.get("/packages/:id", authorize({ feature: "umrah", action: "view" }), asy
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Defence-in-depth on the season JOIN — same pattern landed on
+    // groups/:id and sub-agents/:id. Without companyId a stale row
+    // could leak a title from another tenant.
     const [row] = await rawQuery(
-      `SELECT p.*, s.title AS "seasonTitle" FROM umrah_packages p
-       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id AND s."deletedAt" IS NULL
-       WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+      `SELECT p.*, s.title AS "seasonTitle"
+         FROM umrah_packages p
+    LEFT JOIN umrah_seasons s
+           ON p."seasonId" = s.id
+          AND s."companyId" = p."companyId"
+          AND s."deletedAt" IS NULL
+        WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("الباقة غير موجودة"); }
-    const pilgrims = await rawQuery(
-      `SELECT COUNT(*)::int AS c FROM umrah_pilgrims WHERE "packageId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    res.json(maskFields(req, { ...row, pilgrimCount: pilgrims[0]?.c || 0 }));
+
+    // Aggregates — the page already needs "how many pilgrims on this
+    // package" and "what's its revenue/cost picture". One roundtrip
+    // via Promise.all so loading the detail page stays snappy on
+    // large seasons.
+    const [statusRows, marginRow] = await Promise.all([
+      rawQuery<{ status: string; count: string }>(
+        `SELECT status, COUNT(*)::text AS count
+           FROM umrah_pilgrims
+          WHERE "packageId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          GROUP BY status`,
+        [id, scope.companyId],
+      ),
+      // Pilgrim count × package sellPrice/costPrice → simple revenue
+      // projection. Real revenue lives on invoices but the package
+      // itself doesn't know about invoices — projection is the right
+      // signal for "is this package priced correctly?".
+      rawQuery<{ count: string; sellPrice: string | null; costPrice: string | null }>(
+        `SELECT (SELECT COUNT(*)::text FROM umrah_pilgrims
+                  WHERE "packageId" = p.id AND "companyId" = p."companyId" AND "deletedAt" IS NULL
+                ) AS count,
+                p."sellPrice"::text AS "sellPrice",
+                p."costPrice"::text AS "costPrice"
+           FROM umrah_packages p
+          WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
+        [id, scope.companyId],
+      ),
+    ]);
+
+    const statusBreakdown: Record<string, number> = {};
+    let pilgrimCount = 0;
+    for (const r of statusRows) {
+      const n = Number(r.count);
+      statusBreakdown[r.status] = n;
+      pilgrimCount += n;
+    }
+
+    const sell = Number(marginRow[0]?.sellPrice ?? 0);
+    const cost = Number(marginRow[0]?.costPrice ?? 0);
+
+    res.json(maskFields(req, {
+      ...row,
+      pilgrimCount,
+      statusBreakdown,
+      projection: {
+        sellPerPilgrim: sell,
+        costPerPilgrim: cost,
+        marginPerPilgrim: sell - cost,
+        projectedRevenue: sell * pilgrimCount,
+        projectedCost: cost * pilgrimCount,
+        projectedMargin: (sell - cost) * pilgrimCount,
+      },
+    }));
   } catch (err) { handleRouteError(err, res, "Get package error"); }
 });
 
@@ -997,6 +1183,22 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
     const scope = req.scope!;
     const b = zodParse(patchPilgrimSchema.safeParse(req.body));
     const pilgrimId = parseId(req.params.id, "id");
+
+    // Overstay-exemption invariants (PR #1481): setting exempt=true
+    // REQUIRES a reason so compliance can audit WHY. Without it the
+    // operator could silently skip the cron for arbitrary pilgrims.
+    // Setting exempt=false (un-exempting) DOESN'T require a reason —
+    // the operator's removing the exemption, not adding one.
+    if (b.overstayExempt === true) {
+      const reason = (b.overstayExemptReason ?? "").trim();
+      if (!reason) {
+        throw new ValidationError("سبب الاستثناء مطلوب — لا يمكن استثناء معتمر بدون مبرّر مكتوب", {
+          field: "overstayExemptReason",
+          fix: "اكتب سبباً واضحاً (مثل: تأخّر مستشفى، اتفاق وكيل، تأخّر طيران)",
+        });
+      }
+    }
+
     const fieldKeys = ["agentId","subAgentId","packageId","fullName","passportNumber","visaNumber","nationality","gender","dateOfBirth","phone","arrivalDate","departureDate","actualArrival","actualDeparture","hotelName","roomNumber","transportAssigned","notes"] as const;
 
     const encryptIfSensitive = (key: string, val: any): any => {
@@ -1041,6 +1243,29 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
           sets.push(`"${key}"=$${params.length}`);
           if (key === "passportNumber") { params.push(blindIndex(String(b[key]).trim())); sets.push(`"passportNumber_hash"=$${params.length}`); }
           if (key === "visaNumber") { params.push(blindIndex(String(b[key]).trim())); sets.push(`"visaNumber_hash"=$${params.length}`); }
+        }
+      }
+      // Overstay-exemption columns (migration 242). Written together
+      // with the standard fields so a single PATCH can flip the flag
+      // + update other state in one transaction. We track WHO + WHEN
+      // server-side so the audit trail can't be forged via API body.
+      if (b.overstayExempt !== undefined) {
+        params.push(b.overstayExempt);
+        sets.push(`"overstayExempt"=$${params.length}`);
+        if (b.overstayExempt) {
+          // Exempting → record the operator + timestamp + reason.
+          params.push(b.overstayExemptReason!.trim());
+          sets.push(`"overstayExemptReason"=$${params.length}`);
+          params.push(scope.userId);
+          sets.push(`"overstayExemptBy"=$${params.length}`);
+          sets.push(`"overstayExemptAt"=NOW()`);
+        } else {
+          // Un-exempting → clear the metadata so a re-exemption
+          // gets a fresh by/at trail instead of inheriting stale
+          // values from a prior exemption.
+          sets.push(`"overstayExemptReason"=NULL`);
+          sets.push(`"overstayExemptBy"=NULL`);
+          sets.push(`"overstayExemptAt"=NULL`);
         }
       }
       if (sets.length === 0) {
@@ -1093,6 +1318,47 @@ router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "view" }), asy
     const penalties = await rawQuery(`SELECT * FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [id, scope.companyId]);
     res.json(maskFields(req, { ...decryptPilgrimRow(row), penalties }));
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
+});
+
+// Per-pilgrim activity timeline (PR #1484) — closes the operator's
+// "بمجر يدخل المعتمر او يتم اصدار تأشيرة لابد يكون فيه تحديد يومي
+//  عن بيانات المعتمر دخل خرج" rule. Reads audit_logs scoped to this
+// pilgrim, LEFT JOINs users for the operator's name, returns the
+// last 100 events newest-first.
+//
+// Why not just SELECT *? entityId on audit_logs is `text` (legacy
+// shape, supports composite ids elsewhere). We cast on the WHERE
+// clause and use the index that already covers (entity, entityId).
+router.get("/pilgrims/:id/timeline", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Existence check first — a 404 here means the operator typed
+    // a bad URL, not "no events yet for this pilgrim".
+    const [exists] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId],
+    );
+    if (!exists) throw new NotFoundError("المعتمر غير موجود");
+
+    const events = await rawQuery<Record<string, unknown>>(
+      `SELECT al.id, al.action, al."userId", al.before, al.after, al."createdAt",
+              COALESCE(e.name, u.email) AS "userName"
+         FROM audit_logs al
+         LEFT JOIN users u
+                ON u.id = al."userId"
+         LEFT JOIN employees e
+                ON e.id = u."employeeId"
+        WHERE al.entity = 'umrah_pilgrims'
+          AND al."entityId" = $1::text
+          AND al."companyId" = $2
+        ORDER BY al."createdAt" DESC
+        LIMIT 100`,
+      [String(id), scope.companyId],
+    );
+
+    res.json({ data: events, total: events.length });
+  } catch (err) { handleRouteError(err, res, "Get pilgrim timeline error"); }
 });
 
 router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
@@ -1224,7 +1490,7 @@ router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }
 router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping } =
+    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping, allowOverdraft } =
       zodParse(importVouchersSchema.safeParse(req.body));
     await requireOpenSeason(seasonId, scope.companyId);
     // Wire vouchers through the dedicated engine so they actually create
@@ -1246,7 +1512,7 @@ router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }
     // `row.nuskInvoiceNumber === undefined` and bucket every row as an
     // error — the same bug the preview route hit before normalization.
     const normalizedRows = normalizeImportRows(importRows, "vouchers", columnMapping);
-    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers");
+    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers", { allowOverdraft });
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
 });
@@ -1597,27 +1863,76 @@ router.get("/penalties", authorize({ feature: "umrah", action: "list" }), async 
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND pen."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND pen.status=$${params.length}`; }
+    // Tenant-scoped JOINs — without companyId guards a stale FK could
+    // surface a pilgrim / agent name from another tenant. Same pattern
+    // landed on /groups/:id (#1485) and /packages/:id (#1496).
     const rows = await rawQuery(
       `SELECT pen.*, p."fullName" as "pilgrimName", p."passportNumber", a.name as "agentName"
-       FROM umrah_penalties pen
-       LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
-       LEFT JOIN umrah_agents a ON pen."agentId"=a.id
-       WHERE ${where} ORDER BY pen."createdAt" DESC LIMIT 500`, params
+         FROM umrah_penalties pen
+    LEFT JOIN umrah_pilgrims p
+           ON pen."pilgrimId" = p.id
+          AND p."companyId"   = pen."companyId"
+          AND p."deletedAt"   IS NULL
+    LEFT JOIN umrah_agents a
+           ON pen."agentId"   = a.id
+          AND a."companyId"   = pen."companyId"
+          AND a."deletedAt"   IS NULL
+        WHERE ${where}
+        ORDER BY pen."createdAt" DESC
+        LIMIT 500`, params
     );
     res.json(maskFields(req, { data: rows.map(decryptPilgrimRow) }));
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
 });
 
-router.get("/penalties/:id", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+router.get("/penalties/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Tenant-scoped JOINs — same defence-in-depth pattern as the list.
+    // Now enriched with season title + created-by name + journal entry
+    // ref + invoice ref so the operator can see the full audit trail
+    // without opening four separate pages.
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT pen.*, p."fullName" AS "pilgrimName", p."passportNumber", a.name AS "agentName"
-       FROM umrah_penalties pen
-       LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
-       LEFT JOIN umrah_agents a ON pen."agentId"=a.id
-       WHERE pen.id=$1 AND pen."companyId"=$2`,
+      `SELECT pen.*,
+              p."fullName" AS "pilgrimName",
+              p."passportNumber",
+              a.name        AS "agentName",
+              s.title       AS "seasonTitle",
+              COALESCE(emp_c.name, uc.email) AS "createdByName",
+              COALESCE(emp_u.name, uu.email) AS "updatedByName",
+              je."ref"      AS "journalEntryRef",
+              inv.ref       AS "invoiceRef"
+         FROM umrah_penalties pen
+    LEFT JOIN umrah_pilgrims p
+           ON pen."pilgrimId" = p.id
+          AND p."companyId"   = pen."companyId"
+          AND p."deletedAt"   IS NULL
+    LEFT JOIN umrah_agents a
+           ON pen."agentId"   = a.id
+          AND a."companyId"   = pen."companyId"
+          AND a."deletedAt"   IS NULL
+    LEFT JOIN umrah_seasons s
+           ON pen."seasonId"  = s.id
+          AND s."companyId"   = pen."companyId"
+          AND s."deletedAt"   IS NULL
+    LEFT JOIN users uc
+           ON uc.id = pen."createdBy"
+    LEFT JOIN employees emp_c
+           ON emp_c.id = uc."employeeId"
+    LEFT JOIN users uu
+           ON uu.id = pen."updatedBy"
+    LEFT JOIN employees emp_u
+           ON emp_u.id = uu."employeeId"
+    LEFT JOIN journal_entries je
+           ON je.id = pen."journalEntryId"
+          AND je."companyId" = pen."companyId"
+          AND je."deletedAt" IS NULL
+    LEFT JOIN umrah_agent_invoices inv
+           ON inv.id = pen."invoiceId"
+          AND inv."companyId" = pen."companyId"
+          AND inv."deletedAt" IS NULL
+        WHERE pen.id = $1 AND pen."companyId" = $2`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("العقوبة غير موجودة");
@@ -1985,28 +2300,70 @@ router.get("/transport/:id", authorize({ feature: "umrah", action: "view" }), as
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Defence in depth on the cross-domain JOINs — fleet_vehicles /
+    // fleet_drivers are shared tables; a stale FK from another tenant
+    // (or a soft-deleted vehicle/driver) was previously surfacing here.
+    // Season JOIN added too so the page can show the season name.
     const [row] = await rawQuery(
-      `SELECT t.*, v."plateNumber" as "vehiclePlate", v.make as "vehicleMake", v.model as "vehicleModel",
-              d.name as "driverName", d.phone as "driverPhone"
-       FROM umrah_transport t
-       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
-       LEFT JOIN fleet_drivers d ON d.id = t."driverId"
-       WHERE t.id=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL`,
+      `SELECT t.*,
+              v."plateNumber" AS "vehiclePlate",
+              v.make          AS "vehicleMake",
+              v.model         AS "vehicleModel",
+              d.name          AS "driverName",
+              d.phone         AS "driverPhone",
+              s.title         AS "seasonTitle"
+         FROM umrah_transport t
+    LEFT JOIN fleet_vehicles v
+           ON v.id = t."vehicleId"
+          AND v."companyId" = t."companyId"
+          AND v."deletedAt" IS NULL
+    LEFT JOIN fleet_drivers d
+           ON d.id = t."driverId"
+          AND d."companyId" = t."companyId"
+          AND d."deletedAt" IS NULL
+    LEFT JOIN umrah_seasons s
+           ON s.id = t."seasonId"
+          AND s."companyId" = t."companyId"
+          AND s."deletedAt" IS NULL
+        WHERE t.id = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("رحلة النقل غير موجودة");
     // C4 (DT-3): the trip's pilgrims come from the join table — not from
     // every company pilgrim that happens to carry the transportAssigned
-    // flag.
-    const pilgrims = await rawQuery(
+    // flag. p."companyId" guard added (defence in depth — the join
+    // table is already tenant-scoped but a stale row could still slip
+    // through if cleanup ever lags).
+    const pilgrims = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p."fullName", p."passportNumber", p.nationality, p.status
-       FROM umrah_transport_pilgrims tp
-       JOIN umrah_pilgrims p ON p.id = tp."pilgrimId"
-       WHERE tp."transportId"=$1 AND tp."companyId"=$2 AND p."deletedAt" IS NULL
-       ORDER BY p."fullName"`,
+         FROM umrah_transport_pilgrims tp
+         JOIN umrah_pilgrims p
+           ON p.id = tp."pilgrimId"
+          AND p."companyId" = tp."companyId"
+          AND p."deletedAt" IS NULL
+        WHERE tp."transportId" = $1 AND tp."companyId" = $2
+        ORDER BY p."fullName"`,
       [id, scope.companyId]
     );
-    res.json(maskFields(req, { ...row, pilgrims }));
+
+    // Aggregate: status mix for the trip's pilgrims + utilisation % so
+    // the operator sees at a glance "how full is this bus?".
+    const statusBreakdown: Record<string, number> = {};
+    for (const p of pilgrims) {
+      const st = String(p.status ?? "unknown");
+      statusBreakdown[st] = (statusBreakdown[st] ?? 0) + 1;
+    }
+    const cap = Number((row as Record<string, unknown>).capacity ?? 0);
+    const seats = pilgrims.length;
+    const utilisation = cap > 0 ? Math.round((seats / cap) * 100) : 0;
+
+    res.json(maskFields(req, {
+      ...(row as Record<string, unknown>),
+      pilgrims,
+      statusBreakdown,
+      seatsBooked: seats,
+      utilisationPct: utilisation,
+    }));
   } catch (err) { handleRouteError(err, res, "Get transport error"); }
 });
 
@@ -2081,6 +2438,38 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.created", entity: "umrah_transport", entityId: rows[0]?.id, details: JSON.stringify({ fromLocation: b.fromLocation, toLocation: b.toLocation, cost: b.cost }) }).catch((e) => logger.error(e, "umrah background task failed"));
+
+    // Mirror the WhatsApp dispatch path that fleet trip-create uses
+    // (#1354 — driver_assigned). umrah_transport is a parallel trip
+    // surface that historically left drivers in the dark — they could
+    // only know about an umrah trip if they happened to log into the
+    // ERP. Drivers on this surface usually don't have ERP accounts at
+    // all, so WhatsApp is the only realistic channel.
+    if (b.driverId) {
+      try {
+        const [driverInfo] = await rawQuery<{ phone: string | null; name: string | null }>(
+          `SELECT phone, name FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+          [b.driverId, scope.companyId]
+        );
+        if (driverInfo?.phone) {
+          await sendMessage({
+            channel: "whatsapp",
+            recipient: driverInfo.phone,
+            recipientName: driverInfo.name,
+            body: `رحلة عمرة جديدة مسندة إليك:\nمن ${b.fromLocation || 'غير محدد'} إلى ${b.toLocation || 'غير محدد'}\nالتاريخ: ${b.tripDate}\nعدد المعتمرين: ${b.pilgrimCount || 0}\nالرجاء الاطلاع على تفاصيل الرحلة في النظام.`,
+            companyId: scope.companyId,
+            userId: scope.userId,
+            relatedType: "umrah_transport",
+            relatedId: rows[0].id,
+            templateKey: "umrah.transport.driver_assigned",
+            eventAction: "umrah.transport.driver_notified",
+          });
+        }
+      } catch (sendErr) {
+        logger.error({ err: sendErr, transportId: rows[0].id, driverId: b.driverId }, "[umrah] transport driver WhatsApp dispatch failed");
+      }
+    }
+
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create transport error"); }
 });
@@ -2229,6 +2618,30 @@ router.get("/import/header-maps", authorize({ feature: "umrah", action: "create"
       },
     });
   } catch (err) { handleRouteError(err, res, "Import header maps error"); }
+});
+
+// ── Smart column-mapping suggestion ──────────────────────────────────
+// Feeds the wizard's column-mapping step with a fuzzy-matched
+// engine-field suggestion per unknown Excel header. Closes the
+// "operator pastes a vendor file with a non-standard header — wizard
+// asks them to manually pick every column" friction that the hardcoded
+// dictionary + saved presets alone don't cover.
+//
+// The engine ALSO returns exact matches with confidence=1 so the
+// wizard can show a "✓ exact" badge — explicit confirmation beats
+// silent auto-mapping for the operator's confidence.
+
+const suggestMappingSchema = z.object({
+  headers: z.array(z.string()).min(1, "أعمدة الملف مطلوبة"),
+  fileType: z.enum(["mutamers", "vouchers"]),
+});
+
+router.post("/import/suggest-mapping", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const { headers, fileType } = zodParse(suggestMappingSchema.safeParse(req.body));
+    const { suggestColumnMapping } = await import("../lib/umrahImportEngine.js");
+    res.json({ suggestions: suggestColumnMapping(headers, fileType) });
+  } catch (err) { handleRouteError(err, res, "Suggest mapping error"); }
 });
 
 // ── Column-mapping presets ───────────────────────────────────────────
@@ -2581,15 +2994,40 @@ router.post("/penalties", authorize({ feature: "umrah", action: "create" }), asy
 // projection of the companies row (just the umrah-relevant columns) so
 // adding future settings is one zod field + one SET clause.
 
+// Shared nullable-FK preprocessor — "" → null, undefined stays
+// undefined so the PATCH handler can distinguish "field omitted"
+// (preserve existing value via COALESCE) from "field set to null"
+// (explicit clear). Then coerce to number when present.
+const nullableFkPreproc = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.coerce.number().nullable().optional(),
+);
+
+// Penalty knobs are non-negative numbers (or null = "reset to global
+// default"). Same preprocess pattern as the FK fields — "" treated as
+// null, undefined preserves existing value.
+const nullableNumberPreproc = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.coerce.number().nonnegative({ message: "القيمة يجب أن تكون ≥ 0" }).nullable().optional(),
+);
+
 const umrahSettingsPatchSchema = z.object({
-  // Empty string ("") and explicit null both map to "unset" — matches
-  // the pattern PR #1428 introduced for the pilgrim-reassign modal.
   // When unset, the vendor-statement endpoint skips its umrah branch
   // (gracefully — no broken queries).
-  nuskSupplierId: z.preprocess(
-    (v) => (v === "" || v === undefined ? null : v),
-    z.coerce.number().nullable(),
-  ).optional(),
+  nuskSupplierId: nullableFkPreproc,
+  // Service-type → product mapping (migration 241). When all 3 are
+  // set, the Phase 3b engine will split each group's lineTotal into
+  // visa / services / transport lines. When any is unset, the engine
+  // falls back to the single bundled line — no error, just no split.
+  umrahVisaProductId: nullableFkPreproc,
+  umrahServicesProductId: nullableFkPreproc,
+  umrahTransportProductId: nullableFkPreproc,
+  // Overstay penalty knobs (PR #1477). Stored as system_settings rows
+  // keyed per company. Send null to clear (reverts to the global
+  // default from key=… companyId IS NULL).
+  umrahOverstayDailyPenalty: nullableNumberPreproc,
+  umrahOverstayTierDays: nullableNumberPreproc,
+  umrahOverstayTierAmount: nullableNumberPreproc,
 });
 
 router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
@@ -2597,20 +3035,75 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
     const scope = req.scope!;
     // JOIN suppliers so the UI can show the supplier name without
     // a second fetch. LEFT JOIN — `nuskSupplierId` may be null on a
-    // freshly-installed company.
+    // freshly-installed company. The 3 product joins follow the same
+    // pattern (migration 241).
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT c."nuskSupplierId",
               s.name  AS "nuskSupplierName",
-              s.code  AS "nuskSupplierCode"
+              s.code  AS "nuskSupplierCode",
+              c."umrahVisaProductId",
+              pv.name AS "umrahVisaProductName",
+              c."umrahServicesProductId",
+              ps.name AS "umrahServicesProductName",
+              c."umrahTransportProductId",
+              pt.name AS "umrahTransportProductName"
          FROM companies c
          LEFT JOIN suppliers s
                 ON s.id = c."nuskSupplierId"
                AND s."companyId" = c.id
                AND s."deletedAt" IS NULL
+         LEFT JOIN products pv
+                ON pv.id = c."umrahVisaProductId"
+               AND pv."companyId" = c.id
+         LEFT JOIN products ps
+                ON ps.id = c."umrahServicesProductId"
+               AND ps."companyId" = c.id
+         LEFT JOIN products pt
+                ON pt.id = c."umrahTransportProductId"
+               AND pt."companyId" = c.id
         WHERE c.id = $1`,
       [scope.companyId],
     );
-    res.json(row ?? { nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null });
+    // Overstay-penalty settings live in system_settings (not
+    // companies) because they're tunable per-company without a
+    // migration per knob. PR #1477 added the tiered model
+    // (tier_days / tier_amount); this endpoint surfaces the three
+    // existing knobs to the UI so the operator can edit them
+    // without opening a DB console.
+    const penaltyRows = await rawQuery<{ key: string; value: string }>(
+      `SELECT key, value FROM system_settings
+        WHERE key IN ('umrah.overstay_daily_penalty',
+                      'umrah.overstay_tier_days',
+                      'umrah.overstay_tier_amount')
+          AND ( ("companyId" IS NULL AND "branchId" IS NULL)
+                OR ("companyId" = $1 AND "branchId" IS NULL) )
+        ORDER BY "companyId" NULLS FIRST`,
+      [scope.companyId],
+    );
+    // Same NULLS-FIRST precedence the cron uses (PR #1477) — the
+    // company-scoped value overwrites the global default in the
+    // dict assignment loop.
+    const penaltyByKey: Record<string, number | null> = {
+      "umrah.overstay_daily_penalty": null,
+      "umrah.overstay_tier_days": null,
+      "umrah.overstay_tier_amount": null,
+    };
+    for (const r of penaltyRows) {
+      const v = Number(r.value);
+      penaltyByKey[r.key] = Number.isFinite(v) ? v : null;
+    }
+
+    res.json({
+      ...(row ?? {
+        nuskSupplierId: null, nuskSupplierName: null, nuskSupplierCode: null,
+        umrahVisaProductId: null, umrahVisaProductName: null,
+        umrahServicesProductId: null, umrahServicesProductName: null,
+        umrahTransportProductId: null, umrahTransportProductName: null,
+      }),
+      umrahOverstayDailyPenalty: penaltyByKey["umrah.overstay_daily_penalty"],
+      umrahOverstayTierDays: penaltyByKey["umrah.overstay_tier_days"],
+      umrahOverstayTierAmount: penaltyByKey["umrah.overstay_tier_amount"],
+    });
   } catch (err) { handleRouteError(err, res, "Get umrah settings error"); }
 });
 
@@ -2634,17 +3127,190 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
         });
       }
     }
-    await rawExecute(
-      `UPDATE companies SET "nuskSupplierId" = $1 WHERE id = $2`,
-      [b.nuskSupplierId ?? null, scope.companyId],
-    );
+    // Validate each product FK belongs to THIS company — defence in
+    // depth identical to the supplier check above. Products list is
+    // shared across modules so a cross-tenant id leaking through
+    // settings would silently mis-route revenue on future invoices.
+    const productChecks: Array<[number | null | undefined, "umrahVisaProductId" | "umrahServicesProductId" | "umrahTransportProductId"]> = [
+      [b.umrahVisaProductId, "umrahVisaProductId"],
+      [b.umrahServicesProductId, "umrahServicesProductId"],
+      [b.umrahTransportProductId, "umrahTransportProductId"],
+    ];
+    for (const [value, field] of productChecks) {
+      if (value == null) continue;
+      const [product] = await rawQuery<{ id: number }>(
+        `SELECT id FROM products WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+        [value, scope.companyId],
+      );
+      if (!product) {
+        throw new ValidationError(`المنتج رقم ${value} غير موجود`, {
+          field,
+          fix: "اختر منتجاً مسجلاً لهذه الشركة أو اتركه فارغاً",
+        });
+      }
+    }
+    // Dynamic SET clause — proper PATCH semantics. A field absent
+    // from the body is PRESERVED (not touched), a field set to null
+    // is CLEARED, a field set to a value is UPDATED. SQL COALESCE
+    // can't express the "explicit clear" path, so we build the
+    // statement based on what zod actually parsed.
+    const sets: string[] = [];
+    const params: unknown[] = [scope.companyId];
+    const fields: Array<["nuskSupplierId" | "umrahVisaProductId" | "umrahServicesProductId" | "umrahTransportProductId", number | null | undefined]> = [
+      ["nuskSupplierId", b.nuskSupplierId],
+      ["umrahVisaProductId", b.umrahVisaProductId],
+      ["umrahServicesProductId", b.umrahServicesProductId],
+      ["umrahTransportProductId", b.umrahTransportProductId],
+    ];
+    const auditAfter: Record<string, number | null> = {};
+    for (const [field, value] of fields) {
+      if (value === undefined) continue;
+      params.push(value);
+      sets.push(`"${field}" = $${params.length}`);
+      auditAfter[field] = value;
+    }
+    if (sets.length > 0) {
+      await rawExecute(
+        `UPDATE companies SET ${sets.join(", ")} WHERE id = $1`,
+        params,
+      );
+    }
+
+    // Overstay-penalty knobs live in system_settings (not companies).
+    // Same omit/null/value semantics as the FK fields above. We UPSERT
+    // when the value is non-null, DELETE the company-scoped row when
+    // the value is explicitly null — clearing reverts to the global
+    // default (key with companyId IS NULL).
+    const penaltyFields: Array<[string, number | null | undefined]> = [
+      ["umrah.overstay_daily_penalty", b.umrahOverstayDailyPenalty],
+      ["umrah.overstay_tier_days", b.umrahOverstayTierDays],
+      ["umrah.overstay_tier_amount", b.umrahOverstayTierAmount],
+    ];
+    const keyToAuditField: Record<string, string> = {
+      "umrah.overstay_daily_penalty": "umrahOverstayDailyPenalty",
+      "umrah.overstay_tier_days": "umrahOverstayTierDays",
+      "umrah.overstay_tier_amount": "umrahOverstayTierAmount",
+    };
+    for (const [key, value] of penaltyFields) {
+      if (value === undefined) continue;
+      if (value === null) {
+        await rawExecute(
+          `DELETE FROM system_settings WHERE key = $1 AND "companyId" = $2 AND "branchId" IS NULL`,
+          [key, scope.companyId],
+        );
+      } else {
+        // UPSERT — UPDATE first; INSERT only if no row exists.
+        // Matches the pattern in routes/settings.ts so a future
+        // shared helper can replace both call sites.
+        const result = await rawExecute(
+          `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3 AND "branchId" IS NULL`,
+          [String(value), key, scope.companyId],
+        );
+        if (!result.affectedRows) {
+          await rawExecute(
+            `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
+            [key, String(value), scope.companyId],
+          );
+        }
+      }
+      auditAfter[keyToAuditField[key]!] = value;
+    }
+
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "umrah.settings.updated", entity: "companies", entityId: scope.companyId,
-      after: { nuskSupplierId: b.nuskSupplierId ?? null },
+      after: auditAfter,
     }).catch((e) => logger.error(e, "umrah settings audit failed"));
-    res.json({ success: true, nuskSupplierId: b.nuskSupplierId ?? null });
+    res.json({ success: true, ...auditAfter });
   } catch (err) { handleRouteError(err, res, "Update umrah settings error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NUSK WALLET — derived view over the existing AP system
+// ─────────────────────────────────────────────────────────────────────────────
+// The "NUSK wallet" the operator thinks about is NOT a new table — it's the
+// running balance of the NUSK supplier in the standard AP ledger:
+//
+//   walletBalance = (deposits TO NUSK)  -  (NUSK invoice obligations net of refunds)
+//
+//   Positive → operator has prepaid credit with NUSK (can buy more visas)
+//   Zero     → fully reconciled
+//   Negative → operator owes NUSK (must top up before next invoice)
+//
+// Computation reuses the same shapes used by the vendor-statement endpoint
+// (PR #1453), so the wallet display and the supplier statement converge on
+// the same number — no drift, no parallel system.
+
+router.get("/nusk-wallet", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const [companyCfg] = await rawQuery<{ nuskSupplierId: number | null }>(
+      `SELECT "nuskSupplierId" FROM companies WHERE id = $1`,
+      [scope.companyId],
+    );
+    const nuskSupplierId = companyCfg?.nuskSupplierId ?? null;
+    if (nuskSupplierId == null) {
+      // Settings unset — return null balance with a configured: false
+      // flag so the UI can render the "configure NUSK first" CTA
+      // instead of misleading zeroes.
+      res.json({
+        configured: false,
+        nuskSupplierId: null,
+        walletBalance: 0,
+        totalDeposits: 0,
+        totalObligations: 0,
+        totalRefunds: 0,
+      });
+      return;
+    }
+
+    // Deposits TO NUSK — payment-voucher allocations against POs owned by
+    // the NUSK supplier. Same JE filters the vendor-statement uses
+    // (balancesApplied + not reversed + soft-delete guards) so the
+    // numbers reconcile across both reports.
+    const [depositsRow] = await rawQuery<{ total: string }>(
+      `SELECT COALESCE(SUM(spa.amount), 0) AS total
+         FROM supplier_payment_allocations spa
+         JOIN journal_entries je ON je.id = spa."journalEntryId"
+         JOIN purchase_orders po ON po.id = spa."obligationId"
+        WHERE spa."companyId" = $1
+          AND spa."deletedAt" IS NULL
+          AND spa."obligationType" = 'purchase_order'
+          AND po."supplierId" = $2
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL`,
+      [scope.companyId, nuskSupplierId],
+    );
+
+    // NUSK obligations — net of refunds, excluding cancelled rows. Same
+    // shape as the cost-basis fix in PR #1457 so this view's "owed to
+    // NUSK" number matches what's used as cost for margin VAT.
+    const [obligationsRow] = await rawQuery<{ total: string; refunds: string }>(
+      `SELECT COALESCE(SUM("totalAmount"), 0) AS total,
+              COALESCE(SUM("refundAmount"), 0) AS refunds
+         FROM umrah_nusk_invoices
+        WHERE "companyId" = $1
+          AND "deletedAt" IS NULL
+          AND "nuskStatus" NOT IN ('cancelled')`,
+      [scope.companyId],
+    );
+
+    const totalDeposits = Number(depositsRow?.total ?? 0);
+    const grossObligations = Number(obligationsRow?.total ?? 0);
+    const totalRefunds = Number(obligationsRow?.refunds ?? 0);
+    const totalObligations = grossObligations - totalRefunds;
+    const walletBalance = totalDeposits - totalObligations;
+
+    res.json({
+      configured: true,
+      nuskSupplierId,
+      walletBalance,
+      totalDeposits,
+      totalObligations,
+      totalRefunds,
+    });
+  } catch (err) { handleRouteError(err, res, "Get NUSK wallet error"); }
 });
 
 export default router;

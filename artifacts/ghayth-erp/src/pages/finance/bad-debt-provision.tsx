@@ -119,6 +119,10 @@ export default function BadDebtProvisionPage() {
   return (
     <PageShell
       title="مخصص ديون مشكوك فيها"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "مخصص ديون مشكوك فيها" },
+      ]}
       subtitle={`ورقة عمل الإقفال الشهري — نسب قابلة للتعديل لكل سطل عمر`}
       actions={
         <div className="flex items-center gap-2">

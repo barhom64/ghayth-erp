@@ -10,7 +10,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { currentPeriod, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { currentPeriod, currentYear, currentMonthPadded, toDateISO, todayISO, roundTo2 } from "../lib/businessHelpers.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { obligationSummary } from "../lib/obligationsEngine.js";
 import { EXEC_ROLES } from "../lib/rbacCatalog.js";
@@ -38,7 +38,7 @@ execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive",
     const companyId = scope.companyId;
 
     // All 12 dashboard sections are independent — run in parallel.
-    const [cashPosition, ar, ap, obligations, slaBreaches, stuckWorkflows, budgetOverages, dunning, expiringContracts, fleetMaintenance, hrDocExpiries, mtd] = await Promise.all([
+    const [cashPosition, ar, ap, obligations, slaBreaches, stuckWorkflows, budgetOverages, dunning, expiringContracts, fleetMaintenance, hrDocExpiries, mtd, umrahSummary, legalSummary] = await Promise.all([
     // ─── 1. CASH POSITION ─────────────────────────────────────────────────
     safe(async () => {
       const rows = await rawQuery<Record<string, unknown>>(
@@ -253,6 +253,40 @@ execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive",
         net: Number(revenue?.v ?? 0) - Number(expense?.v ?? 0),
       };
     }, { revenue: 0, expense: 0, net: 0 }),
+
+    // ─── 13. UMRAH SUMMARY (cross-domain — was missing from CEO view) ──────
+    safe(async () => {
+      const [r] = await rawQuery<Record<string, unknown>>(
+        `SELECT
+           (SELECT COUNT(*)::int FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL) AS "totalPilgrims",
+           (SELECT COUNT(*)::int FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL AND COALESCE("overstayDays",0) > 0) AS overstays,
+           (SELECT COUNT(*)::int FROM umrah_seasons WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active') AS "activeSeasons",
+           (SELECT COUNT(*)::int FROM umrah_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status NOT IN ('resolved','closed','cancelled')) AS "openViolations"`,
+        [companyId]
+      );
+      return {
+        totalPilgrims: Number(r?.totalPilgrims ?? 0),
+        overstays: Number(r?.overstays ?? 0),
+        activeSeasons: Number(r?.activeSeasons ?? 0),
+        openViolations: Number(r?.openViolations ?? 0),
+      };
+    }, { totalPilgrims: 0, overstays: 0, activeSeasons: 0, openViolations: 0 }),
+
+    // ─── 14. LEGAL SUMMARY (cross-domain — was missing from CEO view) ──────
+    safe(async () => {
+      const [r] = await rawQuery<Record<string, unknown>>(
+        `SELECT
+           (SELECT COUNT(*)::int FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status NOT IN ('closed','resolved','cancelled')) AS "openCases",
+           (SELECT COUNT(*)::int FROM legal_judgments WHERE "companyId"=$1 AND COALESCE("paidAmount",0) < amount AND "dueDate" < CURRENT_DATE) AS "overdueJudgments",
+           (SELECT COALESCE(SUM(amount - COALESCE("paidAmount",0)),0) FROM legal_judgments WHERE "companyId"=$1 AND COALESCE("paidAmount",0) < amount) AS "unpaidJudgments"`,
+        [companyId]
+      );
+      return {
+        openCases: Number(r?.openCases ?? 0),
+        overdueJudgments: Number(r?.overdueJudgments ?? 0),
+        unpaidJudgments: roundTo2(Number(r?.unpaidJudgments ?? 0)),
+      };
+    }, { openCases: 0, overdueJudgments: 0, unpaidJudgments: 0 }),
     ]); // end Promise.all
 
     // ─── ROLL-UP RISK SCORE ───────────────────────────────────────────────
@@ -299,6 +333,8 @@ execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive",
       expiringContracts,
       fleetMaintenance,
       hrDocExpiries,
+      umrahSummary,
+      legalSummary,
     }));
   } catch (err) {
     handleRouteError(err, res, "Exec dashboard error:");
@@ -334,6 +370,147 @@ execDashboardRouter.get("/overdue-invoices", authorize({ feature: "dashboard.exe
 });
 
 // Drill-down: critical obligations
+// N18 — Unified company-wide P&L across every revenue/expense domain.
+//
+// The audit found that the per-module dashboards stop at their own
+// domain (umrah commission report covers commissions only, property
+// dashboard covers rent only, etc.) — but the GL substrate already
+// dimensions every journal line with sourceType + per-domain FKs
+// (umrahAgentId, vehicleId, propertyId, contractId, projectId).
+// That means a true company P&L is a rollup of journal_lines grouped
+// by (a) account type (revenue vs expense) and (b) sourceType, with
+// no new tables needed.
+//
+// Output shape:
+//   {
+//     period: { from, to },
+//     totals: { revenue, expense, net },
+//     bySource: [{ sourceType, revenue, expense, net }],
+//     byAccount: [{ accountCode, name, type, debit, credit, total }]
+//   }
+//
+// Filters: optional ?from=YYYY-MM-DD&to=YYYY-MM-DD (defaults to this
+// fiscal month if absent). Date is matched against journal_entries.date,
+// not createdAt, so back-dated entries land in the correct period.
+execDashboardRouter.get("/unified-pnl", authorize({ feature: "dashboard.executive", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    requireExec(scope);
+    const companyId = scope.companyId;
+
+    // Period bounds. Default = Riyadh month-to-date. Match
+    // journal_entries.date, not createdAt, so a JE dated 2026-01-15
+    // entered on 2026-02-03 shows up in January's P&L not February's.
+    // Use currentYear/currentMonthPadded — both anchored at
+    // Asia/Riyadh — instead of `new Date()` whose UTC slip would put
+    // the first of every Hijri month in the wrong period at midnight.
+    const ryYear = currentYear();
+    const ryMonth = Number(currentMonthPadded());
+    const defaultFrom = `${ryYear}-${String(ryMonth).padStart(2, "0")}-01`;
+    const defaultTo = todayISO();
+    const fromDate = String(req.query.from ?? defaultFrom);
+    const toDate = String(req.query.to ?? defaultTo);
+
+    // 1. Totals — Revenue is `4xxx` accounts (credit-natural), expense is
+    //    `5xxx` (debit-natural). Net = Revenue - Expense.
+    const totals = await safe(async () => {
+      const [row] = await rawQuery<Record<string, unknown>>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN coa.type = 'revenue' THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+           COALESCE(SUM(CASE WHEN coa.type = 'expense' THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+         LEFT JOIN chart_of_accounts coa
+                ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId"
+         WHERE je."companyId" = $1
+           AND je.status = 'posted'
+           AND je."deletedAt" IS NULL
+           AND je.date BETWEEN $2::date AND $3::date`,
+        [companyId, fromDate, toDate]
+      );
+      const revenue = Number(row?.revenue ?? 0);
+      const expense = Number(row?.expense ?? 0);
+      return { revenue: roundTo2(revenue), expense: roundTo2(expense), net: roundTo2(revenue - expense) };
+    }, { revenue: 0, expense: 0, net: 0 });
+
+    // 2. Breakdown by sourceType — surfaces "which domain is making
+    //    money / losing money". sourceType=null means manual journal
+    //    entries — grouped under 'manual' for readability.
+    const bySource = await safe(async () => {
+      return rawQuery<Record<string, unknown>>(
+        `SELECT
+           COALESCE(je."sourceType", 'manual') AS "sourceType",
+           COALESCE(SUM(CASE WHEN coa.type = 'revenue' THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+           COALESCE(SUM(CASE WHEN coa.type = 'expense' THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+         LEFT JOIN chart_of_accounts coa
+                ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId"
+         WHERE je."companyId" = $1
+           AND je.status = 'posted'
+           AND je."deletedAt" IS NULL
+           AND je.date BETWEEN $2::date AND $3::date
+           AND coa.type IN ('revenue', 'expense')
+         GROUP BY je."sourceType"
+         ORDER BY ABS(COALESCE(SUM(CASE WHEN coa.type = 'revenue' THEN jl.credit - jl.debit
+                                        WHEN coa.type = 'expense' THEN -(jl.debit - jl.credit)
+                                        ELSE 0 END), 0)) DESC`,
+        [companyId, fromDate, toDate]
+      ).then(rows => rows.map(r => {
+        const revenue = Number(r.revenue ?? 0);
+        const expense = Number(r.expense ?? 0);
+        return { sourceType: r.sourceType, revenue: roundTo2(revenue), expense: roundTo2(expense), net: roundTo2(revenue - expense) };
+      }));
+    }, []);
+
+    // 3. Top accounts — ordered by absolute impact, capped at 50 so the
+    //    response stays small. Drilldown UIs can ask for more via pagination.
+    const byAccount = await safe(async () => {
+      return rawQuery<Record<string, unknown>>(
+        `SELECT
+           jl."accountCode" AS "accountCode",
+           coa.name AS name,
+           coa.type AS type,
+           COALESCE(SUM(jl.debit), 0) AS debit,
+           COALESCE(SUM(jl.credit), 0) AS credit
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+         LEFT JOIN chart_of_accounts coa
+                ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId"
+         WHERE je."companyId" = $1
+           AND je.status = 'posted'
+           AND je."deletedAt" IS NULL
+           AND je.date BETWEEN $2::date AND $3::date
+           AND coa.type IN ('revenue', 'expense')
+         GROUP BY jl."accountCode", coa.name, coa.type
+         ORDER BY ABS(COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0)) DESC
+         LIMIT 50`,
+        [companyId, fromDate, toDate]
+      ).then(rows => rows.map(r => {
+        const debit = Number(r.debit ?? 0);
+        const credit = Number(r.credit ?? 0);
+        return {
+          accountCode: r.accountCode,
+          name: r.name,
+          type: r.type,
+          debit: roundTo2(debit),
+          credit: roundTo2(credit),
+          total: roundTo2(r.type === "revenue" ? credit - debit : debit - credit),
+        };
+      }));
+    }, []);
+
+    res.json(maskFields(req, {
+      period: { from: fromDate, to: toDate },
+      totals,
+      bySource,
+      byAccount,
+    }));
+  } catch (err) {
+    handleRouteError(err, res, "[exec-dashboard/unified-pnl]");
+  }
+});
+
 execDashboardRouter.get("/critical-obligations", authorize({ feature: "dashboard.executive", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;

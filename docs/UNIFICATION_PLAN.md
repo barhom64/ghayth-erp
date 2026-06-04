@@ -194,7 +194,7 @@ deferred migrations.
 
 ## P6 — Standardization على RESCAN-v3 backlog (نشط)
 
-`docs/audit/RESCAN_2026-05-22-v3.md` §2 يدرج 12 صفحة UI ستُبنى قريبًا:
+`docs/audit/archive/RESCAN_2026-05-22-v3.md` §2 يدرج 12 صفحة UI ستُبنى قريبًا:
 
 - FIN-013 (journal-manual approval buttons)
 - FIN-014 (period close UI)

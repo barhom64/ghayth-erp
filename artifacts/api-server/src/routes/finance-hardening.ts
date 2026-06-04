@@ -21,6 +21,7 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
@@ -209,7 +210,10 @@ financeHardeningRouter.post("/fiscal-periods-v2", authorize({ feature: "finance.
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
+// GAP_MATRIX item #2 — closing a fiscal period is a destructive,
+// audit-grade action that should not be available to every finance role.
+// Floor at level 70 (controller) on top of the per-feature authorize gate.
+financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -245,7 +249,8 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature:
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
+// Reopening a closed period — same gate as close.
+financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -302,7 +307,8 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature
 // on financial_periods.status already enumerates 'locked' as a valid
 // state; we just expose the transition that was previously
 // unreachable from the API.
-financeHardeningRouter.post("/fiscal-periods-v2/:id/lock", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
+// Permanent lock — irreversible audit action; same level-70 floor.
+financeHardeningRouter.post("/fiscal-periods-v2/:id/lock", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

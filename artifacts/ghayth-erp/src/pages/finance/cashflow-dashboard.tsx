@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@workspace/ui-core";
 
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 function MiniBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
@@ -90,6 +91,7 @@ export default function CashflowDashboard() {
         </>
       }
     >
+      <FinanceTabsNav />
       <div className="flex gap-2">
         {(["month", "quarter", "year"] as const).map(p => (
           <button key={p} onClick={() => setPeriod(p)}

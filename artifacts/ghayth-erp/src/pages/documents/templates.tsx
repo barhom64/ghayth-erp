@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  PageShell,
   FormShell,
   FormGrid,
   FormTextField,
@@ -478,14 +479,15 @@ export default function DocumentsTemplates() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">مركز القوالب</h1>
+    <PageShell
+      title="مركز القوالب"
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/documents", label: "الوثائق" }, { label: "مركز القوالب" }]}
+      actions={
         <GuardedButton perm="documents:create" className="gap-2" onClick={() => openEditor()}>
           <Plus className="h-4 w-4" /> إضافة قالب
         </GuardedButton>
-      </div>
-
+      }
+    >
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {statCards.map((c) => {
           const Icon = c.icon;
@@ -576,6 +578,6 @@ export default function DocumentsTemplates() {
           <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml) }} />
         </PrintPreviewModal>
       )}
-    </div>
+    </PageShell>
   );
 }

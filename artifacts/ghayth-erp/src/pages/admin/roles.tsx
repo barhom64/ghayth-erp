@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
 import {
+  PageShell,
   DataTable,
   type DataTableColumn,
   FormShell,
@@ -275,25 +276,16 @@ export default function AdminRolesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <KeyRound className="w-8 h-8 text-purple-600" />
-            إدارة الأدوار والصلاحيات
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات
-            {allRolesCount > 0 && (
-              <span className="ms-2 text-xs">· إجمالي الأدوار في النظام: {allRolesCount}</span>
-            )}
-          </p>
-        </div>
+    <PageShell
+      title="إدارة الأدوار والصلاحيات"
+      subtitle={`تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات${allRolesCount > 0 ? ` · إجمالي الأدوار في النظام: ${allRolesCount}` : ""}`}
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/admin", label: "الإدارة" }, { label: "الأدوار والصلاحيات" }]}
+      actions={
         <GuardedButton perm="admin:create" size="sm" onClick={() => setActiveTab(activeTab === "create" ? "modules" : "create")}>
           {activeTab === "create" ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إنشاء دور جديد</>}
         </GuardedButton>
-      </div>
-
+      }
+    >
       <div className="flex gap-2 border-b">
         <button onClick={() => setActiveTab("modules")} className={cn("px-4 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "modules" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-status-neutral-foreground")}>
           الوحدات المسموحة لكل دور
@@ -567,7 +559,7 @@ export default function AdminRolesPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
 

@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import {
+  PageShell,
   FormShell,
   FormTextField,
   FormEmailField,
@@ -28,6 +29,7 @@ import { ZatcaSettingsTab } from "./settings/zatca-settings-tab";
 import { CommunicationChannelsTab } from "./settings/communication-channels-tab";
 import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { BranchesTab } from "./settings/branches-tab";
+import { DepartmentsTab } from "./settings/departments-tab";
 import { CompaniesTab } from "./settings/companies-tab";
 import { LetterheadSettings } from "./settings/letterhead-tab";
 import { AccountingMappingsTab } from "./settings/accounting-mappings-tab";
@@ -322,7 +324,11 @@ export default function SettingsPage() {
   const [location] = useLocation();
   const initialTab = SETTINGS_PATH_TAB[location] ?? "general";
   return (
-    <div className="space-y-6">
+    <PageShell
+      title="الإعدادات"
+      subtitle="ضبط الإعدادات العامة، الفروع، الأقسام، الموافقات، والتكاملات"
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { label: "الإعدادات" }]}
+    >
       <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="flex flex-wrap gap-1">
           <TabsTrigger value="general">عام</TabsTrigger>
@@ -345,7 +351,7 @@ export default function SettingsPage() {
         <TabsContent value="general"><GeneralSettings /></TabsContent>
         <TabsContent value="branches"><BranchesTab /></TabsContent>
         <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
-        <TabsContent value="departments"><CrudSection title="الأقسام" endpoint="/settings/departments" queryKey="settings-departments" fields={[{ name: "name", label: "الاسم" }, { name: "nameEn", label: "الاسم (إنجليزي)" }, { name: "manager", label: "المدير" }]} /></TabsContent>
+        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
         <TabsContent value="companies"><CompaniesTab /></TabsContent>
         <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
         <TabsContent value="controls"><SystemControlsTab /></TabsContent>
@@ -359,7 +365,7 @@ export default function SettingsPage() {
         <TabsContent value="zatca"><ZatcaSettingsTab /></TabsContent>
         <TabsContent value="gov"><GovIntegrationsTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 

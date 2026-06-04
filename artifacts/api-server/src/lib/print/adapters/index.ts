@@ -3,6 +3,7 @@ import { a4Adapter } from "./a4Adapter.js";
 import { thermalAdapter, thermal58Adapter } from "./thermalAdapter.js";
 import { labelAdapter } from "./labelAdapter.js";
 import { excelAdapter } from "./excelAdapter.js";
+import { csvAdapter } from "./csvAdapter.js";
 
 const adapters: Record<PrintFormat, FormatAdapter> = {
   a4: a4Adapter,
@@ -10,6 +11,7 @@ const adapters: Record<PrintFormat, FormatAdapter> = {
   thermal_58: thermal58Adapter,
   label: labelAdapter,
   excel: excelAdapter,
+  csv: csvAdapter,
 };
 
 export function getAdapter(format: PrintFormat): FormatAdapter {

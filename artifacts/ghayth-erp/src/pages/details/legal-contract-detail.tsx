@@ -8,6 +8,13 @@ import {
 } from "@workspace/entity-kit";
 import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,28 +100,39 @@ export default function LegalContractDetail() {
     { successMessage: "تم إنهاء العقد" },
   );
 
+  // Renew + terminate dialog state — replaces 2 window.prompt calls.
+  const [renewOpen, setRenewOpen] = useState(false);
+  const [renewDate, setRenewDate] = useState("");
   const handleRenew = () => {
     if (!id) return;
     // Default-suggest "today + 1y" using Riyadh wall-clock components
     // (Task #433 — finance-period-drift forbids raw `new Date()` year math).
     const year = currentYearRiyadh() + 1;
-    const today = todayLocal();          // "YYYY-MM-DD" in Riyadh wall-clock
-    const defaultEnd = `${year}-${today.slice(5)}`;
-    const newEndDate = window.prompt("تاريخ نهاية التجديد (YYYY-MM-DD):", defaultEnd);
-    if (!newEndDate) return;
-    renewMut.mutate({ id, newEndDate });
+    const today = todayLocal();
+    setRenewDate(`${year}-${today.slice(5)}`);
+    setRenewOpen(true);
+  };
+  const confirmRenew = () => {
+    if (!id || !renewDate) return;
+    setRenewOpen(false);
+    renewMut.mutate({ id, newEndDate: renewDate });
   };
 
+  const [terminateOpen, setTerminateOpen] = useState(false);
+  const [terminateReason, setTerminateReason] = useState("");
   const handleTerminate = () => {
     if (!id) return;
-    const reason = window.prompt("سبب إنهاء العقد:");
-    if (!reason || !reason.trim()) {
-      if (reason !== null) {
-        toast({ variant: "destructive", title: "سبب الإنهاء مطلوب" });
-      }
+    setTerminateReason("");
+    setTerminateOpen(true);
+  };
+  const confirmTerminate = () => {
+    if (!id) return;
+    if (!terminateReason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإنهاء مطلوب" });
       return;
     }
-    terminateMut.mutate({ id, reason: reason.trim() });
+    setTerminateOpen(false);
+    terminateMut.mutate({ id, reason: terminateReason.trim() });
   };
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
@@ -333,6 +351,36 @@ export default function LegalContractDetail() {
         </>
       }
     />
+    <Dialog open={renewOpen} onOpenChange={setRenewOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>تجديد العقد</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">تاريخ نهاية التجديد</Label>
+          <Input type="date" value={renewDate} onChange={(e) => setRenewDate(e.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setRenewOpen(false)}>إلغاء</Button>
+          <Button onClick={confirmRenew} disabled={!renewDate} rateLimitAware>تجديد</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={terminateOpen} onOpenChange={setTerminateOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إنهاء العقد</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">سبب الإنهاء (مطلوب)</Label>
+          <Textarea value={terminateReason} onChange={(e) => setTerminateReason(e.target.value)} rows={3} />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setTerminateOpen(false)}>إلغاء</Button>
+          <Button variant="destructive" onClick={confirmTerminate} rateLimitAware>تأكيد الإنهاء</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     {contract && id && (
       <EntityEditDialog<ContractEditForm>
         open={editOpen}

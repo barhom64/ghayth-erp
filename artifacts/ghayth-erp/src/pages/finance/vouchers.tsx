@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -143,6 +144,7 @@ export default function VouchersPage() {
         </Link>
       }
     >
+      <FinanceTabsNav />
       <KpiGrid items={[
         { label: "إجمالي السندات", value: formatNumber(items.length), icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "هذا الشهر", value: formatNumber(items.filter((v: any) => { const d = new Date(v.date); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length), icon: Calendar, color: "text-orange-600 bg-orange-50" },

@@ -5,10 +5,10 @@ const UmrahDashboard = lazy(() => import("@/pages/umrah/dashboard"));
 const UmrahPilgrims = lazy(() => import("@/pages/umrah/pilgrims"));
 const UmrahAgents = lazy(() => import("@/pages/umrah/agents"));
 const UmrahSeasons = lazy(() => import("@/pages/umrah/seasons"));
+const UmrahAccommodations = lazy(() => import("@/pages/umrah/accommodations"));
 const UmrahPenalties = lazy(() => import("@/pages/umrah/penalties"));
 const UmrahPayments = lazy(() => import("@/pages/umrah/payments"));
 const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
-const UmrahImport = lazy(() => import("@/pages/umrah/import"));
 const UmrahImportWizard = lazy(() => import("@/pages/umrah/import-wizard"));
 const PilgrimCreate = lazy(() => import("@/pages/umrah/pilgrim-create"));
 const PilgrimDetail = lazy(() => import("@/pages/umrah/pilgrim-detail"));
@@ -41,6 +41,9 @@ const UmrahReconciliation = lazy(() => import("@/pages/umrah/reconciliation"));
 // Groups list + split / merge actions — surfaces /umrah/groups + the two POST
 // endpoints from PR #312.
 const UmrahGroups = lazy(() => import("@/pages/umrah/groups"));
+// Group detail — drill-down enriched with status breakdown, financials,
+// schedule, pilgrim list. Mirrors the agent-detail pattern.
+const UmrahGroupDetail = lazy(() => import("@/pages/details/umrah-group-detail"));
 
 // Standalone cross-entity attachments index. Editing is still per-entity
 // via the embedded UmrahAttachmentsPanel; this page is read-only.
@@ -51,6 +54,12 @@ const UmrahAttachments = lazy(() => import("@/pages/umrah/attachments"));
 // dialog so a payroll admin can re-run for a given month/year.
 const UmrahCommissionCalculations = lazy(() => import("@/pages/umrah/commission-calculations"));
 const UmrahSettings = lazy(() => import("@/pages/umrah/settings"));
+// Compliance rollup for the overstayExempt flag (PR #1482-1484) — shows
+// everyone currently exempt + the authoriser + reason in one screen.
+const UmrahExemptPilgrims = lazy(() => import("@/pages/umrah/exempt-pilgrims"));
+// Compliance dashboard — folds exempt + visa-expiring + overstay +
+// unpaid penalties into 4 KPI tiles + drill-down links.
+const UmrahCompliance = lazy(() => import("@/pages/umrah/compliance"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -65,6 +74,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/agents", component: UmrahAgents, module: "operations" },
   { path: "/umrah/agents/:id", component: UmrahAgentDetail, module: "operations" },
   { path: "/umrah/seasons", component: UmrahSeasons, module: "operations" },
+  { path: "/umrah/accommodations", component: UmrahAccommodations, module: "operations" },
   { path: "/umrah/seasons/:id", component: UmrahSeasonDetail, module: "operations" },
   { path: "/umrah/penalties", component: UmrahPenalties, module: "operations" },
   { path: "/umrah/penalties/:id", component: UmrahPenaltyDetail, module: "operations" },
@@ -74,8 +84,6 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/packages/:id", component: UmrahPackageDetail, module: "operations" },
   { path: "/umrah/transport", component: UmrahTransport, module: "operations" },
   { path: "/umrah/transport/:id", component: UmrahTransportDetail, module: "operations" },
-  // Legacy import page kept for backward compat; new wizard registered below
-  { path: "/umrah/import/legacy", component: UmrahImport, module: "operations" },
   // Wave 5 routes
   { path: "/umrah/sub-agents", component: UmrahSubAgents, module: "operations" },
   { path: "/umrah/sub-agents/:id", component: UmrahSubAgentDetail, module: "operations" },
@@ -90,8 +98,11 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/violations/:id", component: UmrahViolationDetail, module: "operations" },
   { path: "/umrah/import", component: UmrahImportWizard, module: "operations" },
   { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
+  { path: "/umrah/exempt-pilgrims", component: UmrahExemptPilgrims, module: "operations" },
+  { path: "/umrah/compliance", component: UmrahCompliance, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },
+  { path: "/umrah/groups/:id", component: UmrahGroupDetail, module: "operations" },
   { path: "/umrah/attachments", component: UmrahAttachments, module: "operations" },
 ];

@@ -120,7 +120,7 @@ export default function OperationsCenter() {
               الإقفال اليومي
             </Button>
           </Link>
-          <Button variant="outline" size="icon" onClick={() => { setRefreshKey(k => k + 1); refetch(); }}>
+          <Button variant="outline" size="icon" title="تحديث" onClick={() => { setRefreshKey(k => k + 1); refetch(); }}>
             <RefreshCw className="w-4 h-4" />
           </Button>
         </div>

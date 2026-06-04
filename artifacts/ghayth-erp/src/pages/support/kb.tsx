@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
 import { formatDateAr } from "@/lib/formatters";
 import {
   DataTable,
@@ -88,6 +89,7 @@ export default function KnowledgeBase() {
       breadcrumbs={[{ href: "/support", label: "الدعم" }, { label: "قاعدة المعرفة" }]}
       loading={isLoading}
     >
+      <SupportTabsNav />
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
 
       <Dialog open={openId !== null} onOpenChange={(o) => { if (!o) { setOpenId(null); setComment(""); } }}>

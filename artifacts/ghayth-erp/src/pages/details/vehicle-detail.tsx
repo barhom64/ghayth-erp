@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
 import {
   PageStatusBadge,
   DataTable,
@@ -16,12 +15,12 @@ import {
 import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, TrendingUp, Activity, Radio, Eye, Bot } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
-import { CheckSquare } from "lucide-react";
+import { CheckSquare, Video } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   DetailPageLayout,
   EntityComments,
@@ -30,7 +29,6 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { PrintButton } from "@/components/shared/print-button";
-
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
   { key: "info", label: "المعلومات", icon: Car },
@@ -42,35 +40,29 @@ const TABS = [
   { key: "tasks", label: "المهام", icon: CheckSquare },
   { key: "finance", label: "المالية", icon: BookOpen },
 ] as const;
-
 type TabKey = (typeof TABS)[number]["key"];
-
 const VEHICLE_STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },
   { value: "in_use", label: "قيد الاستخدام" },
   { value: "maintenance", label: "في الصيانة" },
   { value: "out_of_service", label: "خارج الخدمة" },
 ];
-
 const IMPACT_ICONS = {
   financial: Banknote,
   operational: Car,
   legal: FileText,
   notification: AlertTriangle,
 };
-
 const SEVERITY_COLORS = {
   info: "bg-status-info-surface border-status-info-surface text-status-info-foreground",
   warning: "bg-status-warning-surface border-status-warning-surface text-status-warning-foreground",
   critical: "bg-status-error-surface border-status-error-surface text-status-error-foreground",
 };
-
 const SEVERITY_ICON = {
   info: Info,
   warning: AlertTriangle,
   critical: XCircle,
 };
-
 export default function VehicleDetail() {
   const [, params] = useRoute("/fleet/:id");
   const id = params?.id;
@@ -80,10 +72,8 @@ export default function VehicleDetail() {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
-
   const { data: vehicle, isLoading, isError, error, refetch } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
   const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
-
   // Telematics drill-down — only fetched once the user opens the tab so
   // we don't slow the hot detail page for vehicles without a device.
   const telematicsEnabled = !!id && activeTab === "telematics";
@@ -112,11 +102,8 @@ export default function VehicleDetail() {
     `/fleet/telematics/vehicles/${id}/ai-alerts`,
     telematicsEnabled,
   );
-
   const { hideTabs: registryHideTabs } = useRegistryTabs("vehicle", id || "");
-
   const [editForm, setEditForm] = useState<Record<string, string>>({});
-
   const vehicleStatusTone = (s: string): "success" | "warning" | "info" | "muted" | "destructive" | "default" => {
     switch (s) {
       case "available": return "success";
@@ -126,15 +113,12 @@ export default function VehicleDetail() {
       default: return "default";
     }
   };
-
   const trips: any[] = vehicle?.trips || [];
   const maintenance: any[] = vehicle?.maintenance || [];
   const fuelLogs: any[] = vehicle?.fuelLogs || [];
   const insuranceList: any[] = vehicle?.insurance || [];
-
   const totalFuelCost = fuelLogs.reduce((s: number, f: any) => s + (Number(f.totalCost) || 0), 0);
   const totalMaintenanceCost = maintenance.reduce((s: number, m: any) => s + (Number(m.cost) || 0), 0);
-
   const startEdit = () => {
     setEditForm({
       plateNumber: vehicle?.plateNumber || "",
@@ -150,7 +134,6 @@ export default function VehicleDetail() {
     });
     setEditing(true);
   };
-
   const saveEdit = async () => {
     try {
       await apiFetch(`/fleet/vehicles/${id}`, {
@@ -176,7 +159,6 @@ export default function VehicleDetail() {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
-
   const handleDelete = async () => {
     try {
       await apiFetch(`/fleet/vehicles/${id}`, { method: "DELETE" });
@@ -186,9 +168,7 @@ export default function VehicleDetail() {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
   };
-
   const statusLabel = VEHICLE_STATUS_OPTIONS.find(o => o.value === vehicle?.status)?.label || vehicle?.status || "";
-
   const actions = (
     <div className="flex items-center gap-2 flex-wrap">
       <Link href={`/fleet/${id}/status`}>
@@ -207,7 +187,6 @@ export default function VehicleDetail() {
       )}
     </div>
   );
-
   const overview = !vehicle ? (
     <div className="text-sm text-muted-foreground p-4">جاري التحميل...</div>
   ) : (
@@ -287,7 +266,6 @@ export default function VehicleDetail() {
           </CardContent>
         </Card>
       )}
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-info-surface"><Gauge className="w-5 h-5 text-status-info-foreground" /></div>
@@ -306,7 +284,6 @@ export default function VehicleDetail() {
           <div><p className="text-xl font-bold">{trips.length}</p><p className="text-xs text-muted-foreground">الرحلات</p></div>
         </CardContent></Card>
       </div>
-
       {(() => {
         const totalTripCost = trips.reduce((s: number, t: any) => s + (Number(t.cost) || 0), 0);
         const totalDistance = trips.reduce((s: number, t: any) => s + (Number(t.distance) || 0), 0);
@@ -346,7 +323,6 @@ export default function VehicleDetail() {
           </Card>
         );
       })()}
-
       <div className="flex gap-2 border-b overflow-x-auto pb-px">
         {TABS.map((tab) => {
           const count = tab.key === "trips" ? trips.length
@@ -373,7 +349,6 @@ export default function VehicleDetail() {
           );
         })}
       </div>
-
       {activeTab === "overview" && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -405,7 +380,6 @@ export default function VehicleDetail() {
               </CardContent>
             </Card>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
@@ -442,7 +416,6 @@ export default function VehicleDetail() {
                 </div>
               </CardContent>
             </Card>
-
             {insuranceList.length > 0 && (
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
@@ -473,7 +446,6 @@ export default function VehicleDetail() {
               </Card>
             )}
           </div>
-
           {maintenance.filter((m: any) => m.status === "pending" || m.status === "in_progress").length > 0 && (
             <Card className="border-orange-200 bg-orange-50/30">
               <CardHeader className="pb-2">
@@ -497,7 +469,6 @@ export default function VehicleDetail() {
               </CardContent>
             </Card>
           )}
-
           {fuelLogs.length > 0 && (
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
@@ -540,7 +511,6 @@ export default function VehicleDetail() {
               </CardContent>
             </Card>
           )}
-
           {maintenance.length > 0 && (
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
@@ -571,7 +541,6 @@ export default function VehicleDetail() {
           )}
         </div>
       )}
-
       {activeTab === "info" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
@@ -585,7 +554,6 @@ export default function VehicleDetail() {
               {vehicle.driverPhone && <div className="grid grid-cols-3 py-2"><span className="text-muted-foreground">هاتف السائق</span><span className="col-span-2" dir="ltr">{vehicle.driverPhone}</span></div>}
             </CardContent>
           </Card>
-
           {insuranceList.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Shield className="w-5 h-5" /> التأمين الحالي</CardTitle></CardHeader>
@@ -604,7 +572,6 @@ export default function VehicleDetail() {
               <CardContent><p className="text-center text-muted-foreground py-4">لا توجد بيانات تأمين</p></CardContent>
             </Card>
           )}
-
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -625,7 +592,6 @@ export default function VehicleDetail() {
           </Card>
         </div>
       )}
-
       {activeTab === "trips" && (
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><MapPin className="w-5 h-5" /> الرحلات ({trips.length})</CardTitle></CardHeader>
@@ -651,7 +617,6 @@ export default function VehicleDetail() {
           </CardContent>
         </Card>
       )}
-
       {activeTab === "maintenance" && (
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Wrench className="w-5 h-5" /> سجل الصيانة ({maintenance.length})</CardTitle></CardHeader>
@@ -677,7 +642,6 @@ export default function VehicleDetail() {
           </CardContent>
         </Card>
       )}
-
       {activeTab === "fuel" && (
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Fuel className="w-5 h-5" /> سجل الوقود ({fuelLogs.length})</CardTitle></CardHeader>
@@ -702,7 +666,6 @@ export default function VehicleDetail() {
           </CardContent>
         </Card>
       )}
-
       {activeTab === "insurance" && (
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Shield className="w-5 h-5" /> سجل التأمين ({insuranceList.length})</CardTitle></CardHeader>
@@ -731,7 +694,6 @@ export default function VehicleDetail() {
           </CardContent>
         </Card>
       )}
-
       {activeTab === "telematics" && id && (
         <div className="space-y-4">
           {!telematicsLive?.data && !telematicsPosition?.data && (
@@ -835,11 +797,9 @@ export default function VehicleDetail() {
           </Card>
         </div>
       )}
-
       {activeTab === "tasks" && id && (
         <LinkedTasks entityType="vehicle" entityId={id} />
       )}
-
       {activeTab === "finance" && id && (
         <div className="space-y-6">
           {tco && (
@@ -911,16 +871,13 @@ export default function VehicleDetail() {
           </Card>
         </div>
       )}
-
       {id && (
         <EntityObligations entityType="fleet-vehicle,fleet-maintenance,fleet-insurance" entityId={id} hideWhenEmpty />
       )}
-
       {id && <EntityComments entityType="vehicle" entityId={id} />}
       {id && <EntityTags entityType="vehicle" entityId={id} />}
     </div>
   );
-
   return (
     <DetailPageLayout
       title={`${vehicle?.make || ""} ${vehicle?.model || ""} ${vehicle?.year || ""}`.trim() || "المركبة"}
@@ -951,21 +908,18 @@ export default function VehicleDetail() {
     />
   );
 }
-
 function fuelTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     gasoline: "بنزين", diesel: "ديزل", electric: "كهربائي", hybrid: "هجين",
   };
   return labels[type] || type || "-";
 }
-
 function insuranceTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     comprehensive: "شامل", third_party: "طرف ثالث", "against-others": "ضد الغير",
   };
   return labels[type] || type || "-";
 }
-
 function maintenanceTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     oil_change: "تغيير زيت", tire_replacement: "استبدال إطارات",

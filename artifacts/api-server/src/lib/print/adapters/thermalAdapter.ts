@@ -16,21 +16,28 @@ function widthMm(paper: PaperSize): number {
 function thermalCss(paper: PaperSize): string {
   const w = widthMm(paper);
   return `
+/* Thermal receipts use continuous paper — height auto, narrow margins.
+   No @bottom counters (a receipt isn't paginated). page-break-inside on
+   line rows keeps items + their totals from splitting awkwardly across a
+   tear-off boundary on long receipts. */
 @page { size: ${w}mm auto; margin: 2mm; }
 * { box-sizing: border-box; }
 html, body { margin:0; padding:0; font-family: 'Noto Naskh Arabic', monospace; color:#000; }
 body { direction: rtl; font-size: 10pt; line-height: 1.3; width: ${w - 4}mm; }
 .thermal-doc { width: 100%; }
-.t-title { text-align:center; font-weight:bold; font-size:11pt; padding:4px 0; border-bottom:1px dashed #000; }
+.t-title { text-align:center; font-weight:bold; font-size:11pt; padding:4px 0; border-bottom:1px dashed #000;
+           page-break-after: avoid; break-after: avoid-page; }
 .t-meta { text-align:center; font-size:8pt; padding:2px 0; }
-.t-totals { padding:4px 0; border-top:1px dashed #000; }
+.t-totals { padding:4px 0; border-top:1px dashed #000;
+            page-break-inside: avoid; break-inside: avoid; }
 .t-grand { font-weight:bold; font-size:11pt; margin-top:2px; border-top:1px solid #000; padding-top:2px; }
-.t-qr { text-align:center; padding:6px 0; }
+.t-qr { text-align:center; padding:6px 0; page-break-inside: avoid; break-inside: avoid; }
 table { width:100%; border-collapse: collapse; }
-th, td { padding:1px 2px; font-size:9pt; }
+tr { page-break-inside: avoid; break-inside: avoid; }
+th, td { padding:1px 2px; font-size:9pt; vertical-align:top; }
 th { border-bottom:1px solid #000; }
 .watermark { display:none !important; }
-@media print { body { -webkit-print-color-adjust: exact; } }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 `;
 }
 

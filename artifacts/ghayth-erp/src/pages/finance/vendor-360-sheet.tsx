@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
@@ -166,18 +167,33 @@ export default function Vendor360SheetPage() {
     lines.push(`قيمة العقود,${totalContractValue.toFixed(2)}`);
     lines.push(`عقود تنتهي خلال 60 يوم,${expiringContracts.length}`);
 
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `vendor-360-${vendor.name}-${today}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+    // GAP_MATRIX item #7 — was a local Blob+createObjectURL builder.
+    // Routed through unified export helper for audit + letterhead.
+    {
+      const _allLines = lines;
+      const _headers = (_allLines[0] ?? "").split(",");
+      const _rows = _allLines.slice(1).map((line) => {
+        const parts = line.split(",");
+        const obj: Record<string, string> = {};
+        _headers.forEach((h, i) => { obj[h] = parts[i] ?? ""; });
+        return obj;
+      });
+      void exportRowsToCsv({
+        entityType: "report_vendor_360_sheet",
+        title: String(`vendor-360-${vendor.name}-${today}.csv`).replace(/\.csv$/i, ""),
+        rows: _rows,
+        columns: _headers.map((h) => ({ key: h, label: h })),
+      }).catch((err) => console.error("[export] failed", err));
+    }
+};
 
   return (
     <PageShell
       title="ملف المورد 360°"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "ملف المورد 360°" },
+      ]}
       subtitle="ملخص شامل لعلاقة المورد المالية — جاهز للاجتماعات والمفاوضات"
     >
       <FinanceTabsNav />
@@ -423,10 +439,8 @@ export default function Vendor360SheetPage() {
                             {formatCurrency(Number(c.totalValue ?? 0))}
                           </td>
                           <td className="py-1.5 px-2">
-                            <Link href={`/finance/contracts/${c.id}`}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <ExternalLink className="w-3 h-3" />
-                              </Button>
+                            <Link href="/finance/contracts">
+                              <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                             </Link>
                           </td>
                         </tr>
@@ -469,9 +483,7 @@ export default function Vendor360SheetPage() {
                         </td>
                         <td className="py-1.5 px-2">
                           <Link href={`/finance/purchase-orders/${p.id}`}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <ExternalLink className="w-3 h-3" />
-                            </Button>
+                            <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                           </Link>
                         </td>
                       </tr>

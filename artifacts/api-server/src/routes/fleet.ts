@@ -12,9 +12,11 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { hashPassword } from "../lib/auth.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -83,6 +85,11 @@ const createFuelLogSchema = z.object({
   mileageAtFuel: z.coerce.number().optional(),
   stationName: z.string().optional(),
   fuelType: z.string().optional(),
+  // M7 fix: optional link back to the trip the fuel was burned on.
+  // When set, /trips/:id/complete will sum these actual costs instead
+  // of using the estimate, avoiding double-counting fuel expense in
+  // the GL.
+  tripId: z.coerce.number().optional(),
 });
 
 const createInsuranceSchema = z.object({
@@ -917,6 +924,112 @@ router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "de
   } catch (err) { handleRouteError(err, res, "Delete driver error:"); }
 });
 
+// ─── Driver portal-account provisioning (#1354) ──────────────────────────
+// Operator-side endpoints to manage driver_portal_accounts (migration 242).
+// Mirrors the client portal-account endpoints in routes/clients.ts. The
+// driver-side login + my-trips view lives in routes/driverPortal.ts and
+// reads from the same table.
+const driverPortalAccountCreateSchema = z.object({
+  email: z.string().email("البريد الإلكتروني غير صالح"),
+  password: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل"),
+});
+
+const driverPortalAccountUpdateSchema = z.object({
+  isActive: z.boolean().optional(),
+  password: z.string().min(6, "كلمة المرور يجب أن تكون 6 أحرف على الأقل").optional(),
+});
+
+router.get("/drivers/:id/portal-account", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [account] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt"
+       FROM driver_portal_accounts
+       WHERE "driverId" = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    res.json({ account: account ?? null });
+  } catch (err) { handleRouteError(err, res, "Get driver portal account error:"); }
+});
+
+router.post("/drivers/:id/portal-account", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(driverPortalAccountCreateSchema.safeParse(req.body ?? {}));
+    const email = b.email.trim().toLowerCase();
+    const [driver] = await rawQuery<{ id: number }>(
+      `SELECT id FROM fleet_drivers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!driver) throw new NotFoundError("السائق غير موجود");
+    const [existing] = await rawQuery<{ id: number }>(
+      `SELECT id FROM driver_portal_accounts WHERE "driverId" = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (existing) throw new ConflictError("يوجد حساب بوابة لهذا السائق مسبقاً");
+    const [emailTaken] = await rawQuery<{ id: number }>(
+      `SELECT id FROM driver_portal_accounts WHERE email = $1`,
+      [email]
+    );
+    if (emailTaken) throw new ConflictError("هذا البريد الإلكتروني مستخدم بالفعل في بوابة السائقين");
+    const passwordHash = await hashPassword(b.password);
+    const { insertId } = await rawExecute(
+      `INSERT INTO driver_portal_accounts ("driverId", "companyId", email, "passwordHash", "isActive", "mustChangePassword")
+       VALUES ($1, $2, $3, $4, true, true)`,
+      [id, scope.companyId, email, passwordHash]
+    );
+    assertInsert(insertId, "driver_portal_accounts");
+    const [account] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, email, "isActive", "mustChangePassword", "createdAt" FROM driver_portal_accounts WHERE id = $1`,
+      [insertId]
+    );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "driver.portal_created", entity: "driver_portal_accounts", entityId: insertId, details: JSON.stringify({ driverId: id, email }) }).catch((e) => logger.error(e, "fleet background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "driver_portal_accounts", entityId: insertId, after: { driverId: id, email } }).catch((e) => logger.error(e, "fleet background task failed"));
+    res.status(201).json({ account });
+  } catch (err) { handleRouteError(err, res, "Create driver portal account error:"); }
+});
+
+router.patch("/drivers/:id/portal-account", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(driverPortalAccountUpdateSchema.safeParse(req.body ?? {}));
+    const [account] = await rawQuery<{ id: number }>(
+      `SELECT id FROM driver_portal_accounts WHERE "driverId" = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!account) throw new NotFoundError("حساب البوابة غير موجود");
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (b.isActive !== undefined) { params.push(b.isActive); sets.push(`"isActive" = $${params.length}`); }
+    if (b.password) {
+      const hash = await hashPassword(b.password);
+      params.push(hash); sets.push(`"passwordHash" = $${params.length}`);
+      params.push(true); sets.push(`"mustChangePassword" = $${params.length}`);
+    }
+    // Any reset (password OR suspend) bumps tokenVersion so all
+    // already-issued JWTs die immediately. Same model as client portal.
+    if (b.password || b.isActive === false) {
+      sets.push(`"tokenVersion" = COALESCE("tokenVersion", 0) + 1`);
+    }
+    if (sets.length === 0) { res.json({ account }); return; }
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(account.id);
+    await rawExecute(
+      `UPDATE driver_portal_accounts SET ${sets.join(",")} WHERE id = $${params.length} AND "companyId" = $${params.length + 1}`,
+      [...params, scope.companyId]
+    );
+    const [updated] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt" FROM driver_portal_accounts WHERE id = $1`,
+      [account.id]
+    );
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "driver_portal_accounts", entityId: account.id, after: { passwordReset: !!b.password, suspended: b.isActive === false } }).catch((e) => logger.error(e, "fleet background task failed"));
+    res.json({ account: updated });
+  } catch (err) { handleRouteError(err, res, "Update driver portal account error:"); }
+});
+
 router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1238,25 +1351,48 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
 
     if (selectedDriverId) {
       try {
-        const [driverEmp] = await rawQuery<Record<string, unknown>>(
-          `SELECT d."employeeId", ea.id AS "assignmentId" FROM fleet_drivers d
+        const [driverInfo] = await rawQuery<{ employeeId: number | null; assignmentId: number | null; phone: string | null; name: string | null }>(
+          `SELECT d."employeeId", d.phone, d.name, ea.id AS "assignmentId" FROM fleet_drivers d
            LEFT JOIN employee_assignments ea ON ea."employeeId"=d."employeeId" AND ea.status='active' AND ea."companyId"=$2
            WHERE d.id=$1 AND d."companyId"=$2 AND d."deletedAt" IS NULL`, [selectedDriverId, scope.companyId]);
-        if (driverEmp?.assignmentId) {
+        const tripSummary = `رحلة من ${b.fromLocation || 'غير محدد'} إلى ${b.toLocation || 'غير محدد'} — المسافة التقديرية: ${estimatedDistanceKm.toFixed(1)} كم`;
+        // In-system notification — only for drivers linked to an active
+        // employee assignment (i.e. drivers who are also staff with an
+        // ERP login). The badge appears in the regular notifications inbox.
+        if (driverInfo?.assignmentId) {
           createNotification({
             companyId: scope.companyId,
-            assignmentId: driverEmp.assignmentId as number,
+            assignmentId: driverInfo.assignmentId,
             type: "fleet_trip",
             title: "رحلة جديدة مسندة إليك",
-            body: `رحلة من ${b.fromLocation || 'غير محدد'} إلى ${b.toLocation || 'غير محدد'} — المسافة: ${estimatedDistanceKm.toFixed(1)} كم`,
+            body: tripSummary,
             priority: "normal",
             refType: "fleet_trips",
             refId: insertId,
           }).catch((e) => logger.error(e, "fleet background task failed"));
         }
+        // WhatsApp dispatch — reaches drivers regardless of employee
+        // linkage as long as the driver row has a phone number. Routes
+        // through messageSender (DLP-scanned, audited, queued in
+        // outbound_queue). Best-effort: any send failure logs but
+        // doesn't fail the trip creation.
+        if (driverInfo?.phone) {
+          sendMessage({
+            channel: "whatsapp",
+            recipient: driverInfo.phone,
+            recipientName: driverInfo.name,
+            body: `رحلة جديدة #${insertId} مسندة إليك:\n${tripSummary}\nالرجاء الاطلاع على تفاصيل الرحلة في النظام.`,
+            companyId: scope.companyId,
+            userId: scope.userId,
+            relatedType: "fleet_trips",
+            relatedId: insertId,
+            templateKey: "fleet.trip.driver_assigned",
+            eventAction: "fleet.trip.driver_notified",
+          }).catch((e) => logger.error({ err: e, driverId: selectedDriverId, tripId: insertId }, "[fleet] driver WhatsApp dispatch failed"));
+        } else {
+          logger.info({ driverId: selectedDriverId, tripId: insertId }, "[fleet] driver has no phone — WhatsApp dispatch skipped");
+        }
       } catch (notifErr) { logger.error(notifErr, "Trip notification error:"); }
-
-      logger.info({ tripId: insertId, clientId: b.clientId || "N/A" }, "New trip SMS notification for client");
     }
 
     createAuditLog({
@@ -1311,7 +1447,27 @@ router.post("/trips/:id/complete", authorize({ feature: "fleet.trips", action: "
     const completeSettings = await getFleetCostSettings(scope.companyId);
     const fuelPricePerLiter = b.fuelPricePerLiter || completeSettings.fuelPricePerLiter;
     const fuelEfficiency = completeSettings.fuelEfficiencyKmPerLiter;
-    const actualFuelCost = (actualDistanceKm / fuelEfficiency) * fuelPricePerLiter;
+    const estimatedFuelCost = (actualDistanceKm / fuelEfficiency) * fuelPricePerLiter;
+    // M7 fix: if any fuel_logs carry tripId = this trip, sum their
+    // actual cost and use THAT instead of the estimate. The fuel-log
+    // route already posted GLs for those rows, so re-posting the
+    // estimate would double-count fuel expense on the same trip.
+    //
+    // Behaviour:
+    //   - No tagged logs (legacy fuel flow): use estimate (status quo).
+    //   - Has tagged logs: use their sum. Estimate is ignored entirely.
+    //   - Mixed (some tagged, some untagged): we treat untagged as
+    //     "different fill-ups, not this trip" and still use the sum
+    //     of the tagged ones. Operators who tag selectively are
+    //     telling us which fills belonged to which trip.
+    const [actualFuelRow] = await rawQuery<{ total: string }>(
+      `SELECT COALESCE(SUM("totalCost"), 0)::text AS total
+         FROM fleet_fuel_logs
+        WHERE "companyId" = $1 AND "tripId" = $2 AND "deletedAt" IS NULL`,
+      [scope.companyId, tripId]
+    ).catch(() => [{ total: "0" }]);
+    const actualFuelFromLogs = Number(actualFuelRow?.total ?? 0);
+    const actualFuelCost = actualFuelFromLogs > 0 ? actualFuelFromLogs : estimatedFuelCost;
     const driverFare = b.driverFare || actualDistanceKm * completeSettings.driverFarePerKm;
     const depreciation = actualDistanceKm * completeSettings.depreciationPerKm;
     const totalCost = actualFuelCost + driverFare + depreciation;
@@ -1337,9 +1493,15 @@ router.post("/trips/:id/complete", authorize({ feature: "fleet.trips", action: "
     });
 
     const { fleetEngine } = await import("../lib/engines/index.js");
+    // M7 fix continued: when actual fuel logs already posted GLs for
+    // this trip, exclude their cost from the trip-completion GL —
+    // posting it again would double-count fuel expense. Driver fare
+    // and depreciation are NOT in any other JE so they always post.
+    const glFuelCost = actualFuelFromLogs > 0 ? 0 : actualFuelCost;
+    const glTotalCost = glFuelCost + driverFare + depreciation;
     const tripGLResult = await fleetEngine.postTripCompletionGL(
       { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
-      { id: tripId, vehicleId: trip.vehicleId as number, fuelCost: actualFuelCost, driverFare, depreciation, totalCost }
+      { id: tripId, vehicleId: trip.vehicleId as number, fuelCost: glFuelCost, driverFare, depreciation, totalCost: glTotalCost }
     );
     const journalEntryId = tripGLResult?.journalId ?? null;
 
@@ -2165,9 +2327,35 @@ router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }
     const fuelDate = b.fuelDate || b.date || todayISO();
     const mileageAtFuel = Number(b.mileageAtFuel || b.mileage) || null;
     const stationName = b.stationName || b.station || null;
+    // M7: validate tripId if provided so a bogus id can't smuggle a
+    // fuel log onto someone else's trip and confuse the dedup logic.
+    let validatedTripId: number | null = null;
+    if (b.tripId) {
+      const [trip] = await rawQuery<{ id: number; vehicleId: number | null }>(
+        `SELECT id, "vehicleId" FROM fleet_trips
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [Number(b.tripId), scope.companyId]
+      );
+      if (!trip) {
+        throw new ValidationError(`الرحلة رقم ${b.tripId} غير موجودة`, {
+          field: "tripId",
+          fix: "اختر رحلة من القائمة",
+        });
+      }
+      // If the trip has a vehicle and the fuel log claims a different
+      // vehicle, the operator probably picked the wrong trip.
+      if (trip.vehicleId && trip.vehicleId !== resolvedVehicleId) {
+        throw new ValidationError("الرحلة المختارة تخص مركبة أخرى", {
+          field: "tripId",
+          fix: "اختر رحلة على نفس المركبة",
+        });
+      }
+      validatedTripId = trip.id;
+    }
+
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, resolvedVehicleId, b.driverId, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName]
+      `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName","tripId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.companyId, resolvedVehicleId, b.driverId, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]
     );
     assertInsert(insertId, "fleet_fuel_logs");
 
@@ -3374,6 +3562,333 @@ router.get("/vehicles/:id/tco", authorize({ feature: "fleet.vehicles", action: "
       },
     }));
   } catch (err) { handleRouteError(err, res, "TCO analysis error:"); }
+});
+
+// ─── N4 — Tires CRUD ─────────────────────────────────────────────────────────
+// Per-vehicle tire inventory. Closes N4 from
+// docs/testing/CRITICAL_DEFECTS_REPORT.md (pre-fix: tires existed only
+// as a preventive-plan task type and an alert reason — no entity, no
+// stock tracking, no per-position lifecycle).
+const createTireSchema = z.object({
+  vehicleId: z.coerce.number().int().positive(),
+  position: z.enum(["front_left", "front_right", "rear_left", "rear_right", "spare", "extra"]),
+  brand: z.string().max(80).optional(),
+  size: z.string().max(40).optional(),
+  installMileage: z.coerce.number().int().optional(),
+  installDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const updateTireSchema = createTireSchema.partial().extend({
+  status: z.enum(["active", "rotated", "replaced", "discarded"]).optional(),
+  replaceMileage: z.coerce.number().int().optional(),
+  replaceDate: z.string().optional(),
+});
+
+router.get("/tires", authorize({ feature: "fleet.maintenance", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const vehicleId = req.query.vehicleId ? Number(req.query.vehicleId) : null;
+    const status = req.query.status ? String(req.query.status) : null;
+    const params: unknown[] = [scope.companyId];
+    let sql = `SELECT t.*, v."plateNumber"
+                 FROM fleet_tires t
+                 LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId" AND v."deletedAt" IS NULL
+                WHERE t."companyId" = $1 AND t."deletedAt" IS NULL`;
+    if (vehicleId) { params.push(vehicleId); sql += ` AND t."vehicleId" = $${params.length}`; }
+    if (status) { params.push(status); sql += ` AND t.status = $${params.length}`; }
+    sql += ` ORDER BY t."vehicleId", t."position", t.id DESC LIMIT 500`;
+    const rows = await rawQuery(sql, params).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "tires list error"); }
+});
+
+router.post("/tires", authorize({ feature: "fleet.maintenance", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createTireSchema.safeParse(req.body));
+    const [v] = await rawQuery<{ id: number; branchId: number | null }>(
+      `SELECT id, "branchId" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [b.vehicleId, scope.companyId]
+    );
+    if (!v) throw new ValidationError("المركبة غير موجودة", { field: "vehicleId" });
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_tires ("companyId","branchId","vehicleId","position",brand,size,"installMileage","installDate",notes,status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active')`,
+      [scope.companyId, v.branchId, b.vehicleId, b.position, b.brand ?? null, b.size ?? null, b.installMileage ?? null, b.installDate ?? null, b.notes ?? null]
+    );
+    createAuditLog({
+      companyId: scope.companyId, branchId: v.branchId ?? undefined, userId: scope.userId,
+      action: "create", entity: "fleet_tires", entityId: insertId,
+      after: { vehicleId: b.vehicleId, position: b.position, brand: b.brand },
+    }).catch((e) => logger.error(e, "tires audit failed"));
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.tire.installed", entity: "fleet_tires", entityId: insertId,
+    }).catch((e) => logger.error(e, "tires event failed"));
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "tires create error"); }
+});
+
+router.patch("/tires/:id", authorize({ feature: "fleet.maintenance", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updateTireSchema.safeParse(req.body));
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    const set = (col: string, val: unknown) => { params.push(val); sets.push(`"${col}" = $${params.length}`); };
+    if (b.position !== undefined) set("position", b.position);
+    if (b.brand !== undefined) set("brand", b.brand);
+    if (b.size !== undefined) set("size", b.size);
+    if (b.installMileage !== undefined) set("installMileage", b.installMileage);
+    if (b.installDate !== undefined) set("installDate", b.installDate);
+    if (b.status !== undefined) set("status", b.status);
+    if (b.replaceMileage !== undefined) set("replaceMileage", b.replaceMileage);
+    if (b.replaceDate !== undefined) set("replaceDate", b.replaceDate);
+    if (b.notes !== undefined) set("notes", b.notes);
+    if (!sets.length) { res.json({ ok: true, updated: 0 }); return; }
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(id, scope.companyId);
+    await rawExecute(
+      `UPDATE fleet_tires SET ${sets.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
+      params
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "fleet_tires", entityId: id,
+      after: b,
+    }).catch((e) => logger.error(e, "tires audit failed"));
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "tires update error"); }
+});
+
+router.delete("/tires/:id", authorize({ feature: "fleet.maintenance", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawExecute(
+      `UPDATE fleet_tires SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "fleet_tires", entityId: id,
+    }).catch((e) => logger.error(e, "tires audit failed"));
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "tires delete error"); }
+});
+
+
+// ─── N5 — Vehicle Rental Contracts ──────────────────────────────────────────
+// External-customer vehicle rental. Closes N5 from
+// CRITICAL_DEFECTS_REPORT.md. Mirrors properties.rental_contracts shape:
+// contract row + payment schedule + GL on payment received.
+const createRentalContractSchema = z.object({
+  vehicleId: z.coerce.number().int().positive(),
+  clientId: z.coerce.number().int().positive(),
+  startDate: z.string().min(1),
+  endDate: z.string().optional(),
+  dailyRate: z.coerce.number().nonnegative().optional(),
+  totalAmount: z.coerce.number().nonnegative().optional(),
+  securityDeposit: z.coerce.number().nonnegative().optional(),
+  paymentTerms: z.enum(["daily", "weekly", "monthly", "quarterly", "one_time"]).optional(),
+  notes: z.string().optional(),
+});
+
+router.get("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const vehicleId = req.query.vehicleId ? Number(req.query.vehicleId) : null;
+    const status = req.query.status ? String(req.query.status) : null;
+    const params: unknown[] = [scope.companyId];
+    let sql = `SELECT c.*, v."plateNumber", cl.name AS "clientName"
+                 FROM fleet_rental_contracts c
+                 LEFT JOIN fleet_vehicles v ON v.id = c."vehicleId" AND v."deletedAt" IS NULL
+                 LEFT JOIN clients cl ON cl.id = c."clientId" AND cl."deletedAt" IS NULL
+                WHERE c."companyId" = $1 AND c."deletedAt" IS NULL`;
+    if (vehicleId) { params.push(vehicleId); sql += ` AND c."vehicleId" = $${params.length}`; }
+    if (status) { params.push(status); sql += ` AND c.status = $${params.length}`; }
+    sql += ` ORDER BY c."startDate" DESC LIMIT 500`;
+    const rows = await rawQuery(sql, params).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "rental contracts list error"); }
+});
+
+router.post("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createRentalContractSchema.safeParse(req.body));
+    const [veh] = await rawQuery<{ id: number; branchId: number | null }>(
+      `SELECT id, "branchId" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [b.vehicleId, scope.companyId]
+    );
+    if (!veh) throw new ValidationError("المركبة غير موجودة", { field: "vehicleId" });
+    const [cli] = await rawQuery<{ id: number }>(
+      `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [b.clientId, scope.companyId]
+    );
+    if (!cli) throw new ValidationError("العميل غير موجود", { field: "clientId" });
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_rental_contracts
+         ("companyId","branchId","vehicleId","clientId","startDate","endDate","dailyRate","totalAmount","securityDeposit","paymentTerms",status,notes,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'draft',$11,$12)`,
+      [scope.companyId, veh.branchId, b.vehicleId, b.clientId, b.startDate, b.endDate ?? null, b.dailyRate ?? null, b.totalAmount ?? null, b.securityDeposit ?? 0, b.paymentTerms ?? 'monthly', b.notes ?? null, scope.userId]
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "fleet_rental_contracts", entityId: insertId,
+      after: { vehicleId: b.vehicleId, clientId: b.clientId, totalAmount: b.totalAmount },
+    }).catch((e) => logger.error(e, "fleet rental contract audit failed"));
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.rental_contract.created", entity: "fleet_rental_contracts", entityId: insertId,
+    }).catch((e) => logger.error(e, "fleet rental contract event failed"));
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "rental contract create error"); }
+});
+
+router.post("/rental-contracts/:id/activate", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(
+      `UPDATE fleet_rental_contracts SET status = 'active', "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!affectedRows) throw new NotFoundError("العقد غير موجود أو ليس في حالة مسودّة");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "activate", entity: "fleet_rental_contracts", entityId: id,
+    }).catch((e) => logger.error(e, "fleet rental audit failed"));
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "rental contract activate error"); }
+});
+
+// Schedule a payment row (operator-driven schedule, mirrors property
+// payments' pattern). GL posting happens on the /pay endpoint below.
+router.post("/rental-contracts/:id/payments", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = z.object({
+      dueDate: z.string().min(1),
+      amount: z.coerce.number().positive(),
+      notes: z.string().optional(),
+    }).safeParse(req.body);
+    if (!b.success) throw new ValidationError(b.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const [c] = await rawQuery<{ id: number }>(
+      `SELECT id FROM fleet_rental_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!c) throw new NotFoundError("العقد غير موجود");
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_rental_payments ("companyId","contractId","dueDate",amount,status,notes)
+       VALUES ($1,$2,$3,$4,'pending',$5)`,
+      [scope.companyId, id, b.data.dueDate, b.data.amount, b.data.notes ?? null]
+    );
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "rental schedule error"); }
+});
+
+// Record payment receipt. Posts a real GL JE (Dr Cash / Cr Rental
+// Revenue) so the fleet rental flow has the same financial integrity
+// as the property rental flow.
+router.post("/rental-payments/:id/pay", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = z.object({
+      paidAmount: z.coerce.number().positive(),
+      paidDate: z.string().optional(),
+      method: z.string().optional(),
+    }).safeParse(req.body);
+    if (!b.success) throw new ValidationError(b.error.errors[0]?.message ?? "بيانات غير صالحة");
+
+    let journalEntryId: number | null = null;
+    await withTransaction(async (client) => {
+      const { rows } = await client.query<{ id: number; contractId: number; amount: string; vehicleId: number; branchId: number | null }>(
+        `SELECT p.id, p."contractId", p.amount, c."vehicleId", c."branchId"
+           FROM fleet_rental_payments p
+           JOIN fleet_rental_contracts c ON c.id = p."contractId" AND c."companyId" = $2
+          WHERE p.id = $1 AND p."companyId" = $2
+            AND p.status IN ('pending', 'partial', 'overdue')
+          FOR UPDATE`,
+        [id, scope.companyId]
+      );
+      if (!rows.length) throw new NotFoundError("الدفعة غير موجودة أو مدفوعة");
+      const payment = rows[0];
+      const paidAmount = Math.min(b.data.paidAmount, Number(payment.amount));
+
+      const { fleetEngine } = await import("../lib/engines/index.js");
+      // postRentalRevenueGL — Dr 1100 Cash / Cr 4220 Fleet Rental
+      // Revenue, dimensioned with vehicleId. If the engine doesn't have
+      // this method yet, fall back to a direct call into financial-
+      // Engine.postJournalEntry with the same shape so the GL still posts.
+      try {
+        const [cashCode, revCode] = await Promise.all([
+          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_cash_source", "credit", "1100"),
+          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_rental_revenue", "credit", "4220"),
+        ]);
+        const fe = (await import("../lib/engines/financialEngine.js")).financialEngine;
+        const result = await fe.postJournalEntry({
+          companyId: scope.companyId,
+          branchId: payment.branchId ?? 0,
+          createdBy: scope.userId,
+          ref: `JE-FLEET-RENT-${payment.id}`,
+          description: `إيراد تأجير مركبة — دفعة #${payment.id}`,
+          type: "sales",
+          sourceType: "fleet_rental_payments",
+          sourceId: payment.id,
+          sourceKey: `fleet:rental_payment:${payment.id}`,
+          guardTable: "fleet_rental_payments",
+          guardId: payment.id,
+          lines: [
+            { accountCode: cashCode, debit: paidAmount, credit: 0, vehicleId: payment.vehicleId },
+            { accountCode: revCode, debit: 0, credit: paidAmount, vehicleId: payment.vehicleId },
+          ],
+        });
+        journalEntryId = result.journalId;
+      } catch (glErr) {
+        logger.error(glErr, "fleet rental GL post failed");
+        throw glErr; // block on GL failure — dual-entry invariant
+      }
+
+      const finalStatus = paidAmount >= Number(payment.amount) ? "paid" : "partial";
+      await client.query(
+        `UPDATE fleet_rental_payments
+            SET "paidAmount" = "paidAmount" + $1,
+                "paidDate" = COALESCE($2, CURRENT_DATE),
+                method = COALESCE($3, method),
+                status = $4,
+                "journalEntryId" = $5,
+                "updatedAt" = NOW()
+          WHERE id = $6`,
+        [paidAmount, b.data.paidDate ?? null, b.data.method ?? null, finalStatus, journalEntryId, id]
+      );
+    });
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.rental_payment.received", entity: "fleet_rental_payments", entityId: id,
+      details: JSON.stringify({ journalEntryId }),
+    }).catch((e) => logger.error(e, "fleet rental event failed"));
+    res.json({ ok: true, journalEntryId });
+  } catch (err) { handleRouteError(err, res, "rental pay error"); }
+});
+
+router.get("/rental-contracts/:id/payments", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery(
+      `SELECT * FROM fleet_rental_payments WHERE "companyId" = $1 AND "contractId" = $2 ORDER BY "dueDate" ASC`,
+      [scope.companyId, id]
+    ).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "rental payments list error"); }
 });
 
 export default router;

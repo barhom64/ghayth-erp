@@ -28,6 +28,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useState } from "react";
 
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 const STATUS_OPTIONS = Object.entries(OVERTIME_STATUS).map(([value, { label }]) => ({ value, label }));
 const STATUS_MAP = OVERTIME_STATUS;
 
@@ -278,6 +279,7 @@ export default function OvertimePage() {
         </Link>
       }
     >
+      <HrTabsNav />
       <KpiGrid items={kpis} />
 
       {Number(stats.pending) > 0 && (

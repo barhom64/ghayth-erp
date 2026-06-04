@@ -1,4 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -28,6 +33,7 @@ import {
   Clock,
   Gauge,
   DollarSign,
+  Radio,
   CheckCircle2,
   XCircle,
 } from "lucide-react";
@@ -86,6 +92,20 @@ export default function TripDetailPage() {
     id && trip?.vehicleId ? `/fleet/maintenance?vehicleId=${trip.vehicleId}` : null,
     !!(id && trip?.vehicleId)
   );
+
+  // Live telematics for the trip's vehicle. Enabled only while the trip is
+  // in-progress or scheduled (no point polling for completed trips). React
+  // Query caches it; the operator can hit "تحديث" or re-open the tab for
+  // fresh data. (No setInterval — the trip page is heavy enough already.)
+  const liveEnabled = !!trip?.vehicleId
+    && (trip.status === "in_progress" || trip.status === "scheduled");
+  const { data: liveResp, refetch: refetchLive } = useApiQuery<any>(
+    ["trip-telematics-live", id, String(trip?.vehicleId ?? "")],
+    trip?.vehicleId ? `/fleet/telematics/vehicles/${trip.vehicleId}/live` : null,
+    liveEnabled,
+  );
+  const live = liveResp?.data;
+
   const allMaint: any[] = maintResp?.data || [];
   const maintenance = useMemo(
     () =>
@@ -154,18 +174,57 @@ export default function TripDetailPage() {
     }
   };
 
-  const handleCancel = async () => {
-    // FLT-001: /cancel frees the vehicle + driver and requires a reason.
-    const reason = window.prompt("سبب إلغاء الرحلة:");
-    if (reason === null) return; // user dismissed the prompt
-    if (!reason.trim()) {
+  // POST /fleet/trips/:id/waypoints — append an intermediate waypoint
+  // (lat/lon required by backend zod schema). Uses the browser's
+  // geolocation API to read the dispatcher's current position; the driver
+  // would typically be the one posting from the mobile app, but the
+  // desktop dispatcher can also record an ad-hoc stop.
+  const handleAddWaypoint = async () => {
+    if (!navigator.geolocation) {
+      toast({ variant: "destructive", title: "الموقع الجغرافي غير متاح في هذا المتصفح" });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await apiFetch(`/fleet/trips/${id}/waypoints`, {
+            method: "POST",
+            body: JSON.stringify({
+              lat: pos.coords.latitude,
+              lon: pos.coords.longitude,
+              speed: pos.coords.speed ?? undefined,
+            }),
+          });
+          queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
+          toast({ title: "تمت إضافة النقطة" });
+        } catch (err: any) {
+          toast({ variant: "destructive", title: "تعذر إضافة النقطة", description: err.message });
+        }
+      },
+      (err) => {
+        toast({ variant: "destructive", title: "فشل قراءة الموقع", description: err.message });
+      },
+      { enableHighAccuracy: true, timeout: 5000 },
+    );
+  };
+
+  // Cancellation dialog state — FLT-001 requires a non-empty reason.
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const handleCancel = () => {
+    setCancelReason("");
+    setCancelOpen(true);
+  };
+  const confirmCancel = async () => {
+    if (!cancelReason.trim()) {
       toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
       return;
     }
+    setCancelOpen(false);
     try {
       await apiFetch(`/fleet/trips/${id}/cancel`, {
         method: "POST",
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason: cancelReason.trim() }),
       });
       queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
       toast({ title: "تم إلغاء الرحلة" });
@@ -275,6 +334,16 @@ export default function TripDetailPage() {
         <XCircle className="h-4 w-4" />
         إلغاء
       </GuardedButton>
+      <GuardedButton
+        perm="fleet:update"
+        size="sm"
+        variant="outline"
+        onClick={handleAddWaypoint}
+        disabled={trip?.status === "completed" || trip?.status === "cancelled"}
+        rateLimitAware
+      >
+        + نقطة
+      </GuardedButton>
       <EntityPrintButton entityType="fleet_trip" entityId={id ?? ""} />
       <DetailActionButtons hook={editDelete} editPerm="fleet:create" deletePerm="fleet:delete" />
     </div>
@@ -286,6 +355,99 @@ export default function TripDetailPage() {
     : "default" as const;
 
   const extraTabs: ExtraTab[] = [
+    {
+      key: "live",
+      label: "تتبع مباشر",
+      icon: Radio,
+      content: () => {
+        if (!trip?.vehicleId) return emptyMsg("لا توجد مركبة مرتبطة بهذه الرحلة");
+        if (!liveEnabled) {
+          return emptyMsg("التتبع المباشر متاح فقط للرحلات الجارية أو المجدولة");
+        }
+        if (!live?.device) {
+          return emptyMsg("هذه المركبة لا تحتوي على جهاز MDVR مرتبط — اربط جهاز من شاشة الأجهزة");
+        }
+        const pos = live.position;
+        const events = (live.events || []) as any[];
+        const alerts = (live.alerts || []) as any[];
+        return (
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-status-info-foreground" />
+                    آخر موقع
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => refetchLive()}>تحديث</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/fleet/telematics/live-map?vehicleId=${trip.vehicleId}`)}
+                    >
+                      <MapPin className="w-3 h-3 me-1" />
+                      الخريطة المباشرة
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <div><p className="text-xs text-muted-foreground">السرعة</p><p className="font-mono">{pos?.speed != null ? `${Number(pos.speed).toFixed(0)} كم/س` : "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">الموقع</p><p className="font-mono text-xs">{pos?.lat != null ? `${Number(pos.lat).toFixed(5)}, ${Number(pos.lng).toFixed(5)}` : "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">الاتجاه</p><p className="font-mono">{pos?.direction != null ? `${Number(pos.direction).toFixed(0)}°` : "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">آخر تحديث</p><p className="text-xs">{pos?.occurredAt ? formatDateAr(pos.occurredAt) : "—"}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                  <Activity className="w-4 h-4 text-purple-600" />
+                  أحدث الأحداث ({events.length})
+                </h3>
+                {events.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-4 text-sm">لا أحداث</p>
+                ) : (
+                  <DataTable
+                    columns={[
+                      { key: "occurredAt", header: "الوقت", render: (e: any) => <span className="text-xs">{formatDateAr(e.occurredAt)}</span> },
+                      { key: "eventType", header: "النوع", render: (e: any) => e.eventType },
+                      { key: "severity", header: "الخطورة", render: (e: any) => <span className="text-xs">{e.severity || "—"}</span> },
+                    ]}
+                    data={events}
+                    noToolbar
+                    pageSize={0}
+                    searchPlaceholder={null}
+                  />
+                )}
+              </CardContent>
+            </Card>
+            {alerts.length > 0 && (
+              <Card>
+                <CardContent className="p-4">
+                  <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+                    <Activity className="w-4 h-4 text-rose-600" />
+                    تنبيهات السلامة الذكية ({alerts.length})
+                  </h3>
+                  <DataTable
+                    columns={[
+                      { key: "occurredAt", header: "الوقت", render: (a: any) => <span className="text-xs">{formatDateAr(a.occurredAt)}</span> },
+                      { key: "category", header: "الفئة", render: (a: any) => a.category },
+                      { key: "alertType", header: "التنبيه", render: (a: any) => a.alertType },
+                      { key: "severity", header: "الخطورة", render: (a: any) => <span className="text-xs">{a.severity}</span> },
+                    ]}
+                    data={alerts}
+                    noToolbar
+                    pageSize={0}
+                    searchPlaceholder={null}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        );
+      },
+    },
     {
       key: "fuel",
       label: "سجلات الوقود",
@@ -309,6 +471,7 @@ export default function TripDetailPage() {
   ];
 
   return (
+    <>
     <DetailPageLayout
       title={trip ? `رحلة #${trip.id}` : "الرحلة"}
       subtitle={trip ? `${trip.fromLocation || trip.origin || ""} → ${trip.toLocation || trip.destination || ""}` : undefined}
@@ -327,6 +490,26 @@ export default function TripDetailPage() {
       extraTabs={[...extraTabs, ...registryExtraTabs]}
       hideTabs={registryHideTabs}
     />
+    <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إلغاء الرحلة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">سبب الإلغاء (مطلوب)</Label>
+          <Textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            rows={3}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCancelOpen(false)}>تراجع</Button>
+          <Button variant="destructive" onClick={confirmCancel} rateLimitAware>تأكيد الإلغاء</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

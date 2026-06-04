@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/formatters";
@@ -9,7 +9,9 @@ import {
   type DataTableColumn,
   AdvancedFilters,
   useFilters,
+  PageShell,
 } from "@workspace/ui-core";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +38,23 @@ export default function UmrahPenalties() {
   const { toast } = useToast();
   const pageSize = 20;
   const items = resp?.data || [];
+
+  // Deep-link filter pre-application — the compliance dashboard tile
+  // navigates here with ?status=pending&seasonId=… so the audit officer
+  // lands on the filtered slice directly. Without this, the URL would
+  // be a no-op.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const next: Record<string, string> = {};
+    let touched = false;
+    for (const k of ["status", "seasonId"]) {
+      const v = sp.get(k);
+      if (v) { next[k] = v; touched = true; }
+    }
+    if (touched) setFilters({ ...filters, ...next } as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const waiveMutation = useApiMutation<any, { id: number; reason: string }>(
     (body) => `/umrah/penalties/${body.id}/waive`,
@@ -181,9 +200,10 @@ export default function UmrahPenalties() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">الغرامات</h1>
+    <PageShell
+      title="الغرامات"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "الغرامات" }]}
+      actions={
         <div className="flex items-center gap-2">
           {selectedIds.length > 0 && (
             <Button
@@ -203,7 +223,9 @@ export default function UmrahPenalties() {
             <Zap className="h-4 w-4" />تشغيل محرك الغرامات
           </GuardedButton>
         </div>
-      </div>
+      }
+    >
+      <UmrahTabsNav />
 
       {manualOpen && (
         <Card className="border-dashed">
@@ -322,6 +344,6 @@ export default function UmrahPenalties() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

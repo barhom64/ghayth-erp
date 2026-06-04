@@ -8,6 +8,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  PageShell,
   PageStatusBadge,
   FormShell,
   FormTextField,
@@ -93,21 +94,17 @@ export default function ScheduledReportsPage() {
   if (isError) return <ErrorState />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Clock className="h-7 w-7 text-status-info-foreground" />
-            التقارير المجدولة
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">جدولة إرسال التقارير تلقائياً بالبريد الإلكتروني</p>
-        </div>
+    <PageShell
+      title="التقارير المجدولة"
+      subtitle="جدولة إرسال التقارير تلقائياً بالبريد الإلكتروني"
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/reports", label: "التقارير" }, { label: "التقارير المجدولة" }]}
+      actions={
         <GuardedButton perm="reports:create" size="sm" onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4 me-1" />
           {showForm ? "إلغاء" : "جدولة جديدة"}
         </GuardedButton>
-      </div>
-
+      }
+    >
       {showForm && (
         <Card className="border-status-info-surface bg-status-info-surface">
           <CardHeader><CardTitle className="text-base">إنشاء جدولة تقرير جديدة</CardTitle></CardHeader>
@@ -207,7 +204,7 @@ export default function ScheduledReportsPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 
@@ -262,7 +259,7 @@ function ScheduledReportCard({ item }: { item: any }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Switch checked={item.isActive} onCheckedChange={handleToggle} />
-            <GuardedButton perm="reports:create" variant="ghost" size="sm" onClick={handleDelete} disabled={deleteMut.isPending}>
+            <GuardedButton perm="reports:create" variant="ghost" size="sm" onClick={handleDelete} disabled={deleteMut.isPending} title="حذف">
               <Trash2 className="h-4 w-4 text-status-error" />
             </GuardedButton>
           </div>

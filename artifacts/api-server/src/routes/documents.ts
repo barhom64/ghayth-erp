@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { checkDocumentAcl } from "../lib/documentAcl.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
@@ -96,14 +97,68 @@ interface BranchContext extends Record<string, unknown> {
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
 
+// N12 fix: taxonomy enforcement on document classification. Previously
+// `category` was a free string, so /documents could end up with rows
+// like "hr", "HR", "Hr", "human resources", "إدارة الموارد البشرية" all
+// nominally meaning the same thing — making any "documents grouped by
+// category" report or search filter useless.
+//
+// The enum below is the canonical list. Existing rows with non-enum
+// values are untouched (old DB writes were not validated); the
+// validator below catches new writes only. To rename a category later,
+// migrate the data first, then add an `.transform()` here.
+export const DOCUMENT_CATEGORIES = [
+  "hr",
+  "finance",
+  "legal",
+  "contracts",
+  "compliance",
+  "operations",
+  "fleet",
+  "properties",
+  "umrah",
+  "marketing",
+  "general",
+] as const;
+const documentCategorySchema = z.enum(DOCUMENT_CATEGORIES).optional();
+
+// M5 retention policy enforcement on document write paths. Maps
+// category → default retention horizon (years). The cron at retention-
+// sweep time computes retentionUntil = createdAt + horizon if the
+// document doesn't carry an explicit value.
+//
+// Horizons chosen to match Saudi compliance defaults:
+//   - finance / contracts: 10 years (ZATCA 6y minimum, finance Best
+//     Practice 10y)
+//   - hr / legal / compliance: 7 years (Saudi labour law + statute of
+//     limitations)
+//   - operations / fleet / properties / umrah / marketing: 5 years
+//     (operational reference)
+//   - general: 3 years (no specific legal hold)
+export const RETENTION_HORIZONS_YEARS: Record<string, number> = {
+  finance: 10,
+  contracts: 10,
+  hr: 7,
+  legal: 7,
+  compliance: 7,
+  operations: 5,
+  fleet: 5,
+  properties: 5,
+  umrah: 5,
+  marketing: 5,
+  general: 3,
+};
+
 const createDocumentSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   type: z.string().optional(),
-  category: z.string().optional(),
+  category: documentCategorySchema,
   status: z.enum(["draft", "active", "archived"]).optional().default("draft"),
   department: z.string().optional(),
   folder: z.string().optional(),
+  retentionUntil: z.string().optional(),
+  retentionPolicy: z.string().max(40).optional(),
 });
 
 const entityLinkItem = z.object({
@@ -117,8 +172,10 @@ const uploadDocumentSchema = z.object({
   fileName: z.string().min(1),
   fileSize: z.coerce.number().optional(),
   mimeType: z.string().optional(),
-  category: z.string().optional(),
+  category: documentCategorySchema,
   storageKey: z.string().min(1),
+  retentionUntil: z.string().optional(),
+  retentionPolicy: z.string().max(40).optional(),
   entityLinks: z.array(entityLinkItem).optional(),
 });
 
@@ -339,6 +396,14 @@ router.get("/:id/download", authorize({ feature: "documents", action: "export" }
       throw new NotFoundError("لا يوجد ملف مرفق");
     }
 
+    // M6 enforcement: per-document ACL. checkDocumentAcl returns true
+    // when no ACL rows exist (fallback to feature-RBAC) OR the caller
+    // matches an unexpired grant for the requested level. Returning
+    // 404 instead of 403 deliberately — the existence of a confidential
+    // document should not leak through a 403 to someone outside the ACL.
+    const allowed = await checkDocumentAcl(id, scope, "read");
+    if (!allowed) throw new NotFoundError("المستند غير موجود");
+
     // Compliance: record every access. Fire-and-forget — a logging
     // failure must not block a legitimate download, but the row goes
     // in BEFORE the stream pipes so we record intent even if the
@@ -386,6 +451,12 @@ router.get("/:id/preview", authorize({ feature: "documents", action: "export" })
     );
     if (!doc) throw new NotFoundError("المستند غير موجود");
     if (!doc.storageKey) throw new NotFoundError("لا يوجد ملف مرفق");
+
+    // M6 enforcement — same gate as /download. Identical 404 behaviour
+    // so a confidential doc looks the same to outsiders as a non-existent
+    // one.
+    const allowed = await checkDocumentAcl(id, scope, "read");
+    if (!allowed) throw new NotFoundError("المستند غير موجود");
 
     // Compliance: same fire-and-forget access log as /download, with
     // accessType='preview' so reports can distinguish embed/preview
@@ -1111,6 +1182,120 @@ router.get("/:id/access-log", authorize({ feature: "documents", action: "export"
       [scope.companyId, id]
     ).catch(() => []);
     res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+// M5 retention — backfill helper. Computes retentionUntil for documents
+// that have a category but no explicit policy. Idempotent: skips rows
+// that already carry retentionUntil. Gated by documents:delete because
+// scheduling deletion is effectively the same authority. Result: count
+// of rows updated. The actual purge runs in a separate cron, not here.
+router.post("/retention/backfill", authorize({ feature: "documents", action: "delete" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    let updated = 0;
+    for (const [category, years] of Object.entries(RETENTION_HORIZONS_YEARS)) {
+      const r = await rawExecute(
+        `UPDATE documents
+            SET "retentionUntil" = ("createdAt"::date + (($1::int) * INTERVAL '1 year'))::date,
+                "retentionPolicy" = $2
+          WHERE "companyId" = $3
+            AND category = $2
+            AND "retentionUntil" IS NULL
+            AND "deletedAt" IS NULL`,
+        [years, category, scope.companyId]
+      ).catch(() => ({ affectedRows: 0 }));
+      updated += r.affectedRows ?? 0;
+    }
+    res.json({ ok: true, updated, horizons: RETENTION_HORIZONS_YEARS });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+// M5 retention — list documents whose retention has expired. Cron job
+// (or admin UI button) reads this to decide what to hard-delete next.
+// Returns ids only — actual deletion is a separate action so a human
+// can review the list first.
+router.get("/retention/due", authorize({ feature: "documents", action: "delete" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT id, title, category, "retentionPolicy", "retentionUntil", "createdAt"
+         FROM documents
+        WHERE "companyId" = $1
+          AND "retentionUntil" IS NOT NULL
+          AND "retentionUntil" <= CURRENT_DATE
+          AND "deletedAt" IS NULL
+        ORDER BY "retentionUntil" ASC
+        LIMIT 500`,
+      [scope.companyId]
+    ).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+// M6 per-document ACL — list, grant, revoke. The read-path enforcement
+// is in lib/documentAcl.ts so other modules (preview, download,
+// version delete) can reuse it without duplicating logic.
+
+const grantAclSchema = z.object({
+  userId: z.coerce.number().int().positive().optional(),
+  roleKey: z.string().max(60).optional(),
+  departmentId: z.coerce.number().int().positive().optional(),
+  permission: z.enum(["read", "write", "admin"]).default("read"),
+  expiresAt: z.string().optional(),
+}).refine((b) => Number(!!b.userId) + Number(!!b.roleKey) + Number(!!b.departmentId) === 1, {
+  message: "بالضبط واحدة من userId/roleKey/departmentId مطلوبة",
+});
+
+router.get("/:id/acls", authorize({ feature: "documents", action: "list" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery(
+      `SELECT a.id, a."userId", a."roleKey", a."departmentId", a.permission,
+              a."grantedBy", a."grantedAt", a."expiresAt",
+              u.email AS "userEmail", e.name AS "userName",
+              d.name AS "departmentName"
+         FROM document_acls a
+         LEFT JOIN users u ON u.id = a."userId"
+         LEFT JOIN employees e ON e.id = u."employeeId" AND e."deletedAt" IS NULL
+         LEFT JOIN departments d ON d.id = a."departmentId" AND d."deletedAt" IS NULL
+        WHERE a."companyId" = $1 AND a."documentId" = $2
+          AND (a."expiresAt" IS NULL OR a."expiresAt" > NOW())
+        ORDER BY a."grantedAt" DESC`,
+      [scope.companyId, id]
+    ).catch(() => []);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+router.post("/:id/acls", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const body = zodParse(grantAclSchema.safeParse(req.body));
+    const [{ id: insertId }] = await rawQuery<{ id: number }>(
+      `INSERT INTO document_acls
+         ("companyId", "documentId", "userId", "roleKey", "departmentId", permission, "grantedBy", "expiresAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [scope.companyId, id, body.userId ?? null, body.roleKey ?? null, body.departmentId ?? null, body.permission, scope.userId, body.expiresAt ?? null]
+    );
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "documents"); }
+});
+
+router.delete("/:id/acls/:aclId", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const aclId = parseId(req.params.aclId, "aclId");
+    await rawExecute(
+      `DELETE FROM document_acls
+        WHERE id = $1 AND "documentId" = $2 AND "companyId" = $3`,
+      [aclId, id, scope.companyId]
+    );
+    res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
