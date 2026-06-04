@@ -19,6 +19,10 @@ interface ContractHit extends SearchHit { name: string | null; tenantPhone: stri
 interface BuildingHit extends SearchHit { name: string; city: string | null; status: string; totalUnits: string | number; }
 interface TenantHit extends SearchHit { name: string; phone: string | null; email: string | null; nationalId: string | null; }
 interface PartyHit extends SearchHit { name: string; phone: string | null; email: string | null; nationalId: string | null; roles: string | null; }
+interface LegalCaseHit extends SearchHit { name: string | null; caseNumber: string | null; status: string; }
+interface SupplierHit extends SearchHit { name: string; phone: string | null; status: string; }
+interface AgentHit extends SearchHit { name: string; phone: string | null; status: string; }
+interface DriverHit extends SearchHit { name: string; phone: string | null; status: string; }
 
 router.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
@@ -37,7 +41,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
 
     const shouldSearch = (t: string) => entityType === "all" || entityType === t;
 
-    const [employees, clients, invoices, projects, tickets, units, vehicles, pilgrims, contracts, buildings, tenants, parties] = await Promise.all([
+    const [employees, clients, invoices, projects, tickets, units, vehicles, pilgrims, contracts, buildings, tenants, parties, legalCases, suppliers, agents, drivers] = await Promise.all([
       shouldSearch("employees") ? rawQuery<EmployeeHit>(
         `SELECT e.id, e.name, e."empNumber", e.email, e.phone, e."passportNumber", ea."jobTitle",
                 'employee' AS type
@@ -180,6 +184,46 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
          LIMIT 10`,
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
+
+      // القضايا
+      shouldSearch("legal_cases") || shouldSearch("all") ? rawQuery<LegalCaseHit>(
+        `SELECT id, title AS name, "caseNumber", status, 'legal_case' AS type
+         FROM legal_cases
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
+           AND (title ILIKE $2 OR "caseNumber" ILIKE $2)
+         LIMIT 10`,
+        [scope.companyId, pattern]
+      ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
+
+      // الموردون
+      shouldSearch("suppliers") || shouldSearch("all") ? rawQuery<SupplierHit>(
+        `SELECT id, name, phone, status, 'supplier' AS type
+         FROM suppliers
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
+           AND (name ILIKE $2 OR phone ILIKE $2)
+         LIMIT 10`,
+        [scope.companyId, pattern]
+      ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
+
+      // وكلاء العمرة
+      shouldSearch("umrah_agents") || shouldSearch("all") ? rawQuery<AgentHit>(
+        `SELECT id, name, phone, status, 'umrah_agent' AS type
+         FROM umrah_agents
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
+           AND (name ILIKE $2 OR phone ILIKE $2)
+         LIMIT 10`,
+        [scope.companyId, pattern]
+      ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
+
+      // السائقون
+      shouldSearch("drivers") || shouldSearch("all") ? rawQuery<DriverHit>(
+        `SELECT id, name, phone, status, 'driver' AS type
+         FROM fleet_drivers
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
+           AND (name ILIKE $2 OR phone ILIKE $2)
+         LIMIT 10`,
+        [scope.companyId, pattern]
+      ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
     ]);
 
     res.json(maskFields(req, {
@@ -196,6 +240,10 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         ...buildings.map((b) => ({ ...b, category: "مباني عقارية", link: `/properties/buildings/${b.id}` })),
         ...tenants.map((t) => ({ ...t, category: "مستأجرون", link: `/properties/tenants/${t.id}` })),
         ...parties.map((p) => ({ ...p, category: "هوية موحّدة", link: `/parties/${p.id}/360` })),
+        ...legalCases.map((c) => ({ ...c, category: "قضايا", link: `/legal/cases/${c.id}` })),
+        ...suppliers.map((s) => ({ ...s, category: "موردون", link: `/finance/vendors/${s.id}` })),
+        ...agents.map((a) => ({ ...a, category: "وكلاء العمرة", link: `/umrah/agents/${a.id}` })),
+        ...drivers.map((d) => ({ ...d, category: "سائقون", link: `/fleet/drivers/${d.id}` })),
       ],
     }));
   } catch (err) {
