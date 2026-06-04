@@ -45,6 +45,8 @@ export function InvoiceAmendDialog({
     newInvoiceId: number;
     newInvoiceRef: string;
     creditMemoRef: string;
+    cogsReversalWarnings?: Array<{ reason: string; lineId?: number; productId?: number }>;
+    cogsReversedTotal?: number;
   }, { reason: string }>(
     `/finance/invoices/${invoiceId}/amend`,
     "POST",
@@ -59,9 +61,14 @@ export function InvoiceAmendDialog({
     setSubmitting(true);
     try {
       const result = await amendMut.mutateAsync({ reason: reason.trim() });
+      const cogsCount = result.cogsReversalWarnings?.length ?? 0;
       toast({
         title: "تم التعديل بنجاح",
-        description: `إشعار دائن ${result.creditMemoRef} + فاتورة جديدة ${result.newInvoiceRef}`,
+        description:
+          `إشعار دائن ${result.creditMemoRef} + فاتورة جديدة ${result.newInvoiceRef}`
+          + (cogsCount > 0
+              ? ` — تنبيه: ${cogsCount} ${cogsCount === 1 ? "بند مخزون" : "بنود مخزون"} تتطلّب مراجعة الحالة (انتهاء صلاحية / حجر / استدعاء)`
+              : ""),
       });
       onOpenChange(false);
       // Navigate the operator to the NEW invoice so they can edit the
