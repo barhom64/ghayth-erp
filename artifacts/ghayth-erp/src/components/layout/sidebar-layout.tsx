@@ -248,7 +248,6 @@ const allNavSections: NavSection[] = [
         { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
         { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
-        { label: "منضدة الدفعات المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء (PR)", path: "/finance/purchase-requests", icon: ClipboardList },
