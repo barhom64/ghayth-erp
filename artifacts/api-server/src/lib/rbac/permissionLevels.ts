@@ -155,3 +155,31 @@ export function getPermissionLevelCatalog() {
     scopeLabels: SCOPE_LABELS_AR,
   };
 }
+
+// Breadth rank of every concrete scope (narrow → wide). Used to map a simple
+// tier onto the closest scope a feature actually supports WITHOUT ever granting
+// broader than the chosen tier.
+const SCOPE_RANK: Record<Scope, number> = {
+  self: 0, team: 1, department: 2, department_tree: 3, branch: 4,
+  branches: 5, company: 6, multi_company: 7, all: 8,
+};
+const TIER_TARGET_RANK: Record<ScopeTierKey, number> = {
+  self: 0, department: 3, branch: 4, company: 6, all: 8,
+};
+
+/**
+ * Resolve a simple Arabic scope tier to a concrete Scope the feature supports.
+ * Picks the WIDEST available scope whose breadth ≤ the tier's target (so we
+ * never over-grant beyond what the owner chose); if none qualifies, falls back
+ * to the narrowest available scope (most restrictive, fail-safe).
+ */
+export function scopeForTier(tier: ScopeTierKey, availableScopes: Scope[]): Scope {
+  const target = TIER_TARGET_RANK[tier];
+  const avail = availableScopes.length ? availableScopes : (["self"] as Scope[]);
+  const sorted = [...avail].sort((a, b) => SCOPE_RANK[a] - SCOPE_RANK[b]);
+  let chosen: Scope = sorted[0];
+  for (const s of sorted) {
+    if (SCOPE_RANK[s] <= target) chosen = s; // widest that doesn't exceed the tier
+  }
+  return chosen;
+}
