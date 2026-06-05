@@ -130,12 +130,19 @@ const BACKFILL = (() => {
 })();
 
 describe("POST /finance/cost-centers/backfill — vehicles + contracts added", () => {
-  it("schema accepts the new entityTypes", () => {
-    expect(FCC).toMatch(/backfillCostCentersSchema = z\.object\(\{\s*entityType: z\.enum\(\["branch", "project", "contract", "vehicle"\]\)\.optional\(\),/);
+  it("schema accepts the new entityTypes (at minimum branch / project / contract / vehicle)", () => {
+    // Pin SHAPE — the enum widens as we add types (e.g. department in
+    // the next PR). Use field-presence checks rather than literal match.
+    expect(FCC).toMatch(/backfillCostCentersSchema = z\.object\(\{[\s\S]{0,200}entityType: z\.enum\(\[[^\]]*\]\)\.optional/);
+    for (const t of ['"branch"', '"project"', '"contract"', '"vehicle"']) {
+      expect(FCC).toContain(t);
+    }
   });
 
-  it("summary tracks branches + projects + contracts + vehicles", () => {
-    expect(BACKFILL).toMatch(/const summary = \{ branches: 0, projects: 0, contracts: 0, vehicles: 0, created: 0, reused: 0 \}/);
+  it("summary tracks at minimum branches + projects + contracts + vehicles", () => {
+    for (const f of ["branches:", "projects:", "contracts:", "vehicles:"]) {
+      expect(BACKFILL).toContain(f);
+    }
   });
 
   it("contracts loop reads from legal_contracts + derives branch via earliest JE (no branchId column)", () => {

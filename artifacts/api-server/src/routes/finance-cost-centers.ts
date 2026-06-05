@@ -107,13 +107,23 @@ router.get("/cost-centers/tree", authorize({ feature: "finance.cost_centers", ac
             AND cc.id <> ALL(t.path)         -- cycle break (data corruption guard)
        )
        SELECT t.*,
-              (SELECT COALESCE(SUM(jl.debit - jl.credit), 0)
-                 FROM journal_lines jl
-                 JOIN journal_entries je ON je.id = jl."journalId"
-                WHERE je."companyId" = $1
-                  AND je."deletedAt" IS NULL
-                  AND jl."costCenterId" = t.id) AS "descendantSpend"
+              act."descendantSpend",
+              act."jeCount",
+              act."lastActivityAt"
          FROM tree t
+         LEFT JOIN LATERAL (
+           -- One round-trip per node for the three activity signals:
+           -- spend (net debit−credit), JE count (how busy this CC is),
+           -- and the most recent posting timestamp (signals dead CCs).
+           SELECT COALESCE(SUM(jl.debit - jl.credit), 0)         AS "descendantSpend",
+                  COUNT(DISTINCT je.id)::int                     AS "jeCount",
+                  MAX(je.date)                                   AS "lastActivityAt"
+             FROM journal_lines jl
+             JOIN journal_entries je ON je.id = jl."journalId"
+            WHERE je."companyId" = $1
+              AND je."deletedAt" IS NULL
+              AND jl."costCenterId" = t.id
+         ) act ON true
          ORDER BY t.path`,
       [scope.companyId],
     );
@@ -350,7 +360,7 @@ router.delete("/cost-centers/:id", authorize({ feature: "finance.cost_centers", 
 // re-runs are safe.
 // ─────────────────────────────────────────────────────────────────────────────
 const backfillCostCentersSchema = z.object({
-  entityType: z.enum(["branch", "project", "contract", "vehicle"]).optional(),
+  entityType: z.enum(["branch", "project", "contract", "vehicle", "department"]).optional(),
   entityId: z.coerce.number().int().positive().optional(),
 });
 
@@ -361,7 +371,7 @@ router.post("/cost-centers/backfill", authorize({ feature: "finance.cost_centers
     const onlyType = body.entityType;
     const onlyId = body.entityId;
 
-    const summary = { branches: 0, projects: 0, contracts: 0, vehicles: 0, created: 0, reused: 0 };
+    const summary = { branches: 0, projects: 0, contracts: 0, vehicles: 0, departments: 0, created: 0, reused: 0 };
     const details: Array<{ entityType: string; entityId: number; name: string; ccId: number | null; status: string }> = [];
 
     if (!onlyType || onlyType === "branch") {
@@ -478,6 +488,42 @@ router.post("/cost-centers/backfill", authorize({ feature: "finance.cost_centers
       }
     }
 
+    if (!onlyType || onlyType === "department") {
+      // Departments don't carry a branchId column — same trick as
+      // projects/contracts: earliest JE's branchId nests under branch.
+      const departments = await rawQuery<{ id: number; name: string; branchId: number | null }>(
+        `SELECT d.id, d.name,
+                (SELECT je."branchId" FROM journal_entries je
+                  WHERE je."companyId" = d."companyId"
+                    AND je."deletedAt" IS NULL
+                    AND EXISTS (
+                      SELECT 1 FROM journal_lines jl
+                       WHERE jl."journalId" = je.id
+                         AND jl."departmentId" = d.id
+                    )
+                  ORDER BY je."createdAt" ASC LIMIT 1) AS "branchId"
+           FROM departments d
+          WHERE d."companyId" = $1
+          ${onlyId && onlyType === "department" ? `AND d.id = ${Number(onlyId)}` : ""}
+          ORDER BY d.id ASC`,
+        [scope.companyId],
+      );
+      summary.departments = departments.length;
+      for (const d of departments) {
+        const cc = await createCostCenterForEntity(
+          scope.companyId, "department", d.id, d.name,
+          {
+            parentEntityType: d.branchId ? "branch" : null,
+            parentEntityId: d.branchId,
+            actorUserId: scope.userId,
+          },
+        );
+        if (cc) summary.created++;
+        else summary.reused++;
+        details.push({ entityType: "department", entityId: d.id, name: d.name, ccId: cc?.id ?? null, status: cc ? "created_or_reused" : "failed" });
+      }
+    }
+
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "cost_center.backfill", entity: "cost_centers", entityId: 0,
@@ -485,6 +531,160 @@ router.post("/cost-centers/backfill", authorize({ feature: "finance.cost_centers
     });
     res.json({ summary, details });
   } catch (err) { handleRouteError(err, res, "Backfill cost centers error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DIMENSIONAL-ROUTING HEALTH — the operator's «هل النظام المالي
+// متأصل في اصل النظام?» single-pane view. For every entity type that
+// participates in subsidiary_accounts OR cost_centers we report:
+//   - total: how many of this entity exist (live, non-deleted)
+//   - linked: how many have a matching subsidiary_accounts row
+//   - withCc: how many have a matching cost_centers row
+//   - missingAccounts: total - linked  → backfill candidates
+//   - missingCcs:      total - withCc  → backfill candidates
+//
+// The UI consumes this for a coverage dashboard ("3 وكلاء بدون حساب
+// مبيعات") and surfaces a one-click backfill against the appropriate
+// endpoint (umrah backfill for umrah_*, cost-centre backfill for the
+// CC half, accounting-engine for the rest).
+// ─────────────────────────────────────────────────────────────────────────────
+interface DimensionalHealthRow {
+  entityType: string;
+  label: string;
+  total: number;
+  /** Count of entities with at least one subsidiary_accounts mapping. */
+  linked: number;
+  /** Count of entities with at least one cost_centers mapping. */
+  withCc: number;
+  missingAccounts: number;
+  missingCcs: number;
+  /** Helpers for the UI — which endpoint backfills which side. */
+  subsidiaryBackfillPath: string | null;
+  ccBackfillPath: string | null;
+}
+
+router.get("/dimensional-routing/health", authorize({ feature: "finance.cost_centers", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+
+    // Each row: an entity type that should be financially routed, the
+    // source table, the column name carrying its id in subsidiary_accounts,
+    // and the per-side backfill endpoint (null = no backfill exists,
+    // operator must use POST /subsidiary-accounts manually).
+    type EntitySpec = {
+      entityType: string;
+      label: string;
+      sourceTable: string;
+      sourceWhere: string; // soft-delete clause shape, varies per table
+      subsidiaryEntityType: string | null;
+      ccEntityType: string | null;
+      subsidiaryBackfill: string | null;
+      ccBackfill: string | null;
+    };
+
+    const specs: EntitySpec[] = [
+      // Branches — CC only (no subsidiary_account concept).
+      { entityType: "branch", label: "الفروع", sourceTable: "branches", sourceWhere: "",
+        subsidiaryEntityType: null, ccEntityType: "branch",
+        subsidiaryBackfill: null, ccBackfill: "/finance/cost-centers/backfill" },
+      // Departments — CC only.
+      { entityType: "department", label: "الإدارات", sourceTable: "departments", sourceWhere: "",
+        subsidiaryEntityType: null, ccEntityType: "department",
+        subsidiaryBackfill: null, ccBackfill: "/finance/cost-centers/backfill" },
+      // Projects — CC only.
+      { entityType: "project", label: "المشاريع", sourceTable: "projects", sourceWhere: `AND "deletedAt" IS NULL`,
+        subsidiaryEntityType: null, ccEntityType: "project",
+        subsidiaryBackfill: null, ccBackfill: "/finance/cost-centers/backfill" },
+      // Contracts — CC only.
+      { entityType: "contract", label: "العقود القانونية", sourceTable: "legal_contracts", sourceWhere: `AND "deletedAt" IS NULL`,
+        subsidiaryEntityType: null, ccEntityType: "contract",
+        subsidiaryBackfill: null, ccBackfill: "/finance/cost-centers/backfill" },
+      // Vehicles — both subsidiary (custody) AND CC (per-vehicle spend).
+      { entityType: "vehicle", label: "المركبات", sourceTable: "fleet_vehicles", sourceWhere: `AND "deletedAt" IS NULL`,
+        subsidiaryEntityType: "vehicle", ccEntityType: "vehicle",
+        subsidiaryBackfill: null, ccBackfill: "/finance/cost-centers/backfill" },
+      // Drivers — subsidiary only (cash custody).
+      { entityType: "driver", label: "السائقون", sourceTable: "fleet_drivers", sourceWhere: `AND "deletedAt" IS NULL`,
+        subsidiaryEntityType: "driver", ccEntityType: null,
+        subsidiaryBackfill: null, ccBackfill: null },
+      // Umrah agents — both (revenue + cost routing).
+      { entityType: "umrah_agent", label: "وكلاء العمرة", sourceTable: "umrah_agents", sourceWhere: `AND "deletedAt" IS NULL`,
+        subsidiaryEntityType: "umrah_agent", ccEntityType: null,
+        subsidiaryBackfill: "/umrah/backfill-dimensional-accounts", ccBackfill: null },
+      // Umrah sub-agents — subsidiary (nested under their agent).
+      { entityType: "umrah_sub_agent", label: "الوكلاء الفرعيون", sourceTable: "umrah_sub_agents", sourceWhere: `AND "deletedAt" IS NULL`,
+        subsidiaryEntityType: "umrah_sub_agent", ccEntityType: null,
+        subsidiaryBackfill: "/umrah/backfill-dimensional-accounts", ccBackfill: null },
+      // Umrah seasons — subsidiary (season-wide revenue routing).
+      { entityType: "umrah_season", label: "مواسم العمرة", sourceTable: "umrah_seasons", sourceWhere: `AND "deletedAt" IS NULL`,
+        subsidiaryEntityType: "umrah_season", ccEntityType: null,
+        subsidiaryBackfill: "/umrah/backfill-dimensional-accounts", ccBackfill: null },
+    ];
+
+    const rows: DimensionalHealthRow[] = [];
+    for (const spec of specs) {
+      const [totalRow] = await rawQuery<{ total: number }>(
+        `SELECT COUNT(*)::int AS total FROM ${spec.sourceTable}
+          WHERE "companyId" = $1 ${spec.sourceWhere}`,
+        [scope.companyId],
+      );
+      const total = Number(totalRow?.total ?? 0);
+
+      // Linked-via-subsidiary count. NULL spec → skip (the side
+      // doesn't apply for this entity type).
+      let linked = 0;
+      if (spec.subsidiaryEntityType) {
+        const [r] = await rawQuery<{ linked: number }>(
+          `SELECT COUNT(DISTINCT "entityId")::int AS linked
+             FROM subsidiary_accounts
+            WHERE "companyId" = $1
+              AND "entityType" = $2
+              AND "isActive" = true
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, spec.subsidiaryEntityType],
+        );
+        linked = Number(r?.linked ?? 0);
+      }
+
+      let withCc = 0;
+      if (spec.ccEntityType) {
+        const [r] = await rawQuery<{ withcc: number }>(
+          `SELECT COUNT(DISTINCT "relatedEntityId")::int AS withcc
+             FROM cost_centers
+            WHERE "companyId" = $1
+              AND "relatedEntityType" = $2
+              AND status != 'deleted'
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, spec.ccEntityType],
+        );
+        withCc = Number(r?.withcc ?? 0);
+      }
+
+      rows.push({
+        entityType: spec.entityType,
+        label: spec.label,
+        total,
+        linked,
+        withCc,
+        missingAccounts: spec.subsidiaryEntityType ? Math.max(0, total - linked) : 0,
+        missingCcs:      spec.ccEntityType         ? Math.max(0, total - withCc) : 0,
+        subsidiaryBackfillPath: spec.subsidiaryBackfill,
+        ccBackfillPath: spec.ccBackfill,
+      });
+    }
+
+    // Tenant-level rollup — single tile at the top of the dashboard.
+    const totals = rows.reduce(
+      (acc, r) => ({
+        entities: acc.entities + r.total,
+        missingAccounts: acc.missingAccounts + r.missingAccounts,
+        missingCcs: acc.missingCcs + r.missingCcs,
+      }),
+      { entities: 0, missingAccounts: 0, missingCcs: 0 },
+    );
+
+    res.json(maskFields(req, { data: rows, totals }));
+  } catch (err) { handleRouteError(err, res, "Dimensional-routing health error"); }
 });
 
 export { router as costCentersRouter };

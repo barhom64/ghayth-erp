@@ -550,6 +550,17 @@ router.post("/departments", authorizeAny(
       after: { name, nameEn, manager },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    // Department → CC nested under the current branch when one is in
+    // scope. Salaries / overheads can then be drilled by department.
+    // Code: BR-####-D####. Fire-and-forget — non-blocking.
+    createCostCenterForEntity(
+      scope.companyId, "department", r.insertId, name,
+      {
+        parentEntityType: scope.branchId ? "branch" : null,
+        parentEntityId: scope.branchId ?? null,
+        actorUserId: scope.userId,
+      },
+    ).catch((e) => logger.error(e, "department cost-centre auto-create failed"));
     const [row] = await rawQuery<DepartmentRow>(`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }

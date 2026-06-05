@@ -47,6 +47,12 @@ interface TreeNode {
   path: number[];
   allocatedAmount: number | string | null;
   descendantSpend: number | string | null;
+  /** Distinct JE count posted against this CC. 0 = «dead» CC — no
+   *  activity ever, candidate for cleanup. Surfaces as a badge. */
+  jeCount?: number;
+  /** Most-recent date a JE posted against this CC. Surfaces under the
+   *  spend line — operators can spot CCs that went silent. */
+  lastActivityAt?: string | null;
 }
 
 const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -269,6 +275,11 @@ function TreeRow({
   const isAuto = !!node.autoCreatedReason;
   const spend = Number(node.descendantSpend ?? 0);
   const allocated = Number(node.allocatedAmount ?? 0);
+  const jeCount = Number(node.jeCount ?? 0);
+  const lastActivity = node.lastActivityAt;
+  // A CC with zero JEs is "dead weight" — surfaced visually so the
+  // operator can clean up the COA tree without grepping reports.
+  const isDead = jeCount === 0;
   // Inset by 1.5rem per depth level so the hierarchy is visually obvious
   // without needing a tree-line SVG. Capped at 12 so deep trees stay
   // within the card width.
@@ -308,11 +319,38 @@ function TreeRow({
               تلقائي
             </Badge>
           )}
+          {jeCount > 0 && (
+            <Badge
+              variant="outline"
+              className="text-xs"
+              data-testid={`cost-centers-tree-jecount-${node.id}`}
+              title="عدد القيود المرتبطة بهذا المركز"
+            >
+              {jeCount} قيد
+            </Badge>
+          )}
+          {isDead && !isAuto && (
+            // Manually-created CCs with zero JEs are likely orphans
+            // — surface so the operator can prune them.
+            <Badge
+              variant="outline"
+              className="text-xs text-status-warning-foreground border-status-warning-surface/40"
+              data-testid={`cost-centers-tree-dead-${node.id}`}
+              title="لم يُسجَّل أي قيد على هذا المركز"
+            >
+              خامل
+            </Badge>
+          )}
         </div>
-        {(spend !== 0 || allocated !== 0) && (
-          <div className="text-xs text-muted-foreground mt-0.5">
-            {allocated !== 0 && <span>مخصّص: {formatCurrency(allocated)} · </span>}
+        {(spend !== 0 || allocated !== 0 || lastActivity) && (
+          <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-2">
+            {allocated !== 0 && <span>مخصّص: {formatCurrency(allocated)}</span>}
             <span>مصروف: {formatCurrency(spend)}</span>
+            {lastActivity && (
+              <span title="آخر قيد مسجّل" data-testid={`cost-centers-tree-lastact-${node.id}`}>
+                آخر نشاط: {new Date(lastActivity).toLocaleDateString("ar-SA")}
+              </span>
+            )}
           </div>
         )}
       </div>
