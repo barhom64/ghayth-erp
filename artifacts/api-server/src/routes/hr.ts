@@ -1296,6 +1296,138 @@ router.get("/leave-types", authorize({ feature: "hr.leaves", action: "list" }), 
   }
 });
 
+// API-1 (HR audit P2): the leave-management UI calls
+// `PATCH /hr/leave-types/:id` expecting to edit annualDays / isPaid /
+// gender restriction / minServiceMonths. The endpoint didn't exist —
+// the frontend was hitting a 404 and silently swallowing the error.
+// These three handlers close the gap; HR_ROLES gated because changing
+// leave entitlement is a compensation-level decision.
+const leaveTypePayloadSchema = z.object({
+  name: trimmedRequired("اسم نوع الإجازة مطلوب", HR_TEXT_LIMITS.NAME),
+  annualDays: z.coerce.number().int().min(0).max(365).optional(),
+  isPaid: z.boolean().optional(),
+  genderRestriction: z.enum(["male", "female"]).nullable().optional(),
+  minServiceMonths: z.coerce.number().int().min(0).max(120).optional(),
+  oncePerCareer: z.boolean().optional(),
+  requiresDocument: z.boolean().optional(),
+  maxDeptAbsentPct: z.coerce.number().min(0).max(100).optional(),
+});
+
+router.post(
+  "/leave-types",
+  authorize({ feature: "hr.leaves", action: "create" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      if (!HR_ROLES.includes(scope.role)) {
+        res.status(403).json({
+          error: "تعديل أنواع الإجازات يتطلب دور موارد بشرية",
+          meta: { yourRole: scope.role, requiredRoles: HR_ROLES },
+        });
+        return;
+      }
+      const body = zodParse(leaveTypePayloadSchema.safeParse(req.body));
+      const [row] = await rawQuery<Record<string, unknown>>(
+        `INSERT INTO hr_leave_types
+           ("companyId", name, "annualDays", "isPaid", "genderRestriction",
+            "minServiceMonths", "oncePerCareer", "requiresDocument", "maxDeptAbsentPct")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, name, "annualDays" AS "maxDays", "isPaid",
+                   "genderRestriction", "minServiceMonths", "oncePerCareer",
+                   "requiresDocument", "maxDeptAbsentPct"`,
+        [
+          scope.companyId,
+          body.name,
+          body.annualDays ?? null,
+          body.isPaid ?? true,
+          body.genderRestriction ?? null,
+          body.minServiceMonths ?? 0,
+          body.oncePerCareer ?? false,
+          body.requiresDocument ?? false,
+          body.maxDeptAbsentPct ?? null,
+        ],
+      );
+      createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "create",
+        entity: "hr_leave_types",
+        entityId: Number(row?.id ?? 0),
+        after: body,
+      }).catch((e) => logger.error(e, "hr leave-types audit failed"));
+      res.status(201).json(maskFields(req, row));
+    } catch (err) {
+      handleRouteError(err, res, "Create leave type error:");
+    }
+  },
+);
+
+router.patch(
+  "/leave-types/:id",
+  authorize({
+    feature: "hr.leaves",
+    action: "update",
+    resource: { table: "hr_leave_types", idParam: "id" },
+  }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      if (!HR_ROLES.includes(scope.role)) {
+        res.status(403).json({
+          error: "تعديل أنواع الإجازات يتطلب دور موارد بشرية",
+          meta: { yourRole: scope.role, requiredRoles: HR_ROLES },
+        });
+        return;
+      }
+      const id = parseId(req.params.id, "id");
+      const body = zodParse(leaveTypePayloadSchema.partial().safeParse(req.body));
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      let idx = 1;
+      const addField = (col: string, val: unknown) => {
+        if (val !== undefined) {
+          sets.push(`"${col}" = $${idx}`);
+          params.push(val);
+          idx++;
+        }
+      };
+      addField("name", body.name);
+      addField("annualDays", body.annualDays);
+      addField("isPaid", body.isPaid);
+      addField("genderRestriction", body.genderRestriction);
+      addField("minServiceMonths", body.minServiceMonths);
+      addField("oncePerCareer", body.oncePerCareer);
+      addField("requiresDocument", body.requiresDocument);
+      addField("maxDeptAbsentPct", body.maxDeptAbsentPct);
+      if (sets.length === 0) {
+        throw new ValidationError("لا توجد بيانات للتحديث");
+      }
+      params.push(id);
+      params.push(scope.companyId);
+      const [row] = await rawQuery<Record<string, unknown>>(
+        `UPDATE hr_leave_types SET ${sets.join(", ")}
+         WHERE id = $${idx} AND "companyId" = $${idx + 1}
+         RETURNING id, name, "annualDays" AS "maxDays", "isPaid",
+                   "genderRestriction", "minServiceMonths", "oncePerCareer",
+                   "requiresDocument", "maxDeptAbsentPct"`,
+        params,
+      );
+      if (!row) throw new NotFoundError("نوع الإجازة غير موجود");
+      createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "update",
+        entity: "hr_leave_types",
+        entityId: id,
+        after: body,
+      }).catch((e) => logger.error(e, "hr leave-types audit failed"));
+      res.json(maskFields(req, row));
+    } catch (err) {
+      handleRouteError(err, res, "Update leave type error:");
+    }
+  },
+);
+
 router.get("/leave-balance", authorize({ feature: "hr.leaves", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
