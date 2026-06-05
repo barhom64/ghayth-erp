@@ -1858,31 +1858,15 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     });
     }
 
-    // Mark each PO as paid via the lifecycle engine (outside the
-    // payment_runs transaction so each gets its own audit/event trail).
-    for (const po of pos) {
-      await applyTransition({
-        entity: "purchase_orders",
-        id: po.id as number,
-        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-        action: "purchase_order.paid",
-        fromStates: ["invoice_matched"],
-        toState: "paid",
-        setExtras: { paidAt: payDate },
-        after: { paymentRunId: runId, runRef },
-      }).catch(async () => {
-        // paidAt column may not exist — fall back without setExtras
-        await applyTransition({
-          entity: "purchase_orders",
-          id: po.id as number,
-          scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-          action: "purchase_order.paid",
-          fromStates: ["invoice_matched"],
-          toState: "paid",
-          after: { paymentRunId: runId, runRef },
-        });
-      });
-    }
+    // F9 (audit, ZATCA-amend follow-on): post the JE BEFORE flipping
+    // POs to 'paid'. The original sequence transitioned every PO to
+    // paid first and then posted the JE — if the post threw (closed
+    // period, balance mismatch, network), POs were already paid in
+    // the lifecycle but no AP-clearing GL existed. With the order
+    // inverted, a JE failure now leaves POs in 'invoice_matched' and
+    // the operator can retry the entire run idempotently (the
+    // payment_runs.sourceKey + the engine's guardTable/guardId stop
+    // duplicates).
 
     // Post a single aggregated journal entry for the whole run, with one AP
     // debit per PO so per-vendor subledger still reconciles. The cash credit
@@ -1980,6 +1964,36 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
           ]
         );
       }
+    }
+
+    // Now that the JE is committed and the WHT allocations snapshotted,
+    // it's safe to flip each PO to 'paid'. A failure mid-loop here
+    // leaves the GL correct (run can be reconciled manually) — the
+    // critical "POs marked paid with no GL" window is closed by the
+    // ordering inversion above. Each PO transition gets its own audit
+    // trail (the lifecycle engine writes per-row).
+    for (const po of pos) {
+      await applyTransition({
+        entity: "purchase_orders",
+        id: po.id as number,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: "purchase_order.paid",
+        fromStates: ["invoice_matched"],
+        toState: "paid",
+        setExtras: { paidAt: payDate },
+        after: { paymentRunId: runId, runRef },
+      }).catch(async () => {
+        // paidAt column may not exist — fall back without setExtras
+        await applyTransition({
+          entity: "purchase_orders",
+          id: po.id as number,
+          scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+          action: "purchase_order.paid",
+          fromStates: ["invoice_matched"],
+          toState: "paid",
+          after: { paymentRunId: runId, runRef },
+        });
+      });
     }
 
     emitEvent({
