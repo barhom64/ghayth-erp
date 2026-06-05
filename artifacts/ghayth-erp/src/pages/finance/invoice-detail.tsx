@@ -321,6 +321,47 @@ export default function InvoiceDetailPage() {
         lines={(invoice as any).lines}
         documentType="invoice"
       />
+
+      {/* ZATCA amendment chain banner — surfaces both directions of the
+          link so the operator knows whether they're looking at an
+          original that was later replaced or the replacement itself. */}
+      {(invoice.amendedToInvoiceId || invoice.amendedFromInvoiceId) && (
+        <Card className="border-status-warning-surface bg-status-warning-surface/40">
+          <CardContent className="p-3 text-sm">
+            {invoice.amendedToInvoiceId && (
+              <div className="flex items-center gap-2 text-status-warning-foreground">
+                <FilePlus className="h-4 w-4" />
+                <span>
+                  تم تعديل هذه الفاتورة وفقاً لأنظمة ZATCA — استُبدلت بالفاتورة الجديدة{" "}
+                  <Link
+                    href={`/finance/invoices/${invoice.amendedToInvoiceId}`}
+                    className="font-semibold underline"
+                  >
+                    #{invoice.amendedToInvoiceId}
+                  </Link>
+                  {invoice.amendmentReason ? ` — السبب: ${invoice.amendmentReason}` : ""}
+                </span>
+              </div>
+            )}
+            {invoice.amendedFromInvoiceId && (
+              <div className="flex items-center gap-2 text-status-info-foreground">
+                <FilePlus className="h-4 w-4" />
+                <span>
+                  هذه الفاتورة صادرة كتعديل ZATCA للفاتورة السابقة{" "}
+                  <Link
+                    href={`/finance/invoices/${invoice.amendedFromInvoiceId}`}
+                    className="font-semibold underline"
+                  >
+                    #{invoice.amendedFromInvoiceId}
+                  </Link>
+                  {" "}— صدر إشعار دائن للأصلية تلقائياً.
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Visible payment lifecycle strip */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">
