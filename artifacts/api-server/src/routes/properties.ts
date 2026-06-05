@@ -3461,7 +3461,7 @@ router.get("/owners", authorize({ feature: "properties.owners", action: "list" }
   } catch (err) { handleRouteError(err, res, "Property owners error:"); }
 });
 
-router.get("/owners/:id", authorize({ feature: "properties.owners", action: "view", resource: { table: "owners", idParam: "id" } }), async (req, res) => {
+router.get("/owners/:id", authorize({ feature: "properties.owners", action: "view", resource: { table: "property_owners", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
