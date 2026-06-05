@@ -557,6 +557,11 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "الحوكمة والامتثال", path: "/governance/policies", icon: Shield, module: "governance", minRoleLevel: 60, children: [
         { label: "نظرة عامة", path: "/governance", icon: Shield },
+        // مركز التجديدات — سجل تجاري، تراخيص، تأمين طبي، شهادات حكومية،
+        // عقود، ضمانات. كل ما له مدة انتهاء في صفحة واحدة، مرتّب بحسب
+        // الإلحاح (منتهي → حرج → قريب → ضمن الفترة).
+        { label: "مركز التجديدات", path: "/governance/renewals-hub", icon: Clock },
+        { label: "وثيقة منشأة جديدة", path: "/governance/company-documents/new", icon: FilePlus },
         { label: "السياسات", path: "/governance/policies", icon: FileCheck },
         { label: "المخاطر", path: "/governance/risks", icon: AlertTriangle },
         { label: "التدقيق", path: "/governance/audits", icon: ClipboardCheck },

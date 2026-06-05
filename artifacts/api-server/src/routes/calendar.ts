@@ -341,3 +341,301 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
     handleRouteError(err, res, "Calendar upcoming error:");
   }
 });
+
+// ─── Renewals hub — unified list of EVERY duration-based item ────────────
+// Centralises the expiry tracking that was previously scattered across
+// /hr/expiring-documents (HR-only), /finance/bank-guarantees, /fleet/insurance,
+// etc. Each row carries the same shape so the frontend can render a single
+// sortable table regardless of source module. Defaults to 90-day horizon
+// because some items (commercial registration, GOSI, Zakat) have annual
+// renewal cycles and 30 days isn't enough warning.
+calendarRouter.get("/renewals-hub", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+    const daysAhead = Math.min(Number(req.query.days) || 90, 365);
+
+    interface RenewalRow {
+      source: string;        // "company_document" | "fleet_insurance" | "employee_document" | …
+      sourceLabel: string;   // Arabic group label
+      entityId: number;
+      title: string;
+      subtitle: string | null;
+      expiryDate: string;
+      daysLeft: number;
+      severity: "expired" | "critical" | "warning" | "normal";
+      link: string;
+      metadata?: Record<string, unknown>;
+    }
+
+    const severityFor = (daysLeft: number): RenewalRow["severity"] => {
+      if (daysLeft < 0) return "expired";
+      if (daysLeft <= 7) return "critical";
+      if (daysLeft <= 30) return "warning";
+      return "normal";
+    };
+
+    type SourceRow = Record<string, unknown>;
+    const [
+      companyDocs,
+      fleetInsurance,
+      vehicleRegistration,
+      vehicleInspection,
+      employeeDocs,
+      bankGuarantees,
+      legalContracts,
+      rentalContracts,
+      iqamaExpiries,
+      driverLicenses,
+    ] = await Promise.all([
+      safe<SourceRow[]>(() => rawQuery(
+        `SELECT id, "documentType", "documentNumber", "expiryDate", "issuingAuthority",
+                ("expiryDate"::date - CURRENT_DATE)::int AS "daysLeft"
+           FROM company_documents
+          WHERE "companyId" = $1 AND status = 'active' AND "expiryDate" IS NOT NULL
+            AND "expiryDate" <= CURRENT_DATE + ($2 || ' days')::interval`,
+        [cid, daysAhead]
+      ), []),
+      safe<SourceRow[]>(() => rawQuery(
+        `SELECT fi.id, fi."policyNumber", fi."endDate", fi.provider, fi."vehicleId",
+                v."plateNumber",
+                (fi."endDate"::date - CURRENT_DATE)::int AS "daysLeft"
+           FROM fleet_insurance fi
+           JOIN fleet_vehicles v ON v.id = fi."vehicleId" AND v."deletedAt" IS NULL
+          WHERE fi."companyId" = $1 AND fi."deletedAt" IS NULL AND fi."endDate" IS NOT NULL
+            AND fi."endDate" <= CURRENT_DATE + ($2 || ' days')::interval`,
+        [cid, daysAhead]
+      ), []),
+      safe<SourceRow[]>(() => rawQuery(
+        `SELECT id, "plateNumber", "registrationExpiry",
+                ("registrationExpiry"::date - CURRENT_DATE)::int AS "daysLeft"
+           FROM fleet_vehicles
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "registrationExpiry" IS NOT NULL
+            AND "registrationExpiry" <= CURRENT_DATE + ($2 || ' days')::interval`,
+        [cid, daysAhead]
+      ), []),
+      safe<SourceRow[]>(() => rawQuery(
+        `SELECT id, "plateNumber", "nextInspectionDate",
+                ("nextInspectionDate"::date - CURRENT_DATE)::int AS "daysLeft"
+           FROM fleet_vehicles
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "nextInspectionDate" IS NOT NULL
+            AND "nextInspectionDate" <= CURRENT_DATE + ($2 || ' days')::interval`,
+        [cid, daysAhead]
+      ), []),
+      safe<SourceRow[]>(() => rawQuery(
+        `SELECT ed.id, ed."employeeId", ed."documentType", ed."expiryDate", ed."documentNumber",
+                e.name AS "employeeName",
+                (ed."expiryDate"::date - CURRENT_DATE)::int AS "daysLeft"
+           FROM employee_documents ed
+           JOIN employees e ON e.id = ed."employeeId" AND e."deletedAt" IS NULL
+          WHERE ed."companyId" = $1 AND ed."expiryDate" IS NOT NULL
+            AND ed."expiryDate" <= CURRENT_DATE + ($2 || ' days')::interval`,
+        [cid, daysAhead]
+      ), []),
+      safe<SourceRow[]>(() => rawQuery(
+        `SELECT id, ref, beneficiary, "expiryDate", amount,
+                ("expiryDate"::date - CURRENT_DATE)::int AS "daysLeft"
+           FROM bank_guarantees
+          WHERE "companyId" = $1 AND status = 'active' AND "expiryDate" IS NOT NULL
+            AND "expiryDate" <= CURRENT_DATE + ($2 || ' days')::interval`,
+        [cid, daysAhead]
+      ), []),
+      safe<SourceRow[]>(() => rawQuery(
+        `SELECT id, title, "endDate", "partyName"
+              , ("endDate"::date - CURRENT_DATE)::int AS "daysLeft"
+           FROM legal_contracts
+          WHERE "companyId" = $1 AND status = 'active' AND "endDate" IS NOT NULL
+            AND "endDate" <= CURRENT_DATE + ($2 || ' days')::interval`,
+        [cid, daysAhead]
+      ), []),
+      safe<SourceRow[]>(() => rawQuery(
+        `SELECT id, "endDate", "unitId", "tenantName",
+                ("endDate"::date - CURRENT_DATE)::int AS "daysLeft"
+           FROM rental_contracts
+          WHERE "companyId" = $1 AND status = 'active' AND "endDate" IS NOT NULL
+            AND "endDate" <= CURRENT_DATE + ($2 || ' days')::interval`,
+        [cid, daysAhead]
+      ), []),
+      safe<SourceRow[]>(() => rawQuery(
+        `SELECT id, name, "iqamaNumber", "iqamaExpiry",
+                ("iqamaExpiry"::date - CURRENT_DATE)::int AS "daysLeft"
+           FROM employees
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "iqamaExpiry" IS NOT NULL
+            AND "iqamaExpiry" <= CURRENT_DATE + ($2 || ' days')::interval`,
+        [cid, daysAhead]
+      ), []),
+      safe<SourceRow[]>(() => rawQuery(
+        `SELECT id, name, "licenseNumber", "licenseExpiry",
+                ("licenseExpiry"::date - CURRENT_DATE)::int AS "daysLeft"
+           FROM fleet_drivers
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "licenseExpiry" IS NOT NULL
+            AND "licenseExpiry" <= CURRENT_DATE + ($2 || ' days')::interval`,
+        [cid, daysAhead]
+      ), []),
+    ]);
+
+    const rows: RenewalRow[] = [];
+
+    for (const r of companyDocs) {
+      const daysLeft = Number(r.daysLeft ?? 0);
+      rows.push({
+        source: "company_document",
+        sourceLabel: "وثائق المنشأة",
+        entityId: Number(r.id),
+        title: String(r.documentType ?? "وثيقة"),
+        subtitle: (r.documentNumber || r.issuingAuthority) ? `${r.documentNumber ?? ""}${r.issuingAuthority ? ` — ${r.issuingAuthority}` : ""}`.trim() : null,
+        expiryDate: String(r.expiryDate),
+        daysLeft,
+        severity: severityFor(daysLeft),
+        link: "/hr/expiring-documents",
+        metadata: { documentNumber: r.documentNumber, issuingAuthority: r.issuingAuthority },
+      });
+    }
+    for (const r of fleetInsurance) {
+      const daysLeft = Number(r.daysLeft ?? 0);
+      rows.push({
+        source: "fleet_insurance",
+        sourceLabel: "تأمين المركبات",
+        entityId: Number(r.id),
+        title: `تأمين ${r.plateNumber ?? ""}`,
+        subtitle: `${r.provider ?? ""}${r.policyNumber ? ` — وثيقة ${r.policyNumber}` : ""}`,
+        expiryDate: String(r.endDate),
+        daysLeft,
+        severity: severityFor(daysLeft),
+        link: `/fleet/${r.vehicleId}`,
+      });
+    }
+    for (const r of vehicleRegistration) {
+      const daysLeft = Number(r.daysLeft ?? 0);
+      rows.push({
+        source: "vehicle_registration",
+        sourceLabel: "استمارة المركبة",
+        entityId: Number(r.id),
+        title: `استمارة ${r.plateNumber ?? ""}`,
+        subtitle: null,
+        expiryDate: String(r.registrationExpiry),
+        daysLeft,
+        severity: severityFor(daysLeft),
+        link: `/fleet/${r.id}`,
+      });
+    }
+    for (const r of vehicleInspection) {
+      const daysLeft = Number(r.daysLeft ?? 0);
+      rows.push({
+        source: "vehicle_inspection",
+        sourceLabel: "فحص المركبة",
+        entityId: Number(r.id),
+        title: `فحص ${r.plateNumber ?? ""}`,
+        subtitle: null,
+        expiryDate: String(r.nextInspectionDate),
+        daysLeft,
+        severity: severityFor(daysLeft),
+        link: `/fleet/${r.id}`,
+      });
+    }
+    for (const r of employeeDocs) {
+      const daysLeft = Number(r.daysLeft ?? 0);
+      rows.push({
+        source: "employee_document",
+        sourceLabel: "وثائق الموظفين",
+        entityId: Number(r.id),
+        title: `${r.documentType} — ${r.employeeName}`,
+        subtitle: r.documentNumber ? String(r.documentNumber) : null,
+        expiryDate: String(r.expiryDate),
+        daysLeft,
+        severity: severityFor(daysLeft),
+        link: `/employees/${r.employeeId}`,
+      });
+    }
+    for (const r of bankGuarantees) {
+      const daysLeft = Number(r.daysLeft ?? 0);
+      rows.push({
+        source: "bank_guarantee",
+        sourceLabel: "الضمانات البنكية",
+        entityId: Number(r.id),
+        title: `ضمان ${r.ref ?? ""}`,
+        subtitle: r.beneficiary ? String(r.beneficiary) : null,
+        expiryDate: String(r.expiryDate),
+        daysLeft,
+        severity: severityFor(daysLeft),
+        link: `/finance/bank-guarantees/${r.id}`,
+        metadata: { amount: r.amount },
+      });
+    }
+    for (const r of legalContracts) {
+      const daysLeft = Number(r.daysLeft ?? 0);
+      rows.push({
+        source: "legal_contract",
+        sourceLabel: "العقود القانونية",
+        entityId: Number(r.id),
+        title: String(r.title ?? "عقد"),
+        subtitle: r.partyName ? String(r.partyName) : null,
+        expiryDate: String(r.endDate),
+        daysLeft,
+        severity: severityFor(daysLeft),
+        link: `/legal/contracts/${r.id}`,
+      });
+    }
+    for (const r of rentalContracts) {
+      const daysLeft = Number(r.daysLeft ?? 0);
+      rows.push({
+        source: "rental_contract",
+        sourceLabel: "عقود الإيجار",
+        entityId: Number(r.id),
+        title: `عقد إيجار — ${r.tenantName ?? `وحدة ${r.unitId ?? ""}`}`,
+        subtitle: null,
+        expiryDate: String(r.endDate),
+        daysLeft,
+        severity: severityFor(daysLeft),
+        link: `/properties/contracts/${r.id}`,
+      });
+    }
+    for (const r of iqamaExpiries) {
+      const daysLeft = Number(r.daysLeft ?? 0);
+      rows.push({
+        source: "iqama_expiry",
+        sourceLabel: "إقامات الموظفين",
+        entityId: Number(r.id),
+        title: `إقامة — ${r.name}`,
+        subtitle: r.iqamaNumber ? String(r.iqamaNumber) : null,
+        expiryDate: String(r.iqamaExpiry),
+        daysLeft,
+        severity: severityFor(daysLeft),
+        link: `/employees/${r.id}`,
+      });
+    }
+    for (const r of driverLicenses) {
+      const daysLeft = Number(r.daysLeft ?? 0);
+      rows.push({
+        source: "driver_license",
+        sourceLabel: "رخص السائقين",
+        entityId: Number(r.id),
+        title: `رخصة قيادة — ${r.name}`,
+        subtitle: r.licenseNumber ? String(r.licenseNumber) : null,
+        expiryDate: String(r.licenseExpiry),
+        daysLeft,
+        severity: severityFor(daysLeft),
+        link: `/fleet/drivers/${r.id}`,
+      });
+    }
+
+    rows.sort((a, b) => a.daysLeft - b.daysLeft);
+
+    const bySeverity = {
+      expired: rows.filter((r) => r.severity === "expired").length,
+      critical: rows.filter((r) => r.severity === "critical").length,
+      warning: rows.filter((r) => r.severity === "warning").length,
+      normal: rows.filter((r) => r.severity === "normal").length,
+    };
+    const bySource: Record<string, number> = {};
+    for (const r of rows) bySource[r.source] = (bySource[r.source] ?? 0) + 1;
+
+    res.json(maskFields(req, {
+      data: rows,
+      total: rows.length,
+      summary: { bySeverity, bySource, daysAhead },
+    }));
+  } catch (err) {
+    handleRouteError(err, res, "Renewals hub error:");
+  }
+});

@@ -7248,9 +7248,15 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, chamber of commerce, etc.)
+    // Schema is documentType + documentNumber — NOT title/type. The
+    // previous SELECT named non-existent columns and silently returned
+    // an empty array on every call.
     const companyDocs = await rawQuery<Record<string, unknown>>(
-      `SELECT cd.id AS "entityId", cd.title AS "entityName", cd."expiryDate",
-              cd.type AS "docType", cd.title AS "docLabel",
+      `SELECT cd.id AS "entityId",
+              cd."documentType" AS "entityName",
+              cd."expiryDate",
+              cd."documentType" AS "docType",
+              COALESCE(cd."documentNumber", cd."documentType") AS "docLabel",
               (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
               'company' AS "entityType"
        FROM company_documents cd
@@ -7310,11 +7316,27 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
     // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent field access does not require explicit per-field generics; behavior unchanged
     const b = zodParse(companyDocumentSchema.safeParse(req.body)) as any;
 
+    // Schema columns are documentType + documentNumber (NOT title/type).
+    // The previous INSERT named title/type which don't exist in the
+    // company_documents table — every POST silently 500'd. Fixed to
+    // match the real schema (db/schema_pre.sql:4851) and to also
+    // capture issueDate + issuingAuthority + reminderDays that the
+    // schema supports but the old INSERT discarded. Result: full
+    // round-trip for renewal reminders.
     const { insertId } = await rawExecute(
-      `INSERT INTO company_documents ("companyId",title,type,"expiryDate",notes)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [scope.companyId, b.documentType || b.title, b.documentNumber || b.type || null,
-       b.expiryDate || null, b.notes || null]
+      `INSERT INTO company_documents
+         ("companyId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [
+        scope.companyId,
+        b.documentType,
+        b.documentNumber ?? null,
+        b.issueDate ?? null,
+        b.expiryDate ?? null,
+        b.issuingAuthority ?? null,
+        b.reminderDays ?? 30,
+        b.notes ?? null,
+      ]
     );
     assertInsert(insertId, "company_documents");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "company_document.created", entity: "hr_company_documents", entityId: insertId, details: JSON.stringify({ documentType: b.documentType }) }).catch((e) => logger.error(e, "hr background task failed"));
@@ -7324,6 +7346,41 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
       action: "create", entity: "company_documents", entityId: insertId,
       after: { documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
     }).catch((e) => logger.error(e, "hr background task failed"));
+
+    // Smart-renewal obligation — same engine fleet insurance and the
+    // smart-expense flow use. Surfaces this document in the unified
+    // calendar reminderDays before it expires. Works for ANY
+    // documentType: سجل تجاري, ترخيص, تأمين طبي, زكاة, GOSI,
+    // غرفة تجارة — the type is metadata, the engine treats them all
+    // the same.
+    if (b.expiryDate) {
+      try {
+        const endD = new Date(b.expiryDate);
+        if (!Number.isNaN(endD.getTime())) {
+          const remindDays = Number(b.reminderDays ?? 30);
+          const remindAt = new Date(endD);
+          remindAt.setDate(remindAt.getDate() - remindDays);
+          await registerObligation({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            entityType: "company_document",
+            entityId: insertId,
+            obligationType: "renewal",
+            title: `تجديد: ${b.documentType}${b.documentNumber ? ` (${b.documentNumber})` : ""}`,
+            dueAt: remindAt.toISOString(),
+            metadata: {
+              documentType: b.documentType,
+              documentNumber: b.documentNumber ?? null,
+              issuingAuthority: b.issuingAuthority ?? null,
+              expiryDate: endD.toISOString(),
+            },
+            dedupeKey: `company_document:${insertId}`,
+          });
+        }
+      } catch (e) {
+        logger.warn(e, "[hr] company-document renewal obligation registration failed");
+      }
+    }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM company_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, message: "تم إضافة وثيقة المنشأة" });

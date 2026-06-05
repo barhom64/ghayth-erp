@@ -10,8 +10,15 @@ const AuditDetail = lazy(() => import("@/pages/details/audit-detail"));
 const PolicyDetail = lazy(() => import("@/pages/details/policy-detail"));
 const RiskDetail = lazy(() => import("@/pages/details/risk-detail"));
 const ComplianceDetail = lazy(() => import("@/pages/details/compliance-detail"));
+// Unified renewals hub — all duration-based items (commercial reg,
+// licenses, medical insurance, fleet/employee docs, contracts,
+// bank guarantees) in one screen.
+const RenewalsHub = lazy(() => import("@/pages/governance/renewals-hub"));
+const CompanyDocumentCreate = lazy(() => import("@/pages/governance/company-document-create"));
 
 export const governanceRoutes = [
+  { path: "/governance/renewals-hub", component: RenewalsHub },
+  { path: "/governance/company-documents/new", component: CompanyDocumentCreate },
   { path: "/governance", component: Governance },
   { path: "/governance/policies/create", component: PoliciesCreate },
   { path: "/governance/policies/:id", component: PolicyDetail },
