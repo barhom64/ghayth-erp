@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { PageShell } from "@workspace/ui-core";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 function MiniBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
@@ -88,6 +89,25 @@ export default function CashflowDashboard() {
           <Link href="/finance">
             <Button variant="outline" size="sm" className="gap-1">الوحدة المالية <ArrowUpRight className="w-3 h-3" /></Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_cashflow_dashboard"
+            entityId={period}
+            label="طباعة"
+            payload={{
+              entity: { title: `لوحة التدفق النقدي — ${periodLabels[period]}`, total: 4 },
+              items: [
+                { "البند": "إجمالي الإيرادات", "القيمة": Number(totalIncome) },
+                { "البند": "إجمالي المصروفات", "القيمة": Number(totalExpenses) },
+                { "البند": "صافي التدفق النقدي", "القيمة": Number(netCashflow) },
+                { "البند": "الفواتير المعلقة", "القيمة": pendingInvoices.length },
+                { "البند": "المصروفات الأخيرة", "القيمة": recentExpenses.length },
+                ...budgetItems.map((b: any) => ({
+                  "البند": `ميزانية: ${b.name || b.category || "—"}`,
+                  "القيمة": Number(b.actual ?? b.amount ?? 0),
+                })),
+              ],
+            }}
+          />
         </>
       }
     >
