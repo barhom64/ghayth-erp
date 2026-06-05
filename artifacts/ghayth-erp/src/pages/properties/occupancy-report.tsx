@@ -10,6 +10,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
@@ -79,6 +80,29 @@ export default function OccupancyReportPage() {
       subtitle="نظرة شاملة على حالة الوحدات العقارية"
       breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "تقرير الإشغال العقاري" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_property_occupancy"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: {
+              title: "تقرير الإشغال العقاري",
+              total: units.length,
+              occupancyRate: data?.occupancyRate ?? 0,
+            },
+            items: units.map((u: any) => ({
+              "المبنى": u.buildingName || "—",
+              "الوحدة": u.unitNumber || "—",
+              "النوع": u.unitType || u.type || "—",
+              "المساحة (م²)": u.area ?? "—",
+              "حالة الإشغال": u.occupancyStatus || u.status || "—",
+              "المستأجر": u.tenantName || "—",
+              "الإيجار الشهري": u.monthlyRent ?? 0,
+            })),
+          }}
+        />
+      }
     >
       <PropertyTabsNav />
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

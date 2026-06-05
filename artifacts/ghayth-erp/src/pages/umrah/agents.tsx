@@ -19,6 +19,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface AgentForm {
   name: string;
@@ -130,7 +131,28 @@ export default function UmrahAgents() {
   ];
 
   return (
-    <PageShell title="وكلاء العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "الوكلاء" }]}>
+    <PageShell
+      title="وكلاء العمرة"
+      breadcrumbs={[{ label: "العمرة" }, { label: "الوكلاء" }]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_agents"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "وكلاء العمرة", total: items.length },
+            items: items.map((a: any) => ({
+              "الاسم": a.name || "—",
+              "رقم نسك": a.nuskAgentNumber || "—",
+              "البلد": a.country || "—",
+              "الموسم": a.seasonName || "—",
+              "هامش الربح": a.profitMargin ?? "—",
+              "الحالة": a.status || "—",
+            })),
+          }}
+        />
+      }
+    >
       <UmrahTabsNav />
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground">إدارة وكلاء العمرة</p>

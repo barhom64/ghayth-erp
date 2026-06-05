@@ -19,6 +19,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "list" | "schedule";
@@ -106,6 +107,27 @@ export default function TripsPage() {
           <Link href="/fleet/trips/create">
             <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />رحلة جديدة</GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_fleet_trips"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: {
+                title: "قائمة رحلات الأسطول",
+                total: filtered.length,
+              },
+              items: filtered.map((t: any) => ({
+                "رقم الرحلة": t.id,
+                "المركبة": t.plateNumber || t.vehiclePlate || "—",
+                "السائق": t.driverName || "—",
+                "من": t.fromLocation || "—",
+                "إلى": t.toLocation || "—",
+                "التاريخ": t.startTime || t.date || "—",
+                "المسافة (كم)": t.distance ?? 0,
+                "الحالة": t.status || "—",
+              })),
+            }}
+          />
         </div>
       }
     >

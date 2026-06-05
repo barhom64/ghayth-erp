@@ -19,6 +19,7 @@ import { Package, Check, X, Plus, Pencil, Trash2 } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { useToast } from "@/hooks/use-toast";
 
 interface UmrahPackage {
@@ -156,7 +157,31 @@ export default function UmrahPackages() {
   if (packagesQ.isError) return <ErrorState />;
 
   return (
-    <PageShell title="باقات العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "الباقات" }]}>
+    <PageShell
+      title="باقات العمرة"
+      breadcrumbs={[{ label: "العمرة" }, { label: "الباقات" }]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_packages"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "باقات العمرة", total: rows.length },
+            items: rows.map((p: any) => ({
+              "الاسم": p.name || "—",
+              "الموسم": p.seasonName || p.seasonId || "—",
+              "سعر التكلفة": p.costPrice ?? 0,
+              "سعر البيع": p.sellPrice ?? 0,
+              "المدة (يوم)": p.duration ?? "—",
+              "نقل": p.includesTransport ? "نعم" : "لا",
+              "إقامة": p.includesHotel ? "نعم" : "لا",
+              "وجبات": p.includesMeals ? "نعم" : "لا",
+              "الحالة": p.status || "—",
+            })),
+          }}
+        />
+      }
+    >
       <UmrahTabsNav />
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground">إدارة باقات العمرة والأسعار والتفاصيل</p>

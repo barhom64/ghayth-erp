@@ -18,6 +18,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 
 interface ManifestRow {
@@ -130,11 +131,33 @@ export default function FleetCargoPage() {
       subtitle="بوالص الشحن البري وإدارة الأصناف"
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "نقل البضائع" }]}
       actions={
-        <Link href="/fleet/cargo/create">
-          <GuardedButton perm="fleet.cargo:create" size="sm">
-            <Plus className="h-4 w-4 me-1" />بوليصة جديدة
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_cargo"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "بوالص نقل البضائع", total: rows.length },
+              items: rows.map((r: any) => ({
+                "رقم البوليصة": r.manifestNumber || r.id,
+                "العميل": r.customerName || r.linkedCustomerName || "—",
+                "المركبة": r.vehiclePlate || "—",
+                "السائق": r.driverName || "—",
+                "من": r.fromLocation || "—",
+                "إلى": r.toLocation || "—",
+                "تاريخ التحميل": r.pickupDate || "—",
+                "الوزن (كغم)": r.totalWeight ?? 0,
+                "الإيراد": r.freightRevenue ?? 0,
+                "الحالة": r.status || "—",
+              })),
+            }}
+          />
+          <Link href="/fleet/cargo/create">
+            <GuardedButton perm="fleet.cargo:create" size="sm">
+              <Plus className="h-4 w-4 me-1" />بوليصة جديدة
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <FleetTabsNav />

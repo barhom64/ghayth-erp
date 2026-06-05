@@ -18,6 +18,7 @@ import {
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { Plus, Link2, Users, Pencil } from "lucide-react";
@@ -227,14 +228,33 @@ export default function UmrahSubAgents() {
       subtitle="إدارة الوكلاء الفرعيين وربطهم بعملاء النظام"
       breadcrumbs={[{ label: "العمرة" }, { label: "الوكلاء الفرعيون" }]}
       actions={
-        <GuardedButton
-          perm="umrah:write"
-          onClick={() => setEditing({ paymentTerms: "prepaid", isActive: true })}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          وكيل فرعي جديد
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_sub_agents"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "وكلاء العمرة الفرعيون", total: subAgents.length },
+              items: subAgents.map((a: any) => ({
+                "الاسم": a.name || "—",
+                "رمز نسك": a.nuskCode || "—",
+                "الوكيل الرئيسي": a.agentName || "—",
+                "البلد": a.country || "—",
+                "شروط الدفع": a.paymentTerms || "—",
+                "السعر الافتراضي": a.defaultPricePerMutamer ?? "—",
+                "الحالة": a.isActive ? "نشط" : "غير نشط",
+              })),
+            }}
+          />
+          <GuardedButton
+            perm="umrah:write"
+            onClick={() => setEditing({ paymentTerms: "prepaid", isActive: true })}
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            وكيل فرعي جديد
+          </GuardedButton>
+        </div>
       }
     >
       <UmrahTabsNav />

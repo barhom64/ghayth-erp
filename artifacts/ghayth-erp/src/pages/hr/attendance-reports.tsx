@@ -18,6 +18,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 export default function AttendanceReportsPage() {
   const [month, setMonth] = useState(todayLocal().slice(0, 7));
   const [filters, setFilters] = useFilters();
@@ -77,7 +78,30 @@ export default function AttendanceReportsPage() {
       title="تقارير الحضور والانصراف"
       subtitle="تقارير شهرية وتفصيلية عن الحضور والتأخير"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تقارير الحضور والانصراف" }]}
-      actions={<Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />}
+      actions={
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_attendance_summary"
+            entityId={month}
+            label="طباعة"
+            payload={{
+              entity: {
+                title: `تقرير الحضور والانصراف — ${month}`,
+                month,
+                totalDays: kpis?.[0]?.value ?? 0,
+              },
+              items: monthlyRows.map((r: any) => ({
+                "الموظف": r.employeeName || r.name || "—",
+                "أيام الحضور": r.presentDays ?? r.totalPresent ?? 0,
+                "أيام الغياب": r.absentDays ?? r.totalAbsent ?? 0,
+                "التأخر (دقيقة)": r.lateMinutes ?? 0,
+                "ساعات إضافية": r.overtimeHours ?? 0,
+              })),
+            }}
+          />
+          <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />
+        </div>
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { Users, Split, Merge, ChevronRight } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -321,6 +322,22 @@ export default function UmrahGroups() {
             <Users className="h-4 w-4" />
             مجموعة جديدة
           </GuardedButton>
+          <PrintButton
+            entityType="report_umrah_groups"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "مجموعات العمرة", total: items.length },
+              items: items.map((g: any) => ({
+                "الاسم": g.name || "—",
+                "رقم نسك": g.nuskGroupNumber || "—",
+                "الوكيل": g.agentName || "—",
+                "الموسم": g.seasonName || "—",
+                "العدد": g.pilgrimCount ?? 0,
+                "الحالة": g.status || "—",
+              })),
+            }}
+          />
         </div>
       }
     >

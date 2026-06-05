@@ -28,6 +28,7 @@ import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function InvoicesPage() {
   const [, navigate] = useLocation();
@@ -190,6 +191,31 @@ export default function InvoicesPage() {
           <Link href="/finance/invoices/create">
             <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_finance_invoices"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: {
+                title: "قائمة الفواتير",
+                total: filtered.length,
+                totalRevenue: stats?.totalRevenue ?? 0,
+                paidThisMonth: stats?.paidThisMonth ?? 0,
+                pending: stats?.pendingAmount ?? 0,
+                overdue: stats?.overdueAmount ?? 0,
+              },
+              items: filtered.map((i: any) => ({
+                "رقم الفاتورة": i.invoiceNumber || i.ref || i.id,
+                "العميل": i.clientName || "—",
+                "التاريخ": i.invoiceDate || i.date || "—",
+                "تاريخ الاستحقاق": i.dueDate || "—",
+                "الإجمالي": i.total ?? i.amount ?? 0,
+                "المدفوع": i.paidAmount ?? 0,
+                "المتبقي": i.remainingAmount ?? 0,
+                "الحالة": i.status || "—",
+              })),
+            }}
+          />
         </>
       }
     >

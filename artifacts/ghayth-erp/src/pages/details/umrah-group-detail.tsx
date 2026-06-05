@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, Plane, Wallet, AlertTriangle, Shield, Calendar } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 
 // Pilgrim status → Arabic label. Mirrors the constant on the agent
 // detail page (kept in sync via the smoke test pin on both pages).
@@ -504,6 +505,15 @@ export default function UmrahGroupDetail() {
       relatedEntities={relatedEntities}
       entityType="umrah-group"
       entityId={id ?? 0}
+      actions={
+        id ? (
+          <PrintButton
+            entityType="umrah_group"
+            entityId={id}
+            label="طباعة المجموعة"
+          />
+        ) : null
+      }
       overview={overview}
       isLoading={isLoading}
       error={error}

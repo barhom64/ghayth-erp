@@ -12,6 +12,7 @@ import {
   PageShell,
 } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -222,6 +223,23 @@ export default function UmrahPenalties() {
           <GuardedButton perm="umrah:approve" variant="outline" onClick={runPenaltyEngine} className="gap-2" rateLimitAware>
             <Zap className="h-4 w-4" />تشغيل محرك الغرامات
           </GuardedButton>
+          <PrintButton
+            entityType="report_umrah_penalties"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "غرامات العمرة", total: items.length },
+              items: items.map((p: any) => ({
+                "النوع": p.type || "—",
+                "المعتمر": p.pilgrimName || p.mutamerName || "—",
+                "الوكيل": p.agentName || "—",
+                "الموسم": p.seasonName || "—",
+                "قيمة الغرامة": p.amount ?? 0,
+                "تاريخ الإصدار": p.detectedAt || p.createdAt || "—",
+                "الحالة": p.status || "—",
+              })),
+            }}
+          />
         </div>
       }
     >
