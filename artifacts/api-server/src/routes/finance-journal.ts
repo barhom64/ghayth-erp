@@ -505,49 +505,45 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     const targetPeriod = period ?? currentPeriod();
     const sourceAcct = sourceAccountCode || "1100";
 
+    // F3 (audit follow-up): pre-flight ONLY validates the budget here;
+    // the actual UPDATE budgets SET used = newUsed happens inside the
+    // same withTransaction as the JE post below. The previous shape
+    // bumped used in its own (already-committed) txn, then posted the
+    // JE in a second one. A closed-period throw from the engine left
+    // budgets.used inflated forever with no GL — same family as the
+    // PR #1421 ar-payment bug.
     if (accountCode && amount) {
-      await withTransaction(async (client) => {
-        // Lock the budget row to prevent concurrent race conditions
-        const lockResult = await client.query(
-          `SELECT id, amount, used FROM budgets
-           WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL
-           FOR UPDATE`,
-          [effectiveCompanyId, accountCode, targetPeriod]
-        );
-        if (lockResult.rows.length > 0) {
-          const budget = lockResult.rows[0];
-          const budgetAmount = Number(budget.amount);
-          const currentUsed = Number(budget.used);
-          const newUsed = currentUsed + Number(amount);
-          const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
+      const [budget] = await rawQuery<Record<string, unknown>>(
+        `SELECT amount, used FROM budgets
+          WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [effectiveCompanyId, accountCode, targetPeriod]
+      );
+      if (budget) {
+        const budgetAmount = Number(budget.amount);
+        const currentUsed = Number(budget.used);
+        const newUsed = currentUsed + Number(amount);
+        const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
 
-          if (utilization > 110) {
-            throw new ConflictError(
-              "تجاوز الميزانية أكثر من 110% – رفض نهائي",
-              { field: "amount", fix: "أعد تقييم الميزانية أو قلل المبلغ المطلوب", meta: { utilization: Math.round(utilization), status: "rejected" } }
-            );
-          }
-          if (utilization > 99 && !OWNER_GM_ROLES.includes(scope.role)) {
-            throw new ForbiddenError(
-              "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
-              { fix: "اطلب موافقة المدير العام قبل المتابعة", meta: { utilization: Math.round(utilization), status: "blocked_gm" } }
-            );
-          }
-          if (utilization > 80 && !FINANCE_ROLES.includes(scope.role)) {
-            throw new ForbiddenError(
-              "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
-              { fix: "اطلب موافقة المدير المالي قبل المتابعة", meta: { utilization: Math.round(utilization), status: "warning_cfo" } }
-            );
-          }
-
-          // Only increment if all checks pass
-          await client.query(
-            `UPDATE budgets SET used = $1
-             WHERE id = $2`,
-            [newUsed, budget.id]
+        if (utilization > 110) {
+          throw new ConflictError(
+            "تجاوز الميزانية أكثر من 110% – رفض نهائي",
+            { field: "amount", fix: "أعد تقييم الميزانية أو قلل المبلغ المطلوب", meta: { utilization: Math.round(utilization), status: "rejected" } }
           );
         }
-      });
+        if (utilization > 99 && !OWNER_GM_ROLES.includes(scope.role)) {
+          throw new ForbiddenError(
+            "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
+            { fix: "اطلب موافقة المدير العام قبل المتابعة", meta: { utilization: Math.round(utilization), status: "blocked_gm" } }
+          );
+        }
+        if (utilization > 80 && !FINANCE_ROLES.includes(scope.role)) {
+          throw new ForbiddenError(
+            "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
+            { fix: "اطلب موافقة المدير المالي قبل المتابعة", meta: { utilization: Math.round(utilization), status: "warning_cfo" } }
+          );
+        }
+      }
     }
 
     const baseAmount = roundTo2(Number(amount) || 0);
@@ -632,7 +628,26 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     // approval request, nor an approval chain pointing at a missing entry.
     // postJournalEntry's own withTransaction joins this one via savepoint;
     // rawExecute joins via the transaction async-context.
-    const { journalId, alreadyExists, approvalResult } = await withTransaction(async () => {
+    const { journalId, alreadyExists, approvalResult } = await withTransaction(async (client) => {
+      // Re-lock and bump the budget inside the same txn as the JE post.
+      // A closed-period throw from the engine now rolls the bump back
+      // atomically — no more inflated used counter with no GL.
+      if (accountCode && amount) {
+        const lockRes = await client.query(
+          `SELECT id, amount, used FROM budgets
+            WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL
+            FOR UPDATE`,
+          [effectiveCompanyId, accountCode, targetPeriod]
+        );
+        if (lockRes.rows.length > 0) {
+          const lockedNewUsed = Number(lockRes.rows[0].used) + Number(amount);
+          await client.query(
+            `UPDATE budgets SET used = $1 WHERE id = $2`,
+            [lockedNewUsed, lockRes.rows[0].id]
+          );
+        }
+      }
+
       const posted = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${idempotencyToken}`, lines: journalLines });
 
       await rawExecute(
