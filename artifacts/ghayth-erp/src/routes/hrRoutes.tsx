@@ -94,6 +94,11 @@ const AttendanceEdit = lazy(() => import("@/pages/create/hr/attendance-edit"));
 // the defaultRoleKey + opensCustody policy per title from the UI so
 // onboarding auto-fills role + auto-opens custody.
 const JobTitlesAdmin = lazy(() => import("@/pages/hr/job-titles"));
+// Quick-add flow companions — admin enters essentials, employee
+// self-completes from /my-profile.
+const EmployeesQuickCreate = lazy(() => import("@/pages/create/employees-quick-create"));
+const HrPendingProfile = lazy(() => import("@/pages/hr/pending-profile"));
+const MyProfile = lazy(() => import("@/pages/my-profile"));
 const ExcuseEdit = lazy(() => import("@/pages/create/hr/excuse-edit"));
 const LeavesEdit = lazy(() => import("@/pages/create/hr/leaves-edit"));
 const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
@@ -197,4 +202,11 @@ export const hrRoutes = [
   { path: "/hr/saudization", component: Saudization, subKey: "employees" },
   { path: "/hr/saudi-compliance", component: SaudiCompliance, subKey: "payroll" },
   { path: "/hr/job-titles", component: JobTitlesAdmin, subKey: "organization" },
+  // Quick-add (admin enters minimal info) — routed before /employees/:id
+  // so the literal /quick-create path isn't shadowed by the :id matcher.
+  { path: "/employees/quick-create", component: EmployeesQuickCreate, subKey: "employees" },
+  { path: "/hr/pending-profile", component: HrPendingProfile, subKey: "employees" },
+  // Self-service profile — every authenticated employee gets a route
+  // for it. No subKey/module gate (it's the user's own data).
+  { path: "/my-profile", component: MyProfile },
 ];

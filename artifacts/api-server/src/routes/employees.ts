@@ -291,6 +291,184 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
   }
 });
 
+// ─── Quick-add + self-service profile completion ────────────────────────────
+// POST /employees/quick-create lets HR onboard a new hire with only the
+// 5 essentials (name, internal email for login, job title, branch,
+// salary) — the rest (national ID, phone, DOB, address, bank, photo,
+// emergency contact) get filled by the employee themselves from their
+// portal once they receive the temp password. invitedAt + profileCompleted
+// are stamped so the HR dashboard can surface "pending profile" employees.
+//
+// Internally this just delegates to the same POST / handler with the
+// optional personal-data fields left undefined and an extra
+// `_quickCreate` flag the main handler checks at the end to flip
+// profileCompleted=false + stamp invitedAt. Avoids duplicating the
+// 600-line atomic-create transaction.
+const quickCreateEmployeeSchema = z.object({
+  name: z.string().min(1, "اسم الموظف مطلوب"),
+  internalEmail: z.string().email("البريد الداخلي غير صالح"),
+  jobTitleId: z.coerce.number().optional(),
+  jobTitle: z.string().optional(),
+  branchId: z.coerce.number().optional(),
+  departmentId: z.coerce.number().optional(),
+  managerId: z.coerce.number().optional(),
+  salary: z.coerce.number().optional(),
+  hireDate: z.string().optional(),
+  role: z.string().optional(),
+  // opensCustody propagates to the same auto-custody flag the main
+  // handler checks. Stays optional so it can be implied by the
+  // job_title.opensCustody policy.
+  createCustodyAccount: z.boolean().optional(),
+  vehicleId: z.coerce.number().optional(),
+});
+
+router.post("/quick-create", authorize({ feature: "hr.employees", action: "create" }), async (req, res, next) => {
+  try {
+    const b = zodParse(quickCreateEmployeeSchema.safeParse(req.body ?? {}));
+    // Splice the quick-create flag into the body and forward to the
+    // main handler. The main handler is reused so the user account +
+    // RBAC binding + subsidiary accounts + driver-vehicle binding all
+    // run through one well-tested path.
+    req.body = {
+      ...b,
+      _quickCreate: true,
+    };
+    // Continue down the route stack — next() falls through to the
+    // POST "/" handler registered immediately below.
+    next();
+  } catch (err) { handleRouteError(err, res, "quick-create employee"); }
+});
+
+// Self-service profile completion. The employee fills their own
+// personal data after first login. Auth check is scope-based — only
+// the user whose employeeId matches the path id (or HR with
+// hr.employees:update) can patch it. profileCompletedAt is stamped
+// when the minimum-required fields are all present.
+const profileCompletionSchema = z.object({
+  personalEmail: z.string().email("البريد الشخصي غير صالح").optional(),
+  phone: z.string().optional(),
+  nationalId: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  gender: z.string().optional(),
+  nationality: z.string().optional(),
+  address: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  emergencyPhone: z.string().optional(),
+  bankName: z.string().optional(),
+  bankAccount: z.string().optional(),
+  iban: z.string().optional(),
+  photoUrl: z.string().optional(),
+  iqamaNumber: z.string().optional(),
+  iqamaExpiry: z.string().optional(),
+  passportNumber: z.string().optional(),
+  passportExpiry: z.string().optional(),
+});
+
+// Minimum-required fields to consider a profile "complete". Picked
+// what HR actually needs for payroll + WPS — without these we can't
+// process the first paycheck.
+const REQUIRED_PROFILE_FIELDS = ["nationalId", "phone", "dateOfBirth", "bankAccount"] as const;
+
+router.patch("/:id/complete-profile", authorize({ feature: "hr.employees", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Self-service guard: only the employee themselves OR an owner can
+    // use this endpoint. HR admins who need to edit personal data on
+    // behalf of an employee should use the regular PATCH /employees/:id
+    // route which has the full update authorize check. This route
+    // exists for the post-onboarding "complete your profile" flow.
+    const isSelf = scope.employeeId === id;
+    if (!isSelf && !scope.isOwner) {
+      throw new ValidationError("هذا المسار لاستكمال بياناتك الشخصية فقط — لتعديل بيانات موظف آخر استخدم PATCH /employees/:id", {
+        field: "permission",
+        fix: "سجّل الدخول كهذا الموظف، أو استخدم لوحة الموارد البشرية للتعديل بصلاحية المسؤول",
+      });
+    }
+
+    const body = zodParse(profileCompletionSchema.safeParse(req.body ?? {}));
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    const set = (col: string, val: unknown) => { params.push(val); sets.push(`"${col}" = $${params.length}`); };
+    for (const k of Object.keys(body) as Array<keyof typeof body>) {
+      const v = body[k];
+      if (v !== undefined && v !== "") set(k, v);
+    }
+    if (!sets.length) {
+      res.json({ ok: true, updated: 0, profileCompleted: false });
+      return;
+    }
+
+    // Run the UPDATE, then re-read the row so the all-required-fields
+    // check sees the latest state (covering the case where a previous
+    // patch already filled some fields and this one fills the rest).
+    params.push(id, scope.companyId);
+    await rawExecute(
+      `UPDATE employees SET ${sets.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
+      params
+    );
+    const [updated] = await rawQuery<Record<string, unknown>>(
+      `SELECT "nationalId", phone, "dateOfBirth", "bankAccount", "profileCompleted" FROM employees
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    const allRequired = REQUIRED_PROFILE_FIELDS.every((k) => {
+      const v = (updated as any)?.[k];
+      return v != null && v !== "";
+    });
+    let profileCompleted = Boolean(updated?.profileCompleted);
+    if (allRequired && !profileCompleted) {
+      await rawExecute(
+        `UPDATE employees SET "profileCompleted" = true, "profileCompletedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId]
+      );
+      profileCompleted = true;
+      emitEvent({
+        companyId: scope.companyId, userId: scope.userId,
+        action: "employee.profile_completed", entity: "employees", entityId: id,
+      }).catch((e) => logger.error(e, "employees background task failed"));
+    }
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "employees", entityId: id,
+      after: { fieldsUpdated: Object.keys(body), profileCompleted },
+    }).catch((e) => logger.error(e, "employees background task failed"));
+
+    res.json({
+      ok: true,
+      updated: sets.length,
+      profileCompleted,
+      missingFields: REQUIRED_PROFILE_FIELDS.filter((k) => {
+        const v = (updated as any)?.[k];
+        return v == null || v === "";
+      }),
+    });
+  } catch (err) { handleRouteError(err, res, "complete employee profile"); }
+});
+
+// GET pending-profile employees — surfaces who hasn't completed yet
+// so HR can ping them. Predicated index 250 makes this O(pending),
+// not O(all employees).
+router.get("/pending-profile", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT e.id, e.name, e."empNumber", e."internalEmail", e."personalEmail",
+              e."invitedAt", ea."jobTitle", ea."branchId", b.name AS "branchName"
+         FROM employees e
+         LEFT JOIN employee_assignments ea
+           ON ea."employeeId" = e.id AND ea."isPrimary" = true
+         LEFT JOIN branches b ON b.id = ea."branchId"
+        WHERE e."companyId" = $1 AND e."profileCompleted" = false AND e."deletedAt" IS NULL
+        ORDER BY e."invitedAt" DESC NULLS LAST
+        LIMIT 200`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "list pending-profile employees"); }
+});
+
 router.post("/", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createEmployeeSchema.safeParse(req.body));
@@ -1007,6 +1185,21 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     // with the employee record. The old fire-and-forget call here used
     // to fight with the legacy hard-coded 1400 INSERT for the unique
     // constraint and orphaned the 1131-XXXX COA row — removed.
+
+    // Quick-create flow: HR provided only the essentials, so flip
+    // profileCompleted=false and stamp invitedAt. The /pending-profile
+    // list + the employee portal banner pick this up and prompt the
+    // employee to finish their personal data on next login. The flag
+    // defaults true at the column level (migration 250) so the regular
+    // POST path leaves it alone — only the explicit quick-create
+    // delegation toggles it off.
+    if ((req.body as any)?._quickCreate === true) {
+      await rawExecute(
+        `UPDATE employees SET "profileCompleted" = false, "invitedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2`,
+        [empId, scope.companyId]
+      );
+    }
 
     const [employee] = await rawQuery<EmployeeListRow>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,

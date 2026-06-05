@@ -7060,6 +7060,9 @@ CREATE TABLE public.employees (
     attachments jsonb DEFAULT '[]'::jsonb,
     "personalEmail" character varying(200),
     "internalEmail" character varying(200),
+    "profileCompleted" boolean DEFAULT true NOT NULL,
+    "invitedAt" timestamp with time zone,
+    "profileCompletedAt" timestamp with time zone,
     CONSTRAINT chk_employees_status CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('terminated'::character varying)::text, ('on_leave'::character varying)::text, ('suspended'::character varying)::text])))
 );
 

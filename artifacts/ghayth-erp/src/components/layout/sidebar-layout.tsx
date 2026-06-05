@@ -117,6 +117,7 @@ const allNavSections: NavSection[] = [
         { label: "طلب إجازة", path: "/hr/leaves/create", icon: Calendar },
       ]},
       { label: "معلوماتي", path: "/my-attendance", icon: User, children: [
+        { label: "ملفي الشخصي", path: "/my-profile", icon: User },
         { label: "حضوري وانصرافي", path: "/my-attendance", icon: Clock },
         { label: "كشف راتبي", path: "/my-payslip", icon: DollarSign },
         { label: "سلفي", path: "/my-loans", icon: Wallet },
@@ -149,8 +150,12 @@ const allNavSections: NavSection[] = [
       ]},
       // الموظفون — السجل الشامل + كل ما يلتصق بسجل الموظف نفسه: وثائق،
       // عقود، خطابات رسمية، نهاية خدمة، نقل، تفعيل، مراجعة تعيين.
+      // "إضافة سريعة" يدخل أعلى القائمة لأن HR يستخدمه أكثر من الإضافة
+      // التفصيلية في يوم العمل العادي.
       { label: "الموظفون", path: "/employees", icon: Users, module: "hr", children: [
         { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
+        { label: "إضافة سريعة", path: "/employees/quick-create", icon: Zap, subKey: "employees" },
+        { label: "في انتظار الاستكمال", path: "/hr/pending-profile", icon: Clock, subKey: "employees" },
         { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
         { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, subKey: "employees" },
