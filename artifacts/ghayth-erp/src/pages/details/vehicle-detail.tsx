@@ -12,7 +12,7 @@ import {
   PageStatusBadge,
   DataTable,
 } from "@workspace/ui-core";
-import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, TrendingUp, Activity, Radio, Eye, Bot } from "lucide-react";
+import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, TrendingUp, Activity, Radio, Eye, Bot, User, ShieldAlert, Route } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
@@ -74,6 +74,10 @@ export default function VehicleDetail() {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const { data: vehicle, isLoading, isError, error, refetch } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
   const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
+  // Cross-module rollup (driver + employee + insurance + violations +
+  // lifetime/30d trips + next maintenance). Surfaced as a single strip
+  // above the overview KPIs.
+  const { data: linkage } = useApiQuery<any>(["vehicle-linkage", id || ""], `/fleet/vehicles/${id}/linkage-summary`, !!id);
   // Telematics drill-down — only fetched once the user opens the tab so
   // we don't slow the hot detail page for vehicles without a device.
   const telematicsEnabled = !!id && activeTab === "telematics";
@@ -351,6 +355,7 @@ export default function VehicleDetail() {
       </div>
       {activeTab === "overview" && (
         <div className="space-y-4">
+          {linkage && <VehicleLinkageStrip data={linkage} />}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="border-0 shadow-sm bg-status-info-surface">
               <CardContent className="p-4 text-center">
@@ -926,4 +931,146 @@ function maintenanceTypeLabel(type: string): string {
     scheduled: "صيانة دورية", repair: "إصلاح", inspection: "فحص",
   };
   return labels[type] || type || "-";
+}
+
+// Cross-module rollup strip on the vehicle overview tab. Companion to
+// /fleet/vehicles/:id/linkage-summary — surfaces driver (+ linked
+// employee) / insurance lifecycle / open violations / lifetime+30d
+// trips / next maintenance in one row so the operator answers
+// "who drives this, is it insured, any open fines, when's the next
+// service" without changing tabs.
+function VehicleLinkageStrip({ data }: { data: any }) {
+  const driver = data.driver;
+  const insurance = data.insurance;
+  const violations = data.violations ?? {};
+  const trips = data.trips ?? {};
+  const next = data.nextMaintenance;
+
+  const insExpDays = insurance?.daysToExpiry;
+  const insExpired = insExpDays != null && insExpDays < 0;
+  const insExpSoon = insExpDays != null && insExpDays >= 0 && insExpDays <= 30;
+
+  const hasOpenViolations = (violations.openCount ?? 0) > 0;
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Activity className="h-4 w-4 text-muted-foreground" />
+          الربط المتكامل — سائق + موظف + تأمين + مخالفات + رحلات
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-5 text-xs">
+        {/* Driver + employee */}
+        <div className="border rounded p-2 space-y-1">
+          <div className="flex items-center gap-1 text-muted-foreground text-[11px]">
+            <User className="h-3 w-3" /> السائق المسند
+          </div>
+          {driver ? (
+            <>
+              <Link href={`/fleet/drivers/${driver.id}`}>
+                <a className="font-semibold underline-offset-2 hover:underline">{driver.name}</a>
+              </Link>
+              {driver.phone && <p className="font-mono text-[10px] text-muted-foreground" dir="ltr">{driver.phone}</p>}
+              {driver.employeeName && (
+                <Link href={`/hr/employees/${driver.employeeId}`}>
+                  <a className="text-[11px] text-primary underline-offset-2 hover:underline block">
+                    {driver.employeeName}
+                  </a>
+                </Link>
+              )}
+              {driver.employeeJobTitle && (
+                <p className="text-muted-foreground text-[10px]">{driver.employeeJobTitle}</p>
+              )}
+            </>
+          ) : (
+            <p className="text-muted-foreground">لا يوجد سائق مسند</p>
+          )}
+        </div>
+
+        {/* Insurance */}
+        <div
+          className={cn(
+            "border rounded p-2 space-y-1",
+            insExpired && "border-status-error-surface bg-status-error-surface/30",
+            !insExpired && insExpSoon && "border-status-warning-surface bg-status-warning-surface/30",
+          )}
+        >
+          <div className="flex items-center gap-1 text-muted-foreground text-[11px]">
+            <Shield className="h-3 w-3" /> التأمين الحالي
+          </div>
+          {insurance ? (
+            <>
+              <p className="font-semibold font-mono">{insurance.policyNumber || "-"}</p>
+              <p className="text-muted-foreground text-[10px]">{insurance.provider || "-"}</p>
+              {insurance.endDate && (
+                <p className="text-[10px]">
+                  ينتهي: {formatDateAr(insurance.endDate)}
+                  {insExpDays != null && (
+                    <span className={cn(
+                      "ms-1 font-medium",
+                      insExpired && "text-status-error-foreground",
+                      !insExpired && insExpSoon && "text-status-warning-foreground",
+                      !insExpired && !insExpSoon && "text-status-success-foreground",
+                    )}>
+                      ({insExpired ? `منتهٍ منذ ${Math.abs(insExpDays)}ي` : `${insExpDays}ي`})
+                    </span>
+                  )}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-muted-foreground">لا توجد بوليصة تأمين</p>
+          )}
+        </div>
+
+        {/* Violations */}
+        <div className={cn(
+          "border rounded p-2 space-y-1",
+          hasOpenViolations && "border-status-error-surface bg-status-error-surface/30",
+        )}>
+          <div className="flex items-center gap-1 text-muted-foreground text-[11px]">
+            <ShieldAlert className="h-3 w-3" /> المخالفات المرورية
+          </div>
+          <p className="font-semibold font-mono">
+            {violations.openCount ?? 0}
+            <span className="text-muted-foreground font-normal text-[10px] mr-1">مفتوحة</span>
+          </p>
+          <p className="text-muted-foreground">
+            مستحق: {formatCurrency(violations.totalUnpaid ?? 0)}
+          </p>
+          <p className="text-muted-foreground text-[10px]">إجمالي {violations.lifetimeCount ?? 0} مخالفة</p>
+        </div>
+
+        {/* Trips */}
+        <div className="border rounded p-2 space-y-1">
+          <div className="flex items-center gap-1 text-muted-foreground text-[11px]">
+            <Route className="h-3 w-3" /> الرحلات
+          </div>
+          <p className="font-semibold font-mono">{formatNumber(trips.count30d ?? 0)} <span className="font-normal text-[10px] text-muted-foreground">آخر 30 يوم</span></p>
+          <p className="text-muted-foreground font-mono">{formatNumber(Math.round(trips.distance30d ?? 0))} كم</p>
+          <p className="text-muted-foreground text-[10px]">
+            إجمالي: {formatNumber(trips.lifetimeCount ?? 0)} رحلة · {formatNumber(Math.round(trips.lifetimeDistance ?? 0))} كم
+          </p>
+        </div>
+
+        {/* Next maintenance */}
+        <div className="border rounded p-2 space-y-1">
+          <div className="flex items-center gap-1 text-muted-foreground text-[11px]">
+            <Wrench className="h-3 w-3" /> الصيانة القادمة
+          </div>
+          {next ? (
+            <>
+              <p className="font-semibold">{maintenanceTypeLabel(next.type)}</p>
+              {next.nextServiceDate && (
+                <p className="text-muted-foreground text-[10px]">{formatDateAr(next.nextServiceDate)}</p>
+              )}
+            </>
+          ) : (
+            <p className="text-muted-foreground">لا توجد صيانة مجدولة</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }

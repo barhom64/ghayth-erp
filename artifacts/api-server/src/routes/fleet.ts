@@ -574,6 +574,161 @@ router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view
   } catch (err) { handleRouteError(err, res, "Get vehicle error:"); }
 });
 
+// Vehicle "linkage" rollup — pulls the cross-module bits the basic
+// /vehicles/:id GET doesn't carry: linked driver's employee record,
+// insurance lifecycle, open traffic violations, lifetime trips/distance.
+// Surfaced as a top-of-overview strip on vehicle-detail.tsx so the
+// operator sees "this vehicle's driver is X, has Y open violations,
+// insurance expires Z" without bouncing between tabs.
+router.get("/vehicles/:id/linkage-summary", authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const vehicleId = parseId(req.params.id, "id");
+
+    const [vehicle] = await rawQuery<{
+      id: number;
+      plateNumber: string;
+      assignedDriverId: number | null;
+      status: string;
+    }>(
+      `SELECT id, "plateNumber", "assignedDriverId", status
+         FROM fleet_vehicles
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [vehicleId, scope.companyId]
+    );
+    if (!vehicle) throw new NotFoundError("المركبة غير موجودة");
+
+    // Driver + linked employee in one go. Left-join because a vehicle
+    // may have no assigned driver.
+    const [driver] = vehicle.assignedDriverId
+      ? await rawQuery<{
+          id: number;
+          name: string;
+          phone: string | null;
+          licenseExpiry: string | null;
+          status: string;
+          employeeId: number | null;
+          employeeName: string | null;
+          employeeJobTitle: string | null;
+        }>(
+          `SELECT d.id, d.name, d.phone, d."licenseExpiry", d.status,
+                  d."employeeId",
+                  e.name AS "employeeName",
+                  ea."jobTitle" AS "employeeJobTitle"
+             FROM fleet_drivers d
+             LEFT JOIN employees e ON e.id = d."employeeId" AND e."deletedAt" IS NULL
+             LEFT JOIN employee_assignments ea
+               ON ea."employeeId" = e.id AND ea."isPrimary" = true AND ea."companyId" = e."companyId"
+            WHERE d.id = $1 AND d."companyId" = $2 AND d."deletedAt" IS NULL
+            LIMIT 1`,
+          [vehicle.assignedDriverId, scope.companyId]
+        ).catch(() => [])
+      : [];
+
+    // Active insurance — pick the policy with the latest endDate that
+    // hasn't expired yet. If all are expired, fall back to the latest.
+    const [insurance] = await rawQuery<{
+      id: number;
+      policyNumber: string | null;
+      provider: string | null;
+      endDate: string | null;
+      premium: string | null;
+      daysToExpiry: number | null;
+    }>(
+      `SELECT id, "policyNumber", provider, "endDate", premium,
+              CASE WHEN "endDate" IS NULL THEN NULL
+                   ELSE ("endDate"::date - CURRENT_DATE)::int
+              END AS "daysToExpiry"
+         FROM fleet_insurance
+        WHERE "vehicleId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        ORDER BY "endDate" DESC NULLS LAST
+        LIMIT 1`,
+      [vehicleId, scope.companyId]
+    ).catch(() => []);
+
+    // Open traffic violations against this vehicle (unpaid).
+    const [violations] = await rawQuery<{ openCount: string; totalUnpaid: string; lifetimeCount: string }>(
+      `SELECT COUNT(*) FILTER (WHERE "paidAt" IS NULL)::text AS "openCount",
+              COALESCE(SUM("fineAmount") FILTER (WHERE "paidAt" IS NULL), 0)::text AS "totalUnpaid",
+              COUNT(*)::text AS "lifetimeCount"
+         FROM fleet_traffic_violations
+        WHERE "vehicleId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [vehicleId, scope.companyId]
+    ).catch(() => [{ openCount: "0", totalUnpaid: "0", lifetimeCount: "0" }]);
+
+    // Lifetime trips + 30-day window. Two aggregates keep both totals
+    // and recency visible — the longer view explains overall TCO, the
+    // 30d window explains today's utilisation.
+    const [tripStats] = await rawQuery<{
+      lifetimeTrips: string;
+      lifetimeDistance: string;
+      trips30d: string;
+      distance30d: string;
+    }>(
+      `SELECT COUNT(*)::text AS "lifetimeTrips",
+              COALESCE(SUM(distance), 0)::text AS "lifetimeDistance",
+              COUNT(*) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '30 days')::text AS "trips30d",
+              COALESCE(SUM(distance) FILTER (WHERE "createdAt" >= NOW() - INTERVAL '30 days'), 0)::text AS "distance30d"
+         FROM fleet_trips
+        WHERE "vehicleId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [vehicleId, scope.companyId]
+    ).catch(() => [{ lifetimeTrips: "0", lifetimeDistance: "0", trips30d: "0", distance30d: "0" }]);
+
+    // Next scheduled maintenance — earliest future nextServiceDate.
+    const [nextMaintenance] = await rawQuery<{ id: number; type: string; nextServiceDate: string | null }>(
+      `SELECT id, type, "nextServiceDate"
+         FROM fleet_maintenance
+        WHERE "vehicleId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          AND "nextServiceDate" IS NOT NULL
+          AND "nextServiceDate" >= CURRENT_DATE
+        ORDER BY "nextServiceDate" ASC
+        LIMIT 1`,
+      [vehicleId, scope.companyId]
+    ).catch(() => []);
+
+    res.json({
+      vehicleId,
+      vehicle: { plateNumber: vehicle.plateNumber, status: vehicle.status },
+      driver: driver
+        ? {
+            id: driver.id,
+            name: driver.name,
+            phone: driver.phone,
+            status: driver.status,
+            licenseExpiry: driver.licenseExpiry,
+            employeeId: driver.employeeId,
+            employeeName: driver.employeeName,
+            employeeJobTitle: driver.employeeJobTitle,
+          }
+        : null,
+      insurance: insurance
+        ? {
+            id: insurance.id,
+            policyNumber: insurance.policyNumber,
+            provider: insurance.provider,
+            endDate: insurance.endDate,
+            premium: insurance.premium != null ? Number(insurance.premium) : null,
+            daysToExpiry: insurance.daysToExpiry,
+          }
+        : null,
+      violations: {
+        openCount: Number(violations?.openCount ?? 0),
+        totalUnpaid: Number(violations?.totalUnpaid ?? 0),
+        lifetimeCount: Number(violations?.lifetimeCount ?? 0),
+      },
+      trips: {
+        lifetimeCount: Number(tripStats?.lifetimeTrips ?? 0),
+        lifetimeDistance: Number(tripStats?.lifetimeDistance ?? 0),
+        count30d: Number(tripStats?.trips30d ?? 0),
+        distance30d: Number(tripStats?.distance30d ?? 0),
+      },
+      nextMaintenance: nextMaintenance
+        ? { id: nextMaintenance.id, type: nextMaintenance.type, nextServiceDate: nextMaintenance.nextServiceDate }
+        : null,
+    });
+  } catch (err) { handleRouteError(err, res, "vehicle linkage summary"); }
+});
+
 router.get("/vehicles/:id/impact-preview", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
