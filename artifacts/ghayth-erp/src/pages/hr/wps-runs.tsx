@@ -21,6 +21,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const WPS_FORMATS = [
   { value: "generic_pipe", label: "صيغة عامة (Pipe-delimited)" },
   { value: "alrajhi", label: "الراجحي" },
@@ -201,12 +202,31 @@ export default function WpsRunsPage() {
         { label: "WPS" },
       ]}
       actions={
-        <GuardedButton
-          perm="hr.payroll.wps:create"
-          onClick={() => setCreateOpen(true)}
-        >
-          <Plus className="h-4 w-4 ml-1" /> تشغيل WPS جديد
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_wps_runs"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "تشغيلات WPS", total: filtered.length },
+              items: filtered.map((r: any) => ({
+                "رقم التشغيل": r.id,
+                "الفترة": r.period || "—",
+                "البنك": r.bankCode || "—",
+                "عدد الموظفين": r.recordCount ?? 0,
+                "إجمالي المبلغ": r.totalAmount ?? 0,
+                "تاريخ الإنشاء": r.createdAt || "—",
+                "الحالة": r.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton
+            perm="hr.payroll.wps:create"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="h-4 w-4 ml-1" /> تشغيل WPS جديد
+          </GuardedButton>
+        </div>
       }
     >
       <HrTabsNav />

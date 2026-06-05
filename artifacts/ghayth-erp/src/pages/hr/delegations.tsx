@@ -17,6 +17,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { Plus, X } from "lucide-react";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 /**
  * HR-010 — Delegations admin page. Lists active/historical delegations from
  * GET /hr/delegations and creates new ones via POST. Server has no
@@ -84,13 +85,31 @@ export default function DelegationsPage() {
       subtitle="تفويض الصلاحيات بين الموظفين لفترة محدّدة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "التفويضات" }]}
       actions={
-        !showNew ? (
-          <GuardedButton perm="hr.organization:approve" onClick={() => setShowNew(true)}>
-            <Plus className="h-4 w-4 ml-1" /> تفويض جديد
-          </GuardedButton>
-        ) : (
-          <Button variant="outline" onClick={() => { setShowNew(false); setForm(DEFAULT_FORM); }}><X className="h-4 w-4 ml-1" /> إلغاء</Button>
-        )
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_delegations"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "تفويضات الصلاحيات", total: delegations.length },
+              items: delegations.map((d: any) => ({
+                "المُفوِّض": d.delegatorName || d.fromEmployeeName || "—",
+                "المُفوَّض إليه": d.delegateName || d.toEmployeeName || "—",
+                "النوع": d.delegationType || d.type || "—",
+                "من تاريخ": d.startDate || "—",
+                "إلى تاريخ": d.endDate || "—",
+                "الحالة": d.status || "—",
+              })),
+            }}
+          />
+          {!showNew ? (
+            <GuardedButton perm="hr.organization:approve" onClick={() => setShowNew(true)}>
+              <Plus className="h-4 w-4 ml-1" /> تفويض جديد
+            </GuardedButton>
+          ) : (
+            <Button variant="outline" onClick={() => { setShowNew(false); setForm(DEFAULT_FORM); }}><X className="h-4 w-4 ml-1" /> إلغاء</Button>
+          )}
+        </div>
       }
     >
       <HrTabsNav />

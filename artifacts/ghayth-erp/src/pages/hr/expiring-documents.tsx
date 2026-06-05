@@ -20,6 +20,7 @@ import { DOCUMENT_TYPES, DOCUMENT_COLORS } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const DOC_STATUS_OPTIONS = Object.entries(DOCUMENT_TYPES).map(([value, label]) => ({ value, label }));
 
 function getSeverityBadge(daysLeft: number) {
@@ -131,15 +132,33 @@ export default function ExpiringDocumentsPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       loading={isLoading}
       actions={
-        <Select value={days} onValueChange={setDays}>
-          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="14">14 يوم</SelectItem>
-            <SelectItem value="30">30 يوم</SelectItem>
-            <SelectItem value="60">60 يوم</SelectItem>
-            <SelectItem value="90">90 يوم</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_expiring_documents"
+            entityId={days}
+            label="طباعة"
+            payload={{
+              entity: { title: `الوثائق المنتهية خلال ${days} يوم`, days, total: filtered.length },
+              items: filtered.map((d: any) => ({
+                "الموظف": d.employeeName || "—",
+                "نوع الوثيقة": d.documentType || d.type || "—",
+                "رقم الوثيقة": d.documentNumber || d.number || "—",
+                "تاريخ الانتهاء": d.expiryDate || "—",
+                "أيام متبقية": d.daysUntilExpiry ?? "—",
+                "الحالة": d.status || "—",
+              })),
+            }}
+          />
+          <Select value={days} onValueChange={setDays}>
+            <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="14">14 يوم</SelectItem>
+              <SelectItem value="30">30 يوم</SelectItem>
+              <SelectItem value="60">60 يوم</SelectItem>
+              <SelectItem value="90">90 يوم</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       }
     >
       <HrTabsNav />

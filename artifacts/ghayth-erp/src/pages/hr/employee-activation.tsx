@@ -30,6 +30,7 @@ import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useAppContext } from "@/contexts/app-context";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 type LifecycleAction = "activate" | "suspend" | "terminate";
 
 const ACTION_CONFIG: Record<LifecycleAction, {
@@ -270,6 +271,24 @@ export default function EmployeeActivationPage() {
       title="تفعيل / تعليق الموظفين"
       subtitle="إدارة دورة حياة الموظفين: تفعيل، تعليق، وإنهاء الخدمة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تفعيل / تعليق الموظفين" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_employee_activation"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "تفعيل / تعليق الموظفين", total: filtered.length },
+            items: filtered.map((e: any) => ({
+              "الاسم": e.name || "—",
+              "الرقم الوظيفي": e.empNumber || "—",
+              "المسمى": e.position || "—",
+              "الفرع": e.branchName || "—",
+              "تاريخ التعيين": e.hireDate || "—",
+              "الحالة": e.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />

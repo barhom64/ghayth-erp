@@ -15,6 +15,7 @@ import {
   applyFilters,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { Plus, Star, Target, TrendingUp, Users, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -105,9 +106,27 @@ export default function PerformancePage() {
       subtitle="متابعة تقييمات أداء الموظفين ونتائجهم"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Link href="/hr/performance/create">
-          <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />تقييم جديد</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_performance"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "تقييمات الأداء", total: filtered.length },
+              items: filtered.map((p: any) => ({
+                "الموظف": p.employeeName || "—",
+                "الفترة": p.evaluationPeriod || p.period || "—",
+                "التقييم": p.score ?? p.rating ?? "—",
+                "الوزن": p.weight ?? "—",
+                "المُقيِّم": p.evaluatorName || "—",
+                "الحالة": p.status || "—",
+              })),
+            }}
+          />
+          <Link href="/hr/performance/create">
+            <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />تقييم جديد</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />
