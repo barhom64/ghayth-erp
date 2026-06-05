@@ -10,16 +10,21 @@
 
 import { useState } from "react";
 import { Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
-import { AlertTriangle, AlertCircle, Clock, CheckCircle2, Plus, Search } from "lucide-react";
+import { AlertTriangle, AlertCircle, Clock, CheckCircle2, Plus, Search, RefreshCw } from "lucide-react";
 
 interface RenewalRow {
   source: string;
@@ -70,6 +75,7 @@ export default function RenewalsHub() {
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("_all");
   const [severityFilter, setSeverityFilter] = useState<string>("_all");
+  const [renewingRow, setRenewingRow] = useState<RenewalRow | null>(null);
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["renewals-hub", days],
@@ -225,9 +231,20 @@ export default function RenewalsHub() {
                           {r.daysLeft < 0 ? `منذ ${Math.abs(r.daysLeft)} يوم` : `${r.daysLeft} يوم`}
                         </td>
                         <td className="p-2">
-                          <Link href={r.link}>
-                            <a className="text-[11px] text-primary underline-offset-2 hover:underline">فتح ←</a>
-                          </Link>
+                          <div className="flex flex-col gap-1">
+                            <Link href={r.link}>
+                              <a className="text-[11px] text-primary underline-offset-2 hover:underline">فتح ←</a>
+                            </Link>
+                            {r.source === "company_document" && (
+                              <button
+                                onClick={() => setRenewingRow(r)}
+                                className="text-[11px] text-status-success-foreground underline-offset-2 hover:underline inline-flex items-center gap-1"
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                تم التجديد
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -238,7 +255,109 @@ export default function RenewalsHub() {
           )}
         </CardContent>
       </Card>
+
+      {renewingRow && (
+        <RenewDialog
+          row={renewingRow}
+          onClose={() => setRenewingRow(null)}
+          onDone={() => { setRenewingRow(null); refetch(); }}
+        />
+      )}
     </PageShell>
+  );
+}
+
+// "تم التجديد" dialog for company documents. Calls POST
+// /hr/company-documents/:id/renew which atomically:
+//   1. shifts expiryDate forward
+//   2. marks the old obligation met (calendar stops nagging)
+//   3. optionally posts the renewal fee as an expense
+//   4. registers the NEXT-cycle obligation + task on the same
+//      responsible department
+function RenewDialog({ row, onClose, onDone }: {
+  row: RenewalRow;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const [newExpiryDate, setNewExpiryDate] = useState("");
+  const [paidAmount, setPaidAmount] = useState("");
+  const [paidAccountCode, setPaidAccountCode] = useState("");
+  const [postExpense, setPostExpense] = useState(true);
+
+  const renewMut = useApiMutation<any, any>(
+    `/hr/company-documents/${row.entityId}/renew`,
+    "POST",
+    [["renewals-hub"], ["company-documents"]],
+    {
+      onSuccess: () => {
+        toast({ title: "تم التجديد", description: `الانتهاء الجديد: ${newExpiryDate}` });
+        onDone();
+      },
+    }
+  );
+
+  const handleSubmit = () => {
+    if (!newExpiryDate) {
+      toast({ variant: "destructive", title: "تاريخ مطلوب", description: "حدد تاريخ الانتهاء الجديد" });
+      return;
+    }
+    renewMut.mutate({
+      newExpiryDate,
+      paidAmount: paidAmount ? Number(paidAmount) : undefined,
+      paidAccountCode: paidAccountCode || undefined,
+      postExpense: postExpense && !!paidAmount,
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>تجديد: {row.title}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-3 py-2">
+          <div>
+            <Label className="text-xs">تاريخ الانتهاء الجديد *</Label>
+            <DatePicker value={newExpiryDate} onChange={setNewExpiryDate} />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              التاريخ الذي يصلح إليه السجل/الترخيص/التأمين بعد التجديد.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">الرسوم المدفوعة (ر.س)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={paidAmount}
+                onChange={(e) => setPaidAmount(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">حساب المصروف (اختياري)</Label>
+              <Input
+                value={paidAccountCode}
+                onChange={(e) => setPaidAccountCode(e.target.value)}
+                placeholder="افتراضي: 5400"
+                dir="ltr"
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <Checkbox checked={postExpense} onCheckedChange={(v) => setPostExpense(!!v)} />
+            <span>قيّد المصروف الآن في المالية</span>
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button onClick={handleSubmit} disabled={!newExpiryDate || renewMut.isPending} rateLimitAware>
+            تأكيد التجديد
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

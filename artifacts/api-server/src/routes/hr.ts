@@ -34,7 +34,7 @@ import {
   softDeleteJournalEntry,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
+import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { registerObligationWithTask } from "../lib/obligationTaskBridge.js";
 import { applyTransition, LifecycleError } from "../lib/lifecycleEngine.js";
 import {
@@ -7458,6 +7458,145 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
 
+// Close-the-loop renewal action. Called from the "تم التجديد" button on
+// the renewals-hub or the company-document detail page. Does four
+// things in one call so the operator stops bouncing between modules:
+//   1. UPDATEs company_documents.expiryDate to the new date the
+//      operator just paid for.
+//   2. markObligationMet on the (entityType=company_document, type
+//      =renewal) obligation so the calendar nag stops.
+//   3. Optionally posts an expense JE for the renewal fee actually
+//      paid (often differs from the planned renewalCost — government
+//      fees go up, the operator types the real number).
+//   4. registerObligationWithTask for the NEXT renewal cycle, lead
+//      time = reminderDays before the new expiry.
+const renewCompanyDocumentSchema = z.object({
+  newExpiryDate: z.string().min(1, "تاريخ الانتهاء الجديد مطلوب"),
+  paidAmount: z.coerce.number().nonnegative().optional(),
+  paidAccountCode: z.string().optional(),
+  postExpense: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+
+router.post("/company-documents/:id/renew", authorize({ feature: "hr.organization", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(renewCompanyDocumentSchema.safeParse(req.body));
+
+    const [doc] = await rawQuery<{
+      id: number;
+      documentType: string;
+      documentNumber: string | null;
+      issuingAuthority: string | null;
+      reminderDays: number | null;
+      renewalAccountCode: string | null;
+      responsibleDepartmentId: number | null;
+    }>(
+      `SELECT id, "documentType", "documentNumber", "issuingAuthority",
+              "reminderDays", "renewalAccountCode", "responsibleDepartmentId"
+         FROM company_documents
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!doc) throw new NotFoundError("الوثيقة غير موجودة");
+
+    const newExpiry = new Date(b.newExpiryDate);
+    if (Number.isNaN(newExpiry.getTime())) {
+      throw new ValidationError("تاريخ الانتهاء غير صالح", { field: "newExpiryDate", fix: "YYYY-MM-DD" });
+    }
+
+    // (1) Shift the expiry forward.
+    await rawExecute(
+      `UPDATE company_documents SET "expiryDate" = $1, "issueDate" = COALESCE("issueDate", CURRENT_DATE)
+        WHERE id = $2 AND "companyId" = $3`,
+      [b.newExpiryDate, id, scope.companyId]
+    );
+
+    // (2) Close the open obligation. markObligationMet is a no-op if
+    // no matching pending obligation exists (e.g. document was added
+    // pre-bridge so the obligation row never existed) — safe to call
+    // unconditionally.
+    try {
+      await markObligationMet(scope.companyId, "company_document", id, "renewal");
+    } catch (e) { logger.warn(e, "[hr] markObligationMet for company-document renewal failed"); }
+
+    // (3) Optional renewal expense JE.
+    if (b.postExpense && b.paidAmount && b.paidAmount > 0) {
+      try {
+        const { financialEngine } = await import("../lib/engines/index.js");
+        const expenseAccountCode = b.paidAccountCode
+          ?? doc.renewalAccountCode
+          ?? await financialEngine.resolveAccountCode(scope.companyId, "government_fees", "debit", "5400");
+        const sourceCode = await financialEngine.resolveAccountCode(scope.companyId, "cash_register", "credit", "1010");
+        await financialEngine.postJournalEntry({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? 0,
+          createdBy: scope.activeAssignmentId ?? scope.userId,
+          ref: `COMPANY-DOC-RENEW-${id}`,
+          description: `رسوم تجديد ${doc.documentType}${doc.documentNumber ? ` (${doc.documentNumber})` : ""}`,
+          type: "general",
+          sourceType: "company_document",
+          sourceId: id,
+          sourceKey: `company_document_renewal_paid:${id}:${b.newExpiryDate}`,
+          guardTable: "company_documents",
+          guardId: id,
+          lines: [
+            { accountCode: expenseAccountCode, debit: Number(b.paidAmount), credit: 0, description: `تجديد وثيقة منشأة #${id}` },
+            { accountCode: sourceCode, debit: 0, credit: Number(b.paidAmount), description: "سداد رسوم تجديد" },
+          ],
+        });
+      } catch (e) {
+        logger.warn(e, "[hr] company-document renewal expense JE failed");
+      }
+    }
+
+    // (4) Register the next-cycle obligation + task.
+    try {
+      const remindDays = Number(doc.reminderDays ?? 30);
+      const remindAt = new Date(newExpiry);
+      remindAt.setDate(remindAt.getDate() - remindDays);
+      await registerObligationWithTask({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        entityType: "company_document",
+        entityId: id,
+        obligationType: "renewal",
+        title: `تجديد: ${doc.documentType}${doc.documentNumber ? ` (${doc.documentNumber})` : ""}`,
+        dueAt: remindAt.toISOString(),
+        metadata: {
+          documentType: doc.documentType,
+          documentNumber: doc.documentNumber,
+          issuingAuthority: doc.issuingAuthority,
+          expiryDate: newExpiry.toISOString(),
+        },
+        // New dedupeKey for the new cycle so the row gets created
+        // (the previous cycle's obligation was just marked met above).
+        dedupeKey: `company_document:${id}:${b.newExpiryDate}`,
+        responsibleDepartmentId: doc.responsibleDepartmentId,
+      });
+    } catch (e) {
+      logger.warn(e, "[hr] next-cycle renewal obligation registration failed");
+    }
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "renew", entity: "company_documents", entityId: id,
+      after: { newExpiryDate: b.newExpiryDate, paidAmount: b.paidAmount, notes: b.notes },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "company_document.renewed", entity: "company_documents", entityId: id,
+      details: JSON.stringify({ newExpiryDate: b.newExpiryDate, paidAmount: b.paidAmount }),
+    }).catch((e) => logger.error(e, "hr background task failed"));
+
+    const [updated] = await rawQuery<Record<string, unknown>>(`SELECT * FROM company_documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json(updated);
+  } catch (err) { handleRouteError(err, res, "renew company document"); }
+});
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // EMPLOYEE DOCUMENTS — وثائق الموظف الإضافية (رخصة قيادة، شهادات، إلخ)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -7528,6 +7667,46 @@ router.post("/employee-documents", authorize({ feature: "hr.employees", action: 
       action: "create", entity: "employee_documents", entityId: insertId,
       after: { employeeId: Number(b.employeeId), documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
     }).catch((e) => logger.error(e, "hr background task failed"));
+
+    // Smart-renewal — same bridge used for company documents and
+    // fleet insurance. Employee documents with an expiryDate (iqama,
+    // work permit, driving license, residency, qualification cert)
+    // get an auto-task on the hr_manager's queue 30 days before
+    // expiry. Default reminderDays = 30 — operators who need a longer
+    // lead time (passport renewal needs 60+) can later extend via the
+    // obligations engine API.
+    if (b.expiryDate) {
+      try {
+        const endD = new Date(b.expiryDate);
+        if (!Number.isNaN(endD.getTime())) {
+          const remindAt = new Date(endD);
+          remindAt.setDate(remindAt.getDate() - 30);
+          const [emp] = await rawQuery<{ name: string }>(
+            `SELECT name FROM employees WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+            [Number(b.employeeId), scope.companyId]
+          ).catch(() => []);
+          await registerObligationWithTask({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            entityType: "employee_document",
+            entityId: insertId,
+            obligationType: "renewal",
+            title: `تجديد ${b.documentType || b.type}${emp?.name ? ` — ${emp.name}` : ""}`,
+            dueAt: remindAt.toISOString(),
+            metadata: {
+              employeeId: Number(b.employeeId),
+              employeeName: emp?.name ?? null,
+              documentType: b.documentType ?? b.type ?? null,
+              documentNumber: b.documentNumber ?? b.number ?? null,
+              expiryDate: endD.toISOString(),
+            },
+            dedupeKey: `employee_document:${insertId}`,
+          });
+        }
+      } catch (e) {
+        logger.warn(e, "[hr] employee-document renewal obligation registration failed");
+      }
+    }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, message: "تم إضافة وثيقة الموظف" });

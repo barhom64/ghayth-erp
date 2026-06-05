@@ -15,6 +15,7 @@ import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
+import { registerObligationWithTask } from "../lib/obligationTaskBridge.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 
@@ -273,6 +274,42 @@ router.post("/contracts", authorize({ feature: "legal.contracts", action: "creat
       entityId: insertId,
       details: `عقد جديد: ${b.title} — ${b.partyName}`,
     }).catch((e) => logger.error(e, "legal background task failed"));
+
+    // Smart-renewal — legal contracts carry their own alertDaysBefore
+    // (defaults to 30 in the schema) and a renewalAlert flag. We
+    // respect both: if alert is off, skip; otherwise schedule the
+    // task that lead time before endDate. Task lands on legal_manager
+    // queue by default (via obligationTaskBridge's role-fallback map).
+    try {
+      const renewalAlert = b.renewalAlert !== false; // default true
+      if (renewalAlert) {
+        const endD = new Date(b.endDate);
+        if (!Number.isNaN(endD.getTime())) {
+          const lead = Number(b.alertDaysBefore ?? 30);
+          const remindAt = new Date(endD);
+          remindAt.setDate(remindAt.getDate() - lead);
+          await registerObligationWithTask({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            entityType: "legal_contract",
+            entityId: insertId,
+            obligationType: "renewal",
+            title: `تجديد العقد القانوني — ${b.title}`,
+            dueAt: remindAt.toISOString(),
+            metadata: {
+              ref: contractRef,
+              partyName: b.partyName,
+              contractType: b.contractType ?? null,
+              endDate: endD.toISOString(),
+              value: b.value,
+            },
+            dedupeKey: `legal_contract:${insertId}`,
+          });
+        }
+      }
+    } catch (e) {
+      logger.warn(e, "[legal] contract renewal obligation registration failed");
+    }
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create legal contract error:"); }

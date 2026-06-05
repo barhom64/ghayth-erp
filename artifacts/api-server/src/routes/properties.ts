@@ -18,6 +18,7 @@ import { createNotification, createAuditLog, emitEvent, getLegalResponsible, tod
 import { issueNumber } from "../lib/numberingService.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
+import { registerObligationWithTask } from "../lib/obligationTaskBridge.js";
 import { propertiesEngine } from "../lib/engines/index.js";
 
 const createUnitSchema = z.object({
@@ -1207,7 +1208,11 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
       const renewalNoticeDate = new Date(endDate);
       renewalNoticeDate.setDate(renewalNoticeDate.getDate() - renewalNoticeDays);
       if (renewalNoticeDate > new Date()) {
-        await registerObligation({
+        // Upgraded from registerObligation → registerObligationWithTask
+        // so the renewal notice ALSO opens a task on the property
+        // manager's queue, not just sits in the obligations table
+        // waiting for someone to notice the calendar.
+        await registerObligationWithTask({
           companyId: scope.companyId,
           branchId: scope.branchId ?? null,
           entityType: "rental_contract",

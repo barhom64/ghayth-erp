@@ -35,6 +35,7 @@ import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
+import { registerObligationWithTask } from "../lib/obligationTaskBridge.js";
 import { logger } from "../lib/logger.js";
 
 export const financeHardeningRouter = Router();
@@ -944,6 +945,38 @@ financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.ha
       entityId: insertId,
       after: { ref, bank, amount: Number(amount), expiryDate },
     }).catch((err) => logger.error(err, "[audit] bank_guarantee.created:"));
+
+    // Smart-renewal — bank guarantees usually need 60 days lead time
+    // because the bank renewal paperwork + beneficiary acceptance takes
+    // a few weeks. Task lands on the finance manager's queue.
+    if (expiryDate) {
+      try {
+        const endD = new Date(expiryDate);
+        if (!Number.isNaN(endD.getTime())) {
+          const remindAt = new Date(endD);
+          remindAt.setDate(remindAt.getDate() - 60);
+          await registerObligationWithTask({
+            companyId: scope.companyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            entityType: "bank_guarantee",
+            entityId: insertId,
+            obligationType: "renewal",
+            title: `تجديد الضمان البنكي ${ref}`,
+            dueAt: remindAt.toISOString(),
+            metadata: {
+              ref,
+              bank,
+              beneficiary,
+              amount: Number(amount),
+              expiryDate: endD.toISOString(),
+            },
+            dedupeKey: `bank_guarantee:${insertId}`,
+          });
+        }
+      } catch (e) {
+        logger.warn(e, "[finance-hardening] bank-guarantee renewal obligation registration failed");
+      }
+    }
 
     res.status(201).json(row);
   } catch (err) {
