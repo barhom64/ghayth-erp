@@ -534,6 +534,121 @@ router.post("/cost-centers/backfill", authorize({ feature: "finance.cost_centers
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// JOURNAL-LINE DIMENSIONAL BACKFILL — closes the loop on past JEs.
+// The enricher in createJournalEntry handles all NEW lines, but every
+// JE posted BEFORE this feature landed has costCenterId NULL even when
+// it carried a project / contract / vehicle / department hint. This
+// endpoint walks those rows and patches them in place, reusing the
+// same priority chain as the runtime enricher (single source of truth).
+//
+// Operationally cheap — uses one UPDATE...FROM per priority level so a
+// company with 100k journal_lines gets backfilled in a few seconds,
+// not row-by-row.
+//
+// Idempotent: each UPDATE only touches rows where costCenterId IS NULL,
+// so re-runs are no-ops on already-enriched lines.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/journal-lines/backfill-dimensions", authorize({ feature: "finance.cost_centers", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    // Same priority order as the runtime enricher. Each pass fills
+    // rows where costCenterId is null AND the higher-priority field
+    // is null (so a project hint always wins over a branch hint —
+    // matches the runtime semantics).
+    const priorities: Array<{ field: string; entityType: string; precedingFields: string[] }> = [
+      { field: `"projectId"`,    entityType: "project",    precedingFields: [] },
+      { field: `"contractId"`,   entityType: "contract",   precedingFields: [`"projectId"`] },
+      { field: `"vehicleId"`,    entityType: "vehicle",    precedingFields: [`"projectId"`, `"contractId"`] },
+      { field: `"departmentId"`, entityType: "department", precedingFields: [`"projectId"`, `"contractId"`, `"vehicleId"`] },
+      { field: `"branchId"`,     entityType: "branch",     precedingFields: [`"projectId"`, `"contractId"`, `"vehicleId"`, `"departmentId"`] },
+    ];
+
+    const stages: Array<{ entityType: string; updated: number }> = [];
+    for (const p of priorities) {
+      // The precedingFields IS NULL clause makes the priority strict:
+      // a row whose projectId is set gets routed to the project's CC,
+      // not the branch CC. Without it, the branch pass would clobber
+      // earlier passes' assignments.
+      const guardSql = p.precedingFields.length > 0
+        ? `AND ${p.precedingFields.map((f) => `jl.${f} IS NULL`).join(" AND ")}`
+        : "";
+      const result = await rawExecute(
+        `UPDATE journal_lines jl
+            SET "costCenterId" = cc.id
+           FROM journal_entries je, cost_centers cc
+          WHERE jl."journalId" = je.id
+            AND je."companyId" = $1
+            AND je."deletedAt" IS NULL
+            AND jl."costCenterId" IS NULL
+            AND jl.${p.field} IS NOT NULL
+            AND cc."companyId" = $1
+            AND cc."relatedEntityType" = $2
+            AND cc."relatedEntityId" = jl.${p.field}
+            AND cc.status != 'deleted'
+            AND cc."deletedAt" IS NULL
+            ${guardSql}`,
+        [scope.companyId, p.entityType],
+      );
+      stages.push({ entityType: p.entityType, updated: Number(result.affectedRows ?? 0) });
+    }
+
+    const totalUpdated = stages.reduce((s, x) => s + x.updated, 0);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "journal_lines.backfill_dimensions", entity: "journal_lines", entityId: 0,
+      after: { stages, totalUpdated },
+    });
+    res.json({ stages, totalUpdated });
+  } catch (err) { handleRouteError(err, res, "Backfill journal-line dimensions error"); }
+});
+
+// Coverage report — counts JE lines with vs without costCenterId, with
+// a breakdown of whether they carry ANY routable dimension. Splits:
+//   - withCc:                already enriched
+//   - withDimensionButNoCc:   has projectId/etc but CC missing → backfill candidates
+//   - orphanCorporate:        no dimension at all → "corporate overhead"
+// The UI surfaces this as a coverage % and a one-click backfill button.
+router.get("/journal-lines/dimensional-coverage", authorize({ feature: "finance.cost_centers", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery<{
+      totalLines: number;
+      withCc: number;
+      withDimensionButNoCc: number;
+      orphanCorporate: number;
+    }>(
+      `WITH base AS (
+         SELECT jl.id, jl."costCenterId",
+                COALESCE(jl."projectId", jl."contractId", jl."vehicleId",
+                         jl."departmentId", jl."branchId") AS any_dim
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+          WHERE je."companyId" = $1
+            AND je."deletedAt" IS NULL
+       )
+       SELECT COUNT(*)::int                                              AS "totalLines",
+              COUNT(*) FILTER (WHERE "costCenterId" IS NOT NULL)::int   AS "withCc",
+              COUNT(*) FILTER (WHERE "costCenterId" IS NULL
+                                AND any_dim IS NOT NULL)::int          AS "withDimensionButNoCc",
+              COUNT(*) FILTER (WHERE "costCenterId" IS NULL
+                                AND any_dim IS NULL)::int              AS "orphanCorporate"
+         FROM base`,
+      [scope.companyId],
+    );
+    const totalLines = Number(row?.totalLines ?? 0);
+    const withCc = Number(row?.withCc ?? 0);
+    const coveragePct = totalLines > 0 ? Math.round((withCc / totalLines) * 100) : 100;
+    res.json({
+      totalLines,
+      withCc,
+      withDimensionButNoCc: Number(row?.withDimensionButNoCc ?? 0),
+      orphanCorporate: Number(row?.orphanCorporate ?? 0),
+      coveragePct,
+    });
+  } catch (err) { handleRouteError(err, res, "Journal-line dimensional coverage error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DIMENSIONAL-ROUTING HEALTH — the operator's «هل النظام المالي
 // متأصل في اصل النظام?» single-pane view. For every entity type that
 // participates in subsidiary_accounts OR cost_centers we report:

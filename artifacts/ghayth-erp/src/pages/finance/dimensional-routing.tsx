@@ -12,7 +12,7 @@ import { Link } from "wouter";
 import {
   Sparkles, CheckCircle2, AlertTriangle, Network, Wallet2,
   Building, Briefcase, Car, FileText, Layers, MapPin, User, Users,
-  Calendar, ExternalLink,
+  Calendar, ExternalLink, ScrollText,
 } from "lucide-react";
 
 /**
@@ -80,6 +80,14 @@ const DETAIL_LINK_BY_TYPE: Record<string, string> = {
   umrah_season:    "/umrah/seasons",
 };
 
+interface CoverageResponse {
+  totalLines: number;
+  withCc: number;
+  withDimensionButNoCc: number;
+  orphanCorporate: number;
+  coveragePct: number;
+}
+
 function pct(part: number, whole: number): number {
   if (whole <= 0) return 100; // a zero-entity tenant is 100% "covered"
   return Math.round((part / whole) * 100);
@@ -92,6 +100,21 @@ export default function DimensionalRoutingPage() {
   );
   const rows = data?.data ?? [];
   const totals = data?.totals ?? { entities: 0, missingAccounts: 0, missingCcs: 0 };
+
+  // The third dimension of «التأصيل» — journal-line coverage. The
+  // enricher in createJournalEntry fills costCenterId at posting time
+  // for NEW JEs. This query surfaces past JEs that are missing the
+  // routing so the operator can hit a one-click backfill.
+  const { data: coverage, refetch: refetchCoverage } = useApiQuery<CoverageResponse>(
+    ["dim-routing-line-coverage"],
+    "/finance/journal-lines/dimensional-coverage",
+  );
+  const jlBackfillMut = useApiMutation<{ totalUpdated: number }, Record<string, never>>(
+    "/finance/journal-lines/backfill-dimensions",
+    "POST",
+    [["dim-routing-line-coverage"]],
+    { successMessage: "تم تأصيل القيود السابقة" },
+  );
 
   return (
     <PageShell
@@ -145,6 +168,57 @@ export default function DimensionalRoutingPage() {
             testid="dim-routing-missing-ccs"
           />
         </div>
+
+        {/* Journal-line coverage — the deepest signal. New JEs get
+            costCenterId auto-filled by the enricher; this surfaces how
+            much of the EXISTING ledger still needs the backfill. */}
+        {coverage && (
+          <Card className="mb-4" data-testid="dim-routing-jl-coverage">
+            <CardContent className="p-3 flex items-center gap-3 flex-wrap">
+              <ScrollText className="h-7 w-7 text-muted-foreground" />
+              <div className="flex-1 min-w-[12rem]">
+                <div className="text-xs text-muted-foreground">تغطية القيود بمراكز التكلفة</div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl font-bold ${coverage.coveragePct === 100 ? "text-status-success-foreground" : "text-status-warning-foreground"}`}>
+                    {coverage.coveragePct}%
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {coverage.withCc.toLocaleString("ar-SA")} / {coverage.totalLines.toLocaleString("ar-SA")}
+                  </span>
+                </div>
+                <Progress value={coverage.coveragePct} className="h-1.5 mt-1" />
+                <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3">
+                  <span data-testid="dim-routing-jl-fixable">
+                    قابلة للتأصيل: {coverage.withDimensionButNoCc.toLocaleString("ar-SA")}
+                  </span>
+                  <span data-testid="dim-routing-jl-orphan">
+                    قيود عامة (بدون بُعد): {coverage.orphanCorporate.toLocaleString("ar-SA")}
+                  </span>
+                </div>
+              </div>
+              {coverage.withDimensionButNoCc > 0 && (
+                <GuardedButton
+                  perm="finance.cost_centers:update"
+                  variant="outline"
+                  onClick={async () => {
+                    await jlBackfillMut.mutateAsync({});
+                    refetchCoverage();
+                  }}
+                  data-testid="dim-routing-jl-backfill"
+                >
+                  <Sparkles className="h-4 w-4 ms-1" />
+                  استكمل {coverage.withDimensionButNoCc.toLocaleString("ar-SA")} قيد
+                </GuardedButton>
+              )}
+              {coverage.coveragePct === 100 && (
+                <Badge variant="default" className="gap-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  تأصيل كامل
+                </Badge>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="pb-2">
