@@ -24,6 +24,7 @@ const CostCenterDrillPnl = lazy(() => import("@/pages/finance/cost-center-drill-
 const DimensionalRouting = lazy(() => import("@/pages/finance/dimensional-routing"));
 const DormantEntities = lazy(() => import("@/pages/finance/dormant-entities"));
 const EntityPnl = lazy(() => import("@/pages/finance/entity-pnl"));
+const EntityRanking = lazy(() => import("@/pages/finance/entity-ranking"));
 const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const PricingRules = lazy(() => import("@/pages/finance/pricing-rules"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
@@ -317,6 +318,7 @@ export const financeRoutes = [
   { path: "/finance/dimensional-routing", component: DimensionalRouting },
   { path: "/finance/dormant-entities", component: DormantEntities },
   { path: "/finance/entity-pnl/:entityType/:entityId", component: EntityPnl },
+  { path: "/finance/entity-ranking", component: EntityRanking },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
   { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },

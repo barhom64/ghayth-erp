@@ -12,7 +12,7 @@ import { Link } from "wouter";
 import {
   Sparkles, CheckCircle2, AlertTriangle, Network, Wallet2,
   Building, Briefcase, Car, FileText, Layers, MapPin, User, Users,
-  Calendar, ExternalLink, ScrollText,
+  Calendar, ExternalLink, ScrollText, ArrowUpDown,
 } from "lucide-react";
 
 /**
@@ -163,6 +163,12 @@ export default function DimensionalRoutingPage() {
             <Button variant="ghost" data-testid="dim-routing-dormant-link">
               <AlertTriangle className="h-4 w-4 ms-1" />
               الخاملة
+            </Button>
+          </Link>
+          <Link href="/finance/entity-ranking">
+            <Button variant="ghost" data-testid="dim-routing-ranking-link">
+              <ArrowUpDown className="h-4 w-4 ms-1" />
+              التصنيف
             </Button>
           </Link>
         </div>
