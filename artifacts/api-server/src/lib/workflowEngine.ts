@@ -329,6 +329,18 @@ export async function submitWorkflow(params: SubmitParams) {
     [companyId, requestType]
   );
 
+  // No active workflow definition → do NOT create an orphan workflow_instance.
+  // With no definition there are no steps and no resolvable assignee, so the
+  // row would be unactionable: it can never advance, yet it inflates the
+  // workflows list/SLA counters and shows as a phantom "pending" item. These
+  // request types are already driven end-to-end by the approval-chain engine
+  // (initiateApprovalChain → processApprovalStep) with its own inbox and
+  // hourly escalation. Companies that explicitly configure a
+  // workflow_definition for this requestType still get the full workflow.
+  if (!def) {
+    return null;
+  }
+
   const definitionId = def?.id ?? null;
   const label = def?.requestTypeLabel ?? requestType;
 
