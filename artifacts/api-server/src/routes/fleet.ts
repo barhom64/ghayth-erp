@@ -541,7 +541,7 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
 
 // RBAC v2: vehicle detail with scope check + maskFields. Branch-scoped
 // roles see only their branch's vehicles.
-router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
+router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "fleet_vehicles", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vehicleId = parseId(req.params.id, "id");
@@ -726,7 +726,7 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
   } catch (err) { handleRouteError(err, res, "Update vehicle error:"); }
 });
 
-router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
+router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "fleet_vehicles", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -882,7 +882,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
 
 // Drivers fall under the parent "fleet" feature; no dedicated catalog
 // entry yet. Delete checks scope against the drivers table.
-router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "drivers", idParam: "id" } }), async (req, res) => {
+router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "fleet_drivers", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1055,7 +1055,7 @@ router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), asyn
 
 // RBAC v2: trip detail. Drivers can have scope=self via fleet.trips.my
 // (self-service) for their own trips; managers via fleet.trips at branch.
-router.get("/trips/:id", authorize({ feature: "fleet.trips", action: "view", resource: { table: "trips", idParam: "id" } }), async (req, res) => {
+router.get("/trips/:id", authorize({ feature: "fleet.trips", action: "view", resource: { table: "fleet_trips", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
