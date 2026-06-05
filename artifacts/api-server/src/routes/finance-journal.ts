@@ -40,6 +40,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logAllocationOverride } from "../lib/accountingAllocation.js";
 import { resolveTransactionBranch } from "../lib/branchResolution.js";
+import { registerObligation } from "../lib/obligationsEngine.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -126,6 +127,20 @@ const createExpenseSchema = z.object({
     employeeId: z.coerce.number().optional(),
     manualOverrideReason: z.string().optional(),
   }).optional(),
+  // Smart-expense linkage — when the expense covers a service period
+  // (insurance, rent, license, subscription) we want the calendar to
+  // remind the operator BEFORE the coverage runs out. Setting
+  // coverageEndDate registers a renewal obligation against the related
+  // entity (vehicle/property/contract); recurrenceFrequency tells the
+  // engine the cadence so next-cycle reminders auto-roll. Both
+  // optional — a one-off expense leaves them blank and nothing fires.
+  coverageStartDate: z.string().optional(),
+  coverageEndDate: z.string().optional(),
+  recurrenceFrequency: z.enum(["monthly", "quarterly", "yearly"]).optional(),
+  // Days before coverageEndDate to fire the reminder. Default 30 —
+  // standard for insurance/license renewals. Power users can shorten
+  // (e.g. 7 days for monthly subscriptions) or extend.
+  renewalReminderDays: z.coerce.number().int().min(0).max(180).optional(),
 });
 
 const updateDescriptionSchema = z.object({
@@ -453,6 +468,14 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     const scope = req.scope!;
 
     const b = zodParse(createExpenseSchema.safeParse(req.body ?? {}));
+    // Smart-renewal fields pulled BEFORE lineAllocation so the
+    // destructure-shape contract checked by expenseLineAllocationPanel
+    // smoke test stays intact (`lineAllocation,\n}` must be the last
+    // pair). Used after the JE commit to register a renewal obligation.
+    const coverageStartDate = b.coverageStartDate;
+    const coverageEndDate = b.coverageEndDate;
+    const recurrenceFrequency = b.recurrenceFrequency;
+    const renewalReminderDays = b.renewalReminderDays;
     const {
       accountCode, amount, description, period, sourceAccountCode,
       branchId, companyId: bodyCompanyId, departmentId, costCenter, expenseType, subAccountCode,
@@ -709,6 +732,61 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
        GROUP BY je.id`,
       [journalId, effectiveCompanyId]
     );
+
+    // Smart-expense renewal/recurrence obligation registration.
+    // When the operator supplied a coverageEndDate (insurance, license,
+    // rent, SaaS subscription, service contract — anything that runs
+    // out and must be renewed) we register an obligation BEFORE the
+    // end date so the calendar nags the operator in time. Without
+    // this the calendar's vehicle/property/contract expiry streams
+    // catch the obvious ones, but a generic "service contract" on a
+    // random expense slips through. The obligation also feeds the
+    // breached → escalated_L1/L2 notification cron.
+    //
+    // recurrenceFrequency is stored on the obligation metadata so the
+    // notification cron can roll-over to the next cycle when the
+    // operator marks this one met (e.g. monthly subscription auto-
+    // generates next month's obligation on completion).
+    if (coverageEndDate || recurrenceFrequency) {
+      try {
+        const endD = coverageEndDate ? new Date(coverageEndDate) : null;
+        if (endD && !Number.isNaN(endD.getTime())) {
+          const remindDays = renewalReminderDays ?? 30;
+          const remindAt = new Date(endD);
+          remindAt.setDate(remindAt.getDate() - remindDays);
+          // Anchor the obligation to the related entity when present so
+          // it shows up on that entity's detail page. Fallback to the
+          // expense (journal entry) itself when no link was provided.
+          const obEntityType = relatedEntityType || "expense";
+          const obEntityId = (relatedEntityId != null ? Number(relatedEntityId) : 0) || journalId;
+          const labelBase = relatedEntityName || description || `مصروف ${journalId}`;
+          await registerObligation({
+            companyId: effectiveCompanyId,
+            branchId: branchId ? Number(branchId) : (scope.branchId ?? null),
+            entityType: obEntityType,
+            entityId: obEntityId,
+            obligationType: "renewal",
+            title: `تجديد: ${labelBase}`,
+            dueAt: remindAt.toISOString(),
+            metadata: {
+              expenseJournalId: journalId,
+              accountCode,
+              amount: Number(amount),
+              coverageStartDate: coverageStartDate ?? null,
+              coverageEndDate: endD.toISOString(),
+              recurrenceFrequency: recurrenceFrequency ?? null,
+              relatedEntityType: relatedEntityType ?? null,
+              relatedEntityId: relatedEntityId ?? null,
+              relatedEntityName: relatedEntityName ?? null,
+            },
+            dedupeKey: `expense_renewal:${journalId}`,
+          });
+        }
+      } catch (e) {
+        logger.warn(e, "[expenses] renewal obligation registration failed");
+      }
+    }
+
     res.status(201).json({ ...(createdExpense || { id: journalId }), idempotentReplay: alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Create expense error:");

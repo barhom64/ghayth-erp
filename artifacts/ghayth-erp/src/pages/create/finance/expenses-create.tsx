@@ -253,6 +253,13 @@ export default function ExpensesCreate() {
     govIntegrationId: "",
     govEntityType: "",
     govEntityId: "",
+    // Smart renewal fields — when set, backend registers an
+    // obligation that surfaces on the unified calendar before the
+    // coverage runs out.
+    coverageStartDate: "",
+    coverageEndDate: "",
+    recurrenceFrequency: "",
+    renewalReminderDays: "",
   };
 
   const { form, setForm, clearDraft, isDirty, hasDraft } = useAutoDraft("expense-create", defaultForm);
@@ -377,6 +384,13 @@ export default function ExpensesCreate() {
         govIntegrationId: form.govIntegrationId ? Number(form.govIntegrationId) : undefined,
         govEntityType: form.govEntityType || undefined,
         govEntityId: form.govEntityId ? Number(form.govEntityId) : undefined,
+        // Smart renewal — only included when the operator picked a
+        // coverage end date. Backend uses these to register an
+        // obligation that surfaces on the unified calendar.
+        coverageStartDate: form.coverageStartDate || undefined,
+        coverageEndDate: form.coverageEndDate || undefined,
+        recurrenceFrequency: form.recurrenceFrequency || undefined,
+        renewalReminderDays: form.renewalReminderDays ? Number(form.renewalReminderDays) : undefined,
         // Audit item #2 — ship operator overrides (if any field was pinned)
         lineAllocation: Object.values(allocation).some((v) => v != null && v !== "")
           ? buildAllocationPayload(allocation)
@@ -642,6 +656,55 @@ export default function ExpensesCreate() {
                 {form.relatedEntityType === "property" && <PropertyUnitContextCard unitId={form.relatedEntityId} section="payment" />}
               </div>
             )}
+            {/* Smart-renewal panel — when the operator picks a coverage
+                end date, the backend registers an obligation that
+                surfaces on the unified calendar BEFORE the policy
+                runs out. Matches what fleet insurance now does
+                automatically; this opens the same machinery to any
+                expense (rent, SaaS, licenses, service contracts). */}
+            <div className="md:col-span-3 border rounded-lg p-3 bg-status-info-surface/20">
+              <p className="text-xs font-medium mb-2 flex items-center gap-1">
+                🔄 التجديد والتكرار — تذكير تلقائي قبل انتهاء التغطية
+              </p>
+              <div className="grid gap-2 md:grid-cols-4">
+                <FormFieldWrapper label="بداية التغطية">
+                  <DatePicker
+                    value={form.coverageStartDate}
+                    onChange={(v) => setForm({ ...form, coverageStartDate: v })}
+                  />
+                </FormFieldWrapper>
+                <FormFieldWrapper label="نهاية التغطية">
+                  <DatePicker
+                    value={form.coverageEndDate}
+                    onChange={(v) => setForm({ ...form, coverageEndDate: v })}
+                  />
+                </FormFieldWrapper>
+                <FormFieldWrapper label="التكرار">
+                  <Select
+                    value={form.recurrenceFrequency || "_none"}
+                    onValueChange={(v) => setForm({ ...form, recurrenceFrequency: v === "_none" ? "" : v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">دفعة واحدة (بدون تكرار)</SelectItem>
+                      <SelectItem value="monthly">شهرياً</SelectItem>
+                      <SelectItem value="quarterly">ربع سنوي</SelectItem>
+                      <SelectItem value="yearly">سنوياً</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormFieldWrapper>
+                <NumberField
+                  label="تذكير قبل (يوم)"
+                  value={form.renewalReminderDays}
+                  onChange={(v) => setForm({ ...form, renewalReminderDays: v })}
+                  placeholder="30"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2">
+                عند تحديد نهاية تغطية، يُنشأ التزام تجديد آلي يظهر في "التقويم الموحد" قبل {form.renewalReminderDays || 30} يوماً من تاريخ الانتهاء.
+                مفيد للتأمين، الإيجارات، اشتراكات SaaS، تراخيص الجهات الحكومية، عقود الصيانة.
+              </p>
+            </div>
             <TextField label="رقم المرجع / الفاتورة" value={form.reference} onChange={(v) => setForm({ ...form, reference: v })}
               placeholder="رقم الفاتورة أو أمر الشراء" />
           </div>

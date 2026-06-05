@@ -2809,6 +2809,45 @@ router.post("/insurance", authorize({ feature: "fleet.vehicles", action: "create
       ).catch((e: unknown) => logger.error(e, "Insurance GL failed:"));
     }
 
+    // Register a renewal obligation 30 days BEFORE the policy expires.
+    // Without this the policy expiry only surfaced via the calendar's
+    // ad-hoc vehicle-expiries query — the obligations engine never saw
+    // it, so the "breached → escalated_L1 → escalated_L2" cron path
+    // that drives the renewal-reminder notifications never fired for
+    // insurance. dedupeKey scoped on (vehicleId, policyNumber) prevents
+    // duplicates when the same policy gets re-POSTed (e.g. provider
+    // sends a correction).
+    try {
+      const [vehicleForOb] = await rawQuery<{ plateNumber?: string; branchId?: number | null }>(
+        `SELECT "plateNumber", "branchId" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.vehicleId, scope.companyId]
+      );
+      const plate = vehicleForOb?.plateNumber || `#${b.vehicleId}`;
+      const remindAt = new Date(endD);
+      remindAt.setDate(remindAt.getDate() - 30);
+      await registerObligation({
+        companyId: scope.companyId,
+        branchId: vehicleForOb?.branchId ?? scope.branchId ?? null,
+        entityType: "fleet_vehicle",
+        entityId: Number(b.vehicleId),
+        obligationType: "renewal",
+        title: `تجديد تأمين المركبة ${plate}`,
+        dueAt: remindAt.toISOString(),
+        metadata: {
+          insuranceId: insertId,
+          vehicleId: Number(b.vehicleId),
+          plateNumber: plate,
+          policyNumber: b.policyNumber,
+          provider: b.provider,
+          policyEndDate: endD.toISOString(),
+          premium,
+        },
+        dedupeKey: `fleet_insurance:${b.vehicleId}:${b.policyNumber}`,
+      });
+    } catch (e) {
+      logger.warn(e, "[fleet] insurance renewal obligation registration failed");
+    }
+
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
