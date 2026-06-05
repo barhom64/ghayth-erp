@@ -9,6 +9,7 @@ import { formatNumber, formatDateAr } from "@/lib/formatters";
 import { Eye, AlertCircle, CheckCircle2, Pencil } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface AllocationResult {
   id: number;
@@ -167,6 +168,25 @@ export default function AllocationResultsPage() {
         { href: "/finance/accounts", label: "الحسابات" },
         { label: "سجل التوجيه" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_finance_allocation_results"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "سجل توجيه البنود", total: rows.length },
+            items: rows.map((r) => ({
+              "المصدر": SOURCE_LABEL[r.sourceTable] || r.sourceTable,
+              "رقم البند": r.sourceLineId,
+              "نوع الوثيقة": r.documentType || "—",
+              "الحساب": r.resolvedAccountCode || "—",
+              "القاعدة": r.ruleId ?? "—",
+              "تاريخ الحل": r.resolvedAt || "—",
+              "الحالة": STATUS_INFO[r.resolutionStatus]?.label || r.resolutionStatus,
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <AllocationTabsNav />

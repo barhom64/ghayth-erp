@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Save, Eye, Trash2, Pencil, FileText, Receipt, Tag, Layers } from "lucide-react";
 import { PageHeader, PageShell } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
 
 // Fallback list used while /api/print/entity-types loads. The full catalogue
 // (100+ types — every BESPOKE_PRESETS key + every ARABIC_TITLES key) is
@@ -215,9 +216,27 @@ export default function PrintTemplatesPage() {
       subtitle="بناء وتخصيص قوالب الطباعة لكل فرع بشكل مستقل"
       breadcrumbs={[{ label: "الإعدادات" }, { label: "قوالب الطباعة" }]}
       actions={
-        <Button onClick={() => setEditingId("new")} className="gap-1">
-          <Plus className="h-4 w-4" /> قالب جديد
-        </Button>
+        <>
+          <Button onClick={() => setEditingId("new")} className="gap-1">
+            <Plus className="h-4 w-4" /> قالب جديد
+          </Button>
+          <PrintButton
+            entityType="report_settings_print_templates"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "قوالب الطباعة", total: filtered.length },
+              items: filtered.map((t: any) => ({
+                "الاسم": t.name || "—",
+                "نوع الكيان": t.entityType || "—",
+                "الفرع": branches.find((b) => b.id === t.branchId)?.name || (t.branchId ? `#${t.branchId}` : "الشركة"),
+                "الوضع": t.mode || "—",
+                "افتراضي": t.isDefault ? "نعم" : "لا",
+                "نشط": t.isActive ? "نعم" : "لا",
+              })),
+            }}
+          />
+        </>
       }
     >
       <Card>

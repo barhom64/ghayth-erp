@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Allocation Coverage Audit
@@ -186,6 +187,25 @@ export default function AllocationCoveragePage() {
         { href: "/finance/allocation-rules", label: "قواعد التوجيه" },
         { label: "التشخيص" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_finance_allocation_coverage"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: `تشخيص محرك التوجيه — تغطية ${overallCoverage.toFixed(1)}%`, total: sourceBuckets.length },
+            items: sourceBuckets.map((s) => ({
+              "المصدر": s.label,
+              "الإجمالي": s.total,
+              "موجّه تلقائياً": s.resolved,
+              "غير موجّه": s.unmapped,
+              "تعديل يدوي": s.override,
+              "جزئي": s.partial,
+              "% التغطية": s.coveragePct.toFixed(1),
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <AllocationTabsNav />

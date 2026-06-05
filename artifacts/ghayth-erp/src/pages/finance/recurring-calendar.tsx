@@ -11,6 +11,7 @@ import {
   Calendar, Repeat, AlertTriangle, ChevronRight, Plus, Clock,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Recurring JE Schedule Calendar
@@ -145,11 +146,29 @@ export default function RecurringCalendarPage() {
         { label: "التقويم" },
       ]}
       actions={
-        <Link href="/finance/recurring-journals/create">
-          <Button variant="outline" size="sm">
-            <Plus className="h-4 w-4 me-1" /> قيد متكرر جديد
-          </Button>
-        </Link>
+        <>
+          <Link href="/finance/recurring-journals/create">
+            <Button variant="outline" size="sm">
+              <Plus className="h-4 w-4 me-1" /> قيد متكرر جديد
+            </Button>
+          </Link>
+          <PrintButton
+            entityType="report_finance_recurring_calendar"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "تقويم القيود المتكررة — 30 يوم", total: next30Events.length },
+              items: next30Events.map((e) => ({
+                "الاسم": e.name,
+                "الوصف": e.description || "—",
+                "التكرار": FREQ_LABEL[e.frequency] || e.frequency,
+                "تاريخ التشغيل القادم": e.nextRunDate || "—",
+                "المبلغ": Number(e.totalAmount || 0),
+                "مركز التكلفة": e.costCenter || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />
