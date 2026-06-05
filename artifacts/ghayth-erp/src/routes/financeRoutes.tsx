@@ -184,8 +184,21 @@ const FxRates = lazy(() => import("@/pages/finance/fx-rates"));
 const FxRevaluationHistory = lazy(() => import("@/pages/finance/fx-revaluation-history"));
 const SettingsHub = lazy(() => import("@/pages/finance/settings-hub"));
 const FxRevaluation = lazy(() => import("@/pages/finance/fx-revaluation"));
+// Consolidated finance dashboards (originally PRs #1216/#1218/#1222/#1211/#1210/#1182).
+const ProjectPortfolioDashboard = lazy(() => import("@/pages/finance/project-portfolio-dashboard"));
+const PropertyPortfolioDashboard = lazy(() => import("@/pages/finance/property-portfolio-dashboard"));
+const UmrahAgentPortfolio = lazy(() => import("@/pages/finance/umrah-agent-portfolio"));
+const ExpenseMixAnalyzer = lazy(() => import("@/pages/finance/expense-mix-analyzer"));
+const RevenueMixAnalyzer = lazy(() => import("@/pages/finance/revenue-mix-analyzer"));
+const DsoTrend = lazy(() => import("@/pages/finance/dso-trend"));
 
 export const financeRoutes = [
+  { path: "/finance/project-portfolio", component: ProjectPortfolioDashboard },
+  { path: "/finance/property-portfolio", component: PropertyPortfolioDashboard },
+  { path: "/finance/umrah-agent-portfolio", component: UmrahAgentPortfolio },
+  { path: "/finance/expense-mix", component: ExpenseMixAnalyzer },
+  { path: "/finance/revenue-mix", component: RevenueMixAnalyzer },
+  { path: "/finance/reports/dso-trend", component: DsoTrend },
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
   // to its own explicit path so the two pages don't share a URL.
   { path: "/finance", component: Dashboard },
