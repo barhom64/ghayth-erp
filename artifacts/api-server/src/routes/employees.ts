@@ -761,31 +761,63 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
 
       // ── Step 8c: Driver-vehicle binding ──
-      // When the new employee is a driver and the operator chose a
-      // vehicle in the form, validate the vehicle belongs to the same
-      // company and create the assignment row. We use UPDATE
-      // fleet_vehicles SET "currentDriverId" = empId so the existing
-      // driver-detail screens pick it up without a new entity.
+      // When the new employee is a driver, ensure a fleet_drivers row
+      // exists for them; if the operator also picked a vehicle in the
+      // form, validate it belongs to this company and set the assignment
+      // on fleet_vehicles.assignedDriverId (the vehicle ↔ driver edge
+      // lives there, NOT on fleet_drivers). Wrapped in try/catch so a
+      // failure doesn't roll back the whole employee creation — the
+      // assignment can be retried later from /fleet/drivers UI.
       const wantsVehicle = ((body as any).vehicleId as number | null | undefined) ?? null;
       const effectiveRole = role || "employee";
-      if (wantsVehicle && (effectiveRole === "driver" || effectiveRole === "fleet_driver")) {
+      const isDriverRole = effectiveRole === "driver" || effectiveRole === "fleet_driver";
+      if (isDriverRole) {
         try {
-          const [veh] = await client.query<{ id: number }>(
-            `SELECT id FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-            [Number(wantsVehicle), effectiveCompanyId]
+          // Reuse an existing driver row if one already points at this
+          // employee (rare but possible if HR re-onboards). Otherwise
+          // insert a new one.
+          const [existingDriver] = await client.query<{ id: number }>(
+            `SELECT id FROM fleet_drivers
+              WHERE "employeeId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+              LIMIT 1`,
+            [empId, effectiveCompanyId]
           ).then(r => r.rows as Array<{ id: number }>);
-          if (veh) {
-            // Match the existing fleet_drivers.linkedEmployeeId pattern
-            // (fleet route uses it for the trip-complete + violation
-            // flow) — INSERT or UPDATE the link via fleet_drivers.
-            await client.query(
-              `INSERT INTO fleet_drivers (name, phone, "companyId", "branchId", "linkedEmployeeId", status)
-               VALUES ($1, $2, $3, $4, $5, 'available')
-               ON CONFLICT DO NOTHING`,
-              [name, phone || null, effectiveCompanyId, targetBranchId, empId]
-            ).catch(() => undefined);
+
+          let driverId: number;
+          if (existingDriver) {
+            driverId = existingDriver.id;
           } else {
-            logger.warn({ vehicleId: wantsVehicle }, "[employees] vehicleId not in company — skipping driver binding");
+            const { rows: insRows } = await client.query<{ id: number }>(
+              `INSERT INTO fleet_drivers (name, phone, "companyId", "employeeId", status)
+               VALUES ($1, $2, $3, $4, 'available')
+               RETURNING id`,
+              [name, phone || null, effectiveCompanyId, empId]
+            );
+            driverId = insRows[0]?.id;
+          }
+
+          // Vehicle assignment — only if the operator chose one.
+          if (driverId && wantsVehicle) {
+            const [veh] = await client.query<{ id: number; assignedDriverId: number | null }>(
+              `SELECT id, "assignedDriverId" FROM fleet_vehicles
+                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+              [Number(wantsVehicle), effectiveCompanyId]
+            ).then(r => r.rows as Array<{ id: number; assignedDriverId: number | null }>);
+            if (veh) {
+              if (veh.assignedDriverId && veh.assignedDriverId !== driverId) {
+                logger.warn(
+                  { vehicleId: veh.id, oldDriverId: veh.assignedDriverId, newDriverId: driverId },
+                  "[employees] reassigning vehicle from existing driver"
+                );
+              }
+              await client.query(
+                `UPDATE fleet_vehicles SET "assignedDriverId" = $1
+                  WHERE id = $2 AND "companyId" = $3`,
+                [driverId, veh.id, effectiveCompanyId]
+              );
+            } else {
+              logger.warn({ vehicleId: wantsVehicle }, "[employees] vehicleId not in company — skipping vehicle binding");
+            }
           }
         } catch (e) {
           logger.warn(e, "[employees] driver-vehicle binding failed");
