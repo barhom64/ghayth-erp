@@ -26,6 +26,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "in_review",  label: "قيد المراجعة" },
   { value: "probation",  label: "فترة التجربة" },
@@ -191,6 +192,23 @@ export default function OnboardingReviewPage() {
       title="مراجعة التعيين والتأهيل"
       subtitle="متابعة إجراءات التعيين وتأهيل الموظفين الجدد"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_onboarding_review"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "مراجعة التعيين والتأهيل", total: filtered.length },
+            items: filtered.map((e: any) => ({
+              "الموظف": e.name || "—",
+              "المنصب": e.jobTitle || "—",
+              "تاريخ التعيين": e.startDate || "—",
+              "نسبة الإنجاز %": e.onboardingProgress ?? "—",
+              "الحالة": STATUS_OPTIONS.find((s) => s.value === e.onboardingStatus)?.label || e.onboardingStatus || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       {/* KPI cards */}
