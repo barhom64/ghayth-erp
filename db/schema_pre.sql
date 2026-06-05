@@ -4860,7 +4860,10 @@ CREATE TABLE public.company_documents (
     status character varying(20) DEFAULT 'active'::character varying,
     notes text,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "renewalCost" numeric(14,2),
+    "renewalAccountCode" character varying(20),
+    "responsibleDepartmentId" integer
 );
 
 

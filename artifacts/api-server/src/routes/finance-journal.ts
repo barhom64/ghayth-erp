@@ -40,7 +40,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logAllocationOverride } from "../lib/accountingAllocation.js";
 import { resolveTransactionBranch } from "../lib/branchResolution.js";
-import { registerObligation } from "../lib/obligationsEngine.js";
+import { registerObligationWithTask } from "../lib/obligationTaskBridge.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -760,7 +760,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
           const obEntityType = relatedEntityType || "expense";
           const obEntityId = (relatedEntityId != null ? Number(relatedEntityId) : 0) || journalId;
           const labelBase = relatedEntityName || description || `مصروف ${journalId}`;
-          await registerObligation({
+          await registerObligationWithTask({
             companyId: effectiveCompanyId,
             branchId: branchId ? Number(branchId) : (scope.branchId ?? null),
             entityType: obEntityType,

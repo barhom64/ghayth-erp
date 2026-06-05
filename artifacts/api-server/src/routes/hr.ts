@@ -35,6 +35,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
+import { registerObligationWithTask } from "../lib/obligationTaskBridge.js";
 import { applyTransition, LifecycleError } from "../lib/lifecycleEngine.js";
 import {
   computeLeaveImpact,
@@ -195,6 +196,14 @@ const companyDocumentSchema = z.object({
   issuingAuthority: z.string().optional(),
   reminderDays: z.coerce.number().optional(),
   notes: z.string().optional(),
+  // Migration 251 — renewal fee + GL routing + responsible dept.
+  renewalCost: z.coerce.number().nonnegative().optional(),
+  renewalAccountCode: z.string().optional(),
+  responsibleDepartmentId: z.coerce.number().optional(),
+  // Side-effect flag: when true AND renewalCost > 0, post an expense
+  // JE alongside the document so finance captures the fee on day one
+  // instead of waiting for the operator to add it manually.
+  recordExpenseOnCreate: z.boolean().optional(),
 });
 
 const employeeDocumentSchema = z.object({
@@ -7323,10 +7332,22 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
     // capture issueDate + issuingAuthority + reminderDays that the
     // schema supports but the old INSERT discarded. Result: full
     // round-trip for renewal reminders.
+    //
+    // Migration 251 added renewalCost + renewalAccountCode +
+    // responsibleDepartmentId. renewalCost drives the auto-expense
+    // path below (only fires when the operator ticks recordExpenseOnCreate);
+    // responsibleDepartmentId drives the auto-task assignment via
+    // obligationTaskBridge.resolveAssignee.
+    const renewalCost = b.renewalCost != null ? Number(b.renewalCost) : null;
+    const renewalAccountCode = b.renewalAccountCode || null;
+    const responsibleDepartmentId = b.responsibleDepartmentId ? Number(b.responsibleDepartmentId) : null;
+    const recordExpenseOnCreate = Boolean(b.recordExpenseOnCreate);
+
     const { insertId } = await rawExecute(
       `INSERT INTO company_documents
-         ("companyId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+         ("companyId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes,
+          "renewalCost","renewalAccountCode","responsibleDepartmentId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [
         scope.companyId,
         b.documentType,
@@ -7336,6 +7357,9 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
         b.issuingAuthority ?? null,
         b.reminderDays ?? 30,
         b.notes ?? null,
+        renewalCost,
+        renewalAccountCode,
+        responsibleDepartmentId,
       ]
     );
     assertInsert(insertId, "company_documents");
@@ -7347,12 +7371,13 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
       after: { documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    // Smart-renewal obligation — same engine fleet insurance and the
-    // smart-expense flow use. Surfaces this document in the unified
-    // calendar reminderDays before it expires. Works for ANY
-    // documentType: سجل تجاري, ترخيص, تأمين طبي, زكاة, GOSI,
-    // غرفة تجارة — the type is metadata, the engine treats them all
-    // the same.
+    // Smart-renewal: register the obligation AND open a task pre-
+    // assigned to the responsibleDepartmentId's manager (or fallback
+    // to the hr_manager role). The task appears in the operations
+    // centre + the department's queue before the document expires so
+    // somebody actually does the renewal — not just a reminder that
+    // gets ignored. Works for ANY documentType: سجل تجاري, ترخيص,
+    // تأمين طبي, زكاة, GOSI, غرفة تجارة, دفاع مدني, إلخ.
     if (b.expiryDate) {
       try {
         const endD = new Date(b.expiryDate);
@@ -7360,7 +7385,7 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
           const remindDays = Number(b.reminderDays ?? 30);
           const remindAt = new Date(endD);
           remindAt.setDate(remindAt.getDate() - remindDays);
-          await registerObligation({
+          await registerObligationWithTask({
             companyId: scope.companyId,
             branchId: scope.branchId ?? null,
             entityType: "company_document",
@@ -7373,12 +7398,58 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
               documentNumber: b.documentNumber ?? null,
               issuingAuthority: b.issuingAuthority ?? null,
               expiryDate: endD.toISOString(),
+              renewalCost,
             },
             dedupeKey: `company_document:${insertId}`,
+            responsibleDepartmentId,
           });
         }
       } catch (e) {
         logger.warn(e, "[hr] company-document renewal obligation registration failed");
+      }
+    }
+
+    // Optional expense JE for the renewal fee. Tied to the document
+    // via sourceType/sourceId so finance can drill from the journal
+    // back to the company_documents row that triggered it. Defaults
+    // to 5400 (general government fees) when no renewalAccountCode
+    // was supplied. Fires only if the operator ticked the checkbox —
+    // silent failure here doesn't break the document create.
+    if (recordExpenseOnCreate && renewalCost && renewalCost > 0) {
+      try {
+        const { financialEngine } = await import("../lib/engines/index.js");
+        const expenseAccountCode = renewalAccountCode
+          ?? await financialEngine.resolveAccountCode(
+            scope.companyId,
+            "government_fees",
+            "debit",
+            "5400"
+          );
+        const sourceCode = await financialEngine.resolveAccountCode(
+          scope.companyId,
+          "cash_register",
+          "credit",
+          "1010"
+        );
+        await financialEngine.postJournalEntry({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? 0,
+          createdBy: scope.activeAssignmentId ?? scope.userId,
+          ref: `COMPANY-DOC-${insertId}`,
+          description: `رسوم تجديد ${b.documentType}${b.documentNumber ? ` (${b.documentNumber})` : ""}`,
+          type: "general",
+          sourceType: "company_document",
+          sourceId: insertId,
+          sourceKey: `company_document_renewal:${insertId}`,
+          guardTable: "company_documents",
+          guardId: insertId,
+          lines: [
+            { accountCode: expenseAccountCode, debit: Number(renewalCost), credit: 0, description: `تجديد وثيقة منشأة #${insertId}` },
+            { accountCode: sourceCode, debit: 0, credit: Number(renewalCost), description: `سداد رسوم تجديد` },
+          ],
+        });
+      } catch (e) {
+        logger.warn(e, "[hr] company-document renewal expense JE failed");
       }
     }
 

@@ -22,6 +22,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
+import { registerObligationWithTask } from "../lib/obligationTaskBridge.js";
 import { fleetEngine } from "../lib/engines/index.js";
 import { z } from "zod";
 
@@ -2825,7 +2826,10 @@ router.post("/insurance", authorize({ feature: "fleet.vehicles", action: "create
       const plate = vehicleForOb?.plateNumber || `#${b.vehicleId}`;
       const remindAt = new Date(endD);
       remindAt.setDate(remindAt.getDate() - 30);
-      await registerObligation({
+      // Bridge — also opens a "تجديد تأمين <اللوحة>" task pre-assigned
+      // to the fleet manager so the renewal lands on a real queue,
+      // not just a passive calendar entry.
+      await registerObligationWithTask({
         companyId: scope.companyId,
         branchId: vehicleForOb?.branchId ?? scope.branchId ?? null,
         entityType: "fleet_vehicle",

@@ -9,16 +9,17 @@
 
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useApiMutation } from "@/lib/api";
+import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PageShell } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Save, ArrowLeft, AlertCircle } from "lucide-react";
+import { FileText, Save, ArrowLeft, AlertCircle, Wallet, Building2 } from "lucide-react";
 
 interface Form {
   documentType: string;
@@ -28,6 +29,15 @@ interface Form {
   issuingAuthority: string;
   reminderDays: string;
   notes: string;
+  // Renewal-cost path: post an expense JE alongside the document so
+  // the renewal fee is captured in finance from day one.
+  renewalCost: string;
+  renewalAccountCode: string;
+  recordExpenseOnCreate: boolean;
+  // Auto-task assignment: the manager of this department gets a task
+  // when the obligation fires. Defaults to the hr_manager role
+  // fallback in the backend if left empty.
+  responsibleDepartmentId: string;
 }
 
 const EMPTY: Form = {
@@ -38,6 +48,10 @@ const EMPTY: Form = {
   issuingAuthority: "",
   reminderDays: "30",
   notes: "",
+  renewalCost: "",
+  renewalAccountCode: "",
+  recordExpenseOnCreate: false,
+  responsibleDepartmentId: "",
 };
 
 // Smart presets — picking one of these fills the type label + default
@@ -68,6 +82,8 @@ export default function CompanyDocumentCreate() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [form, setForm] = useState<Form>(EMPTY);
+  const { data: deptsResp } = useApiQuery<any>(["departments-list-cd"], "/settings/departments");
+  const departments = asList(deptsResp?.data || deptsResp);
 
   const createMut = useApiMutation<any, any>(
     "/hr/company-documents",
@@ -112,6 +128,10 @@ export default function CompanyDocumentCreate() {
       issuingAuthority: form.issuingAuthority || undefined,
       reminderDays: form.reminderDays ? Number(form.reminderDays) : 30,
       notes: form.notes || undefined,
+      renewalCost: form.renewalCost ? Number(form.renewalCost) : undefined,
+      renewalAccountCode: form.renewalAccountCode || undefined,
+      recordExpenseOnCreate: form.recordExpenseOnCreate,
+      responsibleDepartmentId: form.responsibleDepartmentId ? Number(form.responsibleDepartmentId) : undefined,
     });
   };
 
@@ -223,6 +243,90 @@ export default function CompanyDocumentCreate() {
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               placeholder="أي تفاصيل تساعد المسؤول عن التجديد"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Renewal cost + auto-expense — user said: "I want the
+          renewal of the commercial registration to actually be tied
+          to money in the expenses." Ticking the box posts a JE
+          alongside the document so the renewal fee shows up in
+          finance instantly. */}
+      <Card className="mt-3">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Wallet className="h-4 w-4" /> رسوم التجديد (اختياري)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          <div>
+            <Label className="text-xs">تكلفة التجديد (ر.س)</Label>
+            <Input
+              type="number"
+              min={0}
+              value={form.renewalCost}
+              onChange={(e) => setForm((f) => ({ ...f, renewalCost: e.target.value }))}
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">حساب المصروف</Label>
+            <Input
+              value={form.renewalAccountCode}
+              onChange={(e) => setForm((f) => ({ ...f, renewalAccountCode: e.target.value }))}
+              placeholder="افتراضي: 5400 رسوم حكومية"
+              dir="ltr"
+            />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-start gap-2 text-xs cursor-pointer border rounded p-2 w-full bg-status-info-surface/20">
+              <Checkbox
+                checked={form.recordExpenseOnCreate}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, recordExpenseOnCreate: !!v }))}
+              />
+              <span>
+                <span className="font-medium">قيّد المصروف الآن</span>
+                <span className="block text-[10px] text-muted-foreground mt-0.5">
+                  ينشئ قيداً محاسبياً مدين/دائن بقيمة الرسوم لحظة الحفظ
+                </span>
+              </span>
+            </label>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Responsible department — user said: "any time something is
+          about to expire the system must open a task for the
+          responsible department". The backend resolves this to the
+          department's manager (or falls back to the matching role)
+          and creates a tasks row pre-assigned with status=pending. */}
+      <Card className="mt-3">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Building2 className="h-4 w-4" /> القسم المسؤول عن التجديد
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <Label className="text-xs">القسم</Label>
+              <Select
+                value={form.responsibleDepartmentId || "_none"}
+                onValueChange={(v) => setForm((f) => ({ ...f, responsibleDepartmentId: v === "_none" ? "" : v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="اختر القسم" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— استخدم الافتراضي (مدير الموارد البشرية) —</SelectItem>
+                  {departments.map((d: any) => (
+                    <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="text-[10px] text-muted-foreground self-end">
+              ستُفتح مهمة آلية على قائمة مدير هذا القسم قبل {form.reminderDays || 30} يوماً من الانتهاء.
+              إذا لم يكن للقسم مدير، تُفتح المهمة بدون مُسنَدة لها وتظهر لكل من له صلاحية HR.
+            </div>
           </div>
         </CardContent>
       </Card>
