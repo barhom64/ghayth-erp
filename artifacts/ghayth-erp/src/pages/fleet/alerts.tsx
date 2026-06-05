@@ -15,6 +15,7 @@ import {
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
@@ -122,14 +123,33 @@ export default function FleetAlerts() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "تنبيهات الأسطول" }]}
       loading={isLoading}
       actions={
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">نشطة</SelectItem>
-            <SelectItem value="acknowledged">معتمَدة</SelectItem>
-            <SelectItem value="all">الكل</SelectItem>
-          </SelectContent>
-        </Select>
+        <>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">نشطة</SelectItem>
+              <SelectItem value="acknowledged">معتمَدة</SelectItem>
+              <SelectItem value="all">الكل</SelectItem>
+            </SelectContent>
+          </Select>
+          <PrintButton
+            entityType="report_fleet_alerts"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "تنبيهات الأسطول", total: filtered.length },
+              items: filtered.map((a: any) => ({
+                "النوع": TYPE_LABELS[a.type] || a.type || "—",
+                "المركبة": a.vehicle || a.plateNumber || "—",
+                "السائق": a.driver || a.driverName || "—",
+                "الرسالة": a.message || "—",
+                "الشدة": a.severity || "—",
+                "التاريخ": a.createdAt || a.alertDate || "—",
+                "الحالة": STATUS_LABELS[a.status]?.label || a.status || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <FleetTabsNav />

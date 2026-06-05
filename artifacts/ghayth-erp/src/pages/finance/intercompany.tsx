@@ -23,6 +23,7 @@ import { Link } from "wouter";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 // toCompanyId is a string in the form; the submit handler converts
 // to number for the API. amount coerced via z.coerce.
 const intercompanySchema = z.object({
@@ -132,6 +133,23 @@ export default function IntercompanyPage() {
             <ArrowLeftRight className="h-4 w-4 ml-2" />
             معاملة جديدة
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_intercompany"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "المعاملات البينية", total: list.length },
+              items: list.map((r: any) => ({
+                "المرجع": r.ref || `#${r.id}`,
+                "التاريخ": r.transactionDate || "—",
+                "الشركة المُرسِلة": r.fromCompanyName || "—",
+                "الشركة المُستقبِلة": r.toCompanyName || "—",
+                "المبلغ": Number(r.amount || 0),
+                "البيان": r.description || "—",
+                "الحالة": r.status || "—",
+              })),
+            }}
+          />
         </>
       }
     >

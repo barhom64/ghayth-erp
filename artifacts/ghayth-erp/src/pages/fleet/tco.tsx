@@ -9,6 +9,7 @@ import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 
 const COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 
@@ -41,6 +42,29 @@ export default function TCOPage() {
       subtitle="تكلفة التملك الإجمالية"
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "تحليل التكلفة الكلية للمركبة" }]}
       loading={isLoading}
+      actions={
+        tco ? (
+          <PrintButton
+            entityType="report_fleet_tco"
+            entityId={vehicleId || "list"}
+            label="طباعة"
+            payload={{
+              entity: { title: `تحليل التكلفة الكلية — ${tco.plateNumber || ""}`, total: pieData.length },
+              items: [
+                { "البند": "سعر الشراء", "القيمة": Number(tco.purchasePrice ?? 0) },
+                { "البند": "الوقود", "القيمة": Number(tco.fuelCost ?? 0) },
+                { "البند": "الصيانة", "القيمة": Number(tco.maintenanceCost ?? 0) },
+                { "البند": "التأمين", "القيمة": Number(tco.insuranceCost ?? 0) },
+                { "البند": "المخالفات", "القيمة": Number(tco.trafficFines ?? 0) },
+                { "البند": "إجمالي التكلفة", "القيمة": Number(tco.totalCost ?? 0) },
+                { "البند": "التكلفة لكل كم", "القيمة": Number(tco.costPerKm ?? 0) },
+                { "البند": "إجمالي الكيلومترات", "القيمة": Number(tco.totalKm ?? 0) },
+                { "البند": "عمر المركبة (سنوات)", "القيمة": tco.yearsSincePurchase ?? 0 },
+              ],
+            }}
+          />
+        ) : undefined
+      }
     >
       <FleetTabsNav />
       <div className="flex items-center gap-2">

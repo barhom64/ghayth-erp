@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
+import { PrintButton } from "@/components/shared/print-button";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "مالك النظام" },
@@ -277,9 +278,27 @@ export default function AdminUsersPage() {
       subtitle="إنشاء وإدارة وحذف حسابات المستخدمين في النظام"
       breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/admin", label: "الإدارة" }, { label: "المستخدمون" }]}
       actions={
-        <Button size="sm" onClick={() => { setShowForm(!showForm); setCreatedUser(null); setEditUser(null); setDeleteConfirmId(null); }}>
-          {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة مستخدم</>}
-        </Button>
+        <>
+          <Button size="sm" onClick={() => { setShowForm(!showForm); setCreatedUser(null); setEditUser(null); setDeleteConfirmId(null); }}>
+            {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة مستخدم</>}
+          </Button>
+          <PrintButton
+            entityType="report_admin_users"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "المستخدمون", total: filtered.length },
+              items: filtered.map((u: any) => ({
+                "البريد": u.email || "—",
+                "الموظف": u.employeeName || "—",
+                "الدور": roleLabel(u.role),
+                "الحالة": u.isActive ? "نشط" : "معلق",
+                "آخر دخول": u.lastLoginAt || "—",
+                "محاولات فاشلة (7 أيام)": u.failedAttempts7d ?? 0,
+              })),
+            }}
+          />
+        </>
       }
     >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatNumber } from "@/lib/formatters";
 import { ShieldAlert, RefreshCw, Globe, Calendar, AlertTriangle } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface OverrideRecord {
   id: number;
@@ -121,10 +122,29 @@ export default function ApprovalOverridesReportPage() {
         { label: "تجاوز Workflow" },
       ]}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
-          تحديث
-        </Button>
+        <>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
+            تحديث
+          </Button>
+          <PrintButton
+            entityType="report_admin_approval_overrides"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "سجل تجاوز Workflow", total: rows.length },
+              items: rows.map((r) => ({
+                "الوقت": r.createdAt || "—",
+                "المسؤول": r.userEmail ?? `user#${r.userId}`,
+                "الإجراء": r.action || "—",
+                "الكيان": r.entity || "—",
+                "رقم الكيان": r.entityId ?? "—",
+                "السبب": r.reason || "—",
+                "IP": r.ipAddress || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <Card className="mb-4 border-red-300 bg-red-50/30">

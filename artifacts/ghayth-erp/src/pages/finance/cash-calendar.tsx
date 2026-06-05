@@ -12,6 +12,7 @@ import {
   Wallet, ChevronLeft, ChevronRight, Banknote, Activity,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Cash Calendar — 90-day daily cash position projection
@@ -196,6 +197,23 @@ export default function CashCalendarPage() {
           <Button variant="outline" size="sm" onClick={() => setStartDate(addDaysIso(startDate, 7))}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
+          <PrintButton
+            entityType="report_finance_cash_calendar"
+            entityId={startDate}
+            label="طباعة"
+            payload={{
+              entity: { title: "تقويم السيولة — 90 يوم", total: grid.length },
+              items: grid.map((d) => ({
+                "التاريخ": d.date,
+                "اليوم": getWeekdayAr(d.date),
+                "تدفق داخل": Number(d.inflow || 0),
+                "تدفق خارج": Number(d.outflow || 0),
+                "صافي": Number(d.net || 0),
+                "الرصيد التراكمي": Number(d.runningBalance || 0),
+                "عدد الأحداث": d.events.length,
+              })),
+            }}
+          />
         </div>
       }
     >

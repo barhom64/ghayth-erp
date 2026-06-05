@@ -23,6 +23,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { MODULE_LABELS } from "@/lib/module-labels";
+import { PrintButton } from "@/components/shared/print-button";
 
 // The `modules` field is a string[] of MODULE_LABELS keys. Schema
 // enforces the closed-set; the picker lives below as a small
@@ -281,9 +282,26 @@ export default function AdminRolesPage() {
       subtitle={`تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات${allRolesCount > 0 ? ` · إجمالي الأدوار في النظام: ${allRolesCount}` : ""}`}
       breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/admin", label: "الإدارة" }, { label: "الأدوار والصلاحيات" }]}
       actions={
-        <GuardedButton perm="admin:create" size="sm" onClick={() => setActiveTab(activeTab === "create" ? "modules" : "create")}>
-          {activeTab === "create" ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إنشاء دور جديد</>}
-        </GuardedButton>
+        <>
+          <GuardedButton perm="admin:create" size="sm" onClick={() => setActiveTab(activeTab === "create" ? "modules" : "create")}>
+            {activeTab === "create" ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إنشاء دور جديد</>}
+          </GuardedButton>
+          <PrintButton
+            entityType="report_admin_roles"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "الأدوار والصلاحيات", total: predefinedRoles.length },
+              items: predefinedRoles.map((r: any) => ({
+                "مفتاح الدور": r.roleKey || "—",
+                "الاسم": r.label || r.name || "—",
+                "المستوى": r.level ?? "—",
+                "الوحدات المسموحة": Array.isArray(r.modules) ? r.modules.length : (r.allowedModules?.length ?? 0),
+                "الوصف": r.description || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <div className="flex gap-2 border-b">
