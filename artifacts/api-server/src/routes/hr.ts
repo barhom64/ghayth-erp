@@ -3734,6 +3734,18 @@ router.get("/salary-components", authorize({ feature: "hr.payroll.runs", action:
 router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // SEC-3 (HR audit P1): adding / editing salary components changes
+    // EVERY future payroll run. The capability flag "hr.payroll.runs"
+    // is too coarse — generic editors with payroll-update permission
+    // shouldn't be allowed to set deduction rates or tax thresholds.
+    // Restrict the write paths to PAYROLL_ROLES.
+    if (!PAYROLL_ROLES.includes(scope.role)) {
+      res.status(403).json({
+        error: "تعديل مكوّنات الراتب يتطلب دور موارد بشرية أو مالية",
+        meta: { yourRole: scope.role, requiredRoles: PAYROLL_ROLES },
+      });
+      return;
+    }
     const { name, type, calculationType, value, taxable } = zodParse(salaryComponentSchema.safeParse(req.body));
     const { insertId } = await rawExecute(
       `INSERT INTO salary_components ("companyId",name,type,"calculationType",value,"isTaxable","isActive")
@@ -3758,6 +3770,15 @@ router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action
 router.patch("/salary-components/:id", authorize({ feature: "hr.payroll.runs", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // SEC-3: same SoD gate as POST — payroll-component edits propagate
+    // to every subsequent run.
+    if (!PAYROLL_ROLES.includes(scope.role)) {
+      res.status(403).json({
+        error: "تعديل مكوّنات الراتب يتطلب دور موارد بشرية أو مالية",
+        meta: { yourRole: scope.role, requiredRoles: PAYROLL_ROLES },
+      });
+      return;
+    }
     const id = parseId(req.params.id, "id");
     const b = zodParse(salaryComponentPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
@@ -3788,6 +3809,16 @@ router.patch("/salary-components/:id", authorize({ feature: "hr.payroll.runs", a
 router.delete("/salary-components/:id", authorize({ feature: "hr.payroll.runs", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // SEC-3: delete is the most destructive write — same PAYROLL_ROLES
+    // gate. A deletion silently disappears the component from future
+    // payroll runs without any UI prompt to back it out.
+    if (!PAYROLL_ROLES.includes(scope.role)) {
+      res.status(403).json({
+        error: "حذف مكوّنات الراتب يتطلب دور موارد بشرية أو مالية",
+        meta: { yourRole: scope.role, requiredRoles: PAYROLL_ROLES },
+      });
+      return;
+    }
     const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!beforeRow) throw new NotFoundError("مكوّن الراتب غير موجود");

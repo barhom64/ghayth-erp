@@ -143,6 +143,29 @@ describe("RACE-2: payroll run takes pg_advisory_xact_lock + re-checks duplicate"
   });
 });
 
+// ─── SEC-3 — salary_components writes restricted to PAYROLL_ROLES ────────
+
+describe("SEC-3: salary-components writes require PAYROLL_ROLES", () => {
+  for (const verb of ["post", "patch", "delete"] as const) {
+    it(`${verb.toUpperCase()} /salary-components requires PAYROLL_ROLES inline`, () => {
+      // The handler appears as `router.${verb}("/salary-components"...`
+      // for POST and `router.${verb}("/salary-components/:id"...` for
+      // PATCH/DELETE. Find whichever matches first.
+      const needle =
+        verb === "post"
+          ? 'router.post("/salary-components"'
+          : `router.${verb}("/salary-components/:id"`;
+      const start = HR.indexOf(needle);
+      expect(start, `${needle} handler exists`).toBeGreaterThan(0);
+      const block = HR.slice(start, start + 2500);
+      expect(block).toContain("PAYROLL_ROLES.includes(scope.role)");
+      // POST/PATCH say "تعديل"; DELETE says "حذف". Either is fine —
+      // what matters is the error mentions "مكوّنات الراتب".
+      expect(block).toContain("مكوّنات الراتب");
+    });
+  }
+});
+
 // ─── TZ-1 — attendance check-in/out uses Riyadh calendar day ─────────────
 
 describe("TZ-1: attendance uses Asia/Riyadh calendar day", () => {
