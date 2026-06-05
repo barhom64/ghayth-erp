@@ -87,6 +87,89 @@ const INTENTS: Intent[] = [
       return { answerAr: rows.length ? `إقامات تنتهي خلال 30 يومًا (${rows.length}):` : "لا توجد إقامات تنتهي خلال 30 يومًا.", rows };
     },
   },
+  {
+    key: "vehicles_due_service",
+    match: /صيانة|تحتاج ?صيانة|مركبات.*صيانة|سيارات.*صيانة/,
+    label: "أي مركبات تحتاج صيانة؟",
+    run: async (companyId) => {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT "plateNumber" AS "اللوحة", "nextServiceDate" AS "موعد_الصيانة"
+           FROM fleet_vehicles
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status = 'active'
+            AND "nextServiceDate" IS NOT NULL
+            AND "nextServiceDate" <= CURRENT_DATE + INTERVAL '14 days'
+          ORDER BY "nextServiceDate" ASC LIMIT 10`,
+        [companyId]
+      );
+      return { answerAr: rows.length ? `مركبات تحتاج صيانة قريبًا (${rows.length}):` : "لا توجد مركبات تحتاج صيانة خلال 14 يومًا.", rows };
+    },
+  },
+  {
+    key: "expenses_this_month",
+    match: /مصروف|مصاريف|نفقات/,
+    label: "كم مصروفات هذا الشهر؟",
+    run: async (companyId) => {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT COUNT(*)::int AS "عدد_المطالبات", COALESCE(SUM(amount),0) AS "الإجمالي"
+           FROM expense_claims
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL
+            AND "createdAt" >= date_trunc('month', CURRENT_DATE)`,
+        [companyId]
+      );
+      const total = Number((rows[0]?.["الإجمالي"] as number) ?? 0);
+      const n = Number((rows[0]?.["عدد_المطالبات"] as number) ?? 0);
+      return { answerAr: `مصروفات هذا الشهر: ${n} مطالبة بإجمالي ${total}`, rows };
+    },
+  },
+  {
+    key: "expiring_contracts",
+    match: /عقود.*تنتهي|عقد.*ينتهي|انتهاء.*عقد|عقود ?منتهية/,
+    label: "أي عقود تنتهي قريبًا؟",
+    run: async (companyId) => {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT title AS "العقد", "endDate" AS "تاريخ_الانتهاء", value AS "القيمة"
+           FROM legal_contracts
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "endDate" IS NOT NULL
+            AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+          ORDER BY "endDate" ASC LIMIT 10`,
+        [companyId]
+      );
+      return { answerAr: rows.length ? `عقود تنتهي خلال 30 يومًا (${rows.length}):` : "لا توجد عقود تنتهي خلال 30 يومًا.", rows };
+    },
+  },
+  {
+    key: "overdue_invoices",
+    match: /فواتير.*متأخر|فاتورة ?متأخرة|متأخرات ?الفوات|الفواتير ?المتأخرة/,
+    label: "ما الفواتير المتأخرة؟",
+    run: async (companyId) => {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT ref AS "الفاتورة", (total - COALESCE("paidAmount",0)) AS "المتبقّي", "dueDate" AS "الاستحقاق"
+           FROM invoices
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status NOT IN ('paid','cancelled')
+            AND "dueDate" < CURRENT_DATE AND (total - COALESCE("paidAmount",0)) > 0
+          ORDER BY "dueDate" ASC LIMIT 5`,
+        [companyId]
+      );
+      return { answerAr: rows.length ? `أكثر الفواتير تأخّرًا (${rows.length}):` : "لا توجد فواتير متأخرة.", rows };
+    },
+  },
+  {
+    key: "most_absent",
+    match: /غياب|غائب|تغيب|الأكثر ?غياب/,
+    label: "من الأكثر غيابًا هذا الشهر؟",
+    run: async (companyId) => {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT e.name, ma."absentDays" AS "أيام_الغياب"
+           FROM employee_monthly_attendance ma
+           JOIN employee_assignments ea ON ea.id = ma."assignmentId"
+           JOIN employees e ON e.id = ea."employeeId"
+          WHERE ma."companyId" = $1 AND ma.period = $2 AND ma."absentDays" > 0
+          ORDER BY ma."absentDays" DESC LIMIT 5`,
+        [companyId, currentPeriod()]
+      );
+      return { answerAr: rows.length ? `أكثر ${rows.length} موظفين غيابًا هذا الشهر:` : "لا يوجد غياب مسجّل هذا الشهر.", rows };
+    },
+  },
 ];
 
 const suggestions = INTENTS.map((i) => i.label);
