@@ -31,6 +31,7 @@ import { useFormContext } from "react-hook-form";
 import { formatDateAr } from "@/lib/formatters";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 /**
  * HR / Approval Inbox.
  *
@@ -242,6 +243,29 @@ export default function HrApprovalsPage() {
         { href: "/hr", label: "الموارد البشرية" },
         { label: "صندوق الموافقات" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_hr_approval_inbox"
+          entityId={statusFilter}
+          label="طباعة"
+          payload={{
+            entity: {
+              title: `صندوق موافقات HR — ${statusFilter}`,
+              statusFilter,
+              total: rows.length,
+              overdue: overdueCount,
+            },
+            items: rows.map((r: any) => ({
+              "رقم الطلب": r.id,
+              "نوع الطلب": r.entityType || "—",
+              "الموظف": r.employeeName || r.requesterName || "—",
+              "تاريخ الطلب": r.createdAt || "—",
+              "الحالة": r.status || "—",
+              "الخطوة الحالية": r.currentStep || r.approverName || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <Card>

@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatDateAr } from "@/lib/formatters";
 import {
   DataTable,
@@ -62,6 +63,24 @@ export default function LegalSessions() {
       subtitle="جدول جلسات المحاكم والقضايا"
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الجلسات القادمة" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_legal_sessions"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "جدول جلسات المحاكم", total: filtered.length },
+            items: filtered.map((s: any) => ({
+              "القضية": s.caseTitle || s.caseId || "—",
+              "المحكمة": s.court || "—",
+              "تاريخ الجلسة": s.sessionDate || s.date || "—",
+              "الوقت": s.time || "—",
+              "النوع": s.sessionType || s.type || "—",
+              "الحالة": s.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <LegalTabsNav />
       <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />

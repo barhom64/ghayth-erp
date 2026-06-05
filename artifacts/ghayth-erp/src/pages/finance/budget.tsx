@@ -17,6 +17,7 @@ import {
 import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function BudgetPage() {
   const [, navigate] = useLocation();
@@ -127,6 +128,23 @@ export default function BudgetPage() {
               <Plus className="h-4 w-4 me-1" />إضافة بند
             </Link>
           </Button>
+          <PrintButton
+            entityType="report_finance_budget"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "الميزانية والمخصصات", total: items.length },
+              items: items.map((b: any) => ({
+                "الحساب": b.accountName || b.accountCode || "—",
+                "مركز التكلفة": b.costCenterName || "—",
+                "الفترة": b.period || "—",
+                "المخصص": b.allocatedAmount ?? 0,
+                "المنصرف": b.spentAmount ?? 0,
+                "المتبقي": b.remainingAmount ?? (Number(b.allocatedAmount ?? 0) - Number(b.spentAmount ?? 0)),
+                "%": b.utilizationRate || "—",
+              })),
+            }}
+          />
         </>
       }
     >

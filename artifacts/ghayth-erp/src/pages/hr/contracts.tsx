@@ -26,6 +26,7 @@ import { MoreHorizontal, Plus, FileText } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 // ─── Arabic Maps ────────────────────────────────────────────────────
 
 const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -154,12 +155,34 @@ export default function ContractsPage() {
       title="عقود الموظفين"
       subtitle="إدارة جميع عقود الموظفين"
       actions={
-        <Link href="/hr/contracts/create">
-          <GuardedButton perm="hr:create" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            عقد جديد
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_contracts"
+            entityId="list"
+            label="طباعة القائمة"
+            payload={{
+              entity: {
+                title: "قائمة عقود الموظفين",
+                total: contracts.length,
+              },
+              items: contracts.map((c: any) => ({
+                "الموظف": c.employeeName || "—",
+                "رقم العقد": c.contractNumber || c.id,
+                "النوع": c.contractType || "—",
+                "تاريخ البدء": c.startDate || "—",
+                "تاريخ النهاية": c.endDate || "—",
+                "الراتب الأساسي": c.basicSalary ?? 0,
+                "الحالة": c.status || "—",
+              })),
+            }}
+          />
+          <Link href="/hr/contracts/create">
+            <GuardedButton perm="hr:create" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              عقد جديد
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <DataTable

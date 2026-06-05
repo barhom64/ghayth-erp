@@ -29,6 +29,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { withListFilters } from "@/lib/list-query";
+import { PrintButton } from "@/components/shared/print-button";
 
 const STAGE_LABELS: Record<string, string> = {
   lead: "عميل محتمل",
@@ -268,6 +269,29 @@ function OpportunitiesTab() {
         <Link href="/crm/create">
           <GuardedButton perm="crm:create" className="gap-2"><Plus className="h-4 w-4" /> فرصة جديدة</GuardedButton>
         </Link>
+        <PrintButton
+          entityType="report_crm_opportunities"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: {
+              title: "قائمة الفرص البيعية",
+              total: filtered.length,
+              open: stats?.openOpportunities ?? 0,
+              won: stats?.wonOpportunities ?? 0,
+              pipeline: stats?.pipelineValue ?? 0,
+            },
+            items: filtered.map((o: any) => ({
+              "العنوان": o.title || o.name || "—",
+              "العميل": o.clientName || "—",
+              "المرحلة": o.stage || "—",
+              "القيمة": o.expectedValue ?? o.amount ?? 0,
+              "الاحتمال (%)": o.probability ?? "—",
+              "تاريخ الإغلاق المتوقع": o.expectedCloseDate || o.closeDate || "—",
+              "المسؤول": o.ownerName || o.assignee || "—",
+            })),
+          }}
+        />
       </div>
 
       <BulkActionsBar

@@ -20,6 +20,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function ShiftsPage() {
@@ -79,9 +80,28 @@ export default function ShiftsPage() {
       subtitle="تنظيم وجدولة ورديات العمل"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الورديات" }]}
       actions={
-        <Link href="/hr/shifts/create">
-          <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة وردية</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_shifts"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "ورديات العمل", total: items.length },
+              items: items.map((s: any) => ({
+                "الاسم": s.name || "—",
+                "الكود": s.code || "—",
+                "وقت البداية": s.startTime || "—",
+                "وقت النهاية": s.endTime || "—",
+                "الساعات": s.totalHours ?? "—",
+                "أيام العمل": s.workDays || "—",
+                "الحالة": s.status || "—",
+              })),
+            }}
+          />
+          <Link href="/hr/shifts/create">
+            <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة وردية</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />

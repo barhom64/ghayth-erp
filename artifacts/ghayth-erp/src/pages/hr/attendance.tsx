@@ -28,6 +28,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { useAppContext } from "@/contexts/app-context";
 import { PENALTY_LEVELS } from "@/lib/hr-type-maps";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 
 // P02-M1 — `new Date(...).toISOString().slice(0, 10)` converts the
@@ -254,6 +255,23 @@ export default function AttendancePage() {
               تسجيل حضور
             </GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_hr_attendance"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "سجل الحضور والانصراف", total: filtered.length },
+              items: filtered.map((a: any) => ({
+                "الموظف": a.employeeName || "—",
+                "التاريخ": a.date || "—",
+                "الدخول": a.checkIn || "—",
+                "الخروج": a.checkOut || "—",
+                "ساعات العمل": a.workHours ?? "—",
+                "التأخر": a.lateMinutes ?? 0,
+                "الحالة": a.status || "—",
+              })),
+            }}
+          />
           <ExportButton
             endpoint="/export/excel/attendance"
             filename="attendance.xlsx"

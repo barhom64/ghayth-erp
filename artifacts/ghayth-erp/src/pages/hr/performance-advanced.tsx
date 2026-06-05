@@ -11,6 +11,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function PerformanceAdvancedPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["performance"], "/hr/performance");
@@ -44,6 +45,23 @@ export default function PerformanceAdvancedPage() {
       title="تحليلات الأداء المتقدمة"
       subtitle="تحليل مؤشرات الأداء والمقارنات المعيارية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات الأداء المتقدمة" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_performance_advanced"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "تحليلات الأداء المتقدمة", total: items.length },
+            items: items.map((e: any) => ({
+              "الموظف": e.employeeName || e.name || "—",
+              "المنصب": e.position || e.jobTitle || "—",
+              "النتيجة": e.score ?? e.rating ?? "—",
+              "التصنيف": e.rank || e.grade || "—",
+              "آخر تقييم": e.lastEvaluatedAt || e.lastReviewDate || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />

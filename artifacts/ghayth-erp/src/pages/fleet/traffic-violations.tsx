@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -181,12 +182,31 @@ export default function TrafficViolationsPage() {
       subtitle="تتبع وإدارة مخالفات مركبات الأسطول"
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "المخالفات المرورية" }]}
       actions={
-        <GuardedButton perm="fleet:create" onClick={() => setShowForm(!showForm)} size="sm">
-      <FleetTabsNav />
-          <Plus className="w-4 h-4 me-1" /> تسجيل مخالفة
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_traffic_violations"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "المخالفات المرورية", total: violations.length },
+              items: violations.map((v: any) => ({
+                "المركبة": v.plateNumber || "—",
+                "السائق": v.driverName || "—",
+                "نوع المخالفة": v.violationType || "—",
+                "تاريخ المخالفة": v.violationDate || "—",
+                "الموقع": v.location || "—",
+                "الغرامة": v.fineAmount ?? 0,
+                "الحالة": v.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton perm="fleet:create" onClick={() => setShowForm(!showForm)} size="sm">
+            <Plus className="w-4 h-4 me-1" /> تسجيل مخالفة
+          </GuardedButton>
+        </div>
       }
     >
+      <FleetTabsNav />
       <div className="grid grid-cols-3 gap-4">
         <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{violations.length}</div><div className="text-xs text-muted-foreground">إجمالي المخالفات</div></CardContent></Card>
         <Card className="border-status-error-surface bg-status-error-surface">

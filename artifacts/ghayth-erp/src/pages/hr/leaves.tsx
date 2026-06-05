@@ -31,6 +31,7 @@ import { LEAVE_TYPES, APPROVAL_ROLES } from "@/lib/hr-type-maps";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 function LeaveApprovalStages({ leaveId, leaveStatus }: { leaveId: number; leaveStatus: string }) {
   const { data } = useApiQuery<any>(
@@ -228,6 +229,23 @@ export default function LeavesPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "طلبات الإجازات" }]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_leaves"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "طلبات الإجازات", total: filtered.length },
+              items: filtered.map((l: any) => ({
+                "الموظف": l.employeeName || "—",
+                "النوع": l.leaveType || l.type || "—",
+                "من": l.startDate || "—",
+                "إلى": l.endDate || "—",
+                "الأيام": l.days ?? 0,
+                "السبب": l.reason || "—",
+                "الحالة": l.status || "—",
+              })),
+            }}
+          />
           <Link href="/hr/leaves/create">
             <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />طلب إجازة</GuardedButton>
           </Link>

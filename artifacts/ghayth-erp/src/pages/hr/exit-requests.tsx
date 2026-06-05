@@ -26,6 +26,7 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { EXIT_TYPES, EXIT_REQUEST_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const STATUS_OPTIONS = Object.entries(EXIT_REQUEST_STATUS).map(([value, { label }]) => ({ value, label }));
 
 export default function ExitRequestsPage() {
@@ -218,12 +219,30 @@ export default function ExitRequestsPage() {
       subtitle="سير عمل الاستقالة والفصل — إخلاء طرف وتصفية مستحقات"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Link href="/hr/exit/create">
-          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            طلب نهاية خدمة
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_exit_requests"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "طلبات نهاية الخدمة", total: filtered.length },
+              items: filtered.map((r: any) => ({
+                "الموظف": r.employeeName || "—",
+                "نوع الإنهاء": r.exitType || r.type || "—",
+                "تاريخ الطلب": r.requestDate || r.createdAt || "—",
+                "آخر يوم": r.lastWorkingDay || "—",
+                "السبب": r.reason || "—",
+                "الحالة": r.status || "—",
+              })),
+            }}
+          />
+          <Link href="/hr/exit/create">
+            <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              طلب نهاية خدمة
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />

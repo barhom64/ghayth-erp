@@ -47,6 +47,7 @@ const OPERATION_LABELS: Record<string, string> = {
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 
 export default function ExpensesPage() {
@@ -198,6 +199,23 @@ export default function ExpensesPage() {
           <Link href="/finance/expenses/create">
             <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة مصروف</GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_finance_expenses"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "المصروفات", total: filtered.length },
+              items: filtered.map((e: any) => ({
+                "المرجع": e.ref || e.id,
+                "التاريخ": e.expenseDate || e.date || "—",
+                "الفئة": e.category || "—",
+                "البيان": e.description || "—",
+                "المبلغ": e.amount ?? 0,
+                "مركز التكلفة": e.costCenterName || e.costCenter || "—",
+                "الحالة": e.status || "—",
+              })),
+            }}
+          />
         </>
       }
     >

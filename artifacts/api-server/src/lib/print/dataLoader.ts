@@ -225,6 +225,9 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "fleet_trip":
     case "trip":
       return await loadFleetTrip(companyId, entityId);
+    case "cargo_manifest":
+    case "manifest":
+      return await loadCargoManifest(companyId, entityId);
     case "fuel_log":
       return await loadFuelLog(companyId, entityId);
     case "traffic_violation":
@@ -1162,6 +1165,36 @@ async function loadFleetTrip(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   return { entity: trip ?? { id } };
+}
+
+// Cargo manifest — bill of lading for a single freight job. JOINs the
+// customer + vehicle + driver names so the printed بوليصة matches the
+// detail-page sub-header. Items array drives the {{#each items}} block.
+async function loadCargoManifest(companyId: number, id: string) {
+  const [m] = await rawQuery<Record<string, unknown>>(
+    `SELECT cm.*,
+            v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel",
+            d.name AS "driverName", d.phone AS "driverPhone",
+            d."licenseNumber" AS "driverLicense",
+            c.name AS "linkedCustomerName", c.phone AS "linkedCustomerPhone"
+       FROM cargo_manifests cm
+       LEFT JOIN fleet_vehicles v ON v.id = cm."vehicleId" AND v."companyId" = $2
+       LEFT JOIN fleet_drivers d ON d.id = cm."driverId" AND d."companyId" = $2
+       LEFT JOIN clients c ON c.id = cm."customerId" AND c."companyId" = $2
+      WHERE cm.id = $1 AND cm."companyId" = $2 AND cm."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!m) return { entity: { id } };
+  const items = await rawQuery<Record<string, unknown>>(
+    `SELECT description, quantity, "unitOfMeasure" AS unit, weight, "declaredValue",
+            "isHazmat", "hazmatClass", notes
+       FROM cargo_items
+      WHERE "manifestId" = $1 AND "deletedAt" IS NULL
+      ORDER BY id`,
+    [id]
+  ).catch(() => []);
+  return { entity: m, items };
 }
 
 // Note: removed my earlier loadFleetMaintenance — main's version above

@@ -17,6 +17,7 @@ import {
 } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Eye, Plus, Pencil, Trash2, AlertTriangle, Clock, HelpCircle, UserX } from "lucide-react";
@@ -281,12 +282,32 @@ export default function UmrahViolations() {
       subtitle="رصد المخالفات: تأخر المغادرة، الهروب، وأخرى"
       breadcrumbs={[{ label: "العمرة" }, { label: "المخالفات" }]}
       actions={
-        <GuardedButton perm="umrah:create" asChild className="gap-2">
-          <Link href="/umrah/violations/create">
-            <Plus className="h-4 w-4" />
-            مخالفة جديدة
-          </Link>
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_violations"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "مخالفات العمرة", total: violations.length },
+              items: violations.map((v: any) => ({
+                "الرقم المرجعي": v.referenceNumber || v.id,
+                "النوع": v.type || "—",
+                "الوكيل": v.agentName || "—",
+                "الوكيل الفرعي": v.subAgentName || "—",
+                "المعتمر": v.mutamerName || "—",
+                "قيمة الغرامة": v.penaltyAmount ?? 0,
+                "تاريخ الرصد": v.detectedAt || v.createdAt || "—",
+                "الحالة": v.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton perm="umrah:create" asChild className="gap-2">
+            <Link href="/umrah/violations/create">
+              <Plus className="h-4 w-4" />
+              مخالفة جديدة
+            </Link>
+          </GuardedButton>
+        </div>
       }
     >
       <UmrahTabsNav />
