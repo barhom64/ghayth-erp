@@ -21,6 +21,7 @@ import {
   toDateISO,
 } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { getEmployeeCustodyBalance } from "../lib/custodyBalance.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { hashPassword } from "../lib/auth.js";
@@ -1159,35 +1160,10 @@ router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: 
     const subsidiaryAccount = subsidiaryRows.find((r) => r.accountType === "custody") ?? null;
     const advanceAccount = subsidiaryRows.find((r) => r.accountType === "advance") ?? null;
 
-    // Outstanding custody = SUM(debit on CUSTODY-* JEs) - SUM(credit on
-    // CUSTODY-SETTLE-* JEs) filtered by the employee dimension on the
-    // journal_lines. Pattern mirrors finance-custodies.ts /summary.
-    const [custodyBal] = await rawQuery<{ outstanding: string; openCount: string }>(
-      `WITH advanced AS (
-         SELECT je.id, je.ref, COALESCE(SUM(jl.debit), 0) AS amount
-           FROM journal_entries je
-           JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
-          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
-            AND je."balancesApplied" = true
-            AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
-            AND jl."employeeId" = $2
-          GROUP BY je.id, je.ref
-       ),
-       settled AS (
-         SELECT je2.description AS "originalRef", COALESCE(SUM(jl2.credit), 0) AS settled_amount
-           FROM journal_entries je2
-           JOIN journal_lines jl2 ON jl2."journalId" = je2.id AND jl2.credit > 0
-          WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL
-            AND je2."balancesApplied" = true
-            AND je2.ref LIKE 'CUSTODY-SETTLE%'
-          GROUP BY je2.description
-       )
-       SELECT COALESCE(SUM(GREATEST(a.amount - COALESCE(s.settled_amount, 0), 0)), 0)::text AS outstanding,
-              COUNT(*) FILTER (WHERE a.amount > COALESCE(s.settled_amount, 0))::text AS "openCount"
-         FROM advanced a
-         LEFT JOIN settled s ON s."originalRef" = a.ref`,
-      [scope.companyId, id]
-    ).catch(() => [{ outstanding: "0", openCount: "0" }]);
+    // Outstanding custody via the shared helper — same CTE that
+    // finance-custodies.ts /summary uses, just extracted so the
+    // CUSTODY ref convention has one source of truth.
+    const custodyBal = await getEmployeeCustodyBalance(scope.companyId, id);
 
     // Driver linkage — left-join the vehicle so we still see the driver
     // record when no vehicle is assigned yet. The vehicle ↔ driver edge

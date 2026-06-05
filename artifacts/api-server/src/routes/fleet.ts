@@ -16,6 +16,7 @@ import { hashPassword } from "../lib/auth.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { getDriverCustodyBalance } from "../lib/custodyBalance.js";
 import { sendMessage } from "../lib/messageSender.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -1013,36 +1014,10 @@ router.get("/drivers/:id/integrated-summary", authorize({ feature: "fleet.vehicl
       [id, scope.companyId]
     ).catch(() => []);
 
-    // Custody balance — match the /employees/:id/finance-summary pattern, but
-    // filter journal_lines by driverId OR (employeeId == linked employee) so
-    // custody given against either dimension is rolled up.
-    const linkedEmpId = driver.employeeId;
-    const [custodyBal] = await rawQuery<{ outstanding: string; openCount: string }>(
-      `WITH advanced AS (
-         SELECT je.id, je.ref, COALESCE(SUM(jl.debit), 0) AS amount
-           FROM journal_entries je
-           JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
-          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
-            AND je."balancesApplied" = true
-            AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
-            AND (jl."driverId" = $2 OR ($3::int IS NOT NULL AND jl."employeeId" = $3))
-          GROUP BY je.id, je.ref
-       ),
-       settled AS (
-         SELECT je2.description AS "originalRef", COALESCE(SUM(jl2.credit), 0) AS settled_amount
-           FROM journal_entries je2
-           JOIN journal_lines jl2 ON jl2."journalId" = je2.id AND jl2.credit > 0
-          WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL
-            AND je2."balancesApplied" = true
-            AND je2.ref LIKE 'CUSTODY-SETTLE%'
-          GROUP BY je2.description
-       )
-       SELECT COALESCE(SUM(GREATEST(a.amount - COALESCE(s.settled_amount, 0), 0)), 0)::text AS outstanding,
-              COUNT(*) FILTER (WHERE a.amount > COALESCE(s.settled_amount, 0))::text AS "openCount"
-         FROM advanced a
-         LEFT JOIN settled s ON s."originalRef" = a.ref`,
-      [scope.companyId, id, linkedEmpId]
-    ).catch(() => [{ outstanding: "0", openCount: "0" }]);
+    // Custody balance via the shared helper. Folds driver dimension
+    // AND linked-employee dimension together so custody given against
+    // either side rolls up on the same screen.
+    const custodyBal = await getDriverCustodyBalance(scope.companyId, id, driver.employeeId);
 
     // 30-day operational metrics. Single CTE-style query is overkill —
     // three parallel aggregates are clearer + the planner handles them fine
