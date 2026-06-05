@@ -80,7 +80,7 @@ import {
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
-import { generateSequentialNumber } from "../lib/hrHelpers.js";
+import { generateSequentialNumber, calcGratuity, type ExitType } from "../lib/hrHelpers.js";
 import { HR_TABLES, NUMBER_PREFIXES } from "../lib/hrEnums.js";
 import { logger } from "../lib/logger.js";
 
@@ -313,25 +313,35 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
     );
     const yearsOfService = dayDiff / 365.25;
     const salary = Number(emp.salary || 0);
-    const first5 = Math.min(yearsOfService, 5);
-    const above5 = Math.max(yearsOfService - 5, 0);
-    let gratuity = (salary / 2) * first5 + salary * above5;
 
-    // المادة 85: الاستقالة — التخفيض يُحسب على كل شريحة على حدة
-    if (b.exitType === "resignation") {
-      if (yearsOfService < 2) gratuity = 0;
-      else if (yearsOfService < 5) gratuity = (salary / 2) * first5 / 3;
-      else if (yearsOfService < 10) {
-        gratuity = ((salary / 2) * first5 * 2) / 3 + (salary * above5 * 2) / 3;
-      }
-      // 10+ سنوات: كامل المكافأة
-    }
-    gratuity = roundTo2(gratuity);
+    // Articles 84 + 85 + 80 of the Saudi Labor Law:
+    //   - termination (الفصل من صاحب العمل): full gratuity (0.5 month
+    //     × first 5 years + 1.0 month × remaining years).
+    //   - resignation (الاستقالة): fraction of full — 0 if <2y, 1/3 if
+    //     2–5y, 2/3 if 5–10y, full if 10y+.
+    //   - just_cause (الفصل لسبب — المادة 80): no gratuity.
+    // The exitType comes from the request schema; default is
+    // "termination" if unset.
+    const eosExitType: ExitType =
+      b.exitType === "resignation"
+        ? "resignation"
+        : b.exitType === "just_cause"
+          ? "just_cause"
+          : "termination";
+    const eos = calcGratuity(salary, yearsOfService, eosExitType);
+    const gratuity = eos.total;
 
-    // رصيد الإجازات
+    // رصيد الإجازات — استعلم من جدول hr_leave_balances (الحالي) لا
+    // leave_balances (المهجور). الحقول الفعلية: entitled, used, reserved
+    // و(carried سطر اختياري). نأخذ السنة الأخيرة فقط من الإجازة السنوية
+    // كما تنص المادة 109 — المتبقي من السنوات السابقة يُعالج كمستحقّ سابق
+    // إن وُجد. للتبسيط نأخذ مجموع الأرصدة الفعّالة لجميع أنواع الإجازات
+    // العادية وقت التسوية.
     const [lb] = await rawQuery<{ balance: number | string | null }>(
-      `SELECT COALESCE(SUM(entitled - used - pending + carried), 0) AS balance FROM leave_balances
-       WHERE "employeeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1 LIMIT 1) AND "companyId" = $2`,
+      `SELECT COALESCE(SUM(GREATEST(entitled - used - reserved, 0)), 0) AS balance
+       FROM hr_leave_balances
+       WHERE "employeeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1 LIMIT 1)
+         AND "companyId" = $2`,
       [b.assignmentId, scope.companyId]
     ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ balance: 0 }] as { balance: number }[]; });
     const leaveBalance = Number(lb?.balance ?? 0);

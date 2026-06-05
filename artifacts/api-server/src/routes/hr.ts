@@ -34,6 +34,11 @@ import {
   softDeleteJournalEntry,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import {
+  annualLeaveEntitlement,
+  countLeaveDaysExcludingRest,
+  yearsOfService as calcYearsOfService,
+} from "../lib/hrHelpers.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, LifecycleError } from "../lib/lifecycleEngine.js";
 import {
@@ -82,6 +87,10 @@ const violationSchema = z.object({
   actionTaken: z.string().optional(),
 });
 
+// Saudi Labor Law Article 104: the worker is entitled to a paid
+// 24-hour weekly rest. The default rest day is Friday; an employer may
+// substitute another day with worker consent, but the shift MUST omit
+// at least one weekday. A 7-day shift definition is illegal.
 const shiftSchema = z.object({
   name: z.string().min(1, "اسم الوردية مطلوب"),
   startTime: z.string().optional(),
@@ -97,6 +106,26 @@ const shiftSchema = z.object({
   flexStartLatest: z.string().optional(),
   breakMinutes: z.coerce.number().optional(),
   gracePeriod: z.coerce.number().optional(),
+}).superRefine((val, ctx) => {
+  if (val.days == null) return;
+  let arr: number[] = [];
+  if (Array.isArray(val.days)) {
+    arr = val.days.map((d) => Number(d)).filter((n) => Number.isFinite(n));
+  } else if (typeof val.days === "string") {
+    arr = val.days
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n));
+  }
+  const unique = new Set(arr.filter((n) => n >= 0 && n <= 6));
+  if (unique.size >= 7) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["days"],
+      message:
+        "نظام العمل السعودي (المادة 104): يلزم تخصيص يوم راحة أسبوعي واحد على الأقل. لا يجوز تعريف وردية تعمل 7 أيام في الأسبوع.",
+    });
+  }
 });
 
 const performanceSchema = z.object({
@@ -1443,20 +1472,42 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     }
 
     const start = new Date(startDate);
-    const end = new Date(endDate);
-    let rawDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1);
     const year = start.getFullYear();
 
-    // Exclude public holidays that fall within the leave range from the day count
+    // Saudi Labor Law Article 104: Friday is the default weekly rest
+    // day. Article 109: leave-day counting excludes the weekly rest day
+    // and any public holiday that falls inside the leave window — those
+    // days are not deducted from the entitlement balance.
+    const REST_DAYS = [5]; // Friday by default; future: read per-branch from settings
+    const workingDaysInRange = countLeaveDaysExcludingRest(
+      startDate,
+      endDate,
+      REST_DAYS,
+    );
+
+    // Public holidays inside the range that ALSO fall on a working day
+    // (already excluded if they're a Friday).
     const holidayOverlap = await rawQuery<Record<string, unknown>>(
-      `SELECT SUM(LEAST("endDate"::date, $2::date) - GREATEST("startDate"::date, $1::date) + 1) AS "holidayDays"
+      `SELECT COALESCE(SUM(GREATEST(
+          LEAST("endDate"::date, $2::date) - GREATEST("startDate"::date, $1::date) + 1
+            - (
+              -- count Fridays that fall in the overlap so we don't
+              -- double-deduct (already excluded above).
+              SELECT COUNT(*) FROM generate_series(
+                GREATEST("startDate"::date, $1::date),
+                LEAST("endDate"::date, $2::date),
+                interval '1 day'
+              ) AS d WHERE EXTRACT(DOW FROM d) = 5
+            ),
+          0
+       )), 0) AS "holidayDays"
        FROM public_holidays
        WHERE "companyId"=$3
          AND "startDate" <= $2::date AND "endDate" >= $1::date AND "deletedAt" IS NULL`,
       [startDate, endDate, scope.companyId]
     );
     const holidayDays = Math.max(0, Number(holidayOverlap[0]?.holidayDays ?? 0));
-    const days = Math.max(1, rawDays - holidayDays);
+    const days = Math.max(1, workingDaysInRange - holidayDays);
 
     // ── Validation 1: Fetch leave type with extended rules ──
     const [leaveType] = await rawQuery<Record<string, unknown>>(
@@ -1504,7 +1555,21 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
            AND EXTRACT(YEAR FROM "startDate") = $3 AND "deletedAt" IS NULL`,
         [scope.employeeId, leaveTypeId, year]
       );
-      const entitled = Number(leaveType.annualDays ?? 21);
+      // Saudi Labor Law Article 109: 21 days during the first 5 years
+      // of service, 30 days after 5 years. Auto-upgrade based on the
+      // employee's years of service at the start of the leave year.
+      const [hireRow] = await rawQuery<Record<string, unknown>>(
+        `SELECT "hireDate" FROM employee_assignments WHERE id = $1`,
+        [scope.activeAssignmentId]
+      );
+      const hireDate = hireRow?.hireDate
+        ? String(hireRow.hireDate).slice(0, 10)
+        : `${year}-01-01`;
+      const yearsServed = calcYearsOfService(hireDate, `${year}-01-01`);
+      const entitled = annualLeaveEntitlement(
+        yearsServed,
+        leaveType.annualDays as number | null,
+      );
       const alreadyUsed = Number(usedRow?.used ?? 0);
       const effectiveRemaining = entitled - alreadyUsed;
       if (effectiveRemaining < days) {
@@ -2591,20 +2656,31 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     }
 
     const gosiSettings = await rawQuery<{ key: string; value: string }>(
-      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate','gosiCeiling')`,
+      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate','gosiCeiling','gosiIncludeHousing')`,
       [scope.companyId]
     );
     const gosiSettingsMap = new Map(gosiSettings.map((r) => [r.key, r.value]));
     const gosiComponent = salaryComponents.find((c) => c.isGosi && c.type === 'deduction');
+    // Saudi GOSI Article 19: total 22% on basic + housing (employee 10%
+    // + employer 12%). Previous defaults of 9.75/11.75 understated the
+    // liability. Companies that need the older split must explicitly set
+    // gosiEmployeeRate/gosiEmployerRate in system_settings.
     const GOSI_EMPLOYEE_RATE = gosiComponent && Number(gosiComponent.value) > 0
       ? Number(gosiComponent.value) / 100
-      : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "9.75") / 100;
-    const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "11.75") / 100;
+      : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "10") / 100;
+    const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "12") / 100;
     // Saudi GOSI caps the contribution wage at SAR 45,000/month. A
     // company can override via system_settings.gosiCeiling (e.g. set
     // to a huge number to effectively disable, or to a different
     // ceiling if the regulator changes it).
     const GOSI_CEILING = Number(gosiSettingsMap.get("gosiCeiling") ?? "45000");
+    // GOSI Article 19: contribution wage = basic salary + housing
+    // allowance (transport and "other" allowances are NOT included).
+    // Default ON; companies that need the legacy basic-only base must
+    // set system_settings.gosiIncludeHousing = 'false' explicitly.
+    const GOSI_INCLUDE_HOUSING =
+      (gosiSettingsMap.get("gosiIncludeHousing") ?? "true").toLowerCase() !==
+      "false";
 
     const earningComponents = salaryComponents.filter((c) => c.type === 'earning' && !c.isGosi);
 
@@ -2646,9 +2722,23 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         [scope.companyId, targetPeriod]
       ),
       rawQuery<Record<string, unknown>>(
+        // Saudi Labor Law Article 109: weekly rest day (default Friday)
+        // is NOT a payable absence. Likewise public holidays are paid
+        // — neither should incur the (basic/30) absence deduction.
+        // EXTRACT(DOW FROM date): 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat.
         `SELECT a."assignmentId", COUNT(*) AS "absentDays"
          FROM attendance a
-         WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent' AND a."deletedAt" IS NULL
+         WHERE a."companyId" = $1
+           AND TO_CHAR(a.date, 'YYYY-MM') = $2
+           AND a.status = 'absent'
+           AND a."deletedAt" IS NULL
+           AND EXTRACT(DOW FROM a.date) <> 5
+           AND NOT EXISTS (
+             SELECT 1 FROM public_holidays ph
+             WHERE ph."companyId" = a."companyId"
+               AND ph."deletedAt" IS NULL
+               AND a.date BETWEEN ph."startDate" AND ph."endDate"
+           )
          GROUP BY a."assignmentId"`,
         [scope.companyId, targetPeriod]
       ),
@@ -2762,7 +2852,13 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       const absenceDeduction = roundTo2(absentDays * (basic / 30));
       const violationDeduction = (penaltyMap.get(aId) ?? 0) + (violationMap.get(aId) ?? 0);
       const loanDeduction = loanMap.get(aId) ?? 0;
-      const gosiBase = Math.min(basic, GOSI_CEILING);
+      // GOSI Article 19: contribution wage = basic + housing allowance,
+      // capped at GOSI_CEILING. Transport & "other" earnings are NOT
+      // included in the contribution base.
+      const gosiContributionWage = GOSI_INCLUDE_HOUSING
+        ? basic + housingAllowance
+        : basic;
+      const gosiBase = Math.min(gosiContributionWage, GOSI_CEILING);
       const gosiEmployee = roundTo2(gosiBase * GOSI_EMPLOYEE_RATE);
       const gosiEmployer = roundTo2(gosiBase * GOSI_EMPLOYER_RATE);
       totalGosiEmployer += gosiEmployer;
