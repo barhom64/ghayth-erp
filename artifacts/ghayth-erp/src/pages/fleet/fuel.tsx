@@ -13,6 +13,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function FuelPage() {
   const [, navigate] = useLocation();
@@ -39,9 +40,29 @@ export default function FuelPage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "استهلاك الوقود" }]}
       loading={isLoading}
       actions={
-        <Link href="/fleet/fuel/create">
-          <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />تسجيل تعبئة</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_fuel"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "سجل استهلاك الوقود", total: items.length },
+              items: items.map((f: any) => ({
+                "المركبة": f.plateNumber || f.vehiclePlate || "—",
+                "السائق": f.driverName || "—",
+                "التاريخ": f.fuelDate || f.date || "—",
+                "نوع الوقود": f.fuelType || "—",
+                "الكمية (لتر)": f.quantity ?? 0,
+                "السعر": f.pricePerLiter ?? 0,
+                "الإجمالي": f.totalCost ?? 0,
+                "العدّاد": f.odometer ?? "—",
+              })),
+            }}
+          />
+          <Link href="/fleet/fuel/create">
+            <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />تسجيل تعبئة</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <FleetTabsNav />

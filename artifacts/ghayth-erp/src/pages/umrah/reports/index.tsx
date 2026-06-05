@@ -30,6 +30,14 @@ const REPORTS: ReportTile[] = [
     category: "مالية",
   },
   {
+    href: "/umrah/reports/subagent-balances",
+    title: "أرصدة الوكلاء الفرعيين",
+    description: "الوكلاء الفرعيون (مصدر الدفعات الفعلي) — المُفوتر، المُحصَّل، الدفعات، الرصيد",
+    icon: Wallet,
+    tone: "text-status-success-foreground bg-status-success-surface",
+    category: "مالية",
+  },
+  {
     href: "/umrah/reports/pilgrim-movements",
     title: "حركة المعتمرين",
     description: "وصول / مغادرة / تجاوز / متأخر عن المغادرة — لقطة يومية مع drill-down",

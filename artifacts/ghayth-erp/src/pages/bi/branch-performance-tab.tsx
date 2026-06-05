@@ -9,6 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 export function BranchPerformanceTab() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-branch-perf"], "/bi/reports/branch-performance");
@@ -41,7 +42,24 @@ export function BranchPerformanceTab() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">مقارنة أداء الفروع</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold">مقارنة أداء الفروع</h2>
+        <PrintButton
+          entityType="report_bi_branch_performance"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "مقارنة أداء الفروع", total: rows.length },
+            items: rows.map((r: any) => ({
+              "الفرع": r.branchName || "—",
+              "الإيرادات": r.revenue ?? 0,
+              "المصاريف": r.expenses ?? 0,
+              "صافي الربح": r.netProfit ?? r.profit ?? 0,
+              "الموظفون": r.employeeCount ?? "—",
+            })),
+          }}
+        />
+      </div>
       <DataTable
         columns={columns}
         data={rows}

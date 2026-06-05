@@ -15,6 +15,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { ACTIVITY_TYPES, ACTIVITY_STATUS } from "@/lib/crm-type-maps";
 
 import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const TYPE_OPTIONS = Object.entries(ACTIVITY_TYPES).map(([value, label]) => ({ value, label }));
 
 const STATUS_OPTIONS = [
@@ -108,6 +109,27 @@ export default function CrmActivities() {
     <PageShell
       title="أنشطة إدارة العملاء"
       breadcrumbs={[{ href: "/crm", label: "إدارة العلاقات" }]}
+      actions={
+        <PrintButton
+          entityType="report_crm_activities"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: {
+              title: "أنشطة CRM",
+              total: filtered.length,
+            },
+            items: filtered.map((a: any) => ({
+              "النوع": a.type || a.activityType || "—",
+              "الموضوع": a.subject || a.title || "—",
+              "العميل": a.clientName || "—",
+              "المسؤول": a.userName || a.assigneeName || "—",
+              "التاريخ": a.scheduledAt || a.dueDate || a.createdAt || "—",
+              "الحالة": a.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <CrmTabsNav />
       <KpiGrid items={kpis} />

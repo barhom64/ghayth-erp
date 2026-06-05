@@ -29,6 +29,7 @@ import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useState } from "react";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const STATUS_OPTIONS = Object.entries(OVERTIME_STATUS).map(([value, { label }]) => ({ value, label }));
 const STATUS_MAP = OVERTIME_STATUS;
 
@@ -271,12 +272,34 @@ export default function OvertimePage() {
       subtitle="إدارة طلبات العمل الإضافي — مرتبطة بالرواتب تلقائياً"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Link href="/hr/overtime/create">
-          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            طلب وقت إضافي
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_overtime"
+            entityId="list"
+            label="طباعة القائمة"
+            payload={{
+              entity: {
+                title: "طلبات الوقت الإضافي",
+                total: filtered.length,
+                pending: stats.pending ?? 0,
+                approved: stats.approved ?? 0,
+              },
+              items: filtered.map((r: any) => ({
+                "الموظف": r.employeeName || "—",
+                "التاريخ": r.requestDate || r.date || "—",
+                "الساعات": r.hours ?? 0,
+                "السبب": r.reason || "—",
+                "الحالة": r.status || "—",
+              })),
+            }}
+          />
+          <Link href="/hr/overtime/create">
+            <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              طلب وقت إضافي
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />

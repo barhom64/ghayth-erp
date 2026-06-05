@@ -31,6 +31,7 @@ import {
   applyFilters,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -148,6 +149,22 @@ export default function ViolationsPage() {
               <Plus className="h-4 w-4" /> تسجيل مخالفة
             </GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_hr_violations"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "مخالفات الموظفين", total: memos.length },
+              items: memos.map((v: any) => ({
+                "الموظف": v.employeeName || "—",
+                "النوع": v.violationType || v.penaltyLabel || "—",
+                "التاريخ": v.violationDate || v.date || "—",
+                "الخصم": v.totalDeductionAmount ?? v.amount ?? 0,
+                "المُذكِّر": v.issuedByName || "—",
+                "الحالة": v.status || "—",
+              })),
+            }}
+          />
         </div>
       }
     >

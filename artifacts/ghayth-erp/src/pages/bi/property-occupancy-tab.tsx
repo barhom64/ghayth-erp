@@ -8,6 +8,7 @@ import { formatNumber } from "@/lib/formatters";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
+import { PrintButton } from "@/components/shared/print-button";
 
 export function PropertyOccupancyTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["bi-property-occ"], "/bi/reports/property-occupancy");
@@ -18,7 +19,23 @@ export function PropertyOccupancyTab() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">نسبة الإشغال العقاري</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold">نسبة الإشغال العقاري</h2>
+        <PrintButton
+          entityType="report_bi_property_occupancy"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "تقرير نسبة الإشغال العقاري", total: rows.length },
+            items: rows.map((r: any) => ({
+              "المبنى": r.buildingName || "—",
+              "إجمالي الوحدات": r.totalUnits ?? 0,
+              "المؤجَّر": r.rentedUnits ?? 0,
+              "نسبة الإشغال (%)": r.occupancyRate ?? 0,
+            })),
+          }}
+        />
+      </div>
       {rows.length > 0 && (
         <Card>
           <CardHeader><CardTitle>نسبة الإشغال بالمباني</CardTitle></CardHeader>

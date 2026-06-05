@@ -16,6 +16,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const defaultCenter: [number, number] = [24.7136, 46.6753];
 
 function AttendanceMap({ items }: { items: any[] }) {
@@ -98,6 +99,24 @@ export default function FieldTrackingPage() {
       title="التتبع الميداني"
       subtitle="متابعة مواقع الموظفين الميدانيين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "التتبع الميداني" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_field_tracking"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "تقرير التتبع الميداني", total: items.length },
+            items: items.map((v: any) => ({
+              "الموظف": v.employeeName || "—",
+              "التاريخ": v.date || "—",
+              "وقت التسجيل": v.checkIn || "—",
+              "خط العرض": v.latitude ?? "—",
+              "خط الطول": v.longitude ?? "—",
+              "الحالة": v.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />

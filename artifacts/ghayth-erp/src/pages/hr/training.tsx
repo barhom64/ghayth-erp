@@ -24,6 +24,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "planned",   label: "مخطط"   },
@@ -135,9 +136,28 @@ export default function TrainingPage() {
       subtitle="إدارة برامج التدريب وتسجيلات الموظفين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "برامج التدريب" }]}
       actions={
-        <Link href="/hr/training/create">
-          <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة برنامج</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_training"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "برامج التدريب", total: filtered.length },
+              items: filtered.map((t: any) => ({
+                "البرنامج": t.title || "—",
+                "المدرّب": t.trainer || "—",
+                "النوع": t.type || t.category || "—",
+                "تاريخ البداية": t.startDate || "—",
+                "تاريخ النهاية": t.endDate || "—",
+                "عدد الحضور": t.enrolledCount ?? t.attendees ?? 0,
+                "الحالة": t.status || "—",
+              })),
+            }}
+          />
+          <Link href="/hr/training/create">
+            <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة برنامج</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />
