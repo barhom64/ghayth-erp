@@ -15444,6 +15444,40 @@ CREATE INDEX idx_cargo_items_hazmat
 
 
 --
+-- Multi-assignee tasks (migration 250) — task_assignees junction + tasks.createdBy
+--
+
+ALTER TABLE public.tasks
+    ADD COLUMN "createdBy" INTEGER,
+    ADD COLUMN "updatedAt" TIMESTAMPTZ DEFAULT NOW();
+
+CREATE INDEX idx_tasks_createdBy
+    ON public.tasks ("companyId", "createdBy") WHERE "deletedAt" IS NULL;
+
+CREATE TABLE public.task_assignees (
+    id SERIAL PRIMARY KEY,
+    "companyId" INTEGER NOT NULL,
+    "taskId" INTEGER NOT NULL,
+    "assignmentId" INTEGER NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'member',
+    "assignedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "assignedBy" INTEGER,
+    "removedAt" TIMESTAMPTZ,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT task_assignees_role_check CHECK (role IN ('primary', 'member')),
+    CONSTRAINT task_assignees_task_fk FOREIGN KEY ("taskId") REFERENCES public.tasks(id) ON DELETE CASCADE,
+    CONSTRAINT task_assignees_assignment_fk FOREIGN KEY ("assignmentId") REFERENCES public.employee_assignments(id) ON DELETE RESTRICT
+);
+
+CREATE UNIQUE INDEX uq_task_assignees_active
+    ON public.task_assignees ("taskId", "assignmentId") WHERE "removedAt" IS NULL;
+CREATE INDEX idx_task_assignees_assignment
+    ON public.task_assignees ("companyId", "assignmentId") WHERE "removedAt" IS NULL;
+CREATE INDEX idx_task_assignees_task
+    ON public.task_assignees ("taskId") WHERE "removedAt" IS NULL;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
