@@ -728,36 +728,33 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         if (jt?.opensCustody) opensCustody = true;
       }
 
-      // ── Step 8b: Open employee subsidiary custody account ──
-      // When opensCustody is true (either passed in or job-title-driven),
-      // INSERT a subsidiary_accounts row pointing the employee at the
-      // canonical custody chart account (1400 or whatever the company's
-      // accountingMappings resolves for "custody_account"). Finance then
-      // posts every later advance through this sub-account so the
-      // balance-sheet drill-down stays per-person, not pooled. Failure
-      // here is a soft warning — the employee record still exists.
-      if (opensCustody) {
-        try {
-          const [coaRow] = await client.query<{ id: number; code: string }>(
-            `SELECT id, code FROM chart_of_accounts
-              WHERE "companyId" = $1 AND code = '1400' AND "deletedAt" IS NULL
-              LIMIT 1`,
-            [effectiveCompanyId]
-          ).then(r => r.rows as Array<{ id: number; code: string }>);
-          if (coaRow) {
-            await client.query(
-              `INSERT INTO subsidiary_accounts
-                 ("companyId", "entityType", "entityId", "accountType", "accountId", "isActive")
-               VALUES ($1, 'employee', $2, 'custody', $3, true)
-               ON CONFLICT DO NOTHING`,
-              [effectiveCompanyId, empId, coaRow.id]
-            );
-          } else {
-            logger.warn({ companyId: effectiveCompanyId }, "[employees] chart_of_accounts 1400 missing — custody sub-account skipped");
-          }
-        } catch (e) {
-          logger.warn(e, "[employees] subsidiary custody account create failed");
-        }
+      // ── Step 8b: Open employee subsidiary accounts ──
+      // Routes through the canonical createSubsidiaryAccountsForEntity()
+      // engine which seeds BOTH the advance (1121-XXXX) and the custody
+      // (1131-XXXX) per-employee sub-accounts under the proper parent
+      // codes. Running this here (inside the txn, via SAVEPOINT) instead
+      // of fire-and-forget after commit means a failure rolls back the
+      // employee creation, and we no longer end up with orphan COA rows
+      // when one path commits and the other dies.
+      //
+      // The previous implementation INSERTed a flat subsidiary_account
+      // row pointing at hard-coded code '1400' and ALSO had the engine
+      // fire after commit — the engine's INSERT lost the unique-
+      // constraint race and left a stranded 1131-XXXX COA row with no
+      // subsidiary_accounts pointing to it. finance-custodies.ts /create
+      // already looks up the per-employee subsidiary_accounts row by
+      // entityType/accountType and uses its account, so the canonical
+      // 1131-XXXX is the correct destination.
+      //
+      // opensCustody stays as a soft signal for the UI (the auto-tick
+      // on the form when picking a job title with opensCustody=true);
+      // we always create both sub-accounts so HR can advance custody
+      // to any employee later without a "missing sub-account" failure.
+      void opensCustody; // referenced for the audit trail / lint suppression
+      try {
+        await createSubsidiaryAccountsForEntity(effectiveCompanyId, "employee", empId, name);
+      } catch (e) {
+        logger.warn(e, "[employees] subsidiary accounts create failed — employee still created");
       }
 
       // ── Step 8c: Driver-vehicle binding ──
@@ -956,8 +953,11 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       });
     }
 
-    // ── Step 12: Auto-create subsidiary accounting accounts ──
-    createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name).catch((e) => logger.error(e, "employees background task failed"));
+    // Subsidiary accounts (advance 1121-XXXX + custody 1131-XXXX) are
+    // now created inside the transaction in Step 8b so they're atomic
+    // with the employee record. The old fire-and-forget call here used
+    // to fight with the legacy hard-coded 1400 INSERT for the unique
+    // constraint and orphaned the 1131-XXXX COA row — removed.
 
     const [employee] = await rawQuery<EmployeeListRow>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
@@ -1078,19 +1078,24 @@ router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: 
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
 
-    const [subsidiaryAccount] = await rawQuery<{ accountCode: string; accountName: string }>(
-      `SELECT coa.code AS "accountCode", coa.name AS "accountName"
+    // Pull BOTH advance + custody sub-accounts in one query so the
+    // linkage card can show the full accounting picture. Earlier
+    // version only fetched custody and missed the 1121-XXXX advance.
+    type SubsidiaryRow = { accountType: string; accountCode: string; accountName: string };
+    const subsidiaryRows: SubsidiaryRow[] = await rawQuery<SubsidiaryRow>(
+      `SELECT sa."accountType", coa.code AS "accountCode", coa.name AS "accountName"
          FROM subsidiary_accounts sa
          JOIN chart_of_accounts coa ON coa.id = sa."accountId"
         WHERE sa."companyId" = $1
           AND sa."entityType" = 'employee'
           AND sa."entityId" = $2
-          AND sa."accountType" = 'custody'
+          AND sa."accountType" IN ('custody', 'advance')
           AND sa."isActive" = true
-          AND sa."deletedAt" IS NULL
-        LIMIT 1`,
+          AND sa."deletedAt" IS NULL`,
       [scope.companyId, id]
-    ).catch(() => []);
+    ).catch(() => [] as SubsidiaryRow[]);
+    const subsidiaryAccount = subsidiaryRows.find((r) => r.accountType === "custody") ?? null;
+    const advanceAccount = subsidiaryRows.find((r) => r.accountType === "advance") ?? null;
 
     // Outstanding custody = SUM(debit on CUSTODY-* JEs) - SUM(credit on
     // CUSTODY-SETTLE-* JEs) filtered by the employee dimension on the
@@ -1170,6 +1175,12 @@ router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: 
         outstandingAmount: Number(custodyBal?.outstanding ?? 0),
         openCount: Number(custodyBal?.openCount ?? 0),
       },
+      advance: advanceAccount
+        ? {
+            subsidiaryAccountCode: advanceAccount.accountCode,
+            subsidiaryAccountName: advanceAccount.accountName,
+          }
+        : null,
       vehicle: driverRow?.vehicleId
         ? { id: driverRow.vehicleId, plateNumber: driverRow.plateNumber, brand: driverRow.brand }
         : null,

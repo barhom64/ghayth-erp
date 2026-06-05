@@ -137,6 +137,7 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
   const { data } = useApiQuery<any>(["employee-finance-summary", employeeId], `/employees/${employeeId}/finance-summary`, !!employeeId);
   if (!data) return null;
   const custody = data.custody ?? {};
+  const advance = data.advance ?? null;
   const vehicle = data.vehicle ?? null;
   const driver = data.driver ?? null;
   const emails = data.emails ?? {};
@@ -150,7 +151,7 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">حساب العهدة الفرعي</p>
+            <p className="text-xs text-muted-foreground">حساب العهدة الفرعي (1131)</p>
             {custody.subsidiaryAccountCode ? (
               <>
                 <p className="font-mono text-sm font-bold" data-testid="finance-link-custody-code">{custody.subsidiaryAccountCode}</p>
@@ -158,6 +159,11 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
               </>
             ) : (
               <p className="text-xs text-muted-foreground">لا يوجد — أنشئ حساب فرعي للموظف من شاشة المحاسبة</p>
+            )}
+            {advance && (
+              <p className="text-[10px] text-muted-foreground font-mono mt-1">
+                + سلفة: {advance.subsidiaryAccountCode}
+              </p>
             )}
           </div>
           <div className="space-y-1">

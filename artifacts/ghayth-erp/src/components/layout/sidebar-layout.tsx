@@ -160,12 +160,15 @@ const allNavSections: NavSection[] = [
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
         { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
       ]},
-      // الحضور والانصراف — موحّد: السجل + الوقت الإضافي + الأعذار.
-      // "تقارير" تبقى تبويب داخل /hr/attendance.
+      // الحضور والانصراف — موحّد: السجل + التتبع + الأعذار + الوقت
+      // الإضافي + التقارير. سابقاً كانت "تقارير الحضور" مفقودة من
+      // الشريط، فقط مرئية من بطاقة QuickLink في /hr — أعدناها كي تصبح
+      // قابلة للوصول لمستخدمي الشريط الجانبي مباشرة.
       { label: "الحضور والانصراف", path: "/hr/attendance", icon: Clock, module: "hr", children: [
         { label: "السجل اليومي", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
         { label: "التتبع الميداني", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
         { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
+        { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3, subKey: "attendance" },
         { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
         { label: "طلبات الأعذار", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
       ]},
