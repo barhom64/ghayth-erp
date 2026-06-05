@@ -37,6 +37,65 @@ declare global {
   }
 }
 
+// Default columns the resource loader tries to read for scope/ownership
+// evaluation. A table rarely has *all* of these — and Postgres raises
+// 42703 ("column does not exist") for the very first missing one, which
+// would abort the whole SELECT. Historically that error was swallowed by
+// `.catch(() => [])`, leaving `record` undefined → the cross-tenant 404
+// guard AND the per-record scope check (OUT_OF_SCOPE) silently disabled
+// for essentially every resource route. We now introspect each table's
+// real columns and only SELECT the ones that exist.
+const DEFAULT_RESOURCE_COLUMNS = [
+  "companyId", "branchId", "departmentId", "createdBy", "employeeId", "managerId", "assigneeId",
+];
+
+// table → set of its actual column names. The schema is static at runtime,
+// so a one-time lookup per table is safe to cache for the process lifetime.
+const tableColumnCache = new Map<string, Set<string>>();
+
+async function getTableColumns(safeTable: string): Promise<Set<string>> {
+  const cached = tableColumnCache.get(safeTable);
+  if (cached) return cached;
+  const rows = await rawQuery<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1`,
+    [safeTable]
+  ).catch(() => [] as { column_name: string }[]);
+  const set = new Set(rows.map((r) => r.column_name));
+  // Only cache once the table actually exists — a transient empty result
+  // (e.g. DB hiccup) shouldn't be memoised as "table has no columns".
+  if (set.size > 0) tableColumnCache.set(safeTable, set);
+  return set;
+}
+
+/**
+ * Load a resource record for scope evaluation, selecting ONLY the columns
+ * that actually exist on the table. Requested column names may be quoted
+ * (`'"companyId"'`) or bare (`'total'`); both are normalised. Returns
+ * undefined when the record is absent or the table exposes none of the
+ * requested columns.
+ */
+export async function loadResourceRecord(
+  resource: { table?: string; idParam?: string; columns?: string[] },
+  recordId: number
+): Promise<ResourceRecord | undefined> {
+  const safeTable = (resource.table || "").replace(/[^a-zA-Z0-9_]/g, "");
+  if (!safeTable) return undefined;
+  const existing = await getTableColumns(safeTable);
+  if (existing.size === 0) return undefined; // unknown table — fail closed (no record)
+  const requested = resource.columns?.length ? resource.columns : DEFAULT_RESOURCE_COLUMNS;
+  const present = requested
+    .map((c) => c.replace(/"/g, "").trim())
+    .filter((bare) => bare.length > 0 && existing.has(bare));
+  if (present.length === 0) return undefined;
+  const colSql = present.map((c) => `"${c}"`).join(", ");
+  const [record] = await rawQuery<ResourceRecord>(
+    `SELECT ${colSql} FROM "${safeTable}" WHERE id = $1 LIMIT 1`,
+    [recordId]
+  ).catch(() => [] as ResourceRecord[]);
+  return record;
+}
+
 export interface AuthorizeOptions {
   feature: string;
   action: Action;
@@ -87,12 +146,7 @@ export function authorize(opts: AuthorizeOptions) {
     if (opts.resource?.table && opts.resource.idParam) {
       const recordId = Number(req.params[opts.resource.idParam]);
       if (recordId && !isNaN(recordId)) {
-        const cols = opts.resource.columns?.join(", ") || `"companyId", "branchId", "departmentId", "createdBy", "employeeId", "managerId", "assigneeId"`;
-        const safeTable = opts.resource.table.replace(/[^a-zA-Z0-9_]/g, "");
-        const [record] = await rawQuery<ResourceRecord>(
-          `SELECT ${cols} FROM "${safeTable}" WHERE id = $1 LIMIT 1`,
-          [recordId]
-        ).catch(() => [] as ResourceRecord[]);
+        const record = await loadResourceRecord(opts.resource, recordId);
         if (record) {
           // Tenant isolation — a record belonging to another company is
           // treated as not-found here, so authorize({resource}) can never
@@ -230,12 +284,7 @@ export function authorizeAny(...specs: AuthorizeOptions[]) {
       if (opts.resource?.table && opts.resource.idParam) {
         const recordId = Number(req.params[opts.resource.idParam]);
         if (recordId && !isNaN(recordId)) {
-          const cols = opts.resource.columns?.join(", ") || `"companyId", "branchId", "departmentId", "createdBy", "employeeId", "managerId", "assigneeId"`;
-          const safeTable = opts.resource.table.replace(/[^a-zA-Z0-9_]/g, "");
-          const [record] = await rawQuery<ResourceRecord>(
-            `SELECT ${cols} FROM "${safeTable}" WHERE id = $1 LIMIT 1`,
-            [recordId]
-          ).catch(() => [] as ResourceRecord[]);
+          const record = await loadResourceRecord(opts.resource, recordId);
           if (record) {
             const recCompany = (record as { companyId?: number | null }).companyId;
             if (recCompany != null && recCompany !== scope.companyId) {
