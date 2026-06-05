@@ -114,25 +114,7 @@ export default function PostingActivityPage() {
     `/finance/journal?${qs.toString()}`,
   );
 
-  if (isLoading) return <LoadingSpinner />;
-
   const rows: JournalEntry[] = data?.data ?? [];
-
-  // ── Aggregates
-  const amounts = rows.map((r) => Number(r.totalDebit ?? r.total ?? 0));
-  const totalAmount = amounts.reduce((s, a) => s + a, 0);
-  const reversals = rows.filter((r) => r.type === "reversal").length;
-  const manuals = rows.filter((r) => r.type === "manual").length;
-  const reversed = rows.filter((r) => r.reversedById != null).length;
-
-  // Unusual = top 5% by amount
-  const sortedAmounts = [...amounts].sort((a, b) => b - a);
-  const top5Threshold = sortedAmounts[Math.max(0, Math.floor(sortedAmounts.length * 0.05) - 1)] ?? 0;
-  const unusualIds = new Set(
-    rows
-      .filter((r) => Number(r.totalDebit ?? r.total ?? 0) >= top5Threshold && top5Threshold > 0)
-      .map((r) => r.id)
-  );
 
   const byType = useMemo(() => {
     const m = new Map<string, { count: number; amount: number }>();
@@ -153,6 +135,24 @@ export default function PostingActivityPage() {
     }
     return Array.from(m.entries()).map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count);
   }, [rows]);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  // ── Aggregates
+  const amounts = rows.map((r) => Number(r.totalDebit ?? r.total ?? 0));
+  const totalAmount = amounts.reduce((s, a) => s + a, 0);
+  const reversals = rows.filter((r) => r.type === "reversal").length;
+  const manuals = rows.filter((r) => r.type === "manual").length;
+  const reversed = rows.filter((r) => r.reversedById != null).length;
+
+  // Unusual = top 5% by amount
+  const sortedAmounts = [...amounts].sort((a, b) => b - a);
+  const top5Threshold = sortedAmounts[Math.max(0, Math.floor(sortedAmounts.length * 0.05) - 1)] ?? 0;
+  const unusualIds = new Set(
+    rows
+      .filter((r) => Number(r.totalDebit ?? r.total ?? 0) >= top5Threshold && top5Threshold > 0)
+      .map((r) => r.id)
+  );
 
   const cols: DataTableColumn<JournalEntry>[] = [
     {

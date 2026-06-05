@@ -22,6 +22,7 @@ import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { fleetEngine } from "../lib/engines/index.js";
 import { z } from "zod";
 
@@ -397,6 +398,21 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     );
     assertInsert(insertId, "fleet_vehicles");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    // Vehicle → custody subsidiary (fuel-card / parking-deposit cash
+    // held on the plate) + cost-centre nested under the vehicle's branch
+    // (per-vehicle maintenance + fuel cost roll-up). Both fire-and-
+    // forget — the vehicle create must succeed regardless.
+    const vehicleLabel = `${b.make} ${b.model} — ${b.plateNumber}`;
+    createSubsidiaryAccountsForEntity(scope.companyId, "vehicle", insertId, vehicleLabel)
+      .catch((e) => logger.error(e, "vehicle subsidiary auto-create failed"));
+    createCostCenterForEntity(
+      scope.companyId, "vehicle", insertId, vehicleLabel,
+      {
+        parentEntityType: (b.branchId || scope.branchId) ? "branch" : null,
+        parentEntityId: b.branchId ?? scope.branchId ?? null,
+        actorUserId: scope.userId,
+      },
+    ).catch((e) => logger.error(e, "vehicle cost-centre auto-create failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_vehicles", entityId: insertId,
@@ -541,7 +557,7 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
 
 // RBAC v2: vehicle detail with scope check + maskFields. Branch-scoped
 // roles see only their branch's vehicles.
-router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
+router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "fleet_vehicles", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vehicleId = parseId(req.params.id, "id");
@@ -726,7 +742,7 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
   } catch (err) { handleRouteError(err, res, "Update vehicle error:"); }
 });
 
-router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
+router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "fleet_vehicles", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -882,7 +898,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
 
 // Drivers fall under the parent "fleet" feature; no dedicated catalog
 // entry yet. Delete checks scope against the drivers table.
-router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "drivers", idParam: "id" } }), async (req, res) => {
+router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "fleet_drivers", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1055,7 +1071,7 @@ router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), asyn
 
 // RBAC v2: trip detail. Drivers can have scope=self via fleet.trips.my
 // (self-service) for their own trips; managers via fleet.trips at branch.
-router.get("/trips/:id", authorize({ feature: "fleet.trips", action: "view", resource: { table: "trips", idParam: "id" } }), async (req, res) => {
+router.get("/trips/:id", authorize({ feature: "fleet.trips", action: "view", resource: { table: "fleet_trips", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");

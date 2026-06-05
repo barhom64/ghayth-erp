@@ -92,11 +92,8 @@ export default function CfoCockpitPage() {
   const loading =
     qTreasury.isLoading || qArAging.isLoading || qApAging.isLoading ||
     qPaymentPending.isLoading;
-  if (loading) return <LoadingSpinner />;
 
   const treasury = qTreasury.data;
-  const totalCash = Number(treasury?.totalCash ?? 0);
-  const bankAccounts = treasury?.cashAccounts ?? [];
 
   // AR aging — try buckets shape first, otherwise sum data rows
   const arBuckets: ArAgingBucket[] = useMemo(() => {
@@ -105,10 +102,6 @@ export default function CfoCockpitPage() {
     if (Array.isArray(d?.data) && d.data.length > 0 && d.data[0].bucket) return d.data;
     return [];
   }, [qArAging.data]);
-  const totalAr = SUM(arBuckets, "total");
-  const overdueAr = arBuckets
-    .filter((b) => b.bucket !== "0-30" && b.bucket !== "current")
-    .reduce((s, b) => s + Number(b.total ?? 0), 0);
 
   const apBuckets: ApAgingBucket[] = useMemo(() => {
     const d: any = qApAging.data;
@@ -116,7 +109,6 @@ export default function CfoCockpitPage() {
     if (Array.isArray(d?.data) && d.data.length > 0 && d.data[0].bucket) return d.data;
     return [];
   }, [qApAging.data]);
-  const totalAp = SUM(apBuckets, "total");
 
   const pendingPayables: PendingPayable[] = useMemo(() => {
     const d: any = qPaymentPending.data;
@@ -124,6 +116,24 @@ export default function CfoCockpitPage() {
     if (Array.isArray(d)) return d;
     return [];
   }, [qPaymentPending.data]);
+
+  const overdueInvoices = useMemo(() => {
+    const d: any = qOverdue.data;
+    return Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+  }, [qOverdue.data]);
+
+  if (loading) return <LoadingSpinner />;
+
+  const totalCash = Number(treasury?.totalCash ?? 0);
+  const bankAccounts = treasury?.cashAccounts ?? [];
+
+  const totalAr = SUM(arBuckets, "total");
+  const overdueAr = arBuckets
+    .filter((b) => b.bucket !== "0-30" && b.bucket !== "current")
+    .reduce((s, b) => s + Number(b.total ?? 0), 0);
+
+  const totalAp = SUM(apBuckets, "total");
+
   const apThisWeek = pendingPayables
     .filter((p) => {
       if (!p.expectedDelivery) return false;
@@ -137,10 +147,6 @@ export default function CfoCockpitPage() {
 
   const pendingApprovals = qBudgetAppr.data?.data?.length ?? 0;
   const failuresCount = qFailures.data?.data?.length ?? 0;
-  const overdueInvoices = useMemo(() => {
-    const d: any = qOverdue.data;
-    return Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-  }, [qOverdue.data]);
   const overdueCriticalCount = overdueInvoices.filter((o: any) => Number(o.daysOverdue) >= 30).length;
 
   const netLiquidity = totalCash - apThisWeekAmount;

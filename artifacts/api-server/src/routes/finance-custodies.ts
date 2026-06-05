@@ -416,7 +416,7 @@ custodiesRouter.get("/custodies/summary", authorize({ feature: "finance.custodie
   }
 });
 
-custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", action: "view", resource: { table: "custodies", idParam: "id" } }), async (req, res) => {
+custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", action: "view", resource: { table: "journal_entries", idParam: "id", columns: ['"companyId"', '"branchId"', '"departmentId"'] } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -990,7 +990,7 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
   }
 });
 
-custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.custodies", action: "approve", resource: { table: "custodies", idParam: "id" } }), async (req, res) => {
+custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.custodies", action: "approve", resource: { table: "journal_entries", idParam: "id", columns: ['"companyId"', '"branchId"', '"departmentId"'] } }), async (req, res) => {
   try {
     const scope = req.scope!;
 
