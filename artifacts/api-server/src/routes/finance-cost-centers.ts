@@ -7,6 +7,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { logger } from "../lib/logger.js";
 
@@ -196,6 +197,95 @@ router.delete("/cost-centers/:id", authorize({ feature: "finance.cost_centers", 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "cost_center.deleted", entity: "cost_centers", entityId: id, details: JSON.stringify({ id: id }) }).catch((e) => logger.error(e, "finance-cost-centers background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete cost center error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BACKFILL — auto-create cost centres for entities that predate the
+// hooks on POST /branches + POST /projects. Same shape as the umrah
+// backfill endpoint: optional entityType + entityId narrow the scan;
+// otherwise the whole tenant gets processed.
+//
+// Order matters — branches FIRST so when projects are processed
+// second, they can nest under their branch's freshly-minted CC. The
+// helper itself is idempotent (look-up by entity + ON CONFLICT) so
+// re-runs are safe.
+// ─────────────────────────────────────────────────────────────────────────────
+const backfillCostCentersSchema = z.object({
+  entityType: z.enum(["branch", "project"]).optional(),
+  entityId: z.coerce.number().int().positive().optional(),
+});
+
+router.post("/cost-centers/backfill", authorize({ feature: "finance.cost_centers", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(backfillCostCentersSchema.safeParse(req.body));
+    const onlyType = body.entityType;
+    const onlyId = body.entityId;
+
+    const summary = { branches: 0, projects: 0, created: 0, reused: 0 };
+    const details: Array<{ entityType: string; entityId: number; name: string; ccId: number | null; status: string }> = [];
+
+    if (!onlyType || onlyType === "branch") {
+      const branches = await rawQuery<{ id: number; name: string }>(
+        `SELECT id, name FROM branches
+          WHERE "companyId" = $1
+          ${onlyId && onlyType === "branch" ? `AND id = ${Number(onlyId)}` : ""}
+          ORDER BY id ASC`,
+        [scope.companyId],
+      );
+      summary.branches = branches.length;
+      for (const br of branches) {
+        const cc = await createCostCenterForEntity(
+          scope.companyId, "branch", br.id, br.name,
+          { actorUserId: scope.userId },
+        );
+        if (cc) summary.created++;
+        else summary.reused++;
+        details.push({ entityType: "branch", entityId: br.id, name: br.name, ccId: cc?.id ?? null, status: cc ? "created_or_reused" : "failed" });
+      }
+    }
+
+    if (!onlyType || onlyType === "project") {
+      // Projects don't carry a branchId column, so we use the project's
+      // most recent journal-entry's branchId as the parent hint. Falls
+      // back to no parent when no JE exists yet (project never posted
+      // to GL) — the CC is created at root and the operator can re-parent.
+      const projects = await rawQuery<{ id: number; name: string; branchId: number | null }>(
+        `SELECT p.id, p.name,
+                (SELECT je."branchId" FROM journal_entries je
+                  WHERE je."companyId" = p."companyId"
+                    AND je."sourceType" = 'projects' AND je."sourceId" = p.id
+                    AND je."deletedAt" IS NULL
+                  ORDER BY je."createdAt" ASC LIMIT 1) AS "branchId"
+           FROM projects p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
+          ${onlyId && onlyType === "project" ? `AND p.id = ${Number(onlyId)}` : ""}
+          ORDER BY p.id ASC`,
+        [scope.companyId],
+      );
+      summary.projects = projects.length;
+      for (const pr of projects) {
+        const cc = await createCostCenterForEntity(
+          scope.companyId, "project", pr.id, pr.name,
+          {
+            parentEntityType: pr.branchId ? "branch" : null,
+            parentEntityId: pr.branchId,
+            actorUserId: scope.userId,
+          },
+        );
+        if (cc) summary.created++;
+        else summary.reused++;
+        details.push({ entityType: "project", entityId: pr.id, name: pr.name, ccId: cc?.id ?? null, status: cc ? "created_or_reused" : "failed" });
+      }
+    }
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "cost_center.backfill", entity: "cost_centers", entityId: 0,
+      after: { summary, filters: body },
+    });
+    res.json({ summary, details });
+  } catch (err) { handleRouteError(err, res, "Backfill cost centers error"); }
 });
 
 export { router as costCentersRouter };
