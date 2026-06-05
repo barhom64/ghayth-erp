@@ -4,7 +4,7 @@ import {
   BookOpen, FileText, ScrollText, Wallet, ShoppingCart, Receipt,
   Building2, BarChart3, CreditCard, Banknote, HandCoins, ClipboardList,
   Box, Landmark, BadgeDollarSign, Repeat, FileSpreadsheet,
-  Percent, Boxes, Coins,
+  Percent, Boxes, Coins, Network,
 } from "lucide-react";
 
 const TABS = [
@@ -30,6 +30,8 @@ const TABS = [
   { href: "/finance/wht-categories", label: "فئات الاستقطاع", icon: Receipt, match: ["/finance/wht-categories"] },
   { href: "/finance/reports/zatca", label: "تقارير زاتكا والمخزون", icon: Boxes, match: ["/finance/reports/zatca", "/finance/reports/vat-reconciliation", "/finance/reports/wht-summary", "/finance/reports/cogs-summary", "/finance/reports/inventory-valuation", "/finance/reports/inventory-turnover", "/finance/reports/lot-expiry-alerts", "/finance/reports/negative-stock", "/finance/reports/gl-integrity-gaps", "/finance/reports/unmapped-lines"] },
   { href: "/finance/reports", label: "التقارير", icon: BarChart3, match: ["/finance/reports"] },
+  // التأصيل المالي — نظرة موحّدة على ربط الكيانات بالحسابات + مراكز التكلفة
+  { href: "/finance/dimensional-routing", label: "التأصيل المالي", icon: Network, match: ["/finance/dimensional-routing", "/finance/subsidiary-accounts", "/finance/cost-centers"] },
 ];
 
 export function FinanceTabsNav() {

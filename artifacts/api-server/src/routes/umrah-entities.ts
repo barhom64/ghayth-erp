@@ -21,7 +21,13 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { emitEvent, createAuditLog, initiateApprovalChain, todayISO } from "../lib/businessHelpers.js";
+import {
+  emitEvent,
+  createAuditLog,
+  initiateApprovalChain,
+  todayISO,
+} from "../lib/businessHelpers.js";
+import { reclassifyRevenueForInvoices } from "../lib/umrahReclassifyEngine.js";
 import {
   generateSalesInvoice,
   registerPayment,
@@ -3058,6 +3064,52 @@ router.get("/reports/subagent-balances", authorize({ feature: "umrah", action: "
 
     res.json(maskFields(req, { data: filtered, total: filtered.length, totals }));
   } catch (err) { handleRouteError(err, res, "Sub-agent balances report"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RETROACTIVE REVENUE RECLASSIFICATION — answers the operator's «على القديم
+// والجديد» half. The dimensional resolver (revenueAccountResolver.ts) handles
+// NEW invoices automatically; this endpoint walks OLD invoices and shifts
+// their revenue posting from the original product-default account to whatever
+// the current subsidiary_accounts mapping resolves to for their dimension.
+//
+// Why we don't rewrite historical journal entries: auditable accounting
+// requires that once a number is posted, it stays. The correction shape is
+// a NEW journal entry that DR's the old revenue account and CR's the new
+// one — net effect: revenue moves from old to new as of today, without
+// touching last year's books. (Same pattern as commercial ERPs' "GL
+// reclassification" feature.)
+//
+// Idempotency: we use sourceKey=`umrah_reclass_${invoiceId}_to_${target}` so
+// re-running the endpoint with the same configuration is a no-op for already-
+// aligned invoices. We also UPDATE umrah_sales_invoice_items.accountCode to
+// reflect the new revenue account so subsequent runs see "already aligned"
+// and skip the work cheaply. If the operator later changes the override AGAIN,
+// the next run posts a fresh compensating entry from the current-effective
+// account (read from items.accountCode) to the new target.
+const reclassifyRevenueSchema = z.object({
+  /** Limit to specific invoice ids; omit to reclassify every eligible one. */
+  invoiceIds: z.array(z.coerce.number().int().positive()).optional(),
+  /** Limit to invoices for a single sub-agent (dimension-narrow). */
+  subAgentId: z.coerce.number().int().positive().optional(),
+  /** Limit to invoices in a single season. */
+  seasonId: z.coerce.number().int().positive().optional(),
+  /** When true, report what WOULD change without posting anything. */
+  dryRun: z.boolean().optional(),
+});
+
+router.post("/reclassify-revenue", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(reclassifyRevenueSchema.safeParse(req.body));
+    // All business logic — invoice scan, resolver lookup, compensating
+    // JE posting, items update — lives in the umrahReclassifyEngine.
+    // The route is intentionally thin so the lint-patterns invariant
+    // (GL + account-mapping helpers must stay inside engines, not
+    // routes) holds at the seam.
+    const result = await reclassifyRevenueForInvoices(scope, body);
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "Reclassify revenue error:"); }
 });
 
 export default router;

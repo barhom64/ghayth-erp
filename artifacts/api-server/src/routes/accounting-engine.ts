@@ -603,6 +603,24 @@ export async function createSubsidiaryAccountsForEntity(
       accountsToCreate.push(
         { accountType: "payable", parentCode: "2102", suffix: "ذمة" }
       );
+    } else if (entityType === "driver") {
+      // Drivers receive cash advances for fuel + on-the-road
+      // repairs (custody). The driver-level custody account
+      // splits these from generic employee custody so fleet
+      // managers can report per-driver outstanding cash without
+      // pulling employee_assignments joins.
+      accountsToCreate.push(
+        { accountType: "custody", parentCode: "1131", suffix: "عهدة سائق" }
+      );
+    } else if (entityType === "vehicle") {
+      // Vehicles need their own custody bucket for fuel cards,
+      // parking deposits, and toll prepays held against the plate.
+      // The cost-centre side (per-vehicle maintenance spend
+      // tracking) is handled by costCenterAutoCreate.ts — this
+      // row is for cash-on-the-vehicle only.
+      accountsToCreate.push(
+        { accountType: "custody", parentCode: "1131", suffix: "عهدة مركبة" }
+      );
     }
 
     await withTransaction(async (client) => {

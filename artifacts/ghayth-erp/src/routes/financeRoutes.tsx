@@ -18,7 +18,11 @@ const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
 const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
+const CostCentersTree = lazy(() => import("@/pages/finance/cost-centers-tree"));
 const CostCenterPnl = lazy(() => import("@/pages/finance/cost-center-pnl"));
+const CostCenterDrillPnl = lazy(() => import("@/pages/finance/cost-center-drill-pnl"));
+const DimensionalRouting = lazy(() => import("@/pages/finance/dimensional-routing"));
+const DormantEntities = lazy(() => import("@/pages/finance/dormant-entities"));
 const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const PricingRules = lazy(() => import("@/pages/finance/pricing-rules"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
@@ -293,7 +297,11 @@ export const financeRoutes = [
   { path: "/finance/allocation-coverage", component: AllocationCoverage },
   { path: "/finance/allocation-override-log", component: AllocationOverrideLog },
   { path: "/finance/cost-centers", component: CostCenters },
+  { path: "/finance/cost-centers/tree", component: CostCentersTree },
   { path: "/finance/cost-center-pnl", component: CostCenterPnl },
+  { path: "/finance/cost-centers/:id/pnl", component: CostCenterDrillPnl },
+  { path: "/finance/dimensional-routing", component: DimensionalRouting },
+  { path: "/finance/dormant-entities", component: DormantEntities },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
   { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },
