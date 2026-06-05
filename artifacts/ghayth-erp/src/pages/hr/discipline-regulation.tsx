@@ -18,6 +18,7 @@ import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const SECTION_LABELS: Record<string, string> = {
   work_time: "مخالفات تتعلق بمواعيد العمل",
   work_organization: "مخالفات تتعلق بتنظيم العمل",
@@ -283,6 +284,25 @@ export default function DisciplineRegulationPage() {
             <RefreshCw className={`w-4 h-4 me-2 ${reseeding ? "animate-spin" : ""}`} />
             استنساخ اللائحة الافتراضية
           </GuardedButton>
+          <PrintButton
+            entityType="report_hr_discipline_regulation"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "لائحة الانضباط الوظيفي", total },
+              items: (data?.data ?? []).map((a) => ({
+                "القسم": SECTION_LABELS[a.section] || a.section,
+                "رقم المادة": a.articleNumber,
+                "العنوان": a.title || "—",
+                "الشدة": a.severity || "—",
+                "العقوبة الأولى": a.penalty1 || "—",
+                "العقوبة الثانية": a.penalty2 || "—",
+                "العقوبة الثالثة": a.penalty3 || "—",
+                "العقوبة الرابعة": a.penalty4 || "—",
+                "تصل للفصل": a.isTermination ? "نعم" : "لا",
+              })),
+            }}
+          />
         </div>
       }
     >

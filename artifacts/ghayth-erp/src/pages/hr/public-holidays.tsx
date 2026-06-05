@@ -21,6 +21,7 @@ import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { currentYearRiyadh } from "@/lib/formatters";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 // HOLIDAY_TYPES has a fixed set of keys — `national`, `religious`,
 // `company`, etc. Use them as the closed enum source. type stays a
 // string in the schema (rather than z.enum) because the labels come
@@ -130,6 +131,22 @@ export default function PublicHolidaysPage() {
           <GuardedButton perm="hr:create" onClick={() => { setShowForm(!showForm); setEditingId(null); setFormInitial(defaultHolidayForm); }} size="sm">
             <Plus className="w-4 h-4 me-1" /> إضافة عطلة
           </GuardedButton>
+          <PrintButton
+            entityType="report_hr_public_holidays"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: `تقويم الإجازات الرسمية — ${year}`, total: holidays.length },
+              items: holidays.map((h: any) => ({
+                "الاسم": h.name || "—",
+                "من": h.startDate || "—",
+                "إلى": h.endDate || h.startDate || "—",
+                "النوع": h.type || "—",
+                "متكررة سنوياً": h.isRecurring ? "نعم" : "لا",
+                "الوصف": h.description || "—",
+              })),
+            }}
+          />
         </>
       }
     >

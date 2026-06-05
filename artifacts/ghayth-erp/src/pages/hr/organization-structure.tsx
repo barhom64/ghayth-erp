@@ -6,6 +6,7 @@ import { PageShell } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function OrganizationStructurePage() {
   const { data: depts, isLoading: deptsLoading, isError: deptsError } = useApiQuery<any>(["departments"], "/settings/departments");
@@ -31,6 +32,25 @@ export default function OrganizationStructurePage() {
       title="الهيكل التنظيمي المفصل"
       subtitle="عرض شجري للأقسام والمسؤولين والعلاقات التنظيمية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "الهيكل التنظيمي المفصل" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_organization_structure"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "الهيكل التنظيمي", total: departments.length },
+            items: departments.map((d: any) => {
+              const deptEmps = employees.filter((e: any) => e.departmentName === d.name || e.departmentId === d.id);
+              return {
+                "القسم": d.name || "—",
+                "المدير": d.managerName || "—",
+                "عدد الموظفين": deptEmps.length,
+                "الفرع": d.branchName || "—",
+              };
+            }),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />

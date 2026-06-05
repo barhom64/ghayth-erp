@@ -15,6 +15,7 @@ import { formatCurrency, currentPeriodRiyadh } from "@/lib/formatters";
 import { AlertCircle, Play } from "lucide-react";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 /**
  * HR-010 — Monthly accruals page. Previews the leave + EOS accruals for a
  * period via GET /hr/accruals/preview, then posts them with
@@ -83,6 +84,21 @@ export default function AccrualsPage() {
         <div className="flex items-center gap-2">
           <Label className="text-sm shrink-0">الفترة</Label>
           <Input type="month" dir="ltr" value={period} onChange={(e) => setPeriod(e.target.value)} className="w-36" />
+          <PrintButton
+            entityType="report_hr_accruals"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: `الاستحقاقات الشهرية — ${period}`, total: data?.rows?.length ?? 0 },
+              items: (data?.rows ?? []).map((r) => ({
+                "الموظف": r.employeeName || "—",
+                "الراتب": Number(r.salary || 0),
+                "سنوات الخدمة": Number(r.yearsOfService || 0).toFixed(1),
+                "استحقاق إجازة": Number(r.leaveAccrual || 0),
+                "استحقاق نهاية خدمة": Number(r.eosAccrual || 0),
+              })),
+            }}
+          />
         </div>
       }
     >

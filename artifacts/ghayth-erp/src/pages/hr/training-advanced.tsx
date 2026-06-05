@@ -12,6 +12,7 @@ import {
 import { GraduationCap, Users, Award, BarChart3, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function TrainingAdvancedPage() {
   const { data: statsData, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["training-stats"], "/hr/training/stats");
@@ -43,6 +44,23 @@ export default function TrainingAdvancedPage() {
       title="تحليلات التدريب المتقدمة"
       subtitle="متابعة فعالية البرامج التدريبية ونتائجها"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات التدريب المتقدمة" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_training_advanced"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "تسجيلات التدريب", total: enrollments.length },
+            items: enrollments.map((e: any) => ({
+              "الموظف": e.employeeName || "—",
+              "البرنامج": e.programTitle || "—",
+              "تاريخ التسجيل": e.enrolledAt || e.startDate || "—",
+              "الدرجة": e.score ?? "—",
+              "الحالة": e.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />

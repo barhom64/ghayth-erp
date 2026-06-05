@@ -9,6 +9,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Save } from "lucide-react";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 /**
  * HR-010 — Attendance policy editor. Single row per company; reads from
  * GET /hr/attendance-policy (returns the row OR sensible defaults), writes
@@ -70,6 +71,24 @@ export default function AttendancePolicyPage() {
       title="سياسة الحضور"
       subtitle="عتبات التأخّر ونصف القطر الجغرافي + سُلَّم الجزاءات الخمسة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "سياسة الحضور" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_attendance_policy"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "سياسة الحضور", total: 5 },
+            items: [
+              { "البند": "حدّ التأخّر (دقائق)", "القيمة": form.lateThresholdMinutes ?? "—" },
+              { "البند": "نصف قطر GPS (متر)", "القيمة": form.gpsRadiusMeters ?? "—" },
+              ...([1, 2, 3, 4, 5] as const).map((lvl) => ({
+                "البند": `المستوى ${lvl}: ${form[`penaltyLevel${lvl}Label` as const] ?? ""}`,
+                "القيمة": form[`penaltyLevel${lvl}` as const] ?? "—",
+              })),
+            ],
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <div className="grid gap-4">

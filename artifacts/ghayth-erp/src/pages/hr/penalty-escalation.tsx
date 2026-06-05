@@ -10,6 +10,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 // The discipline regulation (hr_discipline_regulation) escalates every
 // article across four occurrence levels — penalty1..penalty4. That four-
 // step structure IS the escalation ladder; this page surfaces it instead
@@ -66,6 +67,25 @@ export default function PenaltyEscalationPage() {
         { href: "/hr/violations", label: "المخالفات والجزاءات" },
         { label: "تصعيد الجزاءات" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_hr_penalty_escalation"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "تصعيد الجزاءات", total: items.length },
+            items: Object.entries(grouped).map(([name, vs]) => ({
+              "الموظف": name,
+              "عدد المخالفات": vs.length,
+              "أعلى شدة": vs.reduce((max: string, v: any) => {
+                const order = ["low", "medium", "high", "critical"];
+                return order.indexOf(v.severity || "low") > order.indexOf(max) ? v.severity : max;
+              }, "low"),
+              "آخر مخالفة": vs[vs.length - 1]?.createdAt || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />

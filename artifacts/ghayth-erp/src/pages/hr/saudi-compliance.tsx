@@ -28,6 +28,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Banknote, FileCheck, Receipt, Lock } from "lucide-react";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 interface SaudiBank { code: string; name: string; swift: string }
 
 export default function HrSaudiCompliancePage() {
@@ -89,6 +90,25 @@ export default function HrSaudiCompliancePage() {
       title="الامتثال السعودي — WPS / مدد"
       subtitle="بنوك سعودية، تواريخ WPS، تسويات مدد، إعدادات APIs البنوك"
       breadcrumbs={[{ label: "الموارد البشرية" }, { label: "الامتثال السعودي" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_saudi_compliance"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "WPS — السجل التاريخي", total: runs.length },
+            items: runs.map((r: any) => ({
+              "الرقم": r.id,
+              "الفترة": r.period || "—",
+              "البنك": r.bankName || r.bankCode || "—",
+              "عدد الموظفين": r.employeeCount ?? "—",
+              "الإجمالي": Number(r.totalAmount ?? 0),
+              "تاريخ الإرسال": r.submittedAt || "—",
+              "الحالة": r.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
