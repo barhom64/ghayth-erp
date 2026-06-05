@@ -9,6 +9,7 @@ import { TrendingUp, TrendingDown, DollarSign, Calendar, AlertCircle, Banknote, 
 import { PageShell } from "@workspace/ui-core";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 function ForecastCard({ label, days, data }: { label: string; days: string; data: any }) {
   const net = data?.net ?? 0;
   return (
@@ -89,6 +90,19 @@ export default function CashFlowForecastPage() {
               لوحة التدفقات
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_cash_flow_forecast"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "توقعات التدفق النقدي", total: 3 },
+              items: [
+                { "الفترة": "30 يوم", "تدفقات داخلة": Number(forecast.days30?.inflow ?? 0), "تدفقات خارجة": Number(forecast.days30?.outflow ?? 0), "صافي": Number(forecast.days30?.net ?? 0), "الرصيد المتوقع": Number(forecast.days30?.projected ?? 0) },
+                { "الفترة": "60 يوم", "تدفقات داخلة": Number(forecast.days60?.inflow ?? 0), "تدفقات خارجة": Number(forecast.days60?.outflow ?? 0), "صافي": Number(forecast.days60?.net ?? 0), "الرصيد المتوقع": Number(forecast.days60?.projected ?? 0) },
+                { "الفترة": "90 يوم", "تدفقات داخلة": Number(forecast.days90?.inflow ?? 0), "تدفقات خارجة": Number(forecast.days90?.outflow ?? 0), "صافي": Number(forecast.days90?.net ?? 0), "الرصيد المتوقع": Number(forecast.days90?.projected ?? 0) },
+              ],
+            }}
+          />
         </div>
       }
     >

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { Calendar, TrendingUp, TrendingDown, Download } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 
@@ -140,16 +141,39 @@ export default function UmrahSeasonPortfolioDashboard() {
         { label: "محفظة مواسم العمرة" },
       ]}
       actions={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={exportCsv}
-          disabled={rows.length === 0}
-          className="gap-1"
-          data-testid="season-portfolio-export-csv"
-        >
-          <Download className="h-3 w-3" /> تصدير CSV
-        </Button>
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={rows.length === 0}
+            className="gap-1"
+            data-testid="season-portfolio-export-csv"
+          >
+            <Download className="h-3 w-3" /> تصدير CSV
+          </Button>
+          <PrintButton
+            entityType="report_umrah_season_portfolio"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "محفظة مواسم العمرة", total: rows.length },
+              items: rows.map((r) => ({
+                "الموسم": r.title,
+                "السنة الهجرية": r.hijriYear || "—",
+                "البداية": r.startDate || "—",
+                "النهاية": r.endDate || "—",
+                "عدد المعتمرين": r.pilgrimsCount,
+                "عدد المجموعات": r.groupsCount,
+                "الإيراد": Number(r.revenue || 0),
+                "المدفوع": Number(r.paid || 0),
+                "التكلفة": Number(r.cost || 0),
+                "الهامش": Number(r.margin || 0),
+                "الحالة": STATUS_LABELS[r.status] || r.status,
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

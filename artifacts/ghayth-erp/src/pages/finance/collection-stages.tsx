@@ -20,6 +20,7 @@ import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { Megaphone, ArrowRight, AlertTriangle, Phone, Mail } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface OverdueInvoice {
   id: number;
@@ -200,11 +201,33 @@ export default function CollectionStagesPage() {
         { label: "التحصيل" },
       ]}
       actions={
-        <Link href="/finance/dunning">
-          <Button variant="outline" size="sm">
-            <Mail className="h-4 w-4 me-1" /> Dunning (إيميلات جماعية)
-          </Button>
-        </Link>
+        <>
+          <Link href="/finance/dunning">
+            <Button variant="outline" size="sm">
+              <Mail className="h-4 w-4 me-1" /> Dunning (إيميلات جماعية)
+            </Button>
+          </Link>
+          <PrintButton
+            entityType="report_finance_collection_stages"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "مراحل التصعيد للتحصيل", total: rows.length },
+              items: rows.map((r) => ({
+                "الفاتورة": r.ref,
+                "العميل": r.clientName || "—",
+                "الإجمالي": Number(r.total || 0),
+                "المدفوع": Number(r.paidAmount || 0),
+                "المتبقي": Number(r.total || 0) - Number(r.paidAmount || 0),
+                "الاستحقاق": r.dueDate || "—",
+                "أيام التأخر": r.daysOverdue,
+                "المرحلة الحالية": r.currentStage,
+                "المرحلة الموصى": r.recommendedStage,
+                "الإجراء": r.recommendedAction || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

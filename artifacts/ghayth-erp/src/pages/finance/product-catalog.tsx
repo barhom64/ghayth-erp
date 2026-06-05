@@ -13,6 +13,7 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 import { ProductAccountingEditDialog } from "@/components/finance/product-accounting-edit-dialog";
 import { Pencil } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface ProductCatalogRow {
   id: number;
@@ -192,6 +193,27 @@ export default function ProductCatalogPage() {
         { href: "/finance/accounts", label: "الحسابات" },
         { label: "كتالوج المنتجات" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_finance_product_catalog"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "كتالوج المنتجات والخدمات المحاسبي", total: filtered.length },
+            items: filtered.map((p) => ({
+              "الاسم": p.name,
+              "SKU": p.sku || "—",
+              "النوع": ITEM_TYPE_LABEL[p.itemType || ""]?.label || p.itemType || "—",
+              "حساب الإيراد": p.defaultRevenueAccountId ?? "—",
+              "حساب المصروف": p.defaultExpenseAccountId ?? "—",
+              "حساب المخزون": p.defaultInventoryAccountId ?? "—",
+              "حساب الأصل": p.defaultAssetAccountId ?? "—",
+              "رمز الضريبة": p.defaultTaxCode || "—",
+              "استراتيجية مركز التكلفة": STRATEGY_LABEL[p.defaultCostCenterStrategy || ""] || p.defaultCostCenterStrategy || "—",
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <AllocationTabsNav />

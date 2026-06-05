@@ -47,6 +47,7 @@ import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { toast } from "@/hooks/use-toast";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 interface MudadPendingRow {
   id: number;
   employeeId: number;
@@ -503,6 +504,23 @@ export default function GLPostingQueuePage() {
       title="قائمة الانتظار للترحيل المحاسبي"
       subtitle="السجلات الجاهزة للترحيل إلى الأستاذ العام — Mudad، شطب الدفعات، إعادة تقييم FX، الجرد الدوري"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "قائمة الترحيل" }]}
+      actions={
+        <PrintButton
+          entityType="report_finance_gl_posting_queue"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "قائمة الانتظار للترحيل", total: mudadRows.length + lotRows.length + fxRows.length + cycleRows.length },
+            items: [
+              { "النوع": "رواتب Mudad", "العدد": mudadRows.length },
+              { "النوع": "شطب الدفعات (Lots)", "العدد": lotRows.length },
+              { "النوع": "إعادة تقييم FX", "العدد": fxRows.length },
+              { "النوع": "الجرد الدوري", "العدد": cycleRows.length },
+              { "النوع": "FX محقق (تاريخي)", "العدد": realizedRows.length },
+            ],
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-6">

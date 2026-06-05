@@ -8,6 +8,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { ShieldAlert } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Allocation Override Log — audit trail of approvals that bypassed the
@@ -133,6 +134,24 @@ export default function AllocationOverrideLogPage() {
         { href: "/finance/settings", label: "الإعدادات" },
         { label: "تجاوزات التخصيص" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_finance_allocation_override_log"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "سجل تجاوزات تخصيص البنود", total: rows.length },
+            items: rows.map((r) => ({
+              "التاريخ": r.createdAt || "—",
+              "نوع المستند": DOCUMENT_TYPE_LABEL[r.documentType] || r.documentType,
+              "رقم المستند": r.documentId,
+              "المستخدم": r.actorUserId ?? "—",
+              "السبب": r.overrideReason || "—",
+              "العوائق": Array.isArray(r.blockersJson) ? r.blockersJson.join("، ") : "—",
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <AllocationTabsNav />
