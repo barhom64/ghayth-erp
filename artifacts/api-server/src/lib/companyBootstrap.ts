@@ -139,22 +139,49 @@ async function createDefaultShifts(client: pg.PoolClient, companyId: number, bra
   }
 }
 
+// Canonical approval-chain definitions — the chain types the application
+// passes to initiateApprovalChain() (see ApprovalChainType in businessHelpers).
+// Kept in sync with migration 250 (which backfills existing companies) and
+// guarded by approvalChainCoverage.test.ts so a caller can never pass a
+// chainType that isn't seeded here.
+export const DEFAULT_APPROVAL_CHAINS: Array<{ type: string; name: string; roles: string[] }> = [
+  { type: "leaves",                name: "سلسلة موافقة الإجازات",         roles: ["hr_manager", "general_manager"] },
+  { type: "expenses",              name: "سلسلة موافقة المصروفات",        roles: ["branch_manager", "finance_manager"] },
+  { type: "advances",              name: "سلسلة موافقة السلف والعهد",     roles: ["finance_manager", "general_manager"] },
+  { type: "purchases",             name: "سلسلة موافقة أوامر الشراء",     roles: ["finance_manager", "general_manager"] },
+  { type: "procurement",           name: "سلسلة موافقة طلبات الشراء",     roles: ["finance_manager", "general_manager"] },
+  { type: "letters",               name: "سلسلة موافقة الخطابات الرسمية", roles: ["hr_manager", "general_manager"] },
+  { type: "loans",                 name: "سلسلة موافقة القروض",           roles: ["hr_manager", "finance_manager"] },
+  { type: "overtime",              name: "سلسلة موافقة العمل الإضافي",    roles: ["branch_manager", "hr_manager"] },
+  { type: "exit",                  name: "سلسلة موافقة إنهاء الخدمة",     roles: ["hr_manager", "general_manager"] },
+  { type: "umrah_commission_plan", name: "سلسلة موافقة خطط العمولات",     roles: ["finance_manager", "general_manager"] },
+];
+
 async function createDefaultApprovalChains(client: pg.PoolClient, companyId: number) {
-  const chains = [
-    { name: "سلسلة موافقة الإجازات", type: "leave", steps: ["manager", "hr"] },
-    { name: "سلسلة موافقة المشتريات", type: "purchase", steps: ["manager", "finance_manager", "general_manager"] },
-    { name: "سلسلة موافقة المصروفات", type: "expense", steps: ["manager", "finance_manager"] },
-    { name: "سلسلة موافقة التوظيف", type: "recruitment", steps: ["hr", "general_manager"] },
-    { name: "سلسلة موافقة العقود", type: "contract", steps: ["legal_manager", "general_manager"] },
-  ];
-  for (const chain of chains) {
-    await exec(
-      client,
-      `INSERT INTO system_settings (key, value, "companyId")
-       VALUES ($1, $2, $3)
-       ON CONFLICT DO NOTHING`,
-      [`approval_chain_${chain.type}`, JSON.stringify(chain), companyId]
+  // Seed the REAL tables the engine reads (approval_chains + steps). A prior
+  // version wrote system_settings JSON, which initiateApprovalChain() never
+  // reads — so freshly-bootstrapped companies had no chains and every flow
+  // auto-approved. Idempotent per (company, chainType).
+  for (const chain of DEFAULT_APPROVAL_CHAINS) {
+    const existing = await client.query(
+      `SELECT id FROM approval_chains WHERE "companyId" = $1 AND "chainType" = $2 LIMIT 1`,
+      [companyId, chain.type],
     );
+    if ((existing.rowCount ?? 0) > 0) continue;
+    const inserted = await client.query(
+      `INSERT INTO approval_chains ("companyId", name, "chainType", "minAmount", "maxAmount", "isActive")
+       VALUES ($1, $2, $3, 0, 999999999, true) RETURNING id`,
+      [companyId, chain.name, chain.type],
+    );
+    const chainId = inserted.rows[0].id as number;
+    for (let i = 0; i < chain.roles.length; i++) {
+      await exec(
+        client,
+        `INSERT INTO approval_chain_steps ("chainId", "stepOrder", "requiredRole", "timeoutHours", "autoApproveOnTimeout")
+         VALUES ($1, $2, $3, 48, false)`,
+        [chainId, i + 1, chain.roles[i]],
+      );
+    }
   }
 }
 
