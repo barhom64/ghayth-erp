@@ -44,6 +44,7 @@ export type CostCenterEntityType =
   | "branch"
   | "project"
   | "contract"
+  | "vehicle"
   | "department";
 
 interface AutoCreateOptions {
@@ -86,6 +87,7 @@ const PREFIX_BY_TYPE: Record<CostCenterEntityType, string> = {
   branch:     "BR",
   project:    "P",
   contract:   "CT",
+  vehicle:    "V",
   department: "D",
 };
 
@@ -93,6 +95,7 @@ const REASON_BY_TYPE: Record<CostCenterEntityType, string> = {
   branch:     "auto-created on branch insert",
   project:    "auto-created on project insert",
   contract:   "auto-created on contract insert",
+  vehicle:    "auto-created on vehicle insert",
   department: "auto-created on department insert",
 };
 

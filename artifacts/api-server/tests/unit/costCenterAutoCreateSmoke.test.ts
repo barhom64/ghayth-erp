@@ -40,8 +40,14 @@ const FCC = readFileSync(
 // 1. Helper — code shape, dual-write, idempotency, autoCreated traceability
 // ─────────────────────────────────────────────────────────────────────────────
 describe("createCostCenterForEntity — naming + idempotency", () => {
-  it("declares the four supported entity types — branch / project / contract / department", () => {
-    expect(HELPER).toMatch(/export type CostCenterEntityType =\s*\|\s*"branch"\s*\|\s*"project"\s*\|\s*"contract"\s*\|\s*"department"/);
+  it("declares the supported entity types — at minimum branch / project / contract / department", () => {
+    // Pinned as a subset check so later additions (e.g. vehicle) don't
+    // churn this test — the explicit "vehicle" assertion lives in the
+    // dedicated extension smoke (costCenterTreeAndAllEntitiesAutoCreate).
+    for (const t of ["branch", "project", "contract", "department"]) {
+      expect(HELPER).toMatch(new RegExp(`\\|\\s*"${t}"`));
+    }
+    expect(HELPER).toMatch(/export type CostCenterEntityType =/);
   });
 
   it("uses short prefix codes — BR / P / CT / D — for scannable CC codes", () => {
@@ -157,7 +163,10 @@ describe("POST /finance/cost-centers/backfill — retroactive auto-create", () =
   });
 
   it("supports narrowing to one entity (used by detail-page button)", () => {
-    expect(FCC).toMatch(/backfillCostCentersSchema = z\.object\(\{\s*entityType: z\.enum\(\["branch", "project"\]\)\.optional\(\),\s*entityId: z\.coerce\.number\(\)\.int\(\)\.positive\(\)\.optional\(\),\s*\}\);/);
+    // The enum widens over time as we extend auto-create to more
+    // entity types. Pin the SHAPE (entityType + entityId optionals)
+    // not the exact enum list.
+    expect(FCC).toMatch(/backfillCostCentersSchema = z\.object\(\{\s*entityType: z\.enum\(\[[^\]]*"branch"[^\]]*"project"[^\]]*\]\)\.optional\(\),\s*entityId: z\.coerce\.number\(\)\.int\(\)\.positive\(\)\.optional\(\),\s*\}\);/);
   });
 
   it("processes branches BEFORE projects so nesting works on first pass", () => {
@@ -174,8 +183,14 @@ describe("POST /finance/cost-centers/backfill — retroactive auto-create", () =
     expect(BACKFILL).toMatch(/SELECT je\."branchId" FROM journal_entries je\s+WHERE je\."companyId" = p\."companyId"\s+AND je\."sourceType" = 'projects'/);
   });
 
-  it("returns a summary with branches + projects + created + reused counts", () => {
-    expect(BACKFILL).toMatch(/const summary = \{ branches: 0, projects: 0, created: 0, reused: 0 \}/);
+  it("returns a summary with at minimum branches + projects + created + reused counts", () => {
+    // Like the schema, the summary widens over time. Pin each field
+    // individually so later additions (contracts, vehicles) don't
+    // churn this test.
+    for (const f of ["branches:", "projects:", "created:", "reused:"]) {
+      expect(BACKFILL).toContain(f);
+    }
+    expect(BACKFILL).toMatch(/const summary = \{[^}]*\}/);
   });
 
   it("audit-logs the bulk operation (action=cost_center.backfill)", () => {

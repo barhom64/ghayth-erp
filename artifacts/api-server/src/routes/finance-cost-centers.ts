@@ -56,6 +56,145 @@ const updateCostCenterSchema = z.object({
   status: z.string().optional(),
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HIERARCHICAL TREE — flat list shaped into a parent/child forest. The UI's
+// tree page consumes this so it doesn't have to do the O(N²) restructuring
+// client-side. Computes a depth so the renderer can indent without
+// recursive traversal, plus a roll-up `descendantSpend` per node so
+// each branch label shows "spent so far" without a second round-trip.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/cost-centers/tree", authorize({ feature: "finance.cost_centers", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    // Recursive CTE walks the parent/child chain. Roots are rows with
+    // parentId IS NULL (or whose parent is in another company — defensive).
+    // The `path` array lets the UI render a breadcrumb without re-walking.
+    const rows = await rawQuery<{
+      id: number;
+      code: string | null;
+      name: string;
+      type: string | null;
+      parentId: number | null;
+      status: string;
+      relatedEntityType: string | null;
+      relatedEntityId: number | null;
+      autoCreatedReason: string | null;
+      depth: number;
+      path: number[];
+      allocatedAmount: string | number | null;
+      descendantSpend: string | number | null;
+    }>(
+      `WITH RECURSIVE tree AS (
+         SELECT cc.id, cc.code, cc.name, cc.type, cc."parentId", cc.status,
+                cc."relatedEntityType", cc."relatedEntityId", cc."autoCreatedReason",
+                0 AS depth,
+                ARRAY[cc.id] AS path,
+                cc."allocatedAmount"
+           FROM cost_centers cc
+          WHERE cc."companyId" = $1
+            AND cc.status != 'deleted'
+            AND cc."parentId" IS NULL
+         UNION ALL
+         SELECT cc.id, cc.code, cc.name, cc.type, cc."parentId", cc.status,
+                cc."relatedEntityType", cc."relatedEntityId", cc."autoCreatedReason",
+                t.depth + 1,
+                t.path || cc.id,
+                cc."allocatedAmount"
+           FROM cost_centers cc
+           JOIN tree t ON t.id = cc."parentId"
+          WHERE cc."companyId" = $1
+            AND cc.status != 'deleted'
+            AND cc.id <> ALL(t.path)         -- cycle break (data corruption guard)
+       )
+       SELECT t.*,
+              (SELECT COALESCE(SUM(jl.debit - jl.credit), 0)
+                 FROM journal_lines jl
+                 JOIN journal_entries je ON je.id = jl."journalId"
+                WHERE je."companyId" = $1
+                  AND je."deletedAt" IS NULL
+                  AND jl."costCenterId" = t.id) AS "descendantSpend"
+         FROM tree t
+         ORDER BY t.path`,
+      [scope.companyId],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "Cost-centre tree error"); }
+});
+
+// Targeted re-parent — the tree UI calls this on drag-drop. Distinct
+// endpoint from the generic PATCH /cost-centers/:id so the permission
+// gate can be tighter (re-parenting reshapes reports — same `update`
+// permission, but the dedicated path makes audit logs easy to filter).
+// Guards against:
+//   1. parenting to self (`parentId === id`)
+//   2. parenting to a descendant (cycle detection via the same CTE)
+//   3. cross-tenant moves (the parent must belong to the same company)
+const reparentSchema = z.object({
+  parentId: z.coerce.number().int().nullable(),
+});
+router.patch("/cost-centers/:id/parent", authorize({ feature: "finance.cost_centers", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { parentId } = zodParse(reparentSchema.safeParse(req.body));
+
+    if (parentId === id) {
+      throw new ValidationError("لا يمكن جعل مركز التكلفة أبًا لنفسه", { field: "parentId" });
+    }
+
+    const [current] = await rawQuery<CostCenterRow>(
+      `SELECT * FROM cost_centers WHERE id = $1 AND "companyId" = $2 AND status != 'deleted'`,
+      [id, scope.companyId],
+    );
+    if (!current) throw new NotFoundError("مركز التكلفة غير موجود");
+
+    if (parentId != null) {
+      const [parent] = await rawQuery<CostCenterRow>(
+        `SELECT id FROM cost_centers WHERE id = $1 AND "companyId" = $2 AND status != 'deleted'`,
+        [parentId, scope.companyId],
+      );
+      if (!parent) throw new NotFoundError("الأب المستهدف غير موجود في نفس الشركة");
+
+      // Cycle check — walk DOWN from `id` and ensure `parentId` isn't
+      // among the descendants. Without this, dragging a parent under
+      // its own child creates an unreachable subtree.
+      const cycle = await rawQuery<{ id: number }>(
+        `WITH RECURSIVE descendants AS (
+           SELECT id FROM cost_centers WHERE "parentId" = $1 AND "companyId" = $2
+           UNION ALL
+           SELECT cc.id FROM cost_centers cc
+             JOIN descendants d ON cc."parentId" = d.id
+            WHERE cc."companyId" = $2
+         )
+         SELECT id FROM descendants WHERE id = $3 LIMIT 1`,
+        [id, scope.companyId, parentId],
+      );
+      if (cycle.length > 0) {
+        throw new ValidationError(
+          "لا يمكن جعل مركز التكلفة تابعًا لأحد فروعه (دورة في الشجرة)",
+          { field: "parentId", fix: "اختر أبًا خارج الفروع التابعة لهذا المركز" },
+        );
+      }
+    }
+
+    await rawExecute(
+      `UPDATE cost_centers SET "parentId" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3`,
+      [parentId, id, scope.companyId],
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "cost_center.reparented", entity: "cost_centers", entityId: id,
+      before: { parentId: current.parentId }, after: { parentId },
+    });
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "cost_center.reparented", entity: "cost_centers", entityId: id,
+      details: JSON.stringify({ from: current.parentId, to: parentId }),
+    }).catch((e) => logger.error(e, "finance-cost-centers background task failed"));
+    res.json({ id, parentId });
+  } catch (err) { handleRouteError(err, res, "Reparent cost center error"); }
+});
+
 router.get("/cost-centers", authorize({ feature: "finance.cost_centers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -211,7 +350,7 @@ router.delete("/cost-centers/:id", authorize({ feature: "finance.cost_centers", 
 // re-runs are safe.
 // ─────────────────────────────────────────────────────────────────────────────
 const backfillCostCentersSchema = z.object({
-  entityType: z.enum(["branch", "project"]).optional(),
+  entityType: z.enum(["branch", "project", "contract", "vehicle"]).optional(),
   entityId: z.coerce.number().int().positive().optional(),
 });
 
@@ -222,7 +361,7 @@ router.post("/cost-centers/backfill", authorize({ feature: "finance.cost_centers
     const onlyType = body.entityType;
     const onlyId = body.entityId;
 
-    const summary = { branches: 0, projects: 0, created: 0, reused: 0 };
+    const summary = { branches: 0, projects: 0, contracts: 0, vehicles: 0, created: 0, reused: 0 };
     const details: Array<{ entityType: string; entityId: number; name: string; ccId: number | null; status: string }> = [];
 
     if (!onlyType || onlyType === "branch") {
@@ -276,6 +415,66 @@ router.post("/cost-centers/backfill", authorize({ feature: "finance.cost_centers
         if (cc) summary.created++;
         else summary.reused++;
         details.push({ entityType: "project", entityId: pr.id, name: pr.name, ccId: cc?.id ?? null, status: cc ? "created_or_reused" : "failed" });
+      }
+    }
+
+    if (!onlyType || onlyType === "contract") {
+      // legal_contracts has no branchId column either — same trick:
+      // earliest JE's branchId nests the contract under its branch.
+      const contracts = await rawQuery<{ id: number; title: string; branchId: number | null }>(
+        `SELECT c.id, c.title,
+                (SELECT je."branchId" FROM journal_entries je
+                  WHERE je."companyId" = c."companyId"
+                    AND je."sourceType" = 'legal_contracts' AND je."sourceId" = c.id
+                    AND je."deletedAt" IS NULL
+                  ORDER BY je."createdAt" ASC LIMIT 1) AS "branchId"
+           FROM legal_contracts c
+          WHERE c."companyId" = $1 AND c."deletedAt" IS NULL
+          ${onlyId && onlyType === "contract" ? `AND c.id = ${Number(onlyId)}` : ""}
+          ORDER BY c.id ASC`,
+        [scope.companyId],
+      );
+      summary.contracts = contracts.length;
+      for (const ct of contracts) {
+        const cc = await createCostCenterForEntity(
+          scope.companyId, "contract", ct.id, ct.title,
+          {
+            parentEntityType: ct.branchId ? "branch" : null,
+            parentEntityId: ct.branchId,
+            actorUserId: scope.userId,
+          },
+        );
+        if (cc) summary.created++;
+        else summary.reused++;
+        details.push({ entityType: "contract", entityId: ct.id, name: ct.title, ccId: cc?.id ?? null, status: cc ? "created_or_reused" : "failed" });
+      }
+    }
+
+    if (!onlyType || onlyType === "vehicle") {
+      // fleet_vehicles HAS a branchId column — use it directly.
+      const vehicles = await rawQuery<{ id: number; label: string; branchId: number | null }>(
+        `SELECT id,
+                (make || ' ' || model || ' — ' || "plateNumber") AS label,
+                "branchId"
+           FROM fleet_vehicles
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL
+          ${onlyId && onlyType === "vehicle" ? `AND id = ${Number(onlyId)}` : ""}
+          ORDER BY id ASC`,
+        [scope.companyId],
+      );
+      summary.vehicles = vehicles.length;
+      for (const v of vehicles) {
+        const cc = await createCostCenterForEntity(
+          scope.companyId, "vehicle", v.id, v.label,
+          {
+            parentEntityType: v.branchId ? "branch" : null,
+            parentEntityId: v.branchId,
+            actorUserId: scope.userId,
+          },
+        );
+        if (cc) summary.created++;
+        else summary.reused++;
+        details.push({ entityType: "vehicle", entityId: v.id, name: v.label, ccId: cc?.id ?? null, status: cc ? "created_or_reused" : "failed" });
       }
     }
 

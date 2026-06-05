@@ -18,6 +18,7 @@ const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
 const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
+const CostCentersTree = lazy(() => import("@/pages/finance/cost-centers-tree"));
 const CostCenterPnl = lazy(() => import("@/pages/finance/cost-center-pnl"));
 const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const PricingRules = lazy(() => import("@/pages/finance/pricing-rules"));
@@ -293,6 +294,7 @@ export const financeRoutes = [
   { path: "/finance/allocation-coverage", component: AllocationCoverage },
   { path: "/finance/allocation-override-log", component: AllocationOverrideLog },
   { path: "/finance/cost-centers", component: CostCenters },
+  { path: "/finance/cost-centers/tree", component: CostCentersTree },
   { path: "/finance/cost-center-pnl", component: CostCenterPnl },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
