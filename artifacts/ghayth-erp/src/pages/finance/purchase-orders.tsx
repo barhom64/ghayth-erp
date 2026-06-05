@@ -32,6 +32,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Purchase orders list — migrated in R.4 iter 4 to the unified
@@ -190,12 +191,30 @@ export default function PurchaseOrdersPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "طلبات الشراء" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="finance:create" size="sm" asChild>
-          <Link href="/finance/purchase-orders/create">
-            <Plus className="h-4 w-4 me-1" />
-            طلب جديد
-          </Link>
-        </GuardedButton>
+        <>
+          <GuardedButton perm="finance:create" size="sm" asChild>
+            <Link href="/finance/purchase-orders/create">
+              <Plus className="h-4 w-4 me-1" />
+              طلب جديد
+            </Link>
+          </GuardedButton>
+          <PrintButton
+            entityType="report_finance_purchase_orders_list"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "قائمة طلبات الشراء", total: filtered.length },
+              items: filtered.map((po: any) => ({
+                "المرجع": po.ref || `#${po.id}`,
+                "المورد": po.supplierName || "—",
+                "تاريخ الإنشاء": po.createdAt || "—",
+                "الإجمالي": Number(po.totalAmount || 0),
+                "تاريخ الاستلام المتوقع": po.expectedDelivery || "—",
+                "الحالة": po.status || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

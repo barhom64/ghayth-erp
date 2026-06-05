@@ -17,6 +17,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function ReceivablesPage() {
   const [, navigate] = useLocation();
@@ -115,6 +116,23 @@ export default function ReceivablesPage() {
               متابعة Dunning
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_receivables"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "المقبوضات (الذمم المدينة)", total: filtered.length },
+              items: filtered.map((r: any) => ({
+                "المرجع": r.ref,
+                "العميل": r.clientName || "—",
+                "الإجمالي": Number(r.total || 0),
+                "المدفوع": Number(r.paidAmount || 0),
+                "المتبقي": Number(r.remainingAmount || 0),
+                "الاستحقاق": r.dueDate || "—",
+                "الحالة": r.status || "—",
+              })),
+            }}
+          />
         </div>
       }
     >

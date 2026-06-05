@@ -18,6 +18,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 export default function TreasuryPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
@@ -189,6 +190,20 @@ export default function TreasuryPage() {
               <TrendingUp className="h-4 w-4 me-1" />التدفق النقدي
             </Link>
           </Button>
+          <PrintButton
+            entityType="report_finance_treasury"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "الخزينة — الأرصدة النقدية", total: accounts.length },
+              items: accounts.map((a: any) => ({
+                "الكود": a.code,
+                "اسم الحساب": a.name,
+                "النوع": a.code?.startsWith("110") ? "صندوق نقدي" : a.code?.startsWith("11") ? "حساب بنكي" : "أخرى",
+                "الرصيد الحالي": Number(a.currentBalance ?? 0),
+              })),
+            }}
+          />
         </div>
       }
     >

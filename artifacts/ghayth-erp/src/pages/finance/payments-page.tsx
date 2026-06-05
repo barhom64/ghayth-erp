@@ -15,6 +15,7 @@ import {
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function PaymentsPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["payments"], "/finance/payments");
@@ -83,6 +84,20 @@ export default function PaymentsPage() {
               تقادم الموردين
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_payments"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "المدفوعات", total: filtered.length },
+              items: filtered.map((p: any) => ({
+                "المرجع": p.ref || "—",
+                "الوصف": p.description || "—",
+                "المبلغ": Number(p.amount || 0),
+                "التاريخ": p.date || "—",
+              })),
+            }}
+          />
         </div>
       }
     >
