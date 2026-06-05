@@ -227,6 +227,19 @@ router.post("/", authorize({ feature: "crm.clients", action: "create" }), async 
         [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, type, nationality ?? null, language, scope.companyId, attachments ? JSON.stringify(attachments) : null]
       );
       insertedId = newRow!.id;
+      // Seed the per-client receivable sub-account (1111-XXXX) atomically
+      // with the client row. Used to be a fire-and-forget call AFTER the
+      // commit — if the engine threw, the client row was already there
+      // with no subsidiary mapping, and any subsequent invoice posted to
+      // the pooled 1111 fallback instead of the per-client analytic
+      // account. createSubsidiaryAccountsForEntity nests via SAVEPOINT
+      // (rawdb.ts withTransaction is reentrant) so this is safe inside
+      // the outer txn.
+      try {
+        await createSubsidiaryAccountsForEntity(scope.companyId, "client", insertedId, String(name).trim());
+      } catch (e) {
+        logger.warn(e, "[clients] subsidiary receivable create failed");
+      }
     });
 
     const [client] = await rawQuery<ClientRow>(
@@ -244,8 +257,6 @@ router.post("/", authorize({ feature: "crm.clients", action: "create" }), async 
       entityId: insertedId,
       after: { name, phone, email, classification, source },
     }).catch((e) => logger.error(e, "clients background task failed"));
-
-    createSubsidiaryAccountsForEntity(scope.companyId, "client", insertedId, name).catch((e) => logger.error(e, "clients background task failed"));
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertedId, details: JSON.stringify({ name, phone, email, classification, source }) }).catch((e) => logger.error(e, "clients background task failed"));
 

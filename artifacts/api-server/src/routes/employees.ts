@@ -584,11 +584,27 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         if (jtRes.rows.length > 0) resolvedJobTitleId = jtRes.rows[0].id;
       }
 
+      // Resolve the EFFECTIVE role BEFORE the assignment + user rows
+      // are inserted. Previously this was a two-pass: insert with the
+      // body's `role` first, then a Step 8a UPDATE overrode
+      // employee_assignments.role from the job_title's defaultRoleKey —
+      // but the corresponding users.role + rbac_user_roles binding
+      // were never adjusted, leaving the user logged in as "employee"
+      // even though their assignment said "driver". One pass = no drift.
+      let effectiveRole = role;
+      if (resolvedJobTitleId && (!role || role === "employee")) {
+        const [jtRoleDefault] = await client.query<{ defaultRoleKey: string | null }>(
+          `SELECT "defaultRoleKey" FROM job_titles WHERE id = $1`,
+          [resolvedJobTitleId]
+        ).then(r => r.rows as Array<{ defaultRoleKey: string | null }>);
+        if (jtRoleDefault?.defaultRoleKey) effectiveRole = jtRoleDefault.defaultRoleKey;
+      }
+
       const assignRes = await client.query(
         `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status,"managerId")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,'active',$10)
          RETURNING id`,
-        [empId, effectiveCompanyId, targetBranchId, resolvedDepartmentId, jobTitle, resolvedJobTitleId, role, Number(salary), effectiveHireDate, managerId ? Number(managerId) : null]
+        [empId, effectiveCompanyId, targetBranchId, resolvedDepartmentId, jobTitle, resolvedJobTitleId, effectiveRole, Number(salary), effectiveHireDate, managerId ? Number(managerId) : null]
       );
       const assignmentId = assignRes.rows[0].id;
 
@@ -689,6 +705,10 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // Operators who set BOTH internalEmail + personalEmail want the
       // user to log in with the internal one and keep the personal as
       // a contact, not a credential.
+      //
+      // Uses effectiveRole (resolved above) so users.role matches
+      // employee_assignments.role even when the picked job_title's
+      // defaultRoleKey overrode the body's role.
       const loginEmail = internalEmailIn || email || null;
       let userId: number | null = null;
       let tempPassword: string | null = null;
@@ -699,7 +719,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
           const hashedPw = await hashPassword(tempPassword);
           const userRes = await client.query(
             `INSERT INTO users (email, "passwordHash", role, "employeeId", "isActive") VALUES ($1,$2,$3,$4,true) RETURNING id`,
-            [loginEmail, hashedPw, role || "employee", empId]
+            [loginEmail, hashedPw, effectiveRole, empId]
           );
           userId = userRes.rows[0].id;
         } else {
@@ -708,23 +728,62 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         }
       }
 
-      // ── Step 8a: Job-title-driven defaults ──
-      // When the picked job_title has defaultRoleKey set and the body
-      // didn't override `role`, prefer the job-title default. Same for
-      // opensCustody — flips on the auto-custody flag.
-      let opensCustody = Boolean((body as any).createCustodyAccount);
-      if (resolvedJobTitleId) {
-        const [jt] = await client.query<{ defaultRoleKey: string | null; opensCustody: boolean }>(
-          `SELECT "defaultRoleKey", "opensCustody" FROM job_titles WHERE id = $1`,
-          [resolvedJobTitleId]
-        ).then(r => r.rows as Array<{ defaultRoleKey: string | null; opensCustody: boolean }>);
-        if (jt?.defaultRoleKey && (!role || role === "employee")) {
-          // Re-apply the role only on the assignment we just inserted.
-          await client.query(
-            `UPDATE employee_assignments SET role = $1 WHERE id = $2`,
-            [jt.defaultRoleKey, assignmentId]
-          );
+      // ── Step 8.1: Bind the user to RBAC v2 ──
+      // Until this commit, the user.role STRING was stored but no row
+      // ever appeared in rbac_user_roles — so the modern permission
+      // engine (which checks rbac_user_roles → rbac_roles → grants)
+      // saw the new employee as having no roles, no permissions, no
+      // module access. The legacy users.role string was the only
+      // fallback and only some routes checked it. That's why "اضف
+      // موظف وحدد دوره سائق" appeared to work but the new employee
+      // couldn't open any screen — the linkage stopped at users.role.
+      //
+      // Look up the rbac_roles row whose role_key matches the
+      // effective role (system-wide rows have companyId=NULL, company
+      // overrides have companyId=<this>). If no matching row exists
+      // (e.g. a brand-new custom role key), warn and continue — the
+      // autoMigrate batch job will reconcile on the next run.
+      if (userId && effectiveRole) {
+        try {
+          const [rbacRole] = await client.query<{ id: number }>(
+            `SELECT id FROM rbac_roles
+              WHERE role_key = $1
+                AND ("companyId" IS NULL OR "companyId" = $2)
+                AND is_active = true
+              ORDER BY "companyId" NULLS LAST
+              LIMIT 1`,
+            [effectiveRole, effectiveCompanyId]
+          ).then(r => r.rows as Array<{ id: number }>);
+          if (rbacRole) {
+            await client.query(
+              `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary, "assignedBy")
+               VALUES ($1, $2, $3, $4, $5, true, $6)
+               ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+              [userId, effectiveCompanyId, rbacRole.id, targetBranchId, resolvedDepartmentId, scope.userId]
+            );
+          } else {
+            logger.warn(
+              { effectiveRole, userId, companyId: effectiveCompanyId },
+              "[employees] rbac_roles row for role_key not found — user created without RBAC binding"
+            );
+          }
+        } catch (e) {
+          logger.warn(e, "[employees] rbac_user_roles binding failed");
         }
+      }
+
+      // ── Step 8a: Job-title-driven custody default ──
+      // defaultRoleKey is already resolved into effectiveRole BEFORE
+      // the assignment + user inserts (see line ~588), so the old
+      // two-pass UPDATE on employee_assignments.role is gone. Only
+      // opensCustody still needs the job-title lookup — and only when
+      // the operator didn't already tick the checkbox.
+      let opensCustody = Boolean((body as any).createCustodyAccount);
+      if (resolvedJobTitleId && !opensCustody) {
+        const [jt] = await client.query<{ opensCustody: boolean }>(
+          `SELECT "opensCustody" FROM job_titles WHERE id = $1`,
+          [resolvedJobTitleId]
+        ).then(r => r.rows as Array<{ opensCustody: boolean }>);
         if (jt?.opensCustody) opensCustody = true;
       }
 
@@ -766,7 +825,10 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // failure doesn't roll back the whole employee creation — the
       // assignment can be retried later from /fleet/drivers UI.
       const wantsVehicle = ((body as any).vehicleId as number | null | undefined) ?? null;
-      const effectiveRole = role || "employee";
+      // Use the outer effectiveRole (now correctly carries the
+      // job-title's defaultRoleKey override) instead of the raw body
+      // role — picking title "سائق" with no role in the form now
+      // correctly triggers the vehicle-binding path.
       const isDriverRole = effectiveRole === "driver" || effectiveRole === "fleet_driver";
       if (isDriverRole) {
         try {
