@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   FormShell,
@@ -332,9 +333,9 @@ export default function ProjectDetail() {
         <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />التقويم</Button>
       </Link>
       {project.status !== "completed" && !closingProject && (
-        <Button variant="outline" size="sm" className="text-emerald-600" onClick={() => setClosingProject(true)}>
+        <GuardedButton perm="operations:update" variant="outline" size="sm" className="text-emerald-600" onClick={() => setClosingProject(true)}>
           <Lock className="h-4 w-4 me-1" />إقفال المشروع
-        </Button>
+        </GuardedButton>
       )}
       {closingProject && (
         <div className="flex gap-2">
@@ -342,14 +343,14 @@ export default function ProjectDetail() {
           <Button variant="outline" size="sm" onClick={() => setClosingProject(false)}>إلغاء</Button>
         </div>
       )}
-      <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
+      <GuardedButton perm="operations:update" variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</GuardedButton>
       {deleting ? (
         <div className="flex gap-2">
           <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
           <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
         </div>
       ) : (
-        <Button variant="outline" size="sm" className="text-status-error-foreground" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+        <GuardedButton perm="operations:delete" variant="outline" size="sm" className="text-status-error-foreground" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</GuardedButton>
       )}
     </div>
   ) : undefined;
