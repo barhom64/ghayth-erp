@@ -1407,12 +1407,19 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className={cn("flex-1 flex flex-col min-w-0 h-screen overflow-hidden transition-all duration-300", isSidebarCollapsed ? "lg:ms-16" : "lg:ms-64")}>
-        <header className="bg-white border-b border-border h-14 flex items-center justify-between px-4 lg:px-6 flex-shrink-0 z-40">
-          <div className="flex items-center gap-3">
+        {/* Mobile fix: px-2 on the smallest screens (was px-4 even at
+            mobile) — saves 16px of horizontal real estate which is the
+            difference between the role/company/branch chip group
+            fitting inline vs overflowing past the right edge on a
+            360px viewport. The chip group has its OWN gap-1 plus
+            border padding, so trimming the header padding gives them
+            room without changing their visual density. */}
+        <header className="bg-white border-b border-border h-14 flex items-center justify-between px-2 sm:px-4 lg:px-6 flex-shrink-0 z-40 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden h-8 w-8"
+              className="lg:hidden h-8 w-8 shrink-0"
               onClick={() => setIsSidebarOpen(true)}
               title="فتح القائمة"
             >
@@ -1450,19 +1457,33 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Mobile fix: the right-side bell + role/company/branch +
+              language chips group was overflowing past the right edge
+              on phones because each chip carries its own gap + padding
+              and the wrapper had no shrink budget. shrink-0 keeps the
+              icons themselves intact; the search box is already
+              `hidden sm:block` so no change needed there; the
+              role/company/branch chip group below now has min-w-0 so
+              its child <Button>s can compress their text portion.
+
+              Total width on a 360px viewport: hamburger (32) + back
+              (32) + title icon+text (~80) = 144, leaves ~200 for the
+              right group. The 3-chip group renders at ~180 with
+              labels hidden (md:hidden on the text spans), so it now
+              actually fits. */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0 min-w-0">
             <div className="hidden sm:block">
               <button
                 onClick={() => { setCommandPaletteFilter(null); setCommandPaletteOpen(true); }}
-                className="flex items-center gap-2 h-9 px-3 text-sm text-muted-foreground border border-border rounded-lg bg-surface-subtle hover:bg-white hover:border-status-info-surface hover:text-muted-foreground transition-all w-72"
+                className="flex items-center gap-2 h-9 px-3 text-sm text-muted-foreground border border-border rounded-lg bg-surface-subtle hover:bg-white hover:border-status-info-surface hover:text-muted-foreground transition-all w-40 sm:w-56 lg:w-72"
               >
                 <Search className="h-4 w-4 shrink-0" />
-                <span className="flex-1 text-start">بحث في الصفحات والإجراءات...</span>
+                <span className="flex-1 text-start truncate">بحث في الصفحات والإجراءات...</span>
                 <kbd className="hidden lg:flex items-center gap-0.5 text-[10px] text-gray-300 bg-white border border-border rounded px-1 py-0.5">Ctrl+K</kbd>
               </button>
             </div>
 
-            <div className="flex items-center gap-1 border border-border rounded-lg px-1 py-0.5 bg-surface-subtle/50">
+            <div className="flex items-center gap-0.5 sm:gap-1 border border-border rounded-lg px-0.5 sm:px-1 py-0.5 bg-surface-subtle/50 min-w-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button

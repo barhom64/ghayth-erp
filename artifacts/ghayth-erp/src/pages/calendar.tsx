@@ -103,8 +103,13 @@ export default function CalendarPage() {
       subtitle="جميع المواعيد النهائية القادمة من المشاريع والالتزامات والعقود والمهام"
       breadcrumbs={[{ label: "العمليات" }, { label: "التقويم" }]}
       actions={
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-md border bg-muted/30 p-0.5">
+        // Mobile fix: flex-wrap + min-w-0 lets each control drop to a
+        // new row instead of forcing horizontal page scroll. The
+        // Selects swapped fixed `w-40 / w-32` for `flex-1 min-w-[8rem]`
+        // so they shrink down to ~128px on a 360px viewport (two per
+        // row) but grow back to their usual widths on tablet/desktop.
+        <div className="flex items-center gap-2 flex-wrap min-w-0 w-full sm:w-auto">
+          <div className="flex rounded-md border bg-muted/30 p-0.5 shrink-0">
             <Button
               variant={view === "list" ? "default" : "ghost"}
               size="sm"
@@ -123,7 +128,7 @@ export default function CalendarPage() {
             </Button>
           </div>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="flex-1 min-w-[8rem] sm:w-40 sm:flex-initial"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">الكل</SelectItem>
               <SelectItem value="milestone">المعالم</SelectItem>
@@ -139,7 +144,7 @@ export default function CalendarPage() {
             </SelectContent>
           </Select>
           <Select value={days} onValueChange={setDays}>
-            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="flex-1 min-w-[7rem] sm:w-32 sm:flex-initial"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="7">7 أيام</SelectItem>
               <SelectItem value="14">14 يوم</SelectItem>

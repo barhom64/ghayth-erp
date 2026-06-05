@@ -149,7 +149,18 @@ export function PageShell(props: PageShellProps) {
   } = props;
 
   return (
-    <div className="space-y-4 px-1 pb-10" dir="rtl">
+    // Mobile fix: `overflow-x-hidden` on the root prevents one rogue
+    // child (a too-wide table, a fixed-width Select group, a not-yet-
+    // responsive third-party widget) from pushing the WHOLE page wider
+    // than the viewport and clipping the title at the right edge. The
+    // bug surfaced on /calendar where 3 fixed-width filter Selects in
+    // the actions slot blew out the layout. Combined with `min-w-0`
+    // it's the standard guard for an RTL layout in a flex column.
+    //
+    // px-2 sm:px-1: tighter on mobile so cards have room to breathe
+    // (mobile viewport ÷ 2 columns − gap was clipping KPI labels);
+    // wider on sm+ matches the previous look.
+    <div className="space-y-3 sm:space-y-4 px-2 sm:px-1 pb-10 overflow-x-hidden min-w-0" dir="rtl">
       {loading && (
         <div
           role="progressbar"
@@ -170,29 +181,44 @@ export function PageShell(props: PageShellProps) {
         time as a cosmetic cleanup; not urgent.
       */}
 
-      <header className="flex items-start justify-between gap-4 flex-wrap">
+      <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
+          {/* text-xl on mobile (was text-2xl) — at 320-360px viewports
+              text-2xl pushed the title off-screen for longer Arabic
+              labels like "مركز التجديدات والانتهاءات". break-words
+              lets the title wrap when the screen truly can't fit a
+              single line. */}
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground break-words">
             {title}
           </h1>
           {subtitle && (
-            <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words">{subtitle}</p>
           )}
         </div>
         {actions && (
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          // Actions:
+          //   - flex-wrap so each child can drop to a new row
+          //   - min-w-0 so children can shrink (Select w-40 won't blow
+          //     out anymore)
+          //   - On mobile the whole actions row sits BELOW the title
+          //     (sm:flex-row above) — gives them full viewport width.
+          //   - overflow-x-auto fallback if a stubborn child refuses
+          //     to shrink (e.g. a non-responsive button group), so
+          //     instead of overflowing the page we get a localised
+          //     scroll inside the actions row only.
+          <div className="flex items-center gap-2 flex-wrap min-w-0 sm:shrink-0 overflow-x-auto -mx-2 px-2 sm:mx-0 sm:px-0">
             {actions}
           </div>
         )}
       </header>
 
       {filters && (
-        <div className="bg-muted/30 rounded-lg border p-3 flex items-center gap-2 flex-wrap">
+        <div className="bg-muted/30 rounded-lg border p-2 sm:p-3 flex items-center gap-2 flex-wrap min-w-0">
           {filters}
         </div>
       )}
 
-      <div className={cn("relative", contentClassName ?? "space-y-4")}>
+      <div className={cn("relative min-w-0", contentClassName ?? "space-y-3 sm:space-y-4")}>
         <PageErrorBoundary resetKey={resetKey}>{children}</PageErrorBoundary>
       </div>
     </div>
