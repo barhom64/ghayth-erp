@@ -170,8 +170,6 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
   const byType = data?.byType || {};
   const [viewMode, setViewMode] = useState<"tree" | "flat">("tree");
 
-  if (isError) return <ErrorState />;
-
   const tree = useMemo(() => {
     if (!rows.length) return [];
     const map = new Map<number, any>();
