@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Search, AlertTriangle, ChevronRight, ExternalLink,
   ScaleIcon, DollarSign, Clock, RotateCcw, Copy, Layers,
@@ -170,6 +171,23 @@ export default function GlAnomalyDetectorPage() {
               ميزان المراجعة
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_gl_anomaly"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "كاشف الشذوذ في القيود", total: filtered.length },
+              items: filtered.map((j: any) => ({
+                "المرجع": j.ref || `#${j.id}`,
+                "الوصف": j.description || "—",
+                "التاريخ": j.createdAt || "—",
+                "المدين": Number(j.totalDebit || 0),
+                "الدائن": Number(j.totalCredit || 0),
+                "السطور": j.lines?.length ?? 0,
+                "الأنماط": (j.tags || []).map((t: AnomalyType) => ANOMALY_DEFS[t]?.label || t).join("، "),
+              })),
+            }}
+          />
         </div>
       }
     >

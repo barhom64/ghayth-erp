@@ -14,6 +14,7 @@ import { Package, Calculator, TrendingUp, CheckCircle, Info } from "lucide-react
 import { formatCurrency } from "@/lib/formatters";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 export default function InventoryCostingPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [setupResult, setSetupResult] = useState<any>(null);
@@ -119,6 +120,23 @@ export default function InventoryCostingPage() {
       title="تقييم المخزون بالمتوسط المرجح"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تقييم المخزون بالمتوسط المرجح" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_finance_inventory_costing"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "تقييم المخزون بالمتوسط المرجح", total: products.length },
+            items: products.map((p: any) => ({
+              "المنتج": p.name || "—",
+              "SKU": p.sku || "—",
+              "المخزون": Number(p.currentStock || 0).toFixed(2),
+              "تكلفة الوحدة": Number(p.costPrice || 0),
+              "القيمة الإجمالية": Number(p.stockValue || 0),
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-3">

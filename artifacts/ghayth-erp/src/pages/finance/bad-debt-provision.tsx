@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   AlertTriangle, TrendingDown, FileSignature, RefreshCw,
   Info, CheckCircle2, Lock,
@@ -136,6 +137,20 @@ export default function BadDebtProvisionPage() {
               مخاطر العملاء
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_bad_debt_provision"
+            entityId={period}
+            label="طباعة"
+            payload={{
+              entity: { title: `مخصص ديون مشكوك فيها — ${period}`, total: data?.invoiceCount ?? 0 },
+              items: data ? BUCKET_DEFS.map((b) => ({
+                "الشريحة": b.label,
+                "الرصيد المفتوح": Number(data.buckets[b.key] || 0),
+                "النسبة %": (Number(rates[b.key] || 0) * 100).toFixed(1),
+                "المخصص": Number(data.provision[b.key] || 0),
+              })) : [],
+            }}
+          />
         </div>
       }
     >
