@@ -145,10 +145,15 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
   };
 
   return (
-    <div className={cn("space-y-3", className)}>
-      <div className="flex items-center gap-2 flex-wrap">
+    // Mobile fix: min-w-0 on the wrapper + responsive widths on the
+    // search/status controls below. Previously the search box had
+    // min-w-[200px] and the status select had a fixed w-[160px], so
+    // on a 360px viewport two of them in a non-wrapping flex row
+    // overflowed the page silently.
+    <div className={cn("space-y-3 min-w-0", className)}>
+      <div className="flex items-center gap-2 flex-wrap min-w-0">
         {(config.showSearch !== false) && (
-          <div className="relative flex-1 min-w-[200px] max-w-md">
+          <div className="relative flex-1 min-w-[140px] sm:min-w-[200px] max-w-md">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={cooldown.isCoolingDown ? cooldown.label : (config.searchPlaceholder || "بحث...")}
@@ -176,7 +181,7 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
 
         {config.statuses && (
           <Select value={values.status} onValueChange={v => update("status", v === "_all" ? "" : v)}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-full sm:w-[160px]">
               <SelectValue placeholder="كل الحالات" />
             </SelectTrigger>
             <SelectContent>
@@ -215,12 +220,12 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
       </div>
 
       {expanded && (
-        <div className="flex items-center gap-3 flex-wrap p-3 bg-surface-subtle rounded-lg border">
+        <div className="flex items-center gap-3 flex-wrap p-3 bg-surface-subtle rounded-lg border min-w-0">
           {config.branches && config.branches.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <span className="text-xs text-muted-foreground whitespace-nowrap">الفرع:</span>
               <Select value={values.branch} onValueChange={v => update("branch", v === "_all" ? "" : v)}>
-                <SelectTrigger className="w-[150px] h-8 text-xs">
+                <SelectTrigger className="flex-1 sm:w-[150px] sm:flex-initial h-8 text-xs">
                   <SelectValue placeholder="الكل" />
                 </SelectTrigger>
                 <SelectContent>

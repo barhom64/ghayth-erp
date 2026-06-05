@@ -215,7 +215,7 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
   // --- Wrapper handles loading/error state ---------------------------------
   if (isLoading || error) {
     return (
-      <div className="space-y-4" dir="rtl">
+      <div className="space-y-4 min-w-0 overflow-x-hidden" dir="rtl">
         {header}
         <PageStateWrapper isLoading={isLoading} error={error} onRetry={onRetry}>
           <div />
@@ -270,7 +270,11 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
 
   // --- Reference card with full context ------------------------------------
   return (
-    <div className="space-y-4 print:space-y-2" dir="rtl">
+    // Mobile fix: overflow-x-hidden + min-w-0 mirror the PageShell
+    // guard. A long relatedEntities chip strip or a wide title in
+    // the header used to push the entire detail page wider than the
+    // viewport on phones; this prevents that.
+    <div className="space-y-4 print:space-y-2 min-w-0 overflow-x-hidden" dir="rtl">
       {header}
 
       {/* Title + reference + status card */}
@@ -336,12 +340,17 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
                 .map((e, i) => {
                   const Icon = e.icon;
                   const content = (
+                    // Mobile fix: max-w-[14rem] caps the chip width so
+                    // a long label ("DriverIntegratedCard أعلى نموذج
+                    // متكامل…") doesn't push the chip past the
+                    // viewport on a 360px phone. The inner truncate
+                    // (already present) then trims gracefully.
                     <div className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs",
+                      "flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs max-w-[14rem] sm:max-w-none",
                       e.href ? "hover:bg-surface-subtle cursor-pointer" : "",
                       "bg-white border-border"
                     )}>
-                      {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
+                      {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 truncate">{e.label}</p>
                         {e.sublabel && <p className="text-[10px] text-muted-foreground truncate">{e.sublabel}</p>}

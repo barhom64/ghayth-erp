@@ -179,13 +179,20 @@ export function FormShell<TSchema extends FieldValues>({
         <div className="space-y-4">{children}</div>
 
         {!hideSubmit && (
-          <div className="flex items-center justify-between gap-2 pt-4 border-t">
-            <div className="flex items-center gap-2">{secondaryActions}</div>
+          // Mobile fix: stack the footer vertically on phones so the
+          // submit button takes full width (better tap target) and
+          // secondary actions sit above it. On sm+ they go back to a
+          // single row with the previous justify-between layout. The
+          // submit's min-w-[7rem] was OK on desktop but together with
+          // a handful of secondary buttons (cancel + draft + history)
+          // pushed off-screen on a 360px phone.
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 border-t">
+            <div className="flex items-center gap-2 flex-wrap">{secondaryActions}</div>
             <Button
               type="submit"
               variant={submitVariant}
               disabled={disabled || submitting}
-              className="min-w-[7rem]"
+              className="w-full sm:w-auto sm:min-w-[7rem]"
               rateLimitAware
             >
               {submitting ? "جارٍ الحفظ..." : submitLabel}

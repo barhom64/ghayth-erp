@@ -293,13 +293,22 @@ export function DataTable<T>({
   const colCount = visibleColumns.length + (selectable ? 1 : 0);
 
   return (
-    <div className={cn("space-y-3", className)} dir="rtl">
+    // Mobile fix: min-w-0 + overflow-x-hidden on the root mirrors the
+    // PageShell guard. Without it a wide table column or a toolbar
+    // child that refuses to shrink pushes the whole DataTable past
+    // the viewport — and since the table sits inside PageShell which
+    // already clips its OWN overflow, the table just got cut off
+    // silently instead of producing a horizontal scroll users could
+    // see. The inner Table wrapper has overflow-auto so wide tables
+    // still scroll horizontally inside the card; this guard prevents
+    // the table from pushing its container wider than the page.
+    <div className={cn("space-y-3 min-w-0 overflow-x-hidden", className)} dir="rtl">
       {!noToolbar && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
             {toolbarStart}
             {searchPlaceholder !== null && searchableKeys.length > 0 && (
-              <div className="relative flex-1 min-w-[180px] max-w-sm">
+              <div className="relative flex-1 min-w-[140px] sm:min-w-[180px] max-w-sm">
                 <Search className="absolute end-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                 <Input
                   value={search}
@@ -333,7 +342,7 @@ export function DataTable<T>({
                   setCurrentPage(1);
                 }}
               >
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-full sm:w-[160px]">
                   <SelectValue placeholder="الحالة" />
                 </SelectTrigger>
                 <SelectContent>
