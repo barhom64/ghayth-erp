@@ -26,6 +26,7 @@ import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
@@ -373,11 +374,16 @@ function ProjectListTab() {
 }
 
 export default function Projects() {
-  const { roleLevel } = useAppContext();
+  const { roleLevel, scopeQueryString } = useAppContext();
   const canManage = roleLevel >= 50;
   const search = useSearch();
   const params = new URLSearchParams(search);
   const defaultTab = params.get("tab") || "overview";
+  const { data: projectsResp } = useApiQuery<any>(
+    ["projects-print", scopeQueryString],
+    `/projects?limit=500${scopeQueryString ? `&${scopeQueryString}` : ""}`,
+  );
+  const projectsForPrint = asList(projectsResp);
 
   return (
     <PageShell
@@ -385,11 +391,31 @@ export default function Projects() {
       subtitle="متابعة المشاريع والمراحل والتكاليف والمخاطر"
       breadcrumbs={[{ label: "العمليات" }]}
       actions={
-        canManage ? (
-          <Link href="/projects/create">
-            <GuardedButton perm="projects:create" className="gap-2"><Plus className="h-4 w-4" /> مشروع جديد</GuardedButton>
-          </Link>
-        ) : null
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_projects"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "قائمة المشاريع", total: projectsForPrint.length },
+              items: projectsForPrint.map((p: any) => ({
+                "الاسم": p.name || "—",
+                "العميل": p.clientName || "—",
+                "المدير": p.managerName || "—",
+                "تاريخ البدء": p.startDate || "—",
+                "تاريخ النهاية": p.endDate || "—",
+                "الميزانية": p.budget ?? 0,
+                "نسبة الإنجاز": p.progress ?? "—",
+                "الحالة": p.status || "—",
+              })),
+            }}
+          />
+          {canManage ? (
+            <Link href="/projects/create">
+              <GuardedButton perm="projects:create" className="gap-2"><Plus className="h-4 w-4" /> مشروع جديد</GuardedButton>
+            </Link>
+          ) : null}
+        </div>
       }
     >
       <ProjectsTabsNav />
