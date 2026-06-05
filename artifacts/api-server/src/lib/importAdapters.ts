@@ -86,11 +86,37 @@ const EMPLOYEE_GENDER: Record<string, string> = {
   "female": "female",
 };
 
+// Employee status must stay within the employees.status CHECK
+// (active/inactive/terminated/on_leave/suspended). The generic STATUS_GENERIC
+// map emits `pending`/`cancelled`, which that constraint rejects — so a
+// dedicated map keeps imported employee rows inside the allowed set.
+const EMPLOYEE_STATUS: Record<string, string> = {
+  "نشط": "active",
+  "نشطة": "active",
+  "active": "active",
+  "غير نشط": "inactive",
+  "inactive": "inactive",
+  "منتهي الخدمة": "terminated",
+  "مفصول": "terminated",
+  "terminated": "terminated",
+  "في إجازة": "on_leave",
+  "إجازة": "on_leave",
+  "on_leave": "on_leave",
+  "موقوف": "suspended",
+  "معلق": "suspended",
+  "suspended": "suspended",
+};
+
 const INVOICE_STATUS: Record<string, string> = {
   "مسودة": "draft",
   "draft": "draft",
-  "صادرة": "issued",
-  "issued": "issued",
+  // An "issued" invoice maps to the CHECK-valid `sent` status — the
+  // invoices.status constraint has no `issued` value, so importing a row
+  // labelled صادرة/issued used to fail the constraint and drop the row.
+  "صادرة": "sent",
+  "issued": "sent",
+  "مرسلة": "sent",
+  "sent": "sent",
   "مدفوعة": "paid",
   "paid": "paid",
   "متأخرة": "overdue",
@@ -274,7 +300,7 @@ const EMPLOYEES: ImportAdapter = {
   },
   enumMaps: {
     gender: EMPLOYEE_GENDER,
-    status: STATUS_GENERIC,
+    status: EMPLOYEE_STATUS,
   },
   required: ["name"],
   uniqueField: "nationalId",
