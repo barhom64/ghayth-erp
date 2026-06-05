@@ -60,7 +60,7 @@ const ENTITY_MAP: Record<string, string> = {
   "/bi": "bi_object",
 };
 
-const ENTITY_TABLE_MAP: Record<string, string> = {
+export const ENTITY_TABLE_MAP: Record<string, string> = {
   employee: "employees",
   client: "clients",
   invoice: "invoices",
@@ -68,14 +68,14 @@ const ENTITY_TABLE_MAP: Record<string, string> = {
   expense: "expenses",
   purchase_request: "purchase_requests",
   purchase_order: "purchase_orders",
-  salary_advance: "salary_advances",
-  custody: "custodies",
-  vendor: "vendors",
+  salary_advance: "journal_entries",
+  custody: "journal_entries",
+  vendor: "suppliers",
   leave_request: "hr_leave_requests",
   attendance: "attendance",
   violation: "hr_violations",
-  official_letter: "hr_official_letters",
-  performance: "hr_performance_reviews",
+  official_letter: "official_letters",
+  performance: "performance_reviews",
   payroll_run: "payroll_runs",
   evaluation_cycle: "evaluation_cycles",
   loan: "hr_employee_loans",
