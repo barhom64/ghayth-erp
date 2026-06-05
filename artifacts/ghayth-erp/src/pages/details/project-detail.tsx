@@ -78,6 +78,7 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PrintButton } from "@/components/shared/print-button";
+import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 
 const PROJECT_TABS = [
   { key: "overview", label: "نظرة عامة", icon: FolderKanban },
@@ -838,6 +839,7 @@ export default function ProjectDetail() {
             </Button>
           </Link>
           <PrintButton entityType="project" entityId={(id as any) ?? 0} label="طباعة" />
+          {id != null && <EntityPnlButton entityType="project" entityId={Number(id)} />}
         </div>
       }
     />

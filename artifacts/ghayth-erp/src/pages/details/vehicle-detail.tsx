@@ -29,6 +29,7 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { PrintButton } from "@/components/shared/print-button";
+import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
   { key: "info", label: "المعلومات", icon: Car },
@@ -902,6 +903,7 @@ export default function VehicleDetail() {
             </Button>
           </Link>
           <PrintButton entityType="vehicle" entityId={(id as any) ?? 0} label="طباعة" />
+          {id != null && <EntityPnlButton entityType="vehicle" entityId={Number(id)} />}
         </div>
       }
       hideTabs={[...registryHideTabs, "tasks"]}
