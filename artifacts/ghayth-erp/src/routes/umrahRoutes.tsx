@@ -63,6 +63,7 @@ const UmrahCompliance = lazy(() => import("@/pages/umrah/compliance"));
 // Reports hub + new operational reports.
 const UmrahReportsHub = lazy(() => import("@/pages/umrah/reports/index"));
 const UmrahAgentBalancesReport = lazy(() => import("@/pages/umrah/reports/agent-balances"));
+const UmrahSubAgentBalancesReport = lazy(() => import("@/pages/umrah/reports/subagent-balances"));
 const UmrahPilgrimMovementsReport = lazy(() => import("@/pages/umrah/reports/pilgrim-movements"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
@@ -106,6 +107,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/compliance", component: UmrahCompliance, module: "operations" },
   { path: "/umrah/reports", component: UmrahReportsHub, module: "operations" },
   { path: "/umrah/reports/agent-balances", component: UmrahAgentBalancesReport, module: "operations" },
+  { path: "/umrah/reports/subagent-balances", component: UmrahSubAgentBalancesReport, module: "operations" },
   { path: "/umrah/reports/pilgrim-movements", component: UmrahPilgrimMovementsReport, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },

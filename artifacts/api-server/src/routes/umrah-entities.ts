@@ -2945,4 +2945,119 @@ router.get("/reports/pilgrim-movements", authorize({ feature: "umrah", action: "
   } catch (err) { handleRouteError(err, res, "Pilgrim movements report"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// تقرير أرصدة الوكلاء الفرعيين — مكمِّل لتقرير الوكلاء لكنه أهم لأن
+// مدفوعات العمرة الحقيقية تدخل من الوكلاء الفرعيين (عبر umrah_payments).
+//
+// الفرق الجوهري عن agent-balances:
+//   • umrah_sales_invoices.paidAmount عمود حقيقي (مش مجرد status='paid')
+//   • umrah_payments جدول مستقل يجمع التحصيلات حسب subAgentId
+//   • outstanding = SUM(total) − SUM(paidAmount) على الفواتير + رصيد payments
+//
+// لكل وكيل فرعي:
+//   - عدد الفواتير المُصدرة
+//   - إجمالي المُفوتر
+//   - إجمالي المُحصَّل من الفواتير (paidAmount)
+//   - إجمالي المُحصَّل من الـ payments (مستقل)
+//   - الرصيد المستحق
+//   - آخر دفعة + تاريخها
+//   - عدد المعتمرين تحت هذا الوكيل الفرعي
+//   - حالة الوكيل الفرعي (isActive)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/subagent-balances", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, isActive, hasOutstanding } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let seasonClause = "";
+    if (seasonId) { params.push(Number(seasonId)); seasonClause = ` AND inv."seasonId" = $${params.length}`; }
+    let isActiveClause = "";
+    if (isActive === "true")  { isActiveClause = ` AND sa."isActive" = true`; }
+    if (isActive === "false") { isActiveClause = ` AND sa."isActive" = false`; }
+
+    // اثنين LATERAL منفصلين:
+    //   inv_agg → تجميع umrah_sales_invoices (المُفوتر + المُحصَّل)
+    //   pay_agg → تجميع umrah_payments (المدفوعات المستقلة)
+    //
+    // الفرق الحرج: paid من inv.paidAmount مش من status — عمود حقيقي يخزَّن
+    // كل ما يدخل دفعة عبر POST /umrah/payments.
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT sa.id, sa.name, sa."nuskCode", sa.phone, sa.email, sa.country,
+              sa."isActive", sa."paymentTerms", sa."agentId",
+              a.name AS "agentName",
+              COALESCE(inv_agg.invoice_count, 0)::int AS "invoiceCount",
+              COALESCE(inv_agg.total_invoiced, 0)    AS "totalInvoiced",
+              COALESCE(inv_agg.total_paid_on_inv, 0) AS "totalPaidOnInvoices",
+              COALESCE(pay_agg.payment_count, 0)::int AS "paymentCount",
+              COALESCE(pay_agg.total_received, 0)     AS "totalReceived",
+              COALESCE(inv_agg.outstanding, 0)        AS "outstanding",
+              pay_agg.last_payment_at                 AS "lastPaymentAt",
+              pay_agg.last_payment_ref                AS "lastPaymentRef",
+              (SELECT COUNT(*)::int FROM umrah_pilgrims p
+                JOIN umrah_groups g ON g.id = p."groupId"
+                  AND g."companyId" = p."companyId"
+                  AND g."deletedAt" IS NULL
+                WHERE g."subAgentId" = sa.id
+                  AND p."companyId" = sa."companyId"
+                  AND p."deletedAt" IS NULL
+              ) AS "pilgrimCount"
+         FROM umrah_sub_agents sa
+    LEFT JOIN umrah_agents a
+           ON a.id = sa."agentId"
+          AND a."companyId" = sa."companyId"
+          AND a."deletedAt" IS NULL
+    LEFT JOIN LATERAL (
+           SELECT COUNT(*)::int          AS invoice_count,
+                  SUM(inv.total)         AS total_invoiced,
+                  SUM(inv."paidAmount")  AS total_paid_on_inv,
+                  SUM(inv.total - COALESCE(inv."paidAmount", 0))
+                    FILTER (WHERE inv.status NOT IN ('cancelled')) AS outstanding
+             FROM umrah_sales_invoices inv
+            WHERE inv."subAgentId" = sa.id
+              AND inv."companyId" = sa."companyId"
+              AND inv."deletedAt" IS NULL
+              AND inv.status <> 'cancelled'${seasonClause}
+         ) inv_agg ON true
+    LEFT JOIN LATERAL (
+           SELECT COUNT(*)::int   AS payment_count,
+                  SUM(pay."sarAmount") AS total_received,
+                  MAX(pay."paymentDate") AS last_payment_at,
+                  (ARRAY_AGG(pay.ref ORDER BY pay."paymentDate" DESC, pay.id DESC))[1] AS last_payment_ref
+             FROM umrah_payments pay
+            WHERE pay."subAgentId" = sa.id
+              AND pay."companyId" = sa."companyId"
+              AND pay."deletedAt" IS NULL
+         ) pay_agg ON true
+        WHERE sa."companyId" = $1
+          AND sa."deletedAt" IS NULL${isActiveClause}
+        ORDER BY COALESCE(inv_agg.outstanding, 0) DESC, sa.name
+        LIMIT 500`,
+      params,
+    );
+
+    const filtered = hasOutstanding === "true"
+      ? rows.filter((r) => Number(r.outstanding ?? 0) > 0)
+      : rows;
+
+    const totals = filtered.reduce<{
+      subAgents: number;
+      totalInvoiced: number;
+      totalPaidOnInvoices: number;
+      totalReceived: number;
+      outstanding: number;
+    }>(
+      (acc, r) => ({
+        subAgents:           acc.subAgents + 1,
+        totalInvoiced:       acc.totalInvoiced + Number(r.totalInvoiced ?? 0),
+        totalPaidOnInvoices: acc.totalPaidOnInvoices + Number(r.totalPaidOnInvoices ?? 0),
+        totalReceived:       acc.totalReceived + Number(r.totalReceived ?? 0),
+        outstanding:         acc.outstanding + Number(r.outstanding ?? 0),
+      }),
+      { subAgents: 0, totalInvoiced: 0, totalPaidOnInvoices: 0, totalReceived: 0, outstanding: 0 },
+    );
+
+    res.json(maskFields(req, { data: filtered, total: filtered.length, totals }));
+  } catch (err) { handleRouteError(err, res, "Sub-agent balances report"); }
+});
+
 export default router;
