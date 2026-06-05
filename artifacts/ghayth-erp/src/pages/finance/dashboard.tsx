@@ -46,6 +46,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { AllocationHealthCard } from "@/components/shared/allocation-health-card";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 /**
  * Finance Dashboard — R.1.5 of the Reference UI/UX phase.
  *
@@ -292,6 +293,22 @@ export default function FinanceDashboard() {
               قيد يدوي جديد
             </Link>
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_dashboard"
+            entityId="summary"
+            size="icon"
+            payload={{
+              entity: { title: "لوحة المالية — ملخص", total: 6 },
+              items: [
+                { "البند": "إجمالي الإيرادات", "القيمة": Number((summary.data as any)?.revenue ?? 0) },
+                { "البند": "الذمم المستحقة", "القيمة": Number(sOut) },
+                { "البند": "إجمالي المصروفات", "القيمة": Number((summary.data as any)?.expenses ?? 0) },
+                { "البند": "الضمانات النشطة (عدد)", "القيمة": guarantees.length },
+                { "البند": "قيود معلقة للاعتماد", "القيمة": pendingJournals.length },
+                { "البند": "حالة الفترة المالية", "القيمة": periods[0]?.status ?? "—" },
+              ],
+            }}
+          />
         </div>
       }
     >

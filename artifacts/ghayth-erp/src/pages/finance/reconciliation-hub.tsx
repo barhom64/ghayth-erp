@@ -14,6 +14,7 @@ import {
   Package, Percent, RefreshCw, Loader2, ChevronRight, FileText,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Reconciliation Hub — central tie-out screen.
@@ -273,6 +274,21 @@ export default function ReconciliationHubPage() {
           <Button variant="outline" size="sm" onClick={refreshAll}>
             <RefreshCw className="h-4 w-4 me-1" /> تحديث
           </Button>
+          <PrintButton
+            entityType="report_finance_reconciliation_hub"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "مركز التسوية المحاسبية", total: rows.length },
+              items: rows.map((r) => ({
+                "الضابط": r.cfg.label,
+                "رصيد GL": Number(r.glBalance || 0),
+                "رصيد المصدر الفرعي": Number(r.subledger || 0),
+                "الفرق": Number(r.variance || 0),
+                "متوازن": r.isBalanced ? "نعم" : "لا",
+              })),
+            }}
+          />
         </div>
       }
     >
