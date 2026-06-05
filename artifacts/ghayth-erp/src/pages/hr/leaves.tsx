@@ -18,6 +18,7 @@ import {
   dateColumn,
   statusColumn,
   actionsColumn,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflow-kit";
 import { ProcessStages, EntityTimeline } from "@workspace/entity-kit";
@@ -268,6 +269,22 @@ export default function LeavesPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "leaveTypeName", label: "نوع الإجازة" },
+              { key: "startDate", label: "تاريخ البداية" },
+              { key: "endDate", label: "تاريخ النهاية" },
+              { key: "days", label: "عدد الأيام" },
+              { key: "status", label: "الحالة" },
+              { key: "reason", label: "السبب" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "طلبات-الإجازات",
+          )
+        }
         resultCount={filtered?.length}
       />
 

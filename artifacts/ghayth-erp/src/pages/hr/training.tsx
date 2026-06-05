@@ -15,6 +15,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -171,6 +172,22 @@ export default function TrainingPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "title", label: "عنوان البرنامج" },
+              { key: "trainer", label: "المدرب" },
+              { key: "startDate", label: "تاريخ البداية" },
+              { key: "endDate", label: "تاريخ النهاية" },
+              { key: "enrolledCount", label: "عدد المسجلين" },
+              { key: "completedCount", label: "عدد المنجزين" },
+              { key: "status", label: "الحالة" },
+              { key: "cost", label: "التكلفة" },
+            ],
+            "برامج-التدريب",
+          )
+        }
         resultCount={filtered.length}
       />
 
