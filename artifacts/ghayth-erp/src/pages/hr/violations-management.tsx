@@ -21,6 +21,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { SEVERITY_LEVELS } from "@/lib/hr-type-maps";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function ViolationsManagementPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["violations"], "/hr/violations");
@@ -45,6 +46,7 @@ export default function ViolationsManagementPage() {
   if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const byType = items.reduce((acc: Record<string, number>, v: any) => {
     const t = v.type || "أخرى";
@@ -111,9 +113,9 @@ export default function ViolationsManagementPage() {
           entityType="report_hr_violations_management"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "إدارة المخالفات", total: filtered.length },
-            items: filtered.map((v: any) => ({
+          payload={() => ({
+            entity: { title: "إدارة المخالفات", total: printRows.length },
+            items: printRows.map((v: any) => ({
               "الموظف": v.employeeName || "—",
               "النوع": v.type || "—",
               "الوصف": v.description || "—",
@@ -122,7 +124,7 @@ export default function ViolationsManagementPage() {
               "التاريخ": v.createdAt || "—",
               "الحالة": v.status || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -163,6 +165,7 @@ export default function ViolationsManagementPage() {
             />
             <DataTable
               columns={columns}
+              onSortedDataChange={setPrintRows}
               data={filtered}
               noToolbar
               emptyMessage="لا توجد مخالفات"

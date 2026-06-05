@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, Pencil, Trash2, FileText, X } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Finance / Journal Templates — list + create + edit + delete.
@@ -119,6 +120,7 @@ export default function JournalTemplatesPage() {
     "/finance/journal-templates",
   );
   const rows: JournalTemplate[] = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<JournalTemplate | null>(null);
   const [deleting, setDeleting] = useState<JournalTemplate | null>(null);
@@ -208,16 +210,16 @@ export default function JournalTemplatesPage() {
             entityType="report_finance_journal_templates"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "قوالب القيود المحاسبية", total: rows.length },
-              items: rows.map((r) => ({
+            payload={() => ({
+              entity: { title: "قوالب القيود المحاسبية", total: printRows.length },
+              items: printRows.map((r) => ({
                 "الاسم": r.name || "—",
                 "نوع العملية": OPERATION_LABEL[r.operationType] || r.operationType || "—",
                 "الوصف": r.description || "—",
                 "عدد السطور": r.lineCount ?? r.lines?.length ?? 0,
                 "نشط": r.isActive ? "نعم" : "لا",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -227,6 +229,7 @@ export default function JournalTemplatesPage() {
       <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()}>
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={rows}
           rowKey={(r) => r.id}
           emptyMessage="لا توجد قوالب — أنشئ القالب الأول لتسريع القيود المتكررة"

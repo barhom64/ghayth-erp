@@ -33,6 +33,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 function LeaveApprovalStages({ leaveId, leaveStatus }: { leaveId: number; leaveStatus: string }) {
   const { data } = useApiQuery<any>(
@@ -114,6 +115,7 @@ export default function LeavesPage() {
     statusField: "status",
     dateField: "startDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const handleApprovalDone = () => {
     refetch();
@@ -234,9 +236,9 @@ export default function LeavesPage() {
             entityType="report_hr_leaves"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "طلبات الإجازات", total: filtered.length },
-              items: filtered.map((l: any) => ({
+            payload={() => ({
+              entity: { title: "طلبات الإجازات", total: printRows.length },
+              items: printRows.map((l: any) => ({
                 "الموظف": l.employeeName || "—",
                 "النوع": l.leaveType || l.type || "—",
                 "من": l.startDate || "—",
@@ -245,7 +247,7 @@ export default function LeavesPage() {
                 "السبب": l.reason || "—",
                 "الحالة": l.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/hr/leaves/create">
             <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />طلب إجازة</GuardedButton>
@@ -310,6 +312,7 @@ export default function LeavesPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         emptyMessage="لا توجد طلبات إجازة"
         noToolbar

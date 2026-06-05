@@ -30,6 +30,7 @@ import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { withListFilters } from "@/lib/list-query";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const STAGE_LABELS: Record<string, string> = {
   lead: "عميل محتمل",
@@ -136,6 +137,7 @@ function OpportunitiesTab() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/crm/opportunities",
@@ -273,15 +275,15 @@ function OpportunitiesTab() {
           entityType="report_crm_opportunities"
           entityId="list"
           size="icon"
-          payload={{
+          payload={() => ({
             entity: {
               title: "قائمة الفرص البيعية",
-              total: filtered.length,
+              total: printRows.length,
               open: stats?.openOpportunities ?? 0,
               won: stats?.wonOpportunities ?? 0,
               pipeline: stats?.pipelineValue ?? 0,
             },
-            items: filtered.map((o: any) => ({
+            items: printRows.map((o: any) => ({
               "العنوان": o.title || o.name || "—",
               "العميل": o.clientName || "—",
               "المرحلة": o.stage || "—",
@@ -290,7 +292,7 @@ function OpportunitiesTab() {
               "تاريخ الإغلاق المتوقع": o.expectedCloseDate || o.closeDate || "—",
               "المسؤول": o.ownerName || o.assignee || "—",
             })),
-          }}
+          })}
         />
       </div>
 
@@ -319,6 +321,7 @@ function OpportunitiesTab() {
         <CardContent>
           <DataTable
             columns={columns}
+            onSortedDataChange={setPrintRows}
             data={filtered}
             isLoading={isLoading}
             isError={isError}

@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "in_review",  label: "قيد المراجعة" },
   { value: "probation",  label: "فترة التجربة" },
@@ -123,6 +124,7 @@ export default function OnboardingReviewPage() {
     statusField: "_onboardingStatus",
     dateField: "hireDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const pendingTasks = onboardingTasks.filter((t: any) => t.status !== "completed" && t.status !== "skipped");
 
@@ -197,16 +199,16 @@ export default function OnboardingReviewPage() {
           entityType="report_hr_onboarding_review"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "مراجعة التعيين والتأهيل", total: filtered.length },
-            items: filtered.map((e: any) => ({
+          payload={() => ({
+            entity: { title: "مراجعة التعيين والتأهيل", total: printRows.length },
+            items: printRows.map((e: any) => ({
               "الموظف": e.name || "—",
               "المنصب": e.jobTitle || "—",
               "تاريخ التعيين": e.startDate || "—",
               "نسبة الإنجاز %": e.onboardingProgress ?? "—",
               "الحالة": STATUS_OPTIONS.find((s) => s.value === e.onboardingStatus)?.label || e.onboardingStatus || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -292,6 +294,7 @@ export default function OnboardingReviewPage() {
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا يوجد موظفين في مرحلة التأهيل"

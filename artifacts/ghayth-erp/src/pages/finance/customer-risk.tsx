@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Customer Risk Dashboard — concentration + behavior analysis
@@ -207,6 +208,7 @@ export default function CustomerRiskPage() {
   const totalOverdue = customers.reduce((s, c) => s + c.overdueAmount, 0);
 
   const filtered = bandFilter ? customers.filter((c) => c.riskBand === bandFilter) : customers;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const cols: DataTableColumn<CustomerAggregate>[] = [
     {
@@ -342,9 +344,9 @@ export default function CustomerRiskPage() {
             entityType="report_finance_customer_risk"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "تحليل مخاطر العملاء", total: filtered.length },
-              items: filtered.map((c: any) => ({
+            payload={() => ({
+              entity: { title: "تحليل مخاطر العملاء", total: printRows.length },
+              items: printRows.map((c: any) => ({
                 "العميل": c.clientName || "—",
                 "الرصيد القائم": Number(c.outstandingAmount ?? 0),
                 "المتأخر": Number(c.overdueAmount ?? 0),
@@ -354,7 +356,7 @@ export default function CustomerRiskPage() {
                 "درجة المخاطر": c.riskScore ?? 0,
                 "التصنيف": c.riskBand || "—",
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -467,6 +469,7 @@ export default function CustomerRiskPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={filtered}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا يوجد عملاء بمستحقات حالية"
           />

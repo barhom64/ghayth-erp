@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Vendor Spend Analysis — concentration + payment-pattern analysis
@@ -238,6 +239,7 @@ export default function VendorSpendPage() {
   const noContract = vendorAggregates.filter((v) => v.outstandingAmount > 0 && !v.hasActiveContract).length;
 
   const filtered = bandFilter ? vendorAggregates.filter((v) => v.riskBand === bandFilter) : vendorAggregates;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const cols: DataTableColumn<VendorAggregate>[] = [
     {
@@ -355,9 +357,9 @@ export default function VendorSpendPage() {
           entityType="report_finance_vendor_spend"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "تحليل الإنفاق على الموردين", total: filtered.length },
-            items: filtered.map((v) => ({
+          payload={() => ({
+            entity: { title: "تحليل الإنفاق على الموردين", total: printRows.length },
+            items: printRows.map((v) => ({
               "المورد": v.name || "—",
               "الرصيد المفتوح": Number(v.outstandingAmount || 0),
               "عدد الفواتير": v.openInvoiceCount,
@@ -368,7 +370,7 @@ export default function VendorSpendPage() {
               "Score": v.riskScore,
               "التصنيف": v.riskBand,
             })),
-          }}
+          })}
         />
       }
     >
@@ -481,6 +483,7 @@ export default function VendorSpendPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={filtered}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا توجد ذمم مفتوحة لأي مورد"
           />

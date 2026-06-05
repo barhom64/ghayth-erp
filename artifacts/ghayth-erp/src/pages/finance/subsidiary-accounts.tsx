@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Link2 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import {
   EmployeeSelect,
   ClientSelect,
@@ -172,6 +173,7 @@ export default function SubsidiaryAccountsPage() {
   const { data, isLoading, error, refetch } =
     entityFilter.type && entityFilter.id ? entityQ : listQ;
   const rows: SubsidiaryAccountRow[] = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
   const [filters, setFilters] = useFilters();
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<SubsidiaryAccountRow | null>(null);
@@ -273,9 +275,9 @@ export default function SubsidiaryAccountsPage() {
             entityType="report_finance_subsidiary_accounts"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "الحسابات الفرعية", total: rows.length },
-              items: rows.map((r) => ({
+            payload={() => ({
+              entity: { title: "الحسابات الفرعية", total: printRows.length },
+              items: printRows.map((r) => ({
                 "نوع الكيان": ENTITY_TYPES.find((t) => t.value === r.entityType)?.label || r.entityType,
                 "رقم الكيان": r.entityId,
                 "نوع الحساب": r.accountType,
@@ -284,7 +286,7 @@ export default function SubsidiaryAccountsPage() {
                 "الرصيد الحالي": Number(r.currentBalance || 0),
                 "نشط": r.isActive ? "نعم" : "لا",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -333,6 +335,7 @@ export default function SubsidiaryAccountsPage() {
         <AdvancedFilters values={filters} onChange={setFilters} />
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={filtered}
           rowKey={(r) => r.id}
           emptyMessage="لا توجد ربط حسابات — تُنشأ تلقائياً عند إضافة موظفين/عملاء/موردين، أو يمكن إضافتها يدوياً هنا"

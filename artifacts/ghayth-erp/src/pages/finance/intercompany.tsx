@@ -24,6 +24,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // toCompanyId is a string in the form; the submit handler converts
 // to number for the API. amount coerced via z.coerce.
 const intercompanySchema = z.object({
@@ -72,6 +73,7 @@ export default function IntercompanyPage() {
   };
 
   const list = data?.data ?? data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(list);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -137,9 +139,9 @@ export default function IntercompanyPage() {
             entityType="report_finance_intercompany"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "المعاملات البينية", total: list.length },
-              items: list.map((r: any) => ({
+            payload={() => ({
+              entity: { title: "المعاملات البينية", total: printRows.length },
+              items: printRows.map((r: any) => ({
                 "المرجع": r.ref || `#${r.id}`,
                 "التاريخ": r.transactionDate || "—",
                 "الشركة المُرسِلة": r.fromCompanyName || "—",
@@ -148,7 +150,7 @@ export default function IntercompanyPage() {
                 "البيان": r.description || "—",
                 "الحالة": r.status || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -165,6 +167,7 @@ export default function IntercompanyPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={list}
         isLoading={isLoading}
         emptyMessage="لا توجد معاملات بينية"

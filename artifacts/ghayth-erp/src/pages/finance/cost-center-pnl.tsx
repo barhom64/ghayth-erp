@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import {
   TrendingUp, TrendingDown, Crown, Frown, Download,
@@ -90,6 +91,7 @@ export default function CostCenterPnlPage() {
       .filter((r) => r.revenue !== 0 || r.expense !== 0)
       .sort((a, b) => b.net - a.net);
   }, [data]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -283,13 +285,13 @@ export default function CostCenterPnlPage() {
           <PrintButton
             entityType="report_cost_center_pnl"
             entityId={`${startDate}..${endDate}`}
-            payload={{
+            payload={() => ({
               entity: {
                 title: "ربحية مراكز التكلفة",
                 startDate, endDate,
                 centerCount: rows.length,
               },
-              items: rows.map((r) => ({
+              items: printRows.map((r) => ({
                 "مركز التكلفة": r.costCenter,
                 "الإيراد": r.revenue,
                 "المصروف": r.expense,
@@ -297,7 +299,7 @@ export default function CostCenterPnlPage() {
                 "هامش %": Number(r.margin ?? 0).toFixed(2),
                 "عدد القيود": r.entryCount,
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -402,6 +404,7 @@ export default function CostCenterPnlPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا توجد بيانات لمراكز التكلفة في هذي الفترة"
           />

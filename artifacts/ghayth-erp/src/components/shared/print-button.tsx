@@ -70,15 +70,16 @@ interface PrintButtonProps {
   download?: boolean;
   /**
    * Optional payload — when set the server SKIPS the per-entity dataLoader
-   * and renders using these fields directly. Used by:
-   *  - report pages that already have the rows loaded client-side (AR/AP
-   *    aging, inventory valuation, daily close, etc.) so we don't refetch
-   *  - ListPage exports that print the visible filtered rows
-   *  - AI letter drafts that pass a server-generated body
-   * Shape: { entity: { title, ... }, items?: [...] } — anything the
-   * universal fallback or a bespoke preset can consume.
+   * and renders using these fields directly.
+   *
+   * Accepts either an object (resolved at render time) or a function
+   * (resolved at click time). Functions are the right shape when the
+   * caller needs to capture state that's only correct at the moment of
+   * print — most commonly the table's current sort+filter result.
+   *
+   * Shape: { entity: { title, ... }, items?: [...] }
    */
-  payload?: Record<string, unknown>;
+  payload?: Record<string, unknown> | (() => Record<string, unknown>);
 }
 
 export function PrintButton({
@@ -139,6 +140,12 @@ export function PrintButton({
     }
 
     try {
+      // Function-form payload is resolved at click time so callers can
+      // capture the table's current sort/filter result (which isn't
+      // available at render time).
+      const resolvedPayload =
+        typeof payload === "function" ? payload() : payload;
+
       const resp = await apiFetch<RenderResponse>(`/print/render`, {
         method: "POST",
         body: JSON.stringify({
@@ -148,7 +155,7 @@ export function PrintButton({
           // Forward payload only when the caller supplied one — the
           // server's renderBody schema makes it optional and bypasses
           // the dataLoader when present.
-          ...(payload ? { payload } : {}),
+          ...(resolvedPayload ? { payload: resolvedPayload } : {}),
         }),
       });
 

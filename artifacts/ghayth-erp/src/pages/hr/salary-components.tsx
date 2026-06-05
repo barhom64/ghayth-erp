@@ -28,6 +28,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // Zod schema enforces what the old `disabled={!form.name || ...}` guard
 // only half-checked. value is coerced from the <input type="number">
 // string back to a number (same pattern as inspections/deposits #287).
@@ -79,6 +80,7 @@ export default function SalaryComponentsPage() {
 
   const [filters, setFilters] = useFilters();
   const filtered = applyFilters(items, filters, { searchFields: ["name", "type", "calculationType"], statusField: "status" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
   const allowances = items.filter((c: any) => c.type === "earning" || !c.type);
   const deductions = items.filter((c: any) => c.type === "deduction");
 
@@ -157,16 +159,16 @@ export default function SalaryComponentsPage() {
             entityType="report_hr_salary_components"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "مكونات الرواتب", total: filtered.length },
-              items: filtered.map((c: any) => ({
+            payload={() => ({
+              entity: { title: "مكونات الرواتب", total: printRows.length },
+              items: printRows.map((c: any) => ({
                 "الاسم": c.name || "—",
                 "النوع": c.type || "—",
                 "طريقة الحساب": c.calculationType || "—",
                 "القيمة": c.value ?? "—",
                 "الحالة": c.status || "—",
               })),
-            }}
+            })}
           />
           <GuardedButton perm="hr:create" size="sm" onClick={() => { if (showForm) { closeForm(); } else { setEditing(null); setShowForm(true); } }}>
             <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "إضافة مكون"}
@@ -253,6 +255,7 @@ export default function SalaryComponentsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد مكونات رواتب"

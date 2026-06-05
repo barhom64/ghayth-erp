@@ -11,6 +11,7 @@ import {
 } from "@workspace/ui-core";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
@@ -31,6 +32,7 @@ export default function OccupancyReportPage() {
   if (isError) return <ErrorState />;
 
   const units = asList(data?.units || []);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(units);
   const pieData = [
     { name: "مؤجرة", value: data?.occupied || 0 },
     { name: "متاحة", value: data?.available || 0 },
@@ -85,13 +87,13 @@ export default function OccupancyReportPage() {
           entityType="report_property_occupancy"
           entityId="list"
           size="icon"
-          payload={{
+          payload={() => ({
             entity: {
               title: "تقرير الإشغال العقاري",
-              total: units.length,
+              total: printRows.length,
               occupancyRate: data?.occupancyRate ?? 0,
             },
-            items: units.map((u: any) => ({
+            items: printRows.map((u: any) => ({
               "المبنى": u.buildingName || "—",
               "الوحدة": u.unitNumber || "—",
               "النوع": u.unitType || u.type || "—",
@@ -100,7 +102,7 @@ export default function OccupancyReportPage() {
               "المستأجر": u.tenantName || "—",
               "الإيجار الشهري": u.monthlyRent ?? 0,
             })),
-          }}
+          })}
         />
       }
     >
@@ -196,6 +198,7 @@ export default function OccupancyReportPage() {
         <CardContent className="p-0">
           <DataTable
             columns={unitColumns}
+            onSortedDataChange={setPrintRows}
             data={units}
             searchPlaceholder={null}
             noToolbar

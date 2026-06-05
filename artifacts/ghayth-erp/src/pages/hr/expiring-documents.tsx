@@ -21,6 +21,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const DOC_STATUS_OPTIONS = Object.entries(DOCUMENT_TYPES).map(([value, label]) => ({ value, label }));
 
 function getSeverityBadge(daysLeft: number) {
@@ -47,6 +48,7 @@ export default function ExpiringDocumentsPage() {
     statusField: "docType",
     dateField: "expiryDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const criticalCount = allDocs.filter((d: any) => Number(d.daysLeft) <= 14).length;
   const expiredCount = allDocs.filter((d: any) => Number(d.daysLeft) <= 0).length;
@@ -137,9 +139,9 @@ export default function ExpiringDocumentsPage() {
             entityType="report_hr_expiring_documents"
             entityId={days}
             size="icon"
-            payload={{
-              entity: { title: `الوثائق المنتهية خلال ${days} يوم`, days, total: filtered.length },
-              items: filtered.map((d: any) => ({
+            payload={() => ({
+              entity: { title: `الوثائق المنتهية خلال ${days} يوم`, days, total: printRows.length },
+              items: printRows.map((d: any) => ({
                 "الموظف": d.employeeName || "—",
                 "نوع الوثيقة": d.documentType || d.type || "—",
                 "رقم الوثيقة": d.documentNumber || d.number || "—",
@@ -147,7 +149,7 @@ export default function ExpiringDocumentsPage() {
                 "أيام متبقية": d.daysUntilExpiry ?? "—",
                 "الحالة": d.status || "—",
               })),
-            }}
+            })}
           />
           <Select value={days} onValueChange={setDays}>
             <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
@@ -188,6 +190,7 @@ export default function ExpiringDocumentsPage() {
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد وثائق منتهية في هذه الفترة"

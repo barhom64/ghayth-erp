@@ -20,6 +20,7 @@ import {
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 // All three IDs required — the original form tracked `assignmentId`
 // in state but had NO UI input for it, so every submit sent
@@ -56,6 +57,7 @@ export default function ShiftsManagementPage() {
   if (isError) return <ErrorState />;
 
   const shifts = shiftsData?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(shifts);
   const assignments = assignmentsData?.data || [];
   const employees = empData?.data || [];
 
@@ -78,9 +80,9 @@ export default function ShiftsManagementPage() {
           entityType="report_hr_shifts_management"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "الورديات", total: shifts.length },
-            items: shifts.map((s: any) => ({
+          payload={() => ({
+            entity: { title: "الورديات", total: printRows.length },
+            items: printRows.map((s: any) => ({
               "الاسم": s.name || "—",
               "البداية": s.startTime || "—",
               "النهاية": s.endTime || "—",
@@ -88,7 +90,7 @@ export default function ShiftsManagementPage() {
               "عدد الموظفين": assignments.filter((a: any) => a.shiftId === s.id).length,
               "الحالة": s.status || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -197,6 +199,7 @@ export default function ShiftsManagementPage() {
               { key: "startDate", header: "من", sortable: true, render: (v) => <span className="text-muted-foreground">{v.startDate || "-"}</span> },
               { key: "endDate", header: "إلى", sortable: true, render: (v) => <span className="text-muted-foreground">{v.endDate || "مستمر"}</span> },
             ] as DataTableColumn<any>[]}
+            onSortedDataChange={setPrintRows}
             data={assignments}
             noToolbar
             emptyMessage="لا توجد تعيينات"

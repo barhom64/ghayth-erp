@@ -26,6 +26,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "planned",   label: "مخطط"   },
@@ -50,6 +51,7 @@ export default function TrainingPage() {
   const stats = statsData || {};
 
   const filtered = applyFilters(items, filters, { searchFields: ["title", "trainer"], statusField: "status" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const kpis = [
     { label: "إجمالي البرامج", value: stats.totalPrograms ?? items.length, icon: BookOpen, color: "text-status-info-foreground bg-status-info-surface" },
@@ -142,9 +144,9 @@ export default function TrainingPage() {
             entityType="report_hr_training"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "برامج التدريب", total: filtered.length },
-              items: filtered.map((t: any) => ({
+            payload={() => ({
+              entity: { title: "برامج التدريب", total: printRows.length },
+              items: printRows.map((t: any) => ({
                 "البرنامج": t.title || "—",
                 "المدرّب": t.trainer || "—",
                 "النوع": t.type || t.category || "—",
@@ -153,7 +155,7 @@ export default function TrainingPage() {
                 "عدد الحضور": t.enrolledCount ?? t.attendees ?? 0,
                 "الحالة": t.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/hr/training/create">
             <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة برنامج</GuardedButton>
@@ -265,6 +267,7 @@ export default function TrainingPage() {
         <TabsContent value="enrollments">
           <DataTable
             columns={enrollmentColumns}
+            onSortedDataChange={setPrintRows}
             data={filteredEnrollments}
             noToolbar
             emptyMessage="لا توجد تسجيلات"

@@ -1267,7 +1267,8 @@ describe("Print platform — PrintButton.payload contract (#1286 follow-up)", ()
   it("PrintButton forwards payload to /print/render only when provided", () => {
     // Conditional spread keeps the wire format clean — no `payload: undefined`
     // ending up in the JSON body for the common no-payload case.
-    expect(printButton).toMatch(/\.\.\.\(payload\s*\?\s*\{\s*payload\s*\}\s*:\s*\{\}\)/);
+    // Accept either the simple `payload` or the resolved variant (function-form payloads).
+    expect(printButton).toMatch(/\.\.\.\((?:resolvedPayload|payload)\s*\?\s*\{\s*payload:?\s*(?:resolvedPayload)?\s*\}\s*:\s*\{\}\)/);
   });
 });
 

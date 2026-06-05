@@ -8,6 +8,7 @@ import { ArrowRight, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import {
   PageShell,
   DataTable,
@@ -39,6 +40,7 @@ export default function Evaluation360HistoryPage() {
 
   const employee = data?.employee;
   const history = data?.history || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(history);
 
   // Build chart data
   const chartData = history.filter((h: any) => h.finalScore != null);
@@ -59,16 +61,16 @@ export default function Evaluation360HistoryPage() {
             entityType="report_hr_evaluation_360_history"
             entityId={employeeId || "list"}
             size="icon"
-            payload={{
-              entity: { title: `تاريخ التقييمات — ${employee?.name || ""}`, total: history.length },
-              items: history.map((h: any) => ({
+            payload={() => ({
+              entity: { title: `تاريخ التقييمات — ${employee?.name || ""}`, total: printRows.length },
+              items: printRows.map((h: any) => ({
                 "الفترة": h.period || "—",
                 "النتيجة": h.finalScore ?? "—",
                 "المراجع": h.reviewerName || "—",
                 "التاريخ": h.evaluatedAt || h.createdAt || "—",
                 "الحالة": h.status || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -128,6 +130,7 @@ export default function Evaluation360HistoryPage() {
             </Link>
           ) },
         ] as DataTableColumn<any>[]}
+        onSortedDataChange={setPrintRows}
         data={history}
         noToolbar
         emptyMessage="لا توجد سجلات"

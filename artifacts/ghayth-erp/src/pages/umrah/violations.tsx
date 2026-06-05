@@ -18,6 +18,7 @@ import {
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Eye, Plus, Pencil, Trash2, AlertTriangle, Clock, HelpCircle, UserX } from "lucide-react";
@@ -92,6 +93,7 @@ export default function UmrahViolations() {
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
 
   const violations = violationsQ.data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(violations);
   const agents = agentsQ.data?.data ?? [];
   const subAgents = subAgentsQ.data?.data ?? [];
   const seasons = seasonsQ.data?.data ?? [];
@@ -287,9 +289,9 @@ export default function UmrahViolations() {
             entityType="report_umrah_violations"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "مخالفات العمرة", total: violations.length },
-              items: violations.map((v: any) => ({
+            payload={() => ({
+              entity: { title: "مخالفات العمرة", total: printRows.length },
+              items: printRows.map((v: any) => ({
                 "الرقم المرجعي": v.referenceNumber || v.id,
                 "النوع": v.type || "—",
                 "الوكيل": v.agentName || "—",
@@ -299,7 +301,7 @@ export default function UmrahViolations() {
                 "تاريخ الرصد": v.detectedAt || v.createdAt || "—",
                 "الحالة": v.status || "—",
               })),
-            }}
+            })}
           />
           <GuardedButton perm="umrah:create" asChild className="gap-2">
             <Link href="/umrah/violations/create">
@@ -410,6 +412,7 @@ export default function UmrahViolations() {
       >
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={filtered}
           emptyMessage="لا توجد مخالفات مطابقة"
           pageSize={20}

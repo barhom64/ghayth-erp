@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { formatNumber } from "@/lib/formatters";
 import { ShieldAlert, RefreshCw, Globe, Calendar, AlertTriangle } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface OverrideRecord {
   id: number;
@@ -49,6 +50,7 @@ export default function ApprovalOverridesReportPage() {
   if (isError) return <ErrorState />;
 
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const uniqueUsers = new Set(rows.map((r) => r.userId)).size;
   const uniqueEntities = new Set(rows.map((r) => `${r.entity}#${r.entityId ?? "?"}`)).size;
@@ -131,9 +133,9 @@ export default function ApprovalOverridesReportPage() {
             entityType="report_admin_approval_overrides"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "سجل تجاوز Workflow", total: rows.length },
-              items: rows.map((r) => ({
+            payload={() => ({
+              entity: { title: "سجل تجاوز Workflow", total: printRows.length },
+              items: printRows.map((r) => ({
                 "الوقت": r.createdAt || "—",
                 "المسؤول": r.userEmail ?? `user#${r.userId}`,
                 "الإجراء": r.action || "—",
@@ -142,7 +144,7 @@ export default function ApprovalOverridesReportPage() {
                 "السبب": r.reason || "—",
                 "IP": r.ipAddress || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -216,6 +218,7 @@ export default function ApprovalOverridesReportPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               from || to

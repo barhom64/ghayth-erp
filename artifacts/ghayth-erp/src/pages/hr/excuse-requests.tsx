@@ -23,6 +23,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const EXCUSE_TYPES: Record<string, string> = {
   early_leave: "خروج مبكر",
   late_arrival: "تأخر",
@@ -44,6 +45,7 @@ export default function ExcuseRequestsPage() {
     statusField: "status",
     dateField: "excuseDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const handleDone = () => {
     qc.invalidateQueries({ queryKey: ["excuse-requests"] });
@@ -148,9 +150,9 @@ export default function ExcuseRequestsPage() {
             entityType="report_hr_excuse_requests"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "طلبات الاستئذان", total: filtered.length },
-              items: filtered.map((e: any) => ({
+            payload={() => ({
+              entity: { title: "طلبات الاستئذان", total: printRows.length },
+              items: printRows.map((e: any) => ({
                 "الموظف": e.employeeName || "—",
                 "النوع": e.excuseType || e.type || "—",
                 "التاريخ": e.requestDate || e.date || "—",
@@ -159,7 +161,7 @@ export default function ExcuseRequestsPage() {
                 "السبب": e.reason || "—",
                 "الحالة": e.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/hr/excuse-requests/create">
             <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
@@ -210,6 +212,7 @@ export default function ExcuseRequestsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد طلبات استئذان"

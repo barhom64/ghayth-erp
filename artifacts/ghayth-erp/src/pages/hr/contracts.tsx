@@ -27,6 +27,7 @@ import { formatDateAr } from "@/lib/formatters";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // ─── Arabic Maps ────────────────────────────────────────────────────
 
 const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -125,6 +126,7 @@ export default function ContractsPage() {
   if (isError) return <PageShell title="عقود الموظفين"><ErrorState onRetry={() => refetch()} /></PageShell>;
 
   const contracts = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(contracts);
 
   const columns: DataTableColumn<any>[] = [
     { key: "ref", header: "رقم العقد", sortable: true, searchable: true, render: (r: any) => <span className="font-mono text-sm">{r.ref}</span> },
@@ -160,12 +162,12 @@ export default function ContractsPage() {
             entityType="report_hr_contracts"
             entityId="list"
             label="طباعة القائمة"
-            payload={{
+            payload={() => ({
               entity: {
                 title: "قائمة عقود الموظفين",
-                total: contracts.length,
+                total: printRows.length,
               },
-              items: contracts.map((c: any) => ({
+              items: printRows.map((c: any) => ({
                 "الموظف": c.employeeName || "—",
                 "رقم العقد": c.contractNumber || c.id,
                 "النوع": c.contractType || "—",
@@ -174,7 +176,7 @@ export default function ContractsPage() {
                 "الراتب الأساسي": c.basicSalary ?? 0,
                 "الحالة": c.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/hr/contracts/create">
             <GuardedButton perm="hr:create" className="gap-1.5">
@@ -187,6 +189,7 @@ export default function ContractsPage() {
     >
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={contracts}
         isLoading={isLoading}
         isError={isError}

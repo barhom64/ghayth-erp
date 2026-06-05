@@ -28,6 +28,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { ApprovalActions } from "@workspace/workflow-kit";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Salary advances list — migrated in R.4 iter 4 to the unified
@@ -75,6 +76,7 @@ export default function SalaryAdvancesPage() {
     statusField: "status",
     dateField: "date",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -167,9 +169,9 @@ export default function SalaryAdvancesPage() {
             entityType="report_finance_salary_advances"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "سلف الرواتب", total: filtered.length },
-              items: filtered.map((s: any) => ({
+            payload={() => ({
+              entity: { title: "سلف الرواتب", total: printRows.length },
+              items: printRows.map((s: any) => ({
                 "المرجع": s.ref || `#${s.id}`,
                 "الموظف": s.employeeName || "—",
                 "المبلغ": Number(s.amount || 0),
@@ -177,7 +179,7 @@ export default function SalaryAdvancesPage() {
                 "التاريخ": s.date || s.createdAt || "—",
                 "الحالة": s.status || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -224,6 +226,7 @@ export default function SalaryAdvancesPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

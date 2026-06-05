@@ -32,6 +32,7 @@ import { TRANSFER_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // employeeId + toBranchId required (was `if (!form.employeeId || !form.toBranchId)`
 // toast guard — now caught at schema validation before any network call).
 const transferSchema = z.object({
@@ -55,6 +56,7 @@ export default function TransfersPage() {
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["transfers"], "/hr/transfers");
   const transfers = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(transfers);
 
   const { data: employees } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
   const { data: branches } = useApiQuery<any>(["branches"], "/settings/branches");
@@ -218,9 +220,9 @@ export default function TransfersPage() {
             entityType="report_hr_transfers"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "طلبات نقل الموظفين", total: transfers.length },
-              items: transfers.map((t: any) => ({
+            payload={() => ({
+              entity: { title: "طلبات نقل الموظفين", total: printRows.length },
+              items: printRows.map((t: any) => ({
                 "الموظف": t.employeeName || "—",
                 "من فرع": t.fromBranchName || "—",
                 "إلى فرع": t.toBranchName || "—",
@@ -230,7 +232,7 @@ export default function TransfersPage() {
                 "السبب": t.reason || "—",
                 "الحالة": t.status || "—",
               })),
-            }}
+            })}
           />
           <GuardedButton perm="hr:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
             <Plus className="h-4 w-4" />
@@ -317,6 +319,7 @@ export default function TransfersPage() {
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد طلبات نقل — قدّم طلب نقل جديد للبدء"

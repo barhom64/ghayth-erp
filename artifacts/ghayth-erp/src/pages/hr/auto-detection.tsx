@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // ─────────────────────────────────────────────────────────────────────────────
 // الأنواع
 // ─────────────────────────────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ export default function AutoDetectionPage() {
   const settings = settingsQuery.data;
   const summary = summaryQuery.data;
   const logs = logQuery.data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(logs);
 
   // ── مؤشرات الأداء ──
   const kpis = [
@@ -268,9 +270,9 @@ export default function AutoDetectionPage() {
             entityType="report_hr_auto_detection"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "سجل الرصد التلقائي للمخالفات", total: logs.length },
-              items: logs.map((l: any) => ({
+            payload={() => ({
+              entity: { title: "سجل الرصد التلقائي للمخالفات", total: printRows.length },
+              items: printRows.map((l: any) => ({
                 "التاريخ": l.runDate || l.createdAt || "—",
                 "نوع التشغيل": l.runType || l.type || "—",
                 "موظفون مفحوصون": l.employeesScanned ?? 0,
@@ -278,7 +280,7 @@ export default function AutoDetectionPage() {
                 "أخطاء": l.errors ?? 0,
                 "المدة (ث)": l.durationSeconds ?? "—",
               })),
-            }}
+            })}
           />
           <Button
             variant="outline"
@@ -527,6 +529,7 @@ export default function AutoDetectionPage() {
       {/* جدول السجل */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={logs}
         noToolbar
         emptyMessage="لا توجد عمليات رصد سابقة — شغّل المحرك لبدء المراقبة التلقائية"

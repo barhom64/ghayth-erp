@@ -12,6 +12,7 @@ import { ScrollText, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr, todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { downloadDocument } from "@/lib/print-client";
 import { useToast } from "@/hooks/use-toast";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -66,6 +67,7 @@ export default function AdminLogsPage() {
         l.userName?.includes(userSearch) || l.entity?.includes(userSearch) || l.action?.includes(userSearch) || String(l.entityId)?.includes(userSearch)
       )
     : logs;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredLogs);
 
   const logColumns: DataTableColumn<any>[] = [
     {
@@ -191,20 +193,20 @@ export default function AdminLogsPage() {
           <PrintButton
             entityType="report_audit_logs"
             entityId={todayLocal()}
-            payload={{
+            payload={() => ({
               entity: {
                 title: "سجل التدقيق",
                 exportedAt: todayLocal(),
                 rowCount: filteredLogs.length,
               },
-              items: filteredLogs.map((l: any) => ({
+              items: printRows.map((l: any) => ({
                 "المستخدم": l.userName || "النظام",
                 "الإجراء": ACTION_LABELS[l.action] || l.action,
                 "الكيان": ENTITY_LABELS[l.entity] || l.entity,
                 "المعرف": `#${l.entityId}`,
                 "التاريخ": l.createdAt ? formatDateAr(l.createdAt) : "-",
               })),
-            }}
+            })}
           />
           <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
         </div>
@@ -275,6 +277,7 @@ export default function AdminLogsPage() {
         </div>
         <DataTable
           columns={logColumns}
+          onSortedDataChange={setPrintRows}
           data={filteredLogs}
           isLoading={isLoading}
           isError={isError}

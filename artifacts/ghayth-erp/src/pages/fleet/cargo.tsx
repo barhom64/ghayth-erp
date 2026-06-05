@@ -19,6 +19,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 
 interface ManifestRow {
@@ -51,9 +52,10 @@ export default function FleetCargoPage() {
     `/cargo/manifests${qs}`,
   );
   const rows = (data?.data || []) as ManifestRow[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const kpi = {
-    total: rows.length,
+    total: printRows.length,
     inTransit: rows.filter((r) => r.status === "in_transit").length,
     delivered: rows.filter((r) => r.status === "delivered" || r.status === "closed").length,
     revenue: rows.reduce((s, r) => s + (Number(r.freightRevenue) || 0), 0),
@@ -136,9 +138,9 @@ export default function FleetCargoPage() {
             entityType="report_fleet_cargo"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "بوالص نقل البضائع", total: rows.length },
-              items: rows.map((r: any) => ({
+            payload={() => ({
+              entity: { title: "بوالص نقل البضائع", total: printRows.length },
+              items: printRows.map((r: any) => ({
                 "رقم البوليصة": r.manifestNumber || r.id,
                 "العميل": r.customerName || r.linkedCustomerName || "—",
                 "المركبة": r.vehiclePlate || "—",
@@ -150,7 +152,7 @@ export default function FleetCargoPage() {
                 "الإيراد": r.freightRevenue ?? 0,
                 "الحالة": r.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/fleet/cargo/create">
             <GuardedButton perm="fleet.cargo:create" size="sm">
@@ -191,6 +193,7 @@ export default function FleetCargoPage() {
           </div>
           <DataTable<ManifestRow>
             columns={columns}
+            onSortedDataChange={setPrintRows}
             data={rows}
             onRowClick={(m) => navigate(`/fleet/cargo/${m.id}`)}
             searchPlaceholder="ابحث برقم البوليصة، اسم العميل…"

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 /**
  * Fiscal periods list — migrated in R.2 iter 2 to the unified template
  * stack (PageShell + PageStatusBadge). The underlying data source is
@@ -101,6 +102,7 @@ export default function FiscalPeriodsPage() {
     searchFields: ["name", "period"],
     statusField: "status",
   }) as unknown as FiscalPeriodV1Row[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const activeCount = items.filter((p) => p.status === "active").length;
   const closedCount = items.filter((p) => p.status === "closed").length;
@@ -184,9 +186,9 @@ export default function FiscalPeriodsPage() {
           entityType="report_finance_fiscal_periods"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "الفترات المالية", total: filtered.length },
-            items: filtered.map((p: any) => ({
+          payload={() => ({
+            entity: { title: "الفترات المالية", total: printRows.length },
+            items: printRows.map((p: any) => ({
               "الفترة": p.period || "—",
               "الاسم": p.name || "—",
               "تاريخ البدء": p.startDate || "—",
@@ -195,7 +197,7 @@ export default function FiscalPeriodsPage() {
               "إجمالي الحركات": Number(p.totalActivity ?? 0),
               "الحالة": p.status || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -252,6 +254,7 @@ export default function FiscalPeriodsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

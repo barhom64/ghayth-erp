@@ -20,6 +20,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "list" | "schedule";
@@ -56,6 +57,7 @@ export default function TripsPage() {
     statusField: "status",
     dateField: "tripDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -111,12 +113,12 @@ export default function TripsPage() {
             entityType="report_fleet_trips"
             entityId="list"
             size="icon"
-            payload={{
+            payload={() => ({
               entity: {
                 title: "قائمة رحلات الأسطول",
-                total: filtered.length,
+                total: printRows.length,
               },
-              items: filtered.map((t: any) => ({
+              items: printRows.map((t: any) => ({
                 "رقم الرحلة": t.id,
                 "المركبة": t.plateNumber || t.vehiclePlate || "—",
                 "السائق": t.driverName || "—",
@@ -126,7 +128,7 @@ export default function TripsPage() {
                 "المسافة (كم)": t.distance ?? 0,
                 "الحالة": t.status || "—",
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -179,6 +181,7 @@ export default function TripsPage() {
       {viewMode === "list" ? (
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={filtered}
           isLoading={isLoading}
           isError={isError}
