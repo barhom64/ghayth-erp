@@ -88,6 +88,11 @@ interface CoverageResponse {
   coveragePct: number;
 }
 
+interface SubstitutionState {
+  enabled: boolean;
+  subsidiaryCount: number;
+}
+
 function pct(part: number, whole: number): number {
   if (whole <= 0) return 100; // a zero-entity tenant is 100% "covered"
   return Math.round((part / whole) * 100);
@@ -114,6 +119,22 @@ export default function DimensionalRoutingPage() {
     "POST",
     [["dim-routing-line-coverage"]],
     { successMessage: "تم تأصيل القيود السابقة" },
+  );
+
+  // Subsidiary-substitution toggle — when ON, every NEW JE that
+  // posts to a control account (e.g. 1121) with an entity FK gets
+  // its accountCode swapped to the per-entity subsidiary (1121-0042).
+  // OFF by default; the dashboard surfaces the toggle so operators
+  // can opt in once they're confident their reports support it.
+  const { data: substitution, refetch: refetchSubstitution } = useApiQuery<SubstitutionState>(
+    ["dim-routing-substitution-state"],
+    "/finance/subsidiary-substitution/state",
+  );
+  const substitutionMut = useApiMutation<{ enabled: boolean }, { enabled: boolean }>(
+    "/finance/subsidiary-substitution/state",
+    "PATCH",
+    [["dim-routing-substitution-state"]],
+    { successMessage: "تم التحديث" },
   );
 
   return (
@@ -168,6 +189,52 @@ export default function DimensionalRoutingPage() {
             testid="dim-routing-missing-ccs"
           />
         </div>
+
+        {/* Control-account / subsidiary-ledger substitution toggle.
+            The deepest operator-facing knob: when ON, every JE post
+            at runtime swaps control-account codes for the per-entity
+            subsidiary. OFF by default — surfaced so operators can opt
+            in once their reports are ready. */}
+        {substitution && (
+          <Card className="mb-4" data-testid="dim-routing-substitution">
+            <CardContent className="p-3 flex items-center gap-3 flex-wrap">
+              <Wallet2 className="h-7 w-7 text-muted-foreground" />
+              <div className="flex-1 min-w-[14rem]">
+                <div className="text-sm font-medium">
+                  استبدال الحسابات الفرعية في القيود تلقائياً
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  عند التفعيل: قيد مرتبط بالحساب الرئيسي (مثل 1121 سلفة) + موظف #42 يُسجَّل
+                  مباشرة على 1121-0042. الرصيد الأبوي يتجمّع تلقائياً عبر شجرة الحسابات.
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {substitution.subsidiaryCount.toLocaleString("ar-SA")} ربط حالي للحسابات الفرعية
+                </div>
+              </div>
+              <GuardedButton
+                perm="finance.cost_centers:update"
+                variant={substitution.enabled ? "default" : "outline"}
+                onClick={async () => {
+                  await substitutionMut.mutateAsync({ enabled: !substitution.enabled });
+                  refetchSubstitution();
+                }}
+                data-testid="dim-routing-substitution-toggle"
+              >
+                {substitution.enabled ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 ms-1" />
+                    مفعّل
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 ms-1" />
+                    تفعيل
+                  </>
+                )}
+              </GuardedButton>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Journal-line coverage — the deepest signal. New JEs get
             costCenterId auto-filled by the enricher; this surfaces how

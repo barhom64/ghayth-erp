@@ -649,6 +649,77 @@ router.get("/journal-lines/dimensional-coverage", authorize({ feature: "finance.
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SUBSIDIARY-SUBSTITUTION FEATURE FLAG — the operator's toggle for the
+// control-account / subsidiary-ledger pattern. OFF by default; when ON,
+// every JE post at runtime swaps lines like (1121 + employeeId=42) for
+// the employee's subsidiary code (1121-0042).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/subsidiary-substitution/state", authorize({ feature: "finance.cost_centers", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery<{ value: string | null }>(
+      `SELECT value FROM system_settings
+        WHERE key = 'gl_subsidiary_substitution'
+          AND ("companyId" = $1 OR "companyId" IS NULL)
+        ORDER BY ("companyId" IS NULL) ASC
+        LIMIT 1`,
+      [scope.companyId],
+    );
+    const raw = row?.value;
+    const enabled = raw === "true" || raw === "1";
+
+    // Coverage signal — how many subsidiary mappings exist for this
+    // tenant? When the count is 0 there's nothing to substitute, so
+    // the toggle is informational only. The UI uses this to decide
+    // whether to suggest enabling.
+    const [count] = await rawQuery<{ subsidiaries: number }>(
+      `SELECT COUNT(*)::int AS subsidiaries
+         FROM subsidiary_accounts
+        WHERE "companyId" = $1
+          AND "isActive" = true
+          AND "deletedAt" IS NULL`,
+      [scope.companyId],
+    );
+
+    res.json({
+      enabled,
+      subsidiaryCount: Number(count?.subsidiaries ?? 0),
+    });
+  } catch (err) { handleRouteError(err, res, "Subsidiary substitution state error"); }
+});
+
+const setSubstitutionSchema = z.object({ enabled: z.boolean() });
+router.patch("/subsidiary-substitution/state", authorize({ feature: "finance.cost_centers", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { enabled } = zodParse(setSubstitutionSchema.safeParse(req.body));
+    const value = enabled ? "true" : "false";
+
+    // Upsert into system_settings — composite key (companyId, branchId, key).
+    // branchId is null because this is a tenant-wide finance policy.
+    await rawExecute(
+      `INSERT INTO system_settings ("companyId", "branchId", key, value, "updatedAt")
+       VALUES ($1, NULL, 'gl_subsidiary_substitution', $2, NOW())
+       ON CONFLICT ("companyId", "branchId", key)
+         DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+      [scope.companyId, value],
+    );
+
+    // Drop the in-process cache so the next JE picks up the new value
+    // without waiting for a process restart.
+    const { _resetSubsidiarySubstitutionCache } = await import("../lib/journalLineDimensionalEnricher.js");
+    _resetSubsidiarySubstitutionCache();
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "gl.subsidiary_substitution.set", entity: "system_settings", entityId: 0,
+      after: { enabled },
+    });
+    res.json({ enabled });
+  } catch (err) { handleRouteError(err, res, "Set subsidiary substitution error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PER-CC P&L — pays off the auto-enrichment. For a given costCenterId
 // the endpoint returns:
 //   - self bucket:  revenue / expense / net for that CC only

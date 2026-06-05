@@ -114,7 +114,15 @@ describe("inferHeaderDimensionsFromSource — sourceType → propagation bag", (
 // ─────────────────────────────────────────────────────────────────────────────
 describe("createJournalEntry — source inference runs BEFORE per-line CC resolution", () => {
   it("imports both helpers from the enricher module", () => {
-    expect(BH).toMatch(/import \{ enrichJournalLines, inferHeaderDimensionsFromSource, applyHeaderDimensionsToLines \} from "\.\/journalLineDimensionalEnricher\.js"/);
+    // The import list keeps widening — pin INDIVIDUAL names rather
+    // than the literal {} block.
+    for (const name of [
+      "enrichJournalLines",
+      "inferHeaderDimensionsFromSource",
+      "applyHeaderDimensionsToLines",
+    ]) {
+      expect(BH).toMatch(new RegExp(`import \\{[^}]*${name}[^}]*\\} from "\\./journalLineDimensionalEnricher\\.js"`, "s"));
+    }
   });
 
   it("calls inferHeaderDimensionsFromSource with companyId + sourceType + sourceId", () => {

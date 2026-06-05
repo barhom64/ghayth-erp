@@ -313,6 +313,155 @@ export function applyHeaderDimensionsToLines<T extends DimensionalLineInput>(
   return lines;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBSIDIARY ACCOUNT-CODE SUBSTITUTION (control-account / subsidiary-ledger
+// pattern, identical to Oracle/SAP/QuickBooks). At JE post time, when a
+// line says e.g. `accountCode='1121'` (سلفة الموظفين, control account) AND
+// the line carries `employeeId=42`, swap the line's accountCode for the
+// employee-specific subsidiary ('1121-0042'). The control account's
+// `currentBalance` STILL rolls up because the parent/child link in
+// chart_of_accounts is preserved — but the per-entity drill works at the
+// GL level without joins to subsidiary_accounts at query time.
+//
+// SAFETY:
+//  - The function only substitutes when an EXISTING subsidiary_accounts
+//    row points at a CoA row whose `parentCode` matches the line's
+//    current `accountCode`. Without an existing subsidiary mapping
+//    there's no substitution to perform — fully backwards-compatible.
+//  - Explicit operator choice always wins: a line that already carries
+//    a non-control accountCode (one with no children) isn't touched.
+//  - Idempotent: running twice on the same line is a no-op (the second
+//    pass finds no subsidiary whose parent matches the already-swapped
+//    code).
+//  - OFF BY DEFAULT — gated by `system_settings.gl_subsidiary_substitution`
+//    so tenants whose existing reports assume parent posting aren't
+//    silently broken.
+//
+// Entity FK → entityType map:
+//   employeeId  → 'employee'
+//   clientId    → 'client'
+//   vendorId    → 'vendor'
+//   driverId    → 'driver'
+//   vehicleId   → 'vehicle'
+//   propertyId  → 'property'
+// Multi-entity edge case: if a line carries BOTH employeeId AND clientId
+// (rare — typically a coding mistake), we pick the FIRST entity whose
+// lookup hits a subsidiary. Documented in the loop order below.
+
+const SUBSTITUTION_ENTITY_ORDER: Array<[keyof DimensionalLineInput, string]> = [
+  ["employeeId", "employee"],
+  ["clientId",   "client"],
+  ["vendorId",   "vendor"],
+  ["driverId",   "driver"],
+  ["vehicleId",  "vehicle"],
+  ["propertyId", "property"],
+];
+
+interface SubsidiaryLineInput extends DimensionalLineInput {
+  accountCode?: string;
+}
+
+/**
+ * Walk SUBSTITUTION_ENTITY_ORDER and look up a subsidiary CoA row whose
+ * parent is the line's current accountCode and whose entity link
+ * matches. Returns the substituted accountCode (e.g. '1121-0042') or
+ * the original code unchanged.
+ */
+async function substituteLineAccountCode(
+  client: PoolClient,
+  companyId: number,
+  line: SubsidiaryLineInput,
+  cache: Map<string, string | null>,
+): Promise<void> {
+  if (!line.accountCode) return;
+  for (const [field, entityType] of SUBSTITUTION_ENTITY_ORDER) {
+    const raw = (line as Record<string, unknown>)[field as string];
+    const id = typeof raw === "number" && raw > 0 ? raw : null;
+    if (id == null) continue;
+
+    const key = `${entityType}:${id}:${line.accountCode}`;
+    let subCode: string | null;
+    if (cache.has(key)) {
+      subCode = cache.get(key) ?? null;
+    } else {
+      const { rows } = await client.query(
+        `SELECT child.code
+           FROM subsidiary_accounts sa
+           JOIN chart_of_accounts child
+             ON child.id = sa."accountId"
+            AND child."companyId" = sa."companyId"
+            AND child."deletedAt" IS NULL
+          WHERE sa."companyId" = $1
+            AND sa."entityType" = $2
+            AND sa."entityId" = $3
+            AND sa."isActive" = true
+            AND sa."deletedAt" IS NULL
+            AND child."parentCode" = $4
+          LIMIT 1`,
+        [companyId, entityType, id, line.accountCode],
+      );
+      subCode = rows[0]?.code ?? null;
+      cache.set(key, subCode);
+    }
+    if (subCode) {
+      line.accountCode = subCode;
+      return; // First hit wins (documented above).
+    }
+  }
+}
+
+/**
+ * Check the per-tenant feature flag. Cached per process for the
+ * duration of a session — rate of change is "ops-flips-it-once"
+ * so a single cache miss per process is fine.
+ */
+const _substitutionFlagCache = new Map<number, boolean>();
+export async function isSubsidiarySubstitutionEnabled(
+  client: PoolClient,
+  companyId: number,
+): Promise<boolean> {
+  const cached = _substitutionFlagCache.get(companyId);
+  if (cached !== undefined) return cached;
+  try {
+    const { rows } = await client.query(
+      `SELECT value FROM system_settings
+        WHERE key = 'gl_subsidiary_substitution'
+          AND ("companyId" = $1 OR "companyId" IS NULL)
+        ORDER BY ("companyId" IS NULL) ASC
+        LIMIT 1`,
+      [companyId],
+    );
+    const raw = rows[0]?.value;
+    const enabled = raw === "true" || raw === "1" || raw === true;
+    _substitutionFlagCache.set(companyId, enabled);
+    return enabled;
+  } catch {
+    return false;
+  }
+}
+
+/** Test-only — drops the cache so unit tests can flip the flag mid-run. */
+export function _resetSubsidiarySubstitutionCache(): void {
+  _substitutionFlagCache.clear();
+}
+
+/**
+ * Bulk substitution pass — invoked from createJournalEntry after both
+ * inference steps. The flag check is done ONCE per JE, not per line,
+ * to keep the hot path cheap.
+ */
+export async function substituteSubsidiaryAccountCodes(
+  client: PoolClient,
+  lines: SubsidiaryLineInput[],
+  companyId: number,
+): Promise<void> {
+  if (!(await isSubsidiarySubstitutionEnabled(client, companyId))) return;
+  const cache = new Map<string, string | null>();
+  for (const line of lines) {
+    await substituteLineAccountCode(client, companyId, line, cache);
+  }
+}
+
 /**
  * Convenience: enrich every line in an array in one pass, sharing the
  * cache. Used by createJournalEntry inside its INSERT loop.
