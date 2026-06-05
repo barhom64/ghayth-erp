@@ -20,6 +20,7 @@ import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { ClipboardList, Plus, Send, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface PurchaseRequestItem {
   id: number;
@@ -258,11 +259,30 @@ export default function PurchaseRequestsPage() {
         { label: "طلبات الشراء" },
       ]}
       actions={
-        <Link href="/finance/purchase-orders/create">
-          <GuardedButton perm="finance:create">
-            <Plus className="h-4 w-4 me-1" /> طلب جديد
-          </GuardedButton>
-        </Link>
+        <>
+          <Link href="/finance/purchase-orders/create">
+            <GuardedButton perm="finance:create">
+              <Plus className="h-4 w-4 me-1" /> طلب جديد
+            </GuardedButton>
+          </Link>
+          <PrintButton
+            entityType="report_finance_purchase_requests"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "طلبات الشراء", total: rows.length },
+              items: rows.map((r) => ({
+                "المرجع": r.ref,
+                "مقدم الطلب": r.requestedByName || "—",
+                "المورد المقترح": r.supplierName || "—",
+                "الإجمالي": Number(r.totalAmount || 0),
+                "تاريخ الإنشاء": r.createdAt || "—",
+                "عدد الأصناف": Array.isArray(r.items) ? r.items.length : "—",
+                "الحالة": STATUS_LABEL[r.status] || r.status,
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

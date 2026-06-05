@@ -83,7 +83,7 @@ export default function AttendanceReportsPage() {
           <PrintButton
             entityType="report_attendance_summary"
             entityId={month}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: {
                 title: `تقرير الحضور والانصراف — ${month}`,

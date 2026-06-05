@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Shield } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // مُحرّر الصلاحيات المبسّط — مستوى + نطاق عربي لكل ميزة (لمستخدم غير تقني)
@@ -119,9 +120,28 @@ export default function RbacSimpleEditor() {
       breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { label: "الصلاحيات المبسّطة" }]}
       subtitle="اختر لكل ميزة مستوى صلاحية ونطاقًا — بدون مصطلحات تقنية"
       actions={
-        <Button size="sm" onClick={save} disabled={!roleId || saving}>
-          <Save className="h-4 w-4 me-1" /> حفظ
-        </Button>
+        <>
+          <Button size="sm" onClick={save} disabled={!roleId || saving}>
+            <Save className="h-4 w-4 me-1" /> حفظ
+          </Button>
+          <PrintButton
+            entityType="report_admin_rbac_simple"
+            entityId={roleId ? String(roleId) : "list"}
+            size="icon"
+            payload={{
+              entity: {
+                title: `صلاحيات الدور — ${roles.find((r) => r.id === roleId)?.label_ar || ""}`,
+                total: features.length,
+              },
+              items: features.map((f) => ({
+                "الوحدة": featModule(f),
+                "الميزة": featLabel(f),
+                "المستوى": levels.find((l) => l.key === picks[f.feature_key]?.level)?.labelAr || "—",
+                "النطاق": tiers.find((t) => t.key === picks[f.feature_key]?.scopeTier)?.labelAr || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <PageStateWrapper isLoading={fLoad} error={fErr} onRetry={refetch}>

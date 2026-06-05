@@ -15,6 +15,7 @@ import {
 } from "@workspace/ui-core";
 import { ClipboardCheck, Clock, CheckCircle, DollarSign } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function FinancialRequestsPage() {
   const [, navigate] = useLocation();
@@ -78,6 +79,24 @@ export default function FinancialRequestsPage() {
       title="الطلبات المالية"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الطلبات المالية" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_finance_financial_requests"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "الطلبات المالية", total: filtered.length },
+            items: filtered.map((r: any) => ({
+              "المرجع": r.ref || `#${r.id}`,
+              "مقدم الطلب": r.requestedByName || "—",
+              "المورد": r.supplierName || "—",
+              "المبلغ": Number(r.amount || 0),
+              "التاريخ": r.createdAt || "—",
+              "الحالة": r.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">

@@ -28,6 +28,7 @@ import { ExportButton } from "@/components/shared/export-buttons";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 
 function PayrollLines({ runId }: { runId: number }) {
@@ -148,6 +149,22 @@ export default function PayrollPage() {
       actions={
         <div className="flex gap-2">
           <ExportButton endpoint="/export/excel/payroll" filename="payroll.xlsx" type="excel" label="تصدير Excel" />
+          <PrintButton
+            entityType="report_hr_payroll"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "مسيرات الرواتب", total: filtered.length },
+              items: filtered.map((p: any) => ({
+                "رقم المسير": p.ref || p.id,
+                "الفترة": p.period || "—",
+                "عدد الموظفين": p.employeeCount ?? "—",
+                "إجمالي الرواتب": p.totalNet ?? p.totalAmount ?? 0,
+                "تاريخ الإصدار": p.createdAt || "—",
+                "الحالة": p.status || "—",
+              })),
+            }}
+          />
           <Link href="/hr/payroll/create">
             <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />تشغيل مسير رواتب</GuardedButton>
           </Link>

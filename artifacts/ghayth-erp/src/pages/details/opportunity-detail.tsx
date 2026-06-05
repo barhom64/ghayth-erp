@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PrintButton } from "@/components/shared/print-button";
@@ -127,14 +128,14 @@ export default function OpportunityDetail() {
           label="طباعة عرض السعر"
         />
       )}
-      <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
+      <GuardedButton perm="crm:update" variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</GuardedButton>
       {deleting ? (
         <div className="flex gap-2">
           <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
           <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
         </div>
       ) : (
-        <Button variant="outline" size="sm" className="text-status-error-foreground" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+        <GuardedButton perm="crm:delete" variant="outline" size="sm" className="text-status-error-foreground" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</GuardedButton>
       )}
     </div>
   );
@@ -197,7 +198,7 @@ export default function OpportunityDetail() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2"><Target className="w-5 h-5" /> الأنشطة</CardTitle>
               {!addingActivity && (
-                <Button size="sm" variant="outline" onClick={() => setAddingActivity(true)}>نشاط جديد</Button>
+                <GuardedButton perm="crm:create" size="sm" variant="outline" onClick={() => setAddingActivity(true)}>نشاط جديد</GuardedButton>
               )}
             </CardHeader>
             <CardContent className="space-y-3">

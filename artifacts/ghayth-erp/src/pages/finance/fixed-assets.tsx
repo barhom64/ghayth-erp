@@ -123,7 +123,7 @@ export default function FixedAssetsPage() {
           <PrintButton
             entityType="report_finance_fixed_assets"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: {
                 title: "الأصول الثابتة",

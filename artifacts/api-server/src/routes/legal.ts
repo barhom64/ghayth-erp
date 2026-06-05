@@ -13,6 +13,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { z } from "zod";
@@ -263,6 +264,19 @@ router.post("/contracts", authorize({ feature: "legal.contracts", action: "creat
       entityId: insertId,
       after: { title: b.title, partyName: b.partyName, startDate: b.startDate, endDate: b.endDate, value: b.value },
     }).catch((e) => logger.error(e, "legal background task failed"));
+
+    // Contract → CC nested under the current branch when present.
+    // The contract's lifetime spend (invoices, payments, penalties)
+    // can then be drilled by code: BR-####-CT#### contract → branch
+    // → company. Fire-and-forget — non-blocking.
+    createCostCenterForEntity(
+      scope.companyId, "contract", insertId, b.title.trim(),
+      {
+        parentEntityType: scope.branchId ? "branch" : null,
+        parentEntityId: scope.branchId ?? null,
+        actorUserId: scope.userId,
+      },
+    ).catch((e) => logger.error(e, "legal contract cost-centre auto-create failed"));
 
     emitEvent({
       companyId: scope.companyId,

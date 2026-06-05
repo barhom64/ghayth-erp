@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { PageShell } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -293,6 +294,21 @@ export default function FinanceSettingsHubPage() {
         { href: "/finance", label: "المالية" },
         { label: "الإعدادات" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_finance_settings_hub"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "مركز إعدادات النظام المالي", total: CARDS.length },
+            items: CARDS.map((c) => ({
+              "المجموعة": GROUP_INFO[c.group]?.label || c.group,
+              "العنوان": c.title,
+              "الوصف": c.description,
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <EnforceLineAllocationToggle />

@@ -286,7 +286,7 @@ export default function UmrahViolations() {
           <PrintButton
             entityType="report_umrah_violations"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "مخالفات العمرة", total: violations.length },
               items: violations.map((v: any) => ({

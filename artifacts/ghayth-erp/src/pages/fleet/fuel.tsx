@@ -44,7 +44,7 @@ export default function FuelPage() {
           <PrintButton
             entityType="report_fleet_fuel"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "سجل استهلاك الوقود", total: items.length },
               items: items.map((f: any) => ({

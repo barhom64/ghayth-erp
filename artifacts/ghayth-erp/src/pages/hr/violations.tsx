@@ -152,7 +152,7 @@ export default function ViolationsPage() {
           <PrintButton
             entityType="report_hr_violations"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "مخالفات الموظفين", total: memos.length },
               items: memos.map((v: any) => ({

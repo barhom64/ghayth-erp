@@ -15,6 +15,7 @@ import {
 import { FileSignature, DollarSign, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function CommitmentsPage() {
   const [, navigate] = useLocation();
@@ -76,6 +77,23 @@ export default function CommitmentsPage() {
       title="الالتزامات المالية"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الالتزامات المالية" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_finance_commitments"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "الالتزامات المالية", total: filtered.length },
+            items: filtered.map((c: any) => ({
+              "المرجع": c.ref || `#${c.id}`,
+              "المورد": c.vendorName || "—",
+              "المبلغ": Number(c.amount || 0),
+              "تاريخ الاستحقاق": c.dueDate || "—",
+              "الحالة": c.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">

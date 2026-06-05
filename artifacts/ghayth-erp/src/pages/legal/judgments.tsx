@@ -70,7 +70,7 @@ export default function LegalJudgments() {
         <PrintButton
           entityType="report_legal_judgments"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: {
               title: "سجل الأحكام القضائية",

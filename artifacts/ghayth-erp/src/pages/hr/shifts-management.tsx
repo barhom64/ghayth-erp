@@ -19,6 +19,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 // All three IDs required — the original form tracked `assignmentId`
 // in state but had NO UI input for it, so every submit sent
@@ -72,6 +73,24 @@ export default function ShiftsManagementPage() {
       title="إدارة الورديات المتقدمة"
       subtitle="تعيين الموظفين للورديات وإدارة الجداول"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الورديات المتقدمة" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_shifts_management"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "الورديات", total: shifts.length },
+            items: shifts.map((s: any) => ({
+              "الاسم": s.name || "—",
+              "البداية": s.startTime || "—",
+              "النهاية": s.endTime || "—",
+              "افتراضية": s.isDefault ? "نعم" : "لا",
+              "عدد الموظفين": assignments.filter((a: any) => a.shiftId === s.id).length,
+              "الحالة": s.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={[

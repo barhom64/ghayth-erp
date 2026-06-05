@@ -17,6 +17,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Button } from "@/components/ui/button";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 /**
  * Fiscal periods list — migrated in R.2 iter 2 to the unified template
  * stack (PageShell + PageStatusBadge). The underlying data source is
@@ -178,6 +179,25 @@ export default function FiscalPeriodsPage() {
       subtitle="الفترات الشهرية وعدد القيود وإجمالي الحركات"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الفترات المالية" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_finance_fiscal_periods"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "الفترات المالية", total: filtered.length },
+            items: filtered.map((p: any) => ({
+              "الفترة": p.period || "—",
+              "الاسم": p.name || "—",
+              "تاريخ البدء": p.startDate || "—",
+              "تاريخ الانتهاء": p.endDate || "—",
+              "عدد القيود": p.journalCount ?? 0,
+              "إجمالي الحركات": Number(p.totalActivity ?? 0),
+              "الحالة": p.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">

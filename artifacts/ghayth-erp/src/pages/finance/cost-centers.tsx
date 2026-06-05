@@ -20,6 +20,7 @@ import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { Layers, Plus, Building, Car, User, Briefcase, MapPin, Pencil, Trash2, Info } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface CostCenter {
   id: number;
@@ -236,7 +237,24 @@ export default function CostCentersPage() {
         { label: "مراكز التكلفة" },
       ]}
       actions={
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_finance_cost_centers"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "مراكز التكلفة", total: filtered.length },
+              items: filtered.map((c: any) => ({
+                "الرمز": c.code || "—",
+                "الاسم": c.name || "—",
+                "النوع": c.type || "—",
+                "المسؤول": c.managerName || "—",
+                "الفرع": c.branchName || "—",
+                "الحالة": c.isActive ? "نشط" : "غير نشط",
+              })),
+            }}
+          />
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <GuardedButton perm="finance:create">
               <Plus className="h-4 w-4 me-1" /> مركز جديد
@@ -281,6 +299,7 @@ export default function CostCentersPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       }
     >
       <FinanceTabsNav />

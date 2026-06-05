@@ -32,6 +32,7 @@ import {
 import { Tag, Edit, Trash2, TestTube2 } from "lucide-react";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 interface PricingRule {
   id: number;
   name: string;
@@ -134,6 +135,21 @@ export default function PricingRulesPage() {
           >
             + إضافة قاعدة
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_pricing_rules"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "قواعد التسعير", total: rules.length },
+              items: rules.map((r) => ({
+                "المعرف": r.id,
+                "الاسم": r.name || "—",
+                "الحالة": r.active ? "نشطة" : "غير نشطة",
+                "الخصم %": r.discount ?? 0,
+                "الأولوية": r.priority ?? "—",
+              })),
+            }}
+          />
         </div>
       }
     >

@@ -122,7 +122,7 @@ export default function UmrahTransport() {
           <PrintButton
             entityType="report_umrah_transport"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "نقل العمرة", total: rows.length },
               items: rows.map((t: any) => ({

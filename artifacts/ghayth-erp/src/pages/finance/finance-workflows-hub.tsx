@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Search, ChevronRight, Sparkles, FileSignature, Flame, Calendar,
   TrendingUp, TrendingDown, Layers, Building2, Users, Banknote,
@@ -191,6 +192,22 @@ export default function FinanceWorkflowsHubPage() {
         { label: "مركز سير عمل المالية" },
       ]}
       subtitle={`${totalEntries} صفحة عمل عميقة منظمة في ${CATEGORIES.length} مجموعة`}
+      actions={
+        <PrintButton
+          entityType="report_finance_workflows_hub"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "مركز سير عمل المالية", total: totalEntries },
+            items: CATEGORIES.flatMap((c) => c.entries.map((e) => ({
+              "المجموعة": c.title,
+              "العنوان": e.title,
+              "الوصف": e.description,
+              "جديد": e.isNew ? "نعم" : "لا",
+            }))),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
 

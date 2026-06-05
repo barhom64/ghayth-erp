@@ -2241,6 +2241,40 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
           );
         }
       }
+
+      // Audit finding F6: cancelling a revenue-recognised invoice that
+      // had product lines must reverse the COGS draw + restock lots,
+      // exactly like the credit-memo route does. Without this the
+      // inventory side stays drawn while the sale side is gone —
+      // stock report shows the goods out but the books show no sale.
+      // Same shape as the amend orchestrator fix in #1525.
+      if (wasRecognised && je && je.status !== "cancelled") {
+        const { planCogsReversal, applyStockReversals } = await import(
+          "../lib/inventory/cogsPosting.js"
+        );
+        const reversalPlan = await planCogsReversal(client as any, {
+          companyId: scope.companyId,
+          invoiceId: id,
+          ratio: 1.0,
+          memoId: 0,
+        });
+        if (reversalPlan.lineUpdates.length > 0) {
+          await applyStockReversals(
+            client as any, scope.companyId,
+            reversalPlan.stockMovements, scope.activeAssignmentId ?? 0,
+          );
+          for (const u of reversalPlan.lineUpdates) {
+            await client.query(
+              `UPDATE invoice_lines
+                  SET "cogsReversedAmount" = $1,
+                      "cogsReversedAt"     = NOW(),
+                      "cogsReversalJson"   = COALESCE("cogsReversalJson", '[]'::jsonb) || $2::jsonb
+                WHERE id = $3`,
+              [u.newReversedAmount, JSON.stringify([u.snapshot]), u.invoiceLineId],
+            );
+          }
+        }
+      }
     });
     rawExecute(
       `INSERT INTO event_logs ("companyId", "userId", action, entity, "entityId", details)
@@ -2336,6 +2370,36 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
                    WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
                   [net, scope.companyId, invRevenueCode, approvalPeriod]
                 );
+              }
+
+              // Audit finding F6: reject/return on a previously-approved
+              // product invoice must reverse the inventory + COGS draw,
+              // not just AR/VAT/revenue. Same shape as DELETE above and
+              // the amend orchestrator fix in #1525.
+              const { planCogsReversal, applyStockReversals } = await import(
+                "../lib/inventory/cogsPosting.js"
+              );
+              const reversalPlan = await planCogsReversal(client as any, {
+                companyId: scope.companyId,
+                invoiceId: id,
+                ratio: 1.0,
+                memoId: 0,
+              });
+              if (reversalPlan.lineUpdates.length > 0) {
+                await applyStockReversals(
+                  client as any, scope.companyId,
+                  reversalPlan.stockMovements, scope.activeAssignmentId ?? 0,
+                );
+                for (const u of reversalPlan.lineUpdates) {
+                  await client.query(
+                    `UPDATE invoice_lines
+                        SET "cogsReversedAmount" = $1,
+                            "cogsReversedAt"     = NOW(),
+                            "cogsReversalJson"   = COALESCE("cogsReversalJson", '[]'::jsonb) || $2::jsonb
+                      WHERE id = $3`,
+                    [u.newReversedAmount, JSON.stringify([u.snapshot]), u.invoiceLineId],
+                  );
+                }
               }
             } catch (e) { logger.error(e, "Failed to reverse invoice GL on rejection:"); }
           }
@@ -3878,6 +3942,22 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
       });
       advRef = issuedAdv.number;
     }
+    // F2 (audit fix): post the GL inside the SAME withTransaction as the
+    // INSERT, with the journalId stamp also inside. The previous shape
+    // (INSERT in txn A, JE outside, DELETE compensator on JE failure)
+    // could leave the row stranded if the DELETE itself failed; worse,
+    // a crash between the JE commit and the rawExecute() journalId
+    // stamp left the FK NULL permanently. financialEngine's internal
+    // withTransaction joins this outer one reentrantly via SAVEPOINT
+    // (same pattern as credit-memo / debit-memo).
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [cashCode, advLiabCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "debit", "1100"),
+      financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2400"),
+    ]);
+
+    let journalId: number | null = null;
+    let advanceAlreadyExists = false;
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -3922,21 +4002,9 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
           [advanceId, issuedAdv.assignmentId]
         );
       }
-    });
 
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const [cashCode, advLiabCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "debit", "1100"),
-      financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2400"),
-    ]);
-
-    let journalId: number | null = null;
-    try {
       const advanceResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
-        // Lands on the resolved advanceBranchId, not scope.branchId — so
-        // a multi-branch user posts to the explicit branch they picked
-        // and the customer's per-branch AR aging stays accurate.
         branchId: advanceBranchId,
         createdBy: scope.activeAssignmentId,
         ref: advRef,
@@ -3952,16 +4020,16 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
         guardId: advanceId ?? 0,
       });
       journalId = advanceResult.journalId;
-      markIdempotencyReplay(req, res, advanceResult.alreadyExists);
+      advanceAlreadyExists = advanceResult.alreadyExists;
+
       if (journalId && advanceId) {
-        await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, advanceId, scope.companyId]);
+        await client.query(
+          `UPDATE customer_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [journalId, advanceId, scope.companyId],
+        );
       }
-    } catch (glErr) {
-      if (advanceId) {
-        await rawExecute(`DELETE FROM customer_advances WHERE id = $1 AND "companyId" = $2`, [advanceId, scope.companyId]);
-      }
-      throw glErr;
-    }
+    });
+    markIdempotencyReplay(req, res, advanceAlreadyExists);
 
     res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });
   } catch (err) {

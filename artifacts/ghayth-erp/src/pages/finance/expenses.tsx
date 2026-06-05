@@ -202,7 +202,7 @@ export default function ExpensesPage() {
           <PrintButton
             entityType="report_finance_expenses"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "المصروفات", total: filtered.length },
               items: filtered.map((e: any) => ({

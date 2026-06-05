@@ -22,6 +22,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -243,6 +244,24 @@ export default function PreventivePlansPage() {
           <GuardedButton perm="fleet:create" onClick={() => setShowForm(!showForm)} size="sm">
             <Plus className="w-4 h-4 me-1" /> إضافة خطة
           </GuardedButton>
+          <PrintButton
+            entityType="report_fleet_preventive_plans"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "خطط الصيانة الوقائية", total: filtered.length },
+              items: filtered.map((p: any) => ({
+                "المركبة": p.plateNumber || `#${p.vehicleId}`,
+                "نوع الخدمة": SERVICE_TYPES[p.serviceType] || p.serviceType || "—",
+                "الفاصل (كم)": p.intervalKm ?? "—",
+                "الفاصل (أيام)": p.intervalDays ?? "—",
+                "آخر خدمة": p.lastServiceDate || "—",
+                "موعد الخدمة القادمة": p.nextServiceDate || "—",
+                "التكلفة المتوقعة": Number(p.estimatedCost || 0),
+                "الحالة": p.status || "—",
+              })),
+            }}
+          />
         </>
       }
     >

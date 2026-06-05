@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Handshake, Plus, AlertTriangle, CalendarCheck, CalendarX, FileText, Users, Pencil, Trash2 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface VendorContract {
   id: number;
@@ -290,6 +291,24 @@ export default function VendorContractsPage() {
               <Users className="h-4 w-4 me-2" />الموردون
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_vendor_contracts"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "عقود الموردين", total: rows.length },
+              items: rows.map((c) => ({
+                "المورد": c.vendorName || "—",
+                "العنوان": c.title || "—",
+                "تاريخ البدء": c.startDate || "—",
+                "تاريخ النهاية": c.endDate || "—",
+                "أيام للانتهاء": daysUntil(c.endDate),
+                "قيمة العقد": Number(c.contractValue || 0),
+                "العملة": c.currency || "—",
+                "الحالة": STATUS_LABEL[c.status] || c.status,
+              })),
+            }}
+          />
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <GuardedButton perm="finance:create">
