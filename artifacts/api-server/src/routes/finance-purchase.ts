@@ -2559,7 +2559,17 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
       return;
     }
 
+    // F2 (audit follow-up): JE post + journalId stamp INSIDE the same
+    // withTransaction. Same shape as customer-advances fix.
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [advReceivableCode, cashCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "debit", "1420"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_cash", "credit", "1100"),
+    ]);
+
     let advanceId: number | null = null;
+    let journalId: number | null = null;
+    let vadvAlreadyExists = false;
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -2603,16 +2613,7 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
           throw e;
         }
       }
-    });
 
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const [advReceivableCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "debit", "1420"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_cash", "credit", "1100"),
-    ]);
-
-    let journalId: number | null = null;
-    try {
       const advResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -2630,16 +2631,16 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
         guardId: advanceId ?? 0,
       });
       journalId = advResult.journalId;
-      markIdempotencyReplay(req, res, advResult.alreadyExists);
+      vadvAlreadyExists = advResult.alreadyExists;
+
       if (journalId && advanceId) {
-        await rawExecute(`UPDATE vendor_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, advanceId, scope.companyId]);
+        await client.query(
+          `UPDATE vendor_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [journalId, advanceId, scope.companyId],
+        );
       }
-    } catch (glErr) {
-      if (advanceId) {
-        await rawExecute(`DELETE FROM vendor_advances WHERE id = $1 AND "companyId" = $2`, [advanceId, scope.companyId]);
-      }
-      throw glErr;
-    }
+    });
+    markIdempotencyReplay(req, res, vadvAlreadyExists);
 
     res.status(201).json({ advanceId, ref: advRef, supplierId, amount: amt, journalId, status: "open" });
   } catch (err) {
@@ -2773,7 +2774,18 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     const creditRef = internalTechRef(`VCM-${supplierId}`);
     const creditSourceKey = `finance:vendor_credit:${supplierId}:${memoDateStr}:${requestIdempotencyToken(req)}`;
 
+    // F2 (audit follow-up): JE post + journalId stamp INSIDE the same
+    // withTransaction. Same shape as customer-advances fix.
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [apCode, returnsCode, vatInputCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5550"),
+      financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1400"),
+    ]);
+
     let memoId: number | null = null;
+    let journalId: number | null = null;
+    let vcmAlreadyExists = false;
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -2819,17 +2831,7 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
           throw e;
         }
       }
-    });
 
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const [apCode, returnsCode, vatInputCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5550"),
-      financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1400"),
-    ]);
-
-    let journalId: number | null = null;
-    try {
       const memoResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -2848,16 +2850,16 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
         guardId: memoId ?? 0,
       });
       journalId = memoResult.journalId;
-      markIdempotencyReplay(req, res, memoResult.alreadyExists);
+      vcmAlreadyExists = memoResult.alreadyExists;
+
       if (journalId && memoId) {
-        await rawExecute(`UPDATE vendor_credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
+        await client.query(
+          `UPDATE vendor_credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [journalId, memoId, scope.companyId],
+        );
       }
-    } catch (glErr) {
-      if (memoId) {
-        await rawExecute(`DELETE FROM vendor_credit_memos WHERE id = $1 AND "companyId" = $2`, [memoId, scope.companyId]);
-      }
-      throw glErr;
-    }
+    });
+    markIdempotencyReplay(req, res, vcmAlreadyExists);
 
     res.status(201).json({ memoId, ref: creditRef, supplierId, amount: subtotal, vatAmount, totalAmount: fullAmount, journalId, status: "open" });
   } catch (err) {
@@ -3063,7 +3065,22 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
       return;
     }
 
+    // F1 + F2 (audit-pass follow-up): pull the JE post + journalId stamp
+    // INSIDE the same withTransaction as the INSERT, mirror the
+    // customer-advances fix. Also bump the denormalised supplier spend
+    // counter + the expense budget bucket so AP dashboards and budget
+    // overruns stay accurate.
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const expenseCode = b.expenseAccountCode
+      ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5400");
+    const [vatInputCode, apCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1400"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+    ]);
+
     let invoiceId: number | null = null;
+    let journalId: number | null = null;
+    let vinvAlreadyExists = false;
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -3115,18 +3132,30 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
           throw e;
         }
       }
-    });
 
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const expenseCode = b.expenseAccountCode
-      ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5400");
-    const [vatInputCode, apCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1400"),
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
-    ]);
+      // Denormalised supplier-spend counter — symmetric to clients
+      // .totalRevenue. Subtotal (not total) so the bump matches the
+      // expense recognised, not the VAT input.
+      if (subtotal > 0) {
+        await client.query(
+          `UPDATE suppliers SET "totalSpend" = COALESCE("totalSpend",0) + $1
+           WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [subtotal, b.supplierId, scope.companyId],
+        ).catch(() => { /* totalSpend column may not exist yet — non-fatal */ });
+      }
 
-    let journalId: number | null = null;
-    try {
+      // Budget bucket bump on the expense code for the invoiceDate
+      // period — mirrors what the invoice-approval revenue bump does
+      // on the sales side.
+      if (subtotal > 0) {
+        const period = String(b.invoiceDate).slice(0, 7);
+        await client.query(
+          `UPDATE budgets SET used = COALESCE(used, 0) + $1
+           WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+          [subtotal, scope.companyId, expenseCode, period],
+        );
+      }
+
       const invResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -3148,16 +3177,16 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
         guardId: invoiceId ?? 0,
       });
       journalId = invResult.journalId;
-      markIdempotencyReplay(req, res, invResult.alreadyExists);
+      vinvAlreadyExists = invResult.alreadyExists;
+
       if (journalId && invoiceId) {
-        await rawExecute(`UPDATE vendor_invoices SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, invoiceId, scope.companyId]);
+        await client.query(
+          `UPDATE vendor_invoices SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [journalId, invoiceId, scope.companyId],
+        );
       }
-    } catch (glErr) {
-      if (invoiceId) {
-        await rawExecute(`DELETE FROM vendor_invoices WHERE id = $1 AND "companyId" = $2`, [invoiceId, scope.companyId]);
-      }
-      throw glErr;
-    }
+    });
+    markIdempotencyReplay(req, res, vinvAlreadyExists);
 
     res.status(201).json({ invoiceId, ref: b.ref, supplierId: b.supplierId, subtotal, vatAmount, total, journalId, status: "approved" });
   } catch (err) {
