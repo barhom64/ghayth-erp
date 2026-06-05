@@ -85,7 +85,10 @@ describe("Phase 3c — group lineItem consumes the resolved services mapping", (
     // Phase 1 (#1467) added the columns; Phase 3c populates them
     // from the resolver. Anchor on the push block so future
     // additions (e.g., violationId reordering) don't churn.
-    expect(ENGINE).toMatch(/lineItems\.push\(\{\s*itemType: "group"[\s\S]{1,800}productId: servicesProductId,\s*accountCode: servicesAccountCode,\s*vatRate: servicesVatRate/);
+    // The bundled fallback now consults the dimensional override
+    // from migration 250 / revenueAccountResolver before the product
+    // default — `overrideAccountCode ?? servicesAccountCode`.
+    expect(ENGINE).toMatch(/lineItems\.push\(\{\s*itemType: "group"[\s\S]{1,800}productId: servicesProductId,\s*accountCode: (?:overrideAccountCode \?\? )?servicesAccountCode,\s*vatRate: servicesVatRate/);
   });
 
   it("falls back gracefully when no services product is configured", () => {

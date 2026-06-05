@@ -22,6 +22,7 @@ import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { fleetEngine } from "../lib/engines/index.js";
 import { z } from "zod";
 
@@ -397,6 +398,21 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     );
     assertInsert(insertId, "fleet_vehicles");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    // Vehicle → custody subsidiary (fuel-card / parking-deposit cash
+    // held on the plate) + cost-centre nested under the vehicle's branch
+    // (per-vehicle maintenance + fuel cost roll-up). Both fire-and-
+    // forget — the vehicle create must succeed regardless.
+    const vehicleLabel = `${b.make} ${b.model} — ${b.plateNumber}`;
+    createSubsidiaryAccountsForEntity(scope.companyId, "vehicle", insertId, vehicleLabel)
+      .catch((e) => logger.error(e, "vehicle subsidiary auto-create failed"));
+    createCostCenterForEntity(
+      scope.companyId, "vehicle", insertId, vehicleLabel,
+      {
+        parentEntityType: (b.branchId || scope.branchId) ? "branch" : null,
+        parentEntityId: b.branchId ?? scope.branchId ?? null,
+        actorUserId: scope.userId,
+      },
+    ).catch((e) => logger.error(e, "vehicle cost-centre auto-create failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_vehicles", entityId: insertId,
