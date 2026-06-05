@@ -1119,4 +1119,120 @@ router.get("/dimensional-routing/health", authorize({ feature: "finance.cost_cen
   } catch (err) { handleRouteError(err, res, "Dimensional-routing health error"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PER-ENTITY P&L — the natural payoff of the journal-line dimensional
+// enrichment. For any of the 9 routable entities the system enriches
+// (client, vendor, employee, vehicle, driver, project, contract,
+// umrah_agent, umrah_season), this endpoint returns:
+//   - revenue:  SUM(credit - debit) on credit-natured CoA rows
+//   - expense:  SUM(debit - credit) on debit-natured CoA rows
+//   - net:      revenue - expense
+//   - recent:   top 50 JEs touching this entity (drill list)
+//
+// The query uses journal_lines.<entityField> directly because the
+// enrichment guarantees that field is populated on every NEW line and
+// the backfill endpoint fills it on historical lines. No joins back
+// to source documents needed — drill-down works on the GL itself.
+// ─────────────────────────────────────────────────────────────────────────────
+const ENTITY_TYPE_TO_JL_COLUMN: Record<string, string> = {
+  client:        `"clientId"`,
+  vendor:        `"vendorId"`,
+  employee:      `"employeeId"`,
+  vehicle:       `"vehicleId"`,
+  driver:        `"driverId"`,
+  project:       `"projectId"`,
+  contract:      `"contractId"`,
+  umrah_agent:   `"umrahAgentId"`,
+  umrah_season:  `"umrahSeasonId"`,
+};
+
+const ENTITY_TYPE_TO_NAME_SQL: Record<string, string> = {
+  client:        `SELECT name FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+  vendor:        `SELECT name FROM vendors WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+  employee:      `SELECT name FROM employees WHERE id = $1 AND "deletedAt" IS NULL LIMIT 1`,
+  vehicle:       `SELECT (make || ' ' || model || ' — ' || "plateNumber") AS name FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+  driver:        `SELECT name FROM fleet_drivers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+  project:       `SELECT name FROM projects WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+  contract:      `SELECT title AS name FROM legal_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+  umrah_agent:   `SELECT name FROM umrah_agents WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+  umrah_season:  `SELECT title AS name FROM umrah_seasons WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+};
+
+router.get("/entity-pnl/:entityType/:entityId", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const entityType = String(req.params.entityType);
+    const entityId = parseId(req.params.entityId, "entityId");
+    const column = ENTITY_TYPE_TO_JL_COLUMN[entityType];
+    const nameSql = ENTITY_TYPE_TO_NAME_SQL[entityType];
+    if (!column || !nameSql) {
+      throw new ValidationError(`نوع الكيان غير مدعوم: ${entityType}`, { field: "entityType" });
+    }
+
+    const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+    // Default to all-time when no range given — entity P&L is most
+    // useful as a lifetime view, with the operator narrowing on demand.
+    const from = dateFrom || "1970-01-01";
+    const to = dateTo || "2099-12-31";
+
+    // Confirm the entity exists in the tenant (defence; also surfaces
+    // the human-readable name for the UI header).
+    const [name] = await rawQuery<{ name: string }>(nameSql, [entityId, scope.companyId]);
+    if (!name) throw new NotFoundError("الكيان غير موجود");
+
+    // Two buckets in a single query. SAFE column interpolation — the
+    // column comes from a closed map, not user input.
+    const [agg] = await rawQuery<{
+      revenue: string; expense: string; entries: number;
+    }>(
+      `SELECT
+         COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                           THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+         COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                           THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+         COUNT(DISTINCT je.id)::int AS entries
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId"
+       LEFT JOIN chart_of_accounts ca
+              ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+       WHERE je."companyId" = $1
+         AND je."deletedAt" IS NULL
+         AND je.date BETWEEN $2 AND $3
+         AND jl.${column} = $4`,
+      [scope.companyId, from, to, entityId],
+    );
+
+    const num = (v: unknown) => Number(v ?? 0);
+    const revenue = num(agg?.revenue);
+    const expense = num(agg?.expense);
+
+    const recent = await rawQuery<{
+      jeId: number; ref: string; date: string; description: string | null;
+      debit: string; credit: string;
+    }>(
+      `SELECT je.id AS "jeId", je.ref, je.date::text AS date, je.description,
+              COALESCE(SUM(jl.debit), 0) AS debit,
+              COALESCE(SUM(jl.credit), 0) AS credit
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id
+        WHERE je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je.date BETWEEN $2 AND $3
+          AND jl.${column} = $4
+        GROUP BY je.id, je.ref, je.date, je.description
+        ORDER BY je.date DESC, je.id DESC
+        LIMIT 50`,
+      [scope.companyId, from, to, entityId],
+    );
+
+    res.json({
+      entity: { type: entityType, id: entityId, name: name.name },
+      dateFrom: from,
+      dateTo: to,
+      bucket: { revenue, expense, net: revenue - expense, entries: num(agg?.entries) },
+      recentEntries: recent.map((r) => ({ ...r, debit: Number(r.debit), credit: Number(r.credit) })),
+    });
+  } catch (err) { handleRouteError(err, res, "Entity P&L error"); }
+});
+
 export { router as costCentersRouter };
