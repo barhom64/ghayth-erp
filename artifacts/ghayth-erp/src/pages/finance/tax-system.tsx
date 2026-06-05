@@ -17,6 +17,7 @@ import { Receipt, TrendingUp, TrendingDown, DollarSign, Calendar, Zap, CheckCirc
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 export default function TaxSystemPage() {
   const currentPeriod = todayLocal().slice(0, 7);
   const [period, setPeriod] = useState(currentPeriod);
@@ -93,12 +94,30 @@ export default function TaxSystemPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "نظام الضرائب والفوترة الإلكترونية" }]}
       loading={summaryLoading || declLoading}
       actions={
-        activeTab === "vat" ? (
-          <>
-            <span className="text-sm text-muted-foreground">الفترة:</span>
-            <Input type="month" className="w-44" value={period} onChange={(e) => setPeriod(e.target.value)} />
-          </>
-        ) : undefined
+        <>
+          {activeTab === "vat" && (
+            <>
+              <span className="text-sm text-muted-foreground">الفترة:</span>
+              <Input type="month" className="w-44" value={period} onChange={(e) => setPeriod(e.target.value)} />
+            </>
+          )}
+          <PrintButton
+            entityType="report_finance_tax_system"
+            entityId={period}
+            size="icon"
+            payload={{
+              entity: { title: `إقرارات ضريبة القيمة المضافة — ${period}`, total: declItems.length },
+              items: declItems.map((d: any) => ({
+                "الفترة": d.period,
+                "ضريبة المخرجات": Number(d.outputVat || 0),
+                "ضريبة المدخلات": Number(d.inputVat || 0),
+                "الصافي": Number(d.netVat || 0),
+                "عدد الفواتير": d.invoiceCount ?? 0,
+                "الحالة": d.status || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

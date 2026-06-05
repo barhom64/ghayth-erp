@@ -3,6 +3,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Wrench } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface CapaItem {
@@ -47,6 +48,24 @@ export default function GovernanceCapa() {
       title="الإجراءات التصحيحية والوقائية (CAPA)"
       subtitle="متابعة الإجراءات التصحيحية والوقائية لضمان الجودة والامتثال"
       breadcrumbs={[{ label: "الحوكمة" }, { label: "CAPA" }]}
+      actions={
+        <PrintButton
+          entityType="report_governance_capa"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "الإجراءات التصحيحية والوقائية", total: rows.length },
+            items: rows.map((r: any) => ({
+              "المرجع": r.ref || r.id,
+              "العنوان": r.title || r.description || "—",
+              "النوع": r.actionType || r.type || "—",
+              "المسؤول": r.assigneeName || "—",
+              "تاريخ الاستحقاق": r.dueDate || "—",
+              "الحالة": r.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
     </PageShell>

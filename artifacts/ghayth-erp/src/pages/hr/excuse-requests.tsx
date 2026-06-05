@@ -22,6 +22,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useQueryClient } from "@tanstack/react-query";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const EXCUSE_TYPES: Record<string, string> = {
   early_leave: "خروج مبكر",
   late_arrival: "تأخر",
@@ -143,6 +144,23 @@ export default function ExcuseRequestsPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_excuse_requests"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "طلبات الاستئذان", total: filtered.length },
+              items: filtered.map((e: any) => ({
+                "الموظف": e.employeeName || "—",
+                "النوع": e.excuseType || e.type || "—",
+                "التاريخ": e.requestDate || e.date || "—",
+                "من": e.fromTime || "—",
+                "إلى": e.toTime || "—",
+                "السبب": e.reason || "—",
+                "الحالة": e.status || "—",
+              })),
+            }}
+          />
           <Link href="/hr/excuse-requests/create">
             <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
               <Plus className="h-4 w-4" />

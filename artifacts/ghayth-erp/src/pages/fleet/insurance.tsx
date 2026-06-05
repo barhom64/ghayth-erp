@@ -50,7 +50,7 @@ export default function InsurancePage() {
           <PrintButton
             entityType="report_fleet_insurance"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تأمينات المركبات", total: filtered.length },
               items: filtered.map((i: any) => ({

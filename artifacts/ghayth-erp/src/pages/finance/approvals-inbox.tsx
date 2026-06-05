@@ -12,6 +12,7 @@ import {
   Briefcase, Wallet, Clock, ChevronRight, AlertTriangle,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Approvals Inbox — unified queue for everything pending approval.
@@ -176,6 +177,22 @@ export default function ApprovalsInboxPage() {
               فحص اليوم
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_approvals_inbox"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "صندوق الموافقات الموحد", total: queuesWithItems.length },
+              items: QUEUES.map((q) => {
+                const s = stats.get(q.key) ?? { count: 0, amount: 0, items: [] };
+                return {
+                  "نوع الطلب": q.label,
+                  "العدد": s.count,
+                  "إجمالي المبلغ": Number(s.amount || 0),
+                };
+              }),
+            }}
+          />
         </div>
       }
     >

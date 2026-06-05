@@ -18,6 +18,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Withholding Tax categories — Saudi Income Tax Law Art. 68.
@@ -163,6 +164,22 @@ export default function WhtCategoriesPage() {
               إضافة فئة استقطاع
             </Link>
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_wht_categories"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "فئات استقطاع الضريبة", total: filtered.length },
+              items: filtered.map((c) => ({
+                "الرمز": c.code,
+                "الاسم": c.name,
+                "Name EN": c.nameEn || "—",
+                "النسبة %": Number(c.rate || 0),
+                "النوع": appliesLabels[c.appliesTo] || c.appliesTo,
+                "نشط": c.isActive ? "نعم" : "لا",
+              })),
+            }}
+          />
         </>
       }
     >

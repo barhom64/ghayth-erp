@@ -103,7 +103,7 @@ export default function FieldTrackingPage() {
         <PrintButton
           entityType="report_hr_field_tracking"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "تقرير التتبع الميداني", total: items.length },
             items: items.map((v: any) => ({

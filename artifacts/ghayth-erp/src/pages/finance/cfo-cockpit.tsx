@@ -12,6 +12,7 @@ import {
   Clock, ArrowRight, Banknote, ReceiptText, FileText, Calendar,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { AllocationHealthCard } from "@/components/shared/allocation-health-card";
 
 /**
@@ -182,6 +183,22 @@ export default function CfoCockpitPage() {
               <FileText className="h-4 w-4 me-1" /> التقارير الكاملة
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_cfo_cockpit"
+            entityId="summary"
+            size="icon"
+            payload={{
+              entity: { title: "لوحة المدير المالي اليومية", total: 6 },
+              items: [
+                { "البند": "إجمالي النقد", "القيمة": Number(totalCash || 0) },
+                { "البند": "إجمالي الذمم المدينة", "القيمة": Number(totalAr || 0) },
+                { "البند": "ذمم مدينة متأخرة", "القيمة": Number(overdueAr || 0) },
+                { "البند": "إجمالي الذمم الدائنة", "القيمة": Number(totalAp || 0) },
+                { "البند": "دفعات معلقة", "القيمة": pendingPayables.length },
+                { "البند": "حسابات بنكية", "القيمة": bankAccounts.length },
+              ],
+            }}
+          />
         </div>
       }
     >

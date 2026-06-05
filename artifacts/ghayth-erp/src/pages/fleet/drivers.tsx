@@ -156,7 +156,7 @@ export default function DriversPage() {
           <PrintButton
             entityType="report_fleet_drivers"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "سائقو الأسطول", total: items.length },
               items: items.map((d: any) => ({

@@ -262,7 +262,7 @@ export default function UmrahPilgrims() {
           <PrintButton
             entityType="report_umrah_pilgrims"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: {
                 title: "قائمة المعتمرين",

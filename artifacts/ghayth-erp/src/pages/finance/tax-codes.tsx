@@ -17,6 +17,7 @@ import { Plus, Percent, Trash2, Pencil, Layers, Receipt } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 /**
@@ -186,6 +187,22 @@ export default function TaxCodesPage() {
               إضافة رمز ضريبة
             </Link>
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_tax_codes"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "رموز الضرائب", total: filtered.length },
+              items: filtered.map((c: any) => ({
+                "الرمز": c.code || "—",
+                "الاسم": c.name || "—",
+                "النسبة (%)": c.ratePercent ?? c.rate ?? "—",
+                "النوع": c.type || "—",
+                "الحساب المرتبط": c.accountCode || "—",
+                "الحالة": c.isActive ? "نشط" : "غير نشط",
+              })),
+            }}
+          />
         </>
       }
     >

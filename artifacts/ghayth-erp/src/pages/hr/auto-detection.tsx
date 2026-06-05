@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 // ─────────────────────────────────────────────────────────────────────────────
 // الأنواع
 // ─────────────────────────────────────────────────────────────────────────────
@@ -263,6 +264,22 @@ export default function AutoDetectionPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_auto_detection"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "سجل الرصد التلقائي للمخالفات", total: logs.length },
+              items: logs.map((l: any) => ({
+                "التاريخ": l.runDate || l.createdAt || "—",
+                "نوع التشغيل": l.runType || l.type || "—",
+                "موظفون مفحوصون": l.employeesScanned ?? 0,
+                "مخالفات تم إنشاؤها": l.violationsCreated ?? 0,
+                "أخطاء": l.errors ?? 0,
+                "المدة (ث)": l.durationSeconds ?? "—",
+              })),
+            }}
+          />
           <Button
             variant="outline"
             size="sm"

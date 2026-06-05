@@ -113,7 +113,7 @@ export default function CrmActivities() {
         <PrintButton
           entityType="report_crm_activities"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: {
               title: "أنشطة CRM",

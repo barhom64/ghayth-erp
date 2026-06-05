@@ -35,6 +35,7 @@ import {
 import { IDP_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const idpSchema = z.object({
   employeeId: z.string().min(1, "الموظف مطلوب"),
   title: z.string().trim(),
@@ -229,10 +230,29 @@ export default function IDPPage() {
       subtitle="تخطيط مسارات التطوير والنمو الوظيفي للموظفين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <GuardedButton perm="hr:create" size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-          <Plus className="h-4 w-4" />
-          خطة جديدة
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_idp"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "خطط التطوير الفردي", total: filtered.length },
+              items: filtered.map((p: any) => ({
+                "الموظف": p.employeeName || "—",
+                "الفترة": p.period || "—",
+                "الهدف": p.developmentGoal || p.title || "—",
+                "تاريخ البدء": p.startDate || "—",
+                "تاريخ النهاية": p.endDate || "—",
+                "التقدم (%)": p.progressPercentage ?? "—",
+                "الحالة": p.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton perm="hr:create" size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4" />
+            خطة جديدة
+          </GuardedButton>
+        </div>
       }
     >
       <HrTabsNav />
