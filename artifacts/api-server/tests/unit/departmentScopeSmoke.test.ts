@@ -50,6 +50,27 @@ describe("department scope — additive, opt-in", () => {
     expect(params).toContain(9);
   });
 
+  it("company-level roles (hr/admin/finance managers) are NOT department-scoped", () => {
+    for (const role of ["hr_manager", "admin", "finance_manager", "general_manager"]) {
+      const { where } = buildScopedWhere(
+        scope({ role, allowedDepartments: [5, 6] }),
+        {},
+        { enforceDepartmentScope: true },
+      );
+      expect(where, `${role} should be department-unbounded`).not.toContain('"departmentId"');
+    }
+  });
+
+  it("a manager assigned to several departments sees ALL of them (multi-department)", () => {
+    const { where, params } = buildScopedWhere(
+      scope({ role: "branch_manager", allowedDepartments: [3, 7, 11] }),
+      {},
+      { enforceDepartmentScope: true },
+    );
+    expect(where).toContain('"departmentId" = ANY(');
+    expect(params).toContainEqual([3, 7, 11]);
+  });
+
   it("owner is department-unbounded even when opted in", () => {
     const { where } = buildScopedWhere(
       scope({ isOwner: true, role: "owner", allowedDepartments: [5] }),

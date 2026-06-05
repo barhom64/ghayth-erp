@@ -32,6 +32,7 @@
 
 import { rawQuery } from "../rawdb.js";
 import { onInvalidation, publishInvalidation } from "./distributedCache.js";
+import { isOwnRecord } from "./recordOwnership.js";
 
 interface SodRuleRow {
   rule_key: string;
@@ -54,6 +55,14 @@ interface SodCheckCtx {
   /** Resource record if the route resolved one — `createdBy` is the
    *  field we compare against to determine self-approval. */
   record?: { createdBy?: number | null } | null;
+  /** Resource table — lets us interpret `createdBy` in the correct
+   *  identity space (user vs assignment id). See recordOwnership.ts. */
+  table?: string | null;
+  /** The acting user's employee_assignment ids (scope.allowedAssignments),
+   *  needed because many `createdBy` columns store an assignment id rather
+   *  than a user id. Without this, self-approval on those tables can never
+   *  be detected. */
+  assignmentIds?: number[];
 }
 
 export interface SodCheckResult {
@@ -120,10 +129,17 @@ export async function enforceSoD(ctx: SodCheckCtx): Promise<SodCheckResult> {
     // determination. Detection-only mode applies.
     return { blocked: false };
   }
-  if (ctx.record.createdBy !== ctx.userId) {
-    // The dangerous case is "approve what you created". If someone
-    // else created the record, this user is acting as the second
-    // independent reviewer, which is what SoD wants.
+  // The dangerous case is "approve what you created". `createdBy` may be a
+  // user id OR an assignment id depending on the table (see recordOwnership),
+  // so resolve ownership in the correct identity space — a plain
+  // `createdBy === userId` silently misses every assignment-id table (most of
+  // finance). If someone else created the record, this user is the second
+  // independent reviewer, which is what SoD wants.
+  const isSelfCreated = isOwnRecord(ctx.table, ctx.record.createdBy, {
+    userId: ctx.userId,
+    assignmentIds: ctx.assignmentIds ?? [],
+  });
+  if (!isSelfCreated) {
     return { blocked: false };
   }
 

@@ -33,6 +33,7 @@ import {
 } from "./featureCatalog.js";
 import { evaluateConditions, type AbacConditions } from "./abacConditions.js";
 import { enforceSoD } from "./sodEnforcement.js";
+import { isOwnRecord } from "./recordOwnership.js";
 import { publishInvalidation, onInvalidation } from "./distributedCache.js";
 import { config } from "../config.js";
 
@@ -263,7 +264,7 @@ export async function bumpCacheVersion(companyId: number): Promise<void> {
 
 // ─── Scope evaluation ───────────────────────────────────────────────────────
 
-interface ScopeContext {
+export interface ScopeContext {
   scope: RequestScope;
   /** Current user's department (resolved from employee_assignments). */
   departmentId: number | null;
@@ -299,7 +300,7 @@ async function loadScopeContext(scope: RequestScope): Promise<ScopeContext> {
   };
 }
 
-function evaluateScopeForRecord(grant: RoleGrantRow, ctx: ScopeContext, record?: ResourceRecord): boolean {
+export function evaluateScopeForRecord(grant: RoleGrantRow, ctx: ScopeContext, record?: ResourceRecord, table?: string | null): boolean {
   if (!record) return true; // list endpoints with no specific record
   const { scope } = ctx;
 
@@ -333,8 +334,15 @@ function evaluateScopeForRecord(grant: RoleGrantRow, ctx: ScopeContext, record?:
         (record.employeeId != null && (record.employeeId === scope.employeeId || ctx.directReportEmployeeIds.includes(record.employeeId)))
       );
     case "self":
+      // `createdBy` may be a user id OR an assignment id depending on the
+      // table (see recordOwnership) — resolve in the correct identity space
+      // rather than assuming `createdBy === userId`, which silently fails on
+      // every assignment-id table (most of finance).
       return (
-        record.createdBy === scope.userId ||
+        isOwnRecord(table, record.createdBy, {
+          userId: scope.userId,
+          assignmentIds: scope.allowedAssignments ?? [],
+        }) ||
         record.employeeId === scope.employeeId ||
         record.assigneeId === scope.employeeId
       );
@@ -369,6 +377,11 @@ function buildScopeFilter(grant: RoleGrantRow, ctx: ScopeContext, columns: Scope
         params: [scope.companyId, scope.userId, [scope.employeeId, ...ctx.directReportEmployeeIds].filter(Boolean)],
       };
     case "self":
+      // NOTE: this scopeFilter SQL is not yet consumed by any handler (lists
+      // scope via buildScopedWhere instead). If wired, the `createdBy = userId`
+      // predicate must be widened per recordOwnership — on assignment-id tables
+      // createdBy never equals userId, so self-scoped lists would show none of
+      // the user's own rows. Mirror evaluateScopeForRecord's isOwnRecord logic.
       return {
         sql: `${c.companyId} = $1 AND (${c.createdBy} = $2 OR ${c.employeeId} = $3 OR ${c.assigneeId} = $3)`,
         params: [scope.companyId, scope.userId, scope.employeeId ?? -1],
@@ -489,7 +502,7 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
   const bestGrant = matchingGrants[0];
 
   // Scope check on the specific record (if provided).
-  const passesScope = evaluateScopeForRecord(bestGrant, ctx, spec.resource?.record);
+  const passesScope = evaluateScopeForRecord(bestGrant, ctx, spec.resource?.record, spec.resource?.table);
   if (spec.resource?.record && !passesScope) {
     return {
       allowed: false,
@@ -558,6 +571,8 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
     action: spec.action,
     grants: grants.map((g) => ({ feature_key: g.feature_key, actions: g.actions })),
     record: spec.resource?.record ?? null,
+    table: spec.resource?.table ?? null,
+    assignmentIds: scope.allowedAssignments ?? [],
   });
   if (sodResult.blocked) {
     return {

@@ -234,6 +234,12 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       branchColumn: 'ea."branchId"',
       extraConditions: [`ea.status = 'active'`],
       enforceBranchScope: true,
+      // Org-as-security-boundary: a department-level manager sees only the
+      // employees whose active assignment is in one of their departments
+      // (company-level roles are exempt — see DEPT_SCOPE_EXEMPT_ROLES). The
+      // department lives on the assignment, so we key off ea."departmentId".
+      enforceDepartmentScope: true,
+      departmentColumn: 'ea."departmentId"',
     });
 
     let paramIdx = nextParamIndex;

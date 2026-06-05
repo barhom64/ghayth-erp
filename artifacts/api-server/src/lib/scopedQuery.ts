@@ -1,7 +1,7 @@
 import { rawQuery } from "./rawdb.js";
 import type { RequestScope } from "../middlewares/authMiddleware.js";
 import type { Request } from "express";
-import { OWNER_GM_ROLES } from "./rbacCatalog.js";
+import { OWNER_GM_ROLES, ADMIN_ROLES, HR_ROLES, FINANCE_ROLES } from "./rbacCatalog.js";
 
 export function parseScopeFilters(req: Request): ScopeFilters {
   const scope = req.scope!;
@@ -87,6 +87,15 @@ export interface ScopedQueryOptions {
 }
 
 const BRANCH_SCOPE_EXEMPT_ROLES = new Set(OWNER_GM_ROLES);
+// Department scoping is role-aware ("حسب نظام الأدوار الوظيفية"): company-level
+// roles (owner/GM + HR/admin/finance managers) span all departments and are
+// NEVER restricted to a department, even if they happen to carry a department
+// assignment. Only lower-tier roles (e.g. a department/team head) get scoped to
+// the departments they are assigned to — and a manager assigned to several
+// departments sees ALL of them via the allowedDepartments set.
+const DEPT_SCOPE_EXEMPT_ROLES = new Set<string>([
+  ...OWNER_GM_ROLES, ...ADMIN_ROLES, ...HR_ROLES, ...FINANCE_ROLES,
+]);
 
 export function buildScopedWhere(
   scope: RequestScope,
@@ -162,7 +171,7 @@ export function buildScopedWhere(
       departmentIds.length === 0 &&
       options.enforceDepartmentScope &&
       !scope.isOwner &&
-      !BRANCH_SCOPE_EXEMPT_ROLES.has(scope.role) &&
+      !DEPT_SCOPE_EXEMPT_ROLES.has(scope.role) &&
       allowedDepartments.length > 0
     ) {
       departmentIds = allowedDepartments;
