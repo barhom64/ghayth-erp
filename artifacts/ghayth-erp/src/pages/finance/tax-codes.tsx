@@ -190,7 +190,7 @@ export default function TaxCodesPage() {
           <PrintButton
             entityType="report_finance_tax_codes"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "رموز الضرائب", total: filtered.length },
               items: filtered.map((c: any) => ({

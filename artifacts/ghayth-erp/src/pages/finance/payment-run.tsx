@@ -170,7 +170,7 @@ export default function PaymentRunPage() {
           <PrintButton
             entityType="report_finance_payment_run"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "دفعات الشراء المعلّقة", total: data?.data?.length ?? 0 },
               items: (data?.data ?? []).map((p) => ({

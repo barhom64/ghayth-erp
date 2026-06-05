@@ -234,7 +234,7 @@ export default function IDPPage() {
           <PrintButton
             entityType="report_hr_idp"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "خطط التطوير الفردي", total: filtered.length },
               items: filtered.map((p: any) => ({

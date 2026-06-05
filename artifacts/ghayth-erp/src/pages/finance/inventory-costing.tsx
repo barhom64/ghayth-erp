@@ -124,7 +124,7 @@ export default function InventoryCostingPage() {
         <PrintButton
           entityType="report_finance_inventory_costing"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "تقييم المخزون بالمتوسط المرجح", total: products.length },
             items: products.map((p: any) => ({

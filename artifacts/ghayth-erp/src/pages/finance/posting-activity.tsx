@@ -253,7 +253,7 @@ export default function PostingActivityPage() {
           <PrintButton
             entityType="report_finance_posting_activity"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "نشاط الترحيل المحاسبي", total: rows.length },
               items: rows.map((r) => ({

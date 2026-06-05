@@ -206,7 +206,7 @@ export default function WpsRunsPage() {
           <PrintButton
             entityType="report_hr_wps_runs"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تشغيلات WPS", total: filtered.length },
               items: filtered.map((r: any) => ({

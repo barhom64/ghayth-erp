@@ -87,7 +87,7 @@ export default function AccrualsPage() {
           <PrintButton
             entityType="report_hr_accruals"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: `الاستحقاقات الشهرية — ${period}`, total: data?.rows?.length ?? 0 },
               items: (data?.rows ?? []).map((r) => ({

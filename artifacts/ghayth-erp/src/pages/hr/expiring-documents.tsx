@@ -136,7 +136,7 @@ export default function ExpiringDocumentsPage() {
           <PrintButton
             entityType="report_hr_expiring_documents"
             entityId={days}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: `الوثائق المنتهية خلال ${days} يوم`, days, total: filtered.length },
               items: filtered.map((d: any) => ({

@@ -210,7 +210,7 @@ export default function CollectionStagesPage() {
           <PrintButton
             entityType="report_finance_collection_stages"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "مراحل التصعيد للتحصيل", total: rows.length },
               items: rows.map((r) => ({

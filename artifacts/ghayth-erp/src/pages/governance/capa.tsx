@@ -52,7 +52,7 @@ export default function GovernanceCapa() {
         <PrintButton
           entityType="report_governance_capa"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "الإجراءات التصحيحية والوقائية", total: rows.length },
             items: rows.map((r: any) => ({

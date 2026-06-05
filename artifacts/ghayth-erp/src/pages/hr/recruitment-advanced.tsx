@@ -49,7 +49,7 @@ export default function RecruitmentAdvancedPage() {
         <PrintButton
           entityType="report_hr_recruitment_advanced"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "متقدمي التوظيف", total: apps.length },
             items: apps.map((a: any) => ({

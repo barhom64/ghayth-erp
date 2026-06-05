@@ -140,7 +140,7 @@ export default function BadDebtProvisionPage() {
           <PrintButton
             entityType="report_finance_bad_debt_provision"
             entityId={period}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: `مخصص ديون مشكوك فيها — ${period}`, total: data?.invoiceCount ?? 0 },
               items: data ? BUCKET_DEFS.map((b) => ({

@@ -191,7 +191,7 @@ export default function CustomerAdvancesPage() {
           <PrintButton
             entityType="report_finance_customer_advances"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "دفعات مقدمة من العملاء", total: filteredRows.length },
               items: filteredRows.map((a) => ({

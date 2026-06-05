@@ -38,7 +38,7 @@ export default function FleetReports() {
           <PrintButton
             entityType="report_fleet_reports"
             entityId="summary"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تقارير الأسطول — ملخص", total: statCards.length },
               items: [

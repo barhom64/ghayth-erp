@@ -289,7 +289,7 @@ export default function AdminRolesPage() {
           <PrintButton
             entityType="report_admin_roles"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "الأدوار والصلاحيات", total: predefinedRoles.length },
               items: predefinedRoles.map((r: any) => ({

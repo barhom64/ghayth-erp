@@ -142,7 +142,7 @@ export default function FxRevaluationHistoryPage() {
           <PrintButton
             entityType="report_finance_fx_revaluation_history"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "سجل إعادة تقييم العملات", total: filtered.length },
               items: filtered.map((r) => ({

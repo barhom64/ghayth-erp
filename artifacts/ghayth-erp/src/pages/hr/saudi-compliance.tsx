@@ -94,7 +94,7 @@ export default function HrSaudiCompliancePage() {
         <PrintButton
           entityType="report_hr_saudi_compliance"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "WPS — السجل التاريخي", total: runs.length },
             items: runs.map((r: any) => ({

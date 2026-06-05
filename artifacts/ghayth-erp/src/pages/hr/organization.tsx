@@ -32,7 +32,7 @@ export default function OrganizationPage() {
         <PrintButton
           entityType="report_hr_organization"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "الهيكل التنظيمي", total: items.length },
             items: items.map((d: any) => {

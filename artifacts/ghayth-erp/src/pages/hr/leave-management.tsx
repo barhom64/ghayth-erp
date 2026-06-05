@@ -121,7 +121,7 @@ export default function LeaveManagementPage() {
         <PrintButton
           entityType="report_hr_leave_management"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "إدارة الإجازات — الطلبات المعلقة", total: pendingRequests.length },
             items: pendingRequests.map((r: any) => ({

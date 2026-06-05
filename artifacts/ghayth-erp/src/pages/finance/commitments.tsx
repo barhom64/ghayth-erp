@@ -81,7 +81,7 @@ export default function CommitmentsPage() {
         <PrintButton
           entityType="report_finance_commitments"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "الالتزامات المالية", total: filtered.length },
             items: filtered.map((c: any) => ({

@@ -194,7 +194,7 @@ export default function InvoicesPage() {
           <PrintButton
             entityType="report_finance_invoices"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: {
                 title: "قائمة الفواتير",

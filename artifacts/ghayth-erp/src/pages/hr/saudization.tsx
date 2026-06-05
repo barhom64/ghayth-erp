@@ -199,7 +199,7 @@ export default function SaudizationPage() {
           <PrintButton
             entityType="report_hr_saudization"
             entityId={sector}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: {
                 title: `تقرير السعودة — ${sector}`,

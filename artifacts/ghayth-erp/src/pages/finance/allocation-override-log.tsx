@@ -138,7 +138,7 @@ export default function AllocationOverrideLogPage() {
         <PrintButton
           entityType="report_finance_allocation_override_log"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "سجل تجاوزات تخصيص البنود", total: rows.length },
             items: rows.map((r) => ({

@@ -167,7 +167,7 @@ export default function WhtCategoriesPage() {
           <PrintButton
             entityType="report_finance_wht_categories"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "فئات استقطاع الضريبة", total: filtered.length },
               items: filtered.map((c) => ({

@@ -160,7 +160,7 @@ export default function FxRatesPage() {
           <PrintButton
             entityType="report_finance_fx_rates"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "أسعار صرف العملات", total: rows.length },
               items: rows.map((r: any) => ({

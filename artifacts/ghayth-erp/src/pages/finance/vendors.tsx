@@ -145,7 +145,7 @@ export default function VendorsPage() {
           <PrintButton
             entityType="report_finance_vendors"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "قائمة الموردين", total: filtered.length },
               items: filtered.map((v: any) => ({

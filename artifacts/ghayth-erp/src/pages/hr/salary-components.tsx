@@ -156,7 +156,7 @@ export default function SalaryComponentsPage() {
           <PrintButton
             entityType="report_hr_salary_components"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "مكونات الرواتب", total: filtered.length },
               items: filtered.map((c: any) => ({

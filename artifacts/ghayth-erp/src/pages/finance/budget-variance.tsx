@@ -170,7 +170,7 @@ export default function BudgetVariancePage() {
           <PrintButton
             entityType="report_finance_budget_variance"
             entityId={period}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: `انحراف الميزانية — ${period}`, total: filtered.length },
               items: filtered.map((l) => ({

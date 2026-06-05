@@ -183,7 +183,7 @@ export default function AllocationRulesPage() {
           <PrintButton
             entityType="report_finance_allocation_rules"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "قواعد التوجيه المحاسبي", total: rows.length },
               items: rows.map((r) => ({

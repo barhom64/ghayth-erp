@@ -87,7 +87,7 @@ export default function PaymentsPage() {
           <PrintButton
             entityType="report_finance_payments"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "المدفوعات", total: filtered.length },
               items: filtered.map((p: any) => ({

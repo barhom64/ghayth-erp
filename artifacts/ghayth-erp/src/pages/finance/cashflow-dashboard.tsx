@@ -92,7 +92,7 @@ export default function CashflowDashboard() {
           <PrintButton
             entityType="report_finance_cashflow_dashboard"
             entityId={period}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: `لوحة التدفق النقدي — ${periodLabels[period]}`, total: 4 },
               items: [

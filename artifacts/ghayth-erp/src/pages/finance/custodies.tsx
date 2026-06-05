@@ -240,7 +240,7 @@ export default function CustodiesPage() {
           <PrintButton
             entityType="report_finance_custodies"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "العهد المالية", total: filtered.length },
               items: filtered.map((c: any) => ({

@@ -224,7 +224,7 @@ export default function RecurringJournalsPage() {
             <PrintButton
               entityType="report_finance_recurring_journals"
               entityId="list"
-              label="طباعة"
+              size="icon"
               payload={{
                 entity: { title: "القيود الدورية", total: items.length },
                 items: items.map((r: any) => ({

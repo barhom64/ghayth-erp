@@ -121,7 +121,7 @@ export default function OpeningBalancesPage() {
           <PrintButton
             entityType="report_finance_opening_balances"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "الأرصدة الافتتاحية", total: items.length },
               items: items.map((r) => ({

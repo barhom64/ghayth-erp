@@ -135,7 +135,7 @@ export default function FleetAlerts() {
           <PrintButton
             entityType="report_fleet_alerts"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تنبيهات الأسطول", total: filtered.length },
               items: filtered.map((a: any) => ({

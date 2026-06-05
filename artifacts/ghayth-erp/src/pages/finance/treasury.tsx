@@ -193,7 +193,7 @@ export default function TreasuryPage() {
           <PrintButton
             entityType="report_finance_treasury"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "الخزينة — الأرصدة النقدية", total: accounts.length },
               items: accounts.map((a: any) => ({

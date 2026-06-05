@@ -71,7 +71,7 @@ export default function PenaltyEscalationPage() {
         <PrintButton
           entityType="report_hr_penalty_escalation"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "تصعيد الجزاءات", total: items.length },
             items: Object.entries(grouped).map(([name, vs]) => ({

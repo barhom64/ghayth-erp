@@ -480,7 +480,7 @@ export default function BankGuaranteesPage() {
             <PrintButton
               entityType="report_finance_bank_guarantees"
               entityId="list"
-              label="طباعة"
+              size="icon"
               payload={{
                 entity: { title: "الضمانات البنكية", total: list.length },
                 items: list.map((g: any) => ({

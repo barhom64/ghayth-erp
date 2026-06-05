@@ -49,7 +49,7 @@ export default function PerformanceAdvancedPage() {
         <PrintButton
           entityType="report_hr_performance_advanced"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "تحليلات الأداء المتقدمة", total: items.length },
             items: items.map((e: any) => ({

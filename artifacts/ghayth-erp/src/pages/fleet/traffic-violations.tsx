@@ -186,7 +186,7 @@ export default function TrafficViolationsPage() {
           <PrintButton
             entityType="report_fleet_traffic_violations"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "المخالفات المرورية", total: violations.length },
               items: violations.map((v: any) => ({

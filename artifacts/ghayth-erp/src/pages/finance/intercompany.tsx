@@ -136,7 +136,7 @@ export default function IntercompanyPage() {
           <PrintButton
             entityType="report_finance_intercompany"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "المعاملات البينية", total: list.length },
               items: list.map((r: any) => ({

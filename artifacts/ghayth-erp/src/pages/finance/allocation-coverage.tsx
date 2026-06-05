@@ -191,7 +191,7 @@ export default function AllocationCoveragePage() {
         <PrintButton
           entityType="report_finance_allocation_coverage"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: `تشخيص محرك التوجيه — تغطية ${overallCoverage.toFixed(1)}%`, total: sourceBuckets.length },
             items: sourceBuckets.map((s) => ({

@@ -155,7 +155,7 @@ export default function ExpenseBulkApprovalsPage() {
           <PrintButton
             entityType="report_finance_expense_bulk_approvals"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "الاعتماد الجماعي للمصاريف", total: filtered.length },
               items: filtered.map((e: any) => ({

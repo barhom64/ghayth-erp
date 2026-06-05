@@ -273,7 +273,7 @@ export default function BudgetApprovalsPage() {
           <PrintButton
             entityType="report_finance_budget_approvals"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "اعتمادات تجاوز الميزانية", total: rows.length },
               items: rows.map((r) => ({

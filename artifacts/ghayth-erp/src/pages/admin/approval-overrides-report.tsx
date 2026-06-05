@@ -130,7 +130,7 @@ export default function ApprovalOverridesReportPage() {
           <PrintButton
             entityType="report_admin_approval_overrides"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "سجل تجاوز Workflow", total: rows.length },
               items: rows.map((r) => ({

@@ -268,7 +268,7 @@ export default function PurchaseRequestsPage() {
           <PrintButton
             entityType="report_finance_purchase_requests"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "طلبات الشراء", total: rows.length },
               items: rows.map((r) => ({

@@ -172,7 +172,7 @@ export default function AllocationResultsPage() {
         <PrintButton
           entityType="report_finance_allocation_results"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "سجل توجيه البنود", total: rows.length },
             items: rows.map((r) => ({

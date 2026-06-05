@@ -197,7 +197,7 @@ export default function ProductCatalogPage() {
         <PrintButton
           entityType="report_finance_product_catalog"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "كتالوج المنتجات والخدمات المحاسبي", total: filtered.length },
             items: filtered.map((p) => ({

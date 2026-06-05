@@ -200,7 +200,7 @@ export default function CashCalendarPage() {
           <PrintButton
             entityType="report_finance_cash_calendar"
             entityId={startDate}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تقويم السيولة — 90 يوم", total: grid.length },
               items: grid.map((d) => ({

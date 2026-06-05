@@ -241,7 +241,7 @@ export default function CostCentersPage() {
           <PrintButton
             entityType="report_finance_cost_centers"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "مراكز التكلفة", total: filtered.length },
               items: filtered.map((c: any) => ({

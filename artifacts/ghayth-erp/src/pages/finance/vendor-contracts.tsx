@@ -294,7 +294,7 @@ export default function VendorContractsPage() {
           <PrintButton
             entityType="report_finance_vendor_contracts"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "عقود الموردين", total: rows.length },
               items: rows.map((c) => ({

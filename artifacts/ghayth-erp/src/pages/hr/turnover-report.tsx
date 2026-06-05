@@ -64,7 +64,7 @@ export default function TurnoverReportPage() {
           <PrintButton
             entityType="report_hr_turnover"
             entityId={String(year)}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: {
                 title: `تقرير دوران الموظفين — ${year}`,

@@ -147,7 +147,7 @@ export default function ExcuseRequestsPage() {
           <PrintButton
             entityType="report_hr_excuse_requests"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "طلبات الاستئذان", total: filtered.length },
               items: filtered.map((e: any) => ({

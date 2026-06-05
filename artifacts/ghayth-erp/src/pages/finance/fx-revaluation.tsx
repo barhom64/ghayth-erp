@@ -125,7 +125,7 @@ export default function FxRevaluationPage() {
         <PrintButton
           entityType="report_finance_fx_revaluation"
           entityId={period}
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: `إعادة تقييم العملات الأجنبية — ${period}`, total: data.lineCount },
             items: data.details.map((d) => ({

@@ -508,7 +508,7 @@ export default function GLPostingQueuePage() {
         <PrintButton
           entityType="report_finance_gl_posting_queue"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "قائمة الانتظار للترحيل", total: mudadRows.length + lotRows.length + fxRows.length + cycleRows.length },
             items: [

@@ -180,7 +180,7 @@ export default function ApprovalsInboxPage() {
           <PrintButton
             entityType="report_finance_approvals_inbox"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "صندوق الموافقات الموحد", total: queuesWithItems.length },
               items: QUEUES.map((q) => {

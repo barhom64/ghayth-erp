@@ -138,7 +138,7 @@ export default function PricingRulesPage() {
           <PrintButton
             entityType="report_finance_pricing_rules"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "قواعد التسعير", total: rules.length },
               items: rules.map((r) => ({

@@ -75,7 +75,7 @@ export default function AttendancePolicyPage() {
         <PrintButton
           entityType="report_hr_attendance_policy"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "سياسة الحضور", total: 5 },
             items: [

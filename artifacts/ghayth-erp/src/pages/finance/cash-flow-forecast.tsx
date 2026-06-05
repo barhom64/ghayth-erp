@@ -93,7 +93,7 @@ export default function CashFlowForecastPage() {
           <PrintButton
             entityType="report_finance_cash_flow_forecast"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "توقعات التدفق النقدي", total: 3 },
               items: [

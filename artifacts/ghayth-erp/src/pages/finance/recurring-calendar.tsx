@@ -155,7 +155,7 @@ export default function RecurringCalendarPage() {
           <PrintButton
             entityType="report_finance_recurring_calendar"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تقويم القيود المتكررة — 30 يوم", total: next30Events.length },
               items: next30Events.map((e) => ({

@@ -285,7 +285,7 @@ export default function AdminUsersPage() {
           <PrintButton
             entityType="report_admin_users"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "المستخدمون", total: filtered.length },
               items: filtered.map((u: any) => ({

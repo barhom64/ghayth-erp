@@ -166,7 +166,7 @@ export default function SalaryAdvancesPage() {
           <PrintButton
             entityType="report_finance_salary_advances"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "سلف الرواتب", total: filtered.length },
               items: filtered.map((s: any) => ({

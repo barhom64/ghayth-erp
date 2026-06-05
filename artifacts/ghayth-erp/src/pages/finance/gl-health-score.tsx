@@ -236,7 +236,7 @@ export default function GlHealthScorePage() {
           <PrintButton
             entityType="report_finance_gl_health"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: `مؤشر صحة النظام المالي — ${Math.round(overallScore)}/100`, total: dimensions.length },
               items: dimensions.map((d) => ({

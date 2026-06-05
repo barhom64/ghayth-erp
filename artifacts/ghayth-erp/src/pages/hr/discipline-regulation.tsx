@@ -287,7 +287,7 @@ export default function DisciplineRegulationPage() {
           <PrintButton
             entityType="report_hr_discipline_regulation"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "لائحة الانضباط الوظيفي", total },
               items: (data?.data ?? []).map((a) => ({

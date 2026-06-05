@@ -67,7 +67,7 @@ export default function LegalSessions() {
         <PrintButton
           entityType="report_legal_sessions"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "جدول جلسات المحاكم", total: filtered.length },
             items: filtered.map((s: any) => ({

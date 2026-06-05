@@ -223,7 +223,7 @@ export default function PrintTemplatesPage() {
           <PrintButton
             entityType="report_settings_print_templates"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "قوالب الطباعة", total: filtered.length },
               items: filtered.map((t: any) => ({

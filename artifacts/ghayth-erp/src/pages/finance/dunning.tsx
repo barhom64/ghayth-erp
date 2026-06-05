@@ -234,7 +234,7 @@ export default function DunningPage() {
           <PrintButton
             entityType="report_finance_dunning"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "متابعة تحصيل الذمم", total: invoices.length },
               items: invoices.map((r) => ({

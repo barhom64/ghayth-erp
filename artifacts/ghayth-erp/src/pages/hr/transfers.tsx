@@ -217,7 +217,7 @@ export default function TransfersPage() {
           <PrintButton
             entityType="report_hr_transfers"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "طلبات نقل الموظفين", total: transfers.length },
               items: transfers.map((t: any) => ({

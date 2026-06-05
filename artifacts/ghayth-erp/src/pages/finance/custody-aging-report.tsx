@@ -40,7 +40,7 @@ export default function CustodyAgingReportPage() {
           <PrintButton
             entityType="report_finance_custody_aging"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تقرير أعمار العهد", total: employees.length },
               items: employees.map((e: any) => ({

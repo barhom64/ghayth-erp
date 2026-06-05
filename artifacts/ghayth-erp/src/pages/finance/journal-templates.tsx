@@ -207,7 +207,7 @@ export default function JournalTemplatesPage() {
           <PrintButton
             entityType="report_finance_journal_templates"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "قوالب القيود المحاسبية", total: rows.length },
               items: rows.map((r) => ({

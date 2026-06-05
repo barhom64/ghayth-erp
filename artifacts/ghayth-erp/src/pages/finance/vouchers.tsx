@@ -227,7 +227,7 @@ export default function VouchersPage() {
                     entityType={v.type === "receipt" ? "receipt_voucher" : "payment_voucher"}
                     entityId={v.id}
                     formats={["a4", "thermal_80"]}
-                    label="طباعة"
+                    size="icon"
                   />
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">

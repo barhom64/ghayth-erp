@@ -275,7 +275,7 @@ export default function EmployeeActivationPage() {
         <PrintButton
           entityType="report_hr_employee_activation"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "تفعيل / تعليق الموظفين", total: filtered.length },
             items: filtered.map((e: any) => ({

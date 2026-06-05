@@ -127,7 +127,7 @@ export default function RbacSimpleEditor() {
           <PrintButton
             entityType="report_admin_rbac_simple"
             entityId={roleId ? String(roleId) : "list"}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: {
                 title: `صلاحيات الدور — ${roles.find((r) => r.id === roleId)?.label_ar || ""}`,

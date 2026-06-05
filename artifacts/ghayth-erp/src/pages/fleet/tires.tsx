@@ -119,7 +119,7 @@ export default function TiresPage() {
           <PrintButton
             entityType="report_fleet_tires"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "إطارات الأسطول", total: filtered.length },
               items: filtered.map((t: any) => ({

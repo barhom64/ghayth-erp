@@ -174,7 +174,7 @@ export default function GlAnomalyDetectorPage() {
           <PrintButton
             entityType="report_finance_gl_anomaly"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "كاشف الشذوذ في القيود", total: filtered.length },
               items: filtered.map((j: any) => ({

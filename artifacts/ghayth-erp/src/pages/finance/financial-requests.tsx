@@ -83,7 +83,7 @@ export default function FinancialRequestsPage() {
         <PrintButton
           entityType="report_finance_financial_requests"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "الطلبات المالية", total: filtered.length },
             items: filtered.map((r: any) => ({

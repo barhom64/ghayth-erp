@@ -170,7 +170,7 @@ export default function UmrahGroupPortfolioDashboard() {
           <PrintButton
             entityType="report_umrah_group_portfolio"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "محفظة مجموعات العمرة", total: rows.length },
               items: rows.map((r) => ({

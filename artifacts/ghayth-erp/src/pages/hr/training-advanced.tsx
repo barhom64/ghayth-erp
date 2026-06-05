@@ -48,7 +48,7 @@ export default function TrainingAdvancedPage() {
         <PrintButton
           entityType="report_hr_training_advanced"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "تسجيلات التدريب", total: enrollments.length },
             items: enrollments.map((e: any) => ({

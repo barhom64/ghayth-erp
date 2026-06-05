@@ -155,7 +155,7 @@ export default function UmrahSeasonPortfolioDashboard() {
           <PrintButton
             entityType="report_umrah_season_portfolio"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "محفظة مواسم العمرة", total: rows.length },
               items: rows.map((r) => ({

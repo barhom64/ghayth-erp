@@ -227,7 +227,7 @@ export default function TaxFilingCalendarPage() {
           <PrintButton
             entityType="report_finance_tax_filing_calendar"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تقويم الإقرارات الضريبية", total: filtered.length },
               items: filtered.map((f) => ({

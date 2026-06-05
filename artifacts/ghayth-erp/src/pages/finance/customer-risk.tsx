@@ -341,7 +341,7 @@ export default function CustomerRiskPage() {
           <PrintButton
             entityType="report_finance_customer_risk"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تحليل مخاطر العملاء", total: filtered.length },
               items: filtered.map((c: any) => ({

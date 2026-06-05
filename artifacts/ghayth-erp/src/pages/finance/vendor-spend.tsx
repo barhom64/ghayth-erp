@@ -354,7 +354,7 @@ export default function VendorSpendPage() {
         <PrintButton
           entityType="report_finance_vendor_spend"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "تحليل الإنفاق على الموردين", total: filtered.length },
             items: filtered.map((v) => ({

@@ -167,7 +167,7 @@ export default function ApplicationListPage() {
           <PrintButton
             entityType="report_hr_applications"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "قائمة المتقدمين للوظائف", total: filtered.length },
               items: filtered.map((a: any) => ({

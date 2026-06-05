@@ -183,7 +183,7 @@ export default function FiscalPeriodsPage() {
         <PrintButton
           entityType="report_finance_fiscal_periods"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "الفترات المالية", total: filtered.length },
             items: filtered.map((p: any) => ({

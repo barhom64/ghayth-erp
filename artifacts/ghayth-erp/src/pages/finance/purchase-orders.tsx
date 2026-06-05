@@ -201,7 +201,7 @@ export default function PurchaseOrdersPage() {
           <PrintButton
             entityType="report_finance_purchase_orders_list"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "قائمة طلبات الشراء", total: filtered.length },
               items: filtered.map((po: any) => ({

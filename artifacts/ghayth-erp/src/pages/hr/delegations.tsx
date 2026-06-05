@@ -89,7 +89,7 @@ export default function DelegationsPage() {
           <PrintButton
             entityType="report_hr_delegations"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تفويضات الصلاحيات", total: delegations.length },
               items: delegations.map((d: any) => ({

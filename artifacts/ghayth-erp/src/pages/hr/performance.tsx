@@ -110,7 +110,7 @@ export default function PerformancePage() {
           <PrintButton
             entityType="report_hr_performance"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تقييمات الأداء", total: filtered.length },
               items: filtered.map((p: any) => ({

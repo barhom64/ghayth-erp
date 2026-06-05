@@ -152,7 +152,7 @@ export default function PayrollPage() {
           <PrintButton
             entityType="report_hr_payroll"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "مسيرات الرواتب", total: filtered.length },
               items: filtered.map((p: any) => ({

@@ -395,7 +395,7 @@ export default function Projects() {
           <PrintButton
             entityType="report_projects"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "قائمة المشاريع", total: projectsForPrint.length },
               items: projectsForPrint.map((p: any) => ({

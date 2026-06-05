@@ -110,7 +110,7 @@ export default function BadDebtPage() {
         <PrintButton
           entityType="report_finance_bad_debt"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "مخصص الديون المشكوك في تحصيلها", total: data.invoiceCount ?? 0 },
             items: (["current", "d30", "d60", "d90", "d90plus"] as const).map((k) => ({

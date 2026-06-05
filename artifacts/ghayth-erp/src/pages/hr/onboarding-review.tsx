@@ -196,7 +196,7 @@ export default function OnboardingReviewPage() {
         <PrintButton
           entityType="report_hr_onboarding_review"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "مراجعة التعيين والتأهيل", total: filtered.length },
             items: filtered.map((e: any) => ({

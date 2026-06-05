@@ -247,7 +247,7 @@ export default function PreventivePlansPage() {
           <PrintButton
             entityType="report_fleet_preventive_plans"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "خطط الصيانة الوقائية", total: filtered.length },
               items: filtered.map((p: any) => ({

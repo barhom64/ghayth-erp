@@ -110,7 +110,7 @@ export default function ViolationsManagementPage() {
         <PrintButton
           entityType="report_hr_violations_management"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "إدارة المخالفات", total: filtered.length },
             items: filtered.map((v: any) => ({

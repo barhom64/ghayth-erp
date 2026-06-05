@@ -143,7 +143,7 @@ export default function ProjectCostingPage() {
           <PrintButton
             entityType="report_finance_project_costing"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "تكاليف المشاريع", total: list.length },
               items: list.map((p) => ({

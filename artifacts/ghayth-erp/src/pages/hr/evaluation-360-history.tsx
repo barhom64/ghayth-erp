@@ -58,7 +58,7 @@ export default function Evaluation360HistoryPage() {
           <PrintButton
             entityType="report_hr_evaluation_360_history"
             entityId={employeeId || "list"}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: `تاريخ التقييمات — ${employee?.name || ""}`, total: history.length },
               items: history.map((h: any) => ({

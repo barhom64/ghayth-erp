@@ -112,7 +112,7 @@ export default function DepositsPage() {
           <PrintButton
             entityType="report_property_deposits"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "ودائع الضمان", total: deposits.length },
               items: deposits.map((d: any) => ({

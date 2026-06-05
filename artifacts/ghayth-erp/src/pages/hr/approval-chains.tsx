@@ -174,7 +174,7 @@ export default function ApprovalChainsPage() {
           <PrintButton
             entityType="report_hr_approval_chains"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "سلاسل الاعتماد", total: filtered.length },
               items: filtered.map((c: any) => ({

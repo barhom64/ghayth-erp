@@ -172,7 +172,7 @@ export default function Evaluation360Page() {
           <PrintButton
             entityType="report_hr_evaluation_360"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "دورات التقييم 360°", total: filtered.length },
               items: filtered.map((c: any) => ({

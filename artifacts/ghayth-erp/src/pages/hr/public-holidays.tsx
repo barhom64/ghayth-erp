@@ -134,7 +134,7 @@ export default function PublicHolidaysPage() {
           <PrintButton
             entityType="report_hr_public_holidays"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: `تقويم الإجازات الرسمية — ${year}`, total: holidays.length },
               items: holidays.map((h: any) => ({

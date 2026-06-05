@@ -245,7 +245,7 @@ export default function SubsidiaryAccountsPage() {
           <PrintButton
             entityType="report_finance_subsidiary_accounts"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "الحسابات الفرعية", total: rows.length },
               items: rows.map((r) => ({

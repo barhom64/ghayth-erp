@@ -50,7 +50,7 @@ export function VendorPerformanceTab() {
         <PrintButton
           entityType="report_bi_vendor_performance"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "تقرير أداء الموردين", total: rows.length },
             items: rows.map((r: any) => ({

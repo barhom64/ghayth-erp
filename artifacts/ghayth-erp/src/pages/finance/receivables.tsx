@@ -119,7 +119,7 @@ export default function ReceivablesPage() {
           <PrintButton
             entityType="report_finance_receivables"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "المقبوضات (الذمم المدينة)", total: filtered.length },
               items: filtered.map((r: any) => ({

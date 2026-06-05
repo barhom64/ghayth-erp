@@ -47,7 +47,7 @@ export default function TCOPage() {
           <PrintButton
             entityType="report_fleet_tco"
             entityId={vehicleId || "list"}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: `تحليل التكلفة الكلية — ${tco.plateNumber || ""}`, total: pieData.length },
               items: [

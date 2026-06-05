@@ -77,7 +77,7 @@ export default function ShiftsManagementPage() {
         <PrintButton
           entityType="report_hr_shifts_management"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "الورديات", total: shifts.length },
             items: shifts.map((s: any) => ({

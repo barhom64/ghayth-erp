@@ -267,7 +267,7 @@ export default function AutoDetectionPage() {
           <PrintButton
             entityType="report_hr_auto_detection"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "سجل الرصد التلقائي للمخالفات", total: logs.length },
               items: logs.map((l: any) => ({

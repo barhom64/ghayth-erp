@@ -372,7 +372,7 @@ export default function InventoryCountPage() {
           <PrintButton
             entityType="report_inventory_counts"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: {
                 title: "جلسات جرد المخزن",

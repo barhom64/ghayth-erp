@@ -73,7 +73,7 @@ export default function UmrahSeasons() {
           <PrintButton
             entityType="report_umrah_seasons"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "مواسم العمرة", total: items.length },
               items: items.map((s: any) => ({

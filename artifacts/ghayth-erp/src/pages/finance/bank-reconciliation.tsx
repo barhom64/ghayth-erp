@@ -151,7 +151,7 @@ export default function BankReconciliationPage() {
           <PrintButton
             entityType="report_finance_bank_reconciliation"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "دفعات التسوية البنكية", total: batches.length },
               items: batches.map((b: any) => ({
