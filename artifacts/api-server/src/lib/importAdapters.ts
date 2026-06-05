@@ -360,7 +360,10 @@ const INVOICES: ImportAdapter = {
   compareFields: ["clientId", "description", "subtotal", "vatRate", "vatAmount", "total", "paidAmount", "status", "dueDate", "currency", "paymentTerms", "poNumber", "notes"],
   hasCompanyId: true,
   hasBranchId: true,
-  defaults: { vatRate: 15, status: "draft", currency: "SAR", glStatus: "pending" },
+  // NB: no `glStatus` here — `invoices` has no such column (GL posting is a
+  // separate step that sets postedAt/postedBy). Including it made every
+  // invoice-import INSERT throw 42703, breaking the whole import path.
+  defaults: { vatRate: 15, status: "draft", currency: "SAR" },
 };
 
 // ---------------------------------------------------------------------------
