@@ -558,6 +558,8 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
     action: spec.action,
     grants: grants.map((g) => ({ feature_key: g.feature_key, actions: g.actions })),
     record: spec.resource?.record ?? null,
+    table: spec.resource?.table ?? null,
+    assignmentIds: scope.allowedAssignments ?? [],
   });
   if (sodResult.blocked) {
     return {
