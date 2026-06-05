@@ -49,6 +49,7 @@ import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { cn } from "@/lib/utils";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 /**
  * Bank guarantees list — R.3 iter 3 end-to-end reference page.
  *
@@ -476,6 +477,24 @@ export default function BankGuaranteesPage() {
               <Plus className="h-4 w-4 me-1" />
               ضمان جديد
             </GuardedButton>
+            <PrintButton
+              entityType="report_finance_bank_guarantees"
+              entityId="list"
+              size="icon"
+              payload={{
+                entity: { title: "الضمانات البنكية", total: list.length },
+                items: list.map((g: any) => ({
+                  "المرجع": g.ref || "—",
+                  "البنك": g.bank || "—",
+                  "المستفيد": g.beneficiary || "—",
+                  "المبلغ": Number(g.amount || 0),
+                  "تاريخ الإصدار": g.issueDate || "—",
+                  "تاريخ الانتهاء": g.expiryDate || "—",
+                  "النوع": g.type || "—",
+                  "الحالة": g.status || "—",
+                })),
+              }}
+            />
           </>
         }
       >

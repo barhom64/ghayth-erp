@@ -247,7 +247,7 @@ export default function HrApprovalsPage() {
         <PrintButton
           entityType="report_hr_approval_inbox"
           entityId={statusFilter}
-          label="طباعة"
+          size="icon"
           payload={{
             entity: {
               title: `صندوق موافقات HR — ${statusFilter}`,

@@ -209,7 +209,7 @@ export default function RisksPage() {
           <PrintButton
             entityType="report_project_risks"
             entityId={projectId || "all"}
-            label="طباعة"
+            size="icon"
             payload={{
               entity: {
                 title: "سجل مخاطر المشاريع",

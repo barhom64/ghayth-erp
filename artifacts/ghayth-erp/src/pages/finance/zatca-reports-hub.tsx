@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@workspace/ui-core";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Receipt, FileBarChart2, Boxes, Layers, Clock,
   AlertTriangle, RefreshCw, ShieldAlert, Percent, Receipt as ReceiptIcon,
@@ -170,6 +171,19 @@ export default function ZatcaReportsHubPage() {
               منضدة WHT
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_zatca_reports_hub"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "تقارير الضرائب والمخزون — الفهرس", total: CARDS.length },
+              items: CARDS.map((c) => ({
+                "المجموعة": c.group === "tax" ? "ضريبة" : c.group === "inventory" ? "مخزون" : "سجل",
+                "التقرير": c.title,
+                "الوصف": c.description,
+              })),
+            }}
+          />
         </div>
       }
     >

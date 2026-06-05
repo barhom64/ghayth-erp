@@ -130,7 +130,7 @@ export default function InspectionsPage() {
           <PrintButton
             entityType="report_property_inspections"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "سجل فحوصات الوحدات العقارية", total: inspections.length },
               items: inspections.map((i: any) => ({

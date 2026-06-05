@@ -14,6 +14,7 @@ import {
   AlertCircle, Calendar,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Posting Activity Today — real-time view of GL posts.
@@ -244,10 +245,28 @@ export default function PostingActivityPage() {
         { label: "نشاط اليوم" },
       ]}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
-          تحديث
-        </Button>
+        <>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
+            تحديث
+          </Button>
+          <PrintButton
+            entityType="report_finance_posting_activity"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "نشاط الترحيل المحاسبي", total: rows.length },
+              items: rows.map((r) => ({
+                "المرجع": r.ref || `#${r.id}`,
+                "الوصف": r.description || "—",
+                "النوع": TYPE_LABEL[r.type] || r.type,
+                "المبلغ": Number(r.totalDebit ?? r.total ?? 0),
+                "تاريخ الترحيل": r.postedAt || r.createdAt || "—",
+                "الحالة": r.status || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

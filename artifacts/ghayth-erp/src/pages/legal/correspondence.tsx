@@ -50,7 +50,7 @@ export default function LegalCorrespondence() {
         <PrintButton
           entityType="report_legal_correspondence"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "سجل المراسلات القانونية", total: filtered.length },
             items: filtered.map((c: any) => ({

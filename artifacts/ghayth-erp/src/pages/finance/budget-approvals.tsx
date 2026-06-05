@@ -22,6 +22,7 @@ import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock, Target, Grid3x3, TrendingUp } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface BudgetApprovalRequest {
   id: number;
@@ -269,6 +270,26 @@ export default function BudgetApprovalsPage() {
               P&L vs Budget
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_budget_approvals"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "اعتمادات تجاوز الميزانية", total: rows.length },
+              items: rows.map((r) => ({
+                "الحساب": r.accountCode,
+                "الاسم": r.accountName || "—",
+                "الفترة": r.period,
+                "المطلوب": Number(r.requestedAmount || 0),
+                "الميزانية": Number(r.budgetAmount || 0),
+                "% قبل": Number(r.utilizationBefore || 0).toFixed(1),
+                "% بعد": Number(r.utilizationAfter || 0).toFixed(1),
+                "المستوى": LEVEL_LABEL[r.approvalLevel] || r.approvalLevel,
+                "السبب": r.reason || "—",
+                "الحالة": r.status,
+              })),
+            }}
+          />
         </div>
       }
     >

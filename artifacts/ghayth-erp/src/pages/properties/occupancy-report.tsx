@@ -84,7 +84,7 @@ export default function OccupancyReportPage() {
         <PrintButton
           entityType="report_property_occupancy"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: {
               title: "تقرير الإشغال العقاري",

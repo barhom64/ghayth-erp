@@ -12,6 +12,7 @@ import {
 } from "@workspace/ui-core";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function RecruitmentAdvancedPage() {
   const { data: stats, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["recruitment-stats"], "/hr/recruitment/stats");
@@ -44,6 +45,23 @@ export default function RecruitmentAdvancedPage() {
       title="تحليلات التوظيف المتقدمة"
       subtitle="إحصائيات ومؤشرات عمليات التوظيف"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات التوظيف المتقدمة" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_recruitment_advanced"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "متقدمي التوظيف", total: apps.length },
+            items: apps.map((a: any) => ({
+              "الاسم": a.applicantName || a.name || "—",
+              "المنصب": a.postingTitle || a.position || "—",
+              "البريد": a.email || "—",
+              "التقييم": a.rating ? `${a.rating}/5` : "—",
+              "المرحلة": RECRUITMENT_STAGES[a.status]?.label || a.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />

@@ -138,7 +138,7 @@ export default function UmrahAgents() {
         <PrintButton
           entityType="report_umrah_agents"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "وكلاء العمرة", total: items.length },
             items: items.map((a: any) => ({

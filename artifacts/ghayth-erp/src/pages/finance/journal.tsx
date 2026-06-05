@@ -214,7 +214,7 @@ export default function JournalPage() {
           <PrintButton
             entityType="report_finance_journal"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "القيود اليومية", total: filtered.length },
               items: filtered.map((j: any) => ({

@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Link2 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   EmployeeSelect,
   ClientSelect,
@@ -260,13 +261,32 @@ export default function SubsidiaryAccountsPage() {
         { label: "الحسابات الفرعية" },
       ]}
       actions={
-        <GuardedButton
-          perm="finance.accounting_engine:create"
-          onClick={() => setCreating(true)}
-          className="gap-1.5"
-        >
-          <Plus className="h-4 w-4" /> ربط حساب جديد
-        </GuardedButton>
+        <>
+          <GuardedButton
+            perm="finance.accounting_engine:create"
+            onClick={() => setCreating(true)}
+            className="gap-1.5"
+          >
+            <Plus className="h-4 w-4" /> ربط حساب جديد
+          </GuardedButton>
+          <PrintButton
+            entityType="report_finance_subsidiary_accounts"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "الحسابات الفرعية", total: rows.length },
+              items: rows.map((r) => ({
+                "نوع الكيان": ENTITY_TYPES.find((t) => t.value === r.entityType)?.label || r.entityType,
+                "رقم الكيان": r.entityId,
+                "نوع الحساب": r.accountType,
+                "كود الحساب": r.accountCode || "—",
+                "اسم الحساب": r.accountName || "—",
+                "الرصيد الحالي": Number(r.currentBalance || 0),
+                "نشط": r.isActive ? "نعم" : "لا",
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

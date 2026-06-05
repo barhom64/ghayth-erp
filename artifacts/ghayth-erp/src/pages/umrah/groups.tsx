@@ -325,7 +325,7 @@ export default function UmrahGroups() {
           <PrintButton
             entityType="report_umrah_groups"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "مجموعات العمرة", total: items.length },
               items: items.map((g: any) => ({

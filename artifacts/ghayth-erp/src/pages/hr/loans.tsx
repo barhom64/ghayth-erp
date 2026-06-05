@@ -275,7 +275,7 @@ export default function LoansPage() {
           <PrintButton
             entityType="report_hr_loans"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "طلبات السلف", total: filtered.length },
               items: filtered.map((l: any) => ({

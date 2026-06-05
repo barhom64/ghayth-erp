@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -236,6 +237,23 @@ export default function CustodiesPage() {
               </>
             )}
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_custodies"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "العهد المالية", total: filtered.length },
+              items: filtered.map((c: any) => ({
+                "المرجع": c.ref || c.id,
+                "الموظف": c.employeeName || "—",
+                "تاريخ الصرف": c.issueDate || "—",
+                "المبلغ المصروف": c.amountIssued ?? c.amount ?? 0,
+                "المتبقي": c.remainingBalance ?? 0,
+                "الغرض": c.purpose || "—",
+                "الحالة": c.status || "—",
+              })),
+            }}
+          />
         </div>
       }
     >

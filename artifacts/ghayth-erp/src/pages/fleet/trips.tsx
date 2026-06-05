@@ -110,7 +110,7 @@ export default function TripsPage() {
           <PrintButton
             entityType="report_fleet_trips"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: {
                 title: "قائمة رحلات الأسطول",

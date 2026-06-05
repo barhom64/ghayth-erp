@@ -14,6 +14,7 @@ import {
   PageShell,
 } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface OpeningBalance {
   id: number;
@@ -117,6 +118,22 @@ export default function OpeningBalancesPage() {
               قيد أرصدة افتتاحية جديد
             </GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_finance_opening_balances"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "الأرصدة الافتتاحية", total: items.length },
+              items: items.map((r) => ({
+                "المرجع": r.ref,
+                "الوصف": r.description || "—",
+                "إجمالي المدين": Number(r.totalDebit || 0),
+                "إجمالي الدائن": Number(r.totalCredit || 0),
+                "متوازن": Math.abs(Number(r.totalDebit) - Number(r.totalCredit)) < 0.01 ? "نعم" : "لا",
+                "التاريخ": r.createdAt || "—",
+              })),
+            }}
+          />
         </>
       }
     >

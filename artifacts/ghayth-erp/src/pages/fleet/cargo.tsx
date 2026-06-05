@@ -135,7 +135,7 @@ export default function FleetCargoPage() {
           <PrintButton
             entityType="report_fleet_cargo"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "بوالص نقل البضائع", total: rows.length },
               items: rows.map((r: any) => ({

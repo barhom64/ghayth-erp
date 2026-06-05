@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Banknote, TrendingUp, TrendingDown, AlertTriangle, Calculator,
   Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Calendar,
@@ -205,6 +206,23 @@ export default function CashPositionCalculatorPage() {
         { label: "حاسبة الوضع النقدي" },
       ]}
       subtitle="ما هو رصيد البنك بعد X يوم؟ توقع الوضع النقدي مع إمكانية إضافة افتراضات"
+      actions={
+        <PrintButton
+          entityType="report_finance_cash_position_calculator"
+          entityId={String(horizon)}
+          size="icon"
+          payload={{
+            entity: { title: `حاسبة الوضع النقدي — ${horizon} يوم`, total: movements.length },
+            items: movements.map((m) => ({
+              "التاريخ": m.date,
+              "النوع": m.type === "in" ? "داخل" : "خارج",
+              "المبلغ": Number(m.amount || 0),
+              "الوصف": m.description || "—",
+              "المصدر": m.source === "known" ? "معروف" : "افتراضي",
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
 

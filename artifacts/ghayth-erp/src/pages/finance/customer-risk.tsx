@@ -12,6 +12,7 @@ import {
   ChevronRight, Phone, Megaphone, Clock, FileWarning,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Customer Risk Dashboard — concentration + behavior analysis
@@ -337,6 +338,24 @@ export default function CustomerRiskPage() {
               الديون المشكوك بها
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_customer_risk"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "تحليل مخاطر العملاء", total: filtered.length },
+              items: filtered.map((c: any) => ({
+                "العميل": c.clientName || "—",
+                "الرصيد القائم": Number(c.outstandingAmount ?? 0),
+                "المتأخر": Number(c.overdueAmount ?? 0),
+                "% من إجمالي AR": (Number(c.shareOfTotal ?? 0) * 100).toFixed(1),
+                "أسوأ تأخر (أيام)": c.maxDaysOverdue ?? 0,
+                "عدد الفواتير المتأخرة": c.overdueCount ?? 0,
+                "درجة المخاطر": c.riskScore ?? 0,
+                "التصنيف": c.riskBand || "—",
+              })),
+            }}
+          />
         </div>
       }
     >

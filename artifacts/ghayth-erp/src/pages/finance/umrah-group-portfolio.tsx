@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Layers, TrendingUp, TrendingDown, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
@@ -166,6 +167,27 @@ export default function UmrahGroupPortfolioDashboard() {
           >
             <Download className="h-3 w-3" /> تصدير CSV
           </Button>
+          <PrintButton
+            entityType="report_umrah_group_portfolio"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "محفظة مجموعات العمرة", total: rows.length },
+              items: rows.map((r) => ({
+                "المجموعة": r.name || r.nuskGroupNumber,
+                "نسك": r.nuskGroupNumber,
+                "الموسم": r.seasonTitle || "—",
+                "المرشد": r.agentName || "—",
+                "متوقع": r.expectedPilgrims ?? 0,
+                "فعلي": r.actualPilgrims,
+                "الإيراد": Number(r.revenue || 0),
+                "المدفوع": Number(r.paid || 0),
+                "التكلفة": Number(r.cost || 0),
+                "الهامش": Number(r.margin || 0),
+                "الحالة": STATUS_LABELS[r.status] || r.status,
+              })),
+            }}
+          />
         </div>
       }
     >
