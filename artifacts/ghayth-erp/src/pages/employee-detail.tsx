@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
-import { useRoute } from "wouter";
+import { Link, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -171,13 +171,14 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
             <p className="text-xs text-muted-foreground">سجل السائق</p>
             {driver ? (
               <>
-                <a
-                  href={`/fleet/drivers/${driver.id}`}
-                  className="font-mono text-sm font-bold text-primary underline-offset-2 hover:underline"
-                  data-testid="finance-link-driver"
-                >
-                  DRV-{driver.id}
-                </a>
+                <Link href={`/fleet/drivers/${driver.id}`}>
+                  <a
+                    className="font-mono text-sm font-bold text-primary underline-offset-2 hover:underline"
+                    data-testid="finance-link-driver"
+                  >
+                    DRV-{driver.id}
+                  </a>
+                </Link>
                 <p className="text-[10px] text-muted-foreground">
                   رخصة {driver.licenseNumber || "—"} · {driver.status === "available" ? "متاح" : driver.status}
                 </p>
@@ -189,13 +190,14 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">المركبة المرتبطة (سائق)</p>
             {vehicle ? (
-              <a
-                href={`/fleet/${vehicle.id}`}
-                className="font-mono text-sm font-bold text-primary underline-offset-2 hover:underline"
-                data-testid="finance-link-vehicle"
-              >
-                {vehicle.plateNumber}{vehicle.brand ? ` — ${vehicle.brand}` : ""}
-              </a>
+              <Link href={`/fleet/${vehicle.id}`}>
+                <a
+                  className="font-mono text-sm font-bold text-primary underline-offset-2 hover:underline"
+                  data-testid="finance-link-vehicle"
+                >
+                  {vehicle.plateNumber}{vehicle.brand ? ` — ${vehicle.brand}` : ""}
+                </a>
+              </Link>
             ) : (
               <p className="text-xs text-muted-foreground">لا توجد مركبة مرتبطة</p>
             )}

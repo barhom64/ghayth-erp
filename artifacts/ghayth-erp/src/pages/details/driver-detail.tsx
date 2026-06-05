@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { Link, useLocation, useRoute } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import {
   useDetailEditDelete,
@@ -416,7 +416,9 @@ function DriverIntegratedCard({ driverId }: { driverId: number }) {
           </div>
           {emp ? (
             <>
-              <a className="font-semibold underline-offset-2 hover:underline" href={`/hr/employees/${emp.id}`}>{emp.name}</a>
+              <Link href={`/hr/employees/${emp.id}`}>
+                <a className="font-semibold underline-offset-2 hover:underline">{emp.name}</a>
+              </Link>
               {emp.empNumber && <p className="font-mono text-muted-foreground">#{emp.empNumber}</p>}
               {emp.jobTitle && <p className="text-muted-foreground">{emp.jobTitle}</p>}
               {emp.departmentName && (
@@ -438,7 +440,9 @@ function DriverIntegratedCard({ driverId }: { driverId: number }) {
           </div>
           {veh ? (
             <>
-              <a className="font-semibold font-mono underline-offset-2 hover:underline" href={`/fleet/${veh.id}`}>{veh.plateNumber}</a>
+              <Link href={`/fleet/${veh.id}`}>
+                <a className="font-semibold font-mono underline-offset-2 hover:underline">{veh.plateNumber}</a>
+              </Link>
               <p className="text-muted-foreground">
                 {[veh.make, veh.model, veh.year].filter(Boolean).join(" ") || "-"}
               </p>
@@ -460,9 +464,11 @@ function DriverIntegratedCard({ driverId }: { driverId: number }) {
           <p className="font-semibold font-mono">{formatCurrency(custody.outstandingAmount ?? 0)}</p>
           <p className="text-muted-foreground">{Number(custody.openCount ?? 0)} عهدة مفتوحة</p>
           {emp && (
-            <a className="text-[11px] text-primary underline-offset-2 hover:underline" href={`/finance/custodies?employeeId=${emp.id}`}>
-              فتح سجل العهد ←
-            </a>
+            <Link href={`/finance/custodies?employeeId=${emp.id}`}>
+              <a className="text-[11px] text-primary underline-offset-2 hover:underline">
+                فتح سجل العهد ←
+              </a>
+            </Link>
           )}
         </div>
 
@@ -538,16 +544,22 @@ function DriverIntegratedCard({ driverId }: { driverId: number }) {
         <div className="border rounded p-2 space-y-1 bg-muted/30">
           <div className="text-muted-foreground text-[11px]">إجراءات سريعة</div>
           {emp && (
-            <a className="block text-[11px] text-primary underline-offset-2 hover:underline" href={`/finance/custodies/new?employeeId=${emp.id}`}>
-              + صرف عهدة جديدة
-            </a>
+            <Link href={`/finance/custodies/new?employeeId=${emp.id}`}>
+              <a className="block text-[11px] text-primary underline-offset-2 hover:underline">
+                + صرف عهدة جديدة
+              </a>
+            </Link>
           )}
-          <a className="block text-[11px] text-primary underline-offset-2 hover:underline" href={`/fleet/trips/new?driverId=${driverId}`}>
-            + رحلة جديدة
-          </a>
-          <a className="block text-[11px] text-primary underline-offset-2 hover:underline" href={`/fleet/fuel/new?driverId=${driverId}`}>
-            + تعبئة وقود
-          </a>
+          <Link href={`/fleet/trips/new?driverId=${driverId}`}>
+            <a className="block text-[11px] text-primary underline-offset-2 hover:underline">
+              + رحلة جديدة
+            </a>
+          </Link>
+          <Link href={`/fleet/fuel/new?driverId=${driverId}`}>
+            <a className="block text-[11px] text-primary underline-offset-2 hover:underline">
+              + تعبئة وقود
+            </a>
+          </Link>
         </div>
       </CardContent>
     </Card>
