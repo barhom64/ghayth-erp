@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -220,6 +221,23 @@ export default function RecurringJournalsPage() {
                 قيد دوري جديد
               </Link>
             </GuardedButton>
+            <PrintButton
+              entityType="report_finance_recurring_journals"
+              entityId="list"
+              label="طباعة"
+              payload={{
+                entity: { title: "القيود الدورية", total: items.length },
+                items: items.map((r: any) => ({
+                  "الاسم": r.name || "—",
+                  "التكرار": r.frequency || "—",
+                  "تاريخ البدء": r.startDate || "—",
+                  "تاريخ النهاية": r.endDate || "—",
+                  "آخر تنفيذ": r.lastExecutedAt || "—",
+                  "تنفيذ تالٍ": r.nextRunAt || "—",
+                  "الحالة": r.status || "—",
+                })),
+              }}
+            />
           </>
         }
       >

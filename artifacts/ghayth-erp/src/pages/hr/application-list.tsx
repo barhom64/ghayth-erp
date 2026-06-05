@@ -19,6 +19,7 @@ import {
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const STATUS_OPTIONS = Object.entries(RECRUITMENT_STAGES).map(([value, { label }]) => ({ value, label }));
 
 export default function ApplicationListPage() {
@@ -162,12 +163,31 @@ export default function ApplicationListPage() {
         { href: "/hr/recruitment", label: "التوظيف" },
       ]}
       actions={
-        <Link href="/hr/recruitment/applicants/create">
-          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            إضافة متقدم
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_applications"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "قائمة المتقدمين للوظائف", total: filtered.length },
+              items: filtered.map((a: any) => ({
+                "الاسم": a.applicantName || a.name || "—",
+                "الوظيفة": a.postingTitle || a.position || "—",
+                "الهاتف": a.phone || "—",
+                "البريد": a.email || "—",
+                "المصدر": a.source || "—",
+                "الحالة": a.status || "—",
+                "تاريخ التقديم": a.createdAt || a.appliedAt || "—",
+              })),
+            }}
+          />
+          <Link href="/hr/recruitment/applicants/create">
+            <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              إضافة متقدم
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />

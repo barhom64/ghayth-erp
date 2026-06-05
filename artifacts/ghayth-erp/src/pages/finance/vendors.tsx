@@ -19,6 +19,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Vendors list — migrated in R.2 iter 2 to the unified template stack.
@@ -141,6 +142,25 @@ export default function VendorsPage() {
               إضافة مورد
             </Link>
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_vendors"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "قائمة الموردين", total: filtered.length },
+              items: filtered.map((v: any) => ({
+                "الاسم": v.name || "—",
+                "الرقم الضريبي": v.taxNumber || "—",
+                "السجل التجاري": v.commercialReg || "—",
+                "الهاتف": v.phone || "—",
+                "البريد": v.email || "—",
+                "المدينة": v.city || "—",
+                "شروط السداد": v.paymentTerms || "—",
+                "العملة": v.preferredCurrency || "—",
+                "الحالة": v.status || "—",
+              })),
+            }}
+          />
         </>
       }
     >

@@ -24,6 +24,7 @@ import {
 import { APPROVAL_ROLES, APPROVAL_CHAIN_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const STATUS_OPTIONS = Object.entries(APPROVAL_CHAIN_STATUS).map(([value, { label }]) => ({ value, label }));
 
 const CHAIN_TYPES: Record<string, string> = {
@@ -169,9 +170,27 @@ export default function ApprovalChainsPage() {
       subtitle="إعداد تعريفات مسارات الاعتماد ومتابعة مراحل الموافقة الجارية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <GuardedButton perm="hr:create" size="sm" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
-          <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "تعريف سلسلة جديدة"}
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_approval_chains"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "سلاسل الاعتماد", total: filtered.length },
+              items: filtered.map((c: any) => ({
+                "النوع": c.entityType || c.type || "—",
+                "ترتيب الخطوة": c.stageOrder ?? c.sequence ?? "—",
+                "اسم الخطوة": c.stageName || c.name || "—",
+                "نوع المعتمِد": c.approverType || "—",
+                "المعتمِد": c.approverName || "—",
+                "الحالة": c.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton perm="hr:create" size="sm" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
+            <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "تعريف سلسلة جديدة"}
+          </GuardedButton>
+        </div>
       }
     >
       <HrTabsNav />
