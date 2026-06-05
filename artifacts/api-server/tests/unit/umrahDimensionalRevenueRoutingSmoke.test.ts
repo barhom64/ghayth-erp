@@ -164,82 +164,94 @@ describe("umrahInvoicingEngine — dimensional override wired into line generati
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. POST /umrah/reclassify-revenue — covers OLD invoices
+// 4. Reclassify reverse — covers OLD invoices.
+//
+// The route handler is a THIN wrapper that calls
+// reclassifyRevenueForInvoices() in the umrahReclassifyEngine. The
+// lint-patterns rule "direct-gl-import-in-domain-route" forbids
+// GL helpers + accounting-mapping lookups in non-finance routes, so
+// the entire scan + posting machinery lives in the engine. We pin
+// the route's wrapper shape AND the engine's invariants separately.
 // ─────────────────────────────────────────────────────────────────────────────
-const RECLASS = (() => {
-  const m = ROUTE_ENT.match(/router\.post\("\/reclassify-revenue"[\s\S]*?(?=\nrouter\.(?:get|post|patch|put|delete)\(|\nexport default)/);
-  if (!m) throw new Error("/reclassify-revenue handler not found");
-  return m[0];
-})();
+const RECLASS_ENGINE = readFileSync(
+  join(import.meta.dirname!, "../../src/lib/umrahReclassifyEngine.ts"),
+  "utf8",
+);
 
-describe("POST /umrah/reclassify-revenue — retroactive route («على القديم»)", () => {
+describe("POST /umrah/reclassify-revenue — thin wrapper around the engine", () => {
   it("registers under feature: umrah, action: update (write permission)", () => {
-    expect(RECLASS).toMatch(/authorize\(\{\s*feature:\s*"umrah",\s*action:\s*"update"\s*\}\)/);
+    expect(ROUTE_ENT).toMatch(/router\.post\("\/reclassify-revenue", authorize\(\{\s*feature:\s*"umrah",\s*action:\s*"update"\s*\}\)/);
   });
 
   it("accepts narrowing filters: invoiceIds + subAgentId + seasonId + dryRun", () => {
     expect(ROUTE_ENT).toMatch(/const reclassifyRevenueSchema = z\.object\(\{[\s\S]*?invoiceIds: z\.array\(z\.coerce\.number\(\)\.int\(\)\.positive\(\)\)\.optional\(\),[\s\S]*?subAgentId:[\s\S]*?seasonId:[\s\S]*?dryRun: z\.boolean\(\)\.optional\(\),[\s\S]*?\}\);/);
   });
 
+  it("delegates to reclassifyRevenueForInvoices(scope, body) — no inline GL helper calls", () => {
+    expect(ROUTE_ENT).toMatch(/import \{ reclassifyRevenueForInvoices \} from "\.\.\/lib\/umrahReclassifyEngine\.js"/);
+    expect(ROUTE_ENT).toMatch(/const result = await reclassifyRevenueForInvoices\(scope, body\)/);
+  });
+});
+
+describe("umrahReclassifyEngine.reclassifyRevenueForInvoices — invariants («على القديم»)", () => {
   it("excludes cancelled invoices from the scan (no reclassification of voided sales)", () => {
-    expect(RECLASS).toMatch(/inv\.status != 'cancelled'/);
+    expect(RECLASS_ENGINE).toMatch(/inv\.status != 'cancelled'/);
   });
 
   it("joins umrah_sub_agents to derive agentId in one round-trip (avoids N+1 lookups)", () => {
-    expect(RECLASS).toMatch(/JOIN umrah_sub_agents sa\s+ON sa\.id = inv\."subAgentId"\s+AND sa\."companyId" = inv\."companyId"/);
+    expect(RECLASS_ENGINE).toMatch(/JOIN umrah_sub_agents sa\s+ON sa\.id = inv\."subAgentId"\s+AND sa\."companyId" = inv\."companyId"/);
   });
 
-  it("calls the same resolver as the engine — single source of truth for the priority chain", () => {
-    expect(RECLASS).toMatch(/await resolveRevenueAccount\(/);
-    expect(RECLASS).toMatch(/subAgentId: inv\.subAgentId/);
-    expect(RECLASS).toMatch(/agentId: inv\.agentId/);
-    expect(RECLASS).toMatch(/seasonId: inv\.seasonId/);
+  it("calls the resolver — single source of truth for the priority chain", () => {
+    expect(RECLASS_ENGINE).toMatch(/await resolveRevenueAccount\(/);
+    expect(RECLASS_ENGINE).toMatch(/subAgentId: inv\.subAgentId/);
+    expect(RECLASS_ENGINE).toMatch(/agentId: inv\.agentId/);
+    expect(RECLASS_ENGINE).toMatch(/seasonId: inv\.seasonId/);
   });
 
   it("reads current accountCode per invoice from umrah_sales_invoice_items (NULL → company default)", () => {
-    expect(RECLASS).toMatch(/COALESCE\("accountCode", \$1\) AS code/);
-    expect(RECLASS).toMatch(/FROM umrah_sales_invoice_items/);
-    expect(RECLASS).toMatch(/WHERE "invoiceId" = \$2 AND "itemType" = 'group'/);
+    expect(RECLASS_ENGINE).toMatch(/COALESCE\("accountCode", \$1\) AS code/);
+    expect(RECLASS_ENGINE).toMatch(/FROM umrah_sales_invoice_items/);
+    expect(RECLASS_ENGINE).toMatch(/WHERE "invoiceId" = \$2 AND "itemType" = 'group'/);
   });
 
   it("posts a COMPENSATING journal entry (audit-safe, never rewrites historical lines)", () => {
-    // The compensating entry shape: DR old-account, CR new-account.
-    expect(RECLASS).toMatch(/accountCode: m\.fromCode,\s*debit: m\.amount,\s*credit: 0/);
-    expect(RECLASS).toMatch(/accountCode: targetCode,\s*debit: 0,\s*credit: m\.amount/);
+    expect(RECLASS_ENGINE).toMatch(/accountCode: m\.fromCode,\s*debit: m\.amount,\s*credit: 0/);
+    expect(RECLASS_ENGINE).toMatch(/accountCode: targetCode,\s*debit: 0,\s*credit: m\.amount/);
   });
 
   it("carries umrahAgentId + umrahSeasonId dimensions on every GL line (drill-down preserved)", () => {
-    expect(RECLASS).toMatch(/umrahAgentId: inv\.agentId \?\? undefined/);
-    expect(RECLASS).toMatch(/umrahSeasonId: inv\.seasonId \?\? undefined/);
+    expect(RECLASS_ENGINE).toMatch(/umrahAgentId: inv\.agentId \?\? undefined/);
+    expect(RECLASS_ENGINE).toMatch(/umrahSeasonId: inv\.seasonId \?\? undefined/);
   });
 
   it("idempotent via sourceKey: `umrah_reclass_${id}_to_${target}` (re-runs are no-ops)", () => {
-    expect(RECLASS).toMatch(/sourceKey: `umrah_reclass_\$\{inv\.id\}_to_\$\{targetCode\}`/);
+    expect(RECLASS_ENGINE).toMatch(/sourceKey: `umrah_reclass_\$\{inv\.id\}_to_\$\{targetCode\}`/);
   });
 
-  it("uses sourceType 'umrah_revenue_reclass' (distinct from the original 'umrah_sales_invoices' posting)", () => {
-    expect(RECLASS).toMatch(/sourceType: "umrah_revenue_reclass"/);
-    expect(RECLASS).toMatch(/type: "reclassification"/);
+  it("uses sourceType 'umrah_revenue_reclass' (distinct from the original posting)", () => {
+    expect(RECLASS_ENGINE).toMatch(/sourceType: "umrah_revenue_reclass"/);
+    expect(RECLASS_ENGINE).toMatch(/type: "reclassification"/);
   });
 
   it("persists the new accountCode on items so the next run sees 'already aligned'", () => {
-    expect(RECLASS).toMatch(/UPDATE umrah_sales_invoice_items\s+SET "accountCode" = \$1\s+WHERE "invoiceId" = \$2 AND "itemType" = 'group'/);
+    expect(RECLASS_ENGINE).toMatch(/UPDATE umrah_sales_invoice_items\s+SET "accountCode" = \$1\s+WHERE "invoiceId" = \$2 AND "itemType" = 'group'/);
   });
 
   it("dryRun mode skips JE posting + items update (preview-safe)", () => {
-    expect(RECLASS).toMatch(/if \(dryRun\) \{[\s\S]{1,400}continue;\s*\}/);
+    expect(RECLASS_ENGINE).toMatch(/if \(dryRun\) \{[\s\S]{1,400}continue;\s*\}/);
   });
 
   it("summary buckets: scanned + reclassified + alreadyAligned + noOverride + failed", () => {
-    expect(RECLASS).toMatch(/const summary = \{\s*scanned: invoices\.length,\s*reclassified: 0,\s*alreadyAligned: 0,\s*noOverride: 0,\s*failed: 0,\s*\};/);
+    expect(RECLASS_ENGINE).toMatch(/const summary = \{\s*scanned: invoices\.length,\s*reclassified: 0,\s*alreadyAligned: 0,\s*noOverride: 0,\s*failed: 0,\s*\};/);
   });
 
   it("emits umrah.invoice.revenue_reclassified event per reclassified invoice (audit trail signal)", () => {
-    expect(RECLASS).toMatch(/action: "umrah\.invoice\.revenue_reclassified"/);
+    expect(RECLASS_ENGINE).toMatch(/action: "umrah\.invoice\.revenue_reclassified"/);
   });
 
   it("logs the bulk operation as an audit log (action=reclassify or preview for dryRun)", () => {
-    expect(RECLASS).toMatch(/action: dryRun \? "preview" : "reclassify"/);
+    expect(RECLASS_ENGINE).toMatch(/action: dryRun \? "preview" : "reclassify"/);
   });
 });
 
