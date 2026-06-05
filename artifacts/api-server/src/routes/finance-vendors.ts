@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -11,6 +11,7 @@ import {
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog, applyJournalEntryBalances } from "../lib/businessHelpers.js";
+import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { applyTransition } from "../lib/lifecycleEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -124,19 +125,37 @@ vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "
       name, contactPerson, phone, email, taxNumber, address, paymentTerms, category,
       residencyStatus, taxResidenceCountry, defaultWhtRate, whtCategoryDefault,
     } = zodParse(createVendorSchema.safeParse(req.body ?? {}));
-    const { insertId } = await rawExecute(
-      `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms", category,
-                              "residencyStatus", "taxResidenceCountry", "defaultWhtRate", "whtCategoryDefault")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [
-        scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null,
-        address || null, paymentTerms || null, category || null,
-        residencyStatus ?? "resident",
-        taxResidenceCountry ? taxResidenceCountry.toUpperCase() : null,
-        defaultWhtRate ?? null,
-        whtCategoryDefault || null,
-      ]
-    );
+    // Vendor INSERT + payable subsidiary account (2102-XXXX) are now
+    // atomic. Until this commit the vendor was inserted standalone and
+    // NO subsidiary_accounts row was ever created — every later
+    // purchase invoice posted to the pooled 2102 fallback instead of
+    // the per-vendor 2102-XXXX analytic, so AP aging / vendor 360°
+    // reports drilled into a single shared bucket. Same "معايير
+    // محاسبية" failure pattern as the employee custody + client
+    // receivable bugs we already fixed in this branch.
+    const insertId = await withTransaction(async (client) => {
+      const { rows: [newRow] } = await client.query<{ id: number }>(
+        `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms", category,
+                                "residencyStatus", "taxResidenceCountry", "defaultWhtRate", "whtCategoryDefault")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         RETURNING id`,
+        [
+          scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null,
+          address || null, paymentTerms || null, category || null,
+          residencyStatus ?? "resident",
+          taxResidenceCountry ? taxResidenceCountry.toUpperCase() : null,
+          defaultWhtRate ?? null,
+          whtCategoryDefault || null,
+        ]
+      );
+      const id = newRow!.id;
+      try {
+        await createSubsidiaryAccountsForEntity(scope.companyId, "vendor", id, name);
+      } catch (e) {
+        logger.warn(e, "[vendors] subsidiary payable create failed");
+      }
+      return id;
+    });
     assertInsert(insertId, "suppliers");
 
     emitEvent({

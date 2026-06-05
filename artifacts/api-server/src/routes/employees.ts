@@ -22,6 +22,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { getEmployeeCustodyBalance } from "../lib/custodyBalance.js";
+import { ensureRbacRoleByKey } from "../lib/rbac/ensureRole.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { hashPassword } from "../lib/auth.js";
@@ -739,35 +740,20 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // موظف وحدد دوره سائق" appeared to work but the new employee
       // couldn't open any screen — the linkage stopped at users.role.
       //
-      // Look up the rbac_roles row whose role_key matches the
-      // effective role (system-wide rows have companyId=NULL, company
-      // overrides have companyId=<this>). If no matching row exists
-      // (e.g. a brand-new custom role key), warn and continue — the
-      // autoMigrate batch job will reconcile on the next run.
+      // ensureRbacRoleByKey lazily seeds the rbac_roles row if missing
+      // (matters for brand-new tenants where autoMigrate.syncLegacyToV2
+      // hasn't discovered any legacy role_permissions to migrate yet —
+      // without this, the first employee's binding would silently skip
+      // and the user would land in the system role-less).
       if (userId && effectiveRole) {
         try {
-          const [rbacRole] = await client.query<{ id: number }>(
-            `SELECT id FROM rbac_roles
-              WHERE role_key = $1
-                AND ("companyId" IS NULL OR "companyId" = $2)
-                AND is_active = true
-              ORDER BY "companyId" NULLS LAST
-              LIMIT 1`,
-            [effectiveRole, effectiveCompanyId]
-          ).then(r => r.rows as Array<{ id: number }>);
-          if (rbacRole) {
-            await client.query(
-              `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary, "assignedBy")
-               VALUES ($1, $2, $3, $4, $5, true, $6)
-               ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
-              [userId, effectiveCompanyId, rbacRole.id, targetBranchId, resolvedDepartmentId, scope.userId]
-            );
-          } else {
-            logger.warn(
-              { effectiveRole, userId, companyId: effectiveCompanyId },
-              "[employees] rbac_roles row for role_key not found — user created without RBAC binding"
-            );
-          }
+          const roleId = await ensureRbacRoleByKey(client as any, effectiveCompanyId, effectiveRole);
+          await client.query(
+            `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary, "assignedBy")
+             VALUES ($1, $2, $3, $4, $5, true, $6)
+             ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+            [userId, effectiveCompanyId, roleId, targetBranchId, resolvedDepartmentId, scope.userId]
+          );
         } catch (e) {
           logger.warn(e, "[employees] rbac_user_roles binding failed");
         }
