@@ -262,18 +262,29 @@ describe("Fleet security contracts", () => {
 });
 
 describe("Fleet subsidiary accounts", () => {
-  it("creates subsidiary accounts for new vehicles", () => {
+  // Vehicles + drivers track financial dimensions via
+  // journal_lines.{vehicleId, driverId} columns, NOT via per-entity
+  // subsidiary accounts. The previous version of these tests asserted
+  // the opposite (a dead call to createSubsidiaryAccountsForEntity
+  // with entityType="vehicle"/"driver" — neither has a branch in the
+  // engine's accountsToCreate map, so the call was a silent no-op).
+  // After the dead-call cleanup we assert the negative: the create
+  // endpoints DON'T make the call, and the source carries a one-line
+  // comment pointing at journal_lines as the source of truth.
+  it("does NOT create per-vehicle subsidiary accounts (uses journal_lines.vehicleId)", () => {
     const idx = FLEET_ROUTE.indexOf('router.post("/vehicles"');
     const endIdx = FLEET_ROUTE.indexOf("router.", idx + 10);
     const section = FLEET_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("createSubsidiaryAccountsForEntity");
+    expect(section).not.toContain("createSubsidiaryAccountsForEntity");
+    expect(section).toContain("journal_lines.vehicleId");
   });
 
-  it("creates subsidiary accounts for new drivers", () => {
+  it("does NOT create per-driver subsidiary accounts (driver finance lives on employee)", () => {
     const idx = FLEET_ROUTE.indexOf('router.post("/drivers"');
     const endIdx = FLEET_ROUTE.indexOf("router.", idx + 10);
     const section = FLEET_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("createSubsidiaryAccountsForEntity");
+    expect(section).not.toContain("createSubsidiaryAccountsForEntity");
+    expect(section).toContain("linked employee");
   });
 });
 

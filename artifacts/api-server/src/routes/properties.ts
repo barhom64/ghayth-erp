@@ -18,7 +18,6 @@ import { createNotification, createAuditLog, emitEvent, getLegalResponsible, tod
 import { issueNumber } from "../lib/numberingService.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
-import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { propertiesEngine } from "../lib/engines/index.js";
 
 const createUnitSchema = z.object({
@@ -611,10 +610,10 @@ router.post("/units", authorize({ feature: "properties.units", action: "create" 
       action: "property.unit.created", entity: "property_units", entityId: insertId,
       details: `وحدة جديدة ${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ''}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
-    createSubsidiaryAccountsForEntity(
-      scope.companyId, "property", insertId,
-      `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`
-    ).catch((e) => logger.error(e, "properties background task failed"));
+    // Property receivables flow through the tenant's client subsidiary
+    // (1111-XXXX). The engine has no entityType='property' branch —
+    // properties show up on journal_lines.propertyId as a dimension,
+    // not via a per-unit sub-account.
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create unit error:"); }

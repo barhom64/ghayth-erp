@@ -21,7 +21,6 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
-import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { fleetEngine } from "../lib/engines/index.js";
 import { z } from "zod";
 
@@ -407,10 +406,10 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
       action: "fleet.vehicle.created", entity: "fleet_vehicles", entityId: insertId,
       details: `مركبة جديدة: ${b.plateNumber}${b.make ? ` — ${b.make}` : ''}${b.model ? ` ${b.model}` : ''}`,
     }).catch((e) => logger.error(e, "fleet background task failed"));
-    createSubsidiaryAccountsForEntity(
-      scope.companyId, "vehicle", insertId,
-      `${b.plateNumber} ${b.make || ""} ${b.model || ""}`.trim()
-    ).catch((e) => logger.error(e, "fleet background task failed"));
+    // Vehicle financial dimensions live on journal_lines.vehicleId
+    // (TCO drilldown, per-vehicle expense tracking). There is no
+    // per-vehicle subsidiary account in the chart of accounts — the
+    // accounting-engine has no entityType='vehicle' branch.
     if (b.purchasePrice && Number(b.purchasePrice) > 0) {
       (async () => {
         try {
@@ -518,7 +517,10 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
     assertInsert(insertId, "fleet_drivers");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
-    createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch((e) => logger.error(e, "fleet background task failed"));
+    // Driver financials live on the linked employee's subsidiary
+    // accounts (1121-XXXX advance + 1131-XXXX custody, seeded when the
+    // employee was created). The engine has no entityType='driver'
+    // branch — drivers piggyback on the employee dimension.
 
     createAuditLog({
       companyId: scope.companyId,

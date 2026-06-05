@@ -581,9 +581,17 @@ router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance.accounti
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTO-CREATE SUBSIDIARY ACCOUNTS FOR A NEW ENTITY
 // ─────────────────────────────────────────────────────────────────────────────
+// Auto-seeds the per-entity child chart_of_accounts rows and the
+// matching subsidiary_accounts mapping. Only the entityTypes listed in
+// the union have a meaningful accounts-to-create list; older code used
+// to call this for vehicle/driver/property too but those were dead
+// no-ops — financial dimensions for those entities live on
+// journal_lines.{vehicleId, driverId, propertyId}, not as subsidiary
+// accounts. If you need a new entityType, ADD an entry to the
+// `accountsToCreate` block below.
 export async function createSubsidiaryAccountsForEntity(
   companyId: number,
-  entityType: "employee" | "client" | "vendor" | "vehicle" | "driver" | "property",
+  entityType: "employee" | "client" | "vendor",
   entityId: number,
   entityName: string
 ): Promise<void> {
