@@ -116,6 +116,14 @@ router.post("/submit", authorize({ feature: "admin", action: "update" }), async 
       submittedByName: scope.userName,
       data,
     });
+    if (!result) {
+      res.status(400).json({
+        error: "لا يوجد تعريف سير عمل نشط لهذا النوع من الطلبات",
+        code: "NO_WORKFLOW_DEFINITION",
+        fix: "عرّف سير عمل (workflow_definitions) لهذا النوع قبل تقديمه",
+      });
+      return;
+    }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_instances", entityId: result.instanceId, after: { requestType, title } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.created", entity: "workflow_instances", entityId: result.instanceId, details: JSON.stringify({ requestType, title }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.status(201).json(result);
