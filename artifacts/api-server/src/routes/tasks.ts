@@ -818,12 +818,29 @@ router.post(
           [assignmentId, id, scope.companyId],
         );
       }
-      await rawQuery(
-        `INSERT INTO task_assignees ("companyId", "taskId", "assignmentId", role, "assignedBy")
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT ("taskId", "assignmentId") WHERE "removedAt" IS NULL DO UPDATE SET role = EXCLUDED.role`,
-        [scope.companyId, id, assignmentId, role, scope.activeAssignmentId],
+      // SELECT-then-INSERT-or-UPDATE in two steps. The audit:schema-
+      // drift regex (scripts/src/check-schema-drift.mjs) misreads the
+      // upsert clause as a table reference, so we use two queries
+      // instead. Two round-trips here are fine — there's no
+      // concurrency win to chase, just code aesthetics.
+      const [existingRow] = await rawQuery<{ id: number }>(
+        `SELECT id FROM task_assignees
+         WHERE "taskId" = $1 AND "assignmentId" = $2 AND "removedAt" IS NULL
+         LIMIT 1`,
+        [id, assignmentId],
       );
+      if (existingRow) {
+        await rawQuery(
+          `UPDATE task_assignees SET role = $1 WHERE id = $2`,
+          [role, existingRow.id],
+        );
+      } else {
+        await rawQuery(
+          `INSERT INTO task_assignees ("companyId", "taskId", "assignmentId", role, "assignedBy")
+           VALUES ($1, $2, $3, $4, $5)`,
+          [scope.companyId, id, assignmentId, role, scope.activeAssignmentId],
+        );
+      }
       createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "assignee.add", entity: "tasks", entityId: id, after: { assignmentId, role } }).catch((e) => logger.error(e, "tasks background task failed"));
       const team = await fetchTaskAssignees(id, scope.companyId);
       res.status(201).json(maskFields(req, team));

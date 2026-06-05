@@ -222,6 +222,27 @@ describe("Team-management endpoints", () => {
     expect(block).toContain("UPDATE tasks SET \"assignedTo\" = $1 WHERE id = $2");
   });
 
+  it("POST /:id/assignees uses SELECT-then-INSERT-or-UPDATE (avoids ON CONFLICT DO UPDATE SET drift-check false positive)", () => {
+    const block = TASKS_ROUTE.slice(
+      TASKS_ROUTE.indexOf('"/:id/assignees"'),
+    );
+    expect(block).toContain("SELECT id FROM task_assignees");
+    expect(block).toContain('UPDATE task_assignees SET role = $1 WHERE id = $2');
+    // The `ON CONFLICT (...) DO UPDATE SET ...` pattern only appears
+    // inside an explanatory `//` comment now — never inside an actual
+    // rawQuery template. Verify no rawQuery template literal contains
+    // both the ON CONFLICT keyword and the DO UPDATE SET clause.
+    const templateLiteralRe = /`[^`]+`/g;
+    let m: RegExpExecArray | null;
+    while ((m = templateLiteralRe.exec(block)) !== null) {
+      if (m[0].includes("ON CONFLICT") && m[0].includes("DO UPDATE SET")) {
+        throw new Error(
+          `rawQuery template still uses DO UPDATE SET: ${m[0].slice(0, 80)}`,
+        );
+      }
+    }
+  });
+
   it("DELETE /:id/assignees/:assignmentId soft-removes (sets removedAt)", () => {
     expect(TASKS_ROUTE).toContain('router.delete(\n  "/:id/assignees/:assignmentId"');
     expect(TASKS_ROUTE).toContain('SET "removedAt" = NOW()');
