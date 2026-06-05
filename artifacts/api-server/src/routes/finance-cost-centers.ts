@@ -649,6 +649,111 @@ router.get("/journal-lines/dimensional-coverage", authorize({ feature: "finance.
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DORMANT ENTITIES REPORT — finds CCs + subsidiary_accounts with ZERO
+// JE traffic in the lookback window (default 90 days). Operationally:
+// these are dead-weight in the COA tree — minted at some point but
+// never used, or once-used and now abandoned. The operator can use
+// the report to drive cleanup (soft-delete the row).
+//
+// Two-sided: both `cost_centers` and `subsidiary_accounts` participate
+// in the dimensional-routing graph, so both can go dormant.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/dormant-entities", authorize({ feature: "finance.cost_centers", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const daysRaw = Number((req.query as Record<string, string | undefined>).days ?? 90);
+    // Clamp to [7, 730] — 1 week minimum signal, 2 years maximum
+    // lookback. A 365-day mid-point covers seasonal businesses
+    // (umrah seasons, real-estate contracts).
+    const days = Math.max(7, Math.min(730, Number.isFinite(daysRaw) ? daysRaw : 90));
+
+    // Dormant CCs — created ≥ `days` ago, no JE line ever (or no JE
+    // line in the lookback window). The `firstSeen` is when the CC
+    // was created so the UI can render "age" honestly.
+    const dormantCcs = await rawQuery<{
+      id: number; code: string | null; name: string; type: string | null;
+      autoCreatedReason: string | null; createdAt: string;
+      lastActivityAt: string | null; jeCount: number;
+    }>(
+      `SELECT cc.id, cc.code, cc.name, cc.type, cc."autoCreatedReason",
+              cc."createdAt"::text AS "createdAt",
+              act."lastActivityAt",
+              COALESCE(act."jeCount", 0)::int AS "jeCount"
+         FROM cost_centers cc
+         LEFT JOIN LATERAL (
+           SELECT MAX(je.date) AS "lastActivityAt",
+                  COUNT(DISTINCT je.id)::int AS "jeCount"
+             FROM journal_lines jl
+             JOIN journal_entries je ON je.id = jl."journalId"
+            WHERE je."companyId" = cc."companyId"
+              AND je."deletedAt" IS NULL
+              AND jl."costCenterId" = cc.id
+              AND je.date >= (CURRENT_DATE - $2::int)
+         ) act ON true
+        WHERE cc."companyId" = $1
+          AND cc.status != 'deleted'
+          AND cc."deletedAt" IS NULL
+          AND cc."createdAt" < (CURRENT_DATE - $2::int)
+          AND COALESCE(act."jeCount", 0) = 0
+        ORDER BY cc."createdAt" ASC
+        LIMIT 500`,
+      [scope.companyId, days],
+    );
+
+    // Dormant subsidiary_accounts — same shape but joined through the
+    // accountCode → journal_lines. We use the CoA's currentBalance
+    // as a coarse sanity check: a non-zero balance means SOMETHING
+    // moved it (possibly before the lookback window), so we exclude.
+    const dormantSubs = await rawQuery<{
+      id: number; entityType: string; entityId: number; accountType: string;
+      accountCode: string; accountName: string;
+      currentBalance: string | number | null; createdAt: string;
+      lastActivityAt: string | null; jeCount: number;
+    }>(
+      `SELECT sa.id, sa."entityType", sa."entityId", sa."accountType",
+              coa.code AS "accountCode", coa.name AS "accountName",
+              coa."currentBalance",
+              sa."createdAt"::text AS "createdAt",
+              act."lastActivityAt",
+              COALESCE(act."jeCount", 0)::int AS "jeCount"
+         FROM subsidiary_accounts sa
+         JOIN chart_of_accounts coa ON coa.id = sa."accountId"
+                                    AND coa."companyId" = sa."companyId"
+                                    AND coa."deletedAt" IS NULL
+         LEFT JOIN LATERAL (
+           SELECT MAX(je.date) AS "lastActivityAt",
+                  COUNT(DISTINCT je.id)::int AS "jeCount"
+             FROM journal_lines jl
+             JOIN journal_entries je ON je.id = jl."journalId"
+            WHERE je."companyId" = sa."companyId"
+              AND je."deletedAt" IS NULL
+              AND jl."accountCode" = coa.code
+              AND je.date >= (CURRENT_DATE - $2::int)
+         ) act ON true
+        WHERE sa."companyId" = $1
+          AND sa."isActive" = true
+          AND sa."deletedAt" IS NULL
+          AND sa."createdAt" < (CURRENT_DATE - $2::int)
+          AND COALESCE(act."jeCount", 0) = 0
+          AND COALESCE(coa."currentBalance", 0) = 0
+        ORDER BY sa."createdAt" ASC
+        LIMIT 500`,
+      [scope.companyId, days],
+    );
+
+    res.json({
+      lookbackDays: days,
+      costCenters: dormantCcs,
+      subsidiaryAccounts: dormantSubs,
+      totals: {
+        costCenters: dormantCcs.length,
+        subsidiaryAccounts: dormantSubs.length,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Dormant entities error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SUBSIDIARY-SUBSTITUTION FEATURE FLAG — the operator's toggle for the
 // control-account / subsidiary-ledger pattern. OFF by default; when ON,
 // every JE post at runtime swaps lines like (1121 + employeeId=42) for

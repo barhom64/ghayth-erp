@@ -159,6 +159,12 @@ export default function DimensionalRoutingPage() {
               شجرة مراكز التكلفة
             </Button>
           </Link>
+          <Link href="/finance/dormant-entities">
+            <Button variant="ghost" data-testid="dim-routing-dormant-link">
+              <AlertTriangle className="h-4 w-4 ms-1" />
+              الخاملة
+            </Button>
+          </Link>
         </div>
       }
     >

@@ -23,6 +23,20 @@
 --          ALTER CONSTRAINT for CHECK clauses, so drop + recreate is
 --          the canonical pattern).
 --
+-- @policy:breaking
+--          The DROP CONSTRAINT step technically narrows the schema
+--          relative to the OLD constraint, even though the NEW
+--          constraint is strictly wider (accepts a SUPERSET of the
+--          old values: original 5 + 4 new). During the milliseconds
+--          between DROP and re-ADD an INSERT with an unknown
+--          entityType could race in — the new constraint would
+--          still accept it because the new list contains every old
+--          value plus the new ones. In practice the only callers
+--          that construct entityType are server-side code we control.
+--          Acknowledging the policy as breaking per
+--          docs/MIGRATION_POLICY.md §4 so the rolling-deploy guard
+--          fires correctly for the brief constraint-absent window.
+--
 -- @rollback:
 --   ALTER TABLE subsidiary_accounts DROP CONSTRAINT IF EXISTS subsidiary_accounts_entityType_check;
 --   ALTER TABLE subsidiary_accounts ADD CONSTRAINT "subsidiary_accounts_entityType_check"
