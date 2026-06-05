@@ -1090,13 +1090,24 @@ router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: 
       [scope.companyId, id]
     ).catch(() => [{ outstanding: "0", openCount: "0" }]);
 
-    // The vehicle ↔ driver link lives on fleet_vehicles.assignedDriverId
-    // (NOT fleet_drivers.currentVehicleId). Join through fleet_drivers
-    // whose employeeId == this employee.
-    const [vehicle] = await rawQuery<{ id: number; plateNumber: string; brand: string | null }>(
-      `SELECT v.id, v."plateNumber", v.brand
+    // Driver linkage — left-join the vehicle so we still see the driver
+    // record when no vehicle is assigned yet. The vehicle ↔ driver edge
+    // lives on fleet_vehicles.assignedDriverId (NOT a column on drivers).
+    const [driverRow] = await rawQuery<{
+      driverId: number;
+      driverName: string;
+      driverStatus: string;
+      licenseNumber: string | null;
+      licenseExpiry: string | null;
+      vehicleId: number | null;
+      plateNumber: string | null;
+      brand: string | null;
+    }>(
+      `SELECT d.id AS "driverId", d.name AS "driverName", d.status AS "driverStatus",
+              d."licenseNumber", d."licenseExpiry",
+              v.id AS "vehicleId", v."plateNumber", v.brand
          FROM fleet_drivers d
-         JOIN fleet_vehicles v
+         LEFT JOIN fleet_vehicles v
            ON v."assignedDriverId" = d.id AND v."companyId" = d."companyId" AND v."deletedAt" IS NULL
         WHERE d."companyId" = $1 AND d."employeeId" = $2 AND d."deletedAt" IS NULL
         LIMIT 1`,
@@ -1127,7 +1138,18 @@ router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: 
         outstandingAmount: Number(custodyBal?.outstanding ?? 0),
         openCount: Number(custodyBal?.openCount ?? 0),
       },
-      vehicle: vehicle ? { id: vehicle.id, plateNumber: vehicle.plateNumber, brand: vehicle.brand } : null,
+      vehicle: driverRow?.vehicleId
+        ? { id: driverRow.vehicleId, plateNumber: driverRow.plateNumber, brand: driverRow.brand }
+        : null,
+      driver: driverRow
+        ? {
+            id: driverRow.driverId,
+            name: driverRow.driverName,
+            status: driverRow.driverStatus,
+            licenseNumber: driverRow.licenseNumber,
+            licenseExpiry: driverRow.licenseExpiry,
+          }
+        : null,
     });
   } catch (err) { handleRouteError(err, res, "employee finance summary"); }
 });

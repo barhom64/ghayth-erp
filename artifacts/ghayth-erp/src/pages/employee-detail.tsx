@@ -138,6 +138,7 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
   if (!data) return null;
   const custody = data.custody ?? {};
   const vehicle = data.vehicle ?? null;
+  const driver = data.driver ?? null;
   const emails = data.emails ?? {};
   const userAcct = data.userAccount ?? null;
   return (
@@ -147,7 +148,7 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
           <p className="text-xs text-muted-foreground font-medium">الربط المالي والوظيفي</p>
           <Badge variant="outline" className="text-[10px]">batch HR</Badge>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">حساب العهدة الفرعي</p>
             {custody.subsidiaryAccountCode ? (
@@ -167,11 +168,34 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
             <p className="text-xs text-muted-foreground">{Number(custody.openCount || 0)} عهدة مفتوحة</p>
           </div>
           <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">سجل السائق</p>
+            {driver ? (
+              <>
+                <a
+                  href={`/fleet/drivers/${driver.id}`}
+                  className="font-mono text-sm font-bold text-primary underline-offset-2 hover:underline"
+                  data-testid="finance-link-driver"
+                >
+                  DRV-{driver.id}
+                </a>
+                <p className="text-[10px] text-muted-foreground">
+                  رخصة {driver.licenseNumber || "—"} · {driver.status === "available" ? "متاح" : driver.status}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">لا يوجد سجل سائق مرتبط</p>
+            )}
+          </div>
+          <div className="space-y-1">
             <p className="text-xs text-muted-foreground">المركبة المرتبطة (سائق)</p>
             {vehicle ? (
-              <p className="font-mono text-sm font-bold" data-testid="finance-link-vehicle">
+              <a
+                href={`/fleet/${vehicle.id}`}
+                className="font-mono text-sm font-bold text-primary underline-offset-2 hover:underline"
+                data-testid="finance-link-vehicle"
+              >
                 {vehicle.plateNumber}{vehicle.brand ? ` — ${vehicle.brand}` : ""}
-              </p>
+              </a>
             ) : (
               <p className="text-xs text-muted-foreground">لا توجد مركبة مرتبطة</p>
             )}
