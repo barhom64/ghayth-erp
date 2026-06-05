@@ -131,7 +131,7 @@ export default function BudgetPage() {
           <PrintButton
             entityType="report_finance_budget"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "الميزانية والمخصصات", total: items.length },
               items: items.map((b: any) => ({

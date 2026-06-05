@@ -18,6 +18,7 @@ import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { Loader2, Mail, AlertTriangle, History, FileWarning, Calculator, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { currentPeriodRiyadh } from "@/lib/formatters";
 
 /**
@@ -144,6 +145,15 @@ export default function CollectionsPage() {
               الديون المشكوك بها
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_collections"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "التحصيل والمتابعة", total: 0 },
+              items: [],
+            }}
+          />
         </div>
       }
     >

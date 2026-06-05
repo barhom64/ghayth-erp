@@ -27,6 +27,7 @@ import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 // Zod schema enforces what the old `disabled={!form.name || ...}` guard
 // only half-checked. value is coerced from the <input type="number">
 // string back to a number (same pattern as inspections/deposits #287).
@@ -151,9 +152,26 @@ export default function SalaryComponentsPage() {
       subtitle="إدارة البدلات والخصومات والمكونات الراتبية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "مكونات الرواتب" }]}
       actions={
-        <GuardedButton perm="hr:create" size="sm" onClick={() => { if (showForm) { closeForm(); } else { setEditing(null); setShowForm(true); } }}>
-          <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "إضافة مكون"}
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_salary_components"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "مكونات الرواتب", total: filtered.length },
+              items: filtered.map((c: any) => ({
+                "الاسم": c.name || "—",
+                "النوع": c.type || "—",
+                "طريقة الحساب": c.calculationType || "—",
+                "القيمة": c.value ?? "—",
+                "الحالة": c.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton perm="hr:create" size="sm" onClick={() => { if (showForm) { closeForm(); } else { setEditing(null); setShowForm(true); } }}>
+            <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "إضافة مكون"}
+          </GuardedButton>
+        </div>
       }
     >
       <HrTabsNav />

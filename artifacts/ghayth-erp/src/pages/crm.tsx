@@ -272,7 +272,7 @@ function OpportunitiesTab() {
         <PrintButton
           entityType="report_crm_opportunities"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: {
               title: "قائمة الفرص البيعية",

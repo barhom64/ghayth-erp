@@ -277,10 +277,19 @@ export function PrintButton({
   }
 
   if (formats.length <= 1) {
+    const isIconOnly = size === "icon";
     return (
-      <Button variant={variant} size={size} onClick={() => run(primary)} disabled={loading || !hasRealId} title={!hasRealId ? "الوثيقة غير محمّلة بعد" : undefined} className="gap-1">
+      <Button
+        variant={variant}
+        size={size}
+        onClick={() => run(primary)}
+        disabled={loading || !hasRealId}
+        title={!hasRealId ? "الوثيقة غير محمّلة بعد" : label}
+        className={isIconOnly ? "shrink-0" : "gap-1"}
+        aria-label={label}
+      >
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-        {label}
+        {!isIconOnly && label}
       </Button>
     );
   }

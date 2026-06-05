@@ -158,7 +158,7 @@ export function authorize(opts: AuthorizeOptions) {
             res.status(404).json({ error: "السجل غير موجود", code: "NOT_FOUND" });
             return;
           }
-          spec.resource = { record };
+          spec.resource = { table: opts.resource.table, record };
         }
       }
     }
@@ -291,7 +291,7 @@ export function authorizeAny(...specs: AuthorizeOptions[]) {
               res.status(404).json({ error: "السجل غير موجود", code: "NOT_FOUND" });
               return;
             }
-            accessSpec.resource = { record };
+            accessSpec.resource = { table: opts.resource.table, record };
           }
         }
       }

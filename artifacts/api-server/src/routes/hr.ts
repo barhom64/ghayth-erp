@@ -12,6 +12,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { resolveRequester } from "../lib/rbac/selfApprovalCreators.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
@@ -3983,28 +3984,28 @@ router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organizat
       throw new ForbiddenError("هذا الطلب مخصص لموافق آخر. لا يمكنك اتخاذ القرار.");
     }
 
-    const refCreatorMap: Record<string, { table: string; col: string }> = {
-      leave_request: { table: "hr_leave_requests", col: '"assignmentId"' },
-      purchase_order: { table: "purchase_orders", col: '"createdByAssignmentId"' },
-      expense: { table: "expenses", col: '"createdByAssignmentId"' },
-      salary_advance: { table: "salary_advances", col: '"createdByAssignmentId"' },
-      custody: { table: "custodies", col: '"createdByAssignmentId"' },
-      official_letter: { table: "official_letters", col: '"createdByAssignmentId"' },
-    };
-    const refMap = refCreatorMap[request.refType as string];
-    let requesterId: number | undefined;
-    if (refMap) {
-      try {
-        const [refRow] = await rawQuery<Record<string, unknown>>(
-          `SELECT ${refMap.col} AS "requesterId" FROM ${refMap.table} WHERE id = $1 LIMIT 1`,
-          [request.refId]
-        );
-        requesterId = (refRow?.requesterId as number | undefined) ?? undefined;
-      } catch (e) {
-        logger.warn(e, "hr approval requester lookup (column may not exist for entity type)");
-      }
+    // Self-approval (maker-checker) guard: the same employee may not approve
+    // a request they created. We resolve the creator's *employee* id — the
+    // canonical "same person" key — for the request's refType, and also keep
+    // their assignment id for processApprovalStep's secondary check.
+    let requesterId: number | undefined; // creator assignment id (when stored)
+    let requesterEmployeeId: number | undefined;
+    try {
+      const creator = await resolveRequester(
+        request.refType as string,
+        request.refId as number,
+        scope.companyId,
+      );
+      requesterId = creator?.assignmentId ?? undefined;
+      requesterEmployeeId = creator?.employeeId ?? undefined;
+    } catch (e) {
+      logger.warn(e, "hr approval requester lookup failed");
     }
-    if (requesterId !== undefined && requesterId === scope.activeAssignmentId) {
+    if (
+      requesterEmployeeId !== undefined &&
+      scope.employeeId != null &&
+      requesterEmployeeId === scope.employeeId
+    ) {
       throw new ForbiddenError("لا يمكنك الموافقة على طلبك الخاص");
     }
 

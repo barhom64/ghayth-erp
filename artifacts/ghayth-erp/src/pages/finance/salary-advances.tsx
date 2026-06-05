@@ -27,6 +27,7 @@ import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { ApprovalActions } from "@workspace/workflow-kit";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Salary advances list — migrated in R.4 iter 4 to the unified
@@ -148,19 +149,37 @@ export default function SalaryAdvancesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "سلف الرواتب" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="finance:create" size="sm" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? (
-            <>
-              <X className="h-4 w-4 me-1" />
-              إلغاء
-            </>
-          ) : (
-            <>
-              <Plus className="h-4 w-4 me-1" />
-              سلفة جديدة
-            </>
-          )}
-        </GuardedButton>
+        <>
+          <GuardedButton perm="finance:create" size="sm" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? (
+              <>
+                <X className="h-4 w-4 me-1" />
+                إلغاء
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4 me-1" />
+                سلفة جديدة
+              </>
+            )}
+          </GuardedButton>
+          <PrintButton
+            entityType="report_finance_salary_advances"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "سلف الرواتب", total: filtered.length },
+              items: filtered.map((s: any) => ({
+                "المرجع": s.ref || `#${s.id}`,
+                "الموظف": s.employeeName || "—",
+                "المبلغ": Number(s.amount || 0),
+                "الوصف": s.description || "—",
+                "التاريخ": s.date || s.createdAt || "—",
+                "الحالة": s.status || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

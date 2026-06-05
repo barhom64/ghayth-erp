@@ -144,7 +144,20 @@ export default function InvoicesCreate() {
         notes: copySource.notes || "",
       }));
       if (copySource.lines?.length) {
-        setLines(copySource.lines.map((l: any) => ({ description: l.description || "", quantity: String(l.quantity || 1), unitPrice: String(l.unitPrice || "") })));
+        // Copy-from-invoice must carry every line field the new schema
+        // accepts; dropping productId/taxCode/taxInclusive/allocation
+        // silently re-routes COGS posting, per-line tax, and dim
+        // allocation — which is exactly the behavior #1519 just wired
+        // up. Map the full shape with safe fallbacks.
+        setLines(copySource.lines.map((l: any) => ({
+          description: l.description || "",
+          quantity: String(l.quantity || 1),
+          unitPrice: String(l.unitPrice || ""),
+          productId: l.productId ? String(l.productId) : "",
+          taxCode: l.taxCode || "",
+          taxInclusive: l.taxInclusive,
+          allocation: (l.allocation ?? {}) as LineAllocation,
+        })));
       }
     }
   }, [copySource, copied]);

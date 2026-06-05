@@ -31,6 +31,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { TRANSFER_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 // employeeId + toBranchId required (was `if (!form.employeeId || !form.toBranchId)`
 // toast guard — now caught at schema validation before any network call).
 const transferSchema = z.object({
@@ -212,10 +213,30 @@ export default function TransfersPage() {
       subtitle="إدارة طلبات نقل الموظفين بين الفروع والأقسام"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <GuardedButton perm="hr:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
-          <Plus className="h-4 w-4" />
-          طلب نقل جديد
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_transfers"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "طلبات نقل الموظفين", total: transfers.length },
+              items: transfers.map((t: any) => ({
+                "الموظف": t.employeeName || "—",
+                "من فرع": t.fromBranchName || "—",
+                "إلى فرع": t.toBranchName || "—",
+                "من قسم": t.fromDepartmentName || "—",
+                "إلى قسم": t.toDepartmentName || "—",
+                "تاريخ النقل": t.transferDate || "—",
+                "السبب": t.reason || "—",
+                "الحالة": t.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton perm="hr:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            طلب نقل جديد
+          </GuardedButton>
+        </div>
       }
     >
       <HrTabsNav />

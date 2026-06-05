@@ -223,7 +223,7 @@ export default function ExitRequestsPage() {
           <PrintButton
             entityType="report_hr_exit_requests"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "طلبات نهاية الخدمة", total: filtered.length },
               items: filtered.map((r: any) => ({

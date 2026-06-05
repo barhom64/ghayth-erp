@@ -140,7 +140,7 @@ export default function TrainingPage() {
           <PrintButton
             entityType="report_hr_training"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "برامج التدريب", total: filtered.length },
               items: filtered.map((t: any) => ({

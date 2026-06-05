@@ -18,6 +18,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => void }) {
   const [showImpact, setShowImpact] = useState(false);
@@ -116,6 +117,25 @@ export default function LeaveManagementPage() {
       title="إدارة الإجازات"
       subtitle="اعتماد طلبات الإجازات ومتابعة الأرصدة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الإجازات" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_leave_management"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "إدارة الإجازات — الطلبات المعلقة", total: pendingRequests.length },
+            items: pendingRequests.map((r: any) => ({
+              "الموظف": r.employeeName || "—",
+              "النوع": r.leaveTypeName || r.leaveType || "—",
+              "من": r.startDate || "—",
+              "إلى": r.endDate || "—",
+              "الأيام": r.days ?? "—",
+              "السبب": r.reason || "—",
+              "الحالة": r.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />

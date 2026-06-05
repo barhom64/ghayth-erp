@@ -14,6 +14,7 @@ import {
   Calendar, ShieldAlert,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Vendor Spend Analysis — concentration + payment-pattern analysis
@@ -349,6 +350,27 @@ export default function VendorSpendPage() {
         { href: "/finance/vendors", label: "الموردون" },
         { label: "تحليل المخاطر" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_finance_vendor_spend"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "تحليل الإنفاق على الموردين", total: filtered.length },
+            items: filtered.map((v) => ({
+              "المورد": v.name || "—",
+              "الرصيد المفتوح": Number(v.outstandingAmount || 0),
+              "عدد الفواتير": v.openInvoiceCount,
+              "% من الإنفاق": (Number(v.shareOfTotal || 0) * 100).toFixed(1),
+              "أقدم تأخر (أيام)": v.oldestInvoiceDays,
+              "عقد ساري": v.hasActiveContract ? "نعم" : "لا",
+              "ينتهي قريباً": v.contractEndingSoon ? "نعم" : "لا",
+              "Score": v.riskScore,
+              "التصنيف": v.riskBand,
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
 

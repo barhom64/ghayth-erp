@@ -164,7 +164,7 @@ export default function UmrahPackages() {
         <PrintButton
           entityType="report_umrah_packages"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "باقات العمرة", total: rows.length },
             items: rows.map((p: any) => ({

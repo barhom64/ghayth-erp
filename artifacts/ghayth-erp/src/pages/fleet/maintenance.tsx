@@ -52,7 +52,7 @@ export default function FleetMaintenancePage() {
           <PrintButton
             entityType="report_fleet_maintenance"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "سجل صيانة المركبات", total: items.length },
               items: items.map((m: any) => ({

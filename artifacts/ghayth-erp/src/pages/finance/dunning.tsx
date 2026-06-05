@@ -14,6 +14,7 @@ import { Send, Mail, MessageSquare, Clock, AlertTriangle, Gavel } from "lucide-r
 import { useToast } from "@/hooks/use-toast";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 interface OverdueInvoice {
   invoiceId: number;
   invoiceNumber: string;
@@ -230,6 +231,23 @@ export default function DunningPage() {
               مراحل التصعيد
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_dunning"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "متابعة تحصيل الذمم", total: invoices.length },
+              items: invoices.map((r) => ({
+                "الفاتورة": r.invoiceNumber || "—",
+                "العميل": r.clientName || "—",
+                "تاريخ الاستحقاق": r.dueDate || "—",
+                "أيام التأخر": r.daysPastDue ?? 0,
+                "المتبقي": r.outstanding ?? 0,
+                "المرحلة المقترحة": STAGE_INFO[r.proposedStage]?.label ?? "—",
+                "آخر إرسال": r.lastSentStage > 0 ? `مرحلة ${r.lastSentStage}` : "—",
+              })),
+            }}
+          />
         </div>
       }
     >

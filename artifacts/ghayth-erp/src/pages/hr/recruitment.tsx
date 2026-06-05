@@ -220,7 +220,7 @@ export default function RecruitmentPage() {
         <PrintButton
           entityType="report_hr_recruitment"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: {
               title: "تقرير التوظيف والاستقطاب",

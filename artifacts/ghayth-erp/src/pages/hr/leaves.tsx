@@ -232,7 +232,7 @@ export default function LeavesPage() {
           <PrintButton
             entityType="report_hr_leaves"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "طلبات الإجازات", total: filtered.length },
               items: filtered.map((l: any) => ({

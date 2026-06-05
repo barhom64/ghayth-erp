@@ -258,7 +258,7 @@ export default function AttendancePage() {
           <PrintButton
             entityType="report_hr_attendance"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "سجل الحضور والانصراف", total: filtered.length },
               items: filtered.map((a: any) => ({

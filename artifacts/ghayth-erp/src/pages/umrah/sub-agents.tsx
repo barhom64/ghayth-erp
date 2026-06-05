@@ -232,7 +232,7 @@ export default function UmrahSubAgents() {
           <PrintButton
             entityType="report_umrah_sub_agents"
             entityId="list"
-            label="طباعة"
+            size="icon"
             payload={{
               entity: { title: "وكلاء العمرة الفرعيون", total: subAgents.length },
               items: subAgents.map((a: any) => ({

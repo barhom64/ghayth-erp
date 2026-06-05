@@ -24,7 +24,7 @@ export function PropertyOccupancyTab() {
         <PrintButton
           entityType="report_bi_property_occupancy"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "تقرير نسبة الإشغال العقاري", total: rows.length },
             items: rows.map((r: any) => ({

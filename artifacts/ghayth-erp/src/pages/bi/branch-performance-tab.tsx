@@ -47,7 +47,7 @@ export function BranchPerformanceTab() {
         <PrintButton
           entityType="report_bi_branch_performance"
           entityId="list"
-          label="طباعة"
+          size="icon"
           payload={{
             entity: { title: "مقارنة أداء الفروع", total: rows.length },
             items: rows.map((r: any) => ({

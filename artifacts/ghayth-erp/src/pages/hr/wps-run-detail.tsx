@@ -23,6 +23,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 interface WpsLine {
   id: number;
   employeeId: number;
@@ -196,6 +197,23 @@ export default function WpsRunDetailPage() {
               <Upload className="h-4 w-4 ml-1" /> تطبيق تأكيد البنك
             </GuardedButton>
           )}
+          <PrintButton
+            entityType="report_hr_wps_run_detail"
+            entityId={String(run.id)}
+            label="طباعة"
+            payload={{
+              entity: { title: `تشغيل WPS — ${run.period}`, total: run.recordCount },
+              items: run.lines.map((l) => ({
+                "الموظف": l.employeeName,
+                "الهوية / الإقامة": l.iqamaOrId,
+                "IBAN": l.iban,
+                "المبلغ": Number(l.amount || 0),
+                "مرجع البنك": l.bankRefNumber || "—",
+                "الحالة": l.status,
+                "خطأ": l.errorMessage || "—",
+              })),
+            }}
+          />
         </div>
       }
     >

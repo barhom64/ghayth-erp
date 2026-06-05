@@ -14,6 +14,7 @@ import {
   AlertCircle, Calendar,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Posting Activity Today — real-time view of GL posts.
@@ -114,25 +115,7 @@ export default function PostingActivityPage() {
     `/finance/journal?${qs.toString()}`,
   );
 
-  if (isLoading) return <LoadingSpinner />;
-
   const rows: JournalEntry[] = data?.data ?? [];
-
-  // ── Aggregates
-  const amounts = rows.map((r) => Number(r.totalDebit ?? r.total ?? 0));
-  const totalAmount = amounts.reduce((s, a) => s + a, 0);
-  const reversals = rows.filter((r) => r.type === "reversal").length;
-  const manuals = rows.filter((r) => r.type === "manual").length;
-  const reversed = rows.filter((r) => r.reversedById != null).length;
-
-  // Unusual = top 5% by amount
-  const sortedAmounts = [...amounts].sort((a, b) => b - a);
-  const top5Threshold = sortedAmounts[Math.max(0, Math.floor(sortedAmounts.length * 0.05) - 1)] ?? 0;
-  const unusualIds = new Set(
-    rows
-      .filter((r) => Number(r.totalDebit ?? r.total ?? 0) >= top5Threshold && top5Threshold > 0)
-      .map((r) => r.id)
-  );
 
   const byType = useMemo(() => {
     const m = new Map<string, { count: number; amount: number }>();
@@ -153,6 +136,24 @@ export default function PostingActivityPage() {
     }
     return Array.from(m.entries()).map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count);
   }, [rows]);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  // ── Aggregates
+  const amounts = rows.map((r) => Number(r.totalDebit ?? r.total ?? 0));
+  const totalAmount = amounts.reduce((s, a) => s + a, 0);
+  const reversals = rows.filter((r) => r.type === "reversal").length;
+  const manuals = rows.filter((r) => r.type === "manual").length;
+  const reversed = rows.filter((r) => r.reversedById != null).length;
+
+  // Unusual = top 5% by amount
+  const sortedAmounts = [...amounts].sort((a, b) => b - a);
+  const top5Threshold = sortedAmounts[Math.max(0, Math.floor(sortedAmounts.length * 0.05) - 1)] ?? 0;
+  const unusualIds = new Set(
+    rows
+      .filter((r) => Number(r.totalDebit ?? r.total ?? 0) >= top5Threshold && top5Threshold > 0)
+      .map((r) => r.id)
+  );
 
   const cols: DataTableColumn<JournalEntry>[] = [
     {
@@ -244,10 +245,28 @@ export default function PostingActivityPage() {
         { label: "نشاط اليوم" },
       ]}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
-          تحديث
-        </Button>
+        <>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
+            تحديث
+          </Button>
+          <PrintButton
+            entityType="report_finance_posting_activity"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "نشاط الترحيل المحاسبي", total: rows.length },
+              items: rows.map((r) => ({
+                "المرجع": r.ref || `#${r.id}`,
+                "الوصف": r.description || "—",
+                "النوع": TYPE_LABEL[r.type] || r.type,
+                "المبلغ": Number(r.totalDebit ?? r.total ?? 0),
+                "تاريخ الترحيل": r.postedAt || r.createdAt || "—",
+                "الحالة": r.status || "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

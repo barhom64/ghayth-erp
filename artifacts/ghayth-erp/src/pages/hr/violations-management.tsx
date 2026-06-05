@@ -20,6 +20,7 @@ import { AlertTriangle, Scale, DollarSign, Shield, TrendingUp } from "lucide-rea
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { SEVERITY_LEVELS } from "@/lib/hr-type-maps";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function ViolationsManagementPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["violations"], "/hr/violations");
@@ -105,6 +106,25 @@ export default function ViolationsManagementPage() {
         { href: "/hr/violations", label: "المخالفات والجزاءات" },
         { label: "تحليل متقدم" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_hr_violations_management"
+          entityId="list"
+          size="icon"
+          payload={{
+            entity: { title: "إدارة المخالفات", total: filtered.length },
+            items: filtered.map((v: any) => ({
+              "الموظف": v.employeeName || "—",
+              "النوع": v.type || "—",
+              "الوصف": v.description || "—",
+              "الشدة": v.severity || "—",
+              "الخصم": Number(v.deductionAmount || 0),
+              "التاريخ": v.createdAt || "—",
+              "الحالة": v.status || "—",
+            })),
+          }}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={[

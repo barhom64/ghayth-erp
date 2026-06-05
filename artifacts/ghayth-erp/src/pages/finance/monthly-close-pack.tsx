@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   FileText, TrendingUp, TrendingDown, AlertTriangle,
   Banknote, Building2, Users, Clock, ChevronRight, Calendar,
@@ -134,6 +135,30 @@ export default function MonthlyClosePackPage() {
         { label: "حزمة الإقفال الشهري" },
       ]}
       subtitle={`ملخص ${period} للعرض على مجلس الإدارة — قابل للطباعة في صفحة واحدة`}
+      actions={
+        <PrintButton
+          entityType="report_finance_monthly_close_pack"
+          entityId={period}
+          size="icon"
+          payload={{
+            entity: { title: `حزمة الإقفال الشهري — ${period}`, total: 8 },
+            items: [
+              { "البند": "إجمالي الإيرادات", "القيمة": Number(pnl.data?.revenue?.total ?? 0) },
+              { "البند": "تكلفة المبيعات", "القيمة": Number(pnl.data?.cogs?.total ?? 0) },
+              { "البند": "إجمالي الربح", "القيمة": Number(pnl.data?.grossProfit ?? 0) },
+              { "البند": "المصروفات التشغيلية", "القيمة": Number(pnl.data?.operatingExpenses?.total ?? 0) },
+              { "البند": "الدخل التشغيلي", "القيمة": Number(pnl.data?.operatingIncome ?? 0) },
+              { "البند": "صافي الدخل", "القيمة": Number(pnl.data?.netIncome ?? 0) },
+              { "البند": "إجمالي الأصول", "القيمة": Number(bs.data?.assets?.total ?? 0) },
+              { "البند": "إجمالي الالتزامات", "القيمة": Number(bs.data?.liabilities?.total ?? 0) },
+              { "البند": "إجمالي حقوق الملكية", "القيمة": Number(bs.data?.equity?.total ?? 0) },
+              { "البند": "النقد الافتتاحي", "القيمة": Number(cf.data?.openingCash ?? 0) },
+              { "البند": "النقد الختامي", "القيمة": Number(cf.data?.closingCash ?? 0) },
+              { "البند": "صافي التغير في النقد", "القيمة": Number(cf.data?.netChange ?? 0) },
+            ],
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
 

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { History, TrendingUp, TrendingDown, ExternalLink, RefreshCw } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface FxRevaluation {
   id: number;
@@ -138,6 +139,22 @@ export default function FxRevaluationHistoryPage() {
               <RefreshCw className="h-4 w-4 me-1" /> تقييم جديد
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_fx_revaluation_history"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "سجل إعادة تقييم العملات", total: filtered.length },
+              items: filtered.map((r) => ({
+                "التاريخ": r.revaluationDate?.slice(0, 10) ?? "—",
+                "العملة": r.currency,
+                "السعر القديم": fmtRate(r.oldRate),
+                "السعر الجديد": fmtRate(r.newRate),
+                "صافي الأثر (SAR)": Number(r.totalImpact ?? 0),
+                "قيد JE": r.journalEntryId ?? "—",
+              })),
+            }}
+          />
         </div>
       }
     >
