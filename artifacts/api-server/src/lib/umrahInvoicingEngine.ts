@@ -4,6 +4,7 @@ import { issueNumber } from "./numberingService.js";
 import { NotFoundError, ConflictError, ValidationError } from "./errorHandler.js";
 import { logger } from "./logger.js";
 import { getProvider as getEInvoiceProvider } from "./einvoice/index.js";
+import { resolveRevenueAccount } from "./revenueAccountResolver.js";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -170,6 +171,28 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     [scope.companyId],
   );
 
+  // Hierarchical revenue-account override — driven by
+  // subsidiary_accounts (migration 250). Resolves the most-specific
+  // override for this invoice context: sub-agent → agent → season.
+  // When set, this code REPLACES whatever product-default the
+  // /umrah/settings mapping produced. Why most-specific-wins:
+  // the operator's question was «ربط الوكيل بحساب مبيعات مخصص ...
+  // مع عدم تعارض ربطها بحساب الوكيل» — a custom-account binding on
+  // the sub-agent should dominate the season-wide override, which
+  // should dominate the company-wide product default.
+  // Null result ⇒ no override configured ⇒ existing behaviour
+  // (per-product accountCode) is preserved byte-identical.
+  const dimensionalOverride = await resolveRevenueAccount(
+    scope.companyId,
+    {
+      subAgentId,
+      agentId: (subAgent.agentId as number | null) ?? null,
+      seasonId,
+    },
+    "revenue",
+  );
+  const overrideAccountCode = dimensionalOverride?.accountCode ?? null;
+
   // Phase 3d — when all 3 service products are configured, the
   // engine splits each group's lineTotal into 3 distinct lines
   // sourced from the matching NUSK invoice's per-category columns.
@@ -286,7 +309,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
           unitPrice: mutamerCount > 0 ? visaPortion / mutamerCount : visaPortion,
           lineTotal: visaPortion,
           productId: productMap!.visaProductId,
-          accountCode: productMap!.visaAccountCode,
+          accountCode: overrideAccountCode ?? productMap!.visaAccountCode,
           vatRate: taxCodeToVat(productMap!.visaTaxCode),
         });
       }
@@ -303,7 +326,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
           unitPrice: transportPortion,
           lineTotal: transportPortion,
           productId: productMap!.transportProductId,
-          accountCode: productMap!.transportAccountCode,
+          accountCode: overrideAccountCode ?? productMap!.transportAccountCode,
           vatRate: taxCodeToVat(productMap!.transportTaxCode),
         });
       }
@@ -320,7 +343,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
         unitPrice: servicesPortion,
         lineTotal: servicesPortion,
         productId: productMap!.servicesProductId,
-        accountCode: productMap!.servicesAccountCode,
+        accountCode: overrideAccountCode ?? productMap!.servicesAccountCode,
         vatRate: taxCodeToVat(productMap!.servicesTaxCode),
       });
     } else {
@@ -340,7 +363,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
         unitPrice: price,
         lineTotal,
         productId: servicesProductId,
-        accountCode: servicesAccountCode,
+        accountCode: overrideAccountCode ?? servicesAccountCode,
         vatRate: servicesVatRate,
       });
     }

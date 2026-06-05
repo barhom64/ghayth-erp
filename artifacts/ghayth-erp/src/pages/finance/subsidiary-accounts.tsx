@@ -69,6 +69,13 @@ import { useFormContext } from "react-hook-form";
  * cheap to re-create.
  */
 
+// `umrah_*` and `property_unit` were added by migration 250 so the
+// operator can route revenue per agent / per sub-agent / per season /
+// per property unit. The resolver lives in revenueAccountResolver.ts;
+// this UI is the operator's hand on the wheel — pick the entity, pick
+// the GL account, the umrah invoicing engine starts using it on the
+// next invoice (POST), and the retroactive endpoint repoints past
+// invoices' journals (POST /umrah/reclassify-revenue).
 const ENTITY_TYPES = [
   { value: "employee", label: "موظف" },
   { value: "client", label: "عميل" },
@@ -76,6 +83,10 @@ const ENTITY_TYPES = [
   { value: "vehicle", label: "مركبة" },
   { value: "driver", label: "سائق" },
   { value: "property", label: "عقار" },
+  { value: "property_unit", label: "وحدة عقارية" },
+  { value: "umrah_agent", label: "وكيل عمرة" },
+  { value: "umrah_sub_agent", label: "وكيل فرعي عمرة" },
+  { value: "umrah_season", label: "موسم عمرة" },
 ] as const;
 type EntityType = (typeof ENTITY_TYPES)[number]["value"];
 
@@ -88,6 +99,11 @@ const ACCOUNT_TYPES = [
   { value: "custody", label: "عهدة" },
   { value: "receivable", label: "ذمم مدينة" },
   { value: "payable", label: "ذمم دائنة" },
+  // Revenue routing — added with migration 250. The umrah invoicing
+  // engine reads from this `accountType="revenue"` slot via
+  // `resolveRevenueAccount(...)`, picking the most-specific match
+  // (sub-agent > agent > season > property_unit > property > default).
+  { value: "revenue", label: "إيراد" },
   { value: "other", label: "أخرى" },
 ];
 
@@ -108,7 +124,18 @@ interface SubsidiaryAccountRow {
 }
 
 const formSchema = z.object({
-  entityType: z.enum(["employee", "client", "vendor", "vehicle", "driver", "property"]),
+  entityType: z.enum([
+    "employee",
+    "client",
+    "vendor",
+    "vehicle",
+    "driver",
+    "property",
+    "property_unit",
+    "umrah_agent",
+    "umrah_sub_agent",
+    "umrah_season",
+  ]),
   entityId: z.coerce.number().int().positive("اختر الكيان"),
   accountType: z.string().trim().min(1, "نوع الحساب مطلوب"),
   accountId: z.coerce.number().int().positive("اختر الحساب من شجرة الحسابات"),
@@ -419,6 +446,58 @@ function EntityPicker() {
             value={entityId || ""}
             onChange={(e) => onChange(e.target.value)}
             placeholder="رقم العقار"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+          />
+        );
+      // For the 4 dimensions added by migration 250 we use a numeric
+      // input rather than a searchable picker. Reason: the operator
+      // typically arrives at this page WITH a specific agent/season
+      // already in mind (and its id visible in the URL of the agent
+      // detail page) — so the friction is acceptable for the v1 cut
+      // and we avoid pulling cross-module catalogs into the finance UI.
+      // If this becomes a bottleneck, swap in dedicated *Select
+      // components next to EmployeeSelect / ClientSelect above.
+      case "property_unit":
+        return (
+          <input
+            type="number"
+            min={1}
+            value={entityId || ""}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="رقم الوحدة العقارية"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+          />
+        );
+      case "umrah_agent":
+        return (
+          <input
+            type="number"
+            min={1}
+            value={entityId || ""}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="رقم وكيل العمرة"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+          />
+        );
+      case "umrah_sub_agent":
+        return (
+          <input
+            type="number"
+            min={1}
+            value={entityId || ""}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="رقم الوكيل الفرعي"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+          />
+        );
+      case "umrah_season":
+        return (
+          <input
+            type="number"
+            min={1}
+            value={entityId || ""}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="رقم موسم العمرة"
             className="w-full rounded-md border bg-background px-3 py-2 text-sm"
           />
         );
