@@ -12,7 +12,7 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { Link } from "wouter";
 import {
   Building, Briefcase, Car, FileText, Layers, MapPin, ChevronDown,
-  ChevronRight, RefreshCw, MoveVertical, List, Sparkles,
+  ChevronRight, RefreshCw, MoveVertical, List, Sparkles, BarChart3,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -369,6 +369,17 @@ function TreeRow({
           </option>
         ))}
       </select>
+
+      <Link href={`/finance/cost-centers/${node.id}/pnl`}>
+        <Button
+          size="sm"
+          variant="ghost"
+          data-testid={`cost-centers-tree-pnl-${node.id}`}
+          title="فتح أرباح وخسائر هذا المركز"
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+        </Button>
+      </Link>
 
       <MoveVertical className="h-3 w-3 text-muted-foreground/40 shrink-0" />
     </div>

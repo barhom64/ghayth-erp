@@ -89,7 +89,10 @@ describe("enrichJournalLineDimensions — resolution priority + safety", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe("createJournalEntry — wires the enricher before the INSERT loop", () => {
   it("imports enrichJournalLines from the dedicated module", () => {
-    expect(BH).toMatch(/import \{ enrichJournalLines \} from "\.\/journalLineDimensionalEnricher\.js"/);
+    // The import list widens over time (header inference, etc.). Pin
+    // SHAPE: enrichJournalLines is in the named-imports list of the
+    // dedicated module, regardless of what siblings show up next to it.
+    expect(BH).toMatch(/import \{[^}]*enrichJournalLines[^}]*\} from "\.\/journalLineDimensionalEnricher\.js"/);
   });
 
   it("invokes the enricher with (client, lines, companyId, branchId) before the line-INSERT loop", () => {
@@ -99,9 +102,15 @@ describe("createJournalEntry — wires the enricher before the INSERT loop", () 
   it("the enricher runs INSIDE withTransaction — same SAVEPOINT as the INSERTs (atomicity)", () => {
     // Pin that the call sits between the header insert and the line
     // loop. Without this, a thrown enricher error would leave the
-    // header committed and the lines orphaned.
-    const tx = BH.match(/headerResult\.rows\[0\]\.id as number;[\s\S]{1,800}await enrichJournalLines[\s\S]{1,400}for \(const line of params\.lines\)/);
-    expect(tx).toBeTruthy();
+    // header committed and the lines orphaned. We match the LAST
+    // occurrence of the call (not the first — comments now also
+    // mention the function name) by searching with lastIndexOf.
+    const headerIdx = BH.indexOf("headerResult.rows[0].id as number");
+    const enrichIdx = BH.lastIndexOf("await enrichJournalLines(client, params.lines");
+    const loopIdx = BH.lastIndexOf("for (const line of params.lines)");
+    expect(headerIdx).toBeGreaterThan(0);
+    expect(enrichIdx).toBeGreaterThan(headerIdx);
+    expect(loopIdx).toBeGreaterThan(enrichIdx);
   });
 });
 

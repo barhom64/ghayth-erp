@@ -649,6 +649,147 @@ router.get("/journal-lines/dimensional-coverage", authorize({ feature: "finance.
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PER-CC P&L — pays off the auto-enrichment. For a given costCenterId
+// the endpoint returns:
+//   - self bucket:  revenue / expense / net for that CC only
+//   - rolled bucket: same metrics INCLUDING all descendants (via the
+//     same recursive-CTE shape as /cost-centers/tree)
+//   - dateFrom / dateTo filter (default: current month)
+//   - recent JEs (top 50 by date) for the drill list
+//
+// The endpoint uses chart_of_accounts.type to classify revenue vs
+// expense — this is the canonical signal. A "revenue" line is one
+// whose accountCode resolves to type='revenue' (credit-natured); an
+// "expense" line resolves to type='expense' or 'cost_of_sales'.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/cost-centers/:id/pnl", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+
+    // Default to the current Riyadh calendar month — same convention
+    // as the rest of the finance reports. Operators can override per
+    // request via the query string.
+    const defaultFrom = (() => {
+      const d = new Date();
+      return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString().slice(0, 10);
+    })();
+    const defaultTo = (() => {
+      const d = new Date();
+      return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+    })();
+    const from = dateFrom || defaultFrom;
+    const to = dateTo || defaultTo;
+
+    // Step 1 — confirm the CC exists in this tenant.
+    const [cc] = await rawQuery<{ id: number; code: string | null; name: string }>(
+      `SELECT id, code, name FROM cost_centers
+        WHERE id = $1 AND "companyId" = $2 AND status != 'deleted'`,
+      [id, scope.companyId],
+    );
+    if (!cc) throw new NotFoundError("مركز التكلفة غير موجود");
+
+    // Step 2 — gather the descendant ids via the same recursive-CTE
+    // shape the tree endpoint uses. One round-trip; the array is
+    // bound to the subsequent aggregate queries.
+    const descendants = await rawQuery<{ id: number }>(
+      `WITH RECURSIVE tree AS (
+         SELECT id FROM cost_centers
+          WHERE id = $1 AND "companyId" = $2
+         UNION ALL
+         SELECT cc.id FROM cost_centers cc
+           JOIN tree t ON t.id = cc."parentId"
+          WHERE cc."companyId" = $2 AND cc.status != 'deleted'
+       )
+       SELECT id FROM tree`,
+      [id, scope.companyId],
+    );
+    const allIds = descendants.map((r) => r.id);
+
+    // Step 3 — the two buckets (self / rolled) in ONE query via
+    // FILTER, so the DB does one scan of journal_lines per JE filter.
+    // Revenue = sum(credit - debit) on credit-natured accounts.
+    // Expense = sum(debit - credit) on debit-natured accounts.
+    // The accountCode → type lookup goes via chart_of_accounts.type.
+    const [agg] = await rawQuery<{
+      selfRevenue: string; selfExpense: string;
+      rolledRevenue: string; rolledExpense: string;
+      selfEntries: number; rolledEntries: number;
+    }>(
+      `SELECT
+         COALESCE(SUM(CASE WHEN ca.type = 'revenue' AND jl."costCenterId" = $1
+                           THEN jl.credit - jl.debit ELSE 0 END), 0) AS "selfRevenue",
+         COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales') AND jl."costCenterId" = $1
+                           THEN jl.debit - jl.credit ELSE 0 END), 0) AS "selfExpense",
+         COALESCE(SUM(CASE WHEN ca.type = 'revenue' AND jl."costCenterId" = ANY($3::int[])
+                           THEN jl.credit - jl.debit ELSE 0 END), 0) AS "rolledRevenue",
+         COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales') AND jl."costCenterId" = ANY($3::int[])
+                           THEN jl.debit - jl.credit ELSE 0 END), 0) AS "rolledExpense",
+         COUNT(DISTINCT je.id) FILTER (WHERE jl."costCenterId" = $1)::int AS "selfEntries",
+         COUNT(DISTINCT je.id) FILTER (WHERE jl."costCenterId" = ANY($3::int[]))::int AS "rolledEntries"
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId"
+       LEFT JOIN chart_of_accounts ca
+              ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+       WHERE je."companyId" = $2
+         AND je."deletedAt" IS NULL
+         AND je.date BETWEEN $4 AND $5
+         AND (jl."costCenterId" = $1 OR jl."costCenterId" = ANY($3::int[]))`,
+      [id, scope.companyId, allIds, from, to],
+    );
+
+    const num = (v: unknown) => Number(v ?? 0);
+    const buckets = {
+      self: {
+        revenue: num(agg?.selfRevenue),
+        expense: num(agg?.selfExpense),
+        net: num(agg?.selfRevenue) - num(agg?.selfExpense),
+        entries: num(agg?.selfEntries),
+      },
+      rolled: {
+        revenue: num(agg?.rolledRevenue),
+        expense: num(agg?.rolledExpense),
+        net: num(agg?.rolledRevenue) - num(agg?.rolledExpense),
+        entries: num(agg?.rolledEntries),
+      },
+    };
+
+    // Step 4 — recent JEs for the drill list. Limited to 50 most-
+    // recent; the UI shows a "see all" link to the journal page.
+    const recent = await rawQuery<{
+      jeId: number; ref: string; date: string; description: string | null;
+      debit: string; credit: string;
+    }>(
+      `SELECT je.id AS "jeId", je.ref, je.date::text AS date, je.description,
+              COALESCE(SUM(jl.debit), 0) AS debit,
+              COALESCE(SUM(jl.credit), 0) AS credit
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id
+        WHERE je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je.date BETWEEN $2 AND $3
+          AND jl."costCenterId" = ANY($4::int[])
+        GROUP BY je.id, je.ref, je.date, je.description
+        ORDER BY je.date DESC, je.id DESC
+        LIMIT 50`,
+      [scope.companyId, from, to, allIds],
+    );
+
+    res.json({
+      costCenter: cc,
+      dateFrom: from,
+      dateTo: to,
+      descendantCount: allIds.length - 1, // exclude self
+      buckets,
+      recentEntries: recent.map((r) => ({
+        ...r, debit: Number(r.debit), credit: Number(r.credit),
+      })),
+    });
+  } catch (err) { handleRouteError(err, res, "Cost-centre P&L error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DIMENSIONAL-ROUTING HEALTH — the operator's «هل النظام المالي
 // متأصل في اصل النظام?» single-pane view. For every entity type that
 // participates in subsidiary_accounts OR cost_centers we report:

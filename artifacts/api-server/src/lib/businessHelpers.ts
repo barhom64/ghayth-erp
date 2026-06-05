@@ -7,7 +7,7 @@ import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
 import { logger } from "./logger.js";
 import { FINANCE_ROLES, OWNER_GM_ROLES } from "./rbacCatalog.js";
 import { config } from "./config.js";
-import { enrichJournalLines } from "./journalLineDimensionalEnricher.js";
+import { enrichJournalLines, inferHeaderDimensionsFromSource, applyHeaderDimensionsToLines } from "./journalLineDimensionalEnricher.js";
 
 // Task #428 — these "what's the current date/period/year?" helpers are now
 // timezone-aware (Asia/Riyadh by default). Pre-Task #428 they all delegated
@@ -566,14 +566,26 @@ export async function createJournalEntry(params: {
     );
     const jId = headerResult.rows[0].id as number;
 
-    // Dimensional enrichment — for each line that didn't carry an
-    // explicit costCenterId, resolve it from the line's project /
-    // contract / vehicle / department / branch hint, with a shared
-    // per-JE cache so an N-line entry only does K unique lookups
-    // (K = unique dimensional contexts, typically 1-2). The function
-    // mutates lines in-place; existing callers that DO set
-    // costCenterId stay byte-identical (the function is a no-op when
-    // the field is non-null).
+    // Step 1 — source-context inference. ONE round-trip per JE that
+    // pulls common entity ids (clientId, vendorId, umrahAgentId, ...)
+    // from the source row and propagates them to every line that
+    // doesn't already carry them. Skipped when sourceType is unknown
+    // — the result is `{}` and propagation is a no-op.
+    //
+    // Why this matters: an invoice JE doesn't need to remember to set
+    // clientId on every line — the enricher reads invoices.clientId
+    // once and propagates. Same for vendor bills, umrah invoices,
+    // expenses, custodies, fleet maintenance, etc.
+    const headerDims = await inferHeaderDimensionsFromSource(
+      client, params.companyId, params.sourceType ?? null, params.sourceId ?? null,
+    );
+    applyHeaderDimensionsToLines(params.lines, headerDims);
+
+    // Step 2 — per-line cost-centre resolution. After the source-side
+    // propagation, each line has whatever entity dims it can carry;
+    // now we map those dims → costCenterId via the priority chain
+    // (project > contract > vehicle > department > branch). Shared
+    // cache so an N-line invoice only does K unique CC lookups.
     //
     // This is what makes per-CC P&L work end-to-end: every invoice,
     // payment, expense, and JE that touches a project/contract/etc

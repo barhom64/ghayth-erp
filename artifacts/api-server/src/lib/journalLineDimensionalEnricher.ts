@@ -155,6 +155,165 @@ export async function enrichJournalLineDimensions<T extends DimensionalLineInput
 }
 
 /**
+ * Header-level source-context inference.
+ *
+ * Operator gap: callers like /invoices, /vendor-bills, /umrah/sales-invoices
+ * pass `sourceType` + `sourceId` on the JE header (so audits can drill
+ * back), but DON'T necessarily put the entity FK on every line. Result:
+ * journal_lines.clientId / vendorId / umrahAgentId stay null even
+ * though the source row HAS that id readily available.
+ *
+ * This function infers a propagation BAG from the source: one DB
+ * round-trip per JE (not per-line), the bag is then merged into each
+ * line by inferDimensionsForLines() below. Same idempotency rule as
+ * the CC enricher: only fills NULL fields, never overwrites.
+ *
+ * Cheap: a single SELECT joined to the source table per JE. Adds
+ * ~1ms to JE posting. Skipped when sourceType is unknown.
+ */
+export interface InferredHeaderDims {
+  clientId?: number | null;
+  vendorId?: number | null;
+  employeeId?: number | null;
+  driverId?: number | null;
+  vehicleId?: number | null;
+  propertyId?: number | null;
+  projectId?: number | null;
+  contractId?: number | null;
+  umrahAgentId?: number | null;
+  umrahSeasonId?: number | null;
+}
+
+export async function inferHeaderDimensionsFromSource(
+  client: PoolClient,
+  companyId: number,
+  sourceType: string | null | undefined,
+  sourceId: number | null | undefined,
+): Promise<InferredHeaderDims> {
+  if (!sourceType || !sourceId || sourceId <= 0) return {};
+  const empty: InferredHeaderDims = {};
+
+  // The lookup map. Each entry: a sourceType the system POSTS JEs
+  // from (the EXACT string used in createJournalEntry calls — see
+  // routes/finance-invoices.ts, finance-custodies.ts, etc.), the table
+  // to JOIN, and the columns to lift. Adding new source types is a
+  // one-arm addition — no per-source code paths elsewhere.
+  //
+  // Edge case: source rows in another company aren't readable here
+  // because every SELECT gates on companyId. A JE created with a
+  // cross-tenant sourceId resolves to empty dims (defence in depth).
+  //
+  // Errors are LOGGED, not thrown — the JE post must succeed even if
+  // the source table is missing in dev / the source row was deleted
+  // between header insert and enrichment. The result is just empty
+  // dims; the operator's posting works.
+  try {
+    switch (sourceType) {
+      case "invoice": {
+        // routes/finance-invoices.ts posts under "invoice" (singular),
+        // not "invoices" — match the actual usage.
+        const { rows } = await client.query(
+          `SELECT "clientId", "branchId" FROM invoices
+            WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+          [sourceId, companyId],
+        );
+        if (rows[0]) return { clientId: rows[0].clientId };
+        return empty;
+      }
+      case "umrah_sales_invoices": {
+        // The sub-agent invoice's agent gets propagated to lines so
+        // per-agent revenue/AR drill works on every line, not just
+        // the one the engine explicitly tagged.
+        const { rows } = await client.query(
+          `SELECT inv."seasonId", sa."agentId"
+             FROM umrah_sales_invoices inv
+             LEFT JOIN umrah_sub_agents sa
+                    ON sa.id = inv."subAgentId" AND sa."companyId" = inv."companyId"
+            WHERE inv.id = $1 AND inv."companyId" = $2 LIMIT 1`,
+          [sourceId, companyId],
+        );
+        if (rows[0]) {
+          return { umrahAgentId: rows[0].agentId, umrahSeasonId: rows[0].seasonId };
+        }
+        return empty;
+      }
+      case "umrah_payments": {
+        const { rows } = await client.query(
+          `SELECT sa."agentId"
+             FROM umrah_payments pay
+             LEFT JOIN umrah_sub_agents sa
+                    ON sa.id = pay."subAgentId" AND sa."companyId" = pay."companyId"
+            WHERE pay.id = $1 AND pay."companyId" = $2 LIMIT 1`,
+          [sourceId, companyId],
+        );
+        if (rows[0]) return { umrahAgentId: rows[0].agentId };
+        return empty;
+      }
+      case "expense": {
+        // routes/expenses.ts emits sourceType='expense' (singular).
+        // expenses table only carries employeeId — propagate that.
+        const { rows } = await client.query(
+          `SELECT "employeeId" FROM expenses
+            WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+          [sourceId, companyId],
+        );
+        if (rows[0]) return { employeeId: rows[0].employeeId };
+        return empty;
+      }
+      case "fleet_maintenance": {
+        const { rows } = await client.query(
+          `SELECT "vehicleId", "driverId" FROM fleet_maintenance
+            WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+          [sourceId, companyId],
+        );
+        if (rows[0]) return rows[0];
+        return empty;
+      }
+      // These sourceTypes ARE the row id itself — no SELECT needed.
+      // Keeping them in the switch documents that they're handled.
+      case "legal_contracts":
+        return { contractId: sourceId };
+      case "projects":
+        return { projectId: sourceId };
+      case "fleet_vehicles":
+        return { vehicleId: sourceId };
+      case "fleet_drivers":
+        return { driverId: sourceId };
+      default:
+        return empty;
+    }
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * Apply inferred header dimensions to each line — only fills NULL
+ * fields (operator's explicit choice always wins). Mutates lines
+ * in place for cheap caller ergonomics.
+ */
+export function applyHeaderDimensionsToLines<T extends DimensionalLineInput>(
+  lines: T[],
+  dims: InferredHeaderDims,
+): T[] {
+  const apply = (line: DimensionalLineInput) => {
+    if (line.clientId == null && dims.clientId != null) line.clientId = dims.clientId;
+    if (line.vendorId == null && dims.vendorId != null) line.vendorId = dims.vendorId;
+    if (line.employeeId == null && dims.employeeId != null) line.employeeId = dims.employeeId;
+    if (line.driverId == null && dims.driverId != null) line.driverId = dims.driverId;
+    if (line.vehicleId == null && dims.vehicleId != null) line.vehicleId = dims.vehicleId;
+    if (line.propertyId == null && dims.propertyId != null) line.propertyId = dims.propertyId;
+    if (line.projectId == null && dims.projectId != null) line.projectId = dims.projectId;
+    if (line.contractId == null && dims.contractId != null) line.contractId = dims.contractId;
+    const anyLine = line as Record<string, unknown>;
+    if (anyLine.umrahAgentId == null && dims.umrahAgentId != null) anyLine.umrahAgentId = dims.umrahAgentId;
+    if (anyLine.umrahSeasonId == null && dims.umrahSeasonId != null) anyLine.umrahSeasonId = dims.umrahSeasonId;
+  };
+  for (const line of lines) apply(line);
+  return lines;
+}
+
+/**
  * Convenience: enrich every line in an array in one pass, sharing the
  * cache. Used by createJournalEntry inside its INSERT loop.
  */
