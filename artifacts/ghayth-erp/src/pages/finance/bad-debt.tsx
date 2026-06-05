@@ -14,6 +14,7 @@ import { AlertTriangle, Calculator, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 interface PreviewResponse {
   asOf: string;
   rates: { current: number; d30: number; d60: number; d90: number; d90plus: number };
@@ -105,6 +106,22 @@ export default function BadDebtPage() {
         { href: "/finance/receivables", label: "التحصيل" },
         { label: "مخصص ديون" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_finance_bad_debt"
+          entityId="list"
+          label="طباعة"
+          payload={{
+            entity: { title: "مخصص الديون المشكوك في تحصيلها", total: data.invoiceCount ?? 0 },
+            items: (["current", "d30", "d60", "d90", "d90plus"] as const).map((k) => ({
+              "الشريحة": bucketLabel[k],
+              "الرصيد المفتوح": Number(data.buckets[k] ?? 0),
+              "النسبة %": (Number(rates[k] ?? 0) * 100).toFixed(1),
+              "المخصص": Number(data.provision[k] ?? 0),
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">

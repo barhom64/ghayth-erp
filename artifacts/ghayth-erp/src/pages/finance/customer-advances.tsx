@@ -14,6 +14,7 @@ import {
   ChevronDown, ChevronRight, ExternalLink, Users, CheckCircle2,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface CustomerAdvance {
   id: number;
@@ -183,9 +184,29 @@ export default function CustomerAdvancesPage() {
         { label: "دفعات مقدمة" },
       ]}
       actions={
-        <GuardedButton perm="finance:create" onClick={() => navigate("/finance/customer-advances/create")}>
-          <Plus className="h-4 w-4 me-1" /> دفعة مقدمة جديدة
-        </GuardedButton>
+        <>
+          <GuardedButton perm="finance:create" onClick={() => navigate("/finance/customer-advances/create")}>
+            <Plus className="h-4 w-4 me-1" /> دفعة مقدمة جديدة
+          </GuardedButton>
+          <PrintButton
+            entityType="report_finance_customer_advances"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "دفعات مقدمة من العملاء", total: filteredRows.length },
+              items: filteredRows.map((a) => ({
+                "المرجع": a.ref || "—",
+                "العميل": a.clientName || "—",
+                "المبلغ": Number(a.amount || 0),
+                "المطبق": Number(a.appliedAmount || 0),
+                "المتبقي": Number(a.remaining || 0),
+                "الطريقة": METHOD_LABEL[a.method || ""] || a.method || "—",
+                "تاريخ الاستلام": a.receivedDate || "—",
+                "الحالة": STATUS_LABEL[a.status]?.label || a.status,
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

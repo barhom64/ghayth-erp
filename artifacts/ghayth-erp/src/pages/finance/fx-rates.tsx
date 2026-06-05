@@ -13,6 +13,7 @@ import { formatNumber, formatDateAr, todayLocal } from "@/lib/formatters";
 import { Globe, Plus, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface FxRate {
   id: number;
@@ -152,9 +153,26 @@ export default function FxRatesPage() {
         { label: "أسعار الصرف" },
       ]}
       actions={
-        <GuardedButton perm="finance:create" onClick={() => setShowForm((s) => !s)}>
-          <Plus className="h-4 w-4 me-1" /> {showForm ? "إلغاء" : "إضافة سعر صرف"}
-        </GuardedButton>
+        <>
+          <GuardedButton perm="finance:create" onClick={() => setShowForm((s) => !s)}>
+            <Plus className="h-4 w-4 me-1" /> {showForm ? "إلغاء" : "إضافة سعر صرف"}
+          </GuardedButton>
+          <PrintButton
+            entityType="report_finance_fx_rates"
+            entityId="list"
+            label="طباعة"
+            payload={{
+              entity: { title: "أسعار صرف العملات", total: rows.length },
+              items: rows.map((r: any) => ({
+                "التاريخ": r.effectiveDate || "—",
+                "من": r.fromCurrency || "—",
+                "إلى": r.toCurrency || "—",
+                "السعر": Number(r.rate ?? 0).toFixed(6),
+                "المصدر": SOURCE_LABEL[r.source] ?? r.source ?? "—",
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />
