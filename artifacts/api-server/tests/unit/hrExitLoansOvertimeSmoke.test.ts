@@ -247,9 +247,12 @@ describe("Loans route structure", () => {
 });
 
 describe("Loan creation", () => {
-  it("validates with Zod createLoanSchema", () => {
+  it("validates with Zod createLoanSchema (uses HR_MONEY_CAPS-based helper)", () => {
     expect(LOANS_ROUTE).toContain("createLoanSchema");
-    expect(LOANS_ROUTE).toContain("amount: z.coerce.number");
+    // After VAL-3/4 hardening, `amount` goes through positiveMoneyAmount()
+    // (capped) instead of raw z.coerce.number(). The helper enforces
+    // > 0 + ≤ HR_MONEY_CAPS.LOAN_MAX.
+    expect(LOANS_ROUTE).toContain('positiveMoneyAmount("المبلغ", HR_MONEY_CAPS.LOAN_MAX)');
     expect(LOANS_ROUTE).toContain("installmentCount: z.coerce.number");
   });
 

@@ -89,6 +89,12 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { generateSequentialNumber, nextPeriod as nextPeriodHelper, advancePeriod as advancePeriodHelper } from "../lib/hrHelpers.js";
+import {
+  HR_TEXT_LIMITS,
+  HR_MONEY_CAPS,
+  trimmedOptional,
+  positiveMoneyAmount,
+} from "../lib/hrValidation.js";
 import { HR_TABLES, NUMBER_PREFIXES, LOAN_STATUS } from "../lib/hrEnums.js";
 import { logger } from "../lib/logger.js";
 
@@ -156,23 +162,29 @@ async function generateLoanNumber(companyId: number): Promise<string> {
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
+// VAL-3 / VAL-4: cap loan principal at HR_MONEY_CAPS.LOAN_MAX (200k SAR)
+// so an extra zero in the form doesn't pass through to the GL. Also
+// enforces 1 ≤ installmentCount ≤ 60 (5-year max repayment plan).
 const createLoanSchema = z.object({
   assignmentId: z.coerce.number({ message: "يرجى اختيار الموظف" }),
-  amount: z.coerce.number({ message: "المبلغ مطلوب" }).positive("المبلغ يجب أن يكون أكبر من صفر"),
-  installmentCount: z.coerce.number({ message: "عدد الأقساط مطلوب" }).int().min(1, "عدد الأقساط يجب أن يكون 1 على الأقل"),
-  loanType: z.string().optional(),
-  reason: z.string().optional(),
-  startDeductionPeriod: z.string().optional(),
+  amount: positiveMoneyAmount("المبلغ", HR_MONEY_CAPS.LOAN_MAX),
+  installmentCount: z.coerce.number({ message: "عدد الأقساط مطلوب" })
+    .int()
+    .min(1, "عدد الأقساط يجب أن يكون 1 على الأقل")
+    .max(60, "عدد الأقساط لا يمكن أن يتجاوز 60 شهرًا"),
+  loanType: trimmedOptional(HR_TEXT_LIMITS.SHORT),
+  reason: trimmedOptional(HR_TEXT_LIMITS.TEXT),
+  startDeductionPeriod: trimmedOptional(HR_TEXT_LIMITS.SHORT),
 });
 
 const rejectLoanSchema = z.object({
-  reason: z.string().optional(),
+  reason: trimmedOptional(HR_TEXT_LIMITS.TEXT),
 });
 
 const approvalDecisionSchema = z.object({
   approved: z.boolean().default(true),
-  reason: z.string().optional(),
-  notes: z.string().optional(),
+  reason: trimmedOptional(HR_TEXT_LIMITS.TEXT),
+  notes: trimmedOptional(HR_TEXT_LIMITS.TEXT),
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

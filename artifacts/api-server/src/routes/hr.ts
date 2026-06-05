@@ -40,6 +40,13 @@ import {
   countLeaveDaysExcludingRest,
   yearsOfService as calcYearsOfService,
 } from "../lib/hrHelpers.js";
+import {
+  HR_TEXT_LIMITS,
+  HR_MONEY_CAPS,
+  trimmedRequired,
+  trimmedOptional,
+  moneyAmount,
+} from "../lib/hrValidation.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, LifecycleError } from "../lib/lifecycleEngine.js";
 import {
@@ -65,27 +72,30 @@ const checkInSchema = z.object({
 
 const leaveRequestSchema = z.object({
   leaveTypeId: z.coerce.number().optional(),
-  leaveType: z.string().optional(),
-  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
-  endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
-  reason: z.string().optional(),
-  documentUrl: z.string().optional(),
-  reliefOfficer: z.string().optional(),
-  contactDuringLeave: z.string().optional(),
+  leaveType: trimmedOptional(HR_TEXT_LIMITS.SHORT),
+  startDate: trimmedRequired("تاريخ البداية مطلوب", HR_TEXT_LIMITS.SHORT),
+  endDate: trimmedRequired("تاريخ النهاية مطلوب", HR_TEXT_LIMITS.SHORT),
+  reason: trimmedOptional(HR_TEXT_LIMITS.TEXT),
+  documentUrl: trimmedOptional(HR_TEXT_LIMITS.NAME),
+  reliefOfficer: trimmedOptional(HR_TEXT_LIMITS.NAME),
+  contactDuringLeave: trimmedOptional(HR_TEXT_LIMITS.NAME),
 });
 
+// VAL-2, VAL-4: all free-text fields are trimmed + length-capped;
+// `deduction` is capped at one month's basic salary to refuse the
+// "extra zero" typo that would deduct more than the employee earns.
 const violationSchema = z.object({
   assignmentId: z.coerce.number({ required_error: "يرجى اختيار الموظف" }),
-  type: z.string().min(1, "نوع المخالفة مطلوب"),
-  description: z.string().min(1, "وصف المخالفة مطلوب"),
+  type: trimmedRequired("نوع المخالفة مطلوب", HR_TEXT_LIMITS.SHORT),
+  description: trimmedRequired("وصف المخالفة مطلوب", HR_TEXT_LIMITS.TEXT),
   severity: z.enum(["low", "medium", "high", "minor", "major", "critical"]).optional(),
-  deduction: z.coerce.number().optional(),
-  period: z.string().optional(),
-  incidentDate: z.string().optional(),
+  deduction: moneyAmount("قيمة الخصم", HR_MONEY_CAPS.DEDUCTION_MAX).optional(),
+  period: z.string().trim().max(HR_TEXT_LIMITS.SHORT).optional(),
+  incidentDate: z.string().trim().max(HR_TEXT_LIMITS.SHORT).optional(),
   regulationId: z.coerce.number().optional(),
-  witness: z.string().optional(),
-  location: z.string().optional(),
-  actionTaken: z.string().optional(),
+  witness: trimmedOptional(HR_TEXT_LIMITS.NAME),
+  location: trimmedOptional(HR_TEXT_LIMITS.NAME),
+  actionTaken: trimmedOptional(HR_TEXT_LIMITS.TEXT),
 });
 
 // Saudi Labor Law Article 104: the worker is entitled to a paid
@@ -177,12 +187,15 @@ const shiftAssignmentSchema = z.object({
   endDate: z.string().optional(),
 });
 
+// VAL-1: content was uncapped, so a single request could submit 1MB of
+// text. Caps at LONG_TEXT (10,000 chars) which fits the longest
+// internal HR letter template comfortably.
 const officialLetterSchema = z.object({
   employeeId: z.coerce.number({ required_error: "الموظف مطلوب" }),
-  type: z.string().optional(),
-  subject: z.string().min(1, "موضوع الخطاب مطلوب"),
-  content: z.string().min(1, "محتوى الخطاب مطلوب"),
-  status: z.string().optional(),
+  type: trimmedOptional(HR_TEXT_LIMITS.SHORT),
+  subject: trimmedRequired("موضوع الخطاب مطلوب", HR_TEXT_LIMITS.NAME),
+  content: trimmedRequired("محتوى الخطاب مطلوب", HR_TEXT_LIMITS.LONG_TEXT),
+  status: trimmedOptional(HR_TEXT_LIMITS.SHORT),
 });
 
 const publicHolidaySchema = z.object({
@@ -240,12 +253,12 @@ const employeeDocumentSchema = z.object({
 
 const excuseRequestSchema = z.object({
   assignmentId: z.coerce.number().optional(),
-  excuseDate: z.string().min(1, "تاريخ الاستئذان مطلوب"),
-  excuseType: z.string().min(1, "نوع الاستئذان مطلوب"),
-  startTime: z.string().optional(),
-  endTime: z.string().optional(),
-  estimatedMinutes: z.coerce.number().optional(),
-  reason: z.string().optional(),
+  excuseDate: trimmedRequired("تاريخ الاستئذان مطلوب", HR_TEXT_LIMITS.SHORT),
+  excuseType: trimmedRequired("نوع الاستئذان مطلوب", HR_TEXT_LIMITS.SHORT),
+  startTime: trimmedOptional(HR_TEXT_LIMITS.SHORT),
+  endTime: trimmedOptional(HR_TEXT_LIMITS.SHORT),
+  estimatedMinutes: z.coerce.number().min(0).max(1440).optional(), // 1 day max
+  reason: trimmedOptional(HR_TEXT_LIMITS.TEXT),
 });
 
 const evaluationCycleSchema = z.object({
