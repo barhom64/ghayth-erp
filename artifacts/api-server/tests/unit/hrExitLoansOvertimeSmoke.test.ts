@@ -205,13 +205,19 @@ describe("Exit completion flow", () => {
 
   it("complete terminates the employee assignment", () => {
     const idx = EXIT_ROUTE.indexOf('"/exit/:id/complete"');
-    const section = EXIT_ROUTE.slice(idx, idx + 4000);
+    // Widened from 4000 → 7000 after INT-2 (outstanding-loan guard) and
+    // INT-1 (cancel pending leaves + release reserved days) blocks
+    // were inserted before the assignment-termination UPDATE.
+    const section = EXIT_ROUTE.slice(idx, idx + 7000);
     expect(section).toContain("UPDATE employee_assignments SET status = 'terminated'");
   });
 
   it("complete posts GL settlement via hrEngine", () => {
     const idx = EXIT_ROUTE.indexOf('"/exit/:id/complete"');
-    const section = EXIT_ROUTE.slice(idx, idx + 4500);
+    // Widened to 10_000 after INT-1 (cancel-leaves + release-reserved
+    // SQL inside onApply) added ~3KB between the handler and the
+    // hrEngine.postExitSettlementGL call.
+    const section = EXIT_ROUTE.slice(idx, idx + 10_000);
     expect(section).toContain("hrEngine.postExitSettlementGL");
   });
 });

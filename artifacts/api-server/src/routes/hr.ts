@@ -30,6 +30,7 @@ import {
   currentMonthPadded,
   combineDateAndShiftTime,
   toDateISO,
+  currentDateInTz,
   roundTo2,
   softDeleteJournalEntry,
 } from "../lib/businessHelpers.js";
@@ -509,7 +510,11 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
   try {
     const scope = req.scope!;
     const now = new Date();
-    const today = toDateISO(now);
+    // TZ-1 (HR audit P1): the attendance date must reflect the
+    // employee's local calendar day in Riyadh, not the server's UTC
+    // calendar. A check-in at 02:30 KSA was being recorded as the
+    // previous UTC day before this fix.
+    const today = currentDateInTz("Asia/Riyadh");
     const period = today.slice(0, 7);
     const { lat, lon, notes, workType } = zodParse(checkInSchema.safeParse(req.body));
 
@@ -876,7 +881,10 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
   try {
     const scope = req.scope!;
     const now = new Date();
-    const today = toDateISO(now);
+    // TZ-1: same fix as /check-in — use Riyadh calendar day for
+    // the attendance row's `date` so cross-midnight punches don't
+    // land on the wrong row.
+    const today = currentDateInTz("Asia/Riyadh");
     const period = today.slice(0, 7);
     const { notes, lat, lon } = zodParse(checkOutSchema.safeParse(req.body ?? {}));
 
@@ -2204,6 +2212,18 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
         // every active assignment's company would eat `used += days` from
         // companies that never reserved, so an employee taking 5 days off
         // in Company A would lose 5 days from Company B's balance too.
+        //
+        // RACE-1 (HR audit P1): two overlapping approvals on different
+        // requests for the SAME employee could both read `reserved=10`,
+        // both subtract their `request.days`, and arrive at an incorrect
+        // final reserved. Take SELECT ... FOR UPDATE on the balance row
+        // first so the second transaction blocks until ours commits.
+        await client.query(
+          `SELECT 1 FROM hr_leave_balances
+           WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND year = $4
+           FOR UPDATE`,
+          [request.companyId, request.employeeId, request.leaveTypeId, year],
+        );
         await client.query(
           `UPDATE hr_leave_balances
            SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
@@ -2903,6 +2923,30 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     const totalGosiPayable = roundTo2(totalGosiEmployer + totalGosiEmployee);
 
     const runId = await withTransaction(async (client) => {
+      // RACE-2 (HR audit P1): two concurrent `POST /hr/payroll` calls
+      // for the same period could both pass the "no existing run"
+      // SELECT above and create duplicate runs. Take a transaction-
+      // scoped advisory lock keyed by (companyId, period) so the
+      // second caller waits for the first to either commit (then sees
+      // the row via the SELECT below and aborts) or rollback.
+      //
+      // pg_advisory_xact_lock(int4, int4) takes two int32 keys. We use
+      // companyId as the first key and a stable hash of the YYYY-MM
+      // period string as the second so different periods don't
+      // serialize against each other.
+      await client.query(
+        `SELECT pg_advisory_xact_lock($1::int, hashtext($2)::int)`,
+        [scope.companyId, `payroll_run:${targetPeriod}`],
+      );
+      // Re-check inside the lock — if another caller inserted while
+      // we were waiting, fail cleanly.
+      const dup = await client.query(
+        `SELECT id FROM payroll_runs WHERE "companyId" = $1 AND period = $2 AND "deletedAt" IS NULL`,
+        [scope.companyId, targetPeriod],
+      );
+      if (dup.rows.length > 0) {
+        throw new ConflictError(`الرواتب لشهر ${targetPeriod} تمت معالجتها مسبقاً`);
+      }
       const runResult = await client.query(
         `INSERT INTO payroll_runs ("companyId", period, status, "totalNet", "runBy", reference, notes)
          VALUES ($1,$2,'pending_approval',$3,$4,$5,$6) RETURNING id`,
@@ -3112,13 +3156,23 @@ router.patch("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", act
 router.get("/violations", authorize({ feature: "hr.violations", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // SEC-2 (HR audit P1): an `employee`-role caller without ownership
+    // flag must only see THEIR OWN violations — disciplinary records
+    // are confidential between the employee and HR/managers. Without
+    // this filter the list endpoint exposed peers' violations.
+    const params: unknown[] = [scope.companyId];
+    let where = `ev."companyId" = $1 AND ev."deletedAt" IS NULL`;
+    if (scope.role === "employee" && !scope.isOwner && scope.activeAssignmentId) {
+      where += ` AND ev."assignmentId" = $2`;
+      params.push(scope.activeAssignmentId);
+    }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ev.*, e.name AS "employeeName"
        FROM employee_violations ev
        JOIN employee_assignments ea ON ea.id = ev."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       WHERE ev."companyId" = $1 AND ev."deletedAt" IS NULL ORDER BY ev."createdAt" DESC LIMIT 100`,
-      [scope.companyId]
+       WHERE ${where} ORDER BY ev."createdAt" DESC LIMIT 100`,
+      params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { logger.error(err, "Get violations error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
@@ -3128,6 +3182,13 @@ router.get("/violations/:id", authorize({ feature: "hr.violations", action: "vie
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // SEC-2: same employee-scope gate at the detail level.
+    const detailParams: unknown[] = [id, scope.companyId];
+    let detailWhere = `ev.id = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL`;
+    if (scope.role === "employee" && !scope.isOwner && scope.activeAssignmentId) {
+      detailWhere += ` AND ev."assignmentId" = $3`;
+      detailParams.push(scope.activeAssignmentId);
+    }
     const [item] = await rawQuery<Record<string, unknown>>(
       `SELECT ev.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
@@ -3135,8 +3196,8 @@ router.get("/violations/:id", authorize({ feature: "hr.violations", action: "vie
        JOIN employee_assignments ea ON ea.id = ev."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
-       WHERE ev.id = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL`,
-      [id, scope.companyId]
+       WHERE ${detailWhere}`,
+      detailParams
     );
     if (!item) throw new NotFoundError("المخالفة غير موجودة");
 
