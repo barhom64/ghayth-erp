@@ -36,8 +36,10 @@ const AdminIntelligencePlayground = lazy(() => import("@/pages/admin-intelligenc
 const AdminDigitalSignature = lazy(() => import("@/pages/admin-digital-signature"));
 const AdminZatcaAudits = lazy(() => import("@/pages/admin-zatca-audits"));
 const AdminIntegrationsDiagnostics = lazy(() => import("@/pages/admin-integrations-diagnostics"));
+const AdminExpiringDocs = lazy(() => import("@/pages/admin/expiring-docs")); // originally PR #1128
 
 export const adminRoutes = [
+  { path: "/admin/expiring-docs", component: AdminExpiringDocs },
   { path: "/admin", component: Admin },
   { path: "/admin/users", component: AdminUsers },
   { path: "/admin/user-onboarding", component: AdminUserOnboarding },
