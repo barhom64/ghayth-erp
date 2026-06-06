@@ -1293,6 +1293,71 @@ router.get("/cost-centers/ranking", authorize({ feature: "finance.cost_centers",
       [scope.companyId, from, to],
     );
 
+    // OPTIONAL: prior-period rollup for the same CCs. Same shape as
+    // the entity-ranking includePrior path — each top-N CC gets a
+    // matching aggregate over the prior calendar-year window so the
+    // frontend can render anomaly badges without N round-trips.
+    //
+    // Uses ANY($::int[]) over the top-N ids — one query, no N+1.
+    // Each row reaggregates over the FULL descendant subtree of THAT
+    // cc (same recursive CTE shape).
+    let priorRows: Array<{ ccId: number; revenue: number; expense: number; net: number; entries: number }> = [];
+    if (q.includePrior === "true" && rows.length > 0) {
+      const shiftYear = (iso: string): string => {
+        const [yStr, m, d] = iso.split("-");
+        return `${Number(yStr) - 1}-${m}-${d}`;
+      };
+      const priorFrom = shiftYear(from);
+      const priorTo = shiftYear(to);
+      const ids = rows.map((r) => r.ccId);
+      const priorAgg = await rawQuery<{
+        ccId: number;
+        revenue: string;
+        expense: string;
+        entries: number;
+      }>(
+        `WITH RECURSIVE tree AS (
+           SELECT id AS root_id, id AS desc_id
+             FROM cost_centers
+            WHERE "companyId" = $1
+              AND status != 'deleted'
+              AND id = ANY($4::int[])
+           UNION ALL
+           SELECT t.root_id, cc.id
+             FROM cost_centers cc
+             JOIN tree t ON cc."parentId" = t.desc_id
+            WHERE cc."companyId" = $1
+              AND cc.status != 'deleted'
+         )
+         SELECT t.root_id AS "ccId",
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM tree t
+           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id
+           LEFT JOIN journal_entries je
+                  ON je.id = jl."journalId"
+                 AND je."companyId" = $1
+                 AND je."deletedAt" IS NULL
+                 AND je.date BETWEEN $2 AND $3
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          GROUP BY t.root_id`,
+        [scope.companyId, priorFrom, priorTo, ids],
+      );
+      priorRows = priorAgg.map((r) => ({
+        ccId: r.ccId,
+        revenue: Number(r.revenue),
+        expense: Number(r.expense),
+        net: Number(r.revenue) - Number(r.expense),
+        entries: Number(r.entries),
+      }));
+    }
+
+    const priorByCc = new Map(priorRows.map((p) => [p.ccId, p]));
+
     res.json({
       metric,
       direction: direction.toLowerCase(),
@@ -1300,15 +1365,27 @@ router.get("/cost-centers/ranking", authorize({ feature: "finance.cost_centers",
       dateTo: to,
       limit,
       rootId,
-      rows: rows.map((r) => ({
-        ccId: r.ccId,
-        ccCode: r.ccCode,
-        ccName: r.ccName,
-        revenue: Number(r.revenue),
-        expense: Number(r.expense),
-        net: Number(r.revenue) - Number(r.expense),
-        entries: Number(r.entries),
-      })),
+      includePrior: q.includePrior === "true",
+      rows: rows.map((r) => {
+        const prior = priorByCc.get(r.ccId) ?? null;
+        return {
+          ccId: r.ccId,
+          ccCode: r.ccCode,
+          ccName: r.ccName,
+          revenue: Number(r.revenue),
+          expense: Number(r.expense),
+          net: Number(r.revenue) - Number(r.expense),
+          entries: Number(r.entries),
+          prior: prior
+            ? {
+                revenue: prior.revenue,
+                expense: prior.expense,
+                net: prior.net,
+                entries: prior.entries,
+              }
+            : null,
+        };
+      }),
     });
   } catch (err) { handleRouteError(err, res, "Cost-centre ranking error"); }
 });
@@ -1924,6 +2001,57 @@ router.get("/entity-ranking", authorize({ feature: "finance.cost_centers", actio
       [scope.companyId, from, to],
     );
 
+    // OPTIONAL: prior-period rollup for the same entities. When
+    // `includePrior=true`, we compute the same aggregate over the
+    // prior calendar-year window — enables per-row anomaly badges on
+    // the frontend (delta + % change) without a per-row round-trip.
+    //
+    // Shifts both `from` and `to` back by exactly one calendar year
+    // (same "preserve the calendar window" logic the entity-pnl YoY
+    // endpoint uses). Skipped when the top-N is empty.
+    let priorRows: Array<{ entityId: number; revenue: number; expense: number; net: number; entries: number }> = [];
+    if (q.includePrior === "true" && rows.length > 0) {
+      const shiftYear = (iso: string): string => {
+        const [yStr, m, d] = iso.split("-");
+        return `${Number(yStr) - 1}-${m}-${d}`;
+      };
+      const priorFrom = shiftYear(from);
+      const priorTo = shiftYear(to);
+      const ids = rows.map((r) => r.entityId);
+      const priorAgg = await rawQuery<{
+        entityId: number;
+        revenue: string;
+        expense: string;
+        entries: number;
+      }>(
+        `SELECT jl.${column} AS "entityId",
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          WHERE je."companyId" = $1
+            AND je."deletedAt" IS NULL
+            AND je.date BETWEEN $2 AND $3
+            AND jl.${column} = ANY($4::int[])
+          GROUP BY jl.${column}`,
+        [scope.companyId, priorFrom, priorTo, ids],
+      );
+      priorRows = priorAgg.map((r) => ({
+        entityId: r.entityId,
+        revenue: Number(r.revenue),
+        expense: Number(r.expense),
+        net: Number(r.revenue) - Number(r.expense),
+        entries: Number(r.entries),
+      }));
+    }
+
+    const priorByEntity = new Map(priorRows.map((p) => [p.entityId, p]));
+
     res.json({
       entityType,
       metric,
@@ -1931,14 +2059,26 @@ router.get("/entity-ranking", authorize({ feature: "finance.cost_centers", actio
       dateFrom: from,
       dateTo: to,
       limit,
-      rows: rows.map((r) => ({
-        entityId: r.entityId,
-        entityName: r.entityName,
-        revenue: Number(r.revenue),
-        expense: Number(r.expense),
-        net: Number(r.net),
-        entries: Number(r.entries),
-      })),
+      includePrior: q.includePrior === "true",
+      rows: rows.map((r) => {
+        const prior = priorByEntity.get(r.entityId) ?? null;
+        return {
+          entityId: r.entityId,
+          entityName: r.entityName,
+          revenue: Number(r.revenue),
+          expense: Number(r.expense),
+          net: Number(r.net),
+          entries: Number(r.entries),
+          prior: prior
+            ? {
+                revenue: prior.revenue,
+                expense: prior.expense,
+                net: prior.net,
+                entries: prior.entries,
+              }
+            : null,
+        };
+      }),
     });
   } catch (err) { handleRouteError(err, res, "Entity ranking error"); }
 });

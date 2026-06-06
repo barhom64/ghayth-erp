@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
+import { AnomalyBadge } from "@/components/shared/anomaly-badge";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { formatCurrency } from "@/lib/formatters";
 import { TrendingUp, TrendingDown, ArrowUpDown, ExternalLink, BarChart3, Download, Network } from "lucide-react";
@@ -30,6 +31,13 @@ import { TrendingUp, TrendingDown, ArrowUpDown, ExternalLink, BarChart3, Downloa
  * click.
  */
 
+interface PriorBucket {
+  revenue: number;
+  expense: number;
+  net: number;
+  entries: number;
+}
+
 interface RankingRow {
   ccId: number;
   ccCode: string | null;
@@ -38,6 +46,8 @@ interface RankingRow {
   expense: number;
   net: number;
   entries: number;
+  /** Present only when includePrior=true. */
+  prior?: PriorBucket | null;
 }
 
 interface RankingResponse {
@@ -47,6 +57,7 @@ interface RankingResponse {
   dateTo: string;
   limit: number;
   rootId: number | null;
+  includePrior?: boolean;
   rows: RankingRow[];
 }
 
@@ -63,17 +74,19 @@ export default function CostCenterRankingPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [limit, setLimit] = useState(20);
+  const [includePrior, setIncludePrior] = useState(false);
 
   const qs = new URLSearchParams({
     metric,
     direction,
     limit: String(limit),
+    ...(includePrior ? { includePrior: "true" } : {}),
   });
   if (from) qs.set("dateFrom", from);
   if (to) qs.set("dateTo", to);
 
   const { data, isLoading, error, refetch } = useApiQuery<RankingResponse>(
-    ["cc-ranking", metric, direction, from, to, String(limit)],
+    ["cc-ranking", metric, direction, from, to, String(limit), String(includePrior)],
     `/finance/cost-centers/ranking?${qs.toString()}`,
   );
 
@@ -205,6 +218,18 @@ export default function CostCenterRankingPage() {
               />
             </div>
           </div>
+          <label
+            className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer"
+            data-testid="cc-ranking-include-prior-toggle"
+          >
+            <input
+              type="checkbox"
+              checked={includePrior}
+              onChange={(e) => setIncludePrior(e.target.checked)}
+              className="h-3 w-3"
+            />
+            مع المقارنة بالعام السابق
+          </label>
         </CardContent>
       </Card>
 
@@ -236,6 +261,21 @@ export default function CostCenterRankingPage() {
       </PageStateWrapper>
     </PageShell>
   );
+}
+
+// Same metricValue shape as the entity-ranking page — used by
+// AnomalyBadge so prior-period comparison aligns with the ranked metric.
+function metricValue(
+  row: { revenue: number; expense: number; net: number; entries: number },
+  metric: string,
+): number {
+  switch (metric) {
+    case "revenue": return row.revenue;
+    case "expense": return row.expense;
+    case "net":     return row.net;
+    case "entries": return row.entries;
+    default:        return 0;
+  }
 }
 
 function RankingList({ rows, metric }: { rows: RankingRow[]; metric: string }) {
@@ -283,6 +323,14 @@ function RankingList({ rows, metric }: { rows: RankingRow[]; metric: string }) {
                   <Badge variant="secondary" className="text-xs">
                     {r.entries.toLocaleString("ar-SA")} قيد
                   </Badge>
+                  {r.prior !== undefined && (
+                    <AnomalyBadge
+                      current={metricValue(r, metric)}
+                      prior={r.prior ? metricValue(r.prior, metric) : null}
+                      metric={metric as "revenue" | "expense" | "net" | "entries"}
+                      testidPrefix={`cc-ranking-anomaly-${r.ccId}`}
+                    />
+                  )}
                 </div>
                 <div className="grid grid-cols-3 gap-2 mt-1">
                   <MetricBar label="إيراد" value={r.revenue} pct={revPct} tone="success" icon={TrendingUp} />
