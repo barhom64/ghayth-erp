@@ -15,6 +15,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { DOCUMENT_TYPES, DOCUMENT_COLORS } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -184,6 +185,22 @@ export default function ExpiringDocumentsPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "entityName", label: "الكيان" },
+              { key: "entityType", label: "النوع" },
+              { key: "documentType", label: "نوع الوثيقة" },
+              { key: "documentNumber", label: "الرقم" },
+              { key: "issueDate", label: "تاريخ الإصدار" },
+              { key: "expiryDate", label: "تاريخ الانتهاء" },
+              { key: "daysUntilExpiry", label: "أيام للانتهاء" },
+              { key: "status", label: "الحالة" },
+            ],
+            "الوثائق-قاربة-الانتهاء",
+          )
+        }
         resultCount={filtered.length}
       />
 

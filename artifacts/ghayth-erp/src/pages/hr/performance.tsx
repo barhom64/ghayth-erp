@@ -13,6 +13,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
@@ -147,6 +148,21 @@ export default function PerformancePage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "period", label: "الفترة" },
+              { key: "overallScore", label: "التقييم الإجمالي" },
+              { key: "status", label: "الحالة" },
+              { key: "reviewedBy", label: "المراجِع" },
+              { key: "comments", label: "ملاحظات" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "تقييمات-الأداء",
+          )
+        }
         resultCount={filtered.length}
       />
 
