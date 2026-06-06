@@ -93,11 +93,13 @@ export default function AllocationRulesPage() {
     `/finance/allocation-rules${qs ? `?${qs}` : ""}`,
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
   const activeCount = rows.filter((r) => r.isActive).length;
   const requiresLink = rows.filter((r) => r.requiresEntityLink).length;
 
