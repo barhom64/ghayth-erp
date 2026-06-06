@@ -73,14 +73,14 @@ Not blocking the application code; ops can wire when they're ready.
 
 Closes findings #2 (outbox not relayed) and #3 (purge deletes pending).
 
-| # | Task | Status | Commit |
-|---|---|---|---|
-| P2.1 | `outboxRelay.ts` daemon | ⬜ TODO | — |
-| P2.2 | dedupe key on `event_outbox` | ⬜ TODO | — |
-| P2.3 | dead-letter table + dashboard | ⬜ TODO | — |
-| P2.4 | `OUTBOX_RELAY_ACTIVE` feature flag | ⬜ TODO | — |
-| **P2.5** | **`purgeAgedOutboxEntries` status-aware** | ✅ **Fixed** | (pending) |
-| P2.6 | integration tests | ⬜ TODO | — |
+| # | Task | Status |
+|---|---|---|
+| **P2.1** | **`outboxRelay.ts` daemon** | ✅ **Scaffold + observability shipped** |
+| P2.2 | dedupe key on `event_outbox` | ⬜ TODO |
+| P2.3 | dead-letter table + dashboard | 🟡 dead-promotion shipped in P2.1; dashboard remains |
+| **P2.4** | **`OUTBOX_RELAY_ACTIVE` feature flag** | ✅ **Shipped (default off)** |
+| **P2.5** | **`purgeAgedOutboxEntries` status-aware** | ✅ Done |
+| P2.6 | integration tests | 🟡 22 smoke tests shipped; live-DB integration TBD |
 
 **P2.5 is shipped early as a foundation:** the purge now filters
 `status IN ('processed', 'dead')` so a future relay can flip on without
@@ -89,9 +89,27 @@ the in-process emitter remains the dispatcher and outbox rows are still
 written but never marked `processed` — so they accumulate. Increase
 `OUTBOX_RETENTION_DAYS` if you don't want to flip the relay on yet.
 
-**P2 estimated remaining effort:** 2-3 weeks for one senior. The relay
-itself, dedupe semantics, dead-letter promotion, and rollback testing are
-all genuinely net-new work.
+**P2.1 + P2.4 shipped (relay scaffold + flag):**
+- `lib/outboxRelay.ts` polls event_outbox for pending rows, dispatches
+  each through `eventBus.dispatchFromOutbox()` (a new bypass that
+  calls super.emit without re-INSERTing), and marks the row
+  `processed` / `failed_retry` / `dead` based on outcome.
+- FOR UPDATE SKIP LOCKED so two worker replicas don't dispatch the
+  same row twice.
+- `EventBus.dispatchFromOutbox()` is the bridge — calling `emit()`
+  would re-INSERT and the relay would never drain.
+- Worker.ts wires startOutboxRelay() + stopOutboxRelay() and exposes
+  `/outbox-stats` for ops to curl.
+- 22 smoke assertions lock the contract.
+
+**Default behaviour unchanged** — the flag is off so the relay is a
+no-op. Staging can flip OUTBOX_RELAY_ACTIVE=true to exercise the loop
+but the relay logs a loud warning that double-dispatch is possible
+until P2.2 lands.
+
+**P2 estimated remaining effort:** ~1-2 weeks for one senior. P2.2
+(dedupe), P2.3 (admin dashboard for dead-letter), and P2.6 (live-DB
+integration tests) are all that's left.
 
 ---
 

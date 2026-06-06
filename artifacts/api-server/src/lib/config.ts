@@ -125,6 +125,31 @@ const EnvSchema = z.object({
   // Port for the worker's /healthz + /readyz endpoints.
   WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(7001),
 
+  // -- P2.4 outbox relay --------------------------------------------------
+  // When true the worker.ts process starts the outbox relay (polls
+  // event_outbox for pending rows, dispatches them in-process, marks
+  // them processed). Default off — when off the in-process emit chain
+  // remains the sole dispatcher and the relay is a no-op so flipping
+  // the flag for testing doesn't change production behaviour.
+  //
+  // ⚠ Do NOT flip this on in production until P2.2 (dedupe) lands.
+  // With the flag on AND the in-process emit still firing (current
+  // eventBus.emit calls super.emit alongside the outbox INSERT) every
+  // event would be dispatched twice. Tests + staging only for now.
+  OUTBOX_RELAY_ACTIVE: boolEnv(false),
+  // Relay polling interval in ms. 5s is conservative enough that a
+  // relay outage causes ≤ 5s of stale events under normal load, but
+  // loose enough that the SELECT doesn't burn CPU on an empty table.
+  OUTBOX_RELAY_INTERVAL_MS: z.coerce.number().int().min(100).max(60_000).default(5_000),
+  // Max rows the relay processes per tick. Bounded so a backlog can't
+  // monopolise the worker — if pending > batch, the next tick drains more.
+  OUTBOX_RELAY_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(50),
+  // Max attempts per row before marking it 'dead'. The runDlqMaintenance
+  // already handles event-handler failures via event_dlq; this knob
+  // bounds the relay's own retry loop on infrastructure errors (DB
+  // hiccup, listener-not-registered-yet at boot, etc).
+  OUTBOX_RELAY_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+
   // -- fleet telematics (#1354) -------------------------------------------
   // Production deployments reject http(s://) CMSV6 base URLs by default.
   // Lab/dev environments can opt out via this flag; the SSRF guard is
@@ -307,6 +332,15 @@ export interface AppConfig {
 
   /** P1 — port for the worker's /healthz + /readyz endpoints. */
   readonly workerHealthPort: number;
+
+  /** P2.4 — when true the worker starts the outbox relay. Default false. */
+  readonly outboxRelayActive: boolean;
+  /** P2.4 — relay polling interval in ms. */
+  readonly outboxRelayIntervalMs: number;
+  /** P2.4 — max rows per relay tick. */
+  readonly outboxRelayBatchSize: number;
+  /** P2.4 — max attempts before a row is marked 'dead'. */
+  readonly outboxRelayMaxAttempts: number;
 
   /** Fleet telematics — #1354 production hardening flags. */
   readonly fleetTelematics: {
@@ -510,6 +544,10 @@ function buildConfig(env: RawEnv): AppConfig {
     persistAllEvents: env.PERSIST_ALL_EVENTS,
     apiOnly: env.API_ONLY,
     workerHealthPort: env.WORKER_HEALTH_PORT,
+    outboxRelayActive: env.OUTBOX_RELAY_ACTIVE,
+    outboxRelayIntervalMs: env.OUTBOX_RELAY_INTERVAL_MS,
+    outboxRelayBatchSize: env.OUTBOX_RELAY_BATCH_SIZE,
+    outboxRelayMaxAttempts: env.OUTBOX_RELAY_MAX_ATTEMPTS,
     fleetTelematics: {
       allowHttp: env.FLEET_TELEMATICS_ALLOW_HTTP,
       proxyTtlSec: Math.min(300, Math.max(15, env.FLEET_TELEMATICS_PROXY_TTL_SEC)),

@@ -124,6 +124,20 @@ class EventBus extends EventEmitter {
     return super.emit(event, stamped);
   }
 
+  /**
+   * P2.1 — dispatch a payload from the outbox WITHOUT re-INSERTing it.
+   *
+   * The relay reads `event_outbox` rows (each already stamped at
+   * INSERT time) and replays them through the in-process listeners.
+   * Using the regular `emit()` would re-INSERT into the outbox and
+   * create an infinite loop. This bypass skips the outbox capture
+   * and goes straight to super.emit, treating the stored payload as
+   * already-stamped.
+   */
+  dispatchFromOutbox(event: EventName, payload?: EventPayload): boolean {
+    return super.emit(event, payload);
+  }
+
   // EventEmitter never awaits async listeners, so a rejecting handler
   // registered via .on() escaped as an unhandledRejection and its
   // side-effect (audit row, notification, cross-domain GL hook) was lost

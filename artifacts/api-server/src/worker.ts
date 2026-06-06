@@ -24,6 +24,7 @@ import { startRuntimeTelemetry, stopRuntimeTelemetry } from "./lib/runtimeTeleme
 import { startAlertEvaluation, stopAlertEvaluation } from "./lib/alertRules.js";
 import { registerEventListeners } from "./lib/eventListeners.js";
 import { registerRulesEngineListener } from "./lib/rulesEngine.js";
+import { startOutboxRelay, stopOutboxRelay, getOutboxRelayStats } from "./lib/outboxRelay.js";
 import "./lib/engines/hrEngine.js";
 import { warmVendorSettingsCache } from "./lib/vendorSettings.js";
 import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
@@ -122,6 +123,10 @@ async function start() {
   startAlertEvaluation();
   logger.info("[worker] Runtime threshold-alert evaluation started");
 
+  // (7.5) P2.1 — outbox relay. No-op unless OUTBOX_RELAY_ACTIVE=true.
+  // The relay itself decides whether to start (config gate inside).
+  startOutboxRelay();
+
   // (8) Health endpoint — minimal HTTP listener so the container
   // orchestrator (k8s, docker-compose healthcheck, PM2) can probe
   // the worker. /healthz returns 200; /readyz checks DB connectivity.
@@ -138,6 +143,21 @@ async function start() {
       res.status(503).json({ status: "degraded", db: "error", message: err?.message });
     }
   });
+  // P2.1 — outbox relay observability. Ops can curl this to see if
+  // pending is growing (relay stuck) or `dead` is climbing (handlers
+  // throwing). No auth — bound to the internal worker-health port only.
+  healthApp.get("/outbox-stats", async (_req, res) => {
+    try {
+      const stats = await getOutboxRelayStats();
+      res.json({
+        active: config.outboxRelayActive,
+        intervalMs: config.outboxRelayIntervalMs,
+        ...stats,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message });
+    }
+  });
   const port = config.workerHealthPort;
   const server = http.createServer(healthApp);
   server.listen(port, "0.0.0.0", () => {
@@ -146,6 +166,7 @@ async function start() {
 
   async function shutdown(signal: string) {
     logger.info({ signal }, "[worker] Received shutdown signal — graceful shutdown starting");
+    stopOutboxRelay();
     stopCronScheduler();
     logger.info("[worker] Cron scheduler stopped");
     stopRuntimeTelemetry();
