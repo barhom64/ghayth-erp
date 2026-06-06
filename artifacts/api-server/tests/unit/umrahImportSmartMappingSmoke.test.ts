@@ -152,11 +152,36 @@ describe("POST /umrah/import/suggest-mapping — route surface", () => {
     expect(ROUTE).toMatch(/fileType:\s*z\.enum\(\["mutamers",\s*"vouchers"\]\)/);
   });
 
-  it("delegates to the engine's suggestColumnMapping (no logic in the route)", () => {
+  it("delegates to the engine's suggestColumnMapping (no business logic in the route)", () => {
     // Routes should be thin — keep the algorithm in the engine so
     // tests + future callers (CLI? scripts?) can use it directly
-    // without spinning up Express.
+    // without spinning up Express. The route is allowed to compute
+    // analytics counters and write a usage audit/event, but the
+    // mapping itself MUST come from the engine.
     expect(ROUTE).toMatch(/const \{ suggestColumnMapping \} = await import\("\.\.\/lib\/umrahImportEngine\.js"\)/);
-    expect(ROUTE).toMatch(/res\.json\(\{ suggestions: suggestColumnMapping\(headers, fileType\) \}\)/);
+    // The route assigns the engine's output to a local `suggestions`
+    // variable and ships it back to the client — same behaviour as
+    // before, just split across two lines so the analytics block can
+    // reference hit/miss counts without re-running the engine.
+    expect(ROUTE).toMatch(/const suggestions = suggestColumnMapping\(headers, fileType\);/);
+    expect(ROUTE).toMatch(/res\.json\(\{ suggestions \}\);/);
+  });
+
+  it("logs a usage audit per call — headers in audit, only counts in event details", () => {
+    // Mirrors the assistant.ask pattern (PR #1625): question text in
+    // the RBAC-gated audit log, only aggregate counts broadcast to
+    // event subscribers. Lets us track which Excel variants are
+    // escaping the built-in dictionary (signal for adding them to it)
+    // without leaking customer-specific headers to wide event consumers.
+    expect(ROUTE).toMatch(/createAuditLog\(\{[\s\S]{0,400}action: "umrah\.import\.suggest_mapping"[\s\S]{0,400}after: \{ fileType, headers, hitCount, missCount \}/);
+    expect(ROUTE).toMatch(/emitEvent\(\{[\s\S]{0,500}action: "umrah\.import\.suggest_mapping"[\s\S]{0,400}details: JSON\.stringify\(\{ fileType, total: headers\.length, hitCount, missCount \}\)/);
+  });
+
+  it("hitCount + missCount derived from the engine output, total = headers.length", () => {
+    // Drift alarm: if anyone changes the derivation (e.g. counting
+    // suppressed-confidence ones differently) the analytics dashboard
+    // silently flips its meaning.
+    expect(ROUTE).toMatch(/const hitCount = Object\.keys\(suggestions \?\? \{\}\)\.length;/);
+    expect(ROUTE).toMatch(/const missCount = Math\.max\(0, headers\.length - hitCount\);/);
   });
 });
