@@ -2676,12 +2676,20 @@ router.delete("/room-allocations/:id", authorize({ feature: "umrah", action: "de
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     // Capture the row BEFORE deleting it so the audit log carries the
-    // last-known state (pilgrimId + roomNumber + bedNumber). Without
-    // this snapshot the audit trail just records "id X deleted",
-    // which is useless for reconstructing which pilgrim was
-    // unassigned from which room when housekeeping disputes arise.
-    const [existing] = await rawQuery<{ pilgrimId: number; roomNumber: string | null; bedNumber: string | null; accommodationId: number }>(
-      `SELECT "pilgrimId", "roomNumber", "bedNumber", "accommodationId"
+    // last-known state (pilgrimId + roomNumber + blockId + occupants
+    // + check-in/out timestamps). Without this snapshot the audit
+    // trail just records "id X deleted", which is useless for
+    // reconstructing which pilgrim was unassigned from which room
+    // when housekeeping disputes arise.
+    const [existing] = await rawQuery<{
+      pilgrimId: number;
+      roomNumber: string | null;
+      blockId: number;
+      occupants: number | null;
+      checkInAt: string | null;
+      checkOutAt: string | null;
+    }>(
+      `SELECT "pilgrimId", "roomNumber", "blockId", occupants, "checkInAt", "checkOutAt"
          FROM umrah_room_allocations
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -2707,7 +2715,7 @@ router.delete("/room-allocations/:id", authorize({ feature: "umrah", action: "de
         action: "umrah.room_allocation.deleted",
         entity: "umrah_room_allocations",
         entityId: id,
-        details: JSON.stringify({ pilgrimId: existing.pilgrimId, accommodationId: existing.accommodationId }),
+        details: JSON.stringify({ pilgrimId: existing.pilgrimId, blockId: existing.blockId }),
       }).catch((e) => logger.error(e, "umrah room-allocation delete event emit failed"));
     }
     res.json({ ok: true });

@@ -9,8 +9,11 @@ import { join } from "node:path";
  * who was unassigned from which room, the trail showed nothing.
  *
  * Fix snapshots the row before the delete so audit `before` carries
- * `pilgrimId`, `roomNumber`, `bedNumber`, `accommodationId` — enough
- * to reconstruct the assignment after the fact.
+ * `pilgrimId`, `roomNumber`, `blockId`, `occupants`, `checkInAt`,
+ * `checkOutAt` — every column on the live schema — enough to
+ * reconstruct the assignment after the fact. (Columns verified
+ * against db/schema_pre.sql; audit:schema-drift guard rejects any
+ * quoted identifier the schema dump doesn't carry.)
  */
 
 const ROUTE = readFileSync(
@@ -23,14 +26,14 @@ describe("DELETE /umrah/room-allocations/:id — audit trail", () => {
     // Drift alarm: if anyone re-orders so the UPDATE runs first then
     // the rawQuery SELECT, the existing-row read returns NULL and the
     // audit `before` becomes empty. The select must precede the update.
-    const selectIdx = ROUTE.indexOf('SELECT "pilgrimId", "roomNumber", "bedNumber", "accommodationId"');
+    const selectIdx = ROUTE.indexOf('SELECT "pilgrimId", "roomNumber", "blockId", occupants, "checkInAt", "checkOutAt"');
     const updateIdx = ROUTE.indexOf('UPDATE umrah_room_allocations SET "deletedAt"');
     expect(selectIdx).toBeGreaterThan(0);
     expect(updateIdx).toBeGreaterThan(selectIdx);
   });
 
   it("snapshot is scoped by companyId AND deletedAt IS NULL (so already-deleted rows return nothing)", () => {
-    expect(ROUTE).toMatch(/SELECT "pilgrimId", "roomNumber", "bedNumber", "accommodationId"\s*\n\s*FROM umrah_room_allocations\s*\n\s*WHERE id = \$1 AND "companyId" = \$2 AND "deletedAt" IS NULL/);
+    expect(ROUTE).toMatch(/SELECT "pilgrimId", "roomNumber", "blockId", occupants, "checkInAt", "checkOutAt"\s*\n\s*FROM umrah_room_allocations\s*\n\s*WHERE id = \$1 AND "companyId" = \$2 AND "deletedAt" IS NULL/);
   });
 
   it("audit + event fire only when the UPDATE actually touched a row (no phantom audit)", () => {
@@ -41,12 +44,13 @@ describe("DELETE /umrah/room-allocations/:id — audit trail", () => {
     expect(ROUTE).toMatch(/action: "umrah\.room_allocation\.deleted"[\s\S]{0,400}before: existing/);
   });
 
-  it("event details broadcast pilgrim + accommodation ids (no row-by-row room geometry)", () => {
-    // pilgrim and accommodation are the join keys consumers care about
-    // for cascade reactions (e.g. invalidating a billed-nights cache).
-    // The room/bed numbers are housekeeping detail and stay in the
-    // RBAC-gated audit.
-    expect(ROUTE).toMatch(/emitEvent\(\{[\s\S]{0,500}action: "umrah\.room_allocation\.deleted"[\s\S]{0,400}details: JSON\.stringify\(\{ pilgrimId: existing\.pilgrimId, accommodationId: existing\.accommodationId \}\)/);
+  it("event details broadcast pilgrim + block ids (no row-by-row room geometry)", () => {
+    // pilgrim and block are the join keys consumers care about for
+    // cascade reactions (e.g. invalidating a billed-nights cache or
+    // refreshing a room-block availability tile). The room number,
+    // occupants count, and check-in/out timestamps are housekeeping
+    // detail that stays in the RBAC-gated audit log.
+    expect(ROUTE).toMatch(/emitEvent\(\{[\s\S]{0,500}action: "umrah\.room_allocation\.deleted"[\s\S]{0,400}details: JSON\.stringify\(\{ pilgrimId: existing\.pilgrimId, blockId: existing\.blockId \}\)/);
   });
 
   it("event emit error is caught — a background failure must not break the response", () => {
