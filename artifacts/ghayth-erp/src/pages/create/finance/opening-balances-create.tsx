@@ -205,6 +205,7 @@ export default function OpeningBalancesCreatePage() {
                 </Select>
                 <NumberField
                   label="مدين"
+                  hideLabel
                   min={0}
                   value={line.debit}
                   onChange={(v) => updateLine(idx, "debit", v)}
@@ -212,6 +213,7 @@ export default function OpeningBalancesCreatePage() {
                 />
                 <NumberField
                   label="دائن"
+                  hideLabel
                   min={0}
                   value={line.credit}
                   onChange={(v) => updateLine(idx, "credit", v)}
