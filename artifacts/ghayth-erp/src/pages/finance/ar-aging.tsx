@@ -56,11 +56,13 @@ export default function ArAgingPage() {
     `/finance/ar-aging?asOfDate=${asOfDate}`
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const clients = (data?.clients || []) as any[];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(clients);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
   const summary = data?.summary || {};
 
   const columns: DataTableColumn<any>[] = [
