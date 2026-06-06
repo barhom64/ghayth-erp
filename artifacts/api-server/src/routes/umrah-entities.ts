@@ -630,47 +630,58 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
     // at a glance — financial (NUSK cost, sales invoice, outstanding),
     // operational (mutamers inside/overstayed), and compliance (visa
     // expiring within 7 days) — without a per-row follow-up request.
+    // Pre-aggregate the FIVE per-row subqueries into 2 CTEs. Original
+    // was the WORST N+1 in the codebase: 500 groups × 5 subqueries =
+    // 2501 lookups (2 on umrah_nusk_invoices + 3 on umrah_pilgrims).
+    //
+    // nusk_stats collapses 2 subqueries (count + sum) into one scan.
+    // pilgrim_stats collapses 3 subqueries (inside / overstayed /
+    // visa-at-risk) using COUNT(*) FILTER (WHERE ...). The
+    // join keys preserve the original AND ni/p."companyId" =
+    // g."companyId" tenant boundary by including companyId in the CTE
+    // output + LEFT JOIN on (groupId, companyId).
     const rows = await rawQuery(
-      `SELECT g.*,
+      `WITH nusk_stats AS (
+         SELECT "groupId", "companyId",
+                COUNT(*) AS "nuskInvoiceCount",
+                COALESCE(SUM("totalAmount"), 0) AS "nuskCostTotal"
+         FROM umrah_nusk_invoices
+         WHERE "deletedAt" IS NULL AND "nuskStatus" != 'cancelled'
+         GROUP BY "groupId", "companyId"
+       ),
+       pilgrim_stats AS (
+         SELECT "groupId", "companyId",
+                COUNT(*) FILTER (WHERE status IN ('arrived','active','overstayed')) AS "pilgrimsInside",
+                COUNT(*) FILTER (WHERE status = 'overstayed') AS "pilgrimsOverstayed",
+                COUNT(*) FILTER (
+                  WHERE status NOT IN ('departed','cancelled','deceased','visa_rejected')
+                    AND "visaExpiry" IS NOT NULL
+                    AND "visaExpiry" < CURRENT_DATE + INTERVAL '7 days'
+                ) AS "visaAtRisk"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL
+         GROUP BY "groupId", "companyId"
+       )
+       SELECT g.*,
               a.name AS "agentName",
               sa.name AS "subAgentName",
               s.title AS "seasonTitle",
-              COALESCE((SELECT COUNT(*) FROM umrah_nusk_invoices ni
-                          WHERE ni."groupId" = g.id
-                            AND ni."companyId" = g."companyId"
-                            AND ni."deletedAt" IS NULL
-                            AND ni."nuskStatus" != 'cancelled'), 0) AS "nuskInvoiceCount",
-              COALESCE((SELECT SUM(ni."totalAmount") FROM umrah_nusk_invoices ni
-                          WHERE ni."groupId" = g.id
-                            AND ni."companyId" = g."companyId"
-                            AND ni."deletedAt" IS NULL
-                            AND ni."nuskStatus" != 'cancelled'), 0) AS "nuskCostTotal",
+              COALESCE(ns."nuskInvoiceCount", 0) AS "nuskInvoiceCount",
+              COALESCE(ns."nuskCostTotal", 0) AS "nuskCostTotal",
               si.ref AS "salesInvoiceRef",
               si.total AS "salesInvoiceTotal",
               si.status AS "salesInvoiceStatus",
               GREATEST(COALESCE(si.total, 0) - COALESCE(si."paidAmount", 0), 0) AS "salesOutstanding",
-              COALESCE((SELECT COUNT(*) FROM umrah_pilgrims p
-                          WHERE p."groupId" = g.id
-                            AND p."companyId" = g."companyId"
-                            AND p."deletedAt" IS NULL
-                            AND p.status IN ('arrived','active','overstayed')), 0) AS "pilgrimsInside",
-              COALESCE((SELECT COUNT(*) FROM umrah_pilgrims p
-                          WHERE p."groupId" = g.id
-                            AND p."companyId" = g."companyId"
-                            AND p."deletedAt" IS NULL
-                            AND p.status = 'overstayed'), 0) AS "pilgrimsOverstayed",
-              COALESCE((SELECT COUNT(*) FROM umrah_pilgrims p
-                          WHERE p."groupId" = g.id
-                            AND p."companyId" = g."companyId"
-                            AND p."deletedAt" IS NULL
-                            AND p.status NOT IN ('departed','cancelled','deceased','visa_rejected')
-                            AND p."visaExpiry" IS NOT NULL
-                            AND p."visaExpiry" < CURRENT_DATE + INTERVAL '7 days'), 0) AS "visaAtRisk"
+              COALESCE(ps."pilgrimsInside", 0) AS "pilgrimsInside",
+              COALESCE(ps."pilgrimsOverstayed", 0) AS "pilgrimsOverstayed",
+              COALESCE(ps."visaAtRisk", 0) AS "visaAtRisk"
        FROM umrah_groups g
        LEFT JOIN umrah_agents a ON g."agentId" = a.id
        LEFT JOIN umrah_sub_agents sa ON g."subAgentId" = sa.id
        LEFT JOIN umrah_seasons s ON g."seasonId" = s.id AND s."deletedAt" IS NULL
        LEFT JOIN umrah_sales_invoices si ON si.id = g."salesInvoiceId" AND si."deletedAt" IS NULL
+       LEFT JOIN nusk_stats ns ON ns."groupId" = g.id AND ns."companyId" = g."companyId"
+       LEFT JOIN pilgrim_stats ps ON ps."groupId" = g.id AND ps."companyId" = g."companyId"
        WHERE ${where}
        ORDER BY g."createdAt" DESC
        LIMIT 500`,
