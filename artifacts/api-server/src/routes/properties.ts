@@ -629,10 +629,27 @@ router.get("/units/:id", authorize({ feature: "properties.units", action: "view"
 
     const [contracts, payments, maintenance, timeline] = await Promise.all([
       rawQuery<Record<string, unknown>>(
-        `SELECT rc.*, (SELECT COUNT(*) FROM rent_payments WHERE "contractId"=rc.id AND status='paid') AS "paidCount",
-                (SELECT COALESCE(SUM(amount),0) FROM rent_payments WHERE "contractId"=rc.id) AS "totalAmount",
-                (SELECT COALESCE(SUM("paidAmount"),0) FROM rent_payments WHERE "contractId"=rc.id) AS "totalPaid"
-         FROM rental_contracts rc WHERE "unitId"=$1 AND "companyId"=$2 AND rc."deletedAt" IS NULL ORDER BY rc.id DESC LIMIT 10`,
+        // Pre-aggregate rent_payments stats once via CTE instead of
+        // running THREE scalar subqueries per row (paidCount +
+        // totalAmount + totalPaid). At LIMIT 10 contracts that's
+        // 31 redundant lookups through rent_payments. Single CTE
+        // collects all three aggregates in one scan using FILTER.
+        `WITH payment_stats AS (
+           SELECT "contractId",
+                  COUNT(*) FILTER (WHERE status = 'paid') AS "paidCount",
+                  COALESCE(SUM(amount), 0) AS "totalAmount",
+                  COALESCE(SUM("paidAmount"), 0) AS "totalPaid"
+           FROM rent_payments
+           GROUP BY "contractId"
+         )
+         SELECT rc.*,
+                COALESCE(ps."paidCount", 0) AS "paidCount",
+                COALESCE(ps."totalAmount", 0) AS "totalAmount",
+                COALESCE(ps."totalPaid", 0) AS "totalPaid"
+         FROM rental_contracts rc
+         LEFT JOIN payment_stats ps ON ps."contractId" = rc.id
+         WHERE "unitId"=$1 AND "companyId"=$2 AND rc."deletedAt" IS NULL
+         ORDER BY rc.id DESC LIMIT 10`,
         [id, scope.companyId]
       ),
       rawQuery<Record<string, unknown>>(
@@ -3449,12 +3466,40 @@ router.get("/owners", authorize({ feature: "properties.owners", action: "list" }
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (search) { params.push(`%${search}%`); conditions.push(`(name ILIKE $${params.length} OR "nationalId" ILIKE $${params.length} OR "crNumber" ILIKE $${params.length} OR phone ILIKE $${params.length})`); }
+    // Pre-aggregate the three sibling counts via separate CTEs
+    // instead of running three scalar subqueries per row. Original
+    // was 3×N+1: 500 owners × 3 subqueries = 1501 lookups across
+    // property_buildings + property_units + rental_contracts. Three
+    // CTEs scan each table once.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT o.*,
-        (SELECT COUNT(*) FROM property_buildings WHERE "ownerId"=o.id AND "deletedAt" IS NULL) AS "buildingCount",
-        (SELECT COUNT(*) FROM property_units WHERE "ownerId"=o.id AND "deletedAt" IS NULL) AS "unitCount",
-        (SELECT COUNT(*) FROM rental_contracts WHERE "ownerId"=o.id AND status='active' AND "deletedAt" IS NULL) AS "activeContracts"
-       FROM property_owners o WHERE ${conditions.join(" AND ")} AND o."deletedAt" IS NULL ORDER BY o.name LIMIT 500`,
+      `WITH building_counts AS (
+         SELECT "ownerId", COUNT(*) AS "buildingCount"
+         FROM property_buildings
+         WHERE "deletedAt" IS NULL
+         GROUP BY "ownerId"
+       ),
+       unit_counts AS (
+         SELECT "ownerId", COUNT(*) AS "unitCount"
+         FROM property_units
+         WHERE "deletedAt" IS NULL
+         GROUP BY "ownerId"
+       ),
+       active_contract_counts AS (
+         SELECT "ownerId", COUNT(*) AS "activeContracts"
+         FROM rental_contracts
+         WHERE status='active' AND "deletedAt" IS NULL
+         GROUP BY "ownerId"
+       )
+       SELECT o.*,
+              COALESCE(bc."buildingCount", 0)::int AS "buildingCount",
+              COALESCE(uc."unitCount", 0)::int AS "unitCount",
+              COALESCE(acc."activeContracts", 0)::int AS "activeContracts"
+       FROM property_owners o
+       LEFT JOIN building_counts bc ON bc."ownerId" = o.id
+       LEFT JOIN unit_counts uc ON uc."ownerId" = o.id
+       LEFT JOIN active_contract_counts acc ON acc."ownerId" = o.id
+       WHERE ${conditions.join(" AND ")} AND o."deletedAt" IS NULL
+       ORDER BY o.name LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
