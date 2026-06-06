@@ -29,6 +29,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
@@ -465,6 +466,22 @@ function MemosTab({ memos, onSortedDataChange }: { memos: any[]; onSortedDataCha
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "memoNumber", label: "رقم المحضر" },
+              { key: "employeeName", label: "الموظف" },
+              { key: "violationType", label: "نوع المخالفة" },
+              { key: "incidentDate", label: "تاريخ الحادثة" },
+              { key: "appliedPenaltyLabel", label: "العقوبة" },
+              { key: "appliedDeductionAmount", label: "قيمة الخصم" },
+              { key: "status", label: "الحالة" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "المخالفات-والمحاضر",
+          )
+        }
         resultCount={filtered.length}
       />
 
