@@ -19,6 +19,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 export default function TreasuryPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
@@ -33,6 +34,7 @@ export default function TreasuryPage() {
 
   const summary = data?.summary || {};
   const accounts = data?.accounts || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(accounts);
   const movements = data?.recentMovements || [];
   const dailySummary = data?.dailySummary || [];
 
@@ -194,15 +196,15 @@ export default function TreasuryPage() {
             entityType="report_finance_treasury"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "الخزينة — الأرصدة النقدية", total: accounts.length },
-              items: accounts.map((a: any) => ({
+            payload={() => ({
+              entity: { title: "الخزينة — الأرصدة النقدية", total: printRows.length },
+              items: printRows.map((a: any) => ({
                 "الكود": a.code,
                 "اسم الحساب": a.name,
                 "النوع": a.code?.startsWith("110") ? "صندوق نقدي" : a.code?.startsWith("11") ? "حساب بنكي" : "أخرى",
                 "الرصيد الحالي": Number(a.currentBalance ?? 0),
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -305,6 +307,7 @@ export default function TreasuryPage() {
       {activeTab === "accounts" && (
         <DataTable
           columns={accountColumns}
+          onSortedDataChange={setPrintRows}
           data={accounts}
           isLoading={isLoading}
           isError={isError}

@@ -51,6 +51,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const jobStatusMap: Record<string, { label: string; color: string }> = {
   open: { label: "مفتوح", color: "bg-status-success-surface text-status-success-foreground" },
@@ -81,6 +82,7 @@ export default function RecruitmentPage() {
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const filteredJobs = applyFilters(jobs, filters, { searchFields: ["title", "department"], statusField: "status" });
   const filteredApps = applyFilters(apps, filters, { searchFields: ["applicantName", "name"], statusField: "status" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredApps);
 
   const kpis = [
     { label: "وظائف مفتوحة", value: stats?.openPostings ?? jobs.filter((j: any) => j.status === "open").length, icon: Briefcase, color: "text-status-info-foreground bg-status-info-surface" },
@@ -221,13 +223,13 @@ export default function RecruitmentPage() {
           entityType="report_hr_recruitment"
           entityId="list"
           size="icon"
-          payload={{
+          payload={() => ({
             entity: {
               title: "تقرير التوظيف والاستقطاب",
               totalJobs: filteredJobs.length,
-              totalApplicants: filteredApps.length,
+              totalApplicants: printRows.length,
             },
-            items: filteredApps.map((a: any) => ({
+            items: printRows.map((a: any) => ({
               "المتقدِّم": a.applicantName || a.name || "—",
               "الوظيفة": a.jobTitle || a.position || "—",
               "الهاتف": a.phone || "—",
@@ -235,7 +237,7 @@ export default function RecruitmentPage() {
               "الحالة": a.status || "—",
               "التاريخ": a.appliedAt || a.createdAt || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -341,6 +343,7 @@ export default function RecruitmentPage() {
         <TabsContent value="applicants">
           <DataTable
             columns={appColumns}
+            onSortedDataChange={setPrintRows}
             data={filteredApps}
             noToolbar
             emptyMessage="لا يوجد متقدمين"
