@@ -15,6 +15,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   PageShell,
   PageStatusBadge,
   FormShell,
@@ -195,6 +196,20 @@ export default function SalaryComponentsPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filtered.length}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "name", label: "المكون" },
+              { key: "calculationType", label: "طريقة الحساب" },
+              { key: "type", label: "التصنيف" },
+              { key: "value", label: "القيمة" },
+              { key: "taxable", label: "خاضع للضريبة" },
+              { key: "status", label: "الحالة" },
+            ],
+            "مكونات-الرواتب",
+          )
+        }
       />
 
       {showForm && (

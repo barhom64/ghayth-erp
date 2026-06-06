@@ -24,6 +24,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   FormShell,
   FormTextField,
   FormTextareaField,
@@ -271,6 +272,19 @@ export default function IDPPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filtered.length}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "title", label: "عنوان الخطة" },
+              { key: "targetDate", label: "التاريخ المستهدف" },
+              { key: "status", label: "الحالة" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "خطط-التطوير-الفردي",
+          )
+        }
       />
 
       {/* Table */}
