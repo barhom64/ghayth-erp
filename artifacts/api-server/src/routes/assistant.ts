@@ -2,7 +2,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { currentPeriod } from "../lib/businessHelpers.js";
+import { currentPeriod, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -180,6 +180,29 @@ router.post("/ask", authorize({ feature: "dashboard.executive", action: "view" }
     const q = String((req.body?.q ?? "")).trim();
     if (!q) throw new ValidationError("اكتب سؤالك");
     const intent = INTENTS.find((i) => i.match.test(q));
+    // Usage audit — every question (matched or not) becomes a trail
+    // entry. Useful for analytics (which intents fire, which questions
+    // miss the matcher) and for abuse detection (spam patterns from a
+    // single user). Stop-ship audit (#1139 §8) flagged this endpoint
+    // as a write-without-audit warning before this change.
+    const matched = !!intent;
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "assistant.ask",
+      entity: "assistant_queries",
+      entityId: scope.userId, // user-scoped surface; the userId is the natural anchor
+      after: { question: q, matched, intent: intent?.key ?? null },
+    });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "assistant.ask",
+      entity: "assistant_queries",
+      entityId: scope.userId,
+      details: JSON.stringify({ matched, intent: intent?.key ?? null }),
+    }).catch((e) => logger.error(e, "assistant.ask event emit failed"));
     if (!intent) {
       return void res.json(maskFields(req, {
         matched: false,
