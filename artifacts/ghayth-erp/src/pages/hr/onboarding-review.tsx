@@ -19,6 +19,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
@@ -288,6 +289,22 @@ export default function OnboardingReviewPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "name", label: "الاسم" },
+              { key: "empNumber", label: "الرقم الوظيفي" },
+              { key: "jobTitle", label: "المسمى الوظيفي" },
+              { key: "branchName", label: "الفرع" },
+              { key: "hireDate", label: "تاريخ التعيين" },
+              { key: "completedSteps", label: "خطوات مكتملة" },
+              { key: "totalSteps", label: "إجمالي الخطوات" },
+              { key: "status", label: "الحالة" },
+            ],
+            "مراجعة-الإعداد-الوظيفي",
+          )
+        }
         resultCount={filtered.length}
       />
 

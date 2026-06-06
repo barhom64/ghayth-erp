@@ -12,6 +12,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -257,6 +258,21 @@ export default function WpsRunsPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "period", label: "الفترة" },
+              { key: "bankName", label: "البنك" },
+              { key: "totalEmployees", label: "عدد الموظفين" },
+              { key: "totalAmount", label: "إجمالي المبلغ" },
+              { key: "status", label: "الحالة" },
+              { key: "submittedAt", label: "تاريخ الإرسال" },
+              { key: "ackedAt", label: "تاريخ التأكيد" },
+            ],
+            "ملفات-WPS",
+          )
+        }
       />
 
       <DataTable

@@ -14,6 +14,7 @@ import {
   useFilters,
   applyFilters,
   PageShell,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -306,6 +307,22 @@ export default function EmployeeActivationPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "name", label: "الاسم" },
+              { key: "empNumber", label: "الرقم الوظيفي" },
+              { key: "jobTitle", label: "المسمى الوظيفي" },
+              { key: "branchName", label: "الفرع" },
+              { key: "hireDate", label: "تاريخ التعيين" },
+              { key: "phone", label: "الجوال" },
+              { key: "email", label: "البريد" },
+              { key: "status", label: "الحالة" },
+            ],
+            "تنشيط-حسابات-الموظفين",
+          )
+        }
         resultCount={filtered.length}
       />
 
