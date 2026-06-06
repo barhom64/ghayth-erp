@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { ClientSelect } from "@/components/shared/entity-selects";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { InlineSparkline } from "@/components/shared/inline-sparkline";
 import { PrintButton } from "@/components/shared/print-button";
 import {
   Building2, Phone, Mail, Printer, Download, AlertTriangle,
@@ -306,6 +307,11 @@ export default function Customer360SheetPage() {
                 <div className="text-[10px] text-muted-foreground mt-1">
                   {stmt.endingBalance > 0 ? "مدين للشركة" : stmt.endingBalance < 0 ? "دائن للشركة" : "متوازن"}
                 </div>
+                <InlineSparkline
+                  values={stmt.movements.map((m) => Number(m.runningBalance ?? 0))}
+                  tone={stmt.endingBalance > 0 ? "warning" : "success"}
+                  testid="customer-360-balance-spark"
+                />
               </CardContent>
             </Card>
             <Card className={overdueAmount > 0 ? "border-status-warning-foreground" : ""}>
