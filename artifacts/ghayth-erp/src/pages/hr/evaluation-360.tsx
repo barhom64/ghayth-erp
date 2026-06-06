@@ -14,6 +14,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Plus, Target, TrendingUp, Award, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -209,6 +210,22 @@ export default function Evaluation360Page() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "period", label: "فترة التقييم" },
+              { key: "managerScore", label: "تقييم المدير" },
+              { key: "peerScore", label: "تقييم الزملاء" },
+              { key: "selfScore", label: "التقييم الذاتي" },
+              { key: "upwardScore", label: "التقييم الصاعد" },
+              { key: "overallScore", label: "المعدل الإجمالي" },
+              { key: "status", label: "الحالة" },
+            ],
+            "تقييم-360-درجة",
+          )
+        }
         resultCount={filtered.length}
       />
 

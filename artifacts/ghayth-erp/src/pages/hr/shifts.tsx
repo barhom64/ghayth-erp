@@ -12,6 +12,7 @@ import {
   useFilters,
   applyFilters,
   PageShell,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Plus, Clock, Users, Sun, Moon } from "lucide-react";
@@ -203,6 +204,21 @@ export default function ShiftsPage() {
               }}
               values={filters}
               onChange={setFilters}
+              onExportCSV={() =>
+                exportToCSV(
+                  filteredAssignments || [],
+                  [
+                    { key: "employeeName", label: "الموظف" },
+                    { key: "shiftName", label: "الوردية" },
+                    { key: "startDate", label: "تاريخ البداية" },
+                    { key: "endDate", label: "تاريخ النهاية" },
+                    { key: "startTime", label: "وقت البداية" },
+                    { key: "endTime", label: "وقت النهاية" },
+                    { key: "branchName", label: "الفرع" },
+                  ],
+                  "تعيينات-الورديات",
+                )
+              }
               resultCount={filteredAssignments.length}
             />
             <DataTable
