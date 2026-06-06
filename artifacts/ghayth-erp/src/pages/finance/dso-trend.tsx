@@ -13,6 +13,7 @@ import {
   Clock, TrendingUp, TrendingDown, AlertTriangle, Target,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { InlineSparkline } from "@/components/shared/inline-sparkline";
 
 /**
  * Days Sales Outstanding (DSO) Trend
@@ -204,12 +205,22 @@ export default function DsoTrendPage() {
             <p className="text-[10px] text-muted-foreground mt-1">
               vs {trend[0]?.dso ?? 0} قبل {monthCount} شهر
             </p>
+            <InlineSparkline
+              values={trend.map((t) => t.dso)}
+              tone={statusFor(latestDso) === "good" ? "success" : "warning"}
+              testid="dso-trend-current-spark"
+            />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">متوسط الفترة</p>
             <p className="text-2xl font-bold font-mono mt-1">{avgDso} يوم</p>
+            <InlineSparkline
+              values={trend.map((t) => t.dso)}
+              tone="muted"
+              testid="dso-trend-avg-spark"
+            />
           </CardContent>
         </Card>
         <Card>
@@ -232,6 +243,11 @@ export default function DsoTrendPage() {
             <p className="text-[10px] text-muted-foreground mt-1">
               {Math.abs(latestDso - earliestDso)} يوم {trendArrow === "up" ? "زيادة" : "نقصان"}
             </p>
+            <InlineSparkline
+              values={trend.map((t) => t.dso)}
+              tone={trendArrow === "up" ? "warning" : "success"}
+              testid="dso-trend-direction-spark"
+            />
           </CardContent>
         </Card>
       </div>
