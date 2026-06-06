@@ -47,9 +47,16 @@ ALTER TABLE public.companies
 -- did not exist before this migration). On a true rolling deploy the
 -- old app version never sees subscriptionStatus, so the new constraint
 -- is invisible to it.
-ALTER TABLE public.companies
-  ADD CONSTRAINT companies_subscription_status_check
-  CHECK ("subscriptionStatus" IN ('trial', 'active', 'expired', 'cancelled'));
+-- Idempotent: skip if the constraint already exists (baseline dump may
+-- already carry it, in which case a bare ADD CONSTRAINT aborts the boot).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'companies_subscription_status_check' AND conrelid = 'public.companies'::regclass) THEN
+    ALTER TABLE public.companies
+      ADD CONSTRAINT companies_subscription_status_check
+      CHECK ("subscriptionStatus" IN ('trial', 'active', 'expired', 'cancelled'));
+  END IF;
+END $$;
 
 -- Backfill: every PRE-EXISTING company is treated as already paid.
 -- Without this, the moment the new gate ships every legacy tenant
