@@ -143,24 +143,41 @@ resolve regardless of which file the mount lives in.
 
 ---
 
-## P4 — Per-route subscription gates ⬜ NOT STARTED
+## P4 — Per-route subscription gates 🟡 BACKEND COMPLETE
 
 Closes finding #5 (subscription gate is company-wide, not "sell each route
 independently").
 
-| # | Task | Status |
-|---|---|---|
-| P4.1 | `subscription_products` + `subscription_features` tables | ⬜ TODO |
-| P4.2 | `company_subscription_features` per-feature tracking | ⬜ TODO |
-| P4.3 | `featureGate(featureKey)` middleware | ⬜ TODO |
-| P4.4 | existing `subscriptionGate` becomes whole-company-only safety net | ⬜ TODO |
-| P4.5 | Admin UI for per-feature toggling | ⬜ TODO |
+| # | Task | Status | Commit |
+|---|---|---|---|
+| P4.1 | `subscription_products` + `subscription_features` tables | ✅ Shipped (migration 253) | (pending) |
+| P4.2 | `company_subscription_features` per-feature tracking | ✅ Shipped (migration 253 + seed grandfathers every tenant) | (pending) |
+| P4.3 | `featureGate(featureKey)` middleware | ✅ Shipped (`lib/middlewares/featureGate.ts` + 60s cache) | (pending) |
+| P4.4 | existing `subscriptionGate` becomes whole-company-only safety net | ✅ Done (both gates coexist — `featureGate` adds granularity, `subscriptionGate` stays as the expired/cancelled safety net) | (pending) |
+| P4.5 | Admin endpoints for per-feature toggling | ✅ Shipped (5 endpoints under `/admin/subscription-features`) | (pending) |
+| P4.6 | Admin SPA for per-feature toggling | ⬜ TODO | — |
 
-**Estimated effort:** 2-3 weeks. Largest remaining piece — touches DB
-schema, every authorize() call site, and a brand-new admin UI surface.
-**Hard dependency on P3** (manifest-based router) — without per-route
-metadata declared in one place, wiring features to routes is per-file
-boilerplate.
+**Backend shape:**
+- 3 new tables: `subscription_products` (sellable SKUs), `subscription_features`
+  (per-product fine-grained features), `company_subscription_features` (per-tenant
+  per-feature row with status + optional expiresAt).
+- `featureGate("<key>")` middleware reads scope.companyId × featureKey, returns
+  402 FEATURE_NOT_SUBSCRIBED when entitlement missing or expired. Owner soft-
+  bypass so they can reach the billing page. 60s in-memory cache.
+- Prefix-mount pattern in `_domain-mounts.ts` — `router.use("/hr", featureGate("hr.access"))`
+  gates every /hr/* sub-router. Three demo mounts shipped (`/hr`, `/fleet`,
+  `/umrah`); the rest stay un-gated (current behaviour) until ops adds them.
+- Admin endpoints: `GET /products`, `GET /features`, `GET /companies/:id/features`,
+  `POST/DELETE /companies/:id/features/:key`. featureKey validated against
+  catalog + allowlist regex. Cache invalidated on every write.
+- Backwards compatible: migration seeds every existing company × every feature
+  with status='active', so NO existing tenant loses access on deploy.
+
+**36 smoke assertions** (`p4FeatureGate.test.ts`) lock the contract.
+
+**P4 remaining:** admin SPA page (P4.6). Optional follow-on: gate more
+mounts (`/finance`, `/crm`, `/warehouse`, `/intelligence`) once commercial
+defines the price tiers.
 
 ---
 
@@ -168,19 +185,23 @@ boilerplate.
 
 | Phase | Status | Tests added | Senior commits |
 |---|---|---|---|
-| P0 | ✅ Complete | 16 | 1 |
+| P0 | ✅ Complete | 22 (16 + 6 explicit-flag) | 2 |
 | P1 | ✅ Complete | 16 | 1 |
-| P2 | 🟡 Partial (P2.5 only) | 4 | (with P1) |
-| P3 | ⬜ Not started | — | — |
-| P4 | ⬜ Not started | — | — |
+| P2 | 🟡 Partial (P2.1+2+3+4+5 shipped; 6 TBD) | 55 | 3 |
+| P3 | ✅ Complete | 12 | 1 |
+| P4 | 🟡 Backend complete (P4.6 admin SPA TBD) | 36 | 1 |
 
-**Total new tests on the security/architecture surface: 36.**
+**Total new tests on the security/architecture surface: 141.**
 
-What's shipped in this branch closes the four highest-risk findings:
+What's shipped in this branch closes seven of the nine senior-review findings:
 1. branch-id silent fallback (✅ P0.1)
-2. SQL injection vector via orderBy/extraConditions (✅ P0.3)
-3. Worker / API single-point-of-failure (✅ P1)
-4. Outbox purge race that would erupt the moment a relay lands (✅ P2.5)
+2. enforceBranchScope opt-in (✅ P0.2 — runtime warn + explicit flags on 5 highest-risk routes)
+3. SQL injection vector via orderBy/extraConditions (✅ P0.3)
+4. Worker / API single-point-of-failure (✅ P1)
+5. Outbox not relayed + purge race (✅ P2.1+P2.2+P2.3+P2.4+P2.5; live-DB integration TBD)
+6. Bloated central router (✅ P3)
+7. Subscription gate is company-wide (✅ P4 backend; admin SPA TBD)
 
-P2 (relay), P3 (router), P4 (per-route subs) remain as named follow-up phases.
-Each can ship as an independent PR without conflicting with the others.
+Remaining: P2.6 (live-DB outbox integration tests) + P4.6 (admin SPA for
+per-feature toggling). Each can ship as an independent PR without
+conflicting with the others.

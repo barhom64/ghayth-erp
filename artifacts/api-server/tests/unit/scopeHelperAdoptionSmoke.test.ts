@@ -46,6 +46,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "admin-notification-routing.ts",
   "admin-observability.ts",
   "admin-pbx-control.ts",
+  // admin-subscription-features.ts: cross-tenant entitlement admin (mounted
+  // at /admin level 90). Queries reference subscription_features + the
+  // companyId entitlement matrix directly by URL parameter — the level
+  // gate is the tenant boundary, not buildScopedWhere.
+  "admin-subscription-features.ts",
   "admin-vendor-settings.ts",
   "admin.ts",
   "approvalActions.ts",
@@ -189,10 +194,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // P3 — added _limiters.ts + _domain-mounts.ts (pure mount/declaration
     // files, no companyId patterns, no scopedQuery usage). Bumps total
     // by 2 but leaves helperUsers + manualOnly unchanged.
+    // P4 — added admin-subscription-features.ts (cross-tenant admin,
+    // allowlisted above). Bumps total by 1 and manualOnly by 1.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 107,
+      total: 108,
       helperUsers: 36,
-      manualOnly: 66,
+      manualOnly: 67,
     });
   });
 });

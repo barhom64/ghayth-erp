@@ -57,6 +57,7 @@ import rulesRouter from "./rules.js";
 import moduleDashboardsRouter from "./moduleDashboards.js";
 import adminRouter from "./admin.js";
 import adminObservabilityRouter from "./admin-observability.js";
+import adminSubscriptionFeaturesRouter from "./admin-subscription-features.js";
 import adminAiGovernanceRouter from "./admin-ai-governance.js";
 import adminCommControlRouter from "./admin-communication-control.js";
 import adminPbxControlRouter from "./admin-pbx-control.js";
@@ -130,6 +131,11 @@ import {
   warehouseUserLimiter,
   hrUserLimiter,
 } from "./_limiters.js";
+// P4 — per-feature subscription gate. Mounted once per module prefix
+// (e.g. router.use("/fleet", featureGate("fleet.access"))) so every
+// sub-router beneath that prefix inherits the 402-on-not-subscribed
+// behaviour without each mount having to declare it.
+import { featureGate } from "../middlewares/featureGate.js";
 
 /**
  * Mounts every domain router onto the central router in the precise
@@ -146,6 +152,9 @@ export function mountDomainRouters(router: IRouter): void {
   // Per-user HR limiter mounted once on /hr so it runs exactly once per
   // request, regardless of which sub-router handles it.
   router.use("/hr", hrUserLimiter);
+  // P4 — HR product gate. Mounted once on /hr so every /hr/* sub-router
+  // below inherits the entitlement check.
+  router.use("/hr", featureGate("hr.access"));
   router.use("/hr", requireModule("hr"), hrRouter);
   router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
   router.use("/hr", requireModule("hr"), loansRouter);
@@ -178,6 +187,8 @@ export function mountDomainRouters(router: IRouter): void {
   router.use("/notifications", notificationsRouter);
   router.use("/tasks", requireModule("operations"), tasksRouter);
   router.use("/fleet", fleetUserLimiter);
+  // P4 — fleet product gate. Same prefix-mount pattern as /hr above.
+  router.use("/fleet", featureGate("fleet.access"));
   router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRouter);
   // Telematics surface mounted under /fleet so it inherits the module +
   // financial guard + per-user limiter; URLs stay /fleet/telematics/*.
@@ -220,6 +231,10 @@ export function mountDomainRouters(router: IRouter): void {
   router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
   router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);
   router.use("/admin/observability", requireModule("admin"), requireMinLevel(90), adminObservabilityRouter);
+  // P4 — per-feature entitlement admin. Mounted at level 90 (owner /
+  // admin / GM) so the upsert + delete actions sit behind the same gate
+  // as the rest of /admin.
+  router.use("/admin/subscription-features", requireModule("admin"), requireMinLevel(90), adminSubscriptionFeaturesRouter);
   router.use("/admin/ai-governance", requireModule("admin"), requireMinLevel(90), adminAiGovernanceRouter);
   router.use("/admin/communication-control", requireModule("admin"), requireMinLevel(90), adminCommControlRouter);
   router.use("/admin/pbx-control", requireModule("admin"), requireMinLevel(90), adminPbxControlRouter);
@@ -245,6 +260,8 @@ export function mountDomainRouters(router: IRouter): void {
   // Umrah limiter mounted once on /umrah prefix so it runs exactly once
   // even when Express falls through to umrahEntitiesRouter.
   router.use("/umrah", umrahUserLimiter);
+  // P4 — umrah product gate. Same prefix-mount pattern as /hr + /fleet.
+  router.use("/umrah", featureGate("umrah.access"));
   router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahRouter);
   router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahEntitiesRouter);
   router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
