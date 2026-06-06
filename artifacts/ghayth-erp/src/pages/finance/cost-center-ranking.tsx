@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { DateRangePresets } from "@/components/shared/date-range-presets";
+import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { formatCurrency } from "@/lib/formatters";
 import { TrendingUp, TrendingDown, ArrowUpDown, ExternalLink, BarChart3, Download, Network } from "lucide-react";
@@ -227,7 +228,7 @@ export default function CostCenterRankingPage() {
                   لا توجد بيانات في الفترة المحددة
                 </div>
               ) : (
-                <RankingList rows={data.rows} />
+                <RankingList rows={data.rows} metric={metric} />
               )}
             </CardContent>
           </Card>
@@ -237,28 +238,45 @@ export default function CostCenterRankingPage() {
   );
 }
 
-function RankingList({ rows }: { rows: RankingRow[] }) {
+function RankingList({ rows, metric }: { rows: RankingRow[]; metric: string }) {
   const maxRev = Math.max(...rows.map((r) => r.revenue), 0);
   const maxExp = Math.max(...rows.map((r) => r.expense), 0);
+  const metricValues = rows.map((r) => {
+    switch (metric) {
+      case "revenue": return r.revenue;
+      case "expense": return r.expense;
+      case "net":     return r.net;
+      case "entries": return r.entries;
+      default:        return 0;
+    }
+  });
+  const { cumulativePcts, thresholdIdx } = computeParetoCumulative(metricValues);
   return (
     <div className="divide-y" data-testid="cc-ranking-list">
       {rows.map((r, idx) => {
         const revPct = maxRev > 0 ? Math.round((r.revenue / maxRev) * 100) : 0;
         const expPct = maxExp > 0 ? Math.round((r.expense / maxExp) * 100) : 0;
         const netPositive = r.net >= 0;
+        const cumulativePct = cumulativePcts[idx] ?? 0;
+        const isThresholdRow = idx === thresholdIdx;
         return (
           <Link
             key={r.ccId}
             href={`/finance/cost-centers/${r.ccId}/pnl`}
             data-testid={`cc-ranking-row-${r.ccId}`}
           >
-            <div className="p-3 flex items-center gap-3 hover:bg-muted/30 cursor-pointer">
+            <div className={`p-3 flex items-center gap-3 hover:bg-muted/30 cursor-pointer ${isThresholdRow ? "bg-amber-50 dark:bg-amber-950/20" : ""}`}>
               <Badge variant="outline" className="text-xs font-mono shrink-0">
                 #{idx + 1}
               </Badge>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium truncate">{r.ccName}</span>
+                  <ParetoMarker
+                    cumulativePct={cumulativePct}
+                    isThresholdRow={isThresholdRow}
+                    testidPrefix={`cc-ranking-pareto-${r.ccId}`}
+                  />
                   {r.ccCode && (
                     <span className="font-mono text-xs text-muted-foreground" dir="ltr">{r.ccCode}</span>
                   )}

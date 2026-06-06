@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { DateRangePresets } from "@/components/shared/date-range-presets";
+import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
 import { formatCurrency } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { TrendingUp, TrendingDown, BarChart3, ArrowUpDown, ExternalLink, Download } from "lucide-react";
@@ -253,7 +254,7 @@ export default function EntityRankingPage() {
                   لا توجد بيانات في الفترة المحددة
                 </div>
               ) : (
-                <RankingTable rows={data.rows} entityType={entityType} />
+                <RankingTable rows={data.rows} entityType={entityType} metric={metric} />
               )}
             </CardContent>
           </Card>
@@ -266,25 +267,42 @@ export default function EntityRankingPage() {
 function RankingTable({
   rows,
   entityType,
+  metric,
 }: {
   rows: RankingRow[];
   entityType: string;
+  metric: string;
 }) {
   const maxRevenue = Math.max(...rows.map((r) => r.revenue), 0);
   const maxExpense = Math.max(...rows.map((r) => r.expense), 0);
+  // Pareto cumulative — uses the SAME metric the operator is ranking
+  // by, so the badge actually answers "how much of the chosen metric
+  // does this row + everything before it account for?".
+  const metricValues = rows.map((r) => {
+    switch (metric) {
+      case "revenue": return r.revenue;
+      case "expense": return r.expense;
+      case "net":     return r.net;
+      case "entries": return r.entries;
+      default:        return 0;
+    }
+  });
+  const { cumulativePcts, thresholdIdx } = computeParetoCumulative(metricValues);
   return (
     <div className="divide-y" data-testid="entity-ranking-list">
       {rows.map((r, idx) => {
         const revPct = maxRevenue > 0 ? Math.round((r.revenue / maxRevenue) * 100) : 0;
         const expPct = maxExpense > 0 ? Math.round((r.expense / maxExpense) * 100) : 0;
         const netPositive = r.net >= 0;
+        const cumulativePct = cumulativePcts[idx] ?? 0;
+        const isThresholdRow = idx === thresholdIdx;
         return (
           <Link
             key={r.entityId}
             href={`/finance/entity-pnl/${entityType}/${r.entityId}`}
             data-testid={`entity-ranking-row-${r.entityId}`}
           >
-            <div className="p-3 flex items-center gap-3 hover:bg-muted/30 cursor-pointer">
+            <div className={`p-3 flex items-center gap-3 hover:bg-muted/30 cursor-pointer ${isThresholdRow ? "bg-amber-50 dark:bg-amber-950/20" : ""}`}>
               <Badge variant="outline" className="text-xs font-mono shrink-0">
                 #{idx + 1}
               </Badge>
@@ -296,6 +314,11 @@ function RankingTable({
                   <Badge variant="secondary" className="text-xs">
                     {r.entries.toLocaleString("ar-SA")} قيد
                   </Badge>
+                  <ParetoMarker
+                    cumulativePct={cumulativePct}
+                    isThresholdRow={isThresholdRow}
+                    testidPrefix={`entity-ranking-pareto-${r.entityId}`}
+                  />
                 </div>
                 <div className="grid grid-cols-3 gap-2 mt-1">
                   <MetricBar
