@@ -4046,6 +4046,19 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
 
     const applyAmt = roundTo2(Number(amount));
 
+    // F4 (audit follow-up): gate the period up front so a closed-period
+    // attempt surfaces as a typed ConflictError instead of an opaque
+    // engine-internal throw. The engine still guards the JE post itself,
+    // but the txn would roll back with an engine message; operators
+    // expect a `ConflictError` with `meta.periodName`.
+    const applyPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!applyPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تطبيق دفعة مقدمة في فترة مُقفلة: ${applyPeriodCheck.periodName ?? ""}`,
+        { meta: { periodName: applyPeriodCheck.periodName } },
+      );
+    }
+
     const { financialEngine } = await import("../lib/engines/index.js");
     const [advLiabCode, arCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "debit", "2400"),
