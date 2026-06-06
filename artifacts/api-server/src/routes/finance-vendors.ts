@@ -377,35 +377,35 @@ vendorsRouter.get("/payables", authorize({ feature: "finance.vendors", action: "
       paidAmount: number | string;
     }
     const rows = (await rawQuery<PayableRowDb>(
-      `SELECT
+      // Pre-aggregate supplier_payment_allocations once via a CTE
+      // instead of repeating the SUM subquery TWICE per row (it was
+      // both `paidAmount` AND inside the `outstandingAmount` math).
+      // Original was 2 × N+1: 200 nusk invoices × 2 subqueries =
+      // 400 round-trips through the allocations + journal_entries
+      // join. Single CTE scan + LEFT JOIN collapses both.
+      `WITH nusk_paid AS (
+         SELECT spa."obligationId" AS "niId", SUM(spa.amount) AS "paidAmount"
+         FROM supplier_payment_allocations spa
+         JOIN journal_entries je ON je.id = spa."journalEntryId"
+         WHERE spa."companyId" = $1
+           AND spa."obligationType" = 'nusk_invoice'
+           AND spa."deletedAt" IS NULL
+           AND je."deletedAt" IS NULL
+           AND je."balancesApplied" = true
+           AND je."reversedById" IS NULL
+         GROUP BY spa."obligationId"
+       )
+       SELECT
          ni.id,
          'umrah_nusk' AS source,
          ni."nuskInvoiceNumber",
          ni."issueDate", ni."expiryDate",
          ni."mutamerCount",
          ni."totalAmount", ni."refundAmount", ni."netCost",
-         COALESCE((SELECT SUM(spa.amount)
-                     FROM supplier_payment_allocations spa
-                     JOIN journal_entries je ON je.id = spa."journalEntryId"
-                    WHERE spa."companyId" = ni."companyId"
-                      AND spa."obligationType" = 'nusk_invoice'
-                      AND spa."obligationId" = ni.id
-                      AND spa."deletedAt" IS NULL
-                      AND je."deletedAt" IS NULL
-                      AND je."balancesApplied" = true
-                      AND je."reversedById" IS NULL), 0) AS "paidAmount",
+         COALESCE(np."paidAmount", 0) AS "paidAmount",
          (COALESCE(ni."totalAmount",0)
             - COALESCE(ni."refundAmount",0)
-            - COALESCE((SELECT SUM(spa.amount)
-                          FROM supplier_payment_allocations spa
-                          JOIN journal_entries je ON je.id = spa."journalEntryId"
-                         WHERE spa."companyId" = ni."companyId"
-                           AND spa."obligationType" = 'nusk_invoice'
-                           AND spa."obligationId" = ni.id
-                           AND spa."deletedAt" IS NULL
-                           AND je."deletedAt" IS NULL
-                           AND je."balancesApplied" = true
-                           AND je."reversedById" IS NULL), 0)
+            - COALESCE(np."paidAmount", 0)
          ) AS "outstandingAmount",
          ni."nuskStatus",
          ni."agentId",
@@ -419,6 +419,7 @@ vendorsRouter.get("/payables", authorize({ feature: "finance.vendors", action: "
        LEFT JOIN umrah_agents      a  ON a.id = ni."agentId"    AND a."deletedAt"  IS NULL
        LEFT JOIN umrah_sub_agents  sa ON sa.id = ni."subAgentId" AND sa."deletedAt" IS NULL
        LEFT JOIN chart_of_accounts t  ON t.id = ni."treasuryId"  AND t."deletedAt"  IS NULL
+       LEFT JOIN nusk_paid np ON np."niId" = ni.id
        WHERE ni."companyId" = $1
          AND ni."deletedAt" IS NULL
          AND ni."nuskStatus" != 'cancelled'
