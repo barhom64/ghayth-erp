@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
+import { AnomalyBadge } from "@/components/shared/anomaly-badge";
 import { formatCurrency } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { TrendingUp, TrendingDown, BarChart3, ArrowUpDown, ExternalLink, Download } from "lucide-react";
@@ -28,6 +29,13 @@ import { TrendingUp, TrendingDown, BarChart3, ArrowUpDown, ExternalLink, Downloa
  * the operator can click through to the per-entity drill.
  */
 
+interface PriorBucket {
+  revenue: number;
+  expense: number;
+  net: number;
+  entries: number;
+}
+
 interface RankingRow {
   entityId: number;
   entityName: string | null;
@@ -35,6 +43,9 @@ interface RankingRow {
   expense: number;
   net: number;
   entries: number;
+  /** Present only when includePrior=true. Null = entity didn't exist
+   *  in the prior period (no journal lines tagged with this entityId). */
+  prior?: PriorBucket | null;
 }
 
 interface RankingResponse {
@@ -44,6 +55,7 @@ interface RankingResponse {
   dateFrom: string;
   dateTo: string;
   limit: number;
+  includePrior?: boolean;
   rows: RankingRow[];
 }
 
@@ -77,19 +89,21 @@ export default function EntityRankingPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [limit, setLimit] = useState(20);
+  const [includePrior, setIncludePrior] = useState(false);
 
   const qs = new URLSearchParams({
     entityType,
     metric,
     direction,
     limit: String(limit),
+    ...(includePrior ? { includePrior: "true" } : {}),
   });
   if (from) qs.set("dateFrom", from);
   if (to) qs.set("dateTo", to);
   const path = `/finance/entity-ranking?${qs.toString()}`;
 
   const { data, isLoading, error, refetch } = useApiQuery<RankingResponse>(
-    ["entity-ranking", entityType, metric, direction, from, to, String(limit)],
+    ["entity-ranking", entityType, metric, direction, from, to, String(limit), String(includePrior)],
     path,
   );
 
@@ -231,6 +245,18 @@ export default function EntityRankingPage() {
             />
           </div>
           </div>
+          <label
+            className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer"
+            data-testid="entity-ranking-include-prior-toggle"
+          >
+            <input
+              type="checkbox"
+              checked={includePrior}
+              onChange={(e) => setIncludePrior(e.target.checked)}
+              className="h-3 w-3"
+            />
+            مع المقارنة بالعام السابق
+          </label>
         </CardContent>
       </Card>
 
@@ -262,6 +288,23 @@ export default function EntityRankingPage() {
       </PageStateWrapper>
     </PageShell>
   );
+}
+
+// Helper: pulls a row's value for the chosen metric. Shared with
+// AnomalyBadge so the prior-period comparison uses the SAME field the
+// operator is ranking by (e.g. ranking by 'expense' compares prior
+// expense, not prior revenue).
+function metricValue(
+  row: { revenue: number; expense: number; net: number; entries: number },
+  metric: string,
+): number {
+  switch (metric) {
+    case "revenue": return row.revenue;
+    case "expense": return row.expense;
+    case "net":     return row.net;
+    case "entries": return row.entries;
+    default:        return 0;
+  }
 }
 
 function RankingTable({
@@ -319,6 +362,14 @@ function RankingTable({
                     isThresholdRow={isThresholdRow}
                     testidPrefix={`entity-ranking-pareto-${r.entityId}`}
                   />
+                  {r.prior !== undefined && (
+                    <AnomalyBadge
+                      current={metricValue(r, metric)}
+                      prior={r.prior ? metricValue(r.prior, metric) : null}
+                      metric={metric as "revenue" | "expense" | "net" | "entries"}
+                      testidPrefix={`entity-ranking-anomaly-${r.entityId}`}
+                    />
+                  )}
                 </div>
                 <div className="grid grid-cols-3 gap-2 mt-1">
                   <MetricBar
