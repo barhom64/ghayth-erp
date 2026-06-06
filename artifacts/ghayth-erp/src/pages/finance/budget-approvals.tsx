@@ -76,11 +76,13 @@ export default function BudgetApprovalsPage() {
     [["budget-approvals"]],
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const totalRequested = rows.reduce((s, r) => s + Number(r.requestedAmount ?? 0), 0);
   const gmCount = rows.filter((r) => r.approvalLevel === "gm").length;
