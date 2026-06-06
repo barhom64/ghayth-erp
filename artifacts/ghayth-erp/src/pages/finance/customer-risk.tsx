@@ -12,6 +12,7 @@ import {
   ChevronRight, Phone, Megaphone, Clock, FileWarning,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 
@@ -208,6 +209,16 @@ export default function CustomerRiskPage() {
   const filtered = bandFilter ? customers.filter((c) => c.riskBand === bandFilter) : customers;
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
+  // Pareto cumulative on outstanding — `customers` is already
+  // outstanding-DESC. Crown marks the row crossing 80%: the operator
+  // gets "these N customers carry 80% of total AR — collect THESE
+  // first, the long tail can wait."
+  const { cumulativePcts: arCumulativePcts, thresholdIdx: arThresholdIdx } =
+    computeParetoCumulative(customers.map((c) => c.outstandingAmount), 80);
+  const cumulativeByName = new Map(
+    customers.map((c, i) => [c.clientName, { pct: arCumulativePcts[i] ?? 0, isThreshold: i === arThresholdIdx }]),
+  );
+
   if (arLoading || collLoading) return <LoadingSpinner />;
 
 
@@ -251,6 +262,20 @@ export default function CustomerRiskPage() {
               }`} style={{ width: `${Math.min(c.shareOfTotal, 100)}%` }} />
             </div>
           </div>
+        );
+      },
+    },
+    {
+      key: "_arPareto",
+      header: "حصة تراكمية",
+      render: (c) => {
+        const e = cumulativeByName.get(c.clientName);
+        return (
+          <ParetoMarker
+            cumulativePct={e?.pct ?? 0}
+            isThresholdRow={e?.isThreshold ?? false}
+            testidPrefix={`customer-risk-pareto-${c.clientName}`}
+          />
         );
       },
     },
