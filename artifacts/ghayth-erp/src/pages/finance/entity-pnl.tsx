@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { formatCurrency } from "@/lib/formatters";
-import { TrendingUp, TrendingDown, ScrollText, ArrowLeftRight, User } from "lucide-react";
+import { exportRowsToCsv } from "@/lib/unified-export";
+import { TrendingUp, TrendingDown, ScrollText, ArrowLeftRight, User, Download } from "lucide-react";
 
 /**
  * Per-entity P&L drill — pays off the journal-line dimensional
@@ -44,6 +45,23 @@ interface PnlResponse {
   dateTo: string;
   bucket: PnlBucket;
   recentEntries: RecentJE[];
+}
+
+interface MonthlyBucket {
+  month: string; // YYYY-MM
+  revenue: number;
+  expense: number;
+  net: number;
+  entries: number;
+}
+
+interface SeriesResponse {
+  entityType: string;
+  entityId: number;
+  dateFrom: string;
+  dateTo: string;
+  buckets: MonthlyBucket[];
+  totals: { revenue: number; expense: number; net: number; entries: number };
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -93,6 +111,18 @@ export default function EntityPnlPage() {
     path,
   );
 
+  // Monthly time-series for the trend chart. Defaults to last 12
+  // months at the backend, but inherits the date filter when the
+  // operator narrows. Falls back to lifetime if from/to are blank
+  // — same defaulting logic the backend uses.
+  const seriesPath = entityId
+    ? `/finance/entity-pnl/${entityType}/${entityId}/series${qs ? "?" + qs : ""}`
+    : null;
+  const { data: series } = useApiQuery<SeriesResponse>(
+    ["entity-pnl-series", entityType, String(entityId ?? ""), from, to],
+    seriesPath,
+  );
+
   const backHref = BACK_LINK[entityType] ?? "/finance";
 
   return (
@@ -105,12 +135,45 @@ export default function EntityPnlPage() {
         { label: "أرباح وخسائر" },
       ]}
       actions={
-        <Link href={backHref}>
-          <Button variant="ghost" data-testid="entity-pnl-back">
-            <User className="h-4 w-4 ms-1" />
-            رجوع
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          {data && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const fname = `entity-pnl-${entityType}-${entityId}`;
+                void exportRowsToCsv({
+                  entityType: "report_entity_pnl",
+                  title: fname,
+                  rows: [
+                    { metric: "الإيرادات", value: String(data.bucket.revenue) },
+                    { metric: "المصروفات", value: String(data.bucket.expense) },
+                    { metric: "الصافي", value: String(data.bucket.net) },
+                    { metric: "عدد القيود", value: String(data.bucket.entries) },
+                    ...(series?.buckets ?? []).map((b) => ({
+                      metric: `شهر ${b.month}`,
+                      value: `${b.revenue}|${b.expense}|${b.net}|${b.entries}`,
+                    })),
+                  ],
+                  columns: [
+                    { key: "metric", label: "البيان" },
+                    { key: "value",  label: "القيمة" },
+                  ],
+                }).catch((err) => console.error("[entity-pnl export] failed", err));
+              }}
+              data-testid="entity-pnl-export-csv"
+            >
+              <Download className="h-4 w-4 ms-1" />
+              CSV
+            </Button>
+          )}
+          <Link href={backHref}>
+            <Button variant="ghost" data-testid="entity-pnl-back">
+              <User className="h-4 w-4 ms-1" />
+              رجوع
+            </Button>
+          </Link>
+        </div>
       }
     >
       <FinanceTabsNav />
@@ -155,6 +218,10 @@ export default function EntityPnlPage() {
         {data && (
           <>
             <BucketCard bucket={data.bucket} />
+
+            {series && series.buckets.length > 0 && (
+              <TrendCard series={series} />
+            )}
 
             <Card>
               <CardHeader className="pb-2 flex flex-row items-center justify-between">
@@ -274,5 +341,98 @@ function Metric({
         {formatCurrency(value)}
       </div>
     </div>
+  );
+}
+
+// Monthly trend — small bar chart with revenue + expense + net line.
+// Each bucket renders as a vertical pair of bars (revenue green,
+// expense red) plus a dot above the bar pair showing the net. The
+// chart is hand-rolled SVG to avoid pulling in a charting dep.
+function TrendCard({ series }: { series: SeriesResponse }) {
+  const buckets = series.buckets;
+  const max = Math.max(
+    1,
+    ...buckets.map((b) => Math.max(Math.abs(b.revenue), Math.abs(b.expense))),
+  );
+  // Chart geometry — wide enough for 12 months at ~40px each.
+  const BAR_GROUP_WIDTH = 40;
+  const BAR_WIDTH = 14;
+  const CHART_HEIGHT = 140;
+  const PADDING_TOP = 8;
+  const PADDING_BOTTOM = 28;
+  const usableH = CHART_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
+  const chartWidth = Math.max(BAR_GROUP_WIDTH * buckets.length, 320);
+
+  return (
+    <Card className="mb-3" data-testid="entity-pnl-trend">
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-base flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          الاتجاه الشهري ({buckets.length} شهر)
+        </CardTitle>
+        <span className="text-xs text-muted-foreground">
+          الصافي التجميعي: {formatCurrency(series.totals.net)}
+        </span>
+      </CardHeader>
+      <CardContent className="p-3">
+        <div className="overflow-x-auto">
+          <svg
+            width={chartWidth}
+            height={CHART_HEIGHT}
+            className="block"
+            data-testid="entity-pnl-trend-chart"
+          >
+            {/* baseline */}
+            <line
+              x1={0}
+              x2={chartWidth}
+              y1={CHART_HEIGHT - PADDING_BOTTOM}
+              y2={CHART_HEIGHT - PADDING_BOTTOM}
+              stroke="currentColor"
+              strokeOpacity={0.2}
+            />
+            {buckets.map((b, i) => {
+              const groupX = i * BAR_GROUP_WIDTH;
+              const revH = (b.revenue / max) * usableH;
+              const expH = (b.expense / max) * usableH;
+              const yBase = CHART_HEIGHT - PADDING_BOTTOM;
+              return (
+                <g key={b.month} data-testid={`entity-pnl-trend-bar-${b.month}`}>
+                  <rect
+                    x={groupX + 4}
+                    y={yBase - revH}
+                    width={BAR_WIDTH}
+                    height={revH}
+                    className="fill-status-success-foreground"
+                    opacity={0.85}
+                  >
+                    <title>{`${b.month} · إيراد ${formatCurrency(b.revenue)}`}</title>
+                  </rect>
+                  <rect
+                    x={groupX + 4 + BAR_WIDTH + 2}
+                    y={yBase - expH}
+                    width={BAR_WIDTH}
+                    height={expH}
+                    className="fill-status-warning-foreground"
+                    opacity={0.85}
+                  >
+                    <title>{`${b.month} · مصروف ${formatCurrency(b.expense)}`}</title>
+                  </rect>
+                  <text
+                    x={groupX + BAR_GROUP_WIDTH / 2}
+                    y={CHART_HEIGHT - 8}
+                    textAnchor="middle"
+                    fontSize={10}
+                    className="fill-muted-foreground"
+                  >
+                    {b.month.slice(5)}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
