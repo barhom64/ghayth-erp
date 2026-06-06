@@ -355,7 +355,42 @@ router.get("/vehicles", authorize({ feature: "fleet.vehicles", action: "list" })
     if (status) { where += ` AND v.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (dateFrom) { where += ` AND v."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
     if (dateTo) { where += ` AND v."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT v.*, d.name AS "driverName", (SELECT COUNT(*) FROM gov_integration_links gl WHERE gl."entityType" = 'vehicle' AND gl."entityId" = v.id AND gl."companyId" = v."companyId")::int AS "govLinkCount", (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id AND fi."companyId" = v."companyId" AND fi."deletedAt" IS NULL) AS "insuranceExpiry" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL WHERE ${where} AND v."deletedAt" IS NULL ORDER BY v.id DESC LIMIT 500`, params);
+    // Dedicated binding for the gov_counts + insurance CTEs so we
+    // don't depend on any specific position inside the scoped where
+    // clause (which may pass companyId as an array via = ANY($1)).
+    params.push(scope.companyId);
+    const govCompanyIdx = paramIdx++;
+    // Pre-aggregate gov_integration_links + fleet_insurance once
+    // each instead of running scalar subqueries per row. The original
+    // pair of SELECT-list correlated subqueries was N+1: postgres
+    // planned one execution PER returned row, so 500 vehicles = 1001
+    // index lookups (501 gov + 500 insurance). Two CTEs scan each
+    // table once and the main SELECT LEFT JOINs the aggregates.
+    const rows = await rawQuery<Record<string, unknown>>(
+      `WITH gov_counts AS (
+         SELECT "entityId", COUNT(*) AS "govLinkCount"
+         FROM gov_integration_links
+         WHERE "entityType" = 'vehicle' AND "companyId" = $${govCompanyIdx}
+         GROUP BY "entityId"
+       ),
+       insurance_expiry AS (
+         SELECT "vehicleId", MAX("endDate") AS "insuranceExpiry"
+         FROM fleet_insurance
+         WHERE "companyId" = $${govCompanyIdx} AND "deletedAt" IS NULL
+         GROUP BY "vehicleId"
+       )
+       SELECT v.*,
+              d.name AS "driverName",
+              COALESCE(gc."govLinkCount", 0)::int AS "govLinkCount",
+              ie."insuranceExpiry"
+       FROM fleet_vehicles v
+       LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL
+       LEFT JOIN gov_counts gc ON gc."entityId" = v.id
+       LEFT JOIN insurance_expiry ie ON ie."vehicleId" = v.id
+       WHERE ${where} AND v."deletedAt" IS NULL
+       ORDER BY v.id DESC LIMIT 500`,
+      params,
+    );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Fleet vehicles error:"); }
 });
