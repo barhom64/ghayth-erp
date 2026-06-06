@@ -15,6 +15,7 @@ import {
 } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface OpeningBalance {
   id: number;
@@ -42,6 +43,7 @@ export default function OpeningBalancesPage() {
     totalDebit: Number(r.totalDebit || 0),
     totalCredit: Number(r.totalCredit || 0),
   }));
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const totalBalanced = items.filter(
     (i) => Math.abs(Number(i.totalDebit) - Number(i.totalCredit)) < 0.01
@@ -122,9 +124,9 @@ export default function OpeningBalancesPage() {
             entityType="report_finance_opening_balances"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "الأرصدة الافتتاحية", total: items.length },
-              items: items.map((r) => ({
+            payload={() => ({
+              entity: { title: "الأرصدة الافتتاحية", total: printRows.length },
+              items: printRows.map((r) => ({
                 "المرجع": r.ref,
                 "الوصف": r.description || "—",
                 "إجمالي المدين": Number(r.totalDebit || 0),
@@ -132,7 +134,7 @@ export default function OpeningBalancesPage() {
                 "متوازن": Math.abs(Number(r.totalDebit) - Number(r.totalCredit)) < 0.01 ? "نعم" : "لا",
                 "التاريخ": r.createdAt || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -166,6 +168,7 @@ export default function OpeningBalancesPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={items}
         isLoading={isLoading}
         isError={isError}

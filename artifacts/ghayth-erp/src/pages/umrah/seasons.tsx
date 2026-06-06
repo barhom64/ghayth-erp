@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ export default function UmrahSeasons() {
   const [, navigate] = useLocation();
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const items = resp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>({});
   const { toast } = useToast();
@@ -74,9 +76,9 @@ export default function UmrahSeasons() {
             entityType="report_umrah_seasons"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "مواسم العمرة", total: items.length },
-              items: items.map((s: any) => ({
+            payload={() => ({
+              entity: { title: "مواسم العمرة", total: printRows.length },
+              items: printRows.map((s: any) => ({
                 "الاسم": s.name || "—",
                 "السنة الهجرية": s.hijriYear || "—",
                 "السنة الميلادية": s.gregorianYear || "—",
@@ -84,7 +86,7 @@ export default function UmrahSeasons() {
                 "تاريخ النهاية": s.endDate || "—",
                 "الحالة": s.status || "—",
               })),
-            }}
+            })}
           />
           <GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />موسم جديد</GuardedButton>
         </div>

@@ -1235,4 +1235,125 @@ router.get("/entity-pnl/:entityType/:entityId", authorize({ feature: "finance.co
   } catch (err) { handleRouteError(err, res, "Entity P&L error"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTITY RANKING — "who are my best/worst customers/vendors/vehicles?"
+//
+// Top-N rollup across all entities of a given type, ordered by a
+// chosen metric. Mirrors the per-entity P&L drill (same allowlist of
+// 9 entity types, same revenue/expense classification) but aggregates
+// across the whole tenant and ranks the results.
+//
+// Reuses ENTITY_TYPE_TO_JL_COLUMN — the column to GROUP BY is resolved
+// from the same closed map so the entityType path param can never
+// inject arbitrary SQL.
+//
+// The name lookup is a CORRELATED subquery (one per row of the top-N)
+// rather than a JOIN because each entity type has a different source
+// table; the subquery shape mirrors ENTITY_TYPE_TO_NAME_SQL. Limit
+// caps the per-tenant scan at 100 rows so the correlated lookups stay
+// cheap.
+// ─────────────────────────────────────────────────────────────────────────────
+const RANKING_METRICS = new Set(["revenue", "expense", "net", "entries"]);
+
+const ENTITY_TYPE_TO_NAME_LATERAL_SQL: Record<string, string> = {
+  client:        `SELECT name FROM clients c WHERE c.id = id_col AND c."companyId" = $1 AND c."deletedAt" IS NULL LIMIT 1`,
+  vendor:        `SELECT name FROM vendors v WHERE v.id = id_col AND v."companyId" = $1 AND v."deletedAt" IS NULL LIMIT 1`,
+  employee:      `SELECT name FROM employees e WHERE e.id = id_col AND e."deletedAt" IS NULL LIMIT 1`,
+  vehicle:       `SELECT (make || ' ' || model || ' — ' || "plateNumber") AS name FROM fleet_vehicles fv WHERE fv.id = id_col AND fv."companyId" = $1 AND fv."deletedAt" IS NULL LIMIT 1`,
+  driver:        `SELECT name FROM fleet_drivers fd WHERE fd.id = id_col AND fd."companyId" = $1 AND fd."deletedAt" IS NULL LIMIT 1`,
+  project:       `SELECT name FROM projects p WHERE p.id = id_col AND p."companyId" = $1 AND p."deletedAt" IS NULL LIMIT 1`,
+  contract:      `SELECT title AS name FROM legal_contracts lc WHERE lc.id = id_col AND lc."companyId" = $1 AND lc."deletedAt" IS NULL LIMIT 1`,
+  umrah_agent:   `SELECT name FROM umrah_agents ua WHERE ua.id = id_col AND ua."companyId" = $1 AND ua."deletedAt" IS NULL LIMIT 1`,
+  umrah_season:  `SELECT title AS name FROM umrah_seasons us WHERE us.id = id_col AND us."companyId" = $1 AND us."deletedAt" IS NULL LIMIT 1`,
+};
+
+router.get("/entity-ranking", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const q = req.query as Record<string, string | undefined>;
+    const entityType = String(q.entityType ?? "");
+    const metric = String(q.metric ?? "revenue");
+    const column = ENTITY_TYPE_TO_JL_COLUMN[entityType];
+    const nameLateral = ENTITY_TYPE_TO_NAME_LATERAL_SQL[entityType];
+    if (!column || !nameLateral) {
+      throw new ValidationError(`نوع الكيان غير مدعوم: ${entityType}`, { field: "entityType" });
+    }
+    if (!RANKING_METRICS.has(metric)) {
+      throw new ValidationError(`المقياس غير مدعوم: ${metric}`, { field: "metric" });
+    }
+
+    // Clamp limit [5, 100] to keep correlated name lookups cheap.
+    const limit = Math.max(5, Math.min(100, Number(q.limit) > 0 ? Number(q.limit) : 20));
+    const from = q.dateFrom || "1970-01-01";
+    const to = q.dateTo || "2099-12-31";
+
+    // Direction: revenue / net favour DESC (top earners first), expense
+    // also DESC (top spenders), entries DESC (busiest). All DESC by
+    // default but `direction=asc` flips for "worst" rankings.
+    const direction = q.direction === "asc" ? "ASC" : "DESC";
+
+    // ORDER BY column is mapped from `metric` (also a closed
+    // allowlist) — never user input. NULLS LAST so a missing name
+    // doesn't push to the top of an ASC ranking.
+    const orderCol: Record<string, string> = {
+      revenue: "revenue",
+      expense: "expense",
+      net:     "net",
+      entries: "entries",
+    };
+
+    const rows = await rawQuery<{
+      entityId: number;
+      entityName: string | null;
+      revenue: string;
+      expense: string;
+      net: string;
+      entries: number;
+    }>(
+      `WITH agg AS (
+         SELECT jl.${column} AS id_col,
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          WHERE je."companyId" = $1
+            AND je."deletedAt" IS NULL
+            AND je.date BETWEEN $2 AND $3
+            AND jl.${column} IS NOT NULL
+          GROUP BY jl.${column}
+       )
+       SELECT id_col AS "entityId",
+              (revenue - expense) AS net,
+              revenue, expense, entries,
+              (${nameLateral}) AS "entityName"
+         FROM agg
+        ORDER BY ${orderCol[metric]} ${direction} NULLS LAST, id_col ASC
+        LIMIT ${limit}`,
+      [scope.companyId, from, to],
+    );
+
+    res.json({
+      entityType,
+      metric,
+      direction: direction.toLowerCase(),
+      dateFrom: from,
+      dateTo: to,
+      limit,
+      rows: rows.map((r) => ({
+        entityId: r.entityId,
+        entityName: r.entityName,
+        revenue: Number(r.revenue),
+        expense: Number(r.expense),
+        net: Number(r.net),
+        entries: Number(r.entries),
+      })),
+    });
+  } catch (err) { handleRouteError(err, res, "Entity ranking error"); }
+});
+
 export { router as costCentersRouter };

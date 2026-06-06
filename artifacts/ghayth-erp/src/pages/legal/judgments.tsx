@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
@@ -59,6 +60,7 @@ export default function LegalJudgments() {
     searchFields: ["caseTitle", "verdict", "caseNumber"],
     statusField: "riskLevel",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   return (
     <PageShell
@@ -71,14 +73,14 @@ export default function LegalJudgments() {
           entityType="report_legal_judgments"
           entityId="list"
           size="icon"
-          payload={{
+          payload={() => ({
             entity: {
               title: "سجل الأحكام القضائية",
-              total: filtered.length,
+              total: printRows.length,
               totalAmount,
               totalPaid,
             },
-            items: filtered.map((j: any) => ({
+            items: printRows.map((j: any) => ({
               "القضية": j.caseTitle || j.caseId || "—",
               "نوع الحكم": j.judgmentType || j.type || "—",
               "تاريخ الحكم": j.judgmentDate || "—",
@@ -87,7 +89,7 @@ export default function LegalJudgments() {
               "المتبقي": (j.amount ?? 0) - (j.amountPaid ?? 0),
               "الحالة": j.status || "—",
             })),
-          }}
+          })}
         />
       }
     >

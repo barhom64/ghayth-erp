@@ -30,6 +30,7 @@ import { useState } from "react";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS = Object.entries(LOAN_STATUS).map(([value, { label }]) => ({ value, label }));
 
 export default function LoansPage() {
@@ -81,6 +82,7 @@ export default function LoansPage() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const kpis = [
     {
@@ -276,9 +278,9 @@ export default function LoansPage() {
             entityType="report_hr_loans"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "طلبات السلف", total: filtered.length },
-              items: filtered.map((l: any) => ({
+            payload={() => ({
+              entity: { title: "طلبات السلف", total: printRows.length },
+              items: printRows.map((l: any) => ({
                 "الموظف": l.employeeName || "—",
                 "النوع": l.loanType || l.type || "—",
                 "المبلغ": l.amount ?? 0,
@@ -286,7 +288,7 @@ export default function LoansPage() {
                 "السبب": l.reason || "—",
                 "الحالة": l.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/hr/loans/create">
             <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
@@ -357,6 +359,7 @@ export default function LoansPage() {
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد سلف — قدّم طلب سلفة جديدة للبدء"

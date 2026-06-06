@@ -13,6 +13,7 @@ import {
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function RecruitmentAdvancedPage() {
   const { data: stats, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["recruitment-stats"], "/hr/recruitment/stats");
@@ -25,6 +26,7 @@ export default function RecruitmentAdvancedPage() {
   if (isError) return <ErrorState />;
 
   const apps = appsData?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(apps);
 
   const pipeline = Object.entries(RECRUITMENT_STAGES).map(([key, val]) => ({
     stage: key,
@@ -50,16 +52,16 @@ export default function RecruitmentAdvancedPage() {
           entityType="report_hr_recruitment_advanced"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "متقدمي التوظيف", total: apps.length },
-            items: apps.map((a: any) => ({
+          payload={() => ({
+            entity: { title: "متقدمي التوظيف", total: printRows.length },
+            items: printRows.map((a: any) => ({
               "الاسم": a.applicantName || a.name || "—",
               "المنصب": a.postingTitle || a.position || "—",
               "البريد": a.email || "—",
               "التقييم": a.rating ? `${a.rating}/5` : "—",
               "المرحلة": RECRUITMENT_STAGES[a.status]?.label || a.status || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -93,6 +95,7 @@ export default function RecruitmentAdvancedPage() {
               { key: "rating", header: "التقييم", sortable: true, render: (v) => <span>{v.rating ? `${v.rating}/5` : "-"}</span> },
               { key: "status", header: "المرحلة", sortable: true, render: (v) => <Badge className={RECRUITMENT_STAGES[v.status]?.color || ""}>{RECRUITMENT_STAGES[v.status]?.label || v.status}</Badge> },
             ] as DataTableColumn<any>[]}
+            onSortedDataChange={setPrintRows}
             data={apps}
             noToolbar
             emptyMessage="لا يوجد متقدمين"

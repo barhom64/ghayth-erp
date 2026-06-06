@@ -21,6 +21,7 @@ import { BulkCheckbox } from "@/components/shared/bulk-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 // PILGRIM_STATUSES is mirrored from the backend enum in routes/umrah.ts;
 // the bulk-status dropdown should match the same option set so an
@@ -105,6 +106,7 @@ export default function UmrahPilgrims() {
   const { data: groupsResp } = useApiQuery<{ data: any[] }>(["umrah-groups"], "/umrah/groups");
   const groups = asList(groupsResp?.data || groupsResp);
   const items = resp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const total = resp?.total || 0;
 
   // GET /umrah/unassigned — pilgrims without an agent. Shows up as an
@@ -263,13 +265,13 @@ export default function UmrahPilgrims() {
             entityType="report_umrah_pilgrims"
             entityId="list"
             size="icon"
-            payload={{
+            payload={() => ({
               entity: {
                 title: "قائمة المعتمرين",
-                total: items.length,
+                total: printRows.length,
                 unassigned: unassignedCount,
               },
-              items: items.map((p: any) => ({
+              items: printRows.map((p: any) => ({
                 "الاسم": p.fullName || p.name || "—",
                 "رقم نسك": p.nuskNumber || "—",
                 "الجواز": p.passportNumber || "—",
@@ -278,7 +280,7 @@ export default function UmrahPilgrims() {
                 "الوكيل الفرعي": p.subAgentName || "—",
                 "الحالة": p.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/umrah/pilgrims/create">
             <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
@@ -503,6 +505,7 @@ export default function UmrahPilgrims() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={items}
         isLoading={isLoading}
         isError={isError}

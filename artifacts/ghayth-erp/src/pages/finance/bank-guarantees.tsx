@@ -50,6 +50,7 @@ import { cn } from "@/lib/utils";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 /**
  * Bank guarantees list — R.3 iter 3 end-to-end reference page.
  *
@@ -263,6 +264,7 @@ export default function BankGuaranteesPage() {
   if (isError) return <ErrorState />;
 
   const list: BankGuarantee[] = data?.data ?? data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(list);
   const summary = data?.summary ?? {};
 
   const alerts = list.filter((g) =>
@@ -481,9 +483,9 @@ export default function BankGuaranteesPage() {
               entityType="report_finance_bank_guarantees"
               entityId="list"
               size="icon"
-              payload={{
-                entity: { title: "الضمانات البنكية", total: list.length },
-                items: list.map((g: any) => ({
+              payload={() => ({
+                entity: { title: "الضمانات البنكية", total: printRows.length },
+                items: printRows.map((g: any) => ({
                   "المرجع": g.ref || "—",
                   "البنك": g.bank || "—",
                   "المستفيد": g.beneficiary || "—",
@@ -493,7 +495,7 @@ export default function BankGuaranteesPage() {
                   "النوع": g.type || "—",
                   "الحالة": g.status || "—",
                 })),
-              }}
+              })}
             />
           </>
         }
@@ -578,6 +580,7 @@ export default function BankGuaranteesPage() {
 
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={list}
           isLoading={isLoading}
           emptyMessage="لا توجد ضمانات بنكية مسجلة"

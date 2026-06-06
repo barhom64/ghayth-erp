@@ -26,6 +26,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const POSITION_LABEL: Record<string, string> = {
   front_left: "أمامي يسار",
@@ -69,6 +70,7 @@ export default function TiresPage() {
   const createMut = useApiMutation("/fleet/tires", "POST");
 
   const filtered = applyFilters(tires, filters, { searchFields: ["plateNumber", "brand", "size"] });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -120,9 +122,9 @@ export default function TiresPage() {
             entityType="report_fleet_tires"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "إطارات الأسطول", total: filtered.length },
-              items: filtered.map((t: any) => ({
+            payload={() => ({
+              entity: { title: "إطارات الأسطول", total: printRows.length },
+              items: printRows.map((t: any) => ({
                 "المركبة": t.plateNumber || `#${t.vehicleId}`,
                 "الموقع": POSITION_LABEL[t.position] || t.position || "—",
                 "البراند": t.brand || "—",
@@ -131,7 +133,7 @@ export default function TiresPage() {
                 "تاريخ التركيب": t.installDate || "—",
                 "الحالة": STATUS_LABEL[t.status] || t.status || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -240,6 +242,7 @@ export default function TiresPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         rowKey={(t: any) => t.id}
         isLoading={isLoading}

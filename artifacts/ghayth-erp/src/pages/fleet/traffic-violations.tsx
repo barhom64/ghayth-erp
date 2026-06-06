@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ export default function TrafficViolationsPage() {
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
   const violations = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(violations);
 
   const { data: vehicles } = useApiQuery<any>(["fleet-vehicles"], "/fleet/vehicles?limit=200");
   const { data: drivers } = useApiQuery<any>(["fleet-drivers"], "/fleet/drivers?limit=200");
@@ -187,9 +189,9 @@ export default function TrafficViolationsPage() {
             entityType="report_fleet_traffic_violations"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "المخالفات المرورية", total: violations.length },
-              items: violations.map((v: any) => ({
+            payload={() => ({
+              entity: { title: "المخالفات المرورية", total: printRows.length },
+              items: printRows.map((v: any) => ({
                 "المركبة": v.plateNumber || "—",
                 "السائق": v.driverName || "—",
                 "نوع المخالفة": v.violationType || "—",
@@ -198,7 +200,7 @@ export default function TrafficViolationsPage() {
                 "الغرامة": v.fineAmount ?? 0,
                 "الحالة": v.status || "—",
               })),
-            }}
+            })}
           />
           <GuardedButton perm="fleet:create" onClick={() => setShowForm(!showForm)} size="sm">
             <Plus className="w-4 h-4 me-1" /> تسجيل مخالفة
@@ -306,6 +308,7 @@ export default function TrafficViolationsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد مخالفات مسجلة"

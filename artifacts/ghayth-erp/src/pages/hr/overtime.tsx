@@ -30,6 +30,7 @@ import { useState } from "react";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS = Object.entries(OVERTIME_STATUS).map(([value, { label }]) => ({ value, label }));
 const STATUS_MAP = OVERTIME_STATUS;
 
@@ -93,6 +94,7 @@ export default function OvertimePage() {
     statusField: "status",
     dateField: "overtimeDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const kpis = [
     {
@@ -277,21 +279,21 @@ export default function OvertimePage() {
             entityType="report_hr_overtime"
             entityId="list"
             label="طباعة القائمة"
-            payload={{
+            payload={() => ({
               entity: {
                 title: "طلبات الوقت الإضافي",
-                total: filtered.length,
+                total: printRows.length,
                 pending: stats.pending ?? 0,
                 approved: stats.approved ?? 0,
               },
-              items: filtered.map((r: any) => ({
+              items: printRows.map((r: any) => ({
                 "الموظف": r.employeeName || "—",
                 "التاريخ": r.requestDate || r.date || "—",
                 "الساعات": r.hours ?? 0,
                 "السبب": r.reason || "—",
                 "الحالة": r.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/hr/overtime/create">
             <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
@@ -359,6 +361,7 @@ export default function OvertimePage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد طلبات وقت إضافي — سجّل طلب جديد للبدء"

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
@@ -71,6 +72,7 @@ const columns: DataTableColumn<TransportEntry>[] = [
 export default function UmrahTransport() {
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["umrah-transport"], "/umrah/transport");
   const rows = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
   const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Record<string, any>>({});
@@ -123,9 +125,9 @@ export default function UmrahTransport() {
             entityType="report_umrah_transport"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "نقل العمرة", total: rows.length },
-              items: rows.map((t: any) => ({
+            payload={() => ({
+              entity: { title: "نقل العمرة", total: printRows.length },
+              items: printRows.map((t: any) => ({
                 "التاريخ": t.tripDate || "—",
                 "من": t.fromLocation || "—",
                 "إلى": t.toLocation || "—",
@@ -136,7 +138,7 @@ export default function UmrahTransport() {
                 "التكلفة": t.cost ?? 0,
                 "الحالة": t.status || "—",
               })),
-            }}
+            })}
           />
           <GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />رحلة جديدة</GuardedButton>
         </div>
@@ -195,6 +197,7 @@ export default function UmrahTransport() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={rows}
         onRowClick={(r) => navigate(`/umrah/transport/${r.id}`)}
         emptyMessage="لا توجد رحلات نقل مسجلة"

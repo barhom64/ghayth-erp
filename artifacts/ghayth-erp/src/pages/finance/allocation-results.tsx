@@ -10,6 +10,7 @@ import { Eye, AlertCircle, CheckCircle2, Pencil } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface AllocationResult {
   id: number;
@@ -73,6 +74,7 @@ export default function AllocationResultsPage() {
   if (isError) return <ErrorState />;
 
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const counts = rows.reduce((acc, r) => {
     acc.total += 1;
@@ -173,9 +175,9 @@ export default function AllocationResultsPage() {
           entityType="report_finance_allocation_results"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "سجل توجيه البنود", total: rows.length },
-            items: rows.map((r) => ({
+          payload={() => ({
+            entity: { title: "سجل توجيه البنود", total: printRows.length },
+            items: printRows.map((r) => ({
               "المصدر": SOURCE_LABEL[r.sourceTable] || r.sourceTable,
               "رقم البند": r.sourceLineId,
               "نوع الوثيقة": r.documentType || "—",
@@ -184,7 +186,7 @@ export default function AllocationResultsPage() {
               "تاريخ الحل": r.resolvedAt || "—",
               "الحالة": STATUS_INFO[r.resolutionStatus]?.label || r.resolutionStatus,
             })),
-          }}
+          })}
         />
       }
     >
@@ -273,6 +275,7 @@ export default function AllocationResultsPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               sourceFilter || statusFilter

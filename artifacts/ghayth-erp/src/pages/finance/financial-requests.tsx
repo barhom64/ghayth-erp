@@ -16,6 +16,7 @@ import {
 import { ClipboardCheck, Clock, CheckCircle, DollarSign } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function FinancialRequestsPage() {
   const [, navigate] = useLocation();
@@ -32,6 +33,7 @@ export default function FinancialRequestsPage() {
     statusField: "status",
     dateField: "",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const totalAmount = items.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
 
@@ -84,9 +86,9 @@ export default function FinancialRequestsPage() {
           entityType="report_finance_financial_requests"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "الطلبات المالية", total: filtered.length },
-            items: filtered.map((r: any) => ({
+          payload={() => ({
+            entity: { title: "الطلبات المالية", total: printRows.length },
+            items: printRows.map((r: any) => ({
               "المرجع": r.ref || `#${r.id}`,
               "مقدم الطلب": r.requestedByName || "—",
               "المورد": r.supplierName || "—",
@@ -94,7 +96,7 @@ export default function FinancialRequestsPage() {
               "التاريخ": r.createdAt || "—",
               "الحالة": r.status || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -143,6 +145,7 @@ export default function FinancialRequestsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

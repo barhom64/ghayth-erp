@@ -14,6 +14,7 @@ import { Globe, Plus, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface FxRate {
   id: number;
@@ -83,6 +84,7 @@ export default function FxRatesPage() {
   if (isError) return <ErrorState />;
 
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const handleSubmit = async () => {
     if (!form.rate || Number(form.rate) <= 0) {
@@ -161,16 +163,16 @@ export default function FxRatesPage() {
             entityType="report_finance_fx_rates"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "أسعار صرف العملات", total: rows.length },
-              items: rows.map((r: any) => ({
+            payload={() => ({
+              entity: { title: "أسعار صرف العملات", total: printRows.length },
+              items: printRows.map((r: any) => ({
                 "التاريخ": r.effectiveDate || "—",
                 "من": r.fromCurrency || "—",
                 "إلى": r.toCurrency || "—",
                 "السعر": Number(r.rate ?? 0).toFixed(6),
                 "المصدر": SOURCE_LABEL[r.source] ?? r.source ?? "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -308,6 +310,7 @@ export default function FxRatesPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا توجد أسعار صرف لهذي الفلاتر"
           />

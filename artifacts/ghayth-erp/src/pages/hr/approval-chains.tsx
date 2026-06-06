@@ -25,6 +25,7 @@ import { APPROVAL_ROLES, APPROVAL_CHAIN_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS = Object.entries(APPROVAL_CHAIN_STATUS).map(([value, { label }]) => ({ value, label }));
 
 const CHAIN_TYPES: Record<string, string> = {
@@ -84,6 +85,7 @@ export default function ApprovalChainsPage() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const kpis = [
     { label: "تعريفات السلاسل", value: definitions.length, icon: Settings2, color: "text-purple-600 bg-purple-50" },
@@ -175,9 +177,9 @@ export default function ApprovalChainsPage() {
             entityType="report_hr_approval_chains"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "سلاسل الاعتماد", total: filtered.length },
-              items: filtered.map((c: any) => ({
+            payload={() => ({
+              entity: { title: "سلاسل الاعتماد", total: printRows.length },
+              items: printRows.map((c: any) => ({
                 "النوع": c.entityType || c.type || "—",
                 "ترتيب الخطوة": c.stageOrder ?? c.sequence ?? "—",
                 "اسم الخطوة": c.stageName || c.name || "—",
@@ -185,7 +187,7 @@ export default function ApprovalChainsPage() {
                 "المعتمِد": c.approverName || "—",
                 "الحالة": c.status || "—",
               })),
-            }}
+            })}
           />
           <GuardedButton perm="hr:create" size="sm" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
             <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "تعريف سلسلة جديدة"}
@@ -361,6 +363,7 @@ export default function ApprovalChainsPage() {
           />
           <DataTable
             columns={columns}
+            onSortedDataChange={setPrintRows}
             data={filtered}
             noToolbar
             emptyMessage="لا توجد مراحل موافقة جارية"

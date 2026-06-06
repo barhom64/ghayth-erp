@@ -18,6 +18,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function BudgetPage() {
   const [, navigate] = useLocation();
@@ -25,6 +26,7 @@ export default function BudgetPage() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, error, refetch } = useApiQuery<any>(["budget", scopeQueryString], `/finance/budget${scopeSuffix}`);
   const items = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const [filters, setFilters] = useFilters();
 
   const filtered = applyFilters(items, filters, {
@@ -132,9 +134,9 @@ export default function BudgetPage() {
             entityType="report_finance_budget"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "الميزانية والمخصصات", total: items.length },
-              items: items.map((b: any) => ({
+            payload={() => ({
+              entity: { title: "الميزانية والمخصصات", total: printRows.length },
+              items: printRows.map((b: any) => ({
                 "الحساب": b.accountName || b.accountCode || "—",
                 "مركز التكلفة": b.costCenterName || "—",
                 "الفترة": b.period || "—",
@@ -143,7 +145,7 @@ export default function BudgetPage() {
                 "المتبقي": b.remainingAmount ?? (Number(b.allocatedAmount ?? 0) - Number(b.spentAmount ?? 0)),
                 "%": b.utilizationRate || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -180,6 +182,7 @@ export default function BudgetPage() {
       >
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={filtered}
           emptyMessage="لا توجد بنود ميزانية"
           emptyIcon={<FileBarChart className="h-6 w-6 text-slate-400" />}

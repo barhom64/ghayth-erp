@@ -24,6 +24,7 @@ const CostCenterDrillPnl = lazy(() => import("@/pages/finance/cost-center-drill-
 const DimensionalRouting = lazy(() => import("@/pages/finance/dimensional-routing"));
 const DormantEntities = lazy(() => import("@/pages/finance/dormant-entities"));
 const EntityPnl = lazy(() => import("@/pages/finance/entity-pnl"));
+const EntityRanking = lazy(() => import("@/pages/finance/entity-ranking"));
 const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const PricingRules = lazy(() => import("@/pages/finance/pricing-rules"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
@@ -174,6 +175,7 @@ const ProfitabilityUmrahAgent = lazy(() => import("@/pages/finance/profitability
 const CustomerAdvances = lazy(() => import("@/pages/finance/customer-advances"));
 const CustomerAdvancesCreate = lazy(() => import("@/pages/create/finance/customer-advances-create"));
 const CustomerAdvancesApply = lazy(() => import("@/pages/create/finance/customer-advances-apply"));
+const CustomerReceiptWizard = lazy(() => import("@/pages/create/finance/customer-receipt")); // originally PR #1178
 const Dunning = lazy(() => import("@/pages/finance/dunning"));
 const CollectionStages = lazy(() => import("@/pages/finance/collection-stages"));
 const BadDebt = lazy(() => import("@/pages/finance/bad-debt"));
@@ -189,8 +191,21 @@ const FxRates = lazy(() => import("@/pages/finance/fx-rates"));
 const FxRevaluationHistory = lazy(() => import("@/pages/finance/fx-revaluation-history"));
 const SettingsHub = lazy(() => import("@/pages/finance/settings-hub"));
 const FxRevaluation = lazy(() => import("@/pages/finance/fx-revaluation"));
+// Consolidated finance dashboards (originally PRs #1216/#1218/#1222/#1211/#1210/#1182).
+const ProjectPortfolioDashboard = lazy(() => import("@/pages/finance/project-portfolio-dashboard"));
+const PropertyPortfolioDashboard = lazy(() => import("@/pages/finance/property-portfolio-dashboard"));
+const UmrahAgentPortfolio = lazy(() => import("@/pages/finance/umrah-agent-portfolio"));
+const ExpenseMixAnalyzer = lazy(() => import("@/pages/finance/expense-mix-analyzer"));
+const RevenueMixAnalyzer = lazy(() => import("@/pages/finance/revenue-mix-analyzer"));
+const DsoTrend = lazy(() => import("@/pages/finance/dso-trend"));
 
 export const financeRoutes = [
+  { path: "/finance/project-portfolio", component: ProjectPortfolioDashboard },
+  { path: "/finance/property-portfolio", component: PropertyPortfolioDashboard },
+  { path: "/finance/umrah-agent-portfolio", component: UmrahAgentPortfolio },
+  { path: "/finance/expense-mix", component: ExpenseMixAnalyzer },
+  { path: "/finance/revenue-mix", component: RevenueMixAnalyzer },
+  { path: "/finance/reports/dso-trend", component: DsoTrend },
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
   // to its own explicit path so the two pages don't share a URL.
   { path: "/finance", component: Dashboard },
@@ -304,6 +319,7 @@ export const financeRoutes = [
   { path: "/finance/dimensional-routing", component: DimensionalRouting },
   { path: "/finance/dormant-entities", component: DormantEntities },
   { path: "/finance/entity-pnl/:entityType/:entityId", component: EntityPnl },
+  { path: "/finance/entity-ranking", component: EntityRanking },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
   { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },
@@ -316,6 +332,7 @@ export const financeRoutes = [
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/tax-filing-calendar", component: TaxFilingCalendar },
   { path: "/finance/receivables", component: Receivables },
+  { path: "/finance/receivables/receipt", component: CustomerReceiptWizard },
   { path: "/finance/customer-statement-print", component: CustomerStatementPrint },
   { path: "/finance/customer-360-sheet", component: Customer360Sheet },
   { path: "/finance/customer-risk", component: CustomerRisk },

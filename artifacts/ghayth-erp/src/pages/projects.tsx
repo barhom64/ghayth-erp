@@ -27,6 +27,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
@@ -384,6 +385,7 @@ export default function Projects() {
     `/projects?limit=500${scopeQueryString ? `&${scopeQueryString}` : ""}`,
   );
   const projectsForPrint = asList(projectsResp);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(projectsForPrint);
 
   return (
     <PageShell
@@ -396,9 +398,9 @@ export default function Projects() {
             entityType="report_projects"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "قائمة المشاريع", total: projectsForPrint.length },
-              items: projectsForPrint.map((p: any) => ({
+            payload={() => ({
+              entity: { title: "قائمة المشاريع", total: printRows.length },
+              items: printRows.map((p: any) => ({
                 "الاسم": p.name || "—",
                 "العميل": p.clientName || "—",
                 "المدير": p.managerName || "—",
@@ -408,7 +410,7 @@ export default function Projects() {
                 "نسبة الإنجاز": p.progress ?? "—",
                 "الحالة": p.status || "—",
               })),
-            }}
+            })}
           />
           {canManage ? (
             <Link href="/projects/create">
