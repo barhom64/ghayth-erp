@@ -191,8 +191,8 @@ export default function RecurringJournalsCreatePage() {
                   </SelectContent>
                 </Select>
                 <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="البيان" />
-                <NumberField label="مدين" min={0} value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
-                <NumberField label="دائن" min={0} value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />
+                <NumberField label="مدين" hideLabel min={0} value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
+                <NumberField label="دائن" hideLabel min={0} value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />
                 <Button variant="ghost" size="icon" title="حذف" type="button" onClick={() => removeLine(idx)} disabled={lines.length <= 2}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
