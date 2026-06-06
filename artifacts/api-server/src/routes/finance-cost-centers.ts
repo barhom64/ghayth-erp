@@ -1236,6 +1236,117 @@ router.get("/entity-pnl/:entityType/:entityId", authorize({ feature: "finance.co
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PER-ENTITY TIME-SERIES — month-by-month P&L for one entity.
+//
+// Same 9-entityType allowlist + closed column map as the drill, so
+// any drill page can render a small sparkline + a "monthly trend"
+// table side-by-side with no extra resolver code.
+//
+// Bucketing: PostgreSQL `date_trunc('month', je.date)` produces stable
+// YYYY-MM-01 keys. Returns ALL months in [from, to] including months
+// with zero activity (via a generate_series LEFT JOIN) so the front-
+// end can render a continuous chart without gap-filling logic.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/entity-pnl/:entityType/:entityId/series", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const entityType = String(req.params.entityType);
+    const entityId = parseId(req.params.entityId, "entityId");
+    const column = ENTITY_TYPE_TO_JL_COLUMN[entityType];
+    if (!column) {
+      throw new ValidationError(`نوع الكيان غير مدعوم: ${entityType}`, { field: "entityType" });
+    }
+
+    const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+    // Default to last 12 months ending today (Riyadh calendar). The
+    // operator's mental model on a per-entity trend is "the past year"
+    // — annual cycles in umrah, retail, fleet maintenance all surface.
+    const today = new Date();
+    const defaultTo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0))
+      .toISOString().slice(0, 10);
+    const defaultFrom = new Date(Date.UTC(today.getUTCFullYear() - 1, today.getUTCMonth(), 1))
+      .toISOString().slice(0, 10);
+    const from = dateFrom || defaultFrom;
+    const to = dateTo || defaultTo;
+
+    // generate_series produces one month per bucket so months with
+    // zero activity still appear in the result (chart continuity).
+    // Outer LEFT JOIN onto the aggregate ensures the row count equals
+    // the month count, not the active-month count.
+    const rows = await rawQuery<{
+      month: string;
+      revenue: string;
+      expense: string;
+      entries: number;
+    }>(
+      `WITH months AS (
+         SELECT generate_series(
+                  date_trunc('month', $2::date),
+                  date_trunc('month', $3::date),
+                  interval '1 month'
+                )::date AS m
+       ),
+       agg AS (
+         SELECT date_trunc('month', je.date)::date AS m,
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          WHERE je."companyId" = $1
+            AND je."deletedAt" IS NULL
+            AND je.date BETWEEN $2 AND $3
+            AND jl.${column} = $4
+          GROUP BY 1
+       )
+       SELECT to_char(months.m, 'YYYY-MM') AS month,
+              COALESCE(agg.revenue, 0) AS revenue,
+              COALESCE(agg.expense, 0) AS expense,
+              COALESCE(agg.entries, 0) AS entries
+         FROM months
+         LEFT JOIN agg ON agg.m = months.m
+        ORDER BY months.m ASC`,
+      [scope.companyId, from, to, entityId],
+    );
+
+    const buckets = rows.map((r) => {
+      const revenue = Number(r.revenue);
+      const expense = Number(r.expense);
+      return {
+        month: r.month,
+        revenue,
+        expense,
+        net: revenue - expense,
+        entries: Number(r.entries),
+      };
+    });
+
+    const totals = buckets.reduce(
+      (acc, b) => ({
+        revenue: acc.revenue + b.revenue,
+        expense: acc.expense + b.expense,
+        net: acc.net + b.net,
+        entries: acc.entries + b.entries,
+      }),
+      { revenue: 0, expense: 0, net: 0, entries: 0 },
+    );
+
+    res.json({
+      entityType,
+      entityId,
+      dateFrom: from,
+      dateTo: to,
+      buckets,
+      totals,
+    });
+  } catch (err) { handleRouteError(err, res, "Entity time-series error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ENTITY RANKING — "who are my best/worst customers/vendors/vehicles?"
 //
 // Top-N rollup across all entities of a given type, ordered by a
