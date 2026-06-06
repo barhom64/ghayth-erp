@@ -1192,6 +1192,128 @@ router.get("/cost-centers/:id/yoy", authorize({ feature: "finance.cost_centers",
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// COST-CENTRE RANKING — top-N rollup across all CCs (or one branch
+// of the tree). Mirrors GET /entity-ranking but ranks cost-centres
+// instead of entities. Answers "which CCs are bleeding most cash?"
+// or "which projects have the strongest margin this quarter?".
+//
+// Each row sums revenue/expense across THIS CC + its descendants
+// (recursive CTE per row) so the ranking reflects total responsibility.
+// That said, the recursion is cheap because the tree typically has a
+// shallow depth (3-5 levels). Limit caps at 100.
+// ─────────────────────────────────────────────────────────────────────────────
+const CC_RANKING_METRICS = new Set(["revenue", "expense", "net", "entries"]);
+
+router.get("/cost-centers/ranking", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const q = req.query as Record<string, string | undefined>;
+    const metric = String(q.metric ?? "expense");
+    if (!CC_RANKING_METRICS.has(metric)) {
+      throw new ValidationError(`المقياس غير مدعوم: ${metric}`, { field: "metric" });
+    }
+
+    // Clamp limit [5, 100] — cheap correlated tree-rollups, but
+    // still don't want to invite 10k-row scans.
+    const limit = Math.max(5, Math.min(100, Number(q.limit) > 0 ? Number(q.limit) : 20));
+    const from = q.dateFrom || "1970-01-01";
+    const to = q.dateTo || "2099-12-31";
+    const direction = q.direction === "asc" ? "ASC" : "DESC";
+
+    // Optional `rootId` narrows the ranking to a subtree (e.g. just
+    // projects under one branch's CC).
+    const rootId = q.rootId && Number(q.rootId) > 0 ? Number(q.rootId) : null;
+
+    const orderCol: Record<string, string> = {
+      revenue: "revenue",
+      expense: "expense",
+      net:     "net",
+      entries: "entries",
+    };
+
+    // Per-CC rollup via a recursive CTE that produces (cc_id,
+    // descendant_id) pairs. Each CC then aggregates over all its
+    // descendant JE lines in one swoop.
+    //
+    // The OPTIONAL filter `rootId` restricts the top-level set
+    // (defaults to ALL CCs in the tenant — `parentId IS NULL` would
+    // only show roots, which isn't what we want for ranking).
+    const rows = await rawQuery<{
+      ccId: number;
+      ccCode: string | null;
+      ccName: string;
+      revenue: string;
+      expense: string;
+      entries: number;
+    }>(
+      `WITH RECURSIVE tree AS (
+         SELECT id AS root_id, id AS desc_id
+           FROM cost_centers
+          WHERE "companyId" = $1
+            AND status != 'deleted'
+            ${rootId ? `AND id = ${rootId}` : ""}
+         UNION ALL
+         SELECT t.root_id, cc.id
+           FROM cost_centers cc
+           JOIN tree t ON cc."parentId" = t.desc_id
+          WHERE cc."companyId" = $1
+            AND cc.status != 'deleted'
+       ),
+       per_cc AS (
+         SELECT t.root_id AS cc_id,
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM tree t
+           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id
+           LEFT JOIN journal_entries je
+                  ON je.id = jl."journalId"
+                 AND je."companyId" = $1
+                 AND je."deletedAt" IS NULL
+                 AND je.date BETWEEN $2 AND $3
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          GROUP BY t.root_id
+       )
+       SELECT cc.id AS "ccId",
+              cc.code AS "ccCode",
+              cc.name AS "ccName",
+              p.revenue,
+              p.expense,
+              (p.revenue - p.expense) AS net,
+              p.entries
+         FROM per_cc p
+         JOIN cost_centers cc ON cc.id = p.cc_id
+                              AND cc."companyId" = $1
+                              AND cc.status != 'deleted'
+        ORDER BY ${orderCol[metric]} ${direction} NULLS LAST, cc.id ASC
+        LIMIT ${limit}`,
+      [scope.companyId, from, to],
+    );
+
+    res.json({
+      metric,
+      direction: direction.toLowerCase(),
+      dateFrom: from,
+      dateTo: to,
+      limit,
+      rootId,
+      rows: rows.map((r) => ({
+        ccId: r.ccId,
+        ccCode: r.ccCode,
+        ccName: r.ccName,
+        revenue: Number(r.revenue),
+        expense: Number(r.expense),
+        net: Number(r.revenue) - Number(r.expense),
+        entries: Number(r.entries),
+      })),
+    });
+  } catch (err) { handleRouteError(err, res, "Cost-centre ranking error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DIMENSIONAL-ROUTING HEALTH — the operator's «هل النظام المالي
 // متأصل في اصل النظام?» single-pane view. For every entity type that
 // participates in subsidiary_accounts OR cost_centers we report:
