@@ -12,6 +12,7 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { formatCurrency } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";
+import { InlineSparkline } from "@/components/shared/inline-sparkline";
 import { TrendingUp, TrendingDown, ScrollText, ArrowLeftRight, User, Download } from "lucide-react";
 
 /**
@@ -253,7 +254,7 @@ export default function EntityPnlPage() {
       <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()}>
         {data && (
           <>
-            <BucketCard bucket={data.bucket} />
+            <BucketCard bucket={data.bucket} series={series ?? null} />
 
             {yoy && <YoyCard yoy={yoy} />}
 
@@ -316,8 +317,13 @@ export default function EntityPnlPage() {
   );
 }
 
-function BucketCard({ bucket }: { bucket: PnlBucket }) {
+function BucketCard({ bucket, series }: { bucket: PnlBucket; series: SeriesResponse | null }) {
   const positive = bucket.net >= 0;
+  // Tail sparkline series — last 12 buckets is plenty for an inline
+  // "where am I trending?" signal. Each metric pulls its own column.
+  const revSpark = series?.buckets.slice(-12).map((b) => b.revenue) ?? [];
+  const expSpark = series?.buckets.slice(-12).map((b) => b.expense) ?? [];
+  const netSpark = series?.buckets.slice(-12).map((b) => b.net) ?? [];
   return (
     <Card className="mb-3" data-testid="entity-pnl-bucket">
       <CardContent className="p-3">
@@ -327,6 +333,7 @@ function BucketCard({ bucket }: { bucket: PnlBucket }) {
             value={bucket.revenue}
             icon={TrendingUp}
             tone="success"
+            spark={revSpark}
             testid="entity-pnl-revenue"
           />
           <Metric
@@ -334,6 +341,7 @@ function BucketCard({ bucket }: { bucket: PnlBucket }) {
             value={bucket.expense}
             icon={TrendingDown}
             tone="warning"
+            spark={expSpark}
             testid="entity-pnl-expense"
           />
           <Metric
@@ -342,6 +350,7 @@ function BucketCard({ bucket }: { bucket: PnlBucket }) {
             icon={positive ? TrendingUp : TrendingDown}
             tone={positive ? "success" : "warning"}
             highlight
+            spark={netSpark}
             testid="entity-pnl-net"
           />
         </div>
@@ -356,13 +365,14 @@ function BucketCard({ bucket }: { bucket: PnlBucket }) {
 }
 
 function Metric({
-  label, value, icon: Icon, tone, highlight, testid,
+  label, value, icon: Icon, tone, highlight, spark, testid,
 }: {
   label: string;
   value: number;
   icon: React.ComponentType<{ className?: string }>;
   tone: "success" | "warning" | "default";
   highlight?: boolean;
+  spark?: number[];
   testid: string;
 }) {
   const toneClass =
@@ -378,6 +388,13 @@ function Metric({
       <div className={`${highlight ? "text-2xl font-bold" : "text-base font-medium"} ${toneClass}`}>
         {formatCurrency(value)}
       </div>
+      {spark && spark.length >= 2 && (
+        <InlineSparkline
+          values={spark}
+          tone={tone === "default" ? "neutral" : tone}
+          testid={`${testid}-spark`}
+        />
+      )}
     </div>
   );
 }
