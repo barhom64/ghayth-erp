@@ -80,11 +80,13 @@ export default function FxRatesPage() {
 
   const upsertMut = useApiMutation("/finance/fx/rates", "POST", [["fx-rates"]]);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const handleSubmit = async () => {
     if (!form.rate || Number(form.rate) <= 0) {
