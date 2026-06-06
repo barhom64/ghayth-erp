@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { formatCurrency } from "@/lib/formatters";
 import { TrendingUp, TrendingDown, ScrollText, Network, ArrowLeftRight } from "lucide-react";
 
@@ -98,7 +99,14 @@ export default function CostCenterDrillPnlPage() {
       <FinanceTabsNav />
 
       <Card className="mb-3">
-        <CardContent className="p-3 flex items-end gap-2 flex-wrap">
+        <CardContent className="p-3 flex flex-col gap-2">
+          <DateRangePresets
+            value={{ from, to }}
+            onChange={(r) => { setFrom(r.from); setTo(r.to); }}
+            testidPrefix="cost-center-pnl-preset"
+            hideAllTime
+          />
+          <div className="flex items-end gap-2 flex-wrap">
           <div>
             <Label className="text-xs text-muted-foreground">من تاريخ</Label>
             <Input
@@ -127,6 +135,7 @@ export default function CostCenterDrillPnlPage() {
           >
             تحديث
           </Button>
+          </div>
         </CardContent>
       </Card>
 

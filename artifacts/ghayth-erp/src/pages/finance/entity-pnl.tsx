@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { formatCurrency } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { TrendingUp, TrendingDown, ScrollText, ArrowLeftRight, User, Download } from "lucide-react";
@@ -207,7 +208,13 @@ export default function EntityPnlPage() {
       <FinanceTabsNav />
 
       <Card className="mb-3">
-        <CardContent className="p-3 flex items-end gap-2 flex-wrap">
+        <CardContent className="p-3 flex flex-col gap-2">
+          <DateRangePresets
+            value={{ from, to }}
+            onChange={(r) => { setFrom(r.from); setTo(r.to); }}
+            testidPrefix="entity-pnl-preset"
+          />
+          <div className="flex items-end gap-2 flex-wrap">
           <div>
             <Label className="text-xs text-muted-foreground">من تاريخ</Label>
             <Input
@@ -239,6 +246,7 @@ export default function EntityPnlPage() {
           <span className="text-xs text-muted-foreground ms-auto">
             {from || to ? `الفترة: ${from || "البداية"} → ${to || "اليوم"}` : "كامل العمر"}
           </span>
+          </div>
         </CardContent>
       </Card>
 
