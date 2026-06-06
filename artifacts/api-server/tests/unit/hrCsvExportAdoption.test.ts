@@ -49,6 +49,9 @@ const ADOPTED_PAGES: ReadonlyArray<{ path: string; sampleHeader: string }> = [
   { path: "hr/shifts.tsx", sampleHeader: "تعيينات-الورديات" },
   { path: "hr/violations.tsx", sampleHeader: "رقم المحضر" },
   { path: "hr/evaluation-360.tsx", sampleHeader: "تقييم الزملاء" },
+  { path: "hr/wps-runs.tsx", sampleHeader: "ملفات-WPS" },
+  { path: "hr/onboarding-review.tsx", sampleHeader: "خطوات مكتملة" },
+  { path: "hr/employee-activation.tsx", sampleHeader: "تنشيط-حسابات-الموظفين" },
   { path: "hr/recruitment.tsx", sampleHeader: "" },
   { path: "hr/turnover-report.tsx", sampleHeader: "" },
   { path: "hr/overtime.tsx", sampleHeader: "" },
@@ -94,8 +97,8 @@ describe("HR CSV export — every listed page wires exportToCSV", () => {
     });
   }
 
-  it("ratchet never shrinks — minimum 21 HR pages with CSV export", () => {
-    expect(ADOPTED_PAGES.length).toBeGreaterThanOrEqual(21);
+  it("ratchet never shrinks — minimum 24 HR pages with CSV export", () => {
+    expect(ADOPTED_PAGES.length).toBeGreaterThanOrEqual(24);
   });
 });
 
