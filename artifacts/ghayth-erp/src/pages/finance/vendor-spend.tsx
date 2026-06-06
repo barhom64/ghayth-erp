@@ -228,8 +228,6 @@ export default function VendorSpendPage() {
       .sort((a, b) => b.outstandingAmount - a.outstandingAmount);
   }, [vendorsResp, payablesResp, contractsResp]);
 
-  if (vLoading || payLoading || cLoading) return <LoadingSpinner />;
-
   const totalAp = vendorAggregates.reduce((s, v) => s + v.outstandingAmount, 0);
   const top1Share = vendorAggregates[0]?.shareOfTotal ?? 0;
   const top5Share = vendorAggregates.slice(0, 5).reduce((s, v) => s + v.shareOfTotal, 0);
@@ -240,6 +238,9 @@ export default function VendorSpendPage() {
 
   const filtered = bandFilter ? vendorAggregates.filter((v) => v.riskBand === bandFilter) : vendorAggregates;
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (vLoading || payLoading || cLoading) return <LoadingSpinner />;
+
 
   const cols: DataTableColumn<VendorAggregate>[] = [
     {
