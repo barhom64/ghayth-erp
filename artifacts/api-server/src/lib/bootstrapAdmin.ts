@@ -1,6 +1,7 @@
 import { pool } from "./rawdb.js";
 import { hashPassword } from "./auth.js";
-import { currentYear, todayISO } from "./businessHelpers.js";
+import { todayISO } from "./businessHelpers.js";
+import { issueNumber } from "./numberingService.js";
 import { logger } from "./logger.js";
 import { config } from "./config.js";
 import type pg from "pg";
@@ -96,13 +97,21 @@ async function createUserIfNotExists(
     return false;
   }
 
-  // 1. Create employee record
-  const seqRes = await client.query(
-    `SELECT nextval('employee_number_seq') AS seq`,
-  );
-  const seq = Number(seqRes.rows[0].seq);
-  const yearStr = String(currentYear());
-  const empNumber = `EMP-${yearStr}-${String(seq).padStart(3, "0")}`;
+  // 1. Create employee record.
+  // The legacy `employee_number_seq` sequence was dropped (migration 218);
+  // employee codes are now issued through numberingService.issueNumber
+  // (scheme hr/employee_code, seeded by migrations 214/216 which run before
+  // this bootstrap). Mirrors the production path in routes/employees.ts.
+  const issued = await issueNumber({
+    companyId,
+    branchId,
+    moduleKey: "hr",
+    entityKey: "employee_code",
+    entityTable: "employees",
+    actorId: null,
+    expectedTiming: "on_draft",
+  });
+  const empNumber = issued.number;
 
   const empRes = await client.query(
     `INSERT INTO employees (name, phone, email, "empNumber", "nationalId", gender, nationality, status)
@@ -111,6 +120,12 @@ async function createUserIfNotExists(
     [user.name, user.phone, user.email, empNumber, user.nationalId, user.gender, user.nationality],
   );
   const employeeId = empRes.rows[0].id;
+
+  // Link the numbering assignment to the new employee row.
+  await client.query(
+    `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+    [employeeId, issued.assignmentId],
+  );
   logger.info({ name: user.name, employeeId, empNumber }, "Bootstrap created employee");
 
   // 2. Create employee_assignment
