@@ -247,6 +247,7 @@ const allNavSections: NavSection[] = [
         { label: "موزّع التكاليف", path: "/finance/expenses/split", icon: Layers },
         { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
         { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
+        { label: "سند قبض العميل (تطبيق تلقائي)", path: "/finance/receivables/receipt", icon: DollarSign },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
         { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
       ]},
@@ -324,6 +325,12 @@ const allNavSections: NavSection[] = [
         { label: "Y/Y Comparison", path: "/finance/reports/yoy", icon: BarChart2 },
         { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
         { label: "GL Health Score", path: "/finance/gl-health", icon: ShieldAlert },
+        { label: "محفظة ربحية المشاريع", path: "/finance/project-portfolio", icon: BarChart2 },
+        { label: "محفظة ربحية العقارات", path: "/finance/property-portfolio", icon: BarChart2 },
+        { label: "محفظة ربحية وكلاء العمرة", path: "/finance/umrah-agent-portfolio", icon: BarChart2 },
+        { label: "محلّل مزيج الإيرادات", path: "/finance/revenue-mix", icon: TrendingUp },
+        { label: "محلّل مزيج المصاريف", path: "/finance/expense-mix", icon: TrendingUp },
+        { label: "اتجاه DSO للسيولة", path: "/finance/reports/dso-trend", icon: Activity },
       ]},
       { label: "صناديق الواردات", path: "/finance/approvals-inbox", icon: Bell, module: "finance", children: [
         { label: "Approvals Inbox", path: "/finance/approvals-inbox", icon: Bell },
@@ -580,6 +587,7 @@ const allNavSections: NavSection[] = [
         ]},
         { label: "المراقبة والمتابعة", path: "/admin/monitoring", icon: Activity, children: [
           { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "الوثائق الحكومية المنتهية", path: "/admin/expiring-docs", icon: Clock, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
