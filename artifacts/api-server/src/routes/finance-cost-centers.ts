@@ -966,6 +966,431 @@ router.get("/cost-centers/:id/pnl", authorize({ feature: "finance.cost_centers",
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PER-CC MONTHLY TIME-SERIES — mirrors GET /entity-pnl/.../series so
+// the per-CC drill page can render the same TrendCard as entity drills.
+// Single recursive CTE gathers descendants (so the series rolls up the
+// whole sub-tree, matching the existing self/rolled split on the
+// drill); the buckets always use the ROLLED set so the chart shows
+// the total flow through this CC and everything under it.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/cost-centers/:id/series", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+
+    // Default = last 12 months ending today (same convention as the
+    // per-entity series — operators frame trends annually).
+    const today = new Date();
+    const defaultTo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0))
+      .toISOString().slice(0, 10);
+    const defaultFrom = new Date(Date.UTC(today.getUTCFullYear() - 1, today.getUTCMonth(), 1))
+      .toISOString().slice(0, 10);
+    const from = dateFrom || defaultFrom;
+    const to = dateTo || defaultTo;
+
+    // Confirm the CC exists in this tenant (same defence as the drill).
+    const [cc] = await rawQuery<{ id: number; code: string | null; name: string }>(
+      `SELECT id, code, name FROM cost_centers
+        WHERE id = $1 AND "companyId" = $2 AND status != 'deleted'`,
+      [id, scope.companyId],
+    );
+    if (!cc) throw new NotFoundError("مركز التكلفة غير موجود");
+
+    // generate_series + CTE on descendants — single round-trip.
+    const rows = await rawQuery<{
+      month: string;
+      revenue: string;
+      expense: string;
+      entries: number;
+    }>(
+      `WITH RECURSIVE tree AS (
+         SELECT id FROM cost_centers
+          WHERE id = $1 AND "companyId" = $4
+         UNION ALL
+         SELECT cc.id FROM cost_centers cc
+           JOIN tree t ON t.id = cc."parentId"
+          WHERE cc."companyId" = $4 AND cc.status != 'deleted'
+       ),
+       months AS (
+         SELECT generate_series(
+                  date_trunc('month', $2::date),
+                  date_trunc('month', $3::date),
+                  interval '1 month'
+                )::date AS m
+       ),
+       agg AS (
+         SELECT date_trunc('month', je.date)::date AS m,
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          WHERE je."companyId" = $4
+            AND je."deletedAt" IS NULL
+            AND je.date BETWEEN $2 AND $3
+            AND jl."costCenterId" IN (SELECT id FROM tree)
+          GROUP BY 1
+       )
+       SELECT to_char(months.m, 'YYYY-MM') AS month,
+              COALESCE(agg.revenue, 0) AS revenue,
+              COALESCE(agg.expense, 0) AS expense,
+              COALESCE(agg.entries, 0) AS entries
+         FROM months
+         LEFT JOIN agg ON agg.m = months.m
+        ORDER BY months.m ASC`,
+      [id, from, to, scope.companyId],
+    );
+
+    const buckets = rows.map((r) => {
+      const revenue = Number(r.revenue);
+      const expense = Number(r.expense);
+      return {
+        month: r.month,
+        revenue,
+        expense,
+        net: revenue - expense,
+        entries: Number(r.entries),
+      };
+    });
+    const totals = buckets.reduce(
+      (acc, b) => ({
+        revenue: acc.revenue + b.revenue,
+        expense: acc.expense + b.expense,
+        net: acc.net + b.net,
+        entries: acc.entries + b.entries,
+      }),
+      { revenue: 0, expense: 0, net: 0, entries: 0 },
+    );
+
+    res.json({
+      costCenter: cc,
+      dateFrom: from,
+      dateTo: to,
+      buckets,
+      totals,
+    });
+  } catch (err) { handleRouteError(err, res, "Cost-centre series error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PER-CC YEAR-OVER-YEAR — mirrors GET /entity-pnl/.../yoy. Returns
+// current + prior-year-same-period buckets (rolled across the CC's
+// descendants) plus a server-computed delta. Closes the natural
+// "how is this CC doing vs last year?" question.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/cost-centers/:id/yoy", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+
+    // Default = year-to-date (Jan 1 → today).
+    const today = new Date();
+    const defaultFrom = `${today.getUTCFullYear()}-01-01`;
+    const defaultTo = today.toISOString().slice(0, 10);
+    const currentFrom = dateFrom || defaultFrom;
+    const currentTo = dateTo || defaultTo;
+    const shiftYear = (iso: string): string => {
+      const [yStr, m, d] = iso.split("-");
+      const y = Number(yStr) - 1;
+      return `${y}-${m}-${d}`;
+    };
+    const priorFrom = shiftYear(currentFrom);
+    const priorTo = shiftYear(currentTo);
+
+    const [cc] = await rawQuery<{ id: number; code: string | null; name: string }>(
+      `SELECT id, code, name FROM cost_centers
+        WHERE id = $1 AND "companyId" = $2 AND status != 'deleted'`,
+      [id, scope.companyId],
+    );
+    if (!cc) throw new NotFoundError("مركز التكلفة غير موجود");
+
+    // UNION ALL with a recursive CTE for descendants, same shape as
+    // the entity YoY query — keeps the round-trip count to 1.
+    const aggRows = await rawQuery<{
+      period: "current" | "prior";
+      revenue: string;
+      expense: string;
+      entries: number;
+    }>(
+      `WITH RECURSIVE tree AS (
+         SELECT id FROM cost_centers
+          WHERE id = $1 AND "companyId" = $6
+         UNION ALL
+         SELECT cc.id FROM cost_centers cc
+           JOIN tree t ON t.id = cc."parentId"
+          WHERE cc."companyId" = $6 AND cc.status != 'deleted'
+       )
+       SELECT 'current' AS period,
+              COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+              COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+              COUNT(DISTINCT je.id)::int AS entries
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+         LEFT JOIN chart_of_accounts ca
+                ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+        WHERE je."companyId" = $6
+          AND je."deletedAt" IS NULL
+          AND je.date BETWEEN $2 AND $3
+          AND jl."costCenterId" IN (SELECT id FROM tree)
+       UNION ALL
+       SELECT 'prior' AS period,
+              COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+              COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+              COUNT(DISTINCT je.id)::int AS entries
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+         LEFT JOIN chart_of_accounts ca
+                ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+        WHERE je."companyId" = $6
+          AND je."deletedAt" IS NULL
+          AND je.date BETWEEN $4 AND $5
+          AND jl."costCenterId" IN (SELECT id FROM tree)`,
+      [id, currentFrom, currentTo, priorFrom, priorTo, scope.companyId],
+    );
+
+    const num = (v: unknown) => Number(v ?? 0);
+    const bucketFor = (period: "current" | "prior") => {
+      const row = aggRows.find((r) => r.period === period);
+      const revenue = num(row?.revenue);
+      const expense = num(row?.expense);
+      return {
+        revenue, expense, net: revenue - expense, entries: num(row?.entries),
+      };
+    };
+    const current = bucketFor("current");
+    const prior = bucketFor("prior");
+    const pctChange = (cur: number, pri: number): number | null => {
+      if (pri === 0) return null;
+      return Math.round(((cur - pri) / Math.abs(pri)) * 1000) / 10;
+    };
+
+    res.json({
+      costCenter: cc,
+      current: { dateFrom: currentFrom, dateTo: currentTo, bucket: current },
+      prior:   { dateFrom: priorFrom,   dateTo: priorTo,   bucket: prior },
+      delta: {
+        revenue:    current.revenue - prior.revenue,
+        expense:    current.expense - prior.expense,
+        net:        current.net - prior.net,
+        entries:    current.entries - prior.entries,
+        revenuePct: pctChange(current.revenue, prior.revenue),
+        expensePct: pctChange(current.expense, prior.expense),
+        netPct:     pctChange(current.net, prior.net),
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Cost-centre YoY error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COST-CENTRE RANKING — top-N rollup across all CCs (or one branch
+// of the tree). Mirrors GET /entity-ranking but ranks cost-centres
+// instead of entities. Answers "which CCs are bleeding most cash?"
+// or "which projects have the strongest margin this quarter?".
+//
+// Each row sums revenue/expense across THIS CC + its descendants
+// (recursive CTE per row) so the ranking reflects total responsibility.
+// That said, the recursion is cheap because the tree typically has a
+// shallow depth (3-5 levels). Limit caps at 100.
+// ─────────────────────────────────────────────────────────────────────────────
+const CC_RANKING_METRICS = new Set(["revenue", "expense", "net", "entries"]);
+
+router.get("/cost-centers/ranking", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const q = req.query as Record<string, string | undefined>;
+    const metric = String(q.metric ?? "expense");
+    if (!CC_RANKING_METRICS.has(metric)) {
+      throw new ValidationError(`المقياس غير مدعوم: ${metric}`, { field: "metric" });
+    }
+
+    // Clamp limit [5, 100] — cheap correlated tree-rollups, but
+    // still don't want to invite 10k-row scans.
+    const limit = Math.max(5, Math.min(100, Number(q.limit) > 0 ? Number(q.limit) : 20));
+    const from = q.dateFrom || "1970-01-01";
+    const to = q.dateTo || "2099-12-31";
+    const direction = q.direction === "asc" ? "ASC" : "DESC";
+
+    // Optional `rootId` narrows the ranking to a subtree (e.g. just
+    // projects under one branch's CC).
+    const rootId = q.rootId && Number(q.rootId) > 0 ? Number(q.rootId) : null;
+
+    const orderCol: Record<string, string> = {
+      revenue: "revenue",
+      expense: "expense",
+      net:     "net",
+      entries: "entries",
+    };
+
+    // Per-CC rollup via a recursive CTE that produces (cc_id,
+    // descendant_id) pairs. Each CC then aggregates over all its
+    // descendant JE lines in one swoop.
+    //
+    // The OPTIONAL filter `rootId` restricts the top-level set
+    // (defaults to ALL CCs in the tenant — `parentId IS NULL` would
+    // only show roots, which isn't what we want for ranking).
+    const rows = await rawQuery<{
+      ccId: number;
+      ccCode: string | null;
+      ccName: string;
+      revenue: string;
+      expense: string;
+      entries: number;
+    }>(
+      `WITH RECURSIVE tree AS (
+         SELECT id AS root_id, id AS desc_id
+           FROM cost_centers
+          WHERE "companyId" = $1
+            AND status != 'deleted'
+            ${rootId ? `AND id = ${rootId}` : ""}
+         UNION ALL
+         SELECT t.root_id, cc.id
+           FROM cost_centers cc
+           JOIN tree t ON cc."parentId" = t.desc_id
+          WHERE cc."companyId" = $1
+            AND cc.status != 'deleted'
+       ),
+       per_cc AS (
+         SELECT t.root_id AS cc_id,
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM tree t
+           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id
+           LEFT JOIN journal_entries je
+                  ON je.id = jl."journalId"
+                 AND je."companyId" = $1
+                 AND je."deletedAt" IS NULL
+                 AND je.date BETWEEN $2 AND $3
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          GROUP BY t.root_id
+       )
+       SELECT cc.id AS "ccId",
+              cc.code AS "ccCode",
+              cc.name AS "ccName",
+              p.revenue,
+              p.expense,
+              (p.revenue - p.expense) AS net,
+              p.entries
+         FROM per_cc p
+         JOIN cost_centers cc ON cc.id = p.cc_id
+                              AND cc."companyId" = $1
+                              AND cc.status != 'deleted'
+        ORDER BY ${orderCol[metric]} ${direction} NULLS LAST, cc.id ASC
+        LIMIT ${limit}`,
+      [scope.companyId, from, to],
+    );
+
+    // OPTIONAL: prior-period rollup for the same CCs. Same shape as
+    // the entity-ranking includePrior path — each top-N CC gets a
+    // matching aggregate over the prior calendar-year window so the
+    // frontend can render anomaly badges without N round-trips.
+    //
+    // Uses ANY($::int[]) over the top-N ids — one query, no N+1.
+    // Each row reaggregates over the FULL descendant subtree of THAT
+    // cc (same recursive CTE shape).
+    let priorRows: Array<{ ccId: number; revenue: number; expense: number; net: number; entries: number }> = [];
+    if (q.includePrior === "true" && rows.length > 0) {
+      const shiftYear = (iso: string): string => {
+        const [yStr, m, d] = iso.split("-");
+        return `${Number(yStr) - 1}-${m}-${d}`;
+      };
+      const priorFrom = shiftYear(from);
+      const priorTo = shiftYear(to);
+      const ids = rows.map((r) => r.ccId);
+      const priorAgg = await rawQuery<{
+        ccId: number;
+        revenue: string;
+        expense: string;
+        entries: number;
+      }>(
+        `WITH RECURSIVE tree AS (
+           SELECT id AS root_id, id AS desc_id
+             FROM cost_centers
+            WHERE "companyId" = $1
+              AND status != 'deleted'
+              AND id = ANY($4::int[])
+           UNION ALL
+           SELECT t.root_id, cc.id
+             FROM cost_centers cc
+             JOIN tree t ON cc."parentId" = t.desc_id
+            WHERE cc."companyId" = $1
+              AND cc.status != 'deleted'
+         )
+         SELECT t.root_id AS "ccId",
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM tree t
+           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id
+           LEFT JOIN journal_entries je
+                  ON je.id = jl."journalId"
+                 AND je."companyId" = $1
+                 AND je."deletedAt" IS NULL
+                 AND je.date BETWEEN $2 AND $3
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          GROUP BY t.root_id`,
+        [scope.companyId, priorFrom, priorTo, ids],
+      );
+      priorRows = priorAgg.map((r) => ({
+        ccId: r.ccId,
+        revenue: Number(r.revenue),
+        expense: Number(r.expense),
+        net: Number(r.revenue) - Number(r.expense),
+        entries: Number(r.entries),
+      }));
+    }
+
+    const priorByCc = new Map(priorRows.map((p) => [p.ccId, p]));
+
+    res.json({
+      metric,
+      direction: direction.toLowerCase(),
+      dateFrom: from,
+      dateTo: to,
+      limit,
+      rootId,
+      includePrior: q.includePrior === "true",
+      rows: rows.map((r) => {
+        const prior = priorByCc.get(r.ccId) ?? null;
+        return {
+          ccId: r.ccId,
+          ccCode: r.ccCode,
+          ccName: r.ccName,
+          revenue: Number(r.revenue),
+          expense: Number(r.expense),
+          net: Number(r.revenue) - Number(r.expense),
+          entries: Number(r.entries),
+          prior: prior
+            ? {
+                revenue: prior.revenue,
+                expense: prior.expense,
+                net: prior.net,
+                entries: prior.entries,
+              }
+            : null,
+        };
+      }),
+    });
+  } catch (err) { handleRouteError(err, res, "Cost-centre ranking error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DIMENSIONAL-ROUTING HEALTH — the operator's «هل النظام المالي
 // متأصل في اصل النظام?» single-pane view. For every entity type that
 // participates in subsidiary_accounts OR cost_centers we report:
@@ -1236,6 +1661,245 @@ router.get("/entity-pnl/:entityType/:entityId", authorize({ feature: "finance.co
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PER-ENTITY TIME-SERIES — month-by-month P&L for one entity.
+//
+// Same 9-entityType allowlist + closed column map as the drill, so
+// any drill page can render a small sparkline + a "monthly trend"
+// table side-by-side with no extra resolver code.
+//
+// Bucketing: PostgreSQL `date_trunc('month', je.date)` produces stable
+// YYYY-MM-01 keys. Returns ALL months in [from, to] including months
+// with zero activity (via a generate_series LEFT JOIN) so the front-
+// end can render a continuous chart without gap-filling logic.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/entity-pnl/:entityType/:entityId/series", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const entityType = String(req.params.entityType);
+    const entityId = parseId(req.params.entityId, "entityId");
+    const column = ENTITY_TYPE_TO_JL_COLUMN[entityType];
+    if (!column) {
+      throw new ValidationError(`نوع الكيان غير مدعوم: ${entityType}`, { field: "entityType" });
+    }
+
+    const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+    // Default to last 12 months ending today (Riyadh calendar). The
+    // operator's mental model on a per-entity trend is "the past year"
+    // — annual cycles in umrah, retail, fleet maintenance all surface.
+    const today = new Date();
+    const defaultTo = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0))
+      .toISOString().slice(0, 10);
+    const defaultFrom = new Date(Date.UTC(today.getUTCFullYear() - 1, today.getUTCMonth(), 1))
+      .toISOString().slice(0, 10);
+    const from = dateFrom || defaultFrom;
+    const to = dateTo || defaultTo;
+
+    // generate_series produces one month per bucket so months with
+    // zero activity still appear in the result (chart continuity).
+    // Outer LEFT JOIN onto the aggregate ensures the row count equals
+    // the month count, not the active-month count.
+    const rows = await rawQuery<{
+      month: string;
+      revenue: string;
+      expense: string;
+      entries: number;
+    }>(
+      `WITH months AS (
+         SELECT generate_series(
+                  date_trunc('month', $2::date),
+                  date_trunc('month', $3::date),
+                  interval '1 month'
+                )::date AS m
+       ),
+       agg AS (
+         SELECT date_trunc('month', je.date)::date AS m,
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          WHERE je."companyId" = $1
+            AND je."deletedAt" IS NULL
+            AND je.date BETWEEN $2 AND $3
+            AND jl.${column} = $4
+          GROUP BY 1
+       )
+       SELECT to_char(months.m, 'YYYY-MM') AS month,
+              COALESCE(agg.revenue, 0) AS revenue,
+              COALESCE(agg.expense, 0) AS expense,
+              COALESCE(agg.entries, 0) AS entries
+         FROM months
+         LEFT JOIN agg ON agg.m = months.m
+        ORDER BY months.m ASC`,
+      [scope.companyId, from, to, entityId],
+    );
+
+    const buckets = rows.map((r) => {
+      const revenue = Number(r.revenue);
+      const expense = Number(r.expense);
+      return {
+        month: r.month,
+        revenue,
+        expense,
+        net: revenue - expense,
+        entries: Number(r.entries),
+      };
+    });
+
+    const totals = buckets.reduce(
+      (acc, b) => ({
+        revenue: acc.revenue + b.revenue,
+        expense: acc.expense + b.expense,
+        net: acc.net + b.net,
+        entries: acc.entries + b.entries,
+      }),
+      { revenue: 0, expense: 0, net: 0, entries: 0 },
+    );
+
+    res.json({
+      entityType,
+      entityId,
+      dateFrom: from,
+      dateTo: to,
+      buckets,
+      totals,
+    });
+  } catch (err) { handleRouteError(err, res, "Entity time-series error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PER-ENTITY YEAR-OVER-YEAR — same shape as the entity-pnl drill but
+// returns TWO buckets (current period + prior-year same period) and a
+// delta computed server-side. Closes the natural "how am I doing vs
+// last year?" question for any customer / agent / vehicle.
+//
+// The prior period is computed by shifting the current range back by
+// exactly one calendar year (preserving the calendar window, not
+// rolling 365 days — operators think "vs same month last year",
+// not "vs 365 days ago", so this matches the mental model).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/entity-pnl/:entityType/:entityId/yoy", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const entityType = String(req.params.entityType);
+    const entityId = parseId(req.params.entityId, "entityId");
+    const column = ENTITY_TYPE_TO_JL_COLUMN[entityType];
+    if (!column) {
+      throw new ValidationError(`نوع الكيان غير مدعوم: ${entityType}`, { field: "entityType" });
+    }
+
+    // Default to the year-to-date (Jan 1 → today). This is the
+    // most common YoY framing — "this year vs same period last year".
+    const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+    const today = new Date();
+    const defaultFrom = `${today.getUTCFullYear()}-01-01`;
+    const defaultTo = today.toISOString().slice(0, 10);
+    const currentFrom = dateFrom || defaultFrom;
+    const currentTo = dateTo || defaultTo;
+
+    // Shift the range back by exactly one year. Using string
+    // manipulation rather than Date arithmetic to avoid timezone
+    // drift on the boundary days (Riyadh time-zone safe).
+    const shiftYear = (iso: string): string => {
+      const [yStr, m, d] = iso.split("-");
+      const y = Number(yStr) - 1;
+      return `${y}-${m}-${d}`;
+    };
+    const priorFrom = shiftYear(currentFrom);
+    const priorTo = shiftYear(currentTo);
+
+    // Two aggregates in ONE query via UNION ALL with a `period`
+    // discriminator column. Keeps the round-trip count to 1.
+    const aggRows = await rawQuery<{
+      period: "current" | "prior";
+      revenue: string;
+      expense: string;
+      entries: number;
+    }>(
+      `SELECT 'current' AS period,
+              COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+              COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+              COUNT(DISTINCT je.id)::int AS entries
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+         LEFT JOIN chart_of_accounts ca
+                ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+        WHERE je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je.date BETWEEN $2 AND $3
+          AND jl.${column} = $6
+       UNION ALL
+       SELECT 'prior' AS period,
+              COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+              COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+              COUNT(DISTINCT je.id)::int AS entries
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+         LEFT JOIN chart_of_accounts ca
+                ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+        WHERE je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je.date BETWEEN $4 AND $5
+          AND jl.${column} = $6`,
+      [scope.companyId, currentFrom, currentTo, priorFrom, priorTo, entityId],
+    );
+
+    const num = (v: unknown) => Number(v ?? 0);
+    const bucketFor = (period: "current" | "prior") => {
+      const row = aggRows.find((r) => r.period === period);
+      const revenue = num(row?.revenue);
+      const expense = num(row?.expense);
+      return {
+        revenue, expense, net: revenue - expense, entries: num(row?.entries),
+      };
+    };
+    const current = bucketFor("current");
+    const prior = bucketFor("prior");
+
+    // Delta — Δ = current - prior. Percentage uses |prior| as the
+    // denominator (sign-agnostic so a negative-to-positive flip
+    // doesn't render a bogus % drop). Returns null when prior is 0
+    // — the front-end shows "—" instead of "+∞%".
+    const pctChange = (cur: number, pri: number): number | null => {
+      if (pri === 0) return null;
+      return Math.round(((cur - pri) / Math.abs(pri)) * 1000) / 10; // 1 decimal
+    };
+
+    res.json({
+      entityType,
+      entityId,
+      current: {
+        dateFrom: currentFrom,
+        dateTo: currentTo,
+        bucket: current,
+      },
+      prior: {
+        dateFrom: priorFrom,
+        dateTo: priorTo,
+        bucket: prior,
+      },
+      delta: {
+        revenue:    current.revenue - prior.revenue,
+        expense:    current.expense - prior.expense,
+        net:        current.net - prior.net,
+        entries:    current.entries - prior.entries,
+        revenuePct: pctChange(current.revenue, prior.revenue),
+        expensePct: pctChange(current.expense, prior.expense),
+        netPct:     pctChange(current.net, prior.net),
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Entity YoY error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ENTITY RANKING — "who are my best/worst customers/vendors/vehicles?"
 //
 // Top-N rollup across all entities of a given type, ordered by a
@@ -1337,6 +2001,57 @@ router.get("/entity-ranking", authorize({ feature: "finance.cost_centers", actio
       [scope.companyId, from, to],
     );
 
+    // OPTIONAL: prior-period rollup for the same entities. When
+    // `includePrior=true`, we compute the same aggregate over the
+    // prior calendar-year window — enables per-row anomaly badges on
+    // the frontend (delta + % change) without a per-row round-trip.
+    //
+    // Shifts both `from` and `to` back by exactly one calendar year
+    // (same "preserve the calendar window" logic the entity-pnl YoY
+    // endpoint uses). Skipped when the top-N is empty.
+    let priorRows: Array<{ entityId: number; revenue: number; expense: number; net: number; entries: number }> = [];
+    if (q.includePrior === "true" && rows.length > 0) {
+      const shiftYear = (iso: string): string => {
+        const [yStr, m, d] = iso.split("-");
+        return `${Number(yStr) - 1}-${m}-${d}`;
+      };
+      const priorFrom = shiftYear(from);
+      const priorTo = shiftYear(to);
+      const ids = rows.map((r) => r.entityId);
+      const priorAgg = await rawQuery<{
+        entityId: number;
+        revenue: string;
+        expense: string;
+        entries: number;
+      }>(
+        `SELECT jl.${column} AS "entityId",
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          WHERE je."companyId" = $1
+            AND je."deletedAt" IS NULL
+            AND je.date BETWEEN $2 AND $3
+            AND jl.${column} = ANY($4::int[])
+          GROUP BY jl.${column}`,
+        [scope.companyId, priorFrom, priorTo, ids],
+      );
+      priorRows = priorAgg.map((r) => ({
+        entityId: r.entityId,
+        revenue: Number(r.revenue),
+        expense: Number(r.expense),
+        net: Number(r.revenue) - Number(r.expense),
+        entries: Number(r.entries),
+      }));
+    }
+
+    const priorByEntity = new Map(priorRows.map((p) => [p.entityId, p]));
+
     res.json({
       entityType,
       metric,
@@ -1344,14 +2059,26 @@ router.get("/entity-ranking", authorize({ feature: "finance.cost_centers", actio
       dateFrom: from,
       dateTo: to,
       limit,
-      rows: rows.map((r) => ({
-        entityId: r.entityId,
-        entityName: r.entityName,
-        revenue: Number(r.revenue),
-        expense: Number(r.expense),
-        net: Number(r.net),
-        entries: Number(r.entries),
-      })),
+      includePrior: q.includePrior === "true",
+      rows: rows.map((r) => {
+        const prior = priorByEntity.get(r.entityId) ?? null;
+        return {
+          entityId: r.entityId,
+          entityName: r.entityName,
+          revenue: Number(r.revenue),
+          expense: Number(r.expense),
+          net: Number(r.net),
+          entries: Number(r.entries),
+          prior: prior
+            ? {
+                revenue: prior.revenue,
+                expense: prior.expense,
+                net: prior.net,
+                entries: prior.entries,
+              }
+            : null,
+        };
+      }),
     });
   } catch (err) { handleRouteError(err, res, "Entity ranking error"); }
 });
