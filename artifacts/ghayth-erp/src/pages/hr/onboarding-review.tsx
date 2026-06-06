@@ -83,9 +83,6 @@ export default function OnboardingReviewPage() {
     );
   };
 
-  if (empLoading || stepsLoading) return <LoadingSpinner />;
-  if (empError || stepsError) return <ErrorState />;
-
   const employees = data?.data || [];
   const steps: string[] = stepsData?.data || ["تسليم أجهزة تقنية المعلومات", "توقيع عقد العمل", "تعريف المدير", "دورة التعريف"];
 
@@ -126,6 +123,11 @@ export default function OnboardingReviewPage() {
     dateField: "hireDate",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (empLoading || stepsLoading) return <LoadingSpinner />;
+
+  if (empError || stepsError) return <ErrorState />;
+
 
   const pendingTasks = onboardingTasks.filter((t: any) => t.status !== "completed" && t.status !== "skipped");
 

@@ -130,11 +130,13 @@ export default function PurchaseRequestsPage() {
     setConvertTarget(null);
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const draftCount     = rows.filter((r) => r.status === "draft").length;
   const pendingCount   = rows.filter((r) => r.status === "pending" || r.status === "submitted").length;

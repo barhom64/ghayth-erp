@@ -102,15 +102,17 @@ export default function CostCentersPage() {
     allocatedAmount: "",
   });
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
 
   const filtered = typeFilter
     ? rows.filter((r) => (r.relatedEntityType ?? "general") === typeFilter)
     : rows;
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const linkedCount = rows.filter((r) => r.relatedEntityType).length;
   const totalAllocated = rows.reduce((s, r) => s + Number(r.allocatedAmount ?? 0), 0);

@@ -81,15 +81,17 @@ export default function PurchaseOrdersPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "supplierName"],
     statusField: "status",
     dateField: "expectedDelivery",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const totalAmount = items.reduce((s: number, po: any) => s + Number(po.totalAmount || 0), 0);
   const pendingCount = items.filter((po: any) => ["draft", "pending"].includes(po.status)).length;

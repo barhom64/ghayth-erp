@@ -35,15 +35,17 @@ export default function OpeningBalancesPage() {
     ["opening-balances", scopeQueryString],
     `/finance/opening-balances${scopeSuffix}`
   );
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const items: OpeningBalance[] = (data?.data || []).map((r: any) => ({
     ...r,
     totalDebit: Number(r.totalDebit || 0),
     totalCredit: Number(r.totalCredit || 0),
   }));
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const totalBalanced = items.filter(
     (i) => Math.abs(Number(i.totalDebit) - Number(i.totalCredit)) < 0.01

@@ -125,13 +125,15 @@ export default function AutoDetectionPage() {
     { successMessage: "تم حفظ الإعدادات" },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const settings = settingsQuery.data;
   const summary = summaryQuery.data;
   const logs = logQuery.data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(logs);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   // ── مؤشرات الأداء ──
   const kpis = [

@@ -64,11 +64,13 @@ export default function CollectionStagesPage() {
     [["collection-overdue"]],
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const totalOverdueAmount = rows.reduce((s, r) => {
     const out = Number(r.total ?? 0) - Number(r.paidAmount ?? 0);

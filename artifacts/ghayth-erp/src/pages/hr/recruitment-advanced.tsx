@@ -22,11 +22,13 @@ export default function RecruitmentAdvancedPage() {
   const isLoading = statsLoading || appsLoading;
   const isError = statsError || appsError;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const apps = appsData?.data || [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(apps);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const pipeline = Object.entries(RECRUITMENT_STAGES).map(([key, val]) => ({
     stage: key,

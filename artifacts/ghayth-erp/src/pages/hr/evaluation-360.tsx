@@ -46,15 +46,17 @@ export default function Evaluation360Page() {
   const { data: cyclesData, isLoading, isError } = useApiQuery<any>(["evaluation-cycles"], "/hr/evaluation-cycles");
   const cycles = cyclesData?.data || [];
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(cycles, filters, {
     searchFields: ["employeeName", "period"],
     statusField: "status",
     dateField: "createdAt",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const stats = {
     total: cycles.length,

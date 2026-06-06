@@ -56,11 +56,13 @@ export default function ApAgingPage() {
     `/finance/ap-aging?asOfDate=${asOfDate}`
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const suppliers = (data?.suppliers || []) as any[];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(suppliers);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
   const summary = data?.summary || {};
 
   const columns: DataTableColumn<any>[] = [

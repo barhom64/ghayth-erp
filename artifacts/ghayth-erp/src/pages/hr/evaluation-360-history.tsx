@@ -35,12 +35,14 @@ export default function Evaluation360HistoryPage() {
     `/hr/employees/${employeeId}/evaluation-history`
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const employee = data?.employee;
   const history = data?.history || [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(history);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   // Build chart data
   const chartData = history.filter((h: any) => h.finalScore != null);

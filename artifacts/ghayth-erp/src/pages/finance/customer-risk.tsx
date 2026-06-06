@@ -197,8 +197,6 @@ export default function CustomerRiskPage() {
       .sort((a, b) => b.outstandingAmount - a.outstandingAmount);
   }, [receivablesResp, collectionData]);
 
-  if (arLoading || collLoading) return <LoadingSpinner />;
-
   // ── Concentration metrics
   const totalAr = customers.reduce((s, c) => s + c.outstandingAmount, 0);
   const top1Share = customers[0]?.shareOfTotal ?? 0;
@@ -209,6 +207,9 @@ export default function CustomerRiskPage() {
 
   const filtered = bandFilter ? customers.filter((c) => c.riskBand === bandFilter) : customers;
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (arLoading || collLoading) return <LoadingSpinner />;
+
 
   const cols: DataTableColumn<CustomerAggregate>[] = [
     {

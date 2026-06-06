@@ -95,14 +95,16 @@ export default function FiscalPeriodsPage() {
     },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items as unknown as Record<string, unknown>[], filters, {
     searchFields: ["name", "period"],
     statusField: "status",
   }) as unknown as FiscalPeriodV1Row[];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const activeCount = items.filter((p) => p.status === "active").length;
   const closedCount = items.filter((p) => p.status === "closed").length;

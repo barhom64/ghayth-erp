@@ -25,15 +25,17 @@ export default function CommitmentsPage() {
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "vendorName"],
     statusField: "status",
     dateField: "",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const upcomingCount = items.filter((c: any) => {
     if (!c.dueDate) return false;

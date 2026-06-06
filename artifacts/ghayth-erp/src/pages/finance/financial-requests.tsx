@@ -25,15 +25,17 @@ export default function FinancialRequestsPage() {
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "supplierName", "requestedByName"],
     statusField: "status",
     dateField: "",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const totalAmount = items.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
 
