@@ -4,7 +4,9 @@ import { resolve } from "path";
 
 const CSRF_SRC = readFileSync(resolve(__dirname, "../../src/middlewares/csrfMiddleware.ts"), "utf-8");
 const AUTH_SRC = readFileSync(resolve(__dirname, "../../src/routes/auth.ts"), "utf-8");
-const INDEX_SRC = readFileSync(resolve(__dirname, "../../src/routes/index.ts"), "utf-8");
+// P3 — domain mounts moved to _domain-mounts.ts.
+const INDEX_SRC = readFileSync(resolve(__dirname, "../../src/routes/index.ts"), "utf-8")
+  + "\n" + readFileSync(resolve(__dirname, "../../src/routes/_domain-mounts.ts"), "utf-8");
 const API_SRC = readFileSync(resolve(__dirname, "../../../ghayth-erp/src/lib/api.ts"), "utf-8");
 
 describe("CSRF middleware — defense-in-depth layer", () => {

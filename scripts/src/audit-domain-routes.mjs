@@ -27,9 +27,13 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const REGISTRY_PATH = join(REPO_ROOT, "artifacts/api-server/src/lib/domainRegistry.ts");
 const ROUTES_INDEX_PATH = join(REPO_ROOT, "artifacts/api-server/src/routes/index.ts");
+// P3 — the 100+ domain imports moved into routes/_domain-mounts.ts.
+// Concatenate both so this audit's grep matches regardless of which
+// file holds the import.
+const DOMAIN_MOUNTS_PATH = join(REPO_ROOT, "artifacts/api-server/src/routes/_domain-mounts.ts");
 
 const registrySource = await readFile(REGISTRY_PATH, "utf8");
-const indexSource = await readFile(ROUTES_INDEX_PATH, "utf8");
+const indexSource = (await readFile(ROUTES_INDEX_PATH, "utf8")) + "\n" + (await readFile(DOMAIN_MOUNTS_PATH, "utf8"));
 
 // Extract { id, routeFile } pairs from the registry.
 const blockRegex = /id:\s*"([^"]+)"[\s\S]*?routeFile:\s*"([^"]+)"/g;

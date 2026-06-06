@@ -29,7 +29,7 @@ describe("Module coverage: HR", () => {
   const exit = read("routes/hr-exit.ts");
   const loans = read("routes/hr-loans.ts");
   const overtime = read("routes/hr-overtime.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("all HR route files have authorize guards", () => {
@@ -126,7 +126,7 @@ describe("Module coverage: Finance", () => {
   const custodies = read("routes/finance-custodies.ts");
   const hardening = read("routes/finance-hardening.ts");
   const costCenters = read("routes/finance-cost-centers.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("all Finance sub-modules have authorize guards", () => {
@@ -220,7 +220,7 @@ describe("Module coverage: Finance", () => {
 describe("Module coverage: Umrah", () => {
   const umrah = read("routes/umrah.ts");
   const entities = read("routes/umrah-entities.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("both Umrah route files have authorize guards", () => {
@@ -313,7 +313,7 @@ describe("Module coverage: Umrah", () => {
 
 describe("Module coverage: Fleet", () => {
   const fleet = read("routes/fleet.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("has authorize guards", () => {
@@ -365,7 +365,7 @@ describe("Module coverage: Fleet", () => {
 
 describe("Module coverage: Legal", () => {
   const legal = read("routes/legal.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("has authorize guards", () => {
@@ -429,7 +429,7 @@ describe("Module coverage: Legal", () => {
 
 describe("Module coverage: Property", () => {
   const properties = read("routes/properties.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("has authorize guards", () => {
@@ -485,7 +485,7 @@ describe("Module coverage: Property", () => {
 
 describe("Module coverage: Warehouse", () => {
   const warehouse = read("routes/warehouse.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("has authorize guards", () => {
@@ -539,7 +539,7 @@ describe("Module coverage: Warehouse", () => {
 
 describe("Module coverage: Operations", () => {
   const ops = read("routes/operationsCenter.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("has authorize guards", () => {
@@ -586,7 +586,7 @@ describe("Module coverage: Operations", () => {
 
 describe("Module coverage: CRM", () => {
   const crm = read("routes/crm.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("has authorize guards", () => {
@@ -639,7 +639,7 @@ describe("Module coverage: CRM", () => {
 
 describe("Module coverage: Governance", () => {
   const governance = read("routes/governance.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("has authorize guards", () => {
@@ -696,7 +696,7 @@ describe("Module coverage: Governance", () => {
 
 describe("Module coverage: Communications", () => {
   const comms = read("routes/communications.ts");
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
   // Permissions
   it("has authorize guards for authenticated endpoints", () => {
@@ -749,7 +749,7 @@ describe("Module coverage: Communications", () => {
 // ─── Cross-cutting infrastructure ─────────────────────────────────────────────
 
 describe("Module coverage: Infrastructure guards and wiring", () => {
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
   const permMw = read("middlewares/permissionMiddleware.ts");
   const governor = read("lib/systemGovernor.ts");
   const lifecycle = read("lib/lifecycleEngine.ts");

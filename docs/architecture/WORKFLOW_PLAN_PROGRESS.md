@@ -81,20 +81,33 @@ all genuinely net-new work.
 
 ---
 
-## P3 — Modularise the central router ⬜ NOT STARTED
+## P3 — Modularise the central router ✅ COMPLETE
 
-Closes finding #4 (`routes/index.ts` is a 529-line monolith with 120
+Closes finding #4 (`routes/index.ts` was a 529-line monolith with 120
 `router.use()` calls).
 
-| # | Task | Status |
-|---|---|---|
-| P3.1 | Per-domain `{ basePath, router, middlewares?, subscriptionFeature? }` contract | ⬜ TODO |
-| P3.2 | Central `routes/index.ts` becomes a thin discoverer | ⬜ TODO |
-| P3.3 | smoke tests | ⬜ TODO |
+| # | Task | Status | Lines |
+|---|---|---|---|
+| P3.1 | Extract per-user limiter declarations → `routes/_limiters.ts` | ✅ Done | 58 |
+| P3.2 | Extract all 100+ domain router mounts → `routes/_domain-mounts.ts` | ✅ Done | 275 |
+| P3.3 | Reshape `routes/index.ts` to a thin orchestrator + `mountDomainRouters(router)` call | ✅ Done | 183 (was 529) |
+| P3.4 | Smoke tests lock the contract (10 assertions) | ✅ Done | — |
 
-**Estimated effort:** 1-2 weeks. Mostly mechanical — every existing
-`router.use(path, mwOpt, router)` line becomes a manifest entry, then the
-old file is gutted.
+**Result:** routes/index.ts shrank from **529 → 183 lines** (65%
+reduction). The new pattern: add a domain → touch
+`_domain-mounts.ts` only. The orchestrator file is now small enough
+to read top-to-bottom without scrolling.
+
+**Preserved exactly:** the existing mount order (Express routes are
+order-dependent — `wiringScopeErrorHandler` after the stubs, finance
+sub-routers in their declared sequence, the umrah limiter mounted
+before its routers, etc.). Smoke tests assert the ordering so a
+regression PR can't quietly re-order.
+
+**Existing tests updated:** 8 test files were grepping
+`routes/index.ts` for mount strings; all now concatenate
+`routes/index.ts` + `routes/_domain-mounts.ts` so the assertions
+resolve regardless of which file the mount lives in.
 
 ---
 

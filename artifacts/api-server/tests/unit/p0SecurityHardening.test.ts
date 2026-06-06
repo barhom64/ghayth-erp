@@ -6,7 +6,8 @@ const SRC = join(import.meta.dirname!, "../../src");
 const read = (p: string) => readFileSync(join(SRC, p), "utf8");
 
 const APP_TS = read("app.ts");
-const INDEX_TS = read("routes/index.ts");
+// P3 — domain mounts moved to _domain-mounts.ts.
+const INDEX_TS = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 const LIFECYCLE_TS = read("lib/lifecycleEngine.ts");
 const EVENT_BUS_TS = read("lib/eventBus.ts");
 const UMRAH_TS = read("routes/umrah.ts");

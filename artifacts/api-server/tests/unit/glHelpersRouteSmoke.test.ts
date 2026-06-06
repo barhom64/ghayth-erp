@@ -9,8 +9,14 @@ const SRC = readFileSync(
   ),
   "utf8",
 );
+// P3 — domain mounts moved to routes/_domain-mounts.ts. Concatenate
+// both files so the existing router.use("/finance"...) assertions
+// resolve regardless of which file the mount lives in.
 const INDEX = readFileSync(
   join(import.meta.dirname!, "../../../../artifacts/api-server/src/routes/index.ts"),
+  "utf8",
+) + "\n" + readFileSync(
+  join(import.meta.dirname!, "../../../../artifacts/api-server/src/routes/_domain-mounts.ts"),
   "utf8",
 );
 

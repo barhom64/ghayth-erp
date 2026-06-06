@@ -186,8 +186,11 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // This assertion is informational — fails loudly if the route
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
+    // P3 — added _limiters.ts + _domain-mounts.ts (pure mount/declaration
+    // files, no companyId patterns, no scopedQuery usage). Bumps total
+    // by 2 but leaves helperUsers + manualOnly unchanged.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 105,
+      total: 107,
       helperUsers: 36,
       manualOnly: 66,
     });

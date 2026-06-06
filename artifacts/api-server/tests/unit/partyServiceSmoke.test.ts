@@ -7,7 +7,8 @@ const root = join(import.meta.dirname!, "../../../../artifacts/api-server/src");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 const SERVICE = read("lib/partyService.ts");
 const MIGRATION = read("migrations/249_party_model.sql");
-const INDEX = read("routes/index.ts");
+// P3 — domain mounts moved to _domain-mounts.ts.
+const INDEX = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
 
 describe("party model — migration 249", () => {
   it("creates both registry tables", () => {

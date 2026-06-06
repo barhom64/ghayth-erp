@@ -54,7 +54,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, "../..");
 const FRONTEND_SRC = path.join(REPO, "artifacts/ghayth-erp/src");
 const ROUTES_DIR = path.join(REPO, "artifacts/api-server/src/routes");
+// P3 — routes/index.ts is now a thin orchestrator; the 100+
+// `router.use(...)` mounts moved into routes/_domain-mounts.ts. Concatenate
+// both so the audit's parseRoutesIndex() picks up the imports + mounts
+// regardless of which file holds them.
 const ROUTES_INDEX = path.join(ROUTES_DIR, "index.ts");
+const DOMAIN_MOUNTS = path.join(ROUTES_DIR, "_domain-mounts.ts");
 
 // ---------- step 1: build the backend route catalog ----------
 //
@@ -63,7 +68,12 @@ const ROUTES_INDEX = path.join(ROUTES_DIR, "index.ts");
 // for reuse. Keep the extraction logic in sync if either side changes.
 
 function parseRoutesIndex() {
-  const src = fs.readFileSync(ROUTES_INDEX, "utf-8");
+  // P3 — concatenate routes/index.ts + routes/_domain-mounts.ts so the
+  // parser sees imports + mounts no matter which file they live in.
+  const src =
+    fs.readFileSync(ROUTES_INDEX, "utf-8") +
+    "\n" +
+    fs.readFileSync(DOMAIN_MOUNTS, "utf-8");
   const imports = new Map(); // localName -> module stem
   const mounts = new Map();  // localName -> Set<mountPrefix>  (some routers are mounted on multiple prefixes)
   // Default import: `import xRouter from "./y.js"`

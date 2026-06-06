@@ -7,9 +7,9 @@ const API_SRC = join(REPO_ROOT, "artifacts/api-server/src");
 const ROUTES_DIR = join(API_SRC, "routes");
 
 describe("Route index completeness", () => {
-  const indexSource = readFileSync(join(ROUTES_DIR, "index.ts"), "utf8");
+  const indexSource = readFileSync(join(ROUTES_DIR, "index.ts"), "utf8") + "\n" + readFileSync(join(ROUTES_DIR, "_domain-mounts.ts"), "utf8");
   const routeFiles = readdirSync(ROUTES_DIR).filter(
-    (f) => f.endsWith(".ts") && f !== "index.ts"
+    (f) => f.endsWith(".ts") && f !== "index.ts" && !f.startsWith("_")
   );
 
   it("every route file is imported in routes/index.ts", () => {
@@ -65,7 +65,7 @@ describe("Route index completeness", () => {
 
 describe("Route file consistency", () => {
   const routeFiles = readdirSync(ROUTES_DIR).filter(
-    (f) => f.endsWith(".ts") && f !== "index.ts"
+    (f) => f.endsWith(".ts") && f !== "index.ts" && !f.startsWith("_")
   );
 
   it("every route file exports a router", () => {
@@ -117,7 +117,7 @@ describe("Middleware existence", () => {
 });
 
 describe("Domain-protected routes", () => {
-  const indexSource = readFileSync(join(ROUTES_DIR, "index.ts"), "utf8");
+  const indexSource = readFileSync(join(ROUTES_DIR, "index.ts"), "utf8") + "\n" + readFileSync(join(ROUTES_DIR, "_domain-mounts.ts"), "utf8");
 
   const protectedDomains = [
     { path: "/hr", module: "hr" },
@@ -146,7 +146,7 @@ describe("Domain-protected routes", () => {
 });
 
 describe("GL-integrated domains have financial guard", () => {
-  const indexSource = readFileSync(join(ROUTES_DIR, "index.ts"), "utf8");
+  const indexSource = readFileSync(join(ROUTES_DIR, "index.ts"), "utf8") + "\n" + readFileSync(join(ROUTES_DIR, "_domain-mounts.ts"), "utf8");
 
   const glPaths = ["/finance", "/fleet", "/warehouse", "/properties", "/store"];
 

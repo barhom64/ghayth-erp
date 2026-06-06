@@ -7,7 +7,14 @@ const read = (f: string) => readFileSync(join(root, f), "utf8");
 
 const APP = read("app.ts");
 const INDEX = read("index.ts");
-const ROUTES_INDEX = read("routes/index.ts");
+// P3 — The 100+ domain mounts moved out of routes/index.ts into
+// routes/_domain-mounts.ts. The existing "mounts /…" assertions used
+// to grep routes/index.ts for the literal path string; now we
+// concatenate both files so the existing contract still holds wherever
+// the mount actually lives. New tests can target either file
+// independently.
+const ROUTES_INDEX = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
+const ROUTES_INDEX_RAW = read("routes/index.ts");
 
 // ══════════════════════════════════════════════════════════════════════════
 // APP — Security headers & middleware

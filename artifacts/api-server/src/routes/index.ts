@@ -1,96 +1,20 @@
 import { Router, type IRouter } from "express";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
+
+// Pre-auth (anonymous) routers — mounted before authMiddleware below.
 import healthRouter from "./health.js";
 import authRouter from "./auth.js";
-import dashboardRouter from "./dashboard.js";
-import employeesRouter from "./employees.js";
-import clientsRouter from "./clients.js";
-import hrRouter from "./hr.js";
-// finance.ts monolith removed in Phase 7.1 — all its routes now live in the
-// per-domain split files below (finance-vendors, finance-accounts,
-// finance-budget, finance-collection, finance-custodies, finance-hardening,
-// finance-recurring, finance-purchase, finance-invoices, finance-journal,
-// finance-reports, finance-algorithms, accounting-engine, zatca). There is
-// no more /finance fallback router.
-import { invoicesRouter } from "./finance-invoices.js";
-import { journalRouter } from "./finance-journal.js";
-import { glHelpersRouter } from "./finance-gl-helpers.js";
-import { purchaseRouter } from "./finance-purchase.js";
-import { reportsRouter } from "./finance-reports.js";
-import { custodiesRouter } from "./finance-custodies.js";
-import { zatcaRouter } from "./finance-zatca.js";
-import notificationsRouter from "./notifications.js";
-import tasksRouter from "./tasks.js";
-import fleetRouter from "./fleet.js";
-import fleetTelematicsRouter from "./fleet-telematics.js";
-import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
-import cargoRouter from "./cargo.js";
-import warehouseRouter from "./warehouse.js";
-import propertiesRouter from "./properties.js";
-import legalRouter from "./legal.js";
-import projectsRouter from "./projects.js";
-import supportRouter from "./support.js";
-import crmRouter from "./crm.js";
-import intelligenceRouter from "./intelligence.js";
-import automationRouter from "./automation.js";
-import communicationsRouter from "./communications.js";
-import inboxRouter from "./inbox.js";
-import mailboxesRouter from "./mailboxes.js";
-import governanceRouter from "./governance.js";
-import biRouter from "./bi.js";
-import storeRouter from "./store.js";
-import documentsRouter from "./documents.js";
-import requestsRouter from "./requests.js";
-import trainingRouter from "./training.js";
-import recruitmentRouter from "./recruitment.js";
-import marketingRouter from "./marketing.js";
-import settingsRouter from "./settings.js";
-import rulesRouter from "./rules.js";
-import moduleDashboardsRouter from "./moduleDashboards.js";
-import adminRouter from "./admin.js";
-import adminObservabilityRouter from "./admin-observability.js";
-import adminAiGovernanceRouter from "./admin-ai-governance.js";
-import adminCommControlRouter from "./admin-communication-control.js";
-import adminPbxControlRouter from "./admin-pbx-control.js";
-import adminMasterPlanRouter from "./admin-master-plan.js";
-import adminNotificationRoutingRouter from "./admin-notification-routing.js";
-import adminVendorSettingsRouter from "./admin-vendor-settings.js";
-import permissionsRouter from "./permissions.js";
-import rbacV2Router from "./rbacV2.js";
-import auditLogsRouter from "./auditLogs.js";
-import searchRouter from "./search.js";
-import partiesRouter from "./parties.js";
-import activityLogRouter from "./activityLog.js";
-import approvalActionsRouter from "./approvalActions.js";
-import workflowsRouter from "./workflows.js";
-import impactPreviewRouter from "./impactPreview.js";
 import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
-import mySpaceRouter from "./mySpace.js";
-import actionCenterRouter from "./actionCenter.js";
-import workspaceRouter from "./workspace.js";
-import accountingEngineRouter from "./accounting-engine.js";
-import { financeAlgorithmsRouter } from "./finance-algorithms.js";
-import financeHardeningRouter from "./finance-hardening.js";
-import { recurringRouter } from "./finance-recurring.js";
-import entityMetaRouter from "./entityMeta.js";
-import umrahRouter from "./umrah.js";
-import umrahEntitiesRouter from "./umrah-entities.js";
-import operationsCenterRouter from "./operationsCenter.js";
-import {
-  warehouseStubsRouter,
-  documentsStubsRouter,
-  hrStubsRouter,
-  financeStubsRouter,
-  adminStubsRouter,
-  wiringScopeErrorHandler,
-} from "./wiring-stubs.js";
-import notificationEngineRouter from "./notification-engine.js";
-import printRouter from "./print.js";
+import clientPortalRouter from "./clientPortal.js";
+import driverPortalRouter from "./driverPortal.js";
+import careersPortalRouter from "./careersPortal.js";
+import publicDataRouter from "./publicData.js";
 import printVerifyRouter from "./printVerify.js";
-import { requireModule, requireMinLevel } from "../middlewares/roleGuard.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import pdplRouter from "./pdpl.js";
+import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
+
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { subscriptionGate } from "../middlewares/subscriptionGate.js";
 import { csrfMiddleware } from "../middlewares/csrfMiddleware.js";
@@ -98,36 +22,11 @@ import rateLimit from "express-rate-limit";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { rawQuery } from "../lib/rawdb.js";
-import clientPortalRouter from "./clientPortal.js";
-import driverPortalRouter from "./driverPortal.js";
-import publicDataRouter from "./publicData.js";
-import careersPortalRouter from "./careersPortal.js";
-import { exportRouter } from "./export.js";
-import importRouter from "./import.js";
-import { scheduledReportsRouter } from "./scheduled-reports.js";
-import { govIntegrationsRouter } from "./gov-integrations.js";
-import pdplRouter from "./pdpl.js";
-import { collectionRouter } from "./finance-collection.js";
-import { budgetRouter } from "./finance-budget.js";
-import { accountsRouter } from "./finance-accounts.js";
-import { vendorsRouter } from "./finance-vendors.js";
-import { vendorContractsRouter } from "./finance-vendor-contracts.js";
-import { costCentersRouter } from "./finance-cost-centers.js";
-import disciplineRouter from "./hr-discipline.js";
-import loansRouter from "./hr-loans.js";
-import overtimeRouter from "./hr-overtime.js";
-import exitRouter from "./hr-exit.js";
-import wpsRouter from "./hr-wps.js";
-import complianceRouter from "./hr-compliance.js";
-import digitalSignatureRouter from "./digital-signature.js";
-import { eventsRouter } from "./events.js";
-import { execDashboardRouter } from "./execDashboard.js";
-import { obligationsRouter } from "./obligations.js";
-import { calendarRouter } from "./calendar.js";
-import contractsRouter from "./hr-contracts.js";
-import correspondenceRouter from "./correspondence.js";
-import numberingRouter from "./numbering.js";
-import { requireGuards } from "../lib/systemGovernor.js";
+
+// P3 — All 100+ domain router mounts live in ./_domain-mounts.ts. This
+// file is now a thin orchestrator: pre-auth routers + auth chain +
+// global limiter + a single mountDomainRouters(router) call.
+import { mountDomainRouters } from "./_domain-mounts.js";
 
 const router: IRouter = Router();
 
@@ -276,254 +175,9 @@ const globalUserLimiter = createPerUserLimiter({
 });
 router.use(globalUserLimiter);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Per-user rate limiters for heavy modules.
-//
-// Same shape as the umrah limiter below: mounted AFTER authMiddleware,
-// keyed off req.scope.userId, owner/admin roles exempt. The cap is generous
-// (300/min — ~5/sec sustained, well above any realistic human pace) so a
-// normal session is never throttled, but a runaway loop or misbehaving
-// client is still capped. Each module has its own prefix so a finance-heavy
-// session doesn't eat into a fleet click's budget.
-//
-// Anonymous traffic can never reach these — authMiddleware rejects it first
-// — and the global /api limiter in app.ts still covers anonymous abuse.
-// ─────────────────────────────────────────────────────────────────────────────
-const umrahUserLimiter = createPerUserLimiter({
-  prefix: "umrah",
-  windowMs: 60 * 1000,
-  max: 300,
-  message: "تم تجاوز الحد الأقصى لطلبات العمرة. يرجى المحاولة لاحقاً",
-});
-const financeUserLimiter = createPerUserLimiter({
-  prefix: "finance",
-  windowMs: 60 * 1000,
-  max: 300,
-  message: "تم تجاوز الحد الأقصى لطلبات المالية. يرجى المحاولة لاحقاً",
-});
-const propertiesUserLimiter = createPerUserLimiter({
-  prefix: "properties",
-  windowMs: 60 * 1000,
-  max: 300,
-  message: "تم تجاوز الحد الأقصى لطلبات العقارات. يرجى المحاولة لاحقاً",
-});
-const fleetUserLimiter = createPerUserLimiter({
-  prefix: "fleet",
-  windowMs: 60 * 1000,
-  max: 300,
-  message: "تم تجاوز الحد الأقصى لطلبات الأسطول. يرجى المحاولة لاحقاً",
-});
-const warehouseUserLimiter = createPerUserLimiter({
-  prefix: "warehouse",
-  windowMs: 60 * 1000,
-  max: 300,
-  message: "تم تجاوز الحد الأقصى لطلبات المستودع. يرجى المحاولة لاحقاً",
-});
-const hrUserLimiter = createPerUserLimiter({
-  prefix: "hr",
-  windowMs: 60 * 1000,
-  max: 300,
-  message: "تم تجاوز الحد الأقصى لطلبات الموارد البشرية. يرجى المحاولة لاحقاً",
-});
-
-router.use("/dashboard", dashboardRouter);
-router.use("/employees", requireModule("hr"), employeesRouter);
-router.use("/clients", requireModule("crm"), clientsRouter);
-// Per-user HR limiter mounted once on /hr so it runs exactly once per
-// request, regardless of which sub-router handles it. See umrah notes below.
-router.use("/hr", hrUserLimiter);
-router.use("/hr", requireModule("hr"), hrRouter);
-router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
-router.use("/hr", requireModule("hr"), loansRouter);
-router.use("/hr", requireModule("hr"), overtimeRouter);
-router.use("/hr", requireModule("hr"), exitRouter);
-router.use("/hr", requireModule("hr"), wpsRouter);
-router.use("/hr", requireModule("hr"), complianceRouter);
-router.use("/hr/training", requireModule("hr"), trainingRouter);
-router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
-// Per-user finance limiter — mounted once on /finance so the dozen+
-// finance sub-routers below share a single per-user budget.
-router.use("/finance", financeUserLimiter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), invoicesRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), journalRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), glHelpersRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), purchaseRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), reportsRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), custodiesRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), zatcaRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), accountingEngineRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), financeAlgorithmsRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), collectionRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), budgetRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), accountsRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorsRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorContractsRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
-router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
-// financeRouter (finance.ts monolith) removed in Phase 7.1 — the 13
-// singleton routes it still owned were migrated to finance-purchase.ts,
-// finance-vendors.ts, and finance-reports.ts during canonicalisation.
-router.use("/notifications", notificationsRouter);
-router.use("/tasks", requireModule("operations"), tasksRouter);
-router.use("/fleet", fleetUserLimiter);
-router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRouter);
-// Telematics surface (#1354). Mounted under /fleet so it inherits the same
-// module + financial guard + per-user limiter as the rest of the fleet
-// module, and so URLs stay /fleet/telematics/* in the SPA.
-router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetTelematicsRouter);
-// Cargo / freight (#1354). Same fleet module gate + financial guard.
-// URLs stay /cargo/* at the top level (not /fleet/cargo/*) because
-// cargo is its own RBAC feature (fleet.cargo) and its own SPA tab.
-router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRouter);
-router.use("/warehouse", warehouseUserLimiter);
-router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
-router.use("/properties", propertiesUserLimiter);
-router.use("/properties", requireModule("property"), requireGuards("financial"), propertiesRouter);
-// Agent 7 (visibility consistency sweep) — sidebar gates /legal/cases at
-// level 40 but the mount used to be module-only, so a level-10 employee
-// inside a tenant with the legal module could hit /api/legal/* directly.
-// Floor at 40 mirrors the sidebar promise; per-route authorize() still
-// runs inside legalRouter.
-router.use("/legal", requireModule("legal"), requireMinLevel(40), legalRouter);
-router.use("/projects", requireModule("operations"), projectsRouter);
-router.use("/support", requireModule("support"), supportRouter);
-router.use("/crm", requireModule("crm"), crmRouter);
-router.use("/intelligence", requireModule("bi"), intelligenceRouter);
-// Agent 7 — sidebar shows الأتمتة only at level 60 + admin:update; the
-// mount used to be module-only. Floor at 60 so direct-URL traffic
-// matches what the menu promises (per-route authorize uses admin:list /
-// admin:update on every call).
-router.use("/automation", requireModule("automation"), requireMinLevel(60), automationRouter);
-// Agent 7 — sidebar gates the comms management surface (مراقبة الاتصالات،
-// محرك الإشعارات) at level 40. /inbox + /mailboxes below stay module-only
-// because their endpoints are still expected to work for every
-// comms-enabled employee; only the broad call/message log needs the
-// manager floor.
-router.use("/communications", requireModule("comms"), requireMinLevel(40), communicationsRouter);
-// User-facing inbox: compose/send + thread view + call log. Lives next
-// to /communications (read-only logs) so the SPA can navigate between
-// them without crossing module boundaries.
-router.use("/inbox", requireModule("comms"), inboxRouter);
-router.use("/mailboxes", requireModule("comms"), mailboxesRouter);
-// Agent 7 — sidebar gates الحوكمة والامتثال at level 60 and ذكاء الأعمال
-// at level 40; mounts used to be module-only. Floor both at the sidebar
-// level so direct-URL access matches what the menu shows.
-router.use("/governance", requireModule("governance"), requireMinLevel(60), governanceRouter);
-router.use("/bi", requireModule("bi"), requireMinLevel(40), biRouter);
-router.use("/store", requireModule("store"), requireGuards("financial"), storeRouter);
-router.use("/documents", requireModule("documents"), documentsRouter);
-router.use("/requests", requireModule("requests"), requestsRouter);
-router.use("/request-catalog", requireModule("requests"), (req, res, next) => {
-  req.url = "/catalog";
-  requestsRouter(req, res, next);
-});
-router.use("/marketing", requireModule("marketing"), marketingRouter);
-router.use("/settings", requireModule("settings"), requireMinLevel(70), settingsRouter);
-// Numbering center (Issue #1141): admin surface for the central numbering
-// authority. authMiddleware is applied inside the router (it carries
-// per-route authorize() guards on `settings.numbering[.override|.reset|.audit]`).
-router.use("/numbering", requireModule("settings"), requireMinLevel(70), numberingRouter);
-router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter);
-router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
-router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);
-// Observability operator pane (#1139 §5). Mounted under /admin/observability
-// so the same module + minLevel guards apply; each endpoint inside also
-// calls authorize() to stay consistent with the rest of admin.
-router.use("/admin/observability", requireModule("admin"), requireMinLevel(90), adminObservabilityRouter);
-// AI Governance surface (#1139 §4 — provider registry + prompt catalog +
-// review center). Same gating as the rest of /admin.
-router.use("/admin/ai-governance", requireModule("admin"), requireMinLevel(90), adminAiGovernanceRouter);
-// Communication Control Plane (#1139 §3 — provider failover + DLP +
-// unified inbox).
-router.use("/admin/communication-control", requireModule("admin"), requireMinLevel(90), adminCommControlRouter);
-// PBX/IVR/Recording control plane (#1139 §3 — voice side).
-router.use("/admin/pbx-control", requireModule("admin"), requireMinLevel(90), adminPbxControlRouter);
-// Master Plan dashboard (#1139 §6 — "كل شيء قابل للتحكم من الواجهة")
-router.use("/admin/master-plan", requireModule("admin"), requireMinLevel(90), adminMasterPlanRouter);
-// Notification Routing rules + fallback chains UI (existing tables;
-// new admin surface to fulfil #1139 §6 "كل شيء قابل للتحكم من الواجهة").
-router.use("/admin/notification-routing", requireModule("admin"), requireMinLevel(90), adminNotificationRoutingRouter);
-// Vendor Settings hub — every external integration (PBX webhook, WhatsApp,
-// SMTP, VAPID, SIEM, ZATCA) editable from the UI, secrets encrypted at rest.
-router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90), adminVendorSettingsRouter);
-// FND-004 — RBAC administration surfaces. permissions.ts is fully
-// authorize()-guarded per route; rbacV2.ts had a few routes without one;
-// gating the mount at level 90 (consistent with /admin) closes the gap
-// and is defence-in-depth against any future unguarded route.
-router.use("/permissions", requireMinLevel(90), permissionsRouter);
-router.use("/rbac/v2", requireMinLevel(90), rbacV2Router);
-// GAP_MATRIX item #16 — sidebar advertises this with perm=audit:read but
-// the mount only checked level≥70. Add requirePermission so direct-URL
-// access matches what the sidebar promises and lift the level to 90 to
-// align with /admin/* policy.
-router.use("/audit-logs", requireMinLevel(90), requirePermission("audit:read"), auditLogsRouter);
-router.use("/search", searchRouter);
-// Party / master-data identity registry (slice 1). Read-only 360 view +
-// resolve + operator-triggered backfill. See lib/partyService.ts.
-router.use("/parties", partiesRouter);
-router.use("/activity-log", requireMinLevel(70), activityLogRouter);
-router.use("/approval-actions", approvalActionsRouter);
-router.use("/workflows", workflowsRouter);
-router.use("/impact-preview", impactPreviewRouter);
-router.use("/my-space", mySpaceRouter);
-// Agent 7 — sidebar gates مراكز التحكم → مركز القرارات (/action-center)
-// at level 20. Floor the mount to match so a level-10 pre-onboarding
-// account can't reach the action queue via direct URL.
-router.use("/action-center", requireMinLevel(20), actionCenterRouter);
-router.use("/workspace", workspaceRouter);
-router.use("/entity-meta", entityMetaRouter);
-// Mount the umrah limiter once on the /umrah prefix so it runs exactly once per
-// request, regardless of which sub-router (umrahRouter / umrahEntitiesRouter)
-// ultimately handles it. Mounting it on each router would cause double-counting
-// when Express falls through from the first router to the second.
-router.use("/umrah", umrahUserLimiter);
-router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahRouter);
-router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahEntitiesRouter);
-router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
-// Wiring stubs — fills the 42 frontend↔backend orphans surfaced by
-// scripts/src/check-frontend-backend-wiring.mjs. Mounted at /api root because
-// the routes carry their full domain prefix internally.
-// GAP_MATRIX item #17 — wiring stubs return canned envelopes for routes
-// the frontend is wired to but the backend hasn't fully implemented yet.
-// The stubs router had module gates but no min-level floor, so any
-// authenticated user with the module bit set could enumerate them.
-// Floor at level 20 (employee+) — same as exportRouter, deliberately
-// low because stubs are read-only stand-ins. As each stub is replaced
-// by a real implementation it should pick up the destination route's
-// own gates (authorize/requireMinLevel) and this floor becomes
-// belt-and-braces.
-router.use("/warehouse", requireModule("warehouse"), requireMinLevel(20), warehouseStubsRouter);
-router.use("/documents", requireModule("documents"), requireMinLevel(20), documentsStubsRouter);
-router.use("/hr", requireModule("hr"), requireMinLevel(20), hrStubsRouter);
-router.use("/finance", requireModule("finance"), requireMinLevel(20), financeStubsRouter);
-router.use("/admin", requireModule("admin"), requireMinLevel(90), adminStubsRouter);
-router.use(wiringScopeErrorHandler);
-router.use("/export", requireMinLevel(30), exportRouter);
-router.use("/import", requireMinLevel(50), importRouter);
-router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
-router.use("/notification-engine", requireModule("notifications"), notificationEngineRouter);
-// GAP_MATRIX item #18 — both mounts handle government / security data
-// (ZATCA, GOSI, Absher endpoints + digital signing). The sidebar advertises
-// these at admin role-level (90); the routes themselves had no min-level
-// floor, so a misconfigured perm grant could expose them. Floor at 70 as
-// defence-in-depth (lower than 90 because some non-admin tenants legitimately
-// use ZATCA submission flows).
-router.use("/gov-integrations", requireMinLevel(70), govIntegrationsRouter);
-router.use("/digital-signature", requireMinLevel(70), digitalSignatureRouter);
-// FND-004 / FND-005 — events.ts exposes only read-only event-log and
-// event-catalog endpoints, none of which carried an authorize() check.
-// Event-log access is audit-level; gate the mount at 70 (as /audit-logs).
-router.use("/events", requireMinLevel(70), eventsRouter);
-router.use("/exec-dashboard", requireMinLevel(70), execDashboardRouter);
-// Agent 7 — sidebar gates مركز الالتزامات (/obligations) at level 30
-// and التقويم الموحد (/calendar) at level 20. Mounts used to have no
-// floor; align them with the sidebar so direct-URL access matches the
-// menu (per-route authorize() inside each router still applies).
-router.use("/obligations", requireMinLevel(30), obligationsRouter);
-router.use("/calendar", requireMinLevel(20), calendarRouter);
-router.use("/hr/contracts", requireModule("hr"), contractsRouter);
-router.use("/correspondence", requireModule("comms"), correspondenceRouter);
-router.use("/print", printRouter);
+// P3 — Mount all 100+ domain routers (see ./_domain-mounts.ts for the
+// full list + ordering rationale). Equivalent to the ~200 lines of
+// router.use(...) calls that used to live inline here.
+mountDomainRouters(router);
 
 export default router;

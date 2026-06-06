@@ -159,7 +159,7 @@ describe("E2E: HR golden path", () => {
 
 // ─── E2E Scenario: Permissions Isolation ─────────────────────────────────
 describe("E2E: Permission isolation", () => {
-  const indexTs = read("routes/index.ts");
+  const indexTs = read("routes/index.ts") + "\n" + read("routes/_domain-mounts.ts");
   const permMw = read("middlewares/permissionMiddleware.ts");
 
   it("All major modules have requireModule guards", () => {

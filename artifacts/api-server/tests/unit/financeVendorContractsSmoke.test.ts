@@ -4,7 +4,9 @@ import { join } from "node:path";
 
 const ROUTES = join(import.meta.dirname!, "../../../../artifacts/api-server/src/routes");
 const SRC = readFileSync(join(ROUTES, "finance-vendor-contracts.ts"), "utf8");
-const INDEX = readFileSync(join(ROUTES, "index.ts"), "utf8");
+// P3 — domain mounts moved to _domain-mounts.ts. Concatenate both.
+const INDEX = readFileSync(join(ROUTES, "index.ts"), "utf8")
+  + "\n" + readFileSync(join(ROUTES, "_domain-mounts.ts"), "utf8");
 
 describe("finance-vendor-contracts — CRUD smoke", () => {
   it("exports vendorContractsRouter", () => {
@@ -14,7 +16,9 @@ describe("finance-vendor-contracts — CRUD smoke", () => {
   it("router is mounted under /finance in routes/index.ts", () => {
     expect(INDEX).toContain('import { vendorContractsRouter } from "./finance-vendor-contracts.js"');
     // single-line match: any router.use("/finance", ..., vendorContractsRouter)
-    expect(INDEX).toMatch(/^router\.use\("\/finance",.*\bvendorContractsRouter\b.*\);?$/m);
+    // Leading whitespace allowed — the mount may live inside the
+    // mountDomainRouters() function in _domain-mounts.ts (indented).
+    expect(INDEX).toMatch(/^\s*router\.use\("\/finance",.*\bvendorContractsRouter\b.*\);?$/m);
   });
 
   it("declares all 5 CRUD endpoints under /contracts", () => {

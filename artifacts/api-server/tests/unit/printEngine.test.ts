@@ -127,7 +127,9 @@ describe("Print Engine v2 — routes", () => {
   });
 
   it("the router is mounted at /api/print in routes/index.ts", () => {
-    const idx = read(join(REPO_ROOT, "artifacts/api-server/src/routes/index.ts"));
+    // P3 — the import + mount moved to _domain-mounts.ts.
+    const idx = read(join(REPO_ROOT, "artifacts/api-server/src/routes/index.ts"))
+      + "\n" + read(join(REPO_ROOT, "artifacts/api-server/src/routes/_domain-mounts.ts"));
     expect(idx).toContain('import printRouter from "./print.js"');
     expect(idx).toContain('router.use("/print", printRouter)');
   });
