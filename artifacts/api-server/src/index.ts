@@ -34,6 +34,18 @@ const port = config.port;
 
 const isDev = config.isDevelopment;
 
+// P1 — when API_ONLY=true, this process serves HTTP only. Cron, event
+// listeners, rules engine, telemetry, alert evaluation, and print
+// delivery are deliberately NOT started here; a separate worker.ts
+// process picks them up. In dev / single-container deployments, leave
+// API_ONLY unset and this process keeps running everything as before
+// — backwards compatible. The flag is read via config (lib/config.ts)
+// per the FND-003 single-source-of-truth rule.
+const isApiOnly = config.apiOnly;
+if (isApiOnly) {
+  logger.info("[index] API_ONLY=true — background systems delegated to worker.ts");
+}
+
 process.on("unhandledRejection", (reason, promise) => {
   logger.error({ reason, promise }, "Unhandled Promise Rejection — NOT crashing, logged for investigation");
 });
@@ -115,9 +127,17 @@ async function start() {
     logger.info("Demo data seeding disabled (set SEED_DEMO_DATA=true to enable)");
   }
 
-  registerEventListeners();
-  registerRulesEngineListener();
-  logger.info("Event listeners and rules engine registered");
+  // Event listeners + rules engine: in single-process mode (no API_ONLY)
+  // these run in-process so the HTTP server itself reacts to events.
+  // In split-deploy mode the worker.ts process owns these — the API
+  // skips them and just inserts to event_outbox.
+  if (!isApiOnly) {
+    registerEventListeners();
+    registerRulesEngineListener();
+    logger.info("Event listeners and rules engine registered (in-process)");
+  } else {
+    logger.info("Event listeners + rules engine deferred to worker.ts");
+  }
 
   if (!isDev && !config.persistAllEvents) {
     logger.warn(
@@ -141,6 +161,15 @@ async function start() {
 
   server.listen(port, "0.0.0.0", async () => {
     logger.info({ port }, "Server listening");
+
+    // P1 — background systems: cron, print delivery, AI client, telemetry,
+    // alerts. In split-deploy mode (API_ONLY=true), worker.ts owns these
+    // and the API process skips them entirely so a crash in any of them
+    // can't take down the HTTP server.
+    if (isApiOnly) {
+      logger.info("[index] API_ONLY=true — skipping cron / print / telemetry / alerts (handled by worker.ts)");
+      return;
+    }
 
     try {
       await startCronScheduler();

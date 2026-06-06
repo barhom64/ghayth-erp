@@ -117,6 +117,14 @@ const EnvSchema = z.object({
   // -- events --------------------------------------------------------------
   PERSIST_ALL_EVENTS: boolEnv(false),
 
+  // -- P1 worker / API split ----------------------------------------------
+  // API_ONLY=true makes index.ts skip cron / event listeners / telemetry
+  // / alerts / print delivery so the worker.ts process can own them.
+  // Leave unset for the legacy single-process mode (backwards compatible).
+  API_ONLY: boolEnv(false),
+  // Port for the worker's /healthz + /readyz endpoints.
+  WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(7001),
+
   // -- fleet telematics (#1354) -------------------------------------------
   // Production deployments reject http(s://) CMSV6 base URLs by default.
   // Lab/dev environments can opt out via this flag; the SSRF guard is
@@ -291,6 +299,14 @@ export interface AppConfig {
 
   readonly seedDemoData: boolean;
   readonly persistAllEvents: boolean;
+
+  /** P1 — when true, this process runs HTTP only; worker.ts owns
+   *  cron / event listeners / telemetry / alerts / print delivery.
+   *  Set in the API container; leave unset in single-process mode. */
+  readonly apiOnly: boolean;
+
+  /** P1 — port for the worker's /healthz + /readyz endpoints. */
+  readonly workerHealthPort: number;
 
   /** Fleet telematics — #1354 production hardening flags. */
   readonly fleetTelematics: {
@@ -492,6 +508,8 @@ function buildConfig(env: RawEnv): AppConfig {
 
     seedDemoData: env.SEED_DEMO_DATA,
     persistAllEvents: env.PERSIST_ALL_EVENTS,
+    apiOnly: env.API_ONLY,
+    workerHealthPort: env.WORKER_HEALTH_PORT,
     fleetTelematics: {
       allowHttp: env.FLEET_TELEMATICS_ALLOW_HTTP,
       proxyTtlSec: Math.min(300, Math.max(15, env.FLEET_TELEMATICS_PROXY_TTL_SEC)),

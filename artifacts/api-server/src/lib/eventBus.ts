@@ -370,17 +370,29 @@ export async function getOutboxStats(): Promise<OutboxStats> {
 }
 
 /**
- * Delete aged event_outbox rows. Phase 2 — the outbox is a durable capture
- * log and the in-process emitter is still the dispatcher, so aged rows are
- * purged wholesale to bound table growth. When the relay becomes the
- * dispatcher (phase 3) this MUST become status-aware so an unprocessed
- * 'pending' row is never purged. Idempotent; safe to run concurrently.
+ * Delete aged event_outbox rows. STATUS-AWARE — only rows with status
+ * IN ('processed', 'dead') are eligible for purge. A 'pending' row that
+ * the relay hasn't drained yet is NEVER deleted, no matter how old it is.
+ *
+ * Why this matters: the previous version was age-only because phase-1
+ * (current) still uses the in-process emitter so every captured row was
+ * effectively a write-once log entry. When phase-3 (relay) lands the
+ * relay becomes the dispatcher, and a 'pending' row genuinely represents
+ * an undelivered event — purging it by age would silently drop business
+ * events (orders, invoices, audit logs). Making the filter status-aware
+ * NOW means flipping on the relay is a one-line toggle (`OUTBOX_RELAY_ACTIVE`
+ * env flag — see P2 plan) without having to remember to also fix the
+ * purge.
+ *
+ * Idempotent; safe to run concurrently.
  */
 export async function purgeAgedOutboxEntries(
   retentionDays: number = OUTBOX_RETENTION_DAYS,
 ): Promise<number> {
   const result = await rawExecute(
-    `DELETE FROM event_outbox WHERE "createdAt" < now() - make_interval(days => $1)`,
+    `DELETE FROM event_outbox
+       WHERE "createdAt" < now() - make_interval(days => $1)
+         AND status IN ('processed', 'dead')`,
     [retentionDays],
   );
   return result.affectedRows;

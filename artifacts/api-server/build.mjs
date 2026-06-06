@@ -15,11 +15,14 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    // Two bundles: the server (dist/server.mjs) and the OpenTelemetry tracing
-    // preload (dist/otel.mjs). The process entry dist/index.mjs is a generated
-    // shim — see writeEntryShim() below.
+    // Three bundles: the server (dist/server.mjs), the worker
+    // (dist/worker-impl.mjs — wrapped by a shim at dist/worker.mjs), and
+    // the OpenTelemetry tracing preload (dist/otel.mjs). Process entries
+    // (dist/index.mjs + dist/worker.mjs) are thin generated shims — see
+    // writeEntryShim() below.
     entryPoints: {
       server: path.resolve(artifactDir, "src/index.ts"),
+      "worker-impl": path.resolve(artifactDir, "src/worker.ts"),
       otel: path.resolve(artifactDir, "src/otel.ts"),
     },
     platform: "node",
@@ -164,8 +167,10 @@ async function copyMigrations() {
 // hoisted above the preload and defeat this ordering.
 async function writeEntryShim() {
   const distDir = path.resolve(artifactDir, "dist");
-  const shim = `import "./otel.mjs";\nawait import("./server.mjs");\n`;
-  await writeFile(path.resolve(distDir, "index.mjs"), shim, "utf8");
+  const apiShim = `import "./otel.mjs";\nawait import("./server.mjs");\n`;
+  const workerShim = `import "./otel.mjs";\nawait import("./worker-impl.mjs");\n`;
+  await writeFile(path.resolve(distDir, "index.mjs"), apiShim, "utf8");
+  await writeFile(path.resolve(distDir, "worker.mjs"), workerShim, "utf8");
 }
 
 buildAll().then(writeEntryShim).then(copyAssets).then(copyMigrations).catch((err) => {
