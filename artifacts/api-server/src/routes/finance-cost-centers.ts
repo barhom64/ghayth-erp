@@ -1347,6 +1347,134 @@ router.get("/entity-pnl/:entityType/:entityId/series", authorize({ feature: "fin
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PER-ENTITY YEAR-OVER-YEAR — same shape as the entity-pnl drill but
+// returns TWO buckets (current period + prior-year same period) and a
+// delta computed server-side. Closes the natural "how am I doing vs
+// last year?" question for any customer / agent / vehicle.
+//
+// The prior period is computed by shifting the current range back by
+// exactly one calendar year (preserving the calendar window, not
+// rolling 365 days — operators think "vs same month last year",
+// not "vs 365 days ago", so this matches the mental model).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/entity-pnl/:entityType/:entityId/yoy", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const entityType = String(req.params.entityType);
+    const entityId = parseId(req.params.entityId, "entityId");
+    const column = ENTITY_TYPE_TO_JL_COLUMN[entityType];
+    if (!column) {
+      throw new ValidationError(`نوع الكيان غير مدعوم: ${entityType}`, { field: "entityType" });
+    }
+
+    // Default to the year-to-date (Jan 1 → today). This is the
+    // most common YoY framing — "this year vs same period last year".
+    const { dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+    const today = new Date();
+    const defaultFrom = `${today.getUTCFullYear()}-01-01`;
+    const defaultTo = today.toISOString().slice(0, 10);
+    const currentFrom = dateFrom || defaultFrom;
+    const currentTo = dateTo || defaultTo;
+
+    // Shift the range back by exactly one year. Using string
+    // manipulation rather than Date arithmetic to avoid timezone
+    // drift on the boundary days (Riyadh time-zone safe).
+    const shiftYear = (iso: string): string => {
+      const [yStr, m, d] = iso.split("-");
+      const y = Number(yStr) - 1;
+      return `${y}-${m}-${d}`;
+    };
+    const priorFrom = shiftYear(currentFrom);
+    const priorTo = shiftYear(currentTo);
+
+    // Two aggregates in ONE query via UNION ALL with a `period`
+    // discriminator column. Keeps the round-trip count to 1.
+    const aggRows = await rawQuery<{
+      period: "current" | "prior";
+      revenue: string;
+      expense: string;
+      entries: number;
+    }>(
+      `SELECT 'current' AS period,
+              COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+              COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+              COUNT(DISTINCT je.id)::int AS entries
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+         LEFT JOIN chart_of_accounts ca
+                ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+        WHERE je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je.date BETWEEN $2 AND $3
+          AND jl.${column} = $6
+       UNION ALL
+       SELECT 'prior' AS period,
+              COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+              COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+              COUNT(DISTINCT je.id)::int AS entries
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+         LEFT JOIN chart_of_accounts ca
+                ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+        WHERE je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je.date BETWEEN $4 AND $5
+          AND jl.${column} = $6`,
+      [scope.companyId, currentFrom, currentTo, priorFrom, priorTo, entityId],
+    );
+
+    const num = (v: unknown) => Number(v ?? 0);
+    const bucketFor = (period: "current" | "prior") => {
+      const row = aggRows.find((r) => r.period === period);
+      const revenue = num(row?.revenue);
+      const expense = num(row?.expense);
+      return {
+        revenue, expense, net: revenue - expense, entries: num(row?.entries),
+      };
+    };
+    const current = bucketFor("current");
+    const prior = bucketFor("prior");
+
+    // Delta — Δ = current - prior. Percentage uses |prior| as the
+    // denominator (sign-agnostic so a negative-to-positive flip
+    // doesn't render a bogus % drop). Returns null when prior is 0
+    // — the front-end shows "—" instead of "+∞%".
+    const pctChange = (cur: number, pri: number): number | null => {
+      if (pri === 0) return null;
+      return Math.round(((cur - pri) / Math.abs(pri)) * 1000) / 10; // 1 decimal
+    };
+
+    res.json({
+      entityType,
+      entityId,
+      current: {
+        dateFrom: currentFrom,
+        dateTo: currentTo,
+        bucket: current,
+      },
+      prior: {
+        dateFrom: priorFrom,
+        dateTo: priorTo,
+        bucket: prior,
+      },
+      delta: {
+        revenue:    current.revenue - prior.revenue,
+        expense:    current.expense - prior.expense,
+        net:        current.net - prior.net,
+        entries:    current.entries - prior.entries,
+        revenuePct: pctChange(current.revenue, prior.revenue),
+        expensePct: pctChange(current.expense, prior.expense),
+        netPct:     pctChange(current.net, prior.net),
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Entity YoY error"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ENTITY RANKING — "who are my best/worst customers/vendors/vehicles?"
 //
 // Top-N rollup across all entities of a given type, ordered by a
