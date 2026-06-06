@@ -64,6 +64,22 @@ interface SeriesResponse {
   totals: { revenue: number; expense: number; net: number; entries: number };
 }
 
+interface YoyResponse {
+  entityType: string;
+  entityId: number;
+  current: { dateFrom: string; dateTo: string; bucket: PnlBucket };
+  prior:   { dateFrom: string; dateTo: string; bucket: PnlBucket };
+  delta: {
+    revenue: number;
+    expense: number;
+    net: number;
+    entries: number;
+    revenuePct: number | null;
+    expensePct: number | null;
+    netPct: number | null;
+  };
+}
+
 const TYPE_LABEL: Record<string, string> = {
   client: "عميل",
   vendor: "مورد",
@@ -121,6 +137,18 @@ export default function EntityPnlPage() {
   const { data: series } = useApiQuery<SeriesResponse>(
     ["entity-pnl-series", entityType, String(entityId ?? ""), from, to],
     seriesPath,
+  );
+
+  // YoY — current YTD vs same period last year. Inherits the date
+  // filter; defaults to year-to-date when blank. Independent of the
+  // monthly series so the operator can frame "this month vs same month
+  // last year" with one input change.
+  const yoyPath = entityId
+    ? `/finance/entity-pnl/${entityType}/${entityId}/yoy${qs ? "?" + qs : ""}`
+    : null;
+  const { data: yoy } = useApiQuery<YoyResponse>(
+    ["entity-pnl-yoy", entityType, String(entityId ?? ""), from, to],
+    yoyPath,
   );
 
   const backHref = BACK_LINK[entityType] ?? "/finance";
@@ -218,6 +246,8 @@ export default function EntityPnlPage() {
         {data && (
           <>
             <BucketCard bucket={data.bucket} />
+
+            {yoy && <YoyCard yoy={yoy} />}
 
             {series && series.buckets.length > 0 && (
               <TrendCard series={series} />
@@ -434,5 +464,100 @@ function TrendCard({ series }: { series: SeriesResponse }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// YoY comparison card — current period vs prior-year same period.
+// Three deltas (revenue / expense / net) each with arrow + Arabic
+// percent + colour reflecting direction. Expense ↓ is good, expense ↑
+// is bad (inverted vs revenue): the tone helper handles the flip.
+function YoyCard({ yoy }: { yoy: YoyResponse }) {
+  return (
+    <Card className="mb-3" data-testid="entity-pnl-yoy">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          مقارنة سنوية (YoY)
+        </CardTitle>
+        <div className="text-xs text-muted-foreground mt-1">
+          {yoy.current.dateFrom} → {yoy.current.dateTo}
+          {" · مقارنة بـ "}
+          {yoy.prior.dateFrom} → {yoy.prior.dateTo}
+        </div>
+      </CardHeader>
+      <CardContent className="p-3">
+        <div className="grid grid-cols-3 gap-3">
+          <DeltaCell
+            label="الإيرادات"
+            current={yoy.current.bucket.revenue}
+            prior={yoy.prior.bucket.revenue}
+            delta={yoy.delta.revenue}
+            pct={yoy.delta.revenuePct}
+            higherIsBetter={true}
+            testid="entity-pnl-yoy-revenue"
+          />
+          <DeltaCell
+            label="المصروفات"
+            current={yoy.current.bucket.expense}
+            prior={yoy.prior.bucket.expense}
+            delta={yoy.delta.expense}
+            pct={yoy.delta.expensePct}
+            higherIsBetter={false}
+            testid="entity-pnl-yoy-expense"
+          />
+          <DeltaCell
+            label="الصافي"
+            current={yoy.current.bucket.net}
+            prior={yoy.prior.bucket.net}
+            delta={yoy.delta.net}
+            pct={yoy.delta.netPct}
+            higherIsBetter={true}
+            testid="entity-pnl-yoy-net"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DeltaCell({
+  label, current, prior, delta, pct, higherIsBetter, testid,
+}: {
+  label: string;
+  current: number;
+  prior: number;
+  delta: number;
+  pct: number | null;
+  higherIsBetter: boolean;
+  testid: string;
+}) {
+  // Tone flip: for revenue/net, up is good; for expense, down is good.
+  // We compare delta sign against higherIsBetter to pick the colour.
+  const isImprovement = higherIsBetter ? delta > 0 : delta < 0;
+  const isDeterioration = higherIsBetter ? delta < 0 : delta > 0;
+  const toneClass =
+    isImprovement ? "text-status-success-foreground"
+    : isDeterioration ? "text-status-warning-foreground"
+    : "text-muted-foreground";
+  const Arrow = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : TrendingUp;
+
+  return (
+    <div className="flex flex-col" data-testid={testid}>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-lg font-bold">{formatCurrency(current)}</div>
+      <div className="text-xs text-muted-foreground">
+        السابق: {formatCurrency(prior)}
+      </div>
+      <div className={`flex items-center gap-1 text-sm font-medium mt-1 ${toneClass}`}>
+        <Arrow className="h-3 w-3" />
+        <span>{delta >= 0 ? "+" : ""}{formatCurrency(delta)}</span>
+        {pct != null && (
+          <span className="text-xs">
+            ({pct >= 0 ? "+" : ""}{pct.toFixed(1)}%)
+          </span>
+        )}
+        {pct == null && <span className="text-xs text-muted-foreground">(—)</span>}
+      </div>
+    </div>
   );
 }
