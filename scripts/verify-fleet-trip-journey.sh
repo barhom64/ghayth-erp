@@ -32,21 +32,17 @@ TID="$(echo "$TRIP" | gid)"
 TST="$(echo "$TRIP" | py 'import sys,json;print(json.load(sys.stdin).get("status"))')"
 [ -n "$TID" ] && [ "$TST" = "in_progress" ] && ok "trip created (#$TID, in_progress)" || no "trip create (status=$TST)"
 
-CMP="$(curl -sS -b "$J" -H "x-csrf-token: $CSRF" -H "Content-Type: application/json" -X POST "$BASE/fleet/trips/$TID/complete" -d '{"startMileage":1000,"endMileage":1450,"fuelPricePerLiter":2.5}')"
+CMP="$(post /fleet/trips/$TID/complete '{"startMileage":1000,"endMileage":1450,"fuelPricePerLiter":2.5}')"
 CST="$(echo "$CMP" | py 'import sys,json;print(json.load(sys.stdin).get("status") or "")')"
-if [ "$CST" = "completed" ]; then
-  ok "trip completed"
-  export PGPASSWORD="$(echo "$DSN" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')"
-  BAL="$(psql "$DSN" -tA -c "select sum(debit)::numeric=sum(credit)::numeric and sum(debit)>0 from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" where je.\"sourceType\"='fleet_trip' and je.\"sourceId\"=$TID;")"
-  [ "$BAL" = "t" ] && ok "fleet_trip GL entry exists and balanced" || no "fleet GL not balanced ($BAL)"
-else
-  # KNOWN PENDING (#1609 follow-up): trip completion posts a GL cost entry, but
-  # the fleet engine's default GL codes (5200/5210/5220) must be mapped to
-  # postable leaf accounts per company via account_mappings. Until that finance
-  # seed lands, completion returns a clear 422 ("حساب تجميعي/غير موجود"). The
-  # earlier 500 (missing fleet_trips.updatedAt) is fixed by migration 252.
-  echo "  ⚠️  trip completion blocked on fleet GL account mapping (known pending — see docs/OPERATIONAL_LOGIC_ACTIVATION_AUDIT.md)"
-  echo "      response: $(echo "$CMP" | py 'import sys,json;d=json.load(sys.stdin);print(d.get("error") or d)')"
-fi
+[ "$CST" = "completed" ] && ok "trip completed" || no "trip complete (status=$CST)"
 
-rm -f "$J"; echo; echo "▶ Result: $PASS passed, $FAIL failed (creation→insurance→trip verified; GL posting pending account-mapping seed)"; [ "$FAIL" -eq 0 ] || exit 1
+export PGPASSWORD="$(echo "$DSN" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')"
+BAL="$(psql "$DSN" -tA -c "select sum(debit)::numeric=sum(credit)::numeric and sum(debit)>0 from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" where je.\"sourceType\"='fleet_trip' and je.\"sourceId\"=$TID;")"
+[ "$BAL" = "t" ] && ok "fleet_trip GL entry exists and balanced" || no "fleet GL not balanced ($BAL)"
+
+# Per-vehicle routing (#1594): fuel line must post to THIS vehicle's own
+# auto-created subsidiary fuel account (a child leaf, e.g. 5510-000N).
+VEHACC="$(psql "$DSN" -tA -c "select count(*) from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" join subsidiary_accounts sa on sa.\"accountId\"=(select id from chart_of_accounts where code=jl.\"accountCode\" and \"companyId\"=sa.\"companyId\") where je.\"sourceType\"='fleet_trip' and je.\"sourceId\"=$TID and sa.\"entityType\"='vehicle' and sa.\"entityId\"=$VID and sa.\"accountType\"='fuel';")"
+[ "${VEHACC:-0}" -ge 1 ] && ok "fuel posted to the vehicle's own subsidiary account" || no "fuel not routed to per-vehicle account ($VEHACC)"
+
+rm -f "$J"; echo; echo "▶ Result: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ] || exit 1
