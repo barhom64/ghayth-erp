@@ -3156,15 +3156,40 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
            WHERE "companyId" = $1 AND period = $2 AND status = 'pending'`,
           [scope.companyId, targetPeriod]
         );
+        // Pre-aggregate paid-installment sums via CTE + LEFT JOIN
+        // instead of running the SAME scalar SUM subquery THREE times
+        // per row (paidAmount column + remainingAmount column +
+        // CASE expression). At 100 active loans that's 300 redundant
+        // lookups through hr_loan_installments.
+        //
+        // Two CTEs: paid_sums aggregates installments once; to_update
+        // LEFT JOINs that against the active loans so EVERY active
+        // loan gets a row (even ones with zero paid installments).
+        // The outer UPDATE then matches to_update by id — UPDATE FROM
+        // is an implicit INNER JOIN so we'd lose zero-installment
+        // loans without this indirection.
         await client.query(
-          `UPDATE hr_employee_loans l SET
-             "paidAmount" = COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0),
-             "remainingAmount" = l.amount - COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0),
+          `WITH paid_sums AS (
+             SELECT "loanId", SUM(amount) AS paid
+             FROM hr_loan_installments
+             WHERE status = 'paid'
+             GROUP BY "loanId"
+           ),
+           to_update AS (
+             SELECT l.id, COALESCE(ps.paid, 0) AS paid
+             FROM hr_employee_loans l
+             LEFT JOIN paid_sums ps ON ps."loanId" = l.id
+             WHERE l."companyId" = $1 AND l.status = 'active'
+           )
+           UPDATE hr_employee_loans l SET
+             "paidAmount" = tu.paid,
+             "remainingAmount" = l.amount - tu.paid,
              status = CASE
-               WHEN l.amount - COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0) <= 0
+               WHEN l.amount - tu.paid <= 0
                THEN 'completed' ELSE l.status END,
              "updatedAt" = NOW()
-           WHERE l."companyId" = $1 AND l.status = 'active'`,
+           FROM to_update tu
+           WHERE l.id = tu.id`,
           [scope.companyId]
         );
       }
