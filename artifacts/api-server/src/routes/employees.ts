@@ -261,26 +261,45 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;
+    // Dedicated binding for the gov_counts CTE so we don't depend on
+    // any specific position inside the scoped where clause (which may
+    // pass `companyId` as an array via = ANY($1)). Single integer here.
+    params.push(scope.companyId);
+    const govCompanyIdx = paramIdx++;
 
+    // Pre-aggregate gov_integration_links once instead of running the
+    // scalar subquery per row. The original SELECT-list correlated
+    // subquery was N+1: postgres planned one execution PER returned
+    // row, so 500 employees == 501 index lookups. The CTE below scans
+    // gov_integration_links once and joins the per-employee counts.
     const employees = await rawQuery<EmployeeListRow>(
-      `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+      `WITH gov_counts AS (
+         SELECT "entityId", COUNT(*) AS "govLinkCount"
+         FROM gov_integration_links
+         WHERE "entityType" = 'employee' AND "companyId" = $${govCompanyIdx}
+         GROUP BY "entityId"
+       )
+       SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
               ea.id AS "activeAssignmentId",
               e."iqamaNumber", e."iqamaExpiry", e."iqamaStatus",
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
               ea.role, ea.salary, ea."branchId",
               b.name AS "branchName",
-              (SELECT COUNT(*) FROM gov_integration_links gl WHERE gl."entityType" = 'employee' AND gl."entityId" = e.id AND gl."companyId" = ea."companyId")::int AS "govLinkCount"
+              COALESCE(gc."govLinkCount", 0)::int AS "govLinkCount"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
        LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+       LEFT JOIN gov_counts gc ON gc."entityId" = e.id
        WHERE ${where} AND e."deletedAt" IS NULL
        ORDER BY e.name ASC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params
     );
 
-    const countParams = params.slice(0, params.length - 2);
+    // The list query appended 3 trailing params (limit, offset,
+    // govCompanyId); the count query doesn't need any of them.
+    const countParams = params.slice(0, params.length - 3);
     const [countRow] = await rawQuery<{ total: string | number }>(
       `SELECT COUNT(*) AS total
        FROM employees e
