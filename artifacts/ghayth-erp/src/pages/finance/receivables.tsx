@@ -29,15 +29,17 @@ export default function ReceivablesPage() {
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "clientName"],
     statusField: "status",
     dateField: "",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const columns: DataTableColumn<any>[] = [
     {
