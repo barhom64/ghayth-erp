@@ -50,6 +50,10 @@ export interface SendMessageInput {
   channel: SendChannel;
   recipient: string;
   recipientName?: string | null;
+  /** Optional CC address(es). Comma-separated. Email-only — other channels ignore. */
+  cc?: string | null;
+  /** Optional BCC address(es). Comma-separated. Email-only — other channels ignore. */
+  bcc?: string | null;
   subject?: string | null;
   body: string;
   /** Caller's tenant. NULL companyId is rejected — every send is tenant-scoped. */
@@ -174,16 +178,20 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
   const scheduledAt = input.scheduledAt instanceof Date
     ? input.scheduledAt.toISOString()
     : input.scheduledAt ?? null;
+  // CC/BCC only meaningful for email — silently drop on other channels.
+  const cc = input.channel === "email" ? (input.cc ?? null) : null;
+  const bcc = input.channel === "email" ? (input.bcc ?? null) : null;
   await rawExecute(
     `INSERT INTO outbound_queue
-       ("companyId", channel, recipient, "recipientName", subject, body,
+       ("companyId", channel, recipient, "recipientName", cc, bcc, subject, body,
         status, "scheduledAt", "refType", "refId", "messageLogId",
         "createdAt", "updatedAt")
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending', COALESCE($7, NOW()),
-             $8, $9, $10, NOW(), NOW())`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', COALESCE($9, NOW()),
+             $10, $11, $12, NOW(), NOW())`,
     [
       input.companyId, input.channel, input.recipient,
-      input.recipientName ?? null, input.subject ?? null, finalBody,
+      input.recipientName ?? null, cc, bcc,
+      input.subject ?? null, finalBody,
       scheduledAt, input.relatedType ?? null, input.relatedId ?? null, logId,
     ],
   );

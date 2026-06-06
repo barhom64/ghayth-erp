@@ -1295,12 +1295,21 @@ router.get("/employees/:employeeId/assignments", authorize({ feature: "umrah", a
 router.get("/commission-plans", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Pre-aggregate tier counts via CTE — same pattern as the
+    // earlier N+1 fixes. Avoids 1 lookup per commission plan
+    // through employee_commission_tiers.
     const rows = await rawQuery(
-      `SELECT cp.*,
+      `WITH tier_counts AS (
+         SELECT "planId", COUNT(*) AS "tierCount"
+         FROM employee_commission_tiers
+         GROUP BY "planId"
+       )
+       SELECT cp.*,
               s.title AS "seasonTitle",
-              (SELECT COUNT(*)::int FROM employee_commission_tiers WHERE "planId" = cp.id) AS "tierCount"
+              COALESCE(tc."tierCount", 0)::int AS "tierCount"
        FROM employee_commission_plans cp
        LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id AND s."deletedAt" IS NULL
+       LEFT JOIN tier_counts tc ON tc."planId" = cp.id
        WHERE cp."companyId" = $1 AND cp."deletedAt" IS NULL
        ORDER BY cp."createdAt" DESC`,
       [scope.companyId]

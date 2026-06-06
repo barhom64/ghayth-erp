@@ -55,8 +55,10 @@ describe("createSubsidiaryAccountsForEntity — driver + vehicle no-longer-no-op
     expect(ACCT_ENG).toMatch(/entityType === "driver"[\s\S]{1,400}accountType:\s*"custody",\s*parentCode:\s*"1131",\s*suffix:\s*"عهدة سائق"/);
   });
 
-  it("vehicle path pushes a custody account under 1131 with 'عهدة مركبة' label", () => {
-    expect(ACCT_ENG).toMatch(/entityType === "vehicle"[\s\S]{1,400}accountType:\s*"custody",\s*parentCode:\s*"1131",\s*suffix:\s*"عهدة مركبة"/);
+  it("vehicle path pushes custody (1113) + fuel(5510)/maintenance(5520)/depreciation(5710) per-vehicle accounts (#1594)", () => {
+    expect(ACCT_ENG).toMatch(/entityType === "vehicle"[\s\S]{1,1500}accountType:\s*"custody",\s*parentCode:\s*"1113",\s*suffix:\s*"عهدة مركبة"/);
+    expect(ACCT_ENG).toMatch(/entityType === "vehicle"[\s\S]{1,1500}accountType:\s*"fuel",\s*parentCode:\s*"5510"/);
+    expect(ACCT_ENG).toMatch(/entityType === "vehicle"[\s\S]{1,1500}accountType:\s*"depreciation",\s*parentCode:\s*"5710"/);
   });
 
   it("driver + vehicle branches don't accidentally clobber employee path (employee still has advance + custody)", () => {

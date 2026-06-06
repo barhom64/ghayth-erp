@@ -190,6 +190,32 @@ class FleetEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+   * Resolve a vehicle's own postable subsidiary account code for a given
+   * accountType ("fuel" | "maintenance" | "depreciation"), auto-created on
+   * vehicle creation. Returns null when none is configured (caller falls back
+   * to the company/default account), so the routing is purely additive.
+   */
+  private async resolveVehicleAccountCode(
+    companyId: number,
+    vehicleId: number,
+    accountType: string,
+  ): Promise<string | null> {
+    if (!vehicleId) return null;
+    const rows = await rawQuery<{ code: string }>(
+      `SELECT coa.code
+         FROM subsidiary_accounts sa
+         JOIN chart_of_accounts coa ON coa.id = sa."accountId"
+        WHERE sa."companyId" = $1 AND sa."entityType" = 'vehicle'
+          AND sa."entityId" = $2 AND sa."accountType" = $3
+          AND sa."isActive" = true
+          AND coa."allowPosting" = true AND coa."deletedAt" IS NULL
+        LIMIT 1`,
+      [companyId, vehicleId, accountType],
+    );
+    return rows[0]?.code ?? null;
+  }
+
   async postTripCompletionGL(
     ctx: FleetGLContext,
     trip: {
@@ -203,11 +229,20 @@ class FleetEngineImpl implements DomainEngine {
   ) {
     if (trip.totalCost <= 0) return null;
 
+    // Per-vehicle GL routing (#1594): prefer the vehicle's OWN subsidiary
+    // account (auto-created on vehicle creation) so cost posts per-plate; fall
+    // back to the per-company accounting_mappings override, then to the
+    // standard fleet COA leaf (corrected from the old non-postable parents
+    // 5200/1100 → 5510/5710 fuel/depreciation, 5140 transport, 1110 bank).
+    const [vehFuel, vehDep] = await Promise.all([
+      this.resolveVehicleAccountCode(ctx.companyId, trip.vehicleId, "fuel"),
+      this.resolveVehicleAccountCode(ctx.companyId, trip.vehicleId, "depreciation"),
+    ]);
     const [fuelCode, fareCode, depCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_driver_fare", "debit", "5210"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_depreciation", "debit", "5220"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
+      vehFuel ?? financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5510"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_driver_fare", "debit", "5140"),
+      vehDep ?? financialEngine.resolveAccountCode(ctx.companyId, "fleet_depreciation", "debit", "5710"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
 
     return financialEngine.postJournalEntry({
