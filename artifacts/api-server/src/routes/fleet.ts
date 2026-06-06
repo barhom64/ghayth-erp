@@ -1194,11 +1194,29 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
     }
 
     if (!selectedVehicleId) {
+      // Pre-aggregate fleet_trips + fleet_insurance once instead of
+      // running scalar subqueries per row. Original was N+1: 20
+      // vehicles × 2 subqueries = ~41 round-trips. CTEs reduce to one
+      // scan per joined table.
       const vehicles = await rawQuery<Record<string, unknown>>(
-        `SELECT v.*,
-                (SELECT COUNT(*) FROM fleet_trips WHERE "vehicleId"=v.id AND status='completed' AND "deletedAt" IS NULL) AS "tripCount",
-                (SELECT MAX("endDate") FROM fleet_insurance WHERE "vehicleId"=v.id AND "companyId"=v."companyId" AND "deletedAt" IS NULL) AS "insuranceEnd"
+        `WITH v_trip_counts AS (
+           SELECT "vehicleId", COUNT(*) AS "tripCount"
+           FROM fleet_trips
+           WHERE status='completed' AND "deletedAt" IS NULL
+           GROUP BY "vehicleId"
+         ),
+         v_insurance_max AS (
+           SELECT "vehicleId", MAX("endDate") AS "insuranceEnd"
+           FROM fleet_insurance
+           WHERE "companyId"=$1 AND "deletedAt" IS NULL
+           GROUP BY "vehicleId"
+         )
+         SELECT v.*,
+                COALESCE(vtc."tripCount", 0)::int AS "tripCount",
+                vim."insuranceEnd"
          FROM fleet_vehicles v
+         LEFT JOIN v_trip_counts vtc ON vtc."vehicleId" = v.id
+         LEFT JOIN v_insurance_max vim ON vim."vehicleId" = v.id
          WHERE v."companyId"=$1 AND v.status='available' AND v."deletedAt" IS NULL
          ORDER BY v.id LIMIT 20`,
         [scope.companyId]
@@ -1223,12 +1241,25 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
     }
 
     if (!selectedDriverId) {
+      // Pre-aggregate fleet_trips counts once instead of running TWO
+      // scalar subqueries per row. Original was N+1: 20 drivers × 2
+      // subqueries = ~41 round-trips. The single CTE below uses
+      // FILTER to count both completed + in-progress in one scan.
       const drivers = await rawQuery<Record<string, unknown>>(
-        `SELECT d.*,
-                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='completed' AND "deletedAt" IS NULL) AS "tripCount",
-                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='in_progress' AND "deletedAt" IS NULL) AS "activeTrips",
+        `WITH d_trip_counts AS (
+           SELECT "driverId",
+                  COUNT(*) FILTER (WHERE status='completed') AS "tripCount",
+                  COUNT(*) FILTER (WHERE status='in_progress') AS "activeTrips"
+           FROM fleet_trips
+           WHERE "deletedAt" IS NULL
+           GROUP BY "driverId"
+         )
+         SELECT d.*,
+                COALESCE(dtc."tripCount", 0)::int AS "tripCount",
+                COALESCE(dtc."activeTrips", 0)::int AS "activeTrips",
                 COALESCE(d.rating, 3) AS "driverRating"
          FROM fleet_drivers d
+         LEFT JOIN d_trip_counts dtc ON dtc."driverId" = d.id
          WHERE d."companyId"=$1 AND d.status='available'
            AND d."deletedAt" IS NULL
            AND (d."licenseExpiry" IS NULL OR d."licenseExpiry" > CURRENT_DATE)
