@@ -2638,9 +2638,36 @@ const suggestMappingSchema = z.object({
 
 router.post("/import/suggest-mapping", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { headers, fileType } = zodParse(suggestMappingSchema.safeParse(req.body));
     const { suggestColumnMapping } = await import("../lib/umrahImportEngine.js");
-    res.json({ suggestions: suggestColumnMapping(headers, fileType) });
+    const suggestions = suggestColumnMapping(headers, fileType);
+    // Usage telemetry — which headers operators send + how many the
+    // matcher catches at each confidence band. Without this, we can't
+    // see which incoming Excel variants are escaping the built-in
+    // dictionary (signal for adding them to the dictionary). Mirrors
+    // the assistant.ask pattern (#1625): event broadcasts only counts,
+    // audit log carries the raw headers (RBAC-gated).
+    const hitCount = Object.keys(suggestions ?? {}).length;
+    const missCount = Math.max(0, headers.length - hitCount);
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "umrah.import.suggest_mapping",
+      entity: "umrah_import_mapping_presets",
+      entityId: scope.userId,
+      after: { fileType, headers, hitCount, missCount },
+    });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "umrah.import.suggest_mapping",
+      entity: "umrah_import_mapping_presets",
+      entityId: scope.userId,
+      details: JSON.stringify({ fileType, total: headers.length, hitCount, missCount }),
+    }).catch((e) => logger.error(e, "umrah suggest-mapping event emit failed"));
+    res.json({ suggestions });
   } catch (err) { handleRouteError(err, res, "Suggest mapping error"); }
 });
 

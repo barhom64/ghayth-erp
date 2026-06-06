@@ -29,13 +29,16 @@ const UI = readFileSync(
 );
 
 describe("umrah /groups list — enriched operational columns", () => {
-  it("NUSK aggregates: invoice count + cost total are correlated subqueries scoped per group", () => {
-    expect(ROUTE).toMatch(/COUNT\(\*\) FROM umrah_nusk_invoices ni[\s\S]{1,400}AS\s+"nuskInvoiceCount"/);
-    expect(ROUTE).toMatch(/SUM\(ni\."totalAmount"\) FROM umrah_nusk_invoices ni[\s\S]{1,400}AS\s+"nuskCostTotal"/);
+  it("NUSK aggregates: invoice count + cost total live inside a nusk_stats CTE (N+1 fix)", () => {
+    // After the N+1 fix the two NUSK aggregates were lifted out of
+    // per-row correlated subqueries into a single GROUP BY scan.
+    expect(ROUTE).toContain("WITH nusk_stats AS");
+    expect(ROUTE).toContain('COUNT(*) AS "nuskInvoiceCount"');
+    expect(ROUTE).toContain('COALESCE(SUM("totalAmount"), 0) AS "nuskCostTotal"');
   });
 
   it("excludes cancelled NUSK invoices from the aggregates", () => {
-    expect(ROUTE).toMatch(/ni\."nuskStatus" != 'cancelled'/);
+    expect(ROUTE).toContain(`"nuskStatus" != 'cancelled'`);
   });
 
   it("sales invoice fields ride on a LEFT JOIN against the group's salesInvoiceId", () => {
@@ -49,31 +52,36 @@ describe("umrah /groups list — enriched operational columns", () => {
     expect(ROUTE).toMatch(/GREATEST\(COALESCE\(si\.total, 0\) - COALESCE\(si\."paidAmount", 0\), 0\) AS "salesOutstanding"/);
   });
 
-  it("pilgrimsInside counts arrived/active/overstayed (excludes departed)", () => {
-    expect(ROUTE).toMatch(/p\.status IN \('arrived','active','overstayed'\)[\s\S]{1,200}AS\s+"pilgrimsInside"/);
+  it("pilgrimsInside counts arrived/active/overstayed via COUNT(*) FILTER inside pilgrim_stats CTE", () => {
+    expect(ROUTE).toContain("pilgrim_stats AS");
+    expect(ROUTE).toMatch(
+      /COUNT\(\*\) FILTER \(WHERE status IN \('arrived','active','overstayed'\)\) AS "pilgrimsInside"/,
+    );
   });
 
-  it("pilgrimsOverstayed isolates the at-risk subset", () => {
-    expect(ROUTE).toMatch(/p\.status = 'overstayed'[\s\S]{1,200}AS\s+"pilgrimsOverstayed"/);
+  it("pilgrimsOverstayed isolates the at-risk subset via FILTER inside the same CTE", () => {
+    expect(ROUTE).toMatch(
+      /COUNT\(\*\) FILTER \(WHERE status = 'overstayed'\) AS "pilgrimsOverstayed"/,
+    );
   });
 
-  it("visaAtRisk uses the same 7-day Saudi compliance window as the dashboard", () => {
-    expect(ROUTE).toMatch(/p\."visaExpiry" < CURRENT_DATE \+ INTERVAL '7 days'/);
-    expect(ROUTE).toMatch(/p\.status NOT IN \('departed','cancelled','deceased','visa_rejected'\)/);
-    expect(ROUTE).toMatch(/AS\s+"visaAtRisk"/);
+  it("visaAtRisk uses the same 7-day Saudi compliance window via FILTER", () => {
+    expect(ROUTE).toContain(`"visaExpiry" < CURRENT_DATE + INTERVAL '7 days'`);
+    expect(ROUTE).toContain(`status NOT IN ('departed','cancelled','deceased','visa_rejected')`);
+    expect(ROUTE).toContain(`AS "visaAtRisk"`);
   });
 
-  it("Group's correlated subqueries match by both groupId AND companyId (defence-in-depth)", () => {
-    // Mirror PR #1391: every LEFT JOIN clients/employees also matches
-    // companyId. The umrah_pilgrims and umrah_nusk_invoices subqueries
-    // here apply the same defence — a cross-tenant id collision would
-    // otherwise leak rows into the count.
-    const inv = ROUTE.indexOf('SUM(ni."totalAmount") FROM umrah_nusk_invoices');
-    expect(inv).toBeGreaterThan(0);
-    expect(ROUTE.slice(inv, inv + 500)).toMatch(/ni\."companyId" = g\."companyId"/);
-    const pil = ROUTE.indexOf('"pilgrimsInside"');
-    expect(pil).toBeGreaterThan(0);
-    expect(ROUTE.slice(pil - 600, pil)).toMatch(/p\."companyId" = g\."companyId"/);
+  it("Group's CTE joins still match by both groupId AND companyId (defence-in-depth)", () => {
+    // The original correlated subqueries enforced AND
+    // ni/p."companyId" = g."companyId" defensively. The CTEs carry
+    // companyId through into the LEFT JOIN ON clause so that
+    // boundary is preserved.
+    expect(ROUTE).toMatch(
+      /LEFT JOIN nusk_stats ns ON ns\."groupId" = g\.id AND ns\."companyId" = g\."companyId"/,
+    );
+    expect(ROUTE).toMatch(
+      /LEFT JOIN pilgrim_stats ps ON ps\."groupId" = g\.id AND ps\."companyId" = g\."companyId"/,
+    );
   });
 });
 
