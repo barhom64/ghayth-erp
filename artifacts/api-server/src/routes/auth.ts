@@ -5,6 +5,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { setCsrfCookie } from "../middlewares/csrfMiddleware.js";
+import { seedCompanyFeatureEntitlements } from "../lib/subscriptionFeatures.js";
 import rateLimit from "express-rate-limit";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
@@ -343,6 +344,13 @@ router.post("/bootstrap-tenant", registerLimiter, async (req, res) => {
          ON CONFLICT DO NOTHING`,
         [newOwnerUserId, newCompanyId]
       );
+
+      // 6. P4 — seed per-feature subscription entitlements so the new
+      //    tenant starts with the same all-active default migration 253
+      //    gave existing companies. Without this every featureGate module
+      //    (/finance, /hr, /fleet, …) would 402 for the fresh company.
+      //    rawExecute joins THIS transaction via the ambient txStore.
+      await seedCompanyFeatureEntitlements(newCompanyId);
     });
 
     // Bootstrap helpers (CoA seed, leave types, numbering prefixes,

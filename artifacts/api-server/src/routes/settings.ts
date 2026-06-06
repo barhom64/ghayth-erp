@@ -17,6 +17,7 @@ import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
+import { seedCompanyFeatureEntitlements } from "../lib/subscriptionFeatures.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 
@@ -601,6 +602,13 @@ router.post("/companies", authorize({ feature: "settings", action: "update" }), 
     const { name, nameEn, taxNumber, crNumber } = body;
     const r = await rawExecute(`INSERT INTO companies (name, "nameEn", "vatNumber", "crNumber") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, taxNumber || null, crNumber || null]);
     const companyId = r.insertId;
+
+    // P4 — seed per-feature subscription entitlements so the new company
+    // starts all-active (same default migration 253 gave existing tenants).
+    // Without this every featureGate module would 402 for it.
+    await seedCompanyFeatureEntitlements(companyId).catch((e) =>
+      logger.error(e, "[settings] feature-entitlement seed failed for new company"),
+    );
 
     let branchId: number | undefined;
     let bootstrapped = false;

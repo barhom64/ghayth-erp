@@ -89,11 +89,22 @@ export function featureGate(featureKey: string) {
 
     const row = await loadFeature(scope.companyId, featureKey);
 
-    // No row at all → feature not provisioned for this tenant. Fail
-    // closed. (Migration 253 seeds every existing company × every
-    // seeded feature, so this only fires for features added after
-    // deploy that haven't been provisioned.)
+    // No row at all → feature not provisioned for this tenant. Migration
+    // 253 grandfathers existing companies and seedCompanyFeatureEntitlements
+    // covers newly-created ones, so this only fires for a feature added
+    // after a company was created and not yet backfilled. Fail closed for
+    // regular users — but give the OWNER a soft pass so a provisioning gap
+    // can never hard-lock the account holder out of their own workspace
+    // (they can still reach /admin/subscription-features to provision).
     if (!row) {
+      if (scope.isOwner || scope.role === "owner") {
+        logger.warn(
+          { companyId: scope.companyId, featureKey },
+          "featureGate: owner bypass on un-provisioned feature (no entitlement row)",
+        );
+        next();
+        return;
+      }
       res.status(402).json({
         error: "هذه الميزة غير مفعّلة في اشتراك شركتك. تواصل مع المالك لتفعيلها.",
         code: "FEATURE_NOT_SUBSCRIBED",

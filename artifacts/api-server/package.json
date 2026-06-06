@@ -9,7 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "start:api-only": "API_ONLY=true node --enable-source-maps ./dist/index.mjs",
     "worker:dev": "export NODE_ENV=development && pnpm run build && pnpm run worker:start",
-    "worker:start": "node --enable-source-maps ./dist/worker.mjs",
+    "worker:start": "WORKER_PROCESS=true node --enable-source-maps ./dist/worker.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint:permissions": "node scripts/lintPermissions.mjs",
     "lint:sql": "node scripts/lintSql.mjs",

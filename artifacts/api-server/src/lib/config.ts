@@ -122,6 +122,10 @@ const EnvSchema = z.object({
   // / alerts / print delivery so the worker.ts process can own them.
   // Leave unset for the legacy single-process mode (backwards compatible).
   API_ONLY: boolEnv(false),
+  // WORKER_PROCESS=true marks the background worker process (worker.ts). It
+  // does NOT serve the HTTP API — it only binds WORKER_HEALTH_PORT — so the
+  // production env-check skips the PORT + CORS_ORIGINS fatal gates for it.
+  WORKER_PROCESS: boolEnv(false),
   // Port for the worker's /healthz + /readyz endpoints.
   WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(7001),
 
@@ -353,6 +357,11 @@ export interface AppConfig {
    *  Set in the API container; leave unset in single-process mode. */
   readonly apiOnly: boolean;
 
+  /** P1 — when true, this is the background worker process (worker.ts):
+   *  no HTTP API, only the health listener on workerHealthPort. The
+   *  env-check relaxes the PORT + CORS_ORIGINS gates for it. */
+  readonly workerProcess: boolean;
+
   /** P1 — port for the worker's /healthz + /readyz endpoints. */
   readonly workerHealthPort: number;
 
@@ -571,6 +580,7 @@ function buildConfig(env: RawEnv): AppConfig {
     seedDemoData: env.SEED_DEMO_DATA,
     persistAllEvents: env.PERSIST_ALL_EVENTS,
     apiOnly: env.API_ONLY,
+    workerProcess: env.WORKER_PROCESS,
     workerHealthPort: env.WORKER_HEALTH_PORT,
     outboxRelayActive: env.OUTBOX_RELAY_ACTIVE,
     outboxRelayIntervalMs: env.OUTBOX_RELAY_INTERVAL_MS,
@@ -789,7 +799,9 @@ function collectEnvIssues(cfg: AppConfig, raw: NodeJS.ProcessEnv): EnvIssue[] {
     });
   }
 
-  if (!Number.isInteger(cfg.port) || cfg.port <= 0 || cfg.port > 65535) {
+  // The worker (worker.ts) doesn't bind the HTTP API port — it only serves
+  // health on workerHealthPort — so PORT is irrelevant to it. Skip the gate.
+  if (!cfg.workerProcess && (!Number.isInteger(cfg.port) || cfg.port <= 0 || cfg.port > 65535)) {
     issues.push({
       key: "PORT",
       severity: "fatal",
@@ -831,7 +843,9 @@ function collectEnvIssues(cfg: AppConfig, raw: NodeJS.ProcessEnv): EnvIssue[] {
     });
   }
 
-  if (prod && cfg.corsOrigins.length === 0) {
+  // CORS only matters for the browser-facing HTTP API. The worker serves
+  // no browser traffic, so skip this gate for it.
+  if (prod && !cfg.workerProcess && cfg.corsOrigins.length === 0) {
     issues.push({
       key: "CORS_ORIGINS",
       severity: "fatal",

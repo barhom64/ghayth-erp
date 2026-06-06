@@ -101,8 +101,10 @@ describe("P1 — worker.ts entry point exists and owns the background systems", 
 });
 
 describe("P1 — package.json declares worker scripts", () => {
-  it("has a worker:start script that runs the bundled worker entry", () => {
-    expect(PKG.scripts["worker:start"]).toBe("node --enable-source-maps ./dist/worker.mjs");
+  it("has a worker:start script that runs the bundled worker entry as the worker role", () => {
+    // WORKER_PROCESS=true marks the worker role so the prod env-check skips
+    // the PORT + CORS_ORIGINS gates (the worker serves no HTTP API).
+    expect(PKG.scripts["worker:start"]).toBe("WORKER_PROCESS=true node --enable-source-maps ./dist/worker.mjs");
   });
 
   it("has a worker:dev script that builds + starts the worker", () => {

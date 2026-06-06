@@ -136,8 +136,7 @@ router.post("/companies/:id/features/:key", authorize({ feature: "admin", action
       `INSERT INTO company_subscription_features
          ("companyId", "featureKey", status, "expiresAt", notes,
           "lastChangedBy", "lastChangedAt", "enabledAt")
-       VALUES ($1, $2, $3, $4, $5, $6, now(),
-               CASE WHEN $3 = 'active' OR $3 = 'trial' THEN now() ELSE now() END)
+       VALUES ($1, $2, $3::varchar, $4::timestamptz, $5, $6, now(), now())
        ON CONFLICT ("companyId", "featureKey") DO UPDATE
          SET status         = EXCLUDED.status,
              "expiresAt"    = EXCLUDED."expiresAt",

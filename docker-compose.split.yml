@@ -116,6 +116,9 @@ services:
     command: ["node", "--enable-source-maps", "./dist/worker.mjs"]
     environment:
       <<: *app-env
+      # Marks this as the worker role: no HTTP API, so the prod env-check
+      # skips the PORT + CORS_ORIGINS gates.
+      WORKER_PROCESS: "true"
       WORKER_HEALTH_PORT: "7001"
       # The worker is the sole dispatcher: it drains the outbox + runs listeners.
       OUTBOX_RELAY_ACTIVE: "true"

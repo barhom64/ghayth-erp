@@ -181,4 +181,134 @@ d("featureGate — dynamic (real Postgres)", () => {
     await featureGate("umrah.access")(ctx.req, ctx.res, ctx.next);
     expect(ctx.outcome().statusCode).toBe(402);
   });
+
+  it("owner bypasses an UN-PROVISIONED feature (no row at all)", async () => {
+    // beforeEach deleted all rows. Owner should still get in (a
+    // provisioning gap must never hard-lock the account holder).
+    const ctx = makeCtx({ companyId, isOwner: true });
+    await featureGate(KEY)(ctx.req, ctx.res, ctx.next);
+    expect(ctx.outcome().nextCalled).toBe(true);
+  });
+});
+
+d("admin upsert/cancel SQL — executes against real Postgres", () => {
+  // Regression guard for the "inconsistent types deduced for parameter $3"
+  // bug: the admin POST upsert SQL only failed at EXECUTION time (a type
+  // the planner couldn't reconcile), so a text-only unit assertion missed
+  // it. Run the exact statements the route runs against a live DB.
+  let rawExecute: any;
+  let rawQuery: any;
+  let companyId: number;
+  const KEY = "finance.access";
+
+  beforeAll(async () => {
+    const db = await import("../../src/lib/rawdb.js");
+    rawExecute = db.rawExecute;
+    rawQuery = db.rawQuery;
+    const [c] = await rawQuery(
+      `INSERT INTO companies (name, status) VALUES ('Upsert SQL Co', 'active') RETURNING id`,
+    );
+    companyId = c.id;
+  });
+
+  beforeEach(async () => {
+    await rawExecute(`DELETE FROM company_subscription_features WHERE "companyId" = $1`, [companyId]);
+  });
+
+  // Mirrors routes/admin-subscription-features.ts POST handler.
+  async function upsert(status: string, expiresAt: string | null, notes: string | null, userId = 1) {
+    return rawExecute(
+      `INSERT INTO company_subscription_features
+         ("companyId", "featureKey", status, "expiresAt", notes,
+          "lastChangedBy", "lastChangedAt", "enabledAt")
+       VALUES ($1, $2, $3::varchar, $4::timestamptz, $5, $6, now(), now())
+       ON CONFLICT ("companyId", "featureKey") DO UPDATE
+         SET status         = EXCLUDED.status,
+             "expiresAt"    = EXCLUDED."expiresAt",
+             notes          = COALESCE(EXCLUDED.notes, company_subscription_features.notes),
+             "lastChangedBy" = EXCLUDED."lastChangedBy",
+             "lastChangedAt" = now()`,
+      [companyId, KEY, status, expiresAt, notes, userId],
+    );
+  }
+
+  it("INSERT path: status only (no expiry/notes) executes without a type error", async () => {
+    await expect(upsert("active", null, null)).resolves.toBeTruthy();
+    const [row] = await rawQuery(
+      `SELECT status, "expiresAt", "enabledAt" FROM company_subscription_features WHERE "companyId"=$1 AND "featureKey"=$2`,
+      [companyId, KEY],
+    );
+    expect(row.status).toBe("active");
+    expect(row.enabledAt).not.toBeNull();
+  });
+
+  it("UPSERT path: a second call with expiry + notes updates the same row", async () => {
+    await upsert("active", null, null);
+    await upsert("trial", new Date(Date.now() + 86_400_000).toISOString(), "promo");
+    const rows = await rawQuery(
+      `SELECT status, "expiresAt", notes FROM company_subscription_features WHERE "companyId"=$1 AND "featureKey"=$2`,
+      [companyId, KEY],
+    );
+    expect(rows).toHaveLength(1); // ON CONFLICT updated, not duplicated
+    expect(rows[0].status).toBe("trial");
+    expect(rows[0].expiresAt).not.toBeNull();
+    expect(rows[0].notes).toBe("promo");
+  });
+
+  it("DELETE/cancel path: marks the row cancelled, returns affectedRows=1", async () => {
+    await upsert("active", null, null);
+    const res = await rawExecute(
+      `UPDATE company_subscription_features
+          SET status = 'cancelled', "lastChangedBy" = $3, "lastChangedAt" = now()
+        WHERE "companyId" = $1 AND "featureKey" = $2`,
+      [companyId, KEY, 1],
+    );
+    expect(res.affectedRows).toBe(1);
+    const [row] = await rawQuery(
+      `SELECT status FROM company_subscription_features WHERE "companyId"=$1 AND "featureKey"=$2`,
+      [companyId, KEY],
+    );
+    expect(row.status).toBe("cancelled");
+  });
+});
+
+d("seedCompanyFeatureEntitlements — provisions a fresh company", () => {
+  let rawExecute: any;
+  let rawQuery: any;
+  let seed: any;
+
+  beforeAll(async () => {
+    const db = await import("../../src/lib/rawdb.js");
+    rawExecute = db.rawExecute;
+    rawQuery = db.rawQuery;
+    seed = (await import("../../src/lib/subscriptionFeatures.js")).seedCompanyFeatureEntitlements;
+  });
+
+  it("seeds one active entitlement per catalogued feature, idempotently", async () => {
+    const [c] = await rawQuery(
+      `INSERT INTO companies (name, status) VALUES ('Seed Co', 'active') RETURNING id`,
+    );
+    const [{ n: featureCount }] = await rawQuery(
+      `SELECT count(*)::int AS n FROM subscription_features`,
+    );
+
+    const seeded = await seed(c.id);
+    expect(seeded).toBe(featureCount);
+
+    const [{ n: active }] = await rawQuery(
+      `SELECT count(*)::int AS n FROM company_subscription_features
+        WHERE "companyId" = $1 AND status = 'active'`,
+      [c.id],
+    );
+    expect(active).toBe(featureCount);
+
+    // Idempotent — a second call inserts nothing.
+    const again = await seed(c.id);
+    expect(again).toBe(0);
+  });
+
+  it("rejects an invalid companyId", async () => {
+    await expect(seed(0)).rejects.toThrow();
+    await expect(seed(-5)).rejects.toThrow();
+  });
 });

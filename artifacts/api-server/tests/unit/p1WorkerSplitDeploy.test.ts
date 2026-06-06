@@ -40,6 +40,13 @@ describe("P1 — docker-compose.split.yml runs the two roles correctly", () => {
     expect(workerBlock).toMatch(/healthz/); // health check wired
   });
 
+  it("worker is marked WORKER_PROCESS=true so the prod env-check skips PORT/CORS", () => {
+    const workerIdx = SPLIT.indexOf("\n  worker:");
+    const webIdx = SPLIT.indexOf("\n  web:");
+    const workerBlock = SPLIT.slice(workerIdx, webIdx);
+    expect(workerBlock).toMatch(/WORKER_PROCESS:\s*"true"/);
+  });
+
   it("OUTBOX_SOLE_DISPATCHER is set for BOTH roles (shared anchor)", () => {
     // Shared via the x-app-env anchor so api + worker can't drift.
     expect(SPLIT).toMatch(/OUTBOX_SOLE_DISPATCHER:\s*"true"/);
