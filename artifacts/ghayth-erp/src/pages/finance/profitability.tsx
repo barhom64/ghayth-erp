@@ -32,6 +32,7 @@ import { formatCurrency, todayLocal, currentYearRiyadh, currentMonthPaddedRiyadh
 import { Download, ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
 type ProfitabilityType = "vehicle" | "property" | "project" | "umrah-agent";
 
 interface AccountRow {
@@ -246,16 +247,24 @@ export default function ProfitabilityPage({ entityType }: Props) {
     >
       <FinanceTabsNav />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-        <div className="md:col-span-3 flex items-end gap-2 flex-wrap">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">من تاريخ</label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} dir="ltr" />
+        <div className="md:col-span-3 flex flex-col gap-2">
+          <DateRangePresets
+            value={{ from: startDate, to: endDate }}
+            onChange={(r) => { setStartDate(r.from); setEndDate(r.to); }}
+            testidPrefix="profitability-preset"
+            hideAllTime
+          />
+          <div className="flex items-end gap-2 flex-wrap">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">من تاريخ</label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} dir="ltr" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">إلى تاريخ</label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} dir="ltr" />
+            </div>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">إلى تاريخ</label>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} dir="ltr" />
-          </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
         </div>
       </div>
 

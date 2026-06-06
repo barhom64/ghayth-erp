@@ -20,6 +20,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, DollarSign, Users, TrendingUp, FileText, Eye } from "lucide-react";
@@ -188,6 +189,21 @@ export default function PayrollPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "period", label: "الفترة" },
+              { key: "month", label: "الشهر" },
+              { key: "status", label: "الحالة" },
+              { key: "employeeCount", label: "عدد الموظفين" },
+              { key: "totalAmount", label: "إجمالي الصافي" },
+              { key: "runByName", label: "أنشئ بواسطة" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "مسيرات-الرواتب",
+          )
+        }
         resultCount={filtered.length}
       />
 
