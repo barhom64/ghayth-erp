@@ -69,6 +69,18 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     req.scope = scope;
     next();
   } catch (err: any) {
+    // P0.1 — the "no branch could be resolved" branch throws a typed
+    // error so we translate to 403 instead of leaking it as 401
+    // (which would be misleading — the user IS authenticated, they
+    // just have no branch assignment).
+    if (err?._noBranchResolved) {
+      res.status(403).json({
+        error: err.message,
+        code: "NO_BRANCH_RESOLVED",
+        fix: "تواصل مع مسؤول النظام لربط حسابك بفرع نشط.",
+      });
+      return;
+    }
     logger.error(err, "[AUTH] Token verification failed");
     const isExpired = /expired/i.test(String(err?.message ?? ""));
     res.status(401).json({
@@ -167,16 +179,36 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
     }
   }
 
-  // CRITICAL: `employee_assignments.branchId` is nullable in the DB, and
-  // owner / general_manager rows almost always have `branchId = NULL`
-  // because they span all branches. The RequestScope type used to lie
-  // that `branchId: number` which caused dozens of routes to pass `null`
-  // into NOT NULL columns (journal_entries, fleet_vehicles, budgets, ...)
-  // and crash with "null value in column branchId" at runtime.
+  // P0.1 — branch resolution must NEVER silently fall back to 0.
   //
-  // Fall back to the first allowed branch so every downstream route has
-  // a valid branch id to attribute the action to. The frontend can still
-  // override it per-request for company-wide operations.
+  // `employee_assignments.branchId` is nullable in the DB, and owner /
+  // general_manager rows almost always have `branchId = NULL` because
+  // they span all branches. The RequestScope type used to lie that
+  // `branchId: number` which caused dozens of routes to pass `null`
+  // into NOT NULL columns (journal_entries, fleet_vehicles, budgets,
+  // ...) and crash with "null value in column branchId" at runtime.
+  //
+  // The PREVIOUS workaround cascaded: assigned-branch → first-allowed
+  // → first-in-DB → **0**. The final `= 0` was a silent bypass: any
+  // route using `scope.branchId` would attribute writes to a non-
+  // existent branch 0 and any read would skip every branch predicate
+  // (since no row has branchId = 0). A senior reviewer flagged this
+  // as a tenant-isolation bomb.
+  //
+  // New behaviour:
+  //   1. Use the assignment's branch if set (the common path).
+  //   2. Otherwise pick the first allowed branch (owner/GM legitimate
+  //      case — they span all branches and just need a default to
+  //      attribute writes to).
+  //   3. Otherwise pick the first ACTIVE branch in the company and
+  //      add it to allowedBranches (covers the rare edge case where
+  //      the assignment row was created before any branch was, e.g.
+  //      a fresh bootstrap).
+  //   4. If even that returns nothing, REFUSE the request with a
+  //      clear 403 instead of fabricating branch 0. The operator
+  //      either has no branch assignment (admin error) or the
+  //      company has zero active branches (a state that any write
+  //      would corrupt anyway).
   let effectiveBranchId: number | null = assignment.branchId ?? null;
   if (effectiveBranchId == null && allowedBranches.length > 0) {
     effectiveBranchId = allowedBranches[0];
@@ -192,7 +224,19 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
         allowedBranches.push(anyBranch.id);
       }
     } else {
-      effectiveBranchId = 0;
+      // Throw a typed error so the calling middleware (authMiddleware
+      // itself) can translate to 403. Returning early from buildScope
+      // would require it to know about the response object which it
+      // doesn't — keep concerns separated.
+      const err: Error & { _noBranchResolved?: boolean } = new Error(
+        "لا يمكن تحديد فرع للعملية. تواصل مع مسؤول النظام لربط حسابك بفرع نشط.",
+      );
+      err._noBranchResolved = true;
+      logger.warn(
+        { userId: payload.userId, companyId: assignment.companyId, assignmentId: assignment.id, marker: "auth_no_branch_resolved" },
+        "[auth] user has no branch and company has no active branches — refusing request",
+      );
+      throw err;
     }
   }
 

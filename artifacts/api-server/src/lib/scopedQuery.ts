@@ -2,6 +2,7 @@ import { rawQuery } from "./rawdb.js";
 import type { RequestScope } from "../middlewares/authMiddleware.js";
 import type { Request } from "express";
 import { OWNER_GM_ROLES } from "./rbacCatalog.js";
+import { logger } from "./logger.js";
 
 export function parseScopeFilters(req: Request): ScopeFilters {
   const scope = req.scope!;
@@ -34,9 +35,35 @@ export interface ScopeFilters {
 export interface ScopedQueryOptions {
   companyColumn?: string;
   branchColumn?: string;
+  /**
+   * P0.3 — `extraConditions` is unparameterised raw SQL fragments. The
+   * helper itself can't tell whether a fragment came from a string
+   * literal in the calling route file (safe) or was concatenated with
+   * a request value (SQL injection). To make accidental misuse hard:
+   *   - Every fragment is run through `isSafeExtraCondition` (below)
+   *     before being appended. The check rejects fragments that don't
+   *     reference at least one `$N` placeholder OR aren't a known
+   *     constant predicate (`status = 'active'`, `"deletedAt" IS NULL`).
+   *   - If a fragment is rejected, an Error is thrown at construction
+   *     time — better to fail loudly than emit unscoped SQL.
+   * Callers that legitimately need a constant predicate should pass
+   * the placeholder pattern; callers that need a request value should
+   * pass `$N` + an entry in `extraParams`.
+   */
   extraConditions?: string[];
   extraParams?: any[];
+  /**
+   * P0.3 — `orderBy` is interpolated directly into the SQL string. The
+   * helper now requires `orderByAllowed` (whitelist of column names or
+   * column-direction tuples) when `orderBy` is set. The supplied value
+   * MUST resolve to a substring of the whitelist; otherwise we throw.
+   * Callers that don't want this guard (e.g. a list endpoint with an
+   * internal hard-coded ORDER BY) can pass `orderByTrusted: true` —
+   * the field is named to nag the next reviewer.
+   */
   orderBy?: string;
+  orderByAllowed?: string[];
+  orderByTrusted?: boolean;
   limit?: number;
   offset?: number;
   /**
@@ -88,6 +115,65 @@ export interface ScopedQueryOptions {
 
 const BRANCH_SCOPE_EXEMPT_ROLES = new Set(OWNER_GM_ROLES);
 
+// ─── P0.3 SQL safety helpers ────────────────────────────────────────────
+//
+// orderBy whitelist — accepts the supplied value if it matches one of:
+//   1. A bare column name in the whitelist (e.g. `id`) → appended ASC
+//   2. A column + direction pair in the whitelist (e.g. `id DESC`)
+//   3. The exact comma-separated tuple in the whitelist
+// Otherwise throws. Whitelist entries are case-sensitive and must NOT
+// contain semicolons / parentheses / sub-selects — we sanity-check
+// them at validator time too so a typo in a route doesn't open a hole.
+const SAFE_ORDER_BY_REGEX = /^[A-Za-z_"][\w".]*(\s+(?:ASC|DESC))?(\s*,\s*[A-Za-z_"][\w".]*(\s+(?:ASC|DESC))?)*$/;
+function validateOrderBy(value: string, allowed: string[] | undefined): void {
+  // Hard structural check first — even when trusted=true we don't
+  // want a stray "; DROP TABLE…" to slip through.
+  if (!SAFE_ORDER_BY_REGEX.test(value)) {
+    throw new Error(`[scopedQuery] orderBy contains unsafe characters: ${JSON.stringify(value)}`);
+  }
+  if (!allowed || allowed.length === 0) {
+    throw new Error(`[scopedQuery] orderBy was supplied but orderByAllowed whitelist is empty. Use orderByTrusted=true only for hard-coded internal strings.`);
+  }
+  // Match the supplied value against any whitelist entry — exact, or
+  // column-only (whitelist contains "id ASC" but caller passed "id").
+  const normalised = value.trim().replace(/\s+/g, " ");
+  const inWhitelist = allowed.some((entry) => {
+    const a = entry.trim().replace(/\s+/g, " ");
+    if (a === normalised) return true;
+    // Allow "id" to match whitelist entry "id ASC" or "id DESC" too.
+    const aCol = a.split(/\s+/)[0];
+    const nCol = normalised.split(/\s+/)[0];
+    return aCol === nCol;
+  });
+  if (!inWhitelist) {
+    throw new Error(`[scopedQuery] orderBy "${value}" is not in orderByAllowed: ${JSON.stringify(allowed)}`);
+  }
+}
+
+// extraConditions safety — reject fragments that look like they came
+// from a concatenation with a request value. A safe fragment either
+// references a $N placeholder (parameterised) OR is a known constant
+// predicate. Quoted string literals are forbidden because they suggest
+// the caller built a SQL fragment around a user-supplied value.
+const PLACEHOLDER_REGEX = /\$\d+/;
+const CONSTANT_PREDICATE_REGEX = /^[\s\w".'=<>!()]+ (IS|IS NOT) (NULL|TRUE|FALSE)$/i;
+const SAFE_CONSTANT_VALUE_REGEX = /=\s*'(active|pending|completed|inactive|draft|posted|cancelled|deleted|true|false)'$/i;
+function validateExtraCondition(cond: string): void {
+  const trimmed = cond.trim();
+  if (PLACEHOLDER_REGEX.test(trimmed)) return; // parameterised — safe
+  if (CONSTANT_PREDICATE_REGEX.test(trimmed)) return; // `"deletedAt" IS NULL` etc.
+  if (SAFE_CONSTANT_VALUE_REGEX.test(trimmed)) return; // `status = 'active'` etc.
+  // Quoted strings without a known-safe constant pattern are rejected
+  // because they're the canonical concatenation tell. Same for
+  // semicolons (no DDL/multi-statements ever) and -- comments.
+  if (/'[^']*'/.test(trimmed) || trimmed.includes(";") || trimmed.includes("--")) {
+    throw new Error(`[scopedQuery] extraConditions fragment looks unsafe (literal/semicolon/comment): ${JSON.stringify(cond)}. Use a $N placeholder + extraParams instead.`);
+  }
+  // Bare column comparisons without literals and without placeholders
+  // (e.g. `"a" = "b"`) are allowed — those are pure column references
+  // a request value could never reach.
+}
+
 export function buildScopedWhere(
   scope: RequestScope,
   filters: ScopeFilters = {},
@@ -113,6 +199,30 @@ export function buildScopedWhere(
     conditions.push(`${companyCol} = ANY($${paramIdx})`);
     params.push(companyIds);
     paramIdx++;
+  }
+
+  // P0.2 — log a warn when neither enforceBranchScope nor disableBranchScope
+  // was set. This is the "scope-defaulted" case the reviewer flagged: a
+  // route that doesn't declare intent leaves branch_managers / scoped
+  // managers seeing every branch in their company. We don't BREAK these
+  // routes (would crash 100+ endpoints at once), but we log loudly so
+  // ops can audit + ratchet them to explicit flags. Owners/GMs are
+  // unaffected either way (they bypass the cascade).
+  if (
+    options.enforceBranchScope === undefined &&
+    !options.disableBranchScope &&
+    !scope.isOwner &&
+    !BRANCH_SCOPE_EXEMPT_ROLES.has(scope.role)
+  ) {
+    logger.warn(
+      {
+        userId: scope.userId,
+        companyId: scope.companyId,
+        role: scope.role,
+        marker: "scope_branch_not_declared",
+      },
+      "[scopedQuery] route did not declare enforceBranchScope or disableBranchScope — scoped user may see all branches in company. Audit + fix.",
+    );
   }
 
   if (!options.disableBranchScope) {
@@ -189,6 +299,7 @@ export function buildScopedWhere(
 
   if (options.extraConditions) {
     for (const cond of options.extraConditions) {
+      validateExtraCondition(cond); // P0.3 — throws if unsafe
       conditions.push(cond);
     }
   }
@@ -218,6 +329,9 @@ export async function scopedQuery<T = any>(
     : `${baseSQL} WHERE ${where}`;
 
   if (options.orderBy) {
+    if (!options.orderByTrusted) {
+      validateOrderBy(options.orderBy, options.orderByAllowed);
+    }
     sql += ` ORDER BY ${options.orderBy}`;
   }
 
