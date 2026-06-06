@@ -103,7 +103,7 @@ describe("entity-pnl page — YoY card", () => {
     expect(PAGE).toContain("{yoy && <YoyCard yoy={yoy} />}");
     // Order matters for visual hierarchy — totals first, then YoY
     // delta, then trend chart, then JE list.
-    const bucketIdx = PAGE.indexOf("<BucketCard bucket={data.bucket} />");
+    const bucketIdx = PAGE.indexOf("<BucketCard bucket={data.bucket}");
     const yoyIdx = PAGE.indexOf("<YoyCard yoy={yoy} />");
     const trendIdx = PAGE.indexOf("<TrendCard series={series} />");
     expect(bucketIdx).toBeGreaterThan(0);
