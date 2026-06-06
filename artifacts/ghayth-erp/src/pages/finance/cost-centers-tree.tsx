@@ -13,6 +13,7 @@ import { Link } from "wouter";
 import {
   Building, Briefcase, Car, FileText, Layers, MapPin, ChevronDown,
   ChevronRight, RefreshCw, MoveVertical, List, Sparkles, BarChart3,
+  ArrowUpDown,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -206,6 +207,12 @@ export default function CostCentersTreePage() {
             <Button variant="ghost" data-testid="cost-centers-tree-flat-link">
               <List className="h-4 w-4 ms-1" />
               العرض الجدولي
+            </Button>
+          </Link>
+          <Link href="/finance/cost-centers/ranking">
+            <Button variant="ghost" data-testid="cost-centers-tree-ranking-link">
+              <ArrowUpDown className="h-4 w-4 ms-1" />
+              التصنيف
             </Button>
           </Link>
         </div>
