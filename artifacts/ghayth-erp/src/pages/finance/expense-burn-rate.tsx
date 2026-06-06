@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { InlineSparkline } from "@/components/shared/inline-sparkline";
 import { PrintButton } from "@/components/shared/print-button";
 import {
   TrendingDown, TrendingUp, Flame, Calendar, AlertTriangle,
@@ -252,6 +253,11 @@ export default function ExpenseBurnRatePage() {
                 <div className="text-[11px] text-muted-foreground mt-1">
                   معدل آخر 6 أشهر
                 </div>
+                <InlineSparkline
+                  values={monthlyStats.map((m) => m.burn)}
+                  tone={avgBurn > 0 ? "warning" : "success"}
+                  testid="burn-rate-avg-spark"
+                />
               </CardContent>
             </Card>
             <Card>
@@ -292,6 +298,11 @@ export default function ExpenseBurnRatePage() {
                 <div className="text-[11px] text-muted-foreground mt-1">
                   آخر 3 أشهر مقابل سابقها
                 </div>
+                <InlineSparkline
+                  values={monthlyStats.map((m) => m.burn)}
+                  tone={burnTrend > 0 ? "warning" : "success"}
+                  testid="burn-rate-trend-spark"
+                />
               </CardContent>
             </Card>
           </div>
