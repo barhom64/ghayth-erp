@@ -46,11 +46,13 @@ export default function ApprovalOverridesReportPage() {
     `/approval-actions/overrides/report${suffix}`,
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const uniqueUsers = new Set(rows.map((r) => r.userId)).size;
   const uniqueEntities = new Set(rows.map((r) => `${r.entity}#${r.entityId ?? "?"}`)).size;
