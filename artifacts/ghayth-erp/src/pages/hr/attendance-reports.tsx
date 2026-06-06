@@ -33,9 +33,6 @@ export default function AttendanceReportsPage() {
   const isLoading = statsLoading || monthlyLoading;
   const isError = statsError || monthlyError;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filteredMonthly = applyFilters(monthly, filters, { searchFields: ["employeeName"] });
   const filteredDeductions = applyFilters(deductions, filters, { searchFields: ["employeeName"], statusField: "status" });
 
@@ -49,6 +46,11 @@ export default function AttendanceReportsPage() {
     id: Number(d.id ?? i + 1),
   }));
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(monthlyRows);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const kpis = [
     { label: "أيام الحضور", value: stats.present ?? 0, icon: Users, color: "text-status-success-foreground bg-status-success-surface" },

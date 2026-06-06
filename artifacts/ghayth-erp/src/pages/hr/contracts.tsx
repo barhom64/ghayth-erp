@@ -117,16 +117,18 @@ export default function ContractsPage() {
     { successMessage: "تم إنهاء العقد" },
   );
 
+  const contracts = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(contracts);
+
   if (isLoading) return <PageShell title="عقود الموظفين"
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
         { label: "عقود الموظفين" },
       ]}>
       <HrTabsNav /><LoadingSpinner /></PageShell>;
+
   if (isError) return <PageShell title="عقود الموظفين"><ErrorState onRetry={() => refetch()} /></PageShell>;
 
-  const contracts = data?.data || [];
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(contracts);
 
   const columns: DataTableColumn<any>[] = [
     { key: "ref", header: "رقم العقد", sortable: true, searchable: true, render: (r: any) => <span className="font-mono text-sm">{r.ref}</span> },

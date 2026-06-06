@@ -260,11 +260,13 @@ export default function BankGuaranteesPage() {
     },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const list: BankGuarantee[] = data?.data ?? data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(list);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
   const summary = data?.summary ?? {};
 
   const alerts = list.filter((g) =>

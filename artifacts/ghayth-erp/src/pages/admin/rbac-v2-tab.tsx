@@ -285,12 +285,6 @@ export function RbacV2Tab() {
     return undefined;
   };
 
-  if (featLoading || rolesLoading) return <LoadingSpinner />;
-  if (featErr || rolesErr) return <ErrorState onRetry={() => { refetchRoles(); }} />;
-
-  const selectedRole = roles.find((r) => r.id === selectedRoleId);
-  const violations = sodData?.violations || [];
-
   // POST /rbac/v2/roles — create a new role with a code and Arabic label.
   // PATCH /rbac/v2/roles/:id — rename / re-color / re-level a custom role.
   // DELETE /rbac/v2/roles/:id — drop a non-system role (server enforces
@@ -320,6 +314,12 @@ export function RbacV2Tab() {
   const [editRoleId, setEditRoleId] = useState<number | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editLevel, setEditLevel] = useState("");
+
+  if (featLoading || rolesLoading) return <LoadingSpinner />;
+  if (featErr || rolesErr) return <ErrorState onRetry={() => { refetchRoles(); }} />;
+
+  const selectedRole = roles.find((r) => r.id === selectedRoleId);
+  const violations = sodData?.violations || [];
   const submitNewRole = () => {
     if (!newCode.trim() || !newLabel.trim()) return;
     createRoleMut.mutate(

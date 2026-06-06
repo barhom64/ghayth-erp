@@ -61,9 +61,6 @@ export default function IntercompanyPage() {
 
   const companies = companiesData?.data ?? companiesData ?? [];
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const handleSubmit = async (values: IntercompanyForm) => {
     await createMutation.mutateAsync({
       ...values,
@@ -74,6 +71,11 @@ export default function IntercompanyPage() {
 
   const list = data?.data ?? data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(list);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const columns: DataTableColumn<any>[] = [
     {
