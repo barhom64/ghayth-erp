@@ -53,11 +53,13 @@ export default function ShiftsManagementPage() {
   const isLoading = shiftsLoading || assignmentsLoading || empLoading;
   const isError = shiftsError || assignmentsError || empError;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const shifts = shiftsData?.data || [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(shifts);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
   const assignments = assignmentsData?.data || [];
   const employees = empData?.data || [];
 
