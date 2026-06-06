@@ -110,6 +110,23 @@ export const JOURNEY_DEFINITIONS: JourneyDefinition[] = [
     ],
   },
   {
+    // Invoice posting journey — wired and verified end-to-end (#1604).
+    // Steps map to events the finance routes emit onto the EVENT BUS (the
+    // signal journeyTracking observes). invoice.created and invoice.posted
+    // are bus-emitted by the routes; invoice.approved is currently only
+    // persisted to event_logs (critical path) and not re-emitted on the bus,
+    // so it is intentionally omitted until that emit is added (follow-up,
+    // documented in docs/JOURNEY_ENGINE.md). The two-step journey still
+    // tracks an invoice from creation to GL posting and completes cleanly.
+    type: "finance_invoice",
+    label: "رحلة الفاتورة",
+    domain: "finance",
+    steps: [
+      { key: "invoice_created", label: "إنشاء الفاتورة", requiredEvent: "invoice.created" },
+      { key: "invoice_posted", label: "ترحيل الفاتورة", requiredEvent: "invoice.posted" },
+    ],
+  },
+  {
     type: "finance_month_close",
     label: "رحلة إقفال الشهر",
     domain: "finance",

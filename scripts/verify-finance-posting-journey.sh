@@ -83,6 +83,10 @@ ST="$(post /finance/fiscal-periods-v2/$PID/close '{"notes":"verify-journey"}' | 
 CODE="$(postw /finance/invoices "{\"clientId\":$CID,\"date\":\"$(date +%Y-%m-%d)\",\"paymentTermsDays\":30,\"lines\":[{\"description\":\"بعد الإغلاق\",\"quantity\":1,\"unitPrice\":100}]}" | py 'import sys,json;print(json.load(sys.stdin).get("code"))')"
 [ "$CODE" = "SYSTEM_GUARD_BLOCK" ] && ok "GL action blocked in closed period (SYSTEM_GUARD_BLOCK)" || no "closed-period guard not enforced (code=$CODE)"
 
+# --- 7. journey engine wired (#1604): invoice journey tracked + completed ---
+JST="$(psql "$DSN" -tA -c "select status from journey_instances where \"journeyType\"='finance_invoice' and \"entityType\"='invoices' and \"entityId\"=$IID;")"
+[ "$JST" = "completed" ] && ok "journey_instances tracked finance_invoice → completed" || no "journey not completed (status=$JST)"
+
 rm -f "$J"
 echo
 echo "▶ Result: $PASS passed, $FAIL failed"
