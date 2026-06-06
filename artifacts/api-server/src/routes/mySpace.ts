@@ -615,12 +615,24 @@ router.get("/requests", authorize({ feature: "my_space", action: "view" }), asyn
     }
 
     params.push(Math.min(Number(limit) || 20, 500));
+    // Pre-aggregate workflow_step_actions once instead of running a
+    // scalar subquery per row. The original SELECT-list correlated
+    // subquery was N+1: postgres planned one execution PER returned
+    // workflow_instance, so 500 instances == 501 lookups through
+    // workflow_step_actions. The CTE below scans the join table once
+    // and joins per-instance counts back.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT wi.id, wi."requestType", wi.title, wi.status, wi."slaStatus",
+      `WITH action_counts AS (
+         SELECT "instanceId", COUNT(*) AS "actionCount"
+         FROM workflow_step_actions
+         GROUP BY "instanceId"
+       )
+       SELECT wi.id, wi."requestType", wi.title, wi.status, wi."slaStatus",
               wi."currentStepOrder", wi."createdAt", wi."completedAt",
               wi."refTable", wi."refId",
-              (SELECT COUNT(*) FROM workflow_step_actions wsa WHERE wsa."instanceId" = wi.id) AS "actionCount"
+              COALESCE(ac."actionCount", 0)::int AS "actionCount"
        FROM workflow_instances wi
+       LEFT JOIN action_counts ac ON ac."instanceId" = wi.id
        WHERE ${conditions.join(" AND ")}
        ORDER BY wi."createdAt" DESC
        LIMIT $${params.length}`,
