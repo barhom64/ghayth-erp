@@ -1028,21 +1028,31 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
     });
 
     // Aging of open POs, net of allocations against each PO.
+    // Pre-aggregate supplier_payment_allocations once via CTE
+    // instead of running a scalar subquery per PO. Original was N+1:
+    // every PO row triggered a fresh SUM over the allocations table.
+    // The CTE scans the table once filtered to this supplier's
+    // company + active journal entries, then LEFT JOINs the
+    // per-PO totals back.
     const agingPOParams: unknown[] = [supplierId, scope.companyId, asOf];
     const agingPOBranchCond = vsBranchIds ? (() => { agingPOParams.push(vsBranchIds); return ` AND "branchId" = ANY($${agingPOParams.length}::int[])`; })() : "";
     const openPos = await rawQuery<Record<string, unknown>>(
-      `SELECT po.id, po.ref, po."createdAt", po."expectedDelivery", po."totalAmount",
-              COALESCE((SELECT SUM(spa.amount)
-                          FROM supplier_payment_allocations spa
-                          JOIN journal_entries je ON je.id = spa."journalEntryId"
-                         WHERE spa."companyId" = po."companyId"
-                           AND spa."obligationType" = 'purchase_order'
-                           AND spa."obligationId" = po.id
-                           AND spa."deletedAt" IS NULL
-                           AND je."deletedAt" IS NULL
-                           AND je."balancesApplied" = true
-                           AND je."reversedById" IS NULL), 0) AS "paidAmount"
+      `WITH po_paid AS (
+         SELECT spa."obligationId" AS "poId", SUM(spa.amount) AS "paidAmount"
+         FROM supplier_payment_allocations spa
+         JOIN journal_entries je ON je.id = spa."journalEntryId"
+         WHERE spa."companyId" = $2
+           AND spa."obligationType" = 'purchase_order'
+           AND spa."deletedAt" IS NULL
+           AND je."deletedAt" IS NULL
+           AND je."balancesApplied" = true
+           AND je."reversedById" IS NULL
+         GROUP BY spa."obligationId"
+       )
+       SELECT po.id, po.ref, po."createdAt", po."expectedDelivery", po."totalAmount",
+              COALESCE(pp."paidAmount", 0) AS "paidAmount"
          FROM purchase_orders po
+         LEFT JOIN po_paid pp ON pp."poId" = po.id
         WHERE po."supplierId"=$1 AND po."companyId"=$2
           AND po."deletedAt" IS NULL
           AND po.status NOT IN ('paid','completed','cancelled','rejected')
