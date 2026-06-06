@@ -168,9 +168,12 @@ describe("task_assignees — every mutation writes an audit log", () => {
 
 describe("List + detail responses surface the assignee team", () => {
   it("GET /tasks list includes assigneeCount (team size at a glance)", () => {
-    expect(TASKS).toMatch(
-      /\(SELECT COUNT\(\*\)::int FROM task_assignees ta\s*\n?\s*WHERE ta\."taskId" = t\.id AND ta\."removedAt" IS NULL\) AS "assigneeCount"/,
-    );
+    // After the N+1 fix the count comes from a WITH assignee_counts
+    // CTE + LEFT JOIN instead of a correlated subquery — assert the
+    // new shape so the team-size payload contract holds.
+    expect(TASKS).toContain("WITH assignee_counts AS");
+    expect(TASKS).toContain('SELECT "taskId", COUNT(*) AS "assigneeCount"');
+    expect(TASKS).toContain('COALESCE(ac."assigneeCount", 0)::int AS "assigneeCount"');
   });
 
   it("GET /tasks/:id detail returns the full assignees array", () => {
