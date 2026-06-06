@@ -483,7 +483,13 @@ function buildInvoicePreset(): PrintTemplate {
   <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المدفوع</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.paidAmount}} {{entity.currency}}</td></tr>
 </table>
 <div style="margin-top:18px;font-size:10pt;color:#475569">{{entity.notes}}</div>
-{{system.verifyBlock}}
+<div style="margin-top:16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+  <div style="flex:1">{{system.verifyBlock}}</div>
+  <div style="text-align:center">
+    {{entity.zatcaQr}}
+    <div style="font-size:8pt;color:#64748b;margin-top:4px;font-weight:600">رمز QR — هيئة الزكاة والضريبة</div>
+  </div>
+</div>
 {{branch.footer}}
 </div>`,
     layoutJson: null,

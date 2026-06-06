@@ -2695,10 +2695,49 @@ router.delete("/room-allocations/:id", authorize({ feature: "umrah", action: "de
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    await rawExecute(
+    // Capture the row BEFORE deleting it so the audit log carries the
+    // last-known state (pilgrimId + roomNumber + blockId + occupants
+    // + check-in/out timestamps). Without this snapshot the audit
+    // trail just records "id X deleted", which is useless for
+    // reconstructing which pilgrim was unassigned from which room
+    // when housekeeping disputes arise.
+    const [existing] = await rawQuery<{
+      pilgrimId: number;
+      roomNumber: string | null;
+      blockId: number;
+      occupants: number | null;
+      checkInAt: string | null;
+      checkOutAt: string | null;
+    }>(
+      `SELECT "pilgrimId", "roomNumber", "blockId", occupants, "checkInAt", "checkOutAt"
+         FROM umrah_room_allocations
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    const { affectedRows } = await rawExecute(
       `UPDATE umrah_room_allocations SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
+    if (affectedRows > 0 && existing) {
+      createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "umrah.room_allocation.deleted",
+        entity: "umrah_room_allocations",
+        entityId: id,
+        before: existing,
+        after: { deletedAt: "NOW()" },
+      });
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "umrah.room_allocation.deleted",
+        entity: "umrah_room_allocations",
+        entityId: id,
+        details: JSON.stringify({ pilgrimId: existing.pilgrimId, blockId: existing.blockId }),
+      }).catch((e) => logger.error(e, "umrah room-allocation delete event emit failed"));
+    }
     res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "deallocate error"); }
 });

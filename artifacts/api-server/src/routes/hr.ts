@@ -13,6 +13,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { resolveRequester } from "../lib/rbac/selfApprovalCreators.js";
+import { invalidateDelegationCache } from "../lib/rbac/delegationService.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
@@ -278,6 +279,13 @@ const delegationSchema = z.object({
   reason: z.string().min(1, "سبب التفويض مطلوب"),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  // Granular: the specific feature keys delegated (["*"] = all the delegator's
+  // authority). Empty/omitted ⇒ defaults to ["*"] for backward compatibility.
+  features: z.array(z.string()).optional(),
+  // Optional provenance — set when created from another flow (e.g. a leave req).
+  source: z.string().optional(),
+  refType: z.string().optional(),
+  refId: z.coerce.number().optional(),
 });
 
 const checkOutSchema = z.object({
@@ -6324,6 +6332,7 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT d.id, d."delegatorId", d."delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
+              d.features, d.source, d."refType", d."refId",
               e1.name AS "delegatorName", e2.name AS "delegateName"
        FROM delegations d
        LEFT JOIN employees e1 ON e1.id = d."delegatorId"
@@ -6341,7 +6350,8 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
 router.post("/delegations", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { delegateId, scope: delegationScope, reason, startDate, endDate } = zodParse(delegationSchema.safeParse(req.body));
+    const { delegateId, scope: delegationScope, reason, startDate, endDate, features, source, refType, refId } = zodParse(delegationSchema.safeParse(req.body));
+    const delegatedFeatures = features && features.length > 0 ? features : ["*"];
     if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
       throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
         field: "endDate",
@@ -6379,19 +6389,54 @@ router.post("/delegations", authorize({ feature: "hr.organization", action: "app
     // which silently swallowed FK / constraint errors and still returned
     // { success: true, id: null } — a lie to the caller. Drop the catch so
     // real DB errors surface through handleRouteError (with requestId).
+    // Correct columns are delegatorId/delegateId (the previous INSERT used the
+    // non-existent fromUserId/toUserId and 500'd on every create). Granular
+    // `features` make the delegation real + scoped; createdBy/source/ref give
+    // a controllable, auditable trail.
     const r = await rawExecute(
-      `INSERT INTO delegations ("fromUserId","toUserId","companyId",scope,reason,status,"startDate","endDate") VALUES ($1,$2,$3,$4,$5,'active',$6,$7)`,
-      [emp.id, Number(delegateId), scope.companyId, delegationScope || "عام", String(reason).trim(), startDate || new Date(), endDate || null]
+      `INSERT INTO delegations ("delegatorId","delegateId","companyId",scope,reason,status,"startDate","endDate",features,"createdBy",source,"refType","refId")
+       VALUES ($1,$2,$3,$4,$5,'active',$6,$7,$8::jsonb,$9,$10,$11,$12)`,
+      [emp.id, Number(delegateId), scope.companyId, delegationScope || "عام", String(reason).trim(),
+       startDate || new Date(), endDate || null, JSON.stringify(delegatedFeatures), scope.activeAssignmentId,
+       source || "manual", refType || null, refId ?? null]
     );
+    // Make the new authority effective immediately (drop the delegate's cache).
+    invalidateDelegationCache(scope.companyId, Number(delegateId));
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "delegations", entityId: r.insertId,
-      after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, startDate: startDate || null, endDate: endDate || null },
+      after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, features: delegatedFeatures, startDate: startDate || null, endDate: endDate || null },
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.created", entity: "hr_delegations", entityId: r.insertId, details: JSON.stringify({ delegateId: Number(delegateId), scope: delegationScope || "عام" }) }).catch((e) => logger.error(e, "hr background task failed"));
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM delegations WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
   } catch (err) { handleRouteError(err, res, "خطأ في إنشاء التفويض"); }
+});
+
+// Revoke a delegation — controllability: a manager can cut delegated authority
+// at any moment. Sets status='revoked' and drops the delegate's cache so the
+// change takes effect immediately.
+router.patch("/delegations/:id/revoke", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [existing] = await rawQuery<{ delegateId: number }>(
+      `SELECT "delegateId" FROM delegations WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("التفويض غير موجود");
+    await rawExecute(
+      `UPDATE delegations SET status = 'revoked' WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    invalidateDelegationCache(scope.companyId, existing.delegateId);
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "delegations", entityId: id, after: { status: "revoked" },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.revoked", entity: "delegations", entityId: id, details: "{}" }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json({ success: true, id, status: "revoked" });
+  } catch (err) { handleRouteError(err, res, "خطأ في إلغاء التفويض"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

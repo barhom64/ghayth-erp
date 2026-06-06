@@ -9,6 +9,8 @@
 
 import { rawQuery } from "../rawdb.js";
 import { getEntity } from "../entityRegistry.js";
+import QRCode from "qrcode";
+import { logger } from "../logger.js";
 import {
   loadTrialBalance,
   loadIncomeStatement,
@@ -493,7 +495,25 @@ async function loadInvoice(companyId: number, id: string) {
   const client = invoice.clientId
     ? (await rawQuery(`SELECT id, name, "taxNumber" FROM clients WHERE id = $1`, [invoice.clientId]))[0]
     : null;
-  return { entity: invoice, items, client };
+  // ZATCA QR — invoice rows carry the base64 TLV string in `zatcaQrCode`
+  // (populated by finance-zatca's `generateZatcaQrCode`). Render it as a
+  // QR image data URL here so the print template can just `<img>` it via
+  // `{{entity.zatcaQrImage}}`. Falls back to empty string if no TLV string,
+  // or if QR generation fails (decorative — never blocks the print).
+  const tlv = (invoice.zatcaQrCode ?? invoice.zatca_qr_code) as string | null | undefined;
+  let zatcaQrImage = "";
+  if (tlv && typeof tlv === "string" && tlv.length > 0) {
+    try {
+      zatcaQrImage = await QRCode.toDataURL(tlv, { width: 140, margin: 1 });
+    } catch (err) {
+      logger.warn({ err }, "[print/loadInvoice] ZATCA QR generation failed");
+    }
+  }
+  return {
+    entity: { ...invoice, zatcaQrImage },
+    items,
+    client,
+  };
 }
 
 async function loadQuotation(companyId: number, id: string) {
