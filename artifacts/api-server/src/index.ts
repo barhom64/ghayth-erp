@@ -200,10 +200,26 @@ async function start() {
 
     startAlertEvaluation();
     logger.info("Runtime threshold-alert evaluation started");
+
+    // P2.1 — outbox relay. In single-process mode the API process must
+    // own the relay too, otherwise OUTBOX_RELAY_ACTIVE=true with no
+    // worker.ts running would mean events accumulate as pending with
+    // nothing to drain them. The relay itself decides whether to start
+    // (config.outboxRelayActive gate inside).
+    const { startOutboxRelay } = await import("./lib/outboxRelay.js");
+    startOutboxRelay();
   });
 
   async function shutdown(signal: string) {
     logger.info({ signal }, "Received shutdown signal, starting graceful shutdown");
+
+    // Stop the relay first so an in-flight tick doesn't try to write
+    // through pino after the rest of the process has started tearing
+    // down. The dynamic import mirrors the lazy startOutboxRelay above.
+    try {
+      const { stopOutboxRelay } = await import("./lib/outboxRelay.js");
+      stopOutboxRelay();
+    } catch { /* relay never loaded — nothing to stop */ }
 
     stopCronScheduler();
     logger.info("Cron scheduler stopped");

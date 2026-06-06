@@ -76,11 +76,11 @@ Closes findings #2 (outbox not relayed) and #3 (purge deletes pending).
 | # | Task | Status |
 |---|---|---|
 | **P2.1** | **`outboxRelay.ts` daemon** | ✅ **Scaffold + observability shipped** |
-| P2.2 | dedupe key on `event_outbox` | ⬜ TODO |
-| P2.3 | dead-letter table + dashboard | 🟡 dead-promotion shipped in P2.1; dashboard remains |
+| **P2.2** | **opt-in dedupe via `idempotencyKey`** | ✅ **Shipped (migration 252 + partial unique index + ON CONFLICT)** |
+| P2.3 | dead-letter table + dashboard | 🟡 dead-promotion shipped in P2.1; admin dashboard remains |
 | **P2.4** | **`OUTBOX_RELAY_ACTIVE` feature flag** | ✅ **Shipped (default off)** |
 | **P2.5** | **`purgeAgedOutboxEntries` status-aware** | ✅ Done |
-| P2.6 | integration tests | 🟡 22 smoke tests shipped; live-DB integration TBD |
+| P2.6 | integration tests | 🟡 35 smoke tests shipped; live-DB integration TBD |
 
 **P2.5 is shipped early as a foundation:** the purge now filters
 `status IN ('processed', 'dead')` so a future relay can flip on without

@@ -7367,7 +7367,8 @@ CREATE TABLE public.event_outbox (
     attempts integer DEFAULT 0 NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "processedAt" timestamp with time zone,
-    "lastError" text
+    "lastError" text,
+    "idempotencyKey" character varying(200)
 );
 
 

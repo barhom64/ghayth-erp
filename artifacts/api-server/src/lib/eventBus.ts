@@ -98,14 +98,26 @@ const OUTBOX_CAPTURE_ENABLED = !config.isTest;
 
 function captureToOutbox(eventName: string, payload?: EventPayload): void {
   if (!OUTBOX_CAPTURE_ENABLED) return;
+  // P2.2 — opt-in idempotency. Callers that need exactly-once semantics
+  // pass `payload.idempotencyKey = "<stable-id>"` (e.g. the request's
+  // X-Idempotency-Key header, the invoice ref, the trip id). The partial
+  // unique index on (eventName, idempotencyKey) WHERE key IS NOT NULL
+  // makes the second INSERT a no-op via ON CONFLICT DO NOTHING — the
+  // relay then dispatches exactly once. Callers that don't pass a key
+  // keep the existing at-least-once behaviour.
+  const idempotencyKey =
+    (payload as { idempotencyKey?: string } | undefined)?.idempotencyKey ?? null;
   // Fire-and-forget — emit() stays synchronous and is never blocked on the DB.
   void rawExecute(
-    `INSERT INTO event_outbox ("eventName", payload, "companyId")
-     VALUES ($1, $2, $3)`,
+    `INSERT INTO event_outbox ("eventName", payload, "companyId", "idempotencyKey")
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT ("eventName", "idempotencyKey") WHERE "idempotencyKey" IS NOT NULL
+     DO NOTHING`,
     [
       eventName,
       payload != null ? JSON.stringify(payload) : null,
       payload?.companyId ?? null,
+      idempotencyKey,
     ],
   ).catch((err) => logger.warn(err, "[outbox] failed to capture event"));
 }
