@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -812,11 +812,13 @@ function CogsPreviewCard({ invoiceId }: { invoiceId: number }) {
     }
   };
 
-  // Auto-run the first time the card mounts so the operator sees the
-  // status before scrolling.
-  if (!data && !previewMut.isPending && previewMut.isIdle) {
+  // Auto-run once on mount so the operator sees the status before scrolling.
+  // Must run in an effect — calling run() (which triggers a mutation +
+  // setState) during render is a hooks/render-phase anti-pattern.
+  useEffect(() => {
     run();
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (previewMut.isPending && !data) {
     return (
