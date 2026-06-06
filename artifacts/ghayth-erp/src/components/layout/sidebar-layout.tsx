@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { GhaythLogo } from "@/components/shared/ghayth-logo";
 import { useAppContext, roleKeyColors, ModuleType } from "@/contexts/app-context";
 import { useSettings } from "@/contexts/settings-context";
 import {
@@ -705,12 +706,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 className="flex items-center justify-center h-9 w-9 rounded-lg text-primary hover:bg-surface-subtle transition-colors"
                 title="توسيع القائمة"
               >
-                <CloudRain className="h-5 w-5" />
+                <GhaythLogo size={24} />
               </button>
             ) : (
               <>
                 <div className="flex items-center gap-2 font-bold text-lg text-primary">
-                  <CloudRain className="h-5 w-5" />
+                  <GhaythLogo size={24} />
                   <span>{globalSettings.companyName || "منصة غيث"}</span>
                 </div>
                 <div className="flex items-center gap-1">
