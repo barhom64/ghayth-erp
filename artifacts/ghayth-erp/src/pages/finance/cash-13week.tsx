@@ -14,6 +14,7 @@ import {
   Calendar, ChevronRight,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { InlineSparkline } from "@/components/shared/inline-sparkline";
 
 /**
  * 13-Week Cash Flow — banking-grade liquidity projection
@@ -260,6 +261,11 @@ export default function Cash13WeekPage() {
               <TrendingUp className="h-3 w-3" /> تدفقات داخلة 13أ
             </p>
             <p className="text-base font-bold font-mono text-emerald-700 mt-1">+{formatCurrency(totalInflow)}</p>
+            <InlineSparkline
+              values={weeks.map((w) => w.inflow)}
+              tone="success"
+              testid="cash-13week-inflow-spark"
+            />
           </CardContent>
         </Card>
         <Card className="border-red-300">
@@ -268,6 +274,11 @@ export default function Cash13WeekPage() {
               <TrendingDown className="h-3 w-3" /> تدفقات خارجة 13أ
             </p>
             <p className="text-base font-bold font-mono text-red-700 mt-1">-{formatCurrency(totalOutflow)}</p>
+            <InlineSparkline
+              values={weeks.map((w) => w.outflow)}
+              tone="warning"
+              testid="cash-13week-outflow-spark"
+            />
           </CardContent>
         </Card>
         <Card className={endingBalance < 0 ? "border-red-400 bg-red-50/30" : "border-emerald-400"}>
@@ -276,6 +287,11 @@ export default function Cash13WeekPage() {
             <p className={`text-base font-bold font-mono mt-1 ${endingBalance < 0 ? "text-red-700" : "text-emerald-700"}`}>
               {formatCurrency(endingBalance)}
             </p>
+            <InlineSparkline
+              values={weeks.map((w) => w.endingBalance)}
+              tone={endingBalance < 0 ? "warning" : "success"}
+              testid="cash-13week-balance-spark"
+            />
           </CardContent>
         </Card>
         <Card className={negativeWeeks > 0 ? "border-red-400 bg-red-50/30" : ""}>
