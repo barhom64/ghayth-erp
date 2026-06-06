@@ -707,7 +707,10 @@ router.get(
 //   - /outbox-stats           — fast count-by-status snapshot (no auth)
 //   - /admin/observability/outbox — paginated list + actions (admin only)
 
-const OUTBOX_VALID_STATUSES = new Set(["pending", "failed_retry", "processed", "dead"]);
+// 'processing' is a transient claim state the relay sets between claiming a
+// row and marking it processed/failed (P2.6). Included so an operator can
+// filter for rows currently mid-flight (or stuck, pending the reaper).
+const OUTBOX_VALID_STATUSES = new Set(["pending", "processing", "failed_retry", "processed", "dead"]);
 
 router.get("/outbox", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {

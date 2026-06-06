@@ -109,6 +109,31 @@ describe("P2.1 — outboxRelay.ts exports start / stop / stats", () => {
     expect(RELAY).toContain("FOR UPDATE SKIP LOCKED");
   });
 
+  it("P2.6 — claims atomically (UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED) RETURNING)", () => {
+    // Regression guard for the auto-commit lock-gap bug: the claim must
+    // be a SINGLE statement that flips pending → 'processing' so the row
+    // lock genuinely spans the state change. A two-statement
+    // SELECT-then-UPDATE releases the lock between them and double-
+    // dispatches across replicas.
+    expect(RELAY).toMatch(/UPDATE event_outbox[\s\S]{0,200}SET status = 'processing'/);
+    expect(RELAY).toMatch(/WHERE id IN \([\s\S]{0,300}FOR UPDATE SKIP LOCKED[\s\S]{0,40}\)\s*RETURNING/);
+  });
+
+  it("P2.6 — reaps stale 'processing' claims back to pending", () => {
+    expect(RELAY).toContain("reapStaleClaims");
+    expect(RELAY).toMatch(/status = 'processing'[\s\S]{0,200}"claimedAt" < now\(\)/);
+    expect(RELAY).toContain("STALE_CLAIM_MS");
+  });
+
+  it("P2.6 — exports runOutboxRelayOnce() for ops drain + deterministic tests", () => {
+    expect(RELAY).toMatch(/export\s+async\s+function\s+runOutboxRelayOnce/);
+  });
+
+  it("P2.6 — exposes internal helpers for the live-DB integration suite", () => {
+    expect(RELAY).toContain("export const __outboxRelayInternals");
+    expect(RELAY).toMatch(/claimBatch[\s\S]{0,120}reapStaleClaims[\s\S]{0,120}markProcessed[\s\S]{0,120}markFailure/);
+  });
+
   it("respects config.outboxRelayMaxAttempts via SQL filter + dead promotion", () => {
     expect(RELAY).toContain("attempts < $1");
     expect(RELAY).toContain('status = $1'); // markFailure UPDATE

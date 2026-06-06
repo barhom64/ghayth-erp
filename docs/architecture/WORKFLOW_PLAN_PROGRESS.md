@@ -69,7 +69,7 @@ Not blocking the application code; ops can wire when they're ready.
 
 ---
 
-## P2 — Outbox relay completion 🟡 PARTIAL
+## P2 — Outbox relay completion ✅ COMPLETE
 
 Closes findings #2 (outbox not relayed) and #3 (purge deletes pending).
 
@@ -80,7 +80,39 @@ Closes findings #2 (outbox not relayed) and #3 (purge deletes pending).
 | **P2.3** | **dead-letter dashboard + retry/cancel actions** | ✅ **Shipped (`/admin/outbox` + 4 backend endpoints + 16 smoke tests)** |
 | **P2.4** | **`OUTBOX_RELAY_ACTIVE` feature flag** | ✅ **Shipped (default off)** |
 | **P2.5** | **`purgeAgedOutboxEntries` status-aware** | ✅ Done |
-| P2.6 | integration tests | 🟡 51 smoke tests shipped; live-DB integration TBD |
+| **P2.6** | **live-DB integration tests + atomic-claim fix** | ✅ **Shipped (13 live-DB tests; migration 254; concurrency bug fixed)** |
+
+**P2.6 — what the live-DB tests found and fixed:**
+Writing real-Postgres integration tests surfaced a genuine concurrency
+bug. The relay's `fetchBatch` ran `SELECT … FOR UPDATE SKIP LOCKED` on
+the pool in **auto-commit mode** (no surrounding transaction), so the
+row lock released the instant the SELECT returned — *before* the
+follow-up `markProcessed` UPDATE. Two relay replicas could both grab the
+same pending row and dispatch it twice; the SKIP LOCKED was effectively
+a no-op across ticks.
+
+Fix — the canonical transactional-outbox claim pattern:
+  - `claimBatch` is now a **single** `UPDATE … WHERE id IN (SELECT …
+    FOR UPDATE SKIP LOCKED) RETURNING …` that atomically flips pending →
+    `'processing'` (new transient status) and stamps `claimedAt`. The
+    lock genuinely spans the state change, so concurrent replicas claim
+    disjoint sets. Dispatch then happens OUTSIDE any held lock.
+  - `reapStaleClaims` returns rows stranded in `'processing'` by a
+    crashed worker back to `'pending'` once `claimedAt` ages past
+    `STALE_CLAIM_MS` (5 min). Runs at the head of every batch.
+  - Migration 254 adds the nullable `claimedAt` column + a partial index
+    on `(status, claimedAt) WHERE status='processing'` for the reaper.
+  - `runOutboxRelayOnce()` — a public one-shot drain (ops "drain now" +
+    deterministic tests, ungated by the interval/test flags).
+  - The admin monitor whitelist + the SPA status labels learned the
+    `'processing'` state.
+
+13 live-DB integration assertions (`outboxRelay.dynamic.test.ts`) lock
+the whole state machine: happy path, listener-failure→DLQ decoupling,
+**two-concurrent-claims-zero-overlap**, failed_retry→dead promotion,
+stale-claim reaping, idempotency-index dedupe, and status-aware purge —
+all against a real Postgres. The suite `describe.skip`s when no test DB
+is wired, exactly like the other `*.dynamic.test.ts` files.
 
 **P2.5 is shipped early as a foundation:** the purge now filters
 `status IN ('processed', 'dead')` so a future relay can flip on without
@@ -107,9 +139,11 @@ no-op. Staging can flip OUTBOX_RELAY_ACTIVE=true to exercise the loop
 but the relay logs a loud warning that double-dispatch is possible
 until P2.2 lands.
 
-**P2 estimated remaining effort:** ~1-2 weeks for one senior. P2.2
-(dedupe), P2.3 (admin dashboard for dead-letter), and P2.6 (live-DB
-integration tests) are all that's left.
+**P2 is complete.** P2.1–P2.5 shipped earlier; P2.6 (live-DB
+integration tests + the atomic-claim concurrency fix) closes the phase.
+The relay remains default-OFF (`OUTBOX_RELAY_ACTIVE=false`); flipping it
+on in staging now exercises a relay whose claim path is multi-replica
+safe.
 
 ---
 
@@ -188,22 +222,24 @@ mount is now a single `router.use(prefix, featureGate("<key>"))` line.
 |---|---|---|---|
 | P0 | ✅ Complete | 22 (16 + 6 explicit-flag) | 2 |
 | P1 | ✅ Complete | 16 | 1 |
-| P2 | 🟡 Partial (P2.1+2+3+4+5 shipped; 6 TBD) | 55 | 3 |
+| P2 | ✅ Complete | 74 (55 smoke + 6 new claim smoke + 13 live-DB) | 4 |
 | P3 | ✅ Complete | 12 | 1 |
 | P4 | ✅ Complete | 41 | 2 |
 
-**Total new tests on the security/architecture surface: 146.**
+**Total new tests on the security/architecture surface: 165.**
 
-What's shipped in this branch closes seven of the nine senior-review findings:
+What's shipped in this branch closes all nine senior-review findings:
 1. branch-id silent fallback (✅ P0.1)
 2. enforceBranchScope opt-in (✅ P0.2 — runtime warn + explicit flags on 5 highest-risk routes)
 3. SQL injection vector via orderBy/extraConditions (✅ P0.3)
 4. Worker / API single-point-of-failure (✅ P1)
-5. Outbox not relayed + purge race (✅ P2.1+P2.2+P2.3+P2.4+P2.5; live-DB integration TBD)
+5. Outbox not relayed + purge race + claim concurrency (✅ P2.1–P2.6, incl. live-DB tests)
 6. Bloated central router (✅ P3)
 7. Subscription gate is company-wide (✅ P4 — backend + admin SPA)
+8. (covered under P1 — no separate worker workspace → `worker.ts` + `API_ONLY`)
+9. (covered under P0.3 — raw orderBy/extraConditions whitelisted)
 
-Remaining: P2.6 (live-DB outbox integration tests) only. All nine
-senior-review findings are either closed or have shipping code; P2.6
-is the last piece of integration coverage and can ship as an
-independent PR.
+All phases (P0–P4) are complete. The remaining items are operational,
+not application code: Dockerfile/k8s manifests for the worker/API split
+(P1), and flipping `OUTBOX_RELAY_ACTIVE=true` once ops is ready to make
+the outbox the dispatcher.

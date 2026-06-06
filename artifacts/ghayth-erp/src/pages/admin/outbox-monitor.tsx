@@ -30,7 +30,7 @@ import { Inbox, RotateCcw, XCircle, AlertOctagon, AlertTriangle, CheckCircle2, C
 interface OutboxRow {
   id: string;
   eventName: string;
-  status: "pending" | "failed_retry" | "processed" | "dead";
+  status: "pending" | "processing" | "failed_retry" | "processed" | "dead";
   attempts: number;
   createdAt: string;
   processedAt: string | null;
@@ -49,6 +49,7 @@ interface OutboxStats {
 
 const STATUS_LABEL: Record<OutboxRow["status"], string> = {
   pending: "في الانتظار",
+  processing: "قيد المعالجة",
   failed_retry: "فشل — إعادة محاولة",
   processed: "تمت المعالجة",
   dead: "ميت (لم يُعالَج)",
@@ -56,6 +57,7 @@ const STATUS_LABEL: Record<OutboxRow["status"], string> = {
 
 const STATUS_BADGE_VARIANT: Record<OutboxRow["status"], "default" | "secondary" | "destructive" | "outline"> = {
   pending: "secondary",
+  processing: "secondary",
   failed_retry: "outline",
   processed: "default",
   dead: "destructive",
@@ -225,6 +227,7 @@ export default function AdminOutboxMonitor() {
               <SelectContent>
                 <SelectItem value="all">كل الحالات</SelectItem>
                 <SelectItem value="pending">في الانتظار</SelectItem>
+                <SelectItem value="processing">قيد المعالجة</SelectItem>
                 <SelectItem value="failed_retry">فشل — إعادة محاولة</SelectItem>
                 <SelectItem value="dead">ميت</SelectItem>
                 <SelectItem value="processed">تمت المعالجة</SelectItem>
