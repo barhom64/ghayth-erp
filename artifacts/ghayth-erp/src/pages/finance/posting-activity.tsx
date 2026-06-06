@@ -14,6 +14,7 @@ import {
   AlertCircle, Calendar,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 
@@ -323,7 +324,13 @@ export default function PostingActivityPage() {
       </div>
 
       <Card className="mb-3">
-        <CardContent className="p-3">
+        <CardContent className="p-3 flex flex-col gap-2">
+          <DateRangePresets
+            value={{ from: fromDate, to: toDate }}
+            onChange={(r) => { setFromDate(r.from); setToDate(r.to); }}
+            testidPrefix="posting-activity-preset"
+            hideAllTime
+          />
           <div className="flex items-end gap-3 flex-wrap">
             <div>
               <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> من</Label>
