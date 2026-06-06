@@ -12,6 +12,7 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { formatCurrency } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";
+import { InlineSparkline } from "@/components/shared/inline-sparkline";
 import { TrendingUp, TrendingDown, ScrollText, Network, ArrowLeftRight, Download } from "lucide-react";
 
 /**
@@ -231,11 +232,13 @@ export default function CostCenterDrillPnlPage() {
               <BucketCard
                 title="على هذا المركز فقط"
                 bucket={data.buckets.self}
+                series={series ?? null}
                 testid="cost-center-pnl-self"
               />
               <BucketCard
                 title={`تجميعي (يشمل ${data.descendantCount} مركز فرعي)`}
                 bucket={data.buckets.rolled}
+                series={series ?? null}
                 testid="cost-center-pnl-rolled"
               />
             </div>
@@ -302,13 +305,22 @@ export default function CostCenterDrillPnlPage() {
 }
 
 function BucketCard({
-  title, bucket, testid,
+  title, bucket, series, testid,
 }: {
   title: string;
   bucket: PnlBucket;
+  series: SeriesResponse | null;
   testid: string;
 }) {
   const positive = bucket.net >= 0;
+  // Both bucket cards (self + rolled) share the SAME series here —
+  // CcTrendCard renders the rolled series; the operator's view of
+  // the trend on EACH metric is the same regardless of which bucket
+  // they're reading. The split would matter only if the backend
+  // emitted a per-bucket series, which we'd consider a future PR.
+  const revSpark = series?.buckets.slice(-12).map((b) => b.revenue) ?? [];
+  const expSpark = series?.buckets.slice(-12).map((b) => b.expense) ?? [];
+  const netSpark = series?.buckets.slice(-12).map((b) => b.net) ?? [];
   return (
     <Card data-testid={testid}>
       <CardHeader className="pb-1">
@@ -316,13 +328,14 @@ function BucketCard({
       </CardHeader>
       <CardContent className="p-3 pt-0">
         <div className="grid grid-cols-3 gap-3">
-          <Metric label="الإيرادات" value={bucket.revenue} icon={TrendingUp} tone="success" testid={`${testid}-revenue`} />
-          <Metric label="المصروفات" value={bucket.expense} icon={TrendingDown} tone="warning" testid={`${testid}-expense`} />
+          <Metric label="الإيرادات" value={bucket.revenue} icon={TrendingUp} tone="success" spark={revSpark} testid={`${testid}-revenue`} />
+          <Metric label="المصروفات" value={bucket.expense} icon={TrendingDown} tone="warning" spark={expSpark} testid={`${testid}-expense`} />
           <Metric
             label="الصافي"
             value={bucket.net}
             icon={positive ? TrendingUp : TrendingDown}
             tone={positive ? "success" : "warning"}
+            spark={netSpark}
             testid={`${testid}-net`}
             highlight
           />
@@ -336,19 +349,24 @@ function BucketCard({
 }
 
 function Metric({
-  label, value, icon: Icon, tone, highlight, testid,
+  label, value, icon: Icon, tone, highlight, spark, testid,
 }: {
   label: string;
   value: number;
   icon: React.ComponentType<{ className?: string }>;
   tone: "success" | "warning" | "default";
   highlight?: boolean;
+  spark?: number[];
   testid: string;
 }) {
   const toneClass =
     tone === "success" ? "text-status-success-foreground"
     : tone === "warning" ? "text-status-warning-foreground"
     : "text-foreground";
+  const sparkTone =
+    tone === "success" ? "success"
+    : tone === "warning" ? "warning"
+    : "neutral";
   return (
     <div className="flex flex-col" data-testid={testid}>
       <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -358,6 +376,13 @@ function Metric({
       <div className={`${highlight ? "text-xl font-bold" : "text-base font-medium"} ${toneClass}`}>
         {formatCurrency(value)}
       </div>
+      {spark && spark.length >= 2 && (
+        <InlineSparkline
+          values={spark}
+          tone={sparkTone}
+          testid={`${testid}-spark`}
+        />
+      )}
     </div>
   );
 }
