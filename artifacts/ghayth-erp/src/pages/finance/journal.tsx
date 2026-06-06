@@ -33,6 +33,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Journal entries list — migrated in R.5 iter 5 to the unified template
@@ -88,6 +89,7 @@ export default function JournalPage() {
     searchFields: ["description", "ref"],
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -215,9 +217,9 @@ export default function JournalPage() {
             entityType="report_finance_journal"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "القيود اليومية", total: filtered.length },
-              items: filtered.map((j: any) => ({
+            payload={() => ({
+              entity: { title: "القيود اليومية", total: printRows.length },
+              items: printRows.map((j: any) => ({
                 "المرجع": j.ref || j.id,
                 "التاريخ": j.date || j.createdAt || "—",
                 "البيان": j.description || "—",
@@ -226,7 +228,7 @@ export default function JournalPage() {
                 "إجمالي الدائن": j.totalCredit ?? 0,
                 "الحالة": j.status || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -279,6 +281,7 @@ export default function JournalPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

@@ -19,6 +19,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 export default function AttendanceReportsPage() {
   const [month, setMonth] = useState(todayLocal().slice(0, 7));
   const [filters, setFilters] = useFilters();
@@ -46,6 +47,7 @@ export default function AttendanceReportsPage() {
     ...d,
     id: Number(d.id ?? i + 1),
   }));
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(monthlyRows);
 
   const kpis = [
     { label: "أيام الحضور", value: stats.present ?? 0, icon: Users, color: "text-status-success-foreground bg-status-success-surface" },
@@ -84,20 +86,20 @@ export default function AttendanceReportsPage() {
             entityType="report_attendance_summary"
             entityId={month}
             size="icon"
-            payload={{
+            payload={() => ({
               entity: {
                 title: `تقرير الحضور والانصراف — ${month}`,
                 month,
                 totalDays: kpis?.[0]?.value ?? 0,
               },
-              items: monthlyRows.map((r: any) => ({
+              items: printRows.map((r: any) => ({
                 "الموظف": r.employeeName || r.name || "—",
                 "أيام الحضور": r.presentDays ?? r.totalPresent ?? 0,
                 "أيام الغياب": r.absentDays ?? r.totalAbsent ?? 0,
                 "التأخر (دقيقة)": r.lateMinutes ?? 0,
                 "ساعات إضافية": r.overtimeHours ?? 0,
               })),
-            }}
+            })}
           />
           <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />
         </div>
@@ -125,6 +127,7 @@ export default function AttendanceReportsPage() {
         <CardContent className="p-0">
           <DataTable
             columns={monthlyColumns}
+            onSortedDataChange={setPrintRows}
             data={monthlyRows}
             noToolbar
             emptyMessage="لا توجد بيانات لهذا الشهر"

@@ -15,12 +15,14 @@ import { formatCurrency } from "@/lib/formatters";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 export default function InventoryCostingPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [setupResult, setSetupResult] = useState<any>(null);
 
   const { data, isLoading, isError } = useApiQuery<any>(["inventory-costing"], "/finance/inventory-costing");
   const products = data?.products || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(products);
   const summary = data?.summary || {};
 
   const { data: productDetail, isLoading: loadingDetail } = useApiQuery<any>(
@@ -125,16 +127,16 @@ export default function InventoryCostingPage() {
           entityType="report_finance_inventory_costing"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "تقييم المخزون بالمتوسط المرجح", total: products.length },
-            items: products.map((p: any) => ({
+          payload={() => ({
+            entity: { title: "تقييم المخزون بالمتوسط المرجح", total: printRows.length },
+            items: printRows.map((p: any) => ({
               "المنتج": p.name || "—",
               "SKU": p.sku || "—",
               "المخزون": Number(p.currentStock || 0).toFixed(2),
               "تكلفة الوحدة": Number(p.costPrice || 0),
               "القيمة الإجمالية": Number(p.stockValue || 0),
             })),
-          }}
+          })}
         />
       }
     >
@@ -165,6 +167,7 @@ export default function InventoryCostingPage() {
           <CardContent className="p-0">
             <DataTable
               columns={productColumns}
+              onSortedDataChange={setPrintRows}
               data={products}
               isLoading={isLoading}
               rowKey={(p: any) => p.id}

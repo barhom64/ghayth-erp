@@ -7,6 +7,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import {
   DataTable,
   type DataTableColumn,
@@ -59,6 +60,7 @@ export default function ApAgingPage() {
   if (isError) return <ErrorState />;
 
   const suppliers = (data?.suppliers || []) as any[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(suppliers);
   const summary = data?.summary || {};
 
   const columns: DataTableColumn<any>[] = [
@@ -96,14 +98,14 @@ export default function ApAgingPage() {
           <PrintButton
             entityType="report_ap_aging"
             entityId={asOfDate}
-            payload={{
+            payload={() => ({
               entity: {
                 title: "تقرير تقادم الذمم الدائنة",
                 asOfDate: formatDateAr(asOfDate),
                 totalOutstanding: summary.grandTotal ?? 0,
                 over90Total: summary.over90 ?? 0,
               },
-              items: suppliers.map((s: any) => ({
+              items: printRows.map((s: any) => ({
                 "المورد": s.supplierName ?? "",
                 "حالي": Number(s.current ?? 0),
                 "1-30 يوم": Number(s["1_30"] ?? 0),
@@ -112,7 +114,7 @@ export default function ApAgingPage() {
                 "+90 يوم": Number(s.over90 ?? 0),
                 "الإجمالي": Number(s.total ?? 0),
               })),
-            }}
+            })}
           />
         </>
       }
@@ -144,6 +146,7 @@ export default function ApAgingPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={suppliers}
         isLoading={isLoading}
         isError={isError}
