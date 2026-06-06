@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
-import { Trash2, Moon, Sparkles, Network, Wallet2, ExternalLink } from "lucide-react";
+import { Trash2, Moon, Sparkles, Network, Wallet2, ExternalLink, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
+import { exportRowsToCsv } from "@/lib/unified-export";
 
 /**
  * Dormant entities report — cost-centres + subsidiary accounts that
@@ -58,6 +59,16 @@ interface Response {
   totals: { costCenters: number; subsidiaryAccounts: number };
 }
 
+// Lookback presets — the four windows operators actually use. 30/90
+// cover routine cleanup; 180/365 surface seasonal CCs (umrah seasons,
+// annual contracts) before they're prematurely deleted.
+const LOOKBACK_PRESETS: { days: number; label: string }[] = [
+  { days: 30,  label: "آخر 30 يوماً" },
+  { days: 90,  label: "آخر 90 يوماً" },
+  { days: 180, label: "آخر 180 يوماً" },
+  { days: 365, label: "آخر سنة" },
+];
+
 const ENTITY_TYPE_LABEL: Record<string, string> = {
   employee: "موظف",
   client: "عميل",
@@ -88,46 +99,123 @@ export default function DormantEntitiesPage() {
         { label: "الكيانات الخاملة" },
       ]}
       actions={
-        <Link href="/finance/dimensional-routing">
-          <Button variant="ghost" data-testid="dormant-back-link">
-            <Network className="h-4 w-4 ms-1" />
-            رجوع للتأصيل
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          {data && (data.costCenters.length > 0 || data.subsidiaryAccounts.length > 0) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Two row-shapes in one CSV: a 'kind' column distinguishes
+                // cost-centre rows from subsidiary-account rows so the
+                // operator can filter either bucket in their spreadsheet.
+                const ccRows = data.costCenters.map((cc) => ({
+                  kind: "cost_center",
+                  id: String(cc.id),
+                  code: cc.code ?? "",
+                  name: cc.name,
+                  type: cc.type ?? "",
+                  autoCreated: cc.autoCreatedReason ? "نعم" : "",
+                  ageDays: String(Math.floor(
+                    (Date.now() - new Date(cc.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+                  )),
+                  jeCount: String(cc.jeCount),
+                  balance: "",
+                }));
+                const subRows = data.subsidiaryAccounts.map((sa) => ({
+                  kind: "subsidiary",
+                  id: String(sa.id),
+                  code: sa.accountCode,
+                  name: sa.accountName,
+                  type: `${sa.entityType}#${sa.entityId}`,
+                  autoCreated: "",
+                  ageDays: String(Math.floor(
+                    (Date.now() - new Date(sa.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+                  )),
+                  jeCount: String(sa.jeCount),
+                  balance: String(sa.currentBalance ?? 0),
+                }));
+                void exportRowsToCsv({
+                  entityType: "report_dormant_entities",
+                  title: `dormant-entities-${data.lookbackDays}d`,
+                  rows: [...ccRows, ...subRows],
+                  columns: [
+                    { key: "kind",        label: "النوع" },
+                    { key: "id",          label: "المعرّف" },
+                    { key: "code",        label: "الرمز" },
+                    { key: "name",        label: "الاسم" },
+                    { key: "type",        label: "التصنيف" },
+                    { key: "autoCreated", label: "تلقائي" },
+                    { key: "ageDays",     label: "العمر (يوماً)" },
+                    { key: "jeCount",     label: "عدد القيود" },
+                    { key: "balance",     label: "الرصيد" },
+                  ],
+                }).catch((err) => console.error("[dormant-entities export] failed", err));
+              }}
+              data-testid="dormant-export-csv"
+            >
+              <Download className="h-4 w-4 ms-1" />
+              CSV
+            </Button>
+          )}
+          <Link href="/finance/dimensional-routing">
+            <Button variant="ghost" data-testid="dormant-back-link">
+              <Network className="h-4 w-4 ms-1" />
+              رجوع للتأصيل
+            </Button>
+          </Link>
+        </div>
       }
     >
       <FinanceTabsNav />
 
       <Card className="mb-3">
-        <CardContent className="p-3 flex items-end gap-2 flex-wrap">
-          <div>
-            <Label className="text-xs text-muted-foreground">فترة التحقق (أيام)</Label>
-            <Input
-              type="number"
-              min={7}
-              max={730}
-              value={days}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                if (Number.isFinite(v)) setDays(Math.max(7, Math.min(730, v)));
-              }}
-              className="w-32 h-8 text-xs"
-              data-testid="dormant-days-input"
-            />
+        <CardContent className="p-3 flex flex-col gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-muted-foreground ms-1">سريع:</span>
+            {LOOKBACK_PRESETS.map((p) => (
+              <Button
+                key={p.days}
+                size="sm"
+                variant={days === p.days ? "default" : "outline"}
+                className="h-7 text-xs"
+                onClick={() => setDays(p.days)}
+                data-testid={`dormant-preset-${p.days}d`}
+                data-active={days === p.days ? "true" : "false"}
+              >
+                {p.label}
+              </Button>
+            ))}
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => refetch()}
-            data-testid="dormant-refresh"
-          >
-            تحديث
-          </Button>
-          {data && (
-            <span className="text-xs text-muted-foreground ms-auto">
-              فترة التحقق: آخر {data.lookbackDays} يوماً
-            </span>
-          )}
+          <div className="flex items-end gap-2 flex-wrap">
+            <div>
+              <Label className="text-xs text-muted-foreground">فترة التحقق (أيام)</Label>
+              <Input
+                type="number"
+                min={7}
+                max={730}
+                value={days}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v)) setDays(Math.max(7, Math.min(730, v)));
+                }}
+                className="w-32 h-8 text-xs"
+                data-testid="dormant-days-input"
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => refetch()}
+              data-testid="dormant-refresh"
+            >
+              تحديث
+            </Button>
+            {data && (
+              <span className="text-xs text-muted-foreground ms-auto">
+                فترة التحقق: آخر {data.lookbackDays} يوماً
+              </span>
+            )}
+          </div>
         </CardContent>
       </Card>
 

@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 interface OverdueInvoice {
   invoiceId: number;
   invoiceNumber: string;
@@ -82,6 +83,7 @@ export default function DunningPage() {
   if (isError || !preview) return <ErrorState />;
 
   const invoices = preview.invoices;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<OverdueInvoice>(invoices);
   const allSelected = invoices.length > 0 && selected.size === invoices.length;
 
   const toggleAll = () => {
@@ -235,9 +237,9 @@ export default function DunningPage() {
             entityType="report_finance_dunning"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "متابعة تحصيل الذمم", total: invoices.length },
-              items: invoices.map((r) => ({
+            payload={() => ({
+              entity: { title: "متابعة تحصيل الذمم", total: printRows.length },
+              items: printRows.map((r) => ({
                 "الفاتورة": r.invoiceNumber || "—",
                 "العميل": r.clientName || "—",
                 "تاريخ الاستحقاق": r.dueDate || "—",
@@ -246,7 +248,7 @@ export default function DunningPage() {
                 "المرحلة المقترحة": STAGE_INFO[r.proposedStage]?.label ?? "—",
                 "آخر إرسال": r.lastSentStage > 0 ? `مرحلة ${r.lastSentStage}` : "—",
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -333,6 +335,7 @@ export default function DunningPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={invoices}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا توجد فواتير مؤهلة لإرسال تذكير في هذه الفترة"
           />

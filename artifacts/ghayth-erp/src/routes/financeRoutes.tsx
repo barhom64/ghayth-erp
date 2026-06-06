@@ -21,6 +21,7 @@ const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
 const CostCentersTree = lazy(() => import("@/pages/finance/cost-centers-tree"));
 const CostCenterPnl = lazy(() => import("@/pages/finance/cost-center-pnl"));
 const CostCenterDrillPnl = lazy(() => import("@/pages/finance/cost-center-drill-pnl"));
+const CostCenterRanking = lazy(() => import("@/pages/finance/cost-center-ranking"));
 const DimensionalRouting = lazy(() => import("@/pages/finance/dimensional-routing"));
 const DormantEntities = lazy(() => import("@/pages/finance/dormant-entities"));
 const EntityPnl = lazy(() => import("@/pages/finance/entity-pnl"));
@@ -316,6 +317,7 @@ export const financeRoutes = [
   { path: "/finance/cost-centers/tree", component: CostCentersTree },
   { path: "/finance/cost-center-pnl", component: CostCenterPnl },
   { path: "/finance/cost-centers/:id/pnl", component: CostCenterDrillPnl },
+  { path: "/finance/cost-centers/ranking", component: CostCenterRanking },
   { path: "/finance/dimensional-routing", component: DimensionalRouting },
   { path: "/finance/dormant-entities", component: DormantEntities },
   { path: "/finance/entity-pnl/:entityType/:entityId", component: EntityPnl },
