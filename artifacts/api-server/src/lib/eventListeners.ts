@@ -5,6 +5,7 @@ import { createNotification, getManagerAssignmentId, createGuardedJournalEntry, 
 import { computeDiff } from "./auditDiff.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
 import { registerObligation, markObligationMet } from "./obligationsEngine.js";
+import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
 
 async function logEvent(event: string, payload: EventPayload) {
   try {
@@ -105,21 +106,39 @@ export function registerEventListeners() {
   eventBus.on("invoice.created", async (payload) => {
     await logEvent("invoice.created", payload);
     await logAudit("invoice.created", { ...payload, action: "create" });
-    if (payload.companyId && payload.branchId) {
-      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
-      if (managerId) {
-        await createNotification({
-          companyId: payload.companyId,
-          assignmentId: managerId,
-          type: "finance",
-          title: "فاتورة جديدة",
-          body: `تم إنشاء فاتورة #${payload.entityId}`,
-          priority: "normal",
-          refType: "invoice",
-          refId: payload.entityId as number,
-          actionUrl: `/finance/invoices/${payload.entityId}`,
-        });
-      }
+    if (payload.companyId && payload.entityId) {
+      const [inv] = await rawQuery<{
+        ref: string | null;
+        total: string | number | null;
+        clientId: number | null;
+        clientName: string | null;
+        branchId: number | null;
+      }>(
+        `SELECT i.ref, i.total, i."clientId", c."name" AS "clientName", i."branchId"
+         FROM invoices i LEFT JOIN clients c ON c.id = i."clientId"
+         WHERE i.id = $1 AND i."companyId" = $2 LIMIT 1`,
+        [payload.entityId as number, payload.companyId],
+      ).catch(() => [] as Array<{ ref: string | null; total: string | number | null; clientId: number | null; clientName: string | null; branchId: number | null }>);
+
+      const branchId = inv?.branchId ?? (payload.branchId as number | undefined) ?? null;
+      const managerId = branchId ? await getManagerAssignmentId(payload.companyId, branchId) : null;
+      const invoiceRef = inv?.ref ?? `${payload.entityId}`;
+      const customerName = inv?.clientName ?? "—";
+      const amount = inv?.total != null ? String(inv.total) : "0";
+
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "invoice.created",
+        templateVars: { invoiceRef, customerName, amount },
+        fallbackTitle: "فاتورة جديدة",
+        fallbackBody: `تم إنشاء فاتورة #${invoiceRef}`,
+        assignmentId: managerId ?? undefined,
+        recipientUser: inv?.clientId ? { type: "client", id: inv.clientId } : undefined,
+        priority: "normal",
+        refType: "invoice",
+        refId: payload.entityId as number,
+        actionUrl: `/finance/invoices/${payload.entityId}`,
+      });
     }
   });
 
@@ -135,6 +154,31 @@ export function registerEventListeners() {
     // Cross-module: mark financial obligation as fulfilled
     if (payload.companyId && payload.entityId) {
       await markObligationMet(payload.companyId, "invoices", payload.entityId as number, "payment").catch((e) => logger.error(e, "event listener background task failed"));
+
+      const [inv] = await rawQuery<{
+        ref: string | null;
+        total: string | number | null;
+        clientId: number | null;
+      }>(
+        `SELECT ref, total, "clientId" FROM invoices WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [payload.entityId as number, payload.companyId],
+      ).catch(() => [] as Array<{ ref: string | null; total: string | number | null; clientId: number | null }>);
+
+      const invoiceRef = inv?.ref ?? `${payload.entityId}`;
+      const amount = inv?.total != null ? String(inv.total) : "0";
+
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "invoice.paid",
+        templateVars: { invoiceRef, amount },
+        fallbackTitle: "تم سداد الفاتورة",
+        fallbackBody: `تم سداد الفاتورة #${invoiceRef}`,
+        recipientUser: inv?.clientId ? { type: "client", id: inv.clientId } : undefined,
+        priority: "normal",
+        refType: "invoice",
+        refId: payload.entityId as number,
+        actionUrl: `/finance/invoices/${payload.entityId}`,
+      });
     }
   });
 
@@ -143,19 +187,22 @@ export function registerEventListeners() {
     await logAudit("leave.requested", { ...payload, action: "create" });
     if (payload.companyId && payload.branchId) {
       const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
-      if (managerId) {
-        await createNotification({
-          companyId: payload.companyId,
-          assignmentId: managerId,
-          type: "hr",
-          title: "طلب إجازة جديد",
-          body: `طلب إجازة من ${payload.employeeName || "موظف"} - ${payload.leaveType || ""}`,
-          priority: "high",
-          refType: "leave_request",
-          refId: payload.entityId as number,
-          actionUrl: `/hr/leaves`,
-        });
-      }
+      const employeeName = String(payload.employeeName ?? "موظف");
+      const leaveType = String(payload.leaveType ?? "—");
+      const startDate = String(payload.startDate ?? "—");
+      const endDate = String(payload.endDate ?? "—");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "leave.request.created",
+        templateVars: { employeeName, leaveType, startDate, endDate },
+        fallbackTitle: "طلب إجازة جديد",
+        fallbackBody: `طلب إجازة من ${employeeName} - ${leaveType}`,
+        assignmentId: managerId ?? undefined,
+        priority: "high",
+        refType: "leave_request",
+        refId: payload.entityId as number,
+        actionUrl: `/hr/leaves`,
+      });
     }
   });
 
@@ -240,12 +287,15 @@ export function registerEventListeners() {
     await logEvent("task.created", payload);
     await logAudit("task.created", { ...payload, action: "create" });
     if (payload.companyId && payload.assigneeAssignmentId) {
-      await createNotification({
+      const taskTitle = String(payload.taskTitle ?? "");
+      const dueDate = String(payload.dueDate ?? "—");
+      await notifyBusinessEvent({
         companyId: payload.companyId,
+        templateKey: "task.assigned",
+        templateVars: { taskTitle, dueDate },
+        fallbackTitle: "مهمة جديدة",
+        fallbackBody: `تم تعيين مهمة جديدة لك: ${taskTitle}`,
         assignmentId: payload.assigneeAssignmentId as number,
-        type: "task",
-        title: "مهمة جديدة",
-        body: `تم تعيين مهمة جديدة لك: ${payload.taskTitle || ""}`,
         priority: "normal",
         refType: "task",
         refId: payload.entityId as number,
@@ -262,11 +312,43 @@ export function registerEventListeners() {
   eventBus.on("support.ticket.created", async (payload) => {
     await logEvent("support.ticket.created", payload);
     await logAudit("support.ticket.created", { ...payload, action: "create" });
+    if (payload.companyId && payload.entityId) {
+      const ticketId = String(payload.entityId);
+      const subject = String(payload.subject ?? payload.title ?? "—");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "support.ticket.created",
+        templateVars: { ticketId, subject },
+        fallbackTitle: "تذكرة دعم جديدة",
+        fallbackBody: `تم فتح تذكرة #${ticketId} — ${subject}`,
+        priority: "normal",
+        refType: "support_ticket",
+        refId: payload.entityId as number,
+        actionUrl: `/support/${payload.entityId}`,
+      });
+    }
   });
 
   eventBus.on("support.ticket.resolved", async (payload) => {
     await logEvent("support.ticket.resolved", payload);
     await logAudit("support.ticket.resolved", { ...payload, action: "resolve", entity: "support_tickets" });
+    if (payload.companyId && payload.entityId) {
+      const ticketId = String(payload.entityId);
+      const subject = String(payload.subject ?? payload.title ?? "—");
+      const reporterUserId = (payload.reporterUserId ?? payload.userId) as number | undefined;
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "support.ticket.resolved",
+        templateVars: { ticketId, subject },
+        fallbackTitle: "تم حل التذكرة",
+        fallbackBody: `تم حل التذكرة #${ticketId}`,
+        recipientUser: reporterUserId ? { type: "user", id: reporterUserId } : undefined,
+        priority: "normal",
+        refType: "support_ticket",
+        refId: payload.entityId as number,
+        actionUrl: `/support/${payload.entityId}`,
+      });
+    }
   });
 
   // Phase C — Support domain audit. Every lifecycle transition on a
@@ -284,6 +366,22 @@ export function registerEventListeners() {
   eventBus.on("support.ticket.assigned", async (payload) => {
     await logEvent("support.ticket.assigned", payload);
     await logAudit("support.ticket.assigned", { ...payload, action: "assign", entity: "support_tickets" });
+    if (payload.companyId && payload.entityId && payload.assigneeAssignmentId) {
+      const ticketId = String(payload.entityId);
+      const subject = String(payload.subject ?? payload.title ?? "—");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "support.ticket.assigned",
+        templateVars: { ticketId, subject },
+        fallbackTitle: "تذكرة مُسندة لك",
+        fallbackBody: `تم إسناد التذكرة #${ticketId}`,
+        assignmentId: payload.assigneeAssignmentId as number,
+        priority: "normal",
+        refType: "support_ticket",
+        refId: payload.entityId as number,
+        actionUrl: `/support/${payload.entityId}`,
+      });
+    }
   });
   eventBus.on("support.ticket.deleted", async (payload) => {
     await logEvent("support.ticket.deleted", payload);
