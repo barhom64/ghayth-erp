@@ -192,7 +192,7 @@ export default function FleetTelematicsVideoEvidence() {
             المدى (≤ دقيقة). الـ URL الخام لا يصل للمتصفح، وكل محاولة وصول
             تُسجَّل في `fleet_video_access_logs` (مرور أو منع مع السبب).
           </p>
-          <DataTable<VideoSessionRow>
+          <DataTable
             columns={columns}
             data={rows}
             isLoading={isLoading}

@@ -95,10 +95,12 @@ interface Props {
 }
 
 export default function AccountStatementPage({ entityType }: Props) {
-  const route = entityType === "customer"
-    ? useRoute("/clients/:id/statement")
-    : useRoute("/finance/vendors/:id/statement");
-  const [, params] = route;
+  // Both route patterns must be matched unconditionally — calling useRoute
+  // inside a ternary is a rules-of-hooks violation (can surface as React
+  // "rendered more/fewer hooks" #310/#300 under future renderers).
+  const [customerMatch, customerParams] = useRoute("/clients/:id/statement");
+  const [, vendorParams] = useRoute("/finance/vendors/:id/statement");
+  const params = customerMatch ? customerParams : vendorParams;
   const id = params?.id;
   const [, navigate] = useLocation();
 

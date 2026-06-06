@@ -648,11 +648,9 @@ export const allNavSections: NavSection[] = [
           { label: "حماية البيانات (PDPL)", path: "/admin/pdpl", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "التوقيع الرقمي", path: "/admin/digital-signature", icon: FileSignature, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
-        { label: "تشخيص محاسبي وطباعة", path: "/admin/gl-reconciliation", icon: ShieldAlert, children: [
+        { label: "تشخيص محاسبي", path: "/admin/gl-reconciliation", icon: ShieldAlert, children: [
           { label: "تسوية GL", path: "/admin/gl-reconciliation", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "إخفاقات الترحيل", path: "/admin/posting-failures", icon: AlertTriangle, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "قوالب الطباعة (admin)", path: "/admin/print-templates", icon: Printer, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
         { label: "التكاملات والاتصالات", path: "/admin/integrations", icon: Mail, children: [
           { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail, perm: "admin:update" },
@@ -678,15 +676,23 @@ export const allNavSections: NavSection[] = [
       // admin:update, so admin:update is the only meaningful gate here.
       { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60, perm: "admin:update" },
       { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 50, perm: ["bi:read", "reports:read"], permMode: "any" },
-      { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 40, perm: "print_jobs:read" },
-      { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 40, perm: "print:reprint:approve" },
+      // Printing entries were scattered across admin, reports, manager-board and
+      // settings — consolidated here into one "الطباعة والمطبوعات" group. Each
+      // child keeps its original module/perm/minRoleLevel so visibility filtering
+      // is unchanged; only the grouping moved (no page removed → no orphans).
+      { label: "الطباعة والمطبوعات", path: "/reports/print-log", icon: Printer, minRoleLevel: 40, children: [
+        { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 40, perm: "print_jobs:read" },
+        { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 40, perm: "print:reprint:approve" },
+        { label: "قوالب الطباعة", path: "/settings/print-templates", icon: Printer, module: "settings", minRoleLevel: 70, perm: "templates:read" },
+        { label: "قوالب الطباعة (admin)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
+        { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
+      ]},
       { label: "الإعدادات", path: "/settings", icon: Cog, module: "settings", minRoleLevel: 70, children: [
         { label: "عام", path: "/settings", icon: Cog },
         { label: "الفروع", path: "/settings/branches", icon: Building, perm: "settings:write" },
         { label: "الشركات", path: "/settings/companies", icon: Building2, perm: "settings:write" },
         { label: "الأقسام", path: "/settings/departments", icon: Network, perm: "settings:write" },
         { label: "قواعد الأعمال", path: "/settings/rules", icon: Zap, perm: "settings:write" },
-        { label: "قوالب الطباعة", path: "/settings/print-templates", icon: Printer, perm: "templates:read" },
         { label: "سجل المراجعة", path: "/settings/audit-log", icon: ScrollText, perm: ["audit:read", "settings:write"], permMode: "any" },
       ]},
     ],
