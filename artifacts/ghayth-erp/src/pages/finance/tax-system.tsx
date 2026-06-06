@@ -18,6 +18,7 @@ import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 export default function TaxSystemPage() {
   const currentPeriod = todayLocal().slice(0, 7);
   const [period, setPeriod] = useState(currentPeriod);
@@ -40,6 +41,7 @@ export default function TaxSystemPage() {
   if (isError) return <ErrorState />;
 
   const declItems = declarations?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(declItems);
 
   const submissions = submissionsData?.data || [];
   const submissionStats = submissionsData?.stats || {};
@@ -105,9 +107,9 @@ export default function TaxSystemPage() {
             entityType="report_finance_tax_system"
             entityId={period}
             size="icon"
-            payload={{
-              entity: { title: `إقرارات ضريبة القيمة المضافة — ${period}`, total: declItems.length },
-              items: declItems.map((d: any) => ({
+            payload={() => ({
+              entity: { title: `إقرارات ضريبة القيمة المضافة — ${period}`, total: printRows.length },
+              items: printRows.map((d: any) => ({
                 "الفترة": d.period,
                 "ضريبة المخرجات": Number(d.outputVat || 0),
                 "ضريبة المدخلات": Number(d.inputVat || 0),
@@ -115,7 +117,7 @@ export default function TaxSystemPage() {
                 "عدد الفواتير": d.invoiceCount ?? 0,
                 "الحالة": d.status || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -188,6 +190,7 @@ export default function TaxSystemPage() {
             <CardContent className="p-0">
               <DataTable
                 columns={declarationColumns}
+                onSortedDataChange={setPrintRows}
                 data={declItems}
                 isLoading={declLoading}
                 rowKey={(d: any) => d.period}

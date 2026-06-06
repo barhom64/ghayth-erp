@@ -39,6 +39,7 @@ import { todayLocal } from "@/lib/formatters";
 
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // New count session — schema enforces countDate required (was no
 // validation at all on the create form). `Input` per-item edits inside
 // the table are NOT migrated here (different UX, different form).
@@ -124,6 +125,7 @@ export default function InventoryCountPage() {
     statusField: "status",
     dateField: "countDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   // --- KPI stats ---
   const stats = useMemo(() => {
@@ -373,12 +375,12 @@ export default function InventoryCountPage() {
             entityType="report_inventory_counts"
             entityId="list"
             size="icon"
-            payload={{
+            payload={() => ({
               entity: {
                 title: "جلسات جرد المخزن",
-                total: counts.length,
+                total: printRows.length,
               },
-              items: counts.map((c: any) => ({
+              items: printRows.map((c: any) => ({
                 "رقم الجلسة": c.id,
                 "المستودع": c.warehouseName || c.warehouseLocation || "—",
                 "تاريخ الجرد": c.countDate || "—",
@@ -387,7 +389,7 @@ export default function InventoryCountPage() {
                 "الفروقات": c.varianceCount ?? 0,
                 "الحالة": c.status || "—",
               })),
-            }}
+            })}
           />
           <GuardedButton perm="warehouse:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
             <Plus className="w-4 h-4" /> جلسة جرد جديدة
@@ -452,6 +454,7 @@ export default function InventoryCountPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد جلسات جرد — أنشئ جلسة جرد جديدة للبدء"

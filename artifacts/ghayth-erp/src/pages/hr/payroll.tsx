@@ -29,6 +29,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useAppContext } from "@/contexts/app-context";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 
 function PayrollLines({ runId }: { runId: number }) {
@@ -76,6 +77,7 @@ export default function PayrollPage() {
   });
 
   const filtered = applyFilters(items, filters, { searchFields: ["period"], statusField: "status", dateField: "createdAt" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const totalNet = items.reduce((s: number, r: any) => s + Number(r.totalAmount || r.totalNet || 0), 0);
   const totalEmps = items.reduce((s: number, r: any) => s + Number(r.employeeCount || 0), 0);
@@ -153,9 +155,9 @@ export default function PayrollPage() {
             entityType="report_hr_payroll"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "مسيرات الرواتب", total: filtered.length },
-              items: filtered.map((p: any) => ({
+            payload={() => ({
+              entity: { title: "مسيرات الرواتب", total: printRows.length },
+              items: printRows.map((p: any) => ({
                 "رقم المسير": p.ref || p.id,
                 "الفترة": p.period || "—",
                 "عدد الموظفين": p.employeeCount ?? "—",
@@ -163,7 +165,7 @@ export default function PayrollPage() {
                 "تاريخ الإصدار": p.createdAt || "—",
                 "الحالة": p.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/hr/payroll/create">
             <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />تشغيل مسير رواتب</GuardedButton>
@@ -198,6 +200,7 @@ export default function PayrollPage() {
         <TabsContent value="runs">
           <DataTable
             columns={columns}
+            onSortedDataChange={setPrintRows}
             data={filtered}
             noToolbar
             emptyMessage="لا توجد مسيرات رواتب"

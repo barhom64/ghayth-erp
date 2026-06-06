@@ -14,6 +14,7 @@ import {
 import { Download, AlertTriangle, Clock, Users } from "lucide-react";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { exportRowsToCsv } from "@/lib/unified-export";
@@ -59,6 +60,7 @@ export default function ArAgingPage() {
   if (isError) return <ErrorState />;
 
   const clients = (data?.clients || []) as any[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(clients);
   const summary = data?.summary || {};
 
   const columns: DataTableColumn<any>[] = [
@@ -96,14 +98,14 @@ export default function ArAgingPage() {
           <PrintButton
             entityType="report_ar_aging"
             entityId={asOfDate}
-            payload={{
+            payload={() => ({
               entity: {
                 title: "تقرير تقادم الذمم المدينة",
                 asOfDate: formatDateAr(asOfDate),
                 totalOutstanding: summary.grandTotal ?? 0,
                 over90Total: summary.over90 ?? 0,
               },
-              items: clients.map((c: any) => ({
+              items: printRows.map((c: any) => ({
                 "العميل": c.clientName ?? "",
                 "حالي": Number(c.current ?? 0),
                 "1-30 يوم": Number(c["1_30"] ?? 0),
@@ -112,7 +114,7 @@ export default function ArAgingPage() {
                 "+90 يوم": Number(c.over90 ?? 0),
                 "الإجمالي": Number(c.total ?? 0),
               })),
-            }}
+            })}
           />
         </>
       }
@@ -144,6 +146,7 @@ export default function ArAgingPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={clients}
         isLoading={isLoading}
         isError={isError}
