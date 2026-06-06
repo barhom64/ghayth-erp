@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
-import { Trash2, Moon, Sparkles, Network, Wallet2, ExternalLink } from "lucide-react";
+import { Trash2, Moon, Sparkles, Network, Wallet2, ExternalLink, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
+import { exportRowsToCsv } from "@/lib/unified-export";
 
 /**
  * Dormant entities report — cost-centres + subsidiary accounts that
@@ -88,12 +89,71 @@ export default function DormantEntitiesPage() {
         { label: "الكيانات الخاملة" },
       ]}
       actions={
-        <Link href="/finance/dimensional-routing">
-          <Button variant="ghost" data-testid="dormant-back-link">
-            <Network className="h-4 w-4 ms-1" />
-            رجوع للتأصيل
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          {data && (data.costCenters.length > 0 || data.subsidiaryAccounts.length > 0) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Two row-shapes in one CSV: a 'kind' column distinguishes
+                // cost-centre rows from subsidiary-account rows so the
+                // operator can filter either bucket in their spreadsheet.
+                const ccRows = data.costCenters.map((cc) => ({
+                  kind: "cost_center",
+                  id: String(cc.id),
+                  code: cc.code ?? "",
+                  name: cc.name,
+                  type: cc.type ?? "",
+                  autoCreated: cc.autoCreatedReason ? "نعم" : "",
+                  ageDays: String(Math.floor(
+                    (Date.now() - new Date(cc.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+                  )),
+                  jeCount: String(cc.jeCount),
+                  balance: "",
+                }));
+                const subRows = data.subsidiaryAccounts.map((sa) => ({
+                  kind: "subsidiary",
+                  id: String(sa.id),
+                  code: sa.accountCode,
+                  name: sa.accountName,
+                  type: `${sa.entityType}#${sa.entityId}`,
+                  autoCreated: "",
+                  ageDays: String(Math.floor(
+                    (Date.now() - new Date(sa.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+                  )),
+                  jeCount: String(sa.jeCount),
+                  balance: String(sa.currentBalance ?? 0),
+                }));
+                void exportRowsToCsv({
+                  entityType: "report_dormant_entities",
+                  title: `dormant-entities-${data.lookbackDays}d`,
+                  rows: [...ccRows, ...subRows],
+                  columns: [
+                    { key: "kind",        label: "النوع" },
+                    { key: "id",          label: "المعرّف" },
+                    { key: "code",        label: "الرمز" },
+                    { key: "name",        label: "الاسم" },
+                    { key: "type",        label: "التصنيف" },
+                    { key: "autoCreated", label: "تلقائي" },
+                    { key: "ageDays",     label: "العمر (يوماً)" },
+                    { key: "jeCount",     label: "عدد القيود" },
+                    { key: "balance",     label: "الرصيد" },
+                  ],
+                }).catch((err) => console.error("[dormant-entities export] failed", err));
+              }}
+              data-testid="dormant-export-csv"
+            >
+              <Download className="h-4 w-4 ms-1" />
+              CSV
+            </Button>
+          )}
+          <Link href="/finance/dimensional-routing">
+            <Button variant="ghost" data-testid="dormant-back-link">
+              <Network className="h-4 w-4 ms-1" />
+              رجوع للتأصيل
+            </Button>
+          </Link>
+        </div>
       }
     >
       <FinanceTabsNav />
