@@ -59,6 +59,16 @@ interface Response {
   totals: { costCenters: number; subsidiaryAccounts: number };
 }
 
+// Lookback presets — the four windows operators actually use. 30/90
+// cover routine cleanup; 180/365 surface seasonal CCs (umrah seasons,
+// annual contracts) before they're prematurely deleted.
+const LOOKBACK_PRESETS: { days: number; label: string }[] = [
+  { days: 30,  label: "آخر 30 يوماً" },
+  { days: 90,  label: "آخر 90 يوماً" },
+  { days: 180, label: "آخر 180 يوماً" },
+  { days: 365, label: "آخر سنة" },
+];
+
 const ENTITY_TYPE_LABEL: Record<string, string> = {
   employee: "موظف",
   client: "عميل",
@@ -159,35 +169,53 @@ export default function DormantEntitiesPage() {
       <FinanceTabsNav />
 
       <Card className="mb-3">
-        <CardContent className="p-3 flex items-end gap-2 flex-wrap">
-          <div>
-            <Label className="text-xs text-muted-foreground">فترة التحقق (أيام)</Label>
-            <Input
-              type="number"
-              min={7}
-              max={730}
-              value={days}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                if (Number.isFinite(v)) setDays(Math.max(7, Math.min(730, v)));
-              }}
-              className="w-32 h-8 text-xs"
-              data-testid="dormant-days-input"
-            />
+        <CardContent className="p-3 flex flex-col gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-muted-foreground ms-1">سريع:</span>
+            {LOOKBACK_PRESETS.map((p) => (
+              <Button
+                key={p.days}
+                size="sm"
+                variant={days === p.days ? "default" : "outline"}
+                className="h-7 text-xs"
+                onClick={() => setDays(p.days)}
+                data-testid={`dormant-preset-${p.days}d`}
+                data-active={days === p.days ? "true" : "false"}
+              >
+                {p.label}
+              </Button>
+            ))}
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => refetch()}
-            data-testid="dormant-refresh"
-          >
-            تحديث
-          </Button>
-          {data && (
-            <span className="text-xs text-muted-foreground ms-auto">
-              فترة التحقق: آخر {data.lookbackDays} يوماً
-            </span>
-          )}
+          <div className="flex items-end gap-2 flex-wrap">
+            <div>
+              <Label className="text-xs text-muted-foreground">فترة التحقق (أيام)</Label>
+              <Input
+                type="number"
+                min={7}
+                max={730}
+                value={days}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v)) setDays(Math.max(7, Math.min(730, v)));
+                }}
+                className="w-32 h-8 text-xs"
+                data-testid="dormant-days-input"
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => refetch()}
+              data-testid="dormant-refresh"
+            >
+              تحديث
+            </Button>
+            {data && (
+              <span className="text-xs text-muted-foreground ms-auto">
+                فترة التحقق: آخر {data.lookbackDays} يوماً
+              </span>
+            )}
+          </div>
         </CardContent>
       </Card>
 
