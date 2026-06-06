@@ -18,6 +18,8 @@ import {
   emitEvent,
   createAuditLog,
   initiateApprovalChain,
+  checkFinancialPeriodOpen,
+  todayISO,
 } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -530,6 +532,18 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
       });
     }
 
+    // F5 (audit follow-up): typed period gate up front. The JE engine
+    // guards internally so no GL leaks into a closed period, but the
+    // operator-facing error becomes a clean ConflictError with the
+    // period name instead of an opaque engine throw.
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن إصدار عهدة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { meta: { periodName: periodCheck.periodName } },
+      );
+    }
+
     let resolvedAssignmentId = assignmentId ? Number(assignmentId) : null;
     let resolvedEmployeeName = employeeName || "";
 
@@ -679,6 +693,15 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
         field: !custodyRef ? "custodyRef" : "amount",
         fix: "أدخل مرجع العهدة (CUSTODY-...) ومبلغ التسوية الموجب",
       });
+    }
+
+    // F5 (audit follow-up): typed period gate up front.
+    const settlePeriodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!settlePeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسوية عهدة في فترة مُقفلة: ${settlePeriodCheck.periodName ?? ""}`,
+        { meta: { periodName: settlePeriodCheck.periodName } },
+      );
     }
 
     const settleAmount = Number(amount);
@@ -838,6 +861,15 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
 
     const custodyId = parseId(req.params.id, "id");
     const { amount, description, sourceAccountCode } = zodParse(settleCustodyByIdSchema.safeParse(req.body ?? {}));
+
+    // F5 (audit follow-up): typed period gate up front.
+    const settleByIdPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!settleByIdPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسوية عهدة في فترة مُقفلة: ${settleByIdPeriodCheck.periodName ?? ""}`,
+        { meta: { periodName: settleByIdPeriodCheck.periodName } },
+      );
+    }
 
     const [custody] = await rawQuery<CustodyRefStatusRow>(
       `SELECT je.ref, je.status AS "approvalStatus" FROM journal_entries je

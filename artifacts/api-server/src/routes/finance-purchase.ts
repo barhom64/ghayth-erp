@@ -2687,6 +2687,16 @@ purchaseRouter.post("/vendor-advances/:id/apply", authorize({ feature: "finance.
     const { poId, amount } = zodParse(applyVendorAdvanceSchema.safeParse(req.body ?? {}));
     const applyAmt = roundTo2(Number(amount));
 
+    // F4 (audit follow-up): typed period gate up front — mirrors the
+    // customer-advances/apply fix.
+    const vAdvPeriod = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!vAdvPeriod.open) {
+      throw new ConflictError(
+        `لا يمكن تطبيق دفعة مقدمة للمورد في فترة مُقفلة: ${vAdvPeriod.periodName ?? ""}`,
+        { meta: { periodName: vAdvPeriod.periodName } },
+      );
+    }
+
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apCode, advReceivableCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
@@ -2904,6 +2914,15 @@ purchaseRouter.post("/vendor-credits/:id/apply", authorize({ feature: "finance.p
     const memoId = parseId(req.params.id, "id");
     const { poId, amount } = zodParse(applyVendorCreditSchema.safeParse(req.body ?? {}));
     const applyAmt = roundTo2(Number(amount));
+
+    // F4 (audit follow-up): typed period gate up front.
+    const vCreditPeriod = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!vCreditPeriod.open) {
+      throw new ConflictError(
+        `لا يمكن تطبيق إشعار دائن مورد في فترة مُقفلة: ${vCreditPeriod.periodName ?? ""}`,
+        { meta: { periodName: vCreditPeriod.periodName } },
+      );
+    }
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apCode, creditClearingCode] = await Promise.all([
