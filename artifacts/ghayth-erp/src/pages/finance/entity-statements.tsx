@@ -17,6 +17,7 @@ import {
   FileText,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
 import {
   ClientSelect,
   SupplierSelect,
@@ -105,24 +106,32 @@ export default function EntityStatementsPage() {
         <CardHeader>
           <CardTitle className="text-sm">الفترة</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground">من تاريخ</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="rounded-md border bg-background px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground">إلى تاريخ</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="rounded-md border bg-background px-3 py-2 text-sm"
-            />
+        <CardContent className="flex flex-col gap-3">
+          <DateRangePresets
+            value={{ from: startDate, to: endDate }}
+            onChange={(r) => { setStartDate(r.from); setEndDate(r.to); }}
+            testidPrefix="entity-statements-preset"
+            hideAllTime
+          />
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">من تاريخ</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="rounded-md border bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">إلى تاريخ</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="rounded-md border bg-background px-3 py-2 text-sm"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
