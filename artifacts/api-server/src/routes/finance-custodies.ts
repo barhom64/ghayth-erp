@@ -19,6 +19,7 @@ import {
   createAuditLog,
   initiateApprovalChain,
   checkFinancialPeriodOpen,
+  todayISO,
 } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -535,8 +536,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
     // guards internally so no GL leaks into a closed period, but the
     // operator-facing error becomes a clean ConflictError with the
     // period name instead of an opaque engine throw.
-    const today = new Date().toISOString().slice(0, 10);
-    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, today);
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
     if (!periodCheck.open) {
       throw new ConflictError(
         `لا يمكن إصدار عهدة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
@@ -696,8 +696,7 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
     }
 
     // F5 (audit follow-up): typed period gate up front.
-    const settleToday = new Date().toISOString().slice(0, 10);
-    const settlePeriodCheck = await checkFinancialPeriodOpen(scope.companyId, settleToday);
+    const settlePeriodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
     if (!settlePeriodCheck.open) {
       throw new ConflictError(
         `لا يمكن تسوية عهدة في فترة مُقفلة: ${settlePeriodCheck.periodName ?? ""}`,
@@ -864,8 +863,7 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
     const { amount, description, sourceAccountCode } = zodParse(settleCustodyByIdSchema.safeParse(req.body ?? {}));
 
     // F5 (audit follow-up): typed period gate up front.
-    const settleByIdToday = new Date().toISOString().slice(0, 10);
-    const settleByIdPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, settleByIdToday);
+    const settleByIdPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
     if (!settleByIdPeriodCheck.open) {
       throw new ConflictError(
         `لا يمكن تسوية عهدة في فترة مُقفلة: ${settleByIdPeriodCheck.periodName ?? ""}`,
