@@ -65,17 +65,27 @@ router.get(
   async (req, res) => {
     try {
       const scope = req.scope!;
+      // Pre-aggregate numbering_assignments counts via CTE instead
+      // of running a scalar subquery per row. Original was N+1: one
+      // execution per returned scheme, so a company with N schemes
+      // fired N+1 lookups through numbering_assignments. The CTE
+      // scans the join table once.
       const rows = await rawQuery<Record<string, unknown>>(
-        `SELECT s.id, s."moduleKey", s."entityKey", s."displayNameAr", s."displayNameEn",
+        `WITH assignment_counts AS (
+           SELECT "schemeId", COUNT(*) AS "assignmentCount"
+           FROM numbering_assignments
+           GROUP BY "schemeId"
+         )
+         SELECT s.id, s."moduleKey", s."entityKey", s."displayNameAr", s."displayNameEn",
                 s.prefix, s.pattern, s."padLength", s."resetPolicy", s."scopePolicy",
                 s."issueTiming", s."manualEditPolicy", s."requiresReasonOnManualEdit",
                 s."lockAfterStatuses", s."branchPrefixOverrides", s."isActive",
                 s."defaultEntityTable", s."defaultRefColumn",
                 s."lastBackfillAt", s."lastBackfillCount",
                 s."createdAt", s."updatedAt",
-                (SELECT COUNT(*)::int FROM numbering_assignments a
-                  WHERE a."schemeId" = s.id) AS "assignmentCount"
+                COALESCE(ac."assignmentCount", 0)::int AS "assignmentCount"
            FROM numbering_schemes s
+           LEFT JOIN assignment_counts ac ON ac."schemeId" = s.id
           WHERE s."companyId" = $1
           ORDER BY s."moduleKey", s."entityKey"`,
         [scope.companyId],
