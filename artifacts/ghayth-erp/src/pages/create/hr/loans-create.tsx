@@ -46,9 +46,6 @@ export default function LoansCreate() {
     [employees, form.assignmentId]
   );
 
-  if (employeesQ.isLoading) return <LoadingSpinner />;
-  if (employeesQ.isError) return <ErrorState />;
-
   const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
   const maxLoan = salary * 3;
   const amount = Number(form.amount || 0);
@@ -97,6 +94,9 @@ export default function LoansCreate() {
     const m = isDec ? 1 : currentMonth + 1;
     return `${y}-${String(m).padStart(2, "0")}`;
   }, []);
+
+  if (employeesQ.isLoading) return <LoadingSpinner />;
+  if (employeesQ.isError) return <ErrorState />;
 
   return (
     <CreatePageLayout
