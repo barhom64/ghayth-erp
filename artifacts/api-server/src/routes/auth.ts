@@ -60,6 +60,11 @@ interface RefreshTokenRow {
   isActive: boolean;
   employeeId: number;
   lockedUntil: string | null;
+  // Carried through from employees.companyId so the downstream
+  // employee_assignments lookup stays tenant-scoped — without it the
+  // assignment query falls back to employeeId alone, which the
+  // tenant-isolation guard flags as cross-tenant risk.
+  companyId: number;
 }
 
 interface AssignmentRefreshRow {
@@ -534,9 +539,10 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
     }
 
     const [rt] = await rawQuery<RefreshTokenRow>(
-      `SELECT rt.*, u."isActive", u."employeeId", u."lockedUntil"
+      `SELECT rt.*, u."isActive", u."employeeId", u."lockedUntil", e."companyId"
        FROM refresh_tokens rt
        JOIN users u ON u.id = rt."userId"
+       JOIN employees e ON e.id = u."employeeId"
        WHERE rt.token = $1`,
       [refreshToken]
     );
@@ -561,11 +567,17 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
       throw new ForbiddenError("الحساب مقفل مؤقتاً");
     }
 
+    // Tenant scope: an employee record belongs to exactly one company.
+    // Constraining the assignment lookup by BOTH employeeId AND
+    // companyId enforces the invariant at query time — closes the
+    // cross-tenant risk the static guard flagged at this call site.
     const [primaryAssignment] = await rawQuery<AssignmentRefreshRow>(
       `SELECT ea.id, ea.role FROM employee_assignments ea
-       WHERE ea."employeeId" = $1 AND ea.status = 'active'
+       WHERE ea."employeeId" = $1
+         AND ea."companyId" = $2
+         AND ea.status = 'active'
        ORDER BY ea."isPrimary" DESC NULLS LAST LIMIT 1`,
-      [rt.employeeId]
+      [rt.employeeId, rt.companyId]
     );
 
     if (!primaryAssignment) {
