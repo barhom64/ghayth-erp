@@ -80,9 +80,6 @@ export default function IDPPage() {
     onSuccess: () => refetch(),
   });
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const handleSave = async (values: IdpForm) => {
     const payload = {
       ...values,
@@ -107,6 +104,11 @@ export default function IDPPage() {
     dateField: "createdAt",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const stats = {
     total: plans.length,
