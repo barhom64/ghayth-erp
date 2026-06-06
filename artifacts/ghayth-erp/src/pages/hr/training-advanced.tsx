@@ -23,13 +23,15 @@ export default function TrainingAdvancedPage() {
   const isLoading = statsLoading || programsLoading || enrollmentsLoading;
   const isError = statsError || programsError || enrollmentsError;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const stats = statsData || {};
   const programs = programsData?.data || [];
   const enrollments = enrollmentsData?.data || [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(enrollments);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const completionRate = stats.totalEnrollments > 0
     ? Math.round((stats.completedEnrollments / stats.totalEnrollments) * 100) : 0;
