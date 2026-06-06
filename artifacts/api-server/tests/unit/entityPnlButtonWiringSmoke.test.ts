@@ -20,7 +20,17 @@ const PAGES = {
   vehicle: readFileSync(join(import.meta.dirname!, "../../../ghayth-erp/src/pages/details/vehicle-detail.tsx"), "utf8"),
   project: readFileSync(join(import.meta.dirname!, "../../../ghayth-erp/src/pages/details/project-detail.tsx"), "utf8"),
   umrah_agent: readFileSync(join(import.meta.dirname!, "../../../ghayth-erp/src/pages/details/umrah-agent-detail.tsx"), "utf8"),
+  // Phase 2 — the remaining 4 routable entity types from the backend allowlist.
+  employee: readFileSync(join(import.meta.dirname!, "../../../ghayth-erp/src/pages/employee-detail.tsx"), "utf8"),
+  driver: readFileSync(join(import.meta.dirname!, "../../../ghayth-erp/src/pages/details/driver-detail.tsx"), "utf8"),
+  contract: readFileSync(join(import.meta.dirname!, "../../../ghayth-erp/src/pages/details/legal-contract-detail.tsx"), "utf8"),
+  umrah_season: readFileSync(join(import.meta.dirname!, "../../../ghayth-erp/src/pages/details/umrah-season-detail.tsx"), "utf8"),
 };
+
+const RANKING_PAGE = readFileSync(
+  join(import.meta.dirname!, "../../../ghayth-erp/src/pages/finance/entity-ranking.tsx"),
+  "utf8",
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared component
@@ -73,4 +83,35 @@ describe("Detail-page wiring — one line of integration per page", () => {
       expect(page).toMatch(new RegExp(`<EntityPnlButton entityType="${entityType}"`));
     });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Entity-ranking page — CSV export action button
+// ─────────────────────────────────────────────────────────────────────────────
+describe("entity-ranking page — CSV export", () => {
+  it("imports exportRowsToCsv from the unified-export helper", () => {
+    expect(RANKING_PAGE).toMatch(/import \{ exportRowsToCsv \} from "@\/lib\/unified-export"/);
+  });
+
+  it("renders an export button only when data has rows (no-op for empty results)", () => {
+    expect(RANKING_PAGE).toMatch(/data && data\.rows\.length > 0/);
+  });
+
+  it("entityType=report_entity_ranking on the export payload — letterhead routing", () => {
+    expect(RANKING_PAGE).toMatch(/entityType: "report_entity_ranking"/);
+  });
+
+  it("CSV columns cover rank + id + name + revenue + expense + net + entries (7 columns)", () => {
+    for (const k of ["rank", "entityId", "entityName", "revenue", "expense", "net", "entries"]) {
+      expect(RANKING_PAGE).toContain(`key: "${k}"`);
+    }
+  });
+
+  it("filename encodes the current entityType + metric + direction (operators recognise their export)", () => {
+    expect(RANKING_PAGE).toMatch(/`entity-ranking-\$\{entityType\}-\$\{metric\}-\$\{direction\}`/);
+  });
+
+  it("stable testid on the export button", () => {
+    expect(RANKING_PAGE).toContain('data-testid="entity-ranking-export-csv"');
+  });
 });
