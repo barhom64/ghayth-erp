@@ -517,6 +517,17 @@ export function substitute(input: SubstitutionInput): string {
       ? `<img src="${verifyQrDataUrl}" alt="رمز التحقق" style="width:90px;height:90px;display:block;"/>`
       : "",
     "system.verifyBlock": buildVerifyBlock({ verifyUrl, verifyQrDataUrl, jobId }),
+    // ZATCA invoice QR — rendered as <img> when the invoice carries a
+    // zatcaQrImage data URL (data loader fills it from the stored TLV
+    // base64). Phase-1 TLV is required on every B2C / B2B tax invoice
+    // under ZATCA — without the QR the printed invoice is non-compliant.
+    "entity.zatcaQr": (() => {
+      const entity = data?.entity as Record<string, unknown> | undefined;
+      const img = (entity?.zatcaQrImage as string | undefined) ?? "";
+      return img
+        ? `<img src="${img}" alt="ZATCA QR" style="width:140px;height:140px;display:block;border:1px solid #cbd5e1;padding:4px;background:#fff"/>`
+        : "";
+    })(),
     "entity.itemsTable": buildItemsTable((data as { items?: unknown }).items),
     "entity.linesTable": buildLinesTable((data as { lines?: unknown }).lines),
     "entity.movementsTable": buildMovementsTable((data as { movements?: unknown }).movements),
