@@ -79,11 +79,13 @@ export default function DunningPage() {
     ["dunning-preview"], ["dunning-history"],
   ]);
 
+  const invoices = preview?.invoices ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<OverdueInvoice>(invoices);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError || !preview) return <ErrorState />;
 
-  const invoices = preview.invoices;
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<OverdueInvoice>(invoices);
   const allSelected = invoices.length > 0 && selected.size === invoices.length;
 
   const toggleAll = () => {

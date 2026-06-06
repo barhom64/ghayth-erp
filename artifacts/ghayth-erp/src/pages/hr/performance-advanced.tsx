@@ -17,11 +17,13 @@ import { usePrintRows } from "@/hooks/use-print-rows";
 export default function PerformanceAdvancedPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["performance"], "/hr/performance");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const items = data?.data || [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const avgScore = items.length > 0
     ? (items.reduce((s: number, p: any) => s + Number(p.overallScore || 0), 0) / items.length).toFixed(1)

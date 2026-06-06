@@ -77,7 +77,6 @@ export default function GlHealthScorePage() {
   const qPeriods     = useApiQuery<{ data: Array<{ id: number; name: string; status: string; endDate: string }> }>(["health-periods"], `/finance/fiscal-periods-v2`);
 
   const loading = qAlloc.isLoading || qIntegrity.isLoading || qUnmapped.isLoading || qDraftJrnl.isLoading;
-  if (loading) return <LoadingSpinner />;
 
   const dimensions = useMemo<Dimension[]>(() => {
     const dims: Dimension[] = [];
@@ -198,6 +197,8 @@ export default function GlHealthScorePage() {
 
     return dims;
   }, [qAlloc.data, qIntegrity.data, qUnmapped.data, qDraftJrnl.data, qPendingJrnl.data, qFailures.data, qPeriods.data]);
+
+  if (loading) return <LoadingSpinner />;
 
   const overallScore = dimensions.reduce((s, d) => s + d.weightedScore, 0);
   const overallStatus = scoreToStatus(overallScore);

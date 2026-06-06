@@ -139,11 +139,13 @@ export default function VendorContractsPage() {
     notes: "",
   });
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const activeCount      = rows.filter((r) => r.status === "active").length;
   const expiringSoonCount = rows.filter((r) => {

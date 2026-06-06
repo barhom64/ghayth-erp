@@ -82,14 +82,14 @@ export default function JournalPage() {
     },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref"],
     dateField: "createdAt",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const columns: DataTableColumn<any>[] = [
     {
