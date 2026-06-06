@@ -20,6 +20,7 @@ import {
   BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator, LayoutGrid,
   RefreshCw, Globe, TrendingDown as TrendingDown2,
   Satellite, Bot, HardDrive, Video as VideoIcon, Award,
+  Inbox,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -604,6 +605,8 @@ const allNavSections: NavSection[] = [
         { label: "المراقبة والمتابعة", path: "/admin/monitoring", icon: Activity, children: [
           { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          // P2.3 — outbox queue monitor + retry/cancel actions.
+          { label: "صندوق الأحداث (Outbox)", path: "/admin/outbox", icon: Inbox, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
           { label: "مراقبة الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },

@@ -24,9 +24,10 @@
  * with feature=admin, action=list, matching the rest of admin.ts.
  */
 import { Router } from "express";
-import { rawQuery } from "../lib/rawdb.js";
+import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError, parseId } from "../lib/errorHandler.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -694,5 +695,187 @@ router.get(
     }
   },
 );
+
+// ─── P2.3 — outbox monitor ────────────────────────────────────────────────
+//
+// Admin surface for the event_outbox: paginated list filterable by
+// status, plus retry / cancel actions for stuck rows. Mounts under
+// /admin/observability/outbox (the parent already enforces module=admin
+// + minLevel=90 via routes/_domain-mounts.ts).
+//
+// Used together with the worker.ts /outbox-stats endpoint:
+//   - /outbox-stats           — fast count-by-status snapshot (no auth)
+//   - /admin/observability/outbox — paginated list + actions (admin only)
+
+const OUTBOX_VALID_STATUSES = new Set(["pending", "failed_retry", "processed", "dead"]);
+
+router.get("/outbox", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { status, eventName, page: pageStr = "1", limit: limStr = "50" } = req.query as Record<string, string | undefined>;
+
+    const page = Math.max(Number(pageStr) || 1, 1);
+    const perPage = Math.min(Number(limStr) || 50, 200);
+    const offset = (page - 1) * perPage;
+
+    const where: string[] = [];
+    const params: unknown[] = [];
+    // Optional company-scope. Owner / admin can see all; mounted gate
+    // (level 90) means a non-admin can't reach this anyway.
+    where.push(`("companyId" IS NULL OR "companyId" = $${params.length + 1})`);
+    params.push(scope.companyId);
+
+    if (status && OUTBOX_VALID_STATUSES.has(status)) {
+      where.push(`status = $${params.length + 1}`);
+      params.push(status);
+    }
+    if (eventName) {
+      where.push(`"eventName" = $${params.length + 1}`);
+      params.push(eventName);
+    }
+
+    const whereClause = where.join(" AND ");
+
+    const [{ total }] = await rawQuery<{ total: string }>(
+      `SELECT count(*)::text AS total FROM event_outbox WHERE ${whereClause}`,
+      params,
+    );
+
+    params.push(perPage, offset);
+    const rows = await rawQuery<{
+      id: string;
+      eventName: string;
+      payload: unknown;
+      companyId: number | null;
+      status: string;
+      attempts: number;
+      createdAt: string;
+      processedAt: string | null;
+      lastError: string | null;
+      idempotencyKey: string | null;
+    }>(
+      `SELECT id::text, "eventName", payload, "companyId", status, attempts,
+              "createdAt", "processedAt", "lastError", "idempotencyKey"
+         FROM event_outbox
+        WHERE ${whereClause}
+        ORDER BY "createdAt" DESC
+        LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
+
+    res.json({
+      data: rows,
+      total: Number(total),
+      page,
+      perPage,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "admin/observability/outbox list");
+  }
+});
+
+// Retry a single row by id. Resets it from 'failed_retry' or 'dead'
+// back to 'pending' (and zeros attempts so the relay's max-attempts
+// guard doesn't immediately re-bury it). Audit-logged.
+router.post("/outbox/:id/retry", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = String(req.params.id ?? ""); // bigint passed as string
+    if (!/^\d+$/.test(id)) {
+      res.status(400).json({ error: "id must be a numeric outbox row id" });
+      return;
+    }
+    const result = await rawExecute(
+      `UPDATE event_outbox
+          SET status = 'pending',
+              attempts = 0,
+              "lastError" = NULL,
+              "processedAt" = NULL
+        WHERE id = $1::bigint AND status IN ('failed_retry', 'dead')`,
+      [id],
+    );
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: "row not found, or status was not failed_retry / dead" });
+      return;
+    }
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "retry", entity: "event_outbox", entityId: Number(id),
+      after: { status: "pending", attempts: 0 },
+    }).catch((e) => logger.error(e, "outbox-retry audit failed"));
+
+    res.json({ ok: true, id });
+  } catch (err) {
+    handleRouteError(err, res, "admin/observability/outbox retry");
+  }
+});
+
+// Cancel a stuck row. Moves it to 'dead' so the purge can clean it up
+// on schedule and the relay stops trying. Audit-logged.
+router.post("/outbox/:id/cancel", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = String(req.params.id ?? "");
+    if (!/^\d+$/.test(id)) {
+      res.status(400).json({ error: "id must be a numeric outbox row id" });
+      return;
+    }
+    const result = await rawExecute(
+      `UPDATE event_outbox
+          SET status = 'dead',
+              "lastError" = COALESCE("lastError", '') || E'\nCancelled by admin (' || $2 || ')'
+        WHERE id = $1::bigint AND status IN ('pending', 'failed_retry')`,
+      [id, scope.userId],
+    );
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: "row not found, or status was not pending / failed_retry" });
+      return;
+    }
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "cancel", entity: "event_outbox", entityId: Number(id),
+      after: { status: "dead" },
+    }).catch((e) => logger.error(e, "outbox-cancel audit failed"));
+
+    res.json({ ok: true, id });
+  } catch (err) {
+    handleRouteError(err, res, "admin/observability/outbox cancel");
+  }
+});
+
+// Stats by status — fast count-by-status snapshot. Cheap aggregate
+// query backed by the implicit btree on status (Postgres uses
+// bitmap-scan over the partial-index pattern anyway).
+router.get("/outbox/stats", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const rows = await rawQuery<{
+      pending: string;
+      failed_retry: string;
+      processed: string;
+      dead: string;
+      oldest_pending_sec: string | null;
+    }>(
+      `SELECT
+         (count(*) FILTER (WHERE status = 'pending'))::text      AS pending,
+         (count(*) FILTER (WHERE status = 'failed_retry'))::text AS failed_retry,
+         (count(*) FILTER (WHERE status = 'processed'))::text    AS processed,
+         (count(*) FILTER (WHERE status = 'dead'))::text         AS dead,
+         extract(epoch FROM (now() - min("createdAt") FILTER (WHERE status = 'pending')))::text AS oldest_pending_sec
+       FROM event_outbox`,
+    );
+    const row = rows[0];
+    res.json({
+      pending: Number(row?.pending ?? 0),
+      failedRetry: Number(row?.failed_retry ?? 0),
+      processed: Number(row?.processed ?? 0),
+      dead: Number(row?.dead ?? 0),
+      oldestPendingSec: row?.oldest_pending_sec != null ? Math.round(Number(row.oldest_pending_sec)) : null,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "admin/observability/outbox stats");
+  }
+});
 
 export default router;
