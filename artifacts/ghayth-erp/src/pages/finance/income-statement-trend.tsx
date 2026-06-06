@@ -17,6 +17,7 @@ import {
   TrendingUp, TrendingDown, Download, BarChart3, ChevronRight,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { InlineSparkline } from "@/components/shared/inline-sparkline";
 
 /**
  * Income Statement Trend — last N months side-by-side
@@ -203,8 +204,15 @@ export default function IncomeStatementTrendPage() {
     const arrow = mom.pct > 5 ? <TrendingUp className="h-3 w-3 text-emerald-600" />
                 : mom.pct < -5 ? <TrendingDown className="h-3 w-3 text-red-600" />
                 : <span className="h-3 w-3 inline-block" />;
+    // Trend-at-a-glance: the FULL N-month trajectory beside the MoM
+    // number. The arrow + % is the headline; the spark is the shape
+    // (e.g. "+3%" could be steady creep OR a recent jump after flat
+    // months — only the spark distinguishes them).
+    const sparkTone: "success" | "warning" | "muted" =
+      mom.pct > 5 ? "success" : mom.pct < -5 ? "warning" : "muted";
     return (
       <div className="inline-flex items-center gap-1 text-[10px]">
+        <InlineSparkline values={amounts} tone={sparkTone} width={48} height={16} />
         {arrow}
         <span className={`font-mono ${mom.pct > 5 ? "text-emerald-700" : mom.pct < -5 ? "text-red-700" : "text-muted-foreground"}`}>
           {mom.pct > 0 ? "+" : ""}{mom.pct.toFixed(0)}%
