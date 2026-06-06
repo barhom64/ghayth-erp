@@ -14,6 +14,7 @@ import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { InlineSparkline } from "@/components/shared/inline-sparkline";
 /**
  * COGS / Margin summary report — consumes #1034's
  * /reports/cogs-summary endpoint.
@@ -251,6 +252,11 @@ export default function CogsSummaryPage() {
             <p className="text-xl font-bold text-status-info-foreground mt-1">
               {formatCurrency(summary.totalRevenue)}
             </p>
+            <InlineSparkline
+              values={byPeriod.map((p) => p.revenue)}
+              tone="neutral"
+              testid="cogs-summary-revenue-spark"
+            />
           </CardContent>
         </Card>
         <Card>
@@ -260,6 +266,11 @@ export default function CogsSummaryPage() {
             <p className="text-xl font-bold text-orange-700 mt-1">
               {formatCurrency(summary.totalCogsGross)}
             </p>
+            <InlineSparkline
+              values={byPeriod.map((p) => p.cogsNet)}
+              tone="warning"
+              testid="cogs-summary-cogs-spark"
+            />
           </CardContent>
         </Card>
         <Card>
@@ -277,6 +288,11 @@ export default function CogsSummaryPage() {
             <p className="text-xl font-bold text-emerald-700 mt-1">
               {formatCurrency(summary.totalProfit)}
             </p>
+            <InlineSparkline
+              values={byPeriod.map((p) => p.profit)}
+              tone={summary.totalProfit >= 0 ? "success" : "warning"}
+              testid="cogs-summary-profit-spark"
+            />
           </CardContent>
         </Card>
         <Card>
@@ -286,6 +302,11 @@ export default function CogsSummaryPage() {
             <p className={`text-xl font-bold mt-1 ${marginColor(summary.marginPct)}`}>
               {summary.marginPct.toFixed(2)}%
             </p>
+            <InlineSparkline
+              values={byPeriod.map((p) => p.marginPct)}
+              tone={summary.marginPct >= 0 ? "success" : "warning"}
+              testid="cogs-summary-margin-spark"
+            />
           </CardContent>
         </Card>
       </div>
