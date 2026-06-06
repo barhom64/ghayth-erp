@@ -5631,7 +5631,12 @@ CREATE TABLE public.delegations (
     status character varying(20) DEFAULT 'active'::character varying,
     "startDate" date,
     "endDate" date,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    features jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "createdBy" integer,
+    source character varying(32) DEFAULT 'manual'::character varying NOT NULL,
+    "refType" character varying(64),
+    "refId" integer
 );
 
 
