@@ -28,11 +28,13 @@ const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#9ca3af"];
 export default function OccupancyReportPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["occupancy-report"], "/properties/occupancy-report");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const units = asList(data?.units || []);
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(units);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
   const pieData = [
     { name: "مؤجرة", value: data?.occupied || 0 },
     { name: "متاحة", value: data?.available || 0 },
