@@ -327,9 +327,21 @@ router.get("/pending", authorize({ feature: "admin", action: "list" }), async (r
 router.get("/definitions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Pre-aggregate workflow_steps once instead of running a scalar
+    // subquery per row. The original SELECT-list correlated subquery
+    // was N+1: postgres planned one execution per returned
+    // workflow_definition row, so 500 definitions == 501 lookups
+    // through workflow_steps. The CTE below scans the table once and
+    // joins per-definition counts back.
     const defs = await rawQuery<Record<string, unknown>>(
-      `SELECT wd.*, (SELECT COUNT(*) FROM workflow_steps ws WHERE ws."definitionId" = wd.id) AS "stepCount"
+      `WITH step_counts AS (
+         SELECT "definitionId", COUNT(*) AS "stepCount"
+         FROM workflow_steps
+         GROUP BY "definitionId"
+       )
+       SELECT wd.*, COALESCE(sc."stepCount", 0)::int AS "stepCount"
        FROM workflow_definitions wd
+       LEFT JOIN step_counts sc ON sc."definitionId" = wd.id
        WHERE wd."companyId" = $1
        ORDER BY wd."requestTypeLabel" LIMIT 500`,
       [scope.companyId]
