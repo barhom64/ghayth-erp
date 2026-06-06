@@ -20,6 +20,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { APPROVAL_ROLES, APPROVAL_CHAIN_STATUS } from "@/lib/hr-type-maps";
 
@@ -360,6 +361,21 @@ export default function ApprovalChainsPage() {
             values={filters}
             onChange={setFilters}
             resultCount={filtered.length}
+            onExportCSV={() =>
+              exportToCSV(
+                filtered || [],
+                [
+                  { key: "requestId", label: "رقم الطلب" },
+                  { key: "employeeName", label: "الموظف" },
+                  { key: "leaveTypeName", label: "نوع الإجازة" },
+                  { key: "stage", label: "المرحلة" },
+                  { key: "requiredRole", label: "الدور المطلوب" },
+                  { key: "decision", label: "القرار" },
+                  { key: "status", label: "الحالة" },
+                ],
+                "مراحل-الاعتماد",
+              )
+            }
           />
           <DataTable
             columns={columns}
