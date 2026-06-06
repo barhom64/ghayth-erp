@@ -14,7 +14,7 @@
  * BulkCheckbox) into a single API that pages can adopt instead of wiring these
  * pieces by hand.
  */
-import { Fragment, ReactNode, useMemo, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Table,
   TableBody,
@@ -106,6 +106,13 @@ interface DataTableProps<T> {
   selectable?: boolean;
   /** Notified when the selection changes. */
   onSelectionChange?: (ids: number[]) => void;
+  /**
+   * Notified whenever the rows the table is about to render change — i.e.
+   * after filter + sort, before pagination. Pages use this to feed the
+   * same ordering into the PrintButton payload so prints respect the
+   * user's current sort.
+   */
+  onSortedDataChange?: (rows: T[]) => void;
   /** Bulk action buttons shown when ≥1 row selected. */
   bulkActions?: BulkAction[];
 
@@ -176,6 +183,7 @@ export function DataTable<T>({
   rowClassName,
   selectable = false,
   onSelectionChange,
+  onSortedDataChange,
   bulkActions,
   searchPlaceholder = "بحث...",
   statusOptions,
@@ -230,6 +238,12 @@ export function DataTable<T>({
 
   // --- Sort ---
   const { sortedData, sortState, handleSort } = useSortedData<T>(filteredData ?? []);
+
+  // Publish post-filter+sort rows so PrintButton can use the user's
+  // current ordering instead of the original `data` order.
+  useEffect(() => {
+    onSortedDataChange?.(sortedData ?? []);
+  }, [sortedData, onSortedDataChange]);
 
   // --- Pagination ---
   const isServerPaginated = typeof total === "number" && typeof pageProp === "number";

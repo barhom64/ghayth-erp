@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ClipboardList, Plus, Send, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface PurchaseRequestItem {
   id: number;
@@ -133,6 +134,7 @@ export default function PurchaseRequestsPage() {
   if (isError) return <ErrorState />;
 
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const draftCount     = rows.filter((r) => r.status === "draft").length;
   const pendingCount   = rows.filter((r) => r.status === "pending" || r.status === "submitted").length;
@@ -269,9 +271,9 @@ export default function PurchaseRequestsPage() {
             entityType="report_finance_purchase_requests"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "طلبات الشراء", total: rows.length },
-              items: rows.map((r) => ({
+            payload={() => ({
+              entity: { title: "طلبات الشراء", total: printRows.length },
+              items: printRows.map((r) => ({
                 "المرجع": r.ref,
                 "مقدم الطلب": r.requestedByName || "—",
                 "المورد المقترح": r.supplierName || "—",
@@ -280,7 +282,7 @@ export default function PurchaseRequestsPage() {
                 "عدد الأصناف": Array.isArray(r.items) ? r.items.length : "—",
                 "الحالة": STATUS_LABEL[r.status] || r.status,
               })),
-            }}
+            })}
           />
         </>
       }
@@ -361,6 +363,7 @@ export default function PurchaseRequestsPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={30}
             emptyMessage={
               statusFilter

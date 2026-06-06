@@ -18,6 +18,7 @@ import { Plus, X } from "lucide-react";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 /**
  * HR-010 — Delegations admin page. Lists active/historical delegations from
  * GET /hr/delegations and creates new ones via POST. Server has no
@@ -37,6 +38,7 @@ export default function DelegationsPage() {
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["hr-delegations"], "/hr/delegations");
   const delegations = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(delegations);
 
   const { data: empsResp } = useApiQuery<any>(["employees-list"], "/employees?limit=500");
   const employees = asList(empsResp?.data || empsResp);
@@ -90,9 +92,9 @@ export default function DelegationsPage() {
             entityType="report_hr_delegations"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "تفويضات الصلاحيات", total: delegations.length },
-              items: delegations.map((d: any) => ({
+            payload={() => ({
+              entity: { title: "تفويضات الصلاحيات", total: printRows.length },
+              items: printRows.map((d: any) => ({
                 "المُفوِّض": d.delegatorName || d.fromEmployeeName || "—",
                 "المُفوَّض إليه": d.delegateName || d.toEmployeeName || "—",
                 "النوع": d.delegationType || d.type || "—",
@@ -100,7 +102,7 @@ export default function DelegationsPage() {
                 "إلى تاريخ": d.endDate || "—",
                 "الحالة": d.status || "—",
               })),
-            }}
+            })}
           />
           {!showNew ? (
             <GuardedButton perm="hr.organization:approve" onClick={() => setShowNew(true)}>
@@ -157,6 +159,7 @@ export default function DelegationsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={delegations}
         emptyMessage="لا توجد تفويضات"
         noToolbar

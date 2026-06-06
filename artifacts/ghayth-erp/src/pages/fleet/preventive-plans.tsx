@@ -23,6 +23,7 @@ import {
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -121,6 +122,7 @@ export default function PreventivePlansPage() {
     searchFields: ["plateNumber", "serviceType"],
     statusField: "serviceType",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -248,9 +250,9 @@ export default function PreventivePlansPage() {
             entityType="report_fleet_preventive_plans"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "خطط الصيانة الوقائية", total: filtered.length },
-              items: filtered.map((p: any) => ({
+            payload={() => ({
+              entity: { title: "خطط الصيانة الوقائية", total: printRows.length },
+              items: printRows.map((p: any) => ({
                 "المركبة": p.plateNumber || `#${p.vehicleId}`,
                 "نوع الخدمة": SERVICE_TYPES[p.serviceType] || p.serviceType || "—",
                 "الفاصل (كم)": p.intervalKm ?? "—",
@@ -260,7 +262,7 @@ export default function PreventivePlansPage() {
                 "التكلفة المتوقعة": Number(p.estimatedCost || 0),
                 "الحالة": p.status || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -344,6 +346,7 @@ export default function PreventivePlansPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد خطط صيانة وقائية"

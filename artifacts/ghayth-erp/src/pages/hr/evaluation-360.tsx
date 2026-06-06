@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "in_progress", label: "جارٍ التقييم" },
   { value: "completed",   label: "مكتمل"        },
@@ -52,6 +53,7 @@ export default function Evaluation360Page() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const stats = {
     total: cycles.length,
@@ -173,9 +175,9 @@ export default function Evaluation360Page() {
             entityType="report_hr_evaluation_360"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "دورات التقييم 360°", total: filtered.length },
-              items: filtered.map((c: any) => ({
+            payload={() => ({
+              entity: { title: "دورات التقييم 360°", total: printRows.length },
+              items: printRows.map((c: any) => ({
                 "العنوان": c.title || c.name || "—",
                 "بداية الدورة": c.startDate || "—",
                 "نهاية الدورة": c.endDate || "—",
@@ -183,7 +185,7 @@ export default function Evaluation360Page() {
                 "عدد المُقَيَّمين": c.subjectCount ?? "—",
                 "الحالة": c.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/hr/evaluation-360/create">
             <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
@@ -213,6 +215,7 @@ export default function Evaluation360Page() {
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد دورات تقييم — ابدأ بإنشاء دورة تقييم للموظفين"

@@ -32,6 +32,7 @@ import {
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -75,6 +76,7 @@ export default function ViolationsPage() {
     "/hr/discipline/memos",
   );
   const memos = memosResp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(memos);
 
   const { data: stats } = useApiQuery<any>(
     ["discipline-memos-stats"],
@@ -153,9 +155,9 @@ export default function ViolationsPage() {
             entityType="report_hr_violations"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "مخالفات الموظفين", total: memos.length },
-              items: memos.map((v: any) => ({
+            payload={() => ({
+              entity: { title: "مخالفات الموظفين", total: printRows.length },
+              items: printRows.map((v: any) => ({
                 "الموظف": v.employeeName || "—",
                 "النوع": v.violationType || v.penaltyLabel || "—",
                 "التاريخ": v.violationDate || v.date || "—",
@@ -163,7 +165,7 @@ export default function ViolationsPage() {
                 "المُذكِّر": v.issuedByName || "—",
                 "الحالة": v.status || "—",
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -188,7 +190,7 @@ export default function ViolationsPage() {
         </TabsList>
 
         <TabsContent value="overview"><OverviewTab memos={memos} stats={stats} /></TabsContent>
-        <TabsContent value="memos"><MemosTab memos={memos} /></TabsContent>
+        <TabsContent value="memos"><MemosTab memos={memos} onSortedDataChange={setPrintRows} /></TabsContent>
         <TabsContent value="auto"><AutoDetectionLink /></TabsContent>
         <TabsContent value="regulation"><RegulationLink /></TabsContent>
       </Tabs>
@@ -318,7 +320,7 @@ function QuickLink({ href, icon: Icon, label, color }: { href: string; icon: any
 
 // ───────────────────────── Memos List Tab ─────────────────────────
 
-function MemosTab({ memos }: { memos: any[] }) {
+function MemosTab({ memos, onSortedDataChange }: { memos: any[]; onSortedDataChange?: (rows: any[]) => void }) {
   const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
@@ -488,6 +490,7 @@ function MemosTab({ memos }: { memos: any[] }) {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={onSortedDataChange}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد محاضر مخالفات — سجّل مخالفة جديدة للبدء"

@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock, Target, Grid3x3, TrendingUp } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface BudgetApprovalRequest {
   id: number;
@@ -79,6 +80,7 @@ export default function BudgetApprovalsPage() {
   if (isError) return <ErrorState />;
 
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const totalRequested = rows.reduce((s, r) => s + Number(r.requestedAmount ?? 0), 0);
   const gmCount = rows.filter((r) => r.approvalLevel === "gm").length;
@@ -274,9 +276,9 @@ export default function BudgetApprovalsPage() {
             entityType="report_finance_budget_approvals"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "اعتمادات تجاوز الميزانية", total: rows.length },
-              items: rows.map((r) => ({
+            payload={() => ({
+              entity: { title: "اعتمادات تجاوز الميزانية", total: printRows.length },
+              items: printRows.map((r) => ({
                 "الحساب": r.accountCode,
                 "الاسم": r.accountName || "—",
                 "الفترة": r.period,
@@ -284,11 +286,11 @@ export default function BudgetApprovalsPage() {
                 "الميزانية": Number(r.budgetAmount || 0),
                 "% قبل": Number(r.utilizationBefore || 0).toFixed(1),
                 "% بعد": Number(r.utilizationAfter || 0).toFixed(1),
-                "المستوى": LEVEL_LABEL[r.approvalLevel] || r.approvalLevel,
+                "المستوى": LEVEL_LABEL[r.approvalLevel as keyof typeof LEVEL_LABEL] || r.approvalLevel,
                 "السبب": r.reason || "—",
                 "الحالة": r.status,
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -360,6 +362,7 @@ export default function BudgetApprovalsPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={30}
             emptyMessage={
               statusFilter === "pending"

@@ -14,6 +14,7 @@ import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 import { ProductAccountingEditDialog } from "@/components/finance/product-accounting-edit-dialog";
 import { Pencil } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface ProductCatalogRow {
   id: number;
@@ -92,6 +93,7 @@ export default function ProductCatalogPage() {
     }
     return true;
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const stats = allRows.reduce((acc, p) => {
     acc.total += 1;
@@ -198,9 +200,9 @@ export default function ProductCatalogPage() {
           entityType="report_finance_product_catalog"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "كتالوج المنتجات والخدمات المحاسبي", total: filtered.length },
-            items: filtered.map((p) => ({
+          payload={() => ({
+            entity: { title: "كتالوج المنتجات والخدمات المحاسبي", total: printRows.length },
+            items: printRows.map((p) => ({
               "الاسم": p.name,
               "SKU": p.sku || "—",
               "النوع": ITEM_TYPE_LABEL[p.itemType || ""]?.label || p.itemType || "—",
@@ -211,7 +213,7 @@ export default function ProductCatalogPage() {
               "رمز الضريبة": p.defaultTaxCode || "—",
               "استراتيجية مركز التكلفة": STRATEGY_LABEL[p.defaultCostCenterStrategy || ""] || p.defaultCostCenterStrategy || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -303,6 +305,7 @@ export default function ProductCatalogPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={filtered}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               search || typeFilter || routedFilter

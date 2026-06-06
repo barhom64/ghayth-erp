@@ -48,6 +48,7 @@ import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 
 export default function ExpensesPage() {
@@ -74,6 +75,7 @@ export default function ExpensesPage() {
     dateField: "",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((i: any) => tagFilteredIds.has(i.id)) : preFiltered;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const totalExpenses = items.reduce((s: number, e: any) => {
     if (e.amount) return s + Number(e.amount);
@@ -203,9 +205,9 @@ export default function ExpensesPage() {
             entityType="report_finance_expenses"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "المصروفات", total: filtered.length },
-              items: filtered.map((e: any) => ({
+            payload={() => ({
+              entity: { title: "المصروفات", total: printRows.length },
+              items: printRows.map((e: any) => ({
                 "المرجع": e.ref || e.id,
                 "التاريخ": e.expenseDate || e.date || "—",
                 "الفئة": e.category || "—",
@@ -214,7 +216,7 @@ export default function ExpensesPage() {
                 "مركز التكلفة": e.costCenterName || e.costCenter || "—",
                 "الحالة": e.status || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -282,6 +284,7 @@ export default function ExpensesPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

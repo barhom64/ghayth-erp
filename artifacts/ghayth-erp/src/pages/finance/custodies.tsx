@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -111,6 +112,7 @@ export default function CustodiesPage() {
     searchFields: ["description", "ref", "employeeName", "purpose"],
     statusField: "status",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -241,9 +243,9 @@ export default function CustodiesPage() {
             entityType="report_finance_custodies"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "العهد المالية", total: filtered.length },
-              items: filtered.map((c: any) => ({
+            payload={() => ({
+              entity: { title: "العهد المالية", total: printRows.length },
+              items: printRows.map((c: any) => ({
                 "المرجع": c.ref || c.id,
                 "الموظف": c.employeeName || "—",
                 "تاريخ الصرف": c.issueDate || "—",
@@ -252,7 +254,7 @@ export default function CustodiesPage() {
                 "الغرض": c.purpose || "—",
                 "الحالة": c.status || "—",
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -327,6 +329,7 @@ export default function CustodiesPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

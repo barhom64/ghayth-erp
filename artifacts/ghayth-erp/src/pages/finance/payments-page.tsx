@@ -16,6 +16,7 @@ import {
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function PaymentsPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["payments"], "/finance/payments");
@@ -30,6 +31,7 @@ export default function PaymentsPage() {
     searchFields: ["description", "ref"],
     dateField: "",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -88,15 +90,15 @@ export default function PaymentsPage() {
             entityType="report_finance_payments"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "المدفوعات", total: filtered.length },
-              items: filtered.map((p: any) => ({
+            payload={() => ({
+              entity: { title: "المدفوعات", total: printRows.length },
+              items: printRows.map((p: any) => ({
                 "المرجع": p.ref || "—",
                 "الوصف": p.description || "—",
                 "المبلغ": Number(p.amount || 0),
                 "التاريخ": p.date || "—",
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -135,6 +137,7 @@ export default function PaymentsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Posting Activity Today — real-time view of GL posts.
@@ -116,6 +117,7 @@ export default function PostingActivityPage() {
   );
 
   const rows: JournalEntry[] = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const byType = useMemo(() => {
     const m = new Map<string, { count: number; amount: number }>();
@@ -254,9 +256,9 @@ export default function PostingActivityPage() {
             entityType="report_finance_posting_activity"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "نشاط الترحيل المحاسبي", total: rows.length },
-              items: rows.map((r) => ({
+            payload={() => ({
+              entity: { title: "نشاط الترحيل المحاسبي", total: printRows.length },
+              items: printRows.map((r) => ({
                 "المرجع": r.ref || `#${r.id}`,
                 "الوصف": r.description || "—",
                 "النوع": TYPE_LABEL[r.type] || r.type,
@@ -264,7 +266,7 @@ export default function PostingActivityPage() {
                 "تاريخ الترحيل": r.postedAt || r.createdAt || "—",
                 "الحالة": r.status || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -351,6 +353,7 @@ export default function PostingActivityPage() {
           <CardContent className="p-0">
             <DataTable
               columns={cols} data={rows}
+              onSortedDataChange={setPrintRows}
               pageSize={30}
               emptyMessage="ما في قيود في هذا النطاق الزمني"
             />

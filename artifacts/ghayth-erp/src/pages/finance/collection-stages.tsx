@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Megaphone, ArrowRight, AlertTriangle, Phone, Mail } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface OverdueInvoice {
   id: number;
@@ -67,6 +68,7 @@ export default function CollectionStagesPage() {
   if (isError) return <ErrorState />;
 
   const rows = data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const totalOverdueAmount = rows.reduce((s, r) => {
     const out = Number(r.total ?? 0) - Number(r.paidAmount ?? 0);
@@ -211,9 +213,9 @@ export default function CollectionStagesPage() {
             entityType="report_finance_collection_stages"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "مراحل التصعيد للتحصيل", total: rows.length },
-              items: rows.map((r) => ({
+            payload={() => ({
+              entity: { title: "مراحل التصعيد للتحصيل", total: printRows.length },
+              items: printRows.map((r) => ({
                 "الفاتورة": r.ref,
                 "العميل": r.clientName || "—",
                 "الإجمالي": Number(r.total || 0),
@@ -225,7 +227,7 @@ export default function CollectionStagesPage() {
                 "المرحلة الموصى": r.recommendedStage,
                 "الإجراء": r.recommendedAction || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -294,6 +296,7 @@ export default function CollectionStagesPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={30}
             emptyMessage="ما في فواتير متأخرة 🎉 — كل الذمم سارية"
           />

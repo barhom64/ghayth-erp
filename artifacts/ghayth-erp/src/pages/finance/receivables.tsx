@@ -18,6 +18,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function ReceivablesPage() {
   const [, navigate] = useLocation();
@@ -36,6 +37,7 @@ export default function ReceivablesPage() {
     statusField: "status",
     dateField: "",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -120,9 +122,9 @@ export default function ReceivablesPage() {
             entityType="report_finance_receivables"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "المقبوضات (الذمم المدينة)", total: filtered.length },
-              items: filtered.map((r: any) => ({
+            payload={() => ({
+              entity: { title: "المقبوضات (الذمم المدينة)", total: printRows.length },
+              items: printRows.map((r: any) => ({
                 "المرجع": r.ref,
                 "العميل": r.clientName || "—",
                 "الإجمالي": Number(r.total || 0),
@@ -131,7 +133,7 @@ export default function ReceivablesPage() {
                 "الاستحقاق": r.dueDate || "—",
                 "الحالة": r.status || "—",
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -183,6 +185,7 @@ export default function ReceivablesPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

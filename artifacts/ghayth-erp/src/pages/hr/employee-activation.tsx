@@ -31,6 +31,7 @@ import { useAppContext } from "@/contexts/app-context";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 type LifecycleAction = "activate" | "suspend" | "terminate";
 
 const ACTION_CONFIG: Record<LifecycleAction, {
@@ -112,6 +113,7 @@ export default function EmployeeActivationPage() {
     searchFields: ["name", "empNumber"],
     statusField: "status",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const active = employees.filter((e: any) => e.status === "active").length;
   const inactive = employees.filter((e: any) => e.status !== "active").length;
@@ -276,9 +278,9 @@ export default function EmployeeActivationPage() {
           entityType="report_hr_employee_activation"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "تفعيل / تعليق الموظفين", total: filtered.length },
-            items: filtered.map((e: any) => ({
+          payload={() => ({
+            entity: { title: "تفعيل / تعليق الموظفين", total: printRows.length },
+            items: printRows.map((e: any) => ({
               "الاسم": e.name || "—",
               "الرقم الوظيفي": e.empNumber || "—",
               "المسمى": e.position || "—",
@@ -286,7 +288,7 @@ export default function EmployeeActivationPage() {
               "تاريخ التعيين": e.hireDate || "—",
               "الحالة": e.status || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -309,6 +311,7 @@ export default function EmployeeActivationPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا يوجد موظفين"

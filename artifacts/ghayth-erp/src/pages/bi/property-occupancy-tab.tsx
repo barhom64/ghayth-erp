@@ -9,10 +9,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export function PropertyOccupancyTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["bi-property-occ"], "/bi/reports/property-occupancy");
   const rows = (data?.data || []) as any[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -25,15 +27,15 @@ export function PropertyOccupancyTab() {
           entityType="report_bi_property_occupancy"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "تقرير نسبة الإشغال العقاري", total: rows.length },
-            items: rows.map((r: any) => ({
+          payload={() => ({
+            entity: { title: "تقرير نسبة الإشغال العقاري", total: printRows.length },
+            items: printRows.map((r: any) => ({
               "المبنى": r.buildingName || "—",
               "إجمالي الوحدات": r.totalUnits ?? 0,
               "المؤجَّر": r.rentedUnits ?? 0,
               "نسبة الإشغال (%)": r.occupancyRate ?? 0,
             })),
-          }}
+          })}
         />
       </div>
       {rows.length > 0 && (
@@ -86,6 +88,7 @@ export function PropertyOccupancyTab() {
           { key: "totalMonthlyRevenue", header: "الإيرادات الشهرية", sortable: true, className: "text-status-info-foreground font-medium", render: (r) => formatNumber(r.totalMonthlyRevenue) },
           { key: "annualRevenue", header: "الإيرادات السنوية", sortable: true, className: "text-indigo-600 font-medium", render: (r) => formatNumber(r.annualRevenue) },
         ]}
+        onSortedDataChange={setPrintRows}
       />
     </div>
   );

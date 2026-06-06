@@ -33,6 +33,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Purchase orders list — migrated in R.4 iter 4 to the unified
@@ -88,6 +89,7 @@ export default function PurchaseOrdersPage() {
     statusField: "status",
     dateField: "expectedDelivery",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const totalAmount = items.reduce((s: number, po: any) => s + Number(po.totalAmount || 0), 0);
   const pendingCount = items.filter((po: any) => ["draft", "pending"].includes(po.status)).length;
@@ -202,9 +204,9 @@ export default function PurchaseOrdersPage() {
             entityType="report_finance_purchase_orders_list"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "قائمة طلبات الشراء", total: filtered.length },
-              items: filtered.map((po: any) => ({
+            payload={() => ({
+              entity: { title: "قائمة طلبات الشراء", total: printRows.length },
+              items: printRows.map((po: any) => ({
                 "المرجع": po.ref || `#${po.id}`,
                 "المورد": po.supplierName || "—",
                 "تاريخ الإنشاء": po.createdAt || "—",
@@ -212,7 +214,7 @@ export default function PurchaseOrdersPage() {
                 "تاريخ الاستلام المتوقع": po.expectedDelivery || "—",
                 "الحالة": po.status || "—",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -300,6 +302,7 @@ export default function PurchaseOrdersPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

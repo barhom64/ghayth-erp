@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Layers, Plus, Building, Car, User, Briefcase, MapPin, Pencil, Trash2, Info } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface CostCenter {
   id: number;
@@ -109,6 +110,7 @@ export default function CostCentersPage() {
   const filtered = typeFilter
     ? rows.filter((r) => (r.relatedEntityType ?? "general") === typeFilter)
     : rows;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const linkedCount = rows.filter((r) => r.relatedEntityType).length;
   const totalAllocated = rows.reduce((s, r) => s + Number(r.allocatedAmount ?? 0), 0);
@@ -242,9 +244,9 @@ export default function CostCentersPage() {
             entityType="report_finance_cost_centers"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "مراكز التكلفة", total: filtered.length },
-              items: filtered.map((c: any) => ({
+            payload={() => ({
+              entity: { title: "مراكز التكلفة", total: printRows.length },
+              items: printRows.map((c: any) => ({
                 "الرمز": c.code || "—",
                 "الاسم": c.name || "—",
                 "النوع": c.type || "—",
@@ -252,7 +254,7 @@ export default function CostCentersPage() {
                 "الفرع": c.branchName || "—",
                 "الحالة": c.isActive ? "نشط" : "غير نشط",
               })),
-            }}
+            })}
           />
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
@@ -376,6 +378,7 @@ export default function CostCentersPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={filtered}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               typeFilter

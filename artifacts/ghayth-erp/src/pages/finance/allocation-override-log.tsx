@@ -9,6 +9,7 @@ import { ShieldAlert } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Allocation Override Log — audit trail of approvals that bypassed the
@@ -59,6 +60,7 @@ export default function AllocationOverrideLogPage() {
   if (isError) return <ErrorState />;
 
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const columns: DataTableColumn<OverrideRow>[] = [
     {
@@ -139,9 +141,9 @@ export default function AllocationOverrideLogPage() {
           entityType="report_finance_allocation_override_log"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "سجل تجاوزات تخصيص البنود", total: rows.length },
-            items: rows.map((r) => ({
+          payload={() => ({
+            entity: { title: "سجل تجاوزات تخصيص البنود", total: printRows.length },
+            items: printRows.map((r) => ({
               "التاريخ": r.createdAt || "—",
               "نوع المستند": DOCUMENT_TYPE_LABEL[r.documentType] || r.documentType,
               "رقم المستند": r.documentId,
@@ -149,7 +151,7 @@ export default function AllocationOverrideLogPage() {
               "السبب": r.overrideReason || "—",
               "العوائق": Array.isArray(r.blockersJson) ? r.blockersJson.join("، ") : "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -174,6 +176,7 @@ export default function AllocationOverrideLogPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={rows}
         rowKey={(r) => r.id}
         emptyMessage="لا توجد تجاوزات مسجّلة — كل الاعتمادات مرّت بدون استثناء"

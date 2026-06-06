@@ -16,6 +16,7 @@ import { FileSignature, DollarSign, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function CommitmentsPage() {
   const [, navigate] = useLocation();
@@ -32,6 +33,7 @@ export default function CommitmentsPage() {
     statusField: "status",
     dateField: "",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const upcomingCount = items.filter((c: any) => {
     if (!c.dueDate) return false;
@@ -82,16 +84,16 @@ export default function CommitmentsPage() {
           entityType="report_finance_commitments"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "الالتزامات المالية", total: filtered.length },
-            items: filtered.map((c: any) => ({
+          payload={() => ({
+            entity: { title: "الالتزامات المالية", total: printRows.length },
+            items: printRows.map((c: any) => ({
               "المرجع": c.ref || `#${c.id}`,
               "المورد": c.vendorName || "—",
               "المبلغ": Number(c.amount || 0),
               "تاريخ الاستحقاق": c.dueDate || "—",
               "الحالة": c.status || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -135,6 +137,7 @@ export default function CommitmentsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface CustomerAdvance {
   id: number;
@@ -87,6 +88,7 @@ export default function CustomerAdvancesPage() {
       (r.clientName ?? "").toLowerCase().includes(s) || r.ref.toLowerCase().includes(s),
     );
   }, [rows, searchText]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredRows);
 
   const groups = useMemo<ClientGroup[]>(() => {
     const map = new Map<string, ClientGroup>();
@@ -192,9 +194,9 @@ export default function CustomerAdvancesPage() {
             entityType="report_finance_customer_advances"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "دفعات مقدمة من العملاء", total: filteredRows.length },
-              items: filteredRows.map((a) => ({
+            payload={() => ({
+              entity: { title: "دفعات مقدمة من العملاء", total: printRows.length },
+              items: printRows.map((a) => ({
                 "المرجع": a.ref || "—",
                 "العميل": a.clientName || "—",
                 "المبلغ": Number(a.amount || 0),
@@ -204,7 +206,7 @@ export default function CustomerAdvancesPage() {
                 "تاريخ الاستلام": a.receivedDate || "—",
                 "الحالة": STATUS_LABEL[a.status]?.label || a.status,
               })),
-            }}
+            })}
           />
         </>
       }
@@ -289,6 +291,7 @@ export default function CustomerAdvancesPage() {
           <CardContent className="p-0">
             <DataTable
               columns={cols}
+              onSortedDataChange={setPrintRows}
               data={filteredRows}
               pageSize={50}
               emptyMessage="لا توجد دفعات مقدمة"

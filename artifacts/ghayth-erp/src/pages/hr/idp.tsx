@@ -36,6 +36,7 @@ import { IDP_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const idpSchema = z.object({
   employeeId: z.string().min(1, "الموظف مطلوب"),
   title: z.string().trim(),
@@ -104,6 +105,7 @@ export default function IDPPage() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const stats = {
     total: plans.length,
@@ -235,9 +237,9 @@ export default function IDPPage() {
             entityType="report_hr_idp"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "خطط التطوير الفردي", total: filtered.length },
-              items: filtered.map((p: any) => ({
+            payload={() => ({
+              entity: { title: "خطط التطوير الفردي", total: printRows.length },
+              items: printRows.map((p: any) => ({
                 "الموظف": p.employeeName || "—",
                 "الفترة": p.period || "—",
                 "الهدف": p.developmentGoal || p.title || "—",
@@ -246,7 +248,7 @@ export default function IDPPage() {
                 "التقدم (%)": p.progressPercentage ?? "—",
                 "الحالة": p.status || "—",
               })),
-            }}
+            })}
           />
           <GuardedButton perm="hr:create" size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4" />
@@ -274,6 +276,7 @@ export default function IDPPage() {
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد خطط تطوير — أنشئ خطة جديدة للبدء"

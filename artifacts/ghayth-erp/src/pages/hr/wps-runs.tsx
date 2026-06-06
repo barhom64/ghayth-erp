@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const WPS_FORMATS = [
   { value: "generic_pipe", label: "صيغة عامة (Pipe-delimited)" },
   { value: "alrajhi", label: "الراجحي" },
@@ -130,6 +131,7 @@ export default function WpsRunsPage() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<WpsRunRow>[] = [
     {
@@ -207,9 +209,9 @@ export default function WpsRunsPage() {
             entityType="report_hr_wps_runs"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "تشغيلات WPS", total: filtered.length },
-              items: filtered.map((r: any) => ({
+            payload={() => ({
+              entity: { title: "تشغيلات WPS", total: printRows.length },
+              items: printRows.map((r: any) => ({
                 "رقم التشغيل": r.id,
                 "الفترة": r.period || "—",
                 "البنك": r.bankCode || "—",
@@ -218,7 +220,7 @@ export default function WpsRunsPage() {
                 "تاريخ الإنشاء": r.createdAt || "—",
                 "الحالة": r.status || "—",
               })),
-            }}
+            })}
           />
           <GuardedButton
             perm="hr.payroll.wps:create"
@@ -260,6 +262,7 @@ export default function WpsRunsPage() {
       <DataTable
         data={filtered}
         columns={columns}
+        onSortedDataChange={setPrintRows}
         emptyMessage="لا توجد تشغيلات WPS — ابدأ بإنشاء واحد من مسير راتب معتمد"
       />
 

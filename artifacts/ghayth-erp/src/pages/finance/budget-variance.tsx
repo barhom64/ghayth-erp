@@ -16,6 +16,7 @@ import { currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import { TrendingUp, AlertTriangle, CheckCircle2, BarChart3 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface VarianceLine {
   accountCode: string;
@@ -68,6 +69,7 @@ export default function BudgetVariancePage() {
   const filtered = statusFilter
     ? lines.filter((l) => l.status === statusFilter)
     : lines;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const overCount = lines.filter((l) => l.status === "over_budget").length;
   const nearCount = lines.filter((l) => l.status === "near_limit").length;
@@ -171,9 +173,9 @@ export default function BudgetVariancePage() {
             entityType="report_finance_budget_variance"
             entityId={period}
             size="icon"
-            payload={{
-              entity: { title: `انحراف الميزانية — ${period}`, total: filtered.length },
-              items: filtered.map((l) => ({
+            payload={() => ({
+              entity: { title: `انحراف الميزانية — ${period}`, total: printRows.length },
+              items: printRows.map((l) => ({
                 "الحساب": l.accountCode,
                 "الاسم": l.accountName || "—",
                 "النوع": l.accountType || "—",
@@ -182,9 +184,9 @@ export default function BudgetVariancePage() {
                 "الانحراف": Number(l.variance || 0),
                 "%": Number(l.variancePct || 0).toFixed(1),
                 "% الاستخدام": Number(l.utilizationPct || 0).toFixed(1),
-                "الحالة": STATUS_LABEL[l.status] || l.status,
+                "الحالة": STATUS_LABEL[l.status as keyof typeof STATUS_LABEL] || l.status,
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -274,6 +276,7 @@ export default function BudgetVariancePage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={filtered}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               statusFilter

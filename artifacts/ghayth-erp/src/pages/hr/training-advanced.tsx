@@ -13,6 +13,7 @@ import { GraduationCap, Users, Award, BarChart3, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function TrainingAdvancedPage() {
   const { data: statsData, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["training-stats"], "/hr/training/stats");
@@ -28,6 +29,7 @@ export default function TrainingAdvancedPage() {
   const stats = statsData || {};
   const programs = programsData?.data || [];
   const enrollments = enrollmentsData?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(enrollments);
 
   const completionRate = stats.totalEnrollments > 0
     ? Math.round((stats.completedEnrollments / stats.totalEnrollments) * 100) : 0;
@@ -49,16 +51,16 @@ export default function TrainingAdvancedPage() {
           entityType="report_hr_training_advanced"
           entityId="list"
           size="icon"
-          payload={{
-            entity: { title: "تسجيلات التدريب", total: enrollments.length },
-            items: enrollments.map((e: any) => ({
+          payload={() => ({
+            entity: { title: "تسجيلات التدريب", total: printRows.length },
+            items: printRows.map((e: any) => ({
               "الموظف": e.employeeName || "—",
               "البرنامج": e.programTitle || "—",
               "تاريخ التسجيل": e.enrolledAt || e.startDate || "—",
               "الدرجة": e.score ?? "—",
               "الحالة": e.status || "—",
             })),
-          }}
+          })}
         />
       }
     >
@@ -94,6 +96,7 @@ export default function TrainingAdvancedPage() {
               { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} /> },
               { key: "score", header: "الدرجة", sortable: true, render: (v) => <span>{v.score ?? "-"}</span> },
             ] as DataTableColumn<any>[]}
+            onSortedDataChange={setPrintRows}
             data={enrollments}
             noToolbar
             emptyMessage="لا توجد تسجيلات"

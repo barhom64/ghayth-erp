@@ -17,6 +17,7 @@ import { Link } from "wouter";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface AllocationRule {
   id: number;
@@ -96,6 +97,7 @@ export default function AllocationRulesPage() {
   if (isError) return <ErrorState />;
 
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
   const activeCount = rows.filter((r) => r.isActive).length;
   const requiresLink = rows.filter((r) => r.requiresEntityLink).length;
 
@@ -184,9 +186,9 @@ export default function AllocationRulesPage() {
             entityType="report_finance_allocation_rules"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "قواعد التوجيه المحاسبي", total: rows.length },
-              items: rows.map((r) => ({
+            payload={() => ({
+              entity: { title: "قواعد التوجيه المحاسبي", total: printRows.length },
+              items: printRows.map((r) => ({
                 "الاسم": r.name || "—",
                 "نوع المستند": DOC_TYPE_LABEL[r.documentType] || r.documentType || "—",
                 "نوع السطر": r.lineType || "—",
@@ -196,7 +198,7 @@ export default function AllocationRulesPage() {
                 "الأولوية": r.priority,
                 "نشطة": r.isActive ? "نعم" : "لا",
               })),
-            }}
+            })}
           />
         </>
       }
@@ -289,6 +291,7 @@ export default function AllocationRulesPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               docTypeFilter || activeFilter

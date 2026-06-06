@@ -13,6 +13,7 @@ import {
 } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +40,7 @@ export default function UmrahPenalties() {
   const { toast } = useToast();
   const pageSize = 20;
   const items = resp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   // Deep-link filter pre-application — the compliance dashboard tile
   // navigates here with ?status=pending&seasonId=… so the audit officer
@@ -227,9 +229,9 @@ export default function UmrahPenalties() {
             entityType="report_umrah_penalties"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "غرامات العمرة", total: items.length },
-              items: items.map((p: any) => ({
+            payload={() => ({
+              entity: { title: "غرامات العمرة", total: printRows.length },
+              items: printRows.map((p: any) => ({
                 "النوع": p.type || "—",
                 "المعتمر": p.pilgrimName || p.mutamerName || "—",
                 "الوكيل": p.agentName || "—",
@@ -238,7 +240,7 @@ export default function UmrahPenalties() {
                 "تاريخ الإصدار": p.detectedAt || p.createdAt || "—",
                 "الحالة": p.status || "—",
               })),
-            }}
+            })}
           />
         </div>
       }
@@ -318,6 +320,7 @@ export default function UmrahPenalties() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filteredItems}
         isLoading={isLoading}
         isError={isError}

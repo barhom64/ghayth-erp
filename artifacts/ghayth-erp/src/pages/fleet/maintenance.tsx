@@ -14,11 +14,13 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function FleetMaintenancePage() {
   const [, navigate] = useLocation();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-maintenance"], "/fleet/maintenance");
   const items: any[] = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const columns: DataTableColumn<any>[] = [
@@ -53,9 +55,9 @@ export default function FleetMaintenancePage() {
             entityType="report_fleet_maintenance"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "سجل صيانة المركبات", total: items.length },
-              items: items.map((m: any) => ({
+            payload={() => ({
+              entity: { title: "سجل صيانة المركبات", total: printRows.length },
+              items: printRows.map((m: any) => ({
                 "المركبة": m.plateNumber || m.vehiclePlate || "—",
                 "النوع": m.maintenanceType || m.serviceType || "—",
                 "التاريخ": m.serviceDate || m.date || "—",
@@ -64,7 +66,7 @@ export default function FleetMaintenancePage() {
                 "التكلفة": m.totalCost ?? m.cost ?? 0,
                 "الحالة": m.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/fleet/maintenance/create">
             <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة صيانة</GuardedButton>
@@ -102,6 +104,7 @@ export default function FleetMaintenancePage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={items}
         isLoading={isLoading}
         isError={isError}

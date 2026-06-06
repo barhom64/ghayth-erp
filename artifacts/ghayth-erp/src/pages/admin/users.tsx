@@ -52,6 +52,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "مالك النظام" },
@@ -97,6 +98,7 @@ export default function AdminUsersPage() {
     if (filterStatus === "inactive" && u.isActive) return false;
     return true;
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const userColumns: DataTableColumn<any>[] = [
     {
@@ -286,9 +288,9 @@ export default function AdminUsersPage() {
             entityType="report_admin_users"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "المستخدمون", total: filtered.length },
-              items: filtered.map((u: any) => ({
+            payload={() => ({
+              entity: { title: "المستخدمون", total: printRows.length },
+              items: printRows.map((u: any) => ({
                 "البريد": u.email || "—",
                 "الموظف": u.employeeName || "—",
                 "الدور": roleLabel(u.role),
@@ -296,7 +298,7 @@ export default function AdminUsersPage() {
                 "آخر دخول": u.lastLoginAt || "—",
                 "محاولات فاشلة (7 أيام)": u.failedAttempts7d ?? 0,
               })),
-            }}
+            })}
           />
         </>
       }
@@ -451,6 +453,7 @@ export default function AdminUsersPage() {
 
       <DataTable
         columns={userColumns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

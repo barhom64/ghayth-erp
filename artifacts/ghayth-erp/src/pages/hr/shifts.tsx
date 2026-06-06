@@ -21,12 +21,14 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function ShiftsPage() {
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["shifts"], "/hr/shifts");
   const { data: assignmentsData } = useApiQuery<any>(["shift-assignments"], "/hr/shift-assignments");
   const items = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const assignments = assignmentsData?.data || [];
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const [filters, setFilters] = useFilters();
@@ -85,9 +87,9 @@ export default function ShiftsPage() {
             entityType="report_hr_shifts"
             entityId="list"
             size="icon"
-            payload={{
-              entity: { title: "ورديات العمل", total: items.length },
-              items: items.map((s: any) => ({
+            payload={() => ({
+              entity: { title: "ورديات العمل", total: printRows.length },
+              items: printRows.map((s: any) => ({
                 "الاسم": s.name || "—",
                 "الكود": s.code || "—",
                 "وقت البداية": s.startTime || "—",
@@ -96,7 +98,7 @@ export default function ShiftsPage() {
                 "أيام العمل": s.workDays || "—",
                 "الحالة": s.status || "—",
               })),
-            }}
+            })}
           />
           <Link href="/hr/shifts/create">
             <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة وردية</GuardedButton>
@@ -205,6 +207,7 @@ export default function ShiftsPage() {
             />
             <DataTable
               columns={assignmentColumns}
+              onSortedDataChange={setPrintRows}
               data={filteredAssignments}
               noToolbar
               emptyMessage="لا توجد تعيينات"
