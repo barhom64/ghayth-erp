@@ -306,10 +306,11 @@ describe("Support security contracts", () => {
 
   it("ticket list filters deletedAt IS NULL", () => {
     const listIdx = SUPPORT_ROUTE.indexOf('router.get("/tickets"');
-    // Slice widened from 900 → 1600 after the handler grew (added
-    // buildScopedWhere + status/priority filters + LEFT JOIN soft-delete
-    // predicates) so the SELECT body falls within the captured range.
-    const listSection = SUPPORT_ROUTE.slice(listIdx, listIdx + 1600);
+    // Slice widened: 900 → 1600 (handler growth) → 2200 (P0.2 audit
+    // added explicit enforceBranchScope: true + explanatory comment
+    // ~600 chars above the buildScopedWhere call). The SELECT body
+    // must still fall within the captured range.
+    const listSection = SUPPORT_ROUTE.slice(listIdx, listIdx + 2200);
     expect(listSection).toContain('"deletedAt" IS NULL');
   });
 

@@ -69,6 +69,13 @@ router.get("/", authorize({ feature: "admin.audit", action: "view" }), async (re
 
     const perPage = Math.min(Number(lim) || 50, 500);
 
+    // P0.2 audit confirmed: disableBranchScope is intentional here.
+    // audit_logs has a branchId column but the audit dashboard is
+    // mounted at level 90 + audit:read (see routes/_domain-mounts.ts).
+    // The only people reaching this endpoint are senior compliance
+    // staff who legitimately need cross-branch visibility — restricting
+    // to scope.allowedBranches would hide audit events from another
+    // branch the compliance officer is signed off to investigate.
     const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
       scope,
       {},

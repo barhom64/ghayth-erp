@@ -202,7 +202,14 @@ accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts"
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
+    // P0.2 audit fix: chart_of_accounts is COMPANY-WIDE-BY-DESIGN.
+    // The branchId column exists for the rare case of per-branch
+    // overrides, but every consumer (journal entry, expense, vendor
+    // invoice, etc.) treats COA as a flat catalog. enforceBranchScope
+    // would exclude rows where branchId IS NULL (the majority of the
+    // catalog) and break those downstream flows. disable explicitly +
+    // document the intent so a future reviewer doesn't "fix" it back.
+    const { where, params } = buildScopedWhere(scope, filters, { disableBranchScope: true });
     const accounts = await rawQuery<ChartOfAccountsBriefRow>(
       `SELECT id, code, name, type, "parentCode", status
        FROM chart_of_accounts
@@ -220,7 +227,9 @@ accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action:
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
+    // P0.2 audit fix — see /chart-of-accounts above for the COA
+    // company-wide rationale. Same flat-catalog behaviour applies here.
+    const { where, params } = buildScopedWhere(scope, filters, { disableBranchScope: true });
     const { search, type: accountType, postingOnly } = req.query as { search?: string; type?: string; postingOnly?: string };
 
     let extraWhere = "";
@@ -456,7 +465,17 @@ accountsRouter.get("/journal", authorize({ feature: "finance.accounts", action: 
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"' });
+    // P0.2 audit fix — journal_entries IS branch-scoped (every JE
+    // attributes to a branch via je.branchId). Without enforce, a
+    // branch_manager saw every other branch's journal entries through
+    // this admin-list endpoint. Add explicit enforcement; finance
+    // managers above scoped roles (level >= 70) keep cross-branch
+    // access via OWNER_GM_ROLES exemption inside buildScopedWhere.
+    const { where, params } = buildScopedWhere(scope, filters, {
+      companyColumn: 'je."companyId"',
+      branchColumn: 'je."branchId"',
+      enforceBranchScope: true,
+    });
     const rows = await rawQuery<JournalEntryWithLinesRow>(
       `SELECT je.*, json_agg(jl.*) AS lines
        FROM journal_entries je

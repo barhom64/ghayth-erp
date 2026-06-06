@@ -189,7 +189,17 @@ router.get("/tickets", authorize({ feature: "support.tickets", action: "list" })
     // `disableBranchScope: true` so the header picker filters tickets
     // per-branch and a support agent assigned to one branch stops
     // seeing tickets routed to another.
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"' });
+    //
+    // P0.2 audit fix: the original "drop disableBranchScope" change
+    // forgot to ALSO add enforceBranchScope: true. Without the explicit
+    // enforcement flag, scoped users (branch_manager etc.) silently saw
+    // tickets from every branch in their company — the exact bug the
+    // header-picker change was trying to close. Add it now.
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, {
+      companyColumn: 't."companyId"',
+      branchColumn: 't."branchId"',
+      enforceBranchScope: true,
+    });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }

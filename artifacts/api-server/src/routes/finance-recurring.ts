@@ -105,6 +105,13 @@ recurringRouter.get("/recurring-journals", authorize({ feature: "finance.recurri
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
+    // P0.2 audit confirmed: disableBranchScope is intentional here.
+    // recurring_journals has a branchId column but the table is treated
+    // as a finance-manager-owned company-wide setup catalog (the JEs
+    // those templates EMIT do get branch-scoped per their own branchId,
+    // not the template's). Restricting templates to scope.allowedBranches
+    // would block a finance manager from editing a template that emits
+    // entries on another branch — common monthly-close pattern.
     const { where, params } = buildScopedWhere(scope, filters, {
       companyColumn: '"companyId"',
       disableBranchScope: true,

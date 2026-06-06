@@ -22,12 +22,26 @@ further feature work.
 | P0.3 | raw `orderBy` / `extraConditions` | ✅ Fixed | `8068881c` | 8 |
 | P0.4 | smoke tests lock the contract | ✅ Added | `8068881c` | 16 total |
 
-**P0.2 remaining work (out of scope for the security commit):**
-Full migration of 117 callsites across 38 route files to explicit
-`enforceBranchScope` or `disableBranchScope`. The runtime warn now fires in
-production logs every time the default is used by a scoped user — ops can
-grep + ratchet incrementally. Estimated effort: 1-2 days, can be sequenced as
-small per-route PRs without breaking anything.
+**P0.2 follow-up landed:**
+After the runtime warn shipped, the highest-risk callsites were audited
+per-route and given explicit flags:
+
+  - `support.ts /tickets`        — added `enforceBranchScope: true` (was
+    silently leaking other branches' tickets — the original migration-171
+    intent was lost when `disableBranchScope` was dropped without re-
+    adding the enforce flag).
+  - `finance-accounts.ts /journal` — added `enforceBranchScope: true`
+    (branch_manager was seeing every other branch's journal entries).
+  - `finance-accounts.ts /chart-of-accounts` + `/accounts` — added
+    `disableBranchScope: true` with comment explaining COA is
+    company-wide-by-design.
+  - `auditLogs.ts` + `finance-recurring.ts` — kept existing
+    `disableBranchScope: true` but added explanatory comments so a
+    future reviewer doesn't "fix" them back.
+
+6 new smoke assertions in `p02BranchScopeExplicit.test.ts` lock each
+of the explicit flags. Remaining callsites still rely on the runtime
+warn for surfacing; per-route ratcheting continues as small PRs.
 
 ---
 
