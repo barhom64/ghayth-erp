@@ -607,6 +607,8 @@ const allNavSections: NavSection[] = [
           { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           // P2.3 — outbox queue monitor + retry/cancel actions.
           { label: "صندوق الأحداث (Outbox)", path: "/admin/outbox", icon: Inbox, perm: ["admin:list", "admin:view"], permMode: "any" },
+          // P4.6 — per-feature subscription editor (products × features matrix).
+          { label: "إدارة الاشتراكات", path: "/admin/subscription-features", icon: Package, perm: ["admin:list", "admin:update"], permMode: "any" },
           { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
           { label: "مراقبة الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },

@@ -143,7 +143,7 @@ resolve regardless of which file the mount lives in.
 
 ---
 
-## P4 — Per-route subscription gates 🟡 BACKEND COMPLETE
+## P4 — Per-route subscription gates ✅ COMPLETE
 
 Closes finding #5 (subscription gate is company-wide, not "sell each route
 independently").
@@ -155,7 +155,7 @@ independently").
 | P4.3 | `featureGate(featureKey)` middleware | ✅ Shipped (`lib/middlewares/featureGate.ts` + 60s cache) | (pending) |
 | P4.4 | existing `subscriptionGate` becomes whole-company-only safety net | ✅ Done (both gates coexist — `featureGate` adds granularity, `subscriptionGate` stays as the expired/cancelled safety net) | (pending) |
 | P4.5 | Admin endpoints for per-feature toggling | ✅ Shipped (5 endpoints under `/admin/subscription-features`) | (pending) |
-| P4.6 | Admin SPA for per-feature toggling | ⬜ TODO | — |
+| P4.6 | Admin SPA for per-feature toggling | ✅ Shipped (`/admin/subscription-features` matrix UI + Inline edit dialog) | (pending) |
 
 **Backend shape:**
 - 3 new tables: `subscription_products` (sellable SKUs), `subscription_features`
@@ -173,11 +173,12 @@ independently").
 - Backwards compatible: migration seeds every existing company × every feature
   with status='active', so NO existing tenant loses access on deploy.
 
-**36 smoke assertions** (`p4FeatureGate.test.ts`) lock the contract.
+**41 smoke assertions** (`p4FeatureGate.test.ts`) lock the contract
+(36 backend + 5 SPA-wiring).
 
-**P4 remaining:** admin SPA page (P4.6). Optional follow-on: gate more
-mounts (`/finance`, `/crm`, `/warehouse`, `/intelligence`) once commercial
-defines the price tiers.
+**Optional follow-on:** gate more mounts (`/finance`, `/crm`, `/warehouse`,
+`/intelligence`) once commercial defines the price tiers — adding one
+mount is now a single `router.use(prefix, featureGate("<key>"))` line.
 
 ---
 
@@ -189,9 +190,9 @@ defines the price tiers.
 | P1 | ✅ Complete | 16 | 1 |
 | P2 | 🟡 Partial (P2.1+2+3+4+5 shipped; 6 TBD) | 55 | 3 |
 | P3 | ✅ Complete | 12 | 1 |
-| P4 | 🟡 Backend complete (P4.6 admin SPA TBD) | 36 | 1 |
+| P4 | ✅ Complete | 41 | 2 |
 
-**Total new tests on the security/architecture surface: 141.**
+**Total new tests on the security/architecture surface: 146.**
 
 What's shipped in this branch closes seven of the nine senior-review findings:
 1. branch-id silent fallback (✅ P0.1)
@@ -200,8 +201,9 @@ What's shipped in this branch closes seven of the nine senior-review findings:
 4. Worker / API single-point-of-failure (✅ P1)
 5. Outbox not relayed + purge race (✅ P2.1+P2.2+P2.3+P2.4+P2.5; live-DB integration TBD)
 6. Bloated central router (✅ P3)
-7. Subscription gate is company-wide (✅ P4 backend; admin SPA TBD)
+7. Subscription gate is company-wide (✅ P4 — backend + admin SPA)
 
-Remaining: P2.6 (live-DB outbox integration tests) + P4.6 (admin SPA for
-per-feature toggling). Each can ship as an independent PR without
-conflicting with the others.
+Remaining: P2.6 (live-DB outbox integration tests) only. All nine
+senior-review findings are either closed or have shipping code; P2.6
+is the last piece of integration coverage and can ship as an
+independent PR.

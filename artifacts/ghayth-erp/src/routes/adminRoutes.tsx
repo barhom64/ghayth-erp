@@ -9,6 +9,7 @@ const AdminIntegrations = lazy(() => import("@/pages/admin-integrations"));
 const AdminMonitoring = lazy(() => import("@/pages/admin-monitoring"));
 const AdminObservability = lazy(() => import("@/pages/admin-observability"));
 const AdminOutboxMonitor = lazy(() => import("@/pages/admin/outbox-monitor"));
+const AdminSubscriptionFeatures = lazy(() => import("@/pages/admin/subscription-features"));
 const AdminAiGovernance = lazy(() => import("@/pages/admin-ai-governance"));
 const AdminAiPromptDetail = lazy(() => import("@/pages/admin-ai-prompt-detail"));
 const AdminCommunicationControl = lazy(() => import("@/pages/admin-communication-control"));
@@ -48,6 +49,8 @@ export const adminRoutes = [
   { path: "/admin/observability", component: AdminObservability },
   // P2.3 — outbox monitor: event_outbox state + retry/cancel actions.
   { path: "/admin/outbox", component: AdminOutboxMonitor },
+  // P4.6 — per-feature subscription editor (matrix of products × features).
+  { path: "/admin/subscription-features", component: AdminSubscriptionFeatures },
   { path: "/admin/ai-governance", component: AdminAiGovernance },
   { path: "/admin/ai-governance/prompts/:id", component: AdminAiPromptDetail },
   { path: "/admin/communication-control", component: AdminCommunicationControl },

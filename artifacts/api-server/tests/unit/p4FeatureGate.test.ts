@@ -203,6 +203,35 @@ describe("P4.5 — admin endpoints for the per-company feature matrix", () => {
   });
 });
 
+describe("P4.6 — admin SPA wired (subscription-features page)", () => {
+  const SPA = read("artifacts/ghayth-erp/src/pages/admin/subscription-features.tsx");
+  const ADMIN_ROUTES = read("artifacts/ghayth-erp/src/routes/adminRoutes.tsx");
+  const SIDEBAR = read("artifacts/ghayth-erp/src/components/layout/sidebar-layout.tsx");
+
+  it("the page calls GET /admin/subscription-features/companies/.../features", () => {
+    expect(SPA).toContain("/admin/subscription-features/companies/");
+  });
+
+  it("the page calls POST/DELETE for the upsert and cancel flows", () => {
+    expect(SPA).toMatch(/method:\s*"POST"/);
+    expect(SPA).toMatch(/method:\s*"DELETE"/);
+  });
+
+  it("/admin/subscription-features route is registered", () => {
+    expect(ADMIN_ROUTES).toContain('path: "/admin/subscription-features"');
+    expect(ADMIN_ROUTES).toContain("AdminSubscriptionFeatures");
+  });
+
+  it("sidebar surfaces the page under monitoring children", () => {
+    expect(SIDEBAR).toContain('"/admin/subscription-features"');
+    expect(SIDEBAR).toContain("إدارة الاشتراكات");
+  });
+
+  it("page invalidates the matrix query after every write", () => {
+    expect(SPA).toMatch(/invalidateQueries[\s\S]{0,200}admin-subscription-features/);
+  });
+});
+
 describe("P4 — defence-in-depth", () => {
   it("status field is validated against a closed whitelist (no free-text)", () => {
     expect(ADMIN_ROUTER).toMatch(/z\.enum\(\[("active"|"trial"|"expired"|"cancelled")[\s\S]+\]\)/);
