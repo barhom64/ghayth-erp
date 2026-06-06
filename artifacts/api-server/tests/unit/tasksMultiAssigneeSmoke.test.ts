@@ -303,7 +303,11 @@ describe("Response payload — creator (createdBy + creatorName)", () => {
     expect(detailBlock).toContain('creator.name AS "creatorName"');
   });
 
-  it("list query returns assigneeCount (team size)", () => {
-    expect(TASKS_ROUTE).toMatch(/SELECT COUNT\(\*\)::int FROM task_assignees ta\s*\n\s*WHERE ta\."taskId" = t\.id/);
+  it("list query returns assigneeCount (team size, via CTE post N+1 fix)", () => {
+    // The original correlated subquery was replaced with a WITH
+    // assignee_counts CTE + LEFT JOIN to avoid 501-lookup N+1.
+    expect(TASKS_ROUTE).toContain("WITH assignee_counts AS");
+    expect(TASKS_ROUTE).toContain('SELECT "taskId", COUNT(*) AS "assigneeCount"');
+    expect(TASKS_ROUTE).toContain('FROM task_assignees');
   });
 });
