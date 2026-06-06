@@ -20,6 +20,7 @@ import {
   RefreshCw, Search,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
 
 /**
  * Trial Balance Comparison — side-by-side TB for two periods with
@@ -328,7 +329,13 @@ export default function TbComparisonPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3">
-            <div className="grid grid-cols-2 gap-2">
+            <DateRangePresets
+              value={{ from: curStart, to: curEnd }}
+              onChange={(r) => { setCurStart(r.from); setCurEnd(r.to); }}
+              testidPrefix="tb-comparison-cur-preset"
+              hideAllTime
+            />
+            <div className="grid grid-cols-2 gap-2 mt-2">
               <div>
                 <Label className="text-xs">من</Label>
                 <Input type="date" value={curStart} onChange={(e) => setCurStart(e.target.value)} className="h-8" />
