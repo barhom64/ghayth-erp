@@ -24,14 +24,16 @@ export default function PaymentsPage() {
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref"],
     dateField: "",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const columns: DataTableColumn<any>[] = [
     {

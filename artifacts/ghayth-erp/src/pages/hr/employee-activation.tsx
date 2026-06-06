@@ -105,9 +105,6 @@ export default function EmployeeActivationPage() {
 
   const lifecyclePending = patchMutation.isPending || terminateMutation.isPending;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const employees = data?.data || [];
 
   const filtered = applyFilters(employees, filters, {
@@ -115,6 +112,11 @@ export default function EmployeeActivationPage() {
     statusField: "status",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const active = employees.filter((e: any) => e.status === "active").length;
   const inactive = employees.filter((e: any) => e.status !== "active").length;

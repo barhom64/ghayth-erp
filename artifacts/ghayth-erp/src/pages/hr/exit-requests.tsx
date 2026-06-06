@@ -51,9 +51,6 @@ export default function ExitRequestsPage() {
     { successMessage: "تم اعتماد الطلب" },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const handleApprove = async (id: number) => {
     await approveMut.mutateAsync({ id });
     queryClient.invalidateQueries({ queryKey: ["hr-exit"] });
@@ -65,6 +62,11 @@ export default function ExitRequestsPage() {
     dateField: "createdAt",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const kpis = [
     {

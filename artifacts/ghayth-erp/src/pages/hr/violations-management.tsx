@@ -42,11 +42,13 @@ export default function ViolationsManagementPage() {
 
   const [filters, setFilters] = useFilters();
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const byType = items.reduce((acc: Record<string, number>, v: any) => {
     const t = v.type || "أخرى";

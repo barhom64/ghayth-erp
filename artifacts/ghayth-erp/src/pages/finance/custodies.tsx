@@ -105,14 +105,16 @@ export default function CustodiesPage() {
   const [settleTarget, setSettleTarget] = useState<any>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref", "employeeName", "purpose"],
     statusField: "status",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const columns: DataTableColumn<any>[] = [
     {

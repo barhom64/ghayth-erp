@@ -17,6 +17,7 @@ import {
   Layers, ChevronRight,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
 import { DateRangePresets } from "@/components/shared/date-range-presets";
 
 /**
@@ -100,6 +101,15 @@ export default function CostCenterPnlPage() {
   const totalExpense = rows.reduce((s, r) => s + r.expense, 0);
   const totalNet = totalRevenue - totalExpense;
   const profitCount = rows.filter((r) => r.net > 0).length;
+
+  // Pareto cumulative on |net| — `rows` is already net-DESC, so each
+  // step adds the absolute contribution to the running total. Crown
+  // marks the first row crossing 80% — "these N centres drive 80%
+  // of the profit magnitude; the rest is long tail."
+  const { cumulativePcts, thresholdIdx } = computeParetoCumulative(
+    rows.map((r) => r.net),
+    80,
+  );
   const lossCount = rows.filter((r) => r.net < 0).length;
   const breakEvenCount = rows.filter((r) => r.net === 0).length;
 
@@ -240,6 +250,20 @@ export default function CostCenterPnlPage() {
               <div className="h-full bg-emerald-500" style={{ width: `${Math.min(r.share, 100)}%` }} />
             </div>
           </div>
+        );
+      },
+    },
+    {
+      key: "_pareto",
+      header: "حصة تراكمية",
+      render: (r) => {
+        const idx = rows.indexOf(r);
+        return (
+          <ParetoMarker
+            cumulativePct={cumulativePcts[idx] ?? 0}
+            isThresholdRow={idx === thresholdIdx}
+            testidPrefix={`cc-pnl-pareto-${idx}`}
+          />
         );
       },
     },

@@ -112,9 +112,6 @@ export default function PreventivePlansPage() {
     });
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={refetch} />;
-
   const overdueCount = plans.filter((p: any) => getDueStatus(p.nextServiceDate) === "overdue").length;
   const dueSoonCount = plans.filter((p: any) => getDueStatus(p.nextServiceDate) === "due_soon").length;
 
@@ -123,6 +120,11 @@ export default function PreventivePlansPage() {
     statusField: "serviceType",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState onRetry={refetch} />;
+
 
   const columns: DataTableColumn<any>[] = [
     {

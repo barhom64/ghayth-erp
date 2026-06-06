@@ -29,12 +29,14 @@ export default function TreasuryPage() {
   );
   const [activeTab, setActiveTab] = useState<"accounts" | "movements" | "daily">("accounts");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const summary = data?.summary || {};
   const accounts = data?.accounts || [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(accounts);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
   const movements = data?.recentMovements || [];
   const dailySummary = data?.dailySummary || [];
 

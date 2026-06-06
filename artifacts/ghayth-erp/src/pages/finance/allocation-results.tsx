@@ -70,11 +70,13 @@ export default function AllocationResultsPage() {
     `/finance/allocation-results${qs ? `?${qs}` : ""}`,
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const counts = rows.reduce((acc, r) => {
     acc.total += 1;

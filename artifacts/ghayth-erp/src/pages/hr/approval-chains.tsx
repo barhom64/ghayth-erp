@@ -75,9 +75,6 @@ export default function ApprovalChainsPage() {
     { successMessage: "تم إنشاء سلسلة الموافقة", onSuccess: resetForm },
   );
 
-  if (stagesQ.isLoading || defsQ.isLoading) return <LoadingSpinner />;
-  if (stagesQ.isError || defsQ.isError) return <ErrorState />;
-
   const items = stagesQ.data?.data || [];
   const definitions = defsQ.data?.data || [];
 
@@ -87,6 +84,11 @@ export default function ApprovalChainsPage() {
     dateField: "createdAt",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (stagesQ.isLoading || defsQ.isLoading) return <LoadingSpinner />;
+
+  if (stagesQ.isError || defsQ.isError) return <ErrorState />;
+
 
   const kpis = [
     { label: "تعريفات السلاسل", value: definitions.length, icon: Settings2, color: "text-purple-600 bg-purple-50" },

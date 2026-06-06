@@ -68,9 +68,6 @@ export default function ProductCatalogPage() {
     ["product-catalog"], "/warehouse/products?limit=500",
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const allRows = (data?.data ?? []).filter((p) => p.isActive);
 
   const filtered = allRows.filter((p) => {
@@ -94,6 +91,11 @@ export default function ProductCatalogPage() {
     return true;
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const stats = allRows.reduce((acc, p) => {
     acc.total += 1;

@@ -111,11 +111,15 @@ export default function InventoryValuationPage() {
     `/finance/reports/inventory-valuation${qs}`,
   );
 
+  const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<typeof rows[number]>(rows);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError || !data) return <ErrorState />;
 
-  const { summary, byWarehouse, byCategory, data: rows } = data;
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<typeof rows[number]>(rows);
+  const { summary, byWarehouse, byCategory } = data;
+
 
   const productColumns: DataTableColumn<ValuationRow>[] = [
     {

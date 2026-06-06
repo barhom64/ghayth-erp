@@ -34,10 +34,10 @@ export default function ExcuseCreate() {
     assignmentId: "",
   });
 
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
-
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = () => {
     const firstError = validate({

@@ -66,9 +66,6 @@ export default function ExpensesPage() {
   const [, navigate] = useLocation();
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("expense");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const preFiltered = applyFilters(items as Record<string, any>[], filters, {
     searchFields: ["description", "accountName", "ref", "operationType", "costCenter"],
     statusField: "status",
@@ -76,6 +73,11 @@ export default function ExpensesPage() {
   });
   const filtered = tagFilteredIds ? preFiltered.filter((i: any) => tagFilteredIds.has(i.id)) : preFiltered;
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const totalExpenses = items.reduce((s: number, e: any) => {
     if (e.amount) return s + Number(e.amount);

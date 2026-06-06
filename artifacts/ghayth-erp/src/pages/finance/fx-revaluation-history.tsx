@@ -35,14 +35,16 @@ export default function FxRevaluationHistoryPage() {
     `/finance/fx/revaluation`,
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
   const filtered = currencyFilter
     ? rows.filter((r) => r.currency === currencyFilter)
     : rows;
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const currencies = Array.from(new Set(rows.map((r) => r.currency))).sort();
 
