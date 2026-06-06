@@ -37,11 +37,13 @@ export default function TaxSystemPage() {
   const isLoading = summaryLoading || declLoading;
   const isError = summaryError || declError;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const declItems = declarations?.data || [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(declItems);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const submissions = submissionsData?.data || [];
   const submissionStats = submissionsData?.stats || {};
