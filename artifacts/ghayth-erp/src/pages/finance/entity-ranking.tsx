@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { formatCurrency } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { TrendingUp, TrendingDown, BarChart3, ArrowUpDown, ExternalLink, Download } from "lucide-react";
@@ -148,7 +149,13 @@ export default function EntityRankingPage() {
       <FinanceTabsNav />
 
       <Card className="mb-3">
-        <CardContent className="p-3 grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+        <CardContent className="p-3 flex flex-col gap-2">
+          <DateRangePresets
+            value={{ from, to }}
+            onChange={(r) => { setFrom(r.from); setTo(r.to); }}
+            testidPrefix="entity-ranking-preset"
+          />
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div>
             <Label className="text-xs text-muted-foreground">نوع الكيان</Label>
             <Select value={entityType} onValueChange={setEntityType}>
@@ -221,6 +228,7 @@ export default function EntityRankingPage() {
               className="h-8 text-xs"
               data-testid="entity-ranking-limit"
             />
+          </div>
           </div>
         </CardContent>
       </Card>
