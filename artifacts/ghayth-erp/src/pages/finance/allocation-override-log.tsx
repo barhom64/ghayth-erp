@@ -56,11 +56,13 @@ export default function AllocationOverrideLogPage() {
     "/finance/allocation-override-log",
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const columns: DataTableColumn<OverrideRow>[] = [
     {
