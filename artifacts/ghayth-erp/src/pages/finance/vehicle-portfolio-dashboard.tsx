@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
 import {
   Car, TrendingUp, TrendingDown, Download, BarChart3,
   ExternalLink, AlertTriangle, CheckCircle2,
@@ -104,6 +105,17 @@ export default function VehiclePortfolioDashboardPage() {
   const best = sorted[0];
   const worst = sorted[sorted.length - 1];
   const maxAbsProfit = Math.max(...portfolio.map(p => Math.abs(p.profit)), 1);
+
+  // Pareto cumulative on |profit| — the sorted list is profit-DESC, so
+  // the first row's cumulative is its share alone; each subsequent row
+  // adds its absolute contribution to the running total. The crown
+  // marks the FIRST row that crosses 80% — the operational insight is
+  // "this row + everything above accounts for 80% of total profit
+  // magnitude; the rest is the long tail."
+  const { cumulativePcts, thresholdIdx } = computeParetoCumulative(
+    sorted.map((p) => p.profit),
+    80,
+  );
 
   const exportCSV = () => {
     const lines: string[] = [];
@@ -345,6 +357,7 @@ export default function VehiclePortfolioDashboardPage() {
                       <th className="text-end py-2 px-2">المصاريف</th>
                       <th className="text-end py-2 px-2">الربح</th>
                       <th className="text-end py-2 px-2 w-20">الهامش</th>
+                      <th className="text-start py-2 px-2 w-24">حصة تراكمية</th>
                       <th className="py-2 px-2 w-8"></th>
                     </tr>
                   </thead>
@@ -365,6 +378,13 @@ export default function VehiclePortfolioDashboardPage() {
                           {p.margin.toFixed(1)}%
                         </td>
                         <td className="py-1.5 px-2">
+                          <ParetoMarker
+                            cumulativePct={cumulativePcts[idx] ?? 0}
+                            isThresholdRow={idx === thresholdIdx}
+                            testidPrefix={`vehicle-portfolio-pareto-${p.id}`}
+                          />
+                        </td>
+                        <td className="py-1.5 px-2">
                           <Link href={`/fleet/${p.id}`}>
                             <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
                           </Link>
@@ -381,7 +401,7 @@ export default function VehiclePortfolioDashboardPage() {
                         {totals.profit >= 0 ? "+" : ""}{formatCurrency(totals.profit)}
                       </td>
                       <td className="py-2 px-2 text-end tabular-nums">{portfolioMargin.toFixed(1)}%</td>
-                      <td></td>
+                      <td colSpan={2}></td>
                     </tr>
                   </tfoot>
                 </table>
