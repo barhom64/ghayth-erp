@@ -237,10 +237,20 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
         [scope.activeAssignmentId]
       ), []),
       safe(rawQuery<Record<string, unknown>>(
-        `SELECT je.id, je.description,
-                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl WHERE jl."journalId" = je.id AND jl.debit > 0), 0) AS amount,
+        // Pre-aggregate journal_lines debit sums once via CTE instead
+        // of running a scalar subquery per row. Same N+1 shape as the
+        // action-center fix (#1624) applied to my-space custodies.
+        `WITH cust_debit AS (
+           SELECT "journalId", SUM(debit) AS amount
+           FROM journal_lines
+           WHERE debit > 0
+           GROUP BY "journalId"
+         )
+         SELECT je.id, je.description,
+                COALESCE(cd.amount, 0) AS amount,
                 je.status, je."createdAt"
          FROM journal_entries je
+         LEFT JOIN cust_debit cd ON cd."journalId" = je.id
          WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
            AND je.status IN ('approved','draft','pending_approval')
          ORDER BY je."createdAt" DESC LIMIT 10`,
