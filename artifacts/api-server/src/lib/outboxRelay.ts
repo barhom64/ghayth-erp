@@ -200,10 +200,22 @@ export function startOutboxRelay(): void {
   }
 
   const intervalMs = config.outboxRelayIntervalMs;
-  logger.warn(
-    { intervalMs, batchSize: config.outboxRelayBatchSize, maxAttempts: config.outboxRelayMaxAttempts },
-    "[outbox-relay] STARTING — until P2.2 dedupe lands this WILL double-dispatch events. Dev/staging only.",
-  );
+  if (config.outboxSoleDispatcher) {
+    // Correct split mode: emit() captures only (no in-process super.emit),
+    // so the relay is the SOLE dispatcher and there is no double-dispatch.
+    logger.info(
+      { intervalMs, batchSize: config.outboxRelayBatchSize, maxAttempts: config.outboxRelayMaxAttempts },
+      "[outbox-relay] STARTING as the sole dispatcher (OUTBOX_SOLE_DISPATCHER=true).",
+    );
+  } else {
+    // Legacy/hazardous: in-process emit still fires listeners AND the relay
+    // drains the same rows → any process with listeners double-dispatches
+    // its own emits. Only safe where this process has no listeners.
+    logger.warn(
+      { intervalMs, batchSize: config.outboxRelayBatchSize, maxAttempts: config.outboxRelayMaxAttempts },
+      "[outbox-relay] STARTING with OUTBOX_SOLE_DISPATCHER=false — in-process emit still fires, so this WILL double-dispatch for any process that also has listeners. Set OUTBOX_SOLE_DISPATCHER=true for the worker/API split. Dev/staging only otherwise.",
+    );
+  }
 
   const tick = async (): Promise<void> => {
     if (inFlight) return; // a slow query overlapped with the next interval

@@ -173,6 +173,7 @@ describe("P3 — _domain-mounts.ts exports a single mountDomainRouters function"
     for (const mount of financeMounts) {
       if (mount.includes("financeUserLimiter")) continue; // limiter is bare
       if (mount.includes("financeStubsRouter")) continue; // GAP_MATRIX #17 stubs exception
+      if (mount.includes("featureGate(")) continue; // P4 entitlement gate is mounted bare
       expect(mount).toContain('requireModule("finance")');
       expect(mount).toContain('requireGuards("financial")');
     }

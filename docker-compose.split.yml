@@ -1,0 +1,156 @@
+# docker-compose.split.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Worker / API split deployment for Ghayth ERP (closes review findings #1 + #9
+# operationally, and uses the finding-#2 dispatch-source switch).
+#
+# Use with:
+#   docker compose -f docker-compose.split.yml up -d --build
+#
+# vs. the single-process docker-compose.prod.yml, this stack runs TWO copies of
+# the same image with different roles:
+#
+#   api    — HTTP only. API_ONLY=true makes index.ts skip cron / event
+#            listeners / telemetry / alerts / print delivery. It emits events
+#            straight to the event_outbox (OUTBOX_SOLE_DISPATCHER=true means
+#            emit() captures only; it never fires in-process listeners).
+#
+#   worker — owns cron + event listeners + rules engine + print delivery + the
+#            outbox relay. OUTBOX_RELAY_ACTIVE=true drains event_outbox and
+#            dispatches each row through ITS listeners exactly once.
+#
+# The three flags MUST move together for a correct split:
+#   api:    API_ONLY=true               + OUTBOX_SOLE_DISPATCHER=true
+#   worker: OUTBOX_RELAY_ACTIVE=true     + OUTBOX_SOLE_DISPATCHER=true
+#
+# Why OUTBOX_SOLE_DISPATCHER on BOTH: with it on, emit() never calls
+# super.emit, so the worker (which both emits AND runs the relay) does not
+# double-dispatch its own events, and the listener-less API still gets its
+# events delivered — once — by the worker's relay.
+#
+# Scale the worker to >1 replica freely: the relay claims rows with a single
+# atomic `UPDATE … FOR UPDATE SKIP LOCKED` (migration 254), so replicas take
+# disjoint batches with no double-dispatch.
+
+x-app-env: &app-env
+  DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?FIELD_ENCRYPTION_KEY must be set}
+  SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:?SECRETS_ENCRYPTION_KEY must be set}
+  STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+  STORAGE_LOCAL_DIR: ${STORAGE_LOCAL_DIR:-/var/lib/ghayth/storage}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+  AI_INTEGRATIONS_ANTHROPIC_API_KEY: ${AI_INTEGRATIONS_ANTHROPIC_API_KEY:-}
+  WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+  WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+  WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+  PERSIST_ALL_EVENTS: ${PERSIST_ALL_EVENTS:-true}
+  # The dispatch-source switch — on for BOTH roles (see header).
+  OUTBOX_SOLE_DISPATCHER: "true"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ghayth_internal
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    networks:
+      - ghayth_internal
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api-server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      PORT: 8080
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL must be set}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+      SEED_DEMO_DATA: "false"
+      # HTTP only — the worker owns every background subsystem.
+      API_ONLY: "true"
+    volumes:
+      - app_storage:/var/lib/ghayth/storage
+    expose:
+      - "8080"
+    networks:
+      - ghayth_internal
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api-server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # Same image, different entry point: dist/worker.mjs (the otel-preloaded
+    # worker shim produced by build.mjs).
+    command: ["node", "--enable-source-maps", "./dist/worker.mjs"]
+    environment:
+      <<: *app-env
+      WORKER_HEALTH_PORT: "7001"
+      # The worker is the sole dispatcher: it drains the outbox + runs listeners.
+      OUTBOX_RELAY_ACTIVE: "true"
+    expose:
+      - "7001"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:7001/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    networks:
+      - ghayth_internal
+    # Scale freely — the atomic claim makes replicas safe:
+    #   docker compose -f docker-compose.split.yml up -d --scale worker=3
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_UPSTREAM: http://api:8080
+    ports:
+      - "127.0.0.1:8088:80"
+    networks:
+      - ghayth_internal
+
+volumes:
+  pgdata:
+  redisdata:
+  app_storage:
+
+networks:
+  ghayth_internal:
+    driver: bridge

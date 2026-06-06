@@ -133,6 +133,18 @@ class EventBus extends EventEmitter {
     // envelope once guarantees every event is versioned + timestamped.
     const stamped = stampEnvelope(payload);
     captureToOutbox(event, stamped);
+    // Finding #2 completion — dispatch-source switch. When
+    // OUTBOX_SOLE_DISPATCHER is on, the outbox relay is the SOLE dispatcher:
+    // emit() captures the row and returns WITHOUT firing in-process
+    // listeners, so a process that both emits and runs the relay (the
+    // worker) doesn't double-dispatch its own events, and a listener-less
+    // API (API_ONLY=true) still gets its events delivered — once — by the
+    // worker's relay. Default off → unchanged in-process dispatch.
+    if (config.outboxSoleDispatcher) {
+      // Return value mirrors EventEmitter.emit's contract (had-listeners);
+      // under sole-dispatch there are no synchronous listeners on this path.
+      return this.listenerCount(event) > 0;
+    }
     return super.emit(event, stamped);
   }
 

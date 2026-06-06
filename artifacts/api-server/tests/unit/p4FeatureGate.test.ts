@@ -118,7 +118,7 @@ describe("P4.3 — featureGate middleware shape", () => {
   });
 });
 
-describe("P4.3 — featureGate is mounted on /hr, /fleet, /umrah", () => {
+describe("P4.3 — featureGate is mounted on the product-bearing modules", () => {
   it("imports featureGate in _domain-mounts.ts", () => {
     expect(MOUNTS).toMatch(/from\s+"\.\.\/middlewares\/featureGate\.js"/);
   });
@@ -133,6 +133,31 @@ describe("P4.3 — featureGate is mounted on /hr, /fleet, /umrah", () => {
 
   it("/umrah is gated by umrah.access", () => {
     expect(MOUNTS).toMatch(/router\.use\("\/umrah",\s*featureGate\("umrah\.access"\)\)/);
+  });
+
+  it("/finance is gated by finance.access", () => {
+    expect(MOUNTS).toMatch(/router\.use\("\/finance",\s*featureGate\("finance\.access"\)\)/);
+  });
+
+  it("/warehouse is gated by logistics.access (warehouse sells under logistics)", () => {
+    expect(MOUNTS).toMatch(/router\.use\("\/warehouse",\s*featureGate\("logistics\.access"\)\)/);
+  });
+
+  it("/crm is gated by crm.access", () => {
+    expect(MOUNTS).toMatch(/router\.use\("\/crm",\s*featureGate\("crm\.access"\)/);
+  });
+
+  it("/intelligence is gated by insights.ai", () => {
+    expect(MOUNTS).toMatch(/router\.use\("\/intelligence",\s*featureGate\("insights\.ai"\)/);
+  });
+
+  it("every gated key is seeded by migration 253 (no gate references a ghost feature)", () => {
+    const MIGRATION = read("artifacts/api-server/src/migrations/253_subscription_features.sql");
+    const gatedKeys = [...MOUNTS.matchAll(/featureGate\("([^"]+)"\)/g)].map((m) => m[1]);
+    expect(gatedKeys.length).toBeGreaterThanOrEqual(7);
+    for (const key of new Set(gatedKeys)) {
+      expect(MIGRATION).toContain(`'${key}'`);
+    }
   });
 
   it("subscriptionGate (whole-company) is still wired — the two layers coexist", () => {

@@ -58,14 +58,25 @@ workspace).
 | P1.4 | `build.mjs` produces both bundles | ✅ Updated | (pending) |
 | P1.5 | `/healthz` + `/readyz` on worker | ✅ Wired | (pending) |
 | P1.6 | smoke tests | ✅ Added | (pending) |
+| P1.7 | `docker-compose.split.yml` deployment | ✅ Shipped | (pending) |
 
 **Deployment model:**
-- API container: `pnpm run start:api-only` (sets `API_ONLY=true`)
-- Worker container: `pnpm run worker:start`
-- Dev / single-process: `pnpm run start` (legacy behaviour — all-in-one)
+- Single-process (default): `docker compose -f docker-compose.prod.yml up -d`
+  — one container runs HTTP + every background subsystem (current prod).
+- Split: `docker compose -f docker-compose.split.yml up -d` — two
+  containers from the SAME image:
+  - `api`    : `API_ONLY=true` + `OUTBOX_SOLE_DISPATCHER=true` (HTTP only,
+    emits → outbox)
+  - `worker` : `OUTBOX_RELAY_ACTIVE=true` + `OUTBOX_SOLE_DISPATCHER=true`
+    (cron + listeners + relay; health on `:7001/healthz`)
+  - the worker is horizontally scalable (`--scale worker=N`) — the atomic
+    claim (migration 254) makes replicas safe.
+- Dev / single-process CLI: `pnpm run start` (all-in-one).
 
-**P1 remaining work:** Dockerfile / k8s manifests for the split deployment.
-Not blocking the application code; ops can wire when they're ready.
+**P1 is complete** — the split deployment artifacts (compose + Dockerfile
+worker command + the dispatch-source switch that makes the split correct)
+all shipped. k8s manifests, if wanted, are a mechanical translation of the
+compose file.
 
 ---
 
@@ -81,6 +92,19 @@ Closes findings #2 (outbox not relayed) and #3 (purge deletes pending).
 | **P2.4** | **`OUTBOX_RELAY_ACTIVE` feature flag** | ✅ **Shipped (default off)** |
 | **P2.5** | **`purgeAgedOutboxEntries` status-aware** | ✅ Done |
 | **P2.6** | **live-DB integration tests + atomic-claim fix** | ✅ **Shipped (13 live-DB tests; migration 254; concurrency bug fixed)** |
+| **P2.7** | **dispatch-source switch (`OUTBOX_SOLE_DISPATCHER`)** | ✅ **Shipped — closes finding #2 to 100%** |
+
+**P2.7 — the dispatch-source switch (finding #2 to 100%):**
+The relay could drain the outbox, but `emit()` still called `super.emit`
+alongside the outbox INSERT, so finding #2 ("outbox captured but
+dispatched in-process") was only half-closed: any process running BOTH
+listeners AND the relay would double-dispatch its own emits.
+`OUTBOX_SOLE_DISPATCHER` (default false) makes `emit()` capture to the
+outbox ONLY — the relay becomes the sole dispatcher. This is the flag
+that makes the worker/API split correct (see P1 deployment model). The
+two layers compose: API emits → outbox (no listeners); worker relay
+drains → dispatches once through its listeners. Locked by 9 smoke
+assertions (`p2DispatchSourceSwitch.test.ts`) + the live-DB relay suite.
 
 **P2.6 — what the live-DB tests found and fixed:**
 Writing real-Postgres integration tests surfaced a genuine concurrency
@@ -210,9 +234,12 @@ independently").
 **41 smoke assertions** (`p4FeatureGate.test.ts`) lock the contract
 (36 backend + 5 SPA-wiring).
 
-**Optional follow-on:** gate more mounts (`/finance`, `/crm`, `/warehouse`,
-`/intelligence`) once commercial defines the price tiers — adding one
-mount is now a single `router.use(prefix, featureGate("<key>"))` line.
+**Gated mounts (7):** `/hr` (hr.access), `/fleet` (fleet.access),
+`/umrah` (umrah.access), `/finance` (finance.access), `/warehouse`
+(logistics.access), `/crm` (crm.access), `/intelligence` (insights.ai).
+A unit test asserts every gated key is seeded by migration 253 (no gate
+references a ghost feature). Adding another module is a single
+`router.use(prefix, featureGate("<key>"))` line + a seed row.
 
 ---
 
@@ -221,25 +248,29 @@ mount is now a single `router.use(prefix, featureGate("<key>"))` line.
 | Phase | Status | Tests added | Senior commits |
 |---|---|---|---|
 | P0 | ✅ Complete | 22 (16 + 6 explicit-flag) | 2 |
-| P1 | ✅ Complete | 16 | 1 |
-| P2 | ✅ Complete | 74 (55 smoke + 6 new claim smoke + 13 live-DB) | 4 |
+| P1 | ✅ Complete | 23 (16 + 7 split-deploy) | 2 |
+| P2 | ✅ Complete | 96 (61 smoke + 13 live-DB relay + 9 dispatch-switch + 13 live-DB featureGate share) | 5 |
 | P3 | ✅ Complete | 12 | 1 |
-| P4 | ✅ Complete | 41 | 2 |
+| P4 | ✅ Complete | 52 (41 + 11 live-DB featureGate) | 3 |
 
-**Total new tests on the security/architecture surface: 165.**
+**Total new tests on the security/architecture surface: ~205.**
 
 What's shipped in this branch closes all nine senior-review findings:
 1. branch-id silent fallback (✅ P0.1)
 2. enforceBranchScope opt-in (✅ P0.2 — runtime warn + explicit flags on 5 highest-risk routes)
 3. SQL injection vector via orderBy/extraConditions (✅ P0.3)
-4. Worker / API single-point-of-failure (✅ P1)
-5. Outbox not relayed + purge race + claim concurrency (✅ P2.1–P2.6, incl. live-DB tests)
+4. Worker / API single-point-of-failure (✅ P1 — code + `docker-compose.split.yml`)
+5. Outbox not relayed + purge race + claim concurrency (✅ P2.1–P2.7, incl. live-DB tests + dispatch-source switch)
 6. Bloated central router (✅ P3)
-7. Subscription gate is company-wide (✅ P4 — backend + admin SPA)
-8. (covered under P1 — no separate worker workspace → `worker.ts` + `API_ONLY`)
+7. Subscription gate is company-wide (✅ P4 — backend + admin SPA + 7 gated modules)
+8. (covered under P1 — no separate worker workspace → `worker.ts` + `API_ONLY` + split compose)
 9. (covered under P0.3 — raw orderBy/extraConditions whitelisted)
 
-All phases (P0–P4) are complete. The remaining items are operational,
-not application code: Dockerfile/k8s manifests for the worker/API split
-(P1), and flipping `OUTBOX_RELAY_ACTIVE=true` once ops is ready to make
-the outbox the dispatcher.
+All phases (P0–P4) are complete, including the operational deliverables:
+the worker/API split deployment (`docker-compose.split.yml`) and the
+dispatch-source switch (`OUTBOX_SOLE_DISPATCHER`) that makes the split
+correct. The ONLY remaining lever is an operator decision — flipping
+`OUTBOX_RELAY_ACTIVE=true` + `OUTBOX_SOLE_DISPATCHER=true` to make the
+outbox the dispatcher in production (the single-process default stays
+unchanged until then). k8s manifests, if desired, are a mechanical
+translation of the compose file.

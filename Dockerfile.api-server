@@ -30,4 +30,9 @@ WORKDIR /app/artifacts/api-server
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD wget --quiet --tries=1 --spider http://localhost:${PORT}/api/healthz || exit 1
 ENTRYPOINT ["/sbin/tini", "--"]
+# Default role: the HTTP API (dist/server.mjs). The SAME image also runs the
+# background worker via a command override — `node ./dist/worker.mjs` — see
+# docker-compose.split.yml (the build produces both bundles). In a split
+# deployment the API runs with API_ONLY=true + OUTBOX_SOLE_DISPATCHER=true and
+# the worker with OUTBOX_RELAY_ACTIVE=true + OUTBOX_SOLE_DISPATCHER=true.
 CMD ["node", "--enable-source-maps", "./dist/server.mjs"]

@@ -150,6 +150,29 @@ const EnvSchema = z.object({
   // hiccup, listener-not-registered-yet at boot, etc).
   OUTBOX_RELAY_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
 
+  // -- P2 (finding #2 completion) — dispatch source switch ----------------
+  // When true, eventBus.emit() ONLY captures the event to event_outbox and
+  // does NOT call super.emit — making the outbox relay the SOLE dispatcher.
+  // This is the flag that makes the worker / API split correct: with it on
+  //   - the API (API_ONLY=true, no listeners) emits → outbox only, and
+  //   - the worker drains the outbox (OUTBOX_RELAY_ACTIVE=true) → dispatches
+  //     once through its listeners.
+  // No process double-dispatches its own emits, because emit() no longer
+  // fires listeners synchronously.
+  //
+  // Default false → unchanged single-process behaviour (emit captures AND
+  // dispatches in-process; the relay, if on, is the double-dispatch hazard
+  // the OUTBOX_RELAY_ACTIVE note warns about). Flip BOTH this and
+  // OUTBOX_RELAY_ACTIVE together (worker) / this alone (API) for the split.
+  //
+  // ⚠ Eventual-consistency mode: listeners (audit, notifications, GL hooks)
+  // now run after the relay picks the row up (≤ OUTBOX_RELAY_INTERVAL_MS),
+  // not synchronously inside the request. The cross-domain handlers are
+  // already retry+DLQ safe, so this matches their contract — but any code
+  // that (incorrectly) assumed a listener ran before emit() returned must
+  // be audited before flipping this on.
+  OUTBOX_SOLE_DISPATCHER: boolEnv(false),
+
   // -- fleet telematics (#1354) -------------------------------------------
   // Production deployments reject http(s://) CMSV6 base URLs by default.
   // Lab/dev environments can opt out via this flag; the SSRF guard is
@@ -341,6 +364,11 @@ export interface AppConfig {
   readonly outboxRelayBatchSize: number;
   /** P2.4 — max attempts before a row is marked 'dead'. */
   readonly outboxRelayMaxAttempts: number;
+
+  /** P2 (finding #2) — when true, emit() captures to the outbox only and
+   *  the relay is the sole dispatcher (no in-process super.emit). Default
+   *  false. Required for a correct API_ONLY / worker split. */
+  readonly outboxSoleDispatcher: boolean;
 
   /** Fleet telematics — #1354 production hardening flags. */
   readonly fleetTelematics: {
@@ -548,6 +576,7 @@ function buildConfig(env: RawEnv): AppConfig {
     outboxRelayIntervalMs: env.OUTBOX_RELAY_INTERVAL_MS,
     outboxRelayBatchSize: env.OUTBOX_RELAY_BATCH_SIZE,
     outboxRelayMaxAttempts: env.OUTBOX_RELAY_MAX_ATTEMPTS,
+    outboxSoleDispatcher: env.OUTBOX_SOLE_DISPATCHER,
     fleetTelematics: {
       allowHttp: env.FLEET_TELEMATICS_ALLOW_HTTP,
       proxyTtlSec: Math.min(300, Math.max(15, env.FLEET_TELEMATICS_PROXY_TTL_SEC)),

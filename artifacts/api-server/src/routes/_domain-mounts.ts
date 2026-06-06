@@ -167,6 +167,9 @@ export function mountDomainRouters(router: IRouter): void {
   // Per-user finance limiter — mounted once on /finance so the dozen+
   // finance sub-routers below share a single per-user budget.
   router.use("/finance", financeUserLimiter);
+  // P4 — finance product gate. Mounted once on /finance so every finance
+  // sub-router below inherits the entitlement check.
+  router.use("/finance", featureGate("finance.access"));
   router.use("/finance", requireModule("finance"), requireGuards("financial"), invoicesRouter);
   router.use("/finance", requireModule("finance"), requireGuards("financial"), journalRouter);
   router.use("/finance", requireModule("finance"), requireGuards("financial"), glHelpersRouter);
@@ -197,6 +200,8 @@ export function mountDomainRouters(router: IRouter): void {
   // /cargo/* (own RBAC feature fleet.cargo).
   router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRouter);
   router.use("/warehouse", warehouseUserLimiter);
+  // P4 — warehouse sells under the 'logistics' product.
+  router.use("/warehouse", featureGate("logistics.access"));
   router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
   router.use("/properties", propertiesUserLimiter);
   router.use("/properties", requireModule("property"), requireGuards("financial"), propertiesRouter);
@@ -204,7 +209,12 @@ export function mountDomainRouters(router: IRouter): void {
   router.use("/legal", requireModule("legal"), requireMinLevel(40), legalRouter);
   router.use("/projects", requireModule("operations"), projectsRouter);
   router.use("/support", requireModule("support"), supportRouter);
+  // P4 — CRM product gate (separate bare mount like /hr, /finance above so
+  // the requireModule line stays the canonical guard mount).
+  router.use("/crm", featureGate("crm.access"));
   router.use("/crm", requireModule("crm"), crmRouter);
+  // P4 — intelligence sells under the 'insights' product (insights.ai key).
+  router.use("/intelligence", featureGate("insights.ai"));
   router.use("/intelligence", requireModule("bi"), intelligenceRouter);
   // Agent 7 — sidebar shows automation at level 60; floor here matches.
   router.use("/automation", requireModule("automation"), requireMinLevel(60), automationRouter);
