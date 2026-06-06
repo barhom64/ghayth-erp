@@ -1,5 +1,6 @@
 import { pool } from "./rawdb.js";
 import { toDateISO, roundTo2 } from "./businessHelpers.js";
+import { issueNumber } from "./numberingService.js";
 import { logger } from "./logger.js";
 import { config } from "./config.js";
 
@@ -65,9 +66,18 @@ export async function seedDemoData(): Promise<void> {
     const employeeIds: number[] = [];
     for (let i = 0; i < empData.length; i++) {
       const emp = empData[i];
-      const seqRes = await client.query(`SELECT nextval('employee_number_seq') AS seq`);
-      const seq = Number(seqRes.rows[0].seq);
-      const empNumber = `EMP-2024-${String(seq).padStart(3, "0")}`;
+      // Legacy `employee_number_seq` was dropped (migration 218); codes are
+      // now issued via numberingService.issueNumber (scheme hr/employee_code).
+      const issued = await issueNumber({
+        companyId,
+        branchId,
+        moduleKey: "hr",
+        entityKey: "employee_code",
+        entityTable: "employees",
+        actorId: null,
+        expectedTiming: "on_draft",
+      });
+      const empNumber = issued.number;
 
       const empRes = await client.query(
         `INSERT INTO employees (name, phone, email, "empNumber", "nationalId", gender, nationality, status)
@@ -78,6 +88,10 @@ export async function seedDemoData(): Promise<void> {
       if (!empRes.rows.length) continue;
       const empId = empRes.rows[0].id;
       employeeIds.push(empId);
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [empId, issued.assignmentId]
+      );
 
       const hireDate = toDateISO(new Date(2023, i % 12, (i * 3 + 1) % 28 + 1));
       const salary = emp.role.includes("manager") || emp.role === "general_manager" ? 15000 + i * 1000 : 7000 + i * 500;
