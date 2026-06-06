@@ -45,9 +45,6 @@ export default function ExitCreate() {
     [employees, form.assignmentId]
   );
 
-  if (employeesQ.isLoading) return <LoadingSpinner />;
-  if (employeesQ.isError) return <ErrorState />;
-
   const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
   const hireDate = selectedEmployee?.hireDate || selectedEmployee?.joinDate;
   const yearsOfService = hireDate
@@ -73,6 +70,9 @@ export default function ExitCreate() {
     }
     return Math.round(g * 100) / 100;
   }, [salary, yearsOfService, form.exitType]);
+
+  if (employeesQ.isLoading) return <LoadingSpinner />;
+  if (employeesQ.isError) return <ErrorState />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
