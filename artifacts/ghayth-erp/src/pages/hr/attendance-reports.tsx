@@ -12,6 +12,7 @@ import {
   useFilters,
   applyFilters,
   PageShell,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Clock, Users, AlertTriangle, DollarSign } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -119,6 +120,22 @@ export default function AttendanceReportsPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filteredMonthly || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "period", label: "الفترة" },
+              { key: "presentDays", label: "أيام الحضور" },
+              { key: "absentDays", label: "أيام الغياب" },
+              { key: "lateMinutes", label: "إجمالي دقائق التأخر" },
+              { key: "overtimeMinutes", label: "دقائق العمل الإضافي" },
+              { key: "totalDeduction", label: "إجمالي الخصم" },
+              { key: "status", label: "الحالة" },
+            ],
+            "تقرير-الحضور-الشهري",
+          )
+        }
         resultCount={filteredMonthly.length}
       />
 
