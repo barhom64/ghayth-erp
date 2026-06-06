@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { formatCurrency } from "@/lib/formatters";
-import { TrendingUp, TrendingDown, BarChart3, ArrowUpDown, ExternalLink } from "lucide-react";
+import { exportRowsToCsv } from "@/lib/unified-export";
+import { TrendingUp, TrendingDown, BarChart3, ArrowUpDown, ExternalLink, Download } from "lucide-react";
 
 /**
  * Entity ranking — answers "top customers by revenue", "top vendors
@@ -99,12 +100,49 @@ export default function EntityRankingPage() {
         { label: "تصنيف الكيانات" },
       ]}
       actions={
-        <Link href="/finance/dimensional-routing">
-          <Button variant="ghost" data-testid="entity-ranking-back">
-            <BarChart3 className="h-4 w-4 ms-1" />
-            التأصيل المالي
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          {data && data.rows.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const fname = `entity-ranking-${entityType}-${metric}-${direction}`;
+                void exportRowsToCsv({
+                  entityType: "report_entity_ranking",
+                  title: fname,
+                  rows: data.rows.map((r, idx) => ({
+                    rank: String(idx + 1),
+                    entityId: String(r.entityId),
+                    entityName: r.entityName ?? `#${r.entityId}`,
+                    revenue: String(r.revenue),
+                    expense: String(r.expense),
+                    net: String(r.net),
+                    entries: String(r.entries),
+                  })),
+                  columns: [
+                    { key: "rank",       label: "الترتيب" },
+                    { key: "entityId",   label: "المعرف" },
+                    { key: "entityName", label: "الاسم" },
+                    { key: "revenue",    label: "الإيراد" },
+                    { key: "expense",    label: "المصروف" },
+                    { key: "net",        label: "الصافي" },
+                    { key: "entries",    label: "عدد القيود" },
+                  ],
+                }).catch((err) => console.error("[entity-ranking export] failed", err));
+              }}
+              data-testid="entity-ranking-export-csv"
+            >
+              <Download className="h-4 w-4 ms-1" />
+              CSV
+            </Button>
+          )}
+          <Link href="/finance/dimensional-routing">
+            <Button variant="ghost" data-testid="entity-ranking-back">
+              <BarChart3 className="h-4 w-4 ms-1" />
+              التأصيل المالي
+            </Button>
+          </Link>
+        </div>
       }
     >
       <FinanceTabsNav />
