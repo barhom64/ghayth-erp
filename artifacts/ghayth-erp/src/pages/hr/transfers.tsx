@@ -23,6 +23,7 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { ApprovalActions } from "@workspace/workflow-kit";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -313,6 +314,23 @@ export default function TransfersPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "fromBranchName", label: "الفرع الحالي" },
+              { key: "toBranchName", label: "الفرع المنقول إليه" },
+              { key: "toDeptName", label: "القسم الجديد" },
+              { key: "toJobTitle", label: "المسمى الجديد" },
+              { key: "effectiveDate", label: "تاريخ السريان" },
+              { key: "status", label: "الحالة" },
+              { key: "reason", label: "السبب" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "طلبات-النقل",
+          )
+        }
         resultCount={filtered.length}
       />
 

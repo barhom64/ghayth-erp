@@ -12,6 +12,7 @@ import {
   applyFilters,
   PageShell,
   PageStatusBadge,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { ApprovalActions } from "@workspace/workflow-kit";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
@@ -184,6 +185,22 @@ export default function ExcuseRequestsPage() {
           }}
           values={filters}
           onChange={setFilters}
+          onExportCSV={() =>
+            exportToCSV(
+              filtered || [],
+              [
+                { key: "employeeName", label: "الموظف" },
+                { key: "excuseDate", label: "تاريخ الاستئذان" },
+                { key: "excuseType", label: "نوع الاستئذان" },
+                { key: "startTime", label: "من" },
+                { key: "endTime", label: "إلى" },
+                { key: "estimatedMinutes", label: "المدة (دقائق)" },
+                { key: "status", label: "الحالة" },
+                { key: "reason", label: "السبب" },
+              ],
+              "طلبات-الاستئذان",
+            )
+          }
           resultCount={filtered.length}
         />
       }
