@@ -176,13 +176,27 @@ router.get("/users", authorize({ feature: "admin", action: "list" }), async (req
   try {
     await assertAdmin(req);
     const scope = req.scope!;
+    // Pre-aggregate failed-login counts once instead of running the
+    // scalar subquery per row. The original SELECT-list correlated
+    // subquery was N+1: postgres planned one execution PER returned
+    // user, so 500 users == 501 index lookups into security_log over
+    // a 7-day window. The CTE below scans the table once filtered to
+    // that same window and joins per-user counts back.
     const rows = await rawQuery(`
+      WITH failed_login_counts AS (
+        SELECT "userId", COUNT(*) AS "failedAttempts7d"
+        FROM security_log
+        WHERE reason = 'auth_failed'
+          AND "createdAt" > NOW() - INTERVAL '7 days'
+        GROUP BY "userId"
+      )
       SELECT DISTINCT u.id, u.email, u.role, u."isActive", u."lastLoginAt", u."createdAt", u."employeeId",
              e.name AS "employeeName", e."empNumber",
-             (SELECT COUNT(*) FROM security_log sl WHERE sl."userId" = u.id AND sl.reason = 'auth_failed' AND sl."createdAt" > NOW() - INTERVAL '7 days') AS "failedAttempts7d"
+             COALESCE(flc."failedAttempts7d", 0)::int AS "failedAttempts7d"
       FROM users u
       LEFT JOIN employees e ON e.id = u."employeeId"
       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
+      LEFT JOIN failed_login_counts flc ON flc."userId" = u.id
       WHERE ea."companyId" = $1
          OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $1)
       ORDER BY u."createdAt" DESC
