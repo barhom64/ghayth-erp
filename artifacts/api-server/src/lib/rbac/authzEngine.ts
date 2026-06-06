@@ -34,6 +34,7 @@ import {
 import { evaluateConditions, type AbacConditions } from "./abacConditions.js";
 import { enforceSoD } from "./sodEnforcement.js";
 import { isOwnRecord } from "./recordOwnership.js";
+import { getActiveDelegationsFor, delegationCoversFeature, auditDelegatedUse } from "./delegationService.js";
 import { publishInvalidation, onInvalidation } from "./distributedCache.js";
 import { config } from "../config.js";
 
@@ -88,6 +89,8 @@ export interface AccessResult {
     yourCompanyId?: number;
     recordCompanyId?: number | null;
     requiredFix?: string;
+    /** Set when access was granted via an active delegation (delegator emp id). */
+    delegatedFrom?: number;
   };
 }
 
@@ -97,6 +100,9 @@ interface RoleGrantRow {
   actions: string[];
   scope: string;
   conditions: any;
+  /** Set when this is a virtual grant inherited via an active delegation —
+   *  carries the delegator's employee id for the audit trail. role_id is -2. */
+  __delegatorId?: number;
 }
 
 interface FieldPolicyRow {
@@ -475,11 +481,33 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
     }));
 
   // Find any grant that covers (feature, action). Wildcard via parent feature.
-  const roleMatches = grants.filter((g) => {
+  const matchesFeatureAction = (g: RoleGrantRow): boolean => {
     if (g.feature_key !== spec.feature && g.feature_key !== `${featureDef.moduleKey}.*` && g.feature_key !== "*") return false;
     return g.actions.includes(spec.action) || g.actions.includes("*");
-  });
-  const matchingGrants = [...roleMatches, ...userGrantMatches];
+  };
+  const roleMatches = grants.filter(matchesFeatureAction);
+
+  // Delegation: if the acting user is an active delegate whose delegation covers
+  // this feature, inherit the DELEGATOR's grants on it (never more than the
+  // delegator actually has). This is what makes a delegation real — without it
+  // the delegations table is decorative. Bounded by the active window + feature
+  // list (delegationService), and every use is audited at the allow point below.
+  const delegatedMatches: RoleGrantRow[] = [];
+  if (scope.employeeId) {
+    const delegations = await getActiveDelegationsFor(scope.companyId, scope.employeeId);
+    for (const d of delegations) {
+      if (!d.delegatorUserId) continue;
+      if (!delegationCoversFeature(d.features, spec.feature, featureDef.moduleKey)) continue;
+      const delegatorGrants = (await loadEffectiveGrants(d.delegatorUserId, scope.companyId)).grants;
+      for (const g of delegatorGrants) {
+        if (matchesFeatureAction(g)) {
+          delegatedMatches.push({ ...g, role_id: -2, __delegatorId: d.delegatorId });
+        }
+      }
+    }
+  }
+
+  const matchingGrants = [...roleMatches, ...userGrantMatches, ...delegatedMatches];
 
   if (matchingGrants.length === 0) {
     return {
@@ -613,6 +641,19 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
     fieldPolicy[fp.field_name] = fp.mode as any;
   }
 
+  // علم وقوع: if access was granted through a delegation, record it so there is
+  // a clear "acted on behalf of" trail and admins can see delegated activity.
+  const viaDelegation = winningGrant.role_id === -2 ? winningGrant.__delegatorId ?? null : null;
+  if (viaDelegation != null) {
+    auditDelegatedUse({
+      companyId: scope.companyId,
+      delegateUserId: scope.userId,
+      delegatorId: viaDelegation,
+      feature: spec.feature,
+      action: spec.action,
+    });
+  }
+
   return {
     allowed: true,
     fieldPolicy,
@@ -623,6 +664,7 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
       grantedActions: winningGrant.actions as Action[],
       grantedScope: winningGrant.scope as Scope,
       yourCompanyId: scope.companyId,
+      ...(viaDelegation != null ? { delegatedFrom: viaDelegation } : {}),
     },
   };
 }
