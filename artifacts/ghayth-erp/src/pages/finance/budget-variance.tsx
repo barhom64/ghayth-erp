@@ -62,14 +62,16 @@ export default function BudgetVariancePage() {
     `/finance/budget/variance?period=${encodeURIComponent(period)}`,
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError || !data) return <ErrorState />;
-
-  const lines = data.lines ?? [];
+  const lines = data?.lines ?? [];
   const filtered = statusFilter
     ? lines.filter((l) => l.status === statusFilter)
     : lines;
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError || !data) return <ErrorState />;
+
 
   const overCount = lines.filter((l) => l.status === "over_budget").length;
   const nearCount = lines.filter((l) => l.status === "near_limit").length;
