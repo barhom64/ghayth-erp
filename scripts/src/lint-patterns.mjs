@@ -556,6 +556,28 @@ const RULES = [
     // Hardened from ratchet → hard rule.
     message: `PrintActions / PrintDocument / LetterheadHeader imported from the legacy path. ${kitRatchetHint("report-kit")}`,
   },
+  {
+    id: "select-item-empty-value",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx"],
+    // Radix's <Select.Item> CRASHES the entire page at render time when
+    // value="" — the runtime throws the loud
+    //   "A <Select.Item /> must have a value prop that is not an empty
+    //    string. This is because the Select value can be set to an empty
+    //    string to clear the selection and show the placeholder"
+    // which leaks to operators as a fatal error overlay. Use a sentinel
+    // like value="_none" and translate it back to "" on the parent's
+    // onValueChange: `setX(v === "_none" ? "" : v)`. Reported by the
+    // operator on the umrah import wizard — the wizard had 4 such
+    // SelectItems and another lived on admin-communication-control.
+    regex: /<SelectItem\s+value=""/,
+    message:
+      "`<SelectItem value=\"\">` crashes Radix Select on render. Use a " +
+      "sentinel value like `\"_none\"` and translate back to \"\" in the " +
+      "parent's onValueChange: " +
+      "`<Select value={state || \"_none\"} onValueChange={(v) => setState(v === \"_none\" ? \"\" : v)}>` " +
+      "with `<SelectItem value=\"_none\">— الكل —</SelectItem>`.",
+  },
 ];
 
 // ─── Pure matchers (exported for self-tests) ─────────────────────────────
