@@ -56,12 +56,12 @@ describe("Settings endpoint registration", () => {
     expect(SETTINGS_ROUTE).toContain('router.delete("/companies/:id"');
   });
 
-  it("system-controls, timezone, role-modules, approval-config, audit-log, channels endpoints exist", () => {
+  // #1791: GET/PUT /role-modules removed — role→module visibility now derives
+  // from RBAC v2 grants, edited in the v2 editor (not the legacy user_roles map).
+  it("system-controls, timezone, approval-config, audit-log, channels endpoints exist", () => {
     expect(SETTINGS_ROUTE).toContain('router.get("/timezone"');
     expect(SETTINGS_ROUTE).toContain('router.get("/system-controls"');
     expect(SETTINGS_ROUTE).toContain('router.put("/system-controls"');
-    expect(SETTINGS_ROUTE).toContain('router.get("/role-modules"');
-    expect(SETTINGS_ROUTE).toContain('router.put("/role-modules/:roleKey"');
     expect(SETTINGS_ROUTE).toContain('router.get("/approval-config"');
     expect(SETTINGS_ROUTE).toContain('router.post("/approval-config"');
     expect(SETTINGS_ROUTE).toContain('router.delete("/approval-config/:id"');
@@ -174,22 +174,8 @@ describe("Settings companyId scoping", () => {
     expect(section).toContain('"companyId"');
   });
 
-  it("GET /role-modules scopes by companyId (P02-CRIT1 fix)", () => {
-    // #685 PR-A6/A6.2: migrated to buildScopedWhere (user_roles has no branchId
-    // → disableBranchScope:true). A6.2 hotfix asserts WHERE keyword.
-    const idx = SETTINGS_ROUTE.indexOf('router.get("/role-modules"');
-    const section = SETTINGS_ROUTE.slice(idx, idx + 3000);
-    expect(section).toContain("buildScopedWhere(scope");
-    expect(section).toContain("disableBranchScope: true");
-    expect(section).toContain("FROM user_roles WHERE ${where}");
-  });
-
-  it("PUT /role-modules/:roleKey scopes UPDATE by companyId (P02-CRIT1 fix)", () => {
-    const idx = SETTINGS_ROUTE.indexOf('router.put("/role-modules/:roleKey"');
-    const section = SETTINGS_ROUTE.slice(idx, idx + 3000);
-    expect(section).toContain('"companyId"=$3');
-    expect(section).toContain("scope.companyId");
-  });
+  // #1791: GET/PUT /role-modules endpoints removed (read/wrote the dropped
+  // legacy user_roles.modules map) — their scoping smoke tests are obsolete.
 
   it("GET and PUT /channels scope by companyId", () => {
     const getIdx = SETTINGS_ROUTE.indexOf('router.get("/channels"');

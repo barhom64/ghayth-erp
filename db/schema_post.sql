@@ -3924,6 +3924,83 @@ CREATE INDEX idx_fleet_rental_payments_overdue ON public.fleet_rental_payments U
 ALTER TABLE ONLY public.fleet_tires
     ADD CONSTRAINT fleet_tires_pkey PRIMARY KEY (id);
 
+--
+-- #1733 Vehicle profile extension — tire indices + components / assignments / schedules tables.
+--
+
+CREATE INDEX IF NOT EXISTS idx_fleet_tires_serial
+  ON public.fleet_tires ("companyId", "serialNumber")
+  WHERE "serialNumber" IS NOT NULL AND "deletedAt" IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_fleet_tires_axle
+  ON public.fleet_tires ("vehicleId", "axleNumber", side)
+  WHERE "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.vehicle_components ALTER COLUMN id SET DEFAULT nextval('public.vehicle_components_id_seq'::regclass);
+ALTER TABLE ONLY public.vehicle_components ADD CONSTRAINT vehicle_components_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_vehicle_components_vehicle
+  ON public.vehicle_components ("vehicleId", status) WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_vehicle_components_next_service
+  ON public.vehicle_components ("companyId", "nextServiceDate")
+  WHERE "deletedAt" IS NULL AND status IN ('active', 'serviceable', 'needs_service');
+
+ALTER TABLE ONLY public.vehicle_driver_assignments ALTER COLUMN id SET DEFAULT nextval('public.vehicle_driver_assignments_id_seq'::regclass);
+ALTER TABLE ONLY public.vehicle_driver_assignments ADD CONSTRAINT vehicle_driver_assignments_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_vehicle_assignments_vehicle
+  ON public.vehicle_driver_assignments ("vehicleId", status, "startDate" DESC);
+CREATE INDEX IF NOT EXISTS idx_vehicle_assignments_driver
+  ON public.vehicle_driver_assignments ("driverId", status, "startDate" DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vehicle_active_primary
+  ON public.vehicle_driver_assignments ("vehicleId")
+  WHERE status = 'active' AND "assignmentType" = 'primary';
+
+ALTER TABLE ONLY public.vehicle_maintenance_schedules ALTER COLUMN id SET DEFAULT nextval('public.vehicle_maintenance_schedules_id_seq'::regclass);
+ALTER TABLE ONLY public.vehicle_maintenance_schedules ADD CONSTRAINT vehicle_maintenance_schedules_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_due
+  ON public.vehicle_maintenance_schedules ("companyId", "nextDueDate")
+  WHERE "isActive" AND "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_vehicle
+  ON public.vehicle_maintenance_schedules ("vehicleId")
+  WHERE "vehicleId" IS NOT NULL AND "deletedAt" IS NULL;
+
+
+--
+-- #1733 Pricing engine + invoice merging (Issue Comment 3) + driverServiceProfile.
+--
+
+CREATE INDEX IF NOT EXISTS idx_fleet_drivers_service_profile
+  ON public.fleet_drivers ("companyId", "driverServiceProfile")
+  WHERE "driverServiceProfile" IS NOT NULL AND "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_price_rules ALTER COLUMN id SET DEFAULT nextval('public.transport_price_rules_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_price_rules ADD CONSTRAINT transport_price_rules_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_price_rules_lookup
+  ON public.transport_price_rules ("companyId", "transportServiceType", "customerId", "validFrom", "validTo")
+  WHERE "isActive" AND "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_invoice_links ALTER COLUMN id SET DEFAULT nextval('public.transport_invoice_links_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_invoice_links ADD CONSTRAINT transport_invoice_links_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.transport_invoice_links ADD CONSTRAINT uq_transport_invoice_link_service UNIQUE ("companyId", "serviceLineId");
+CREATE INDEX IF NOT EXISTS idx_invoice_links_invoice
+  ON public.transport_invoice_links ("companyId", "invoiceId");
+
+
+--
+-- #1733 final gaps — fleet_expense_rules + transport_intake_rules.
+--
+
+ALTER TABLE ONLY public.fleet_expense_rules ALTER COLUMN id SET DEFAULT nextval('public.fleet_expense_rules_id_seq'::regclass);
+ALTER TABLE ONLY public.fleet_expense_rules ADD CONSTRAINT fleet_expense_rules_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_expense_rules_lookup
+  ON public.fleet_expense_rules ("companyId", "expenseSource", "vehicleId", "isActive")
+  WHERE "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_intake_rules ALTER COLUMN id SET DEFAULT nextval('public.transport_intake_rules_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_intake_rules ADD CONSTRAINT transport_intake_rules_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_intake_rules_lookup
+  ON public.transport_intake_rules ("companyId", "operationType", "transportServiceType", "customerId")
+  WHERE "isActive" AND "deletedAt" IS NULL;
+
 
 --
 -- Name: idx_fleet_tires_vehicle; Type: INDEX; Schema: public; Owner: -

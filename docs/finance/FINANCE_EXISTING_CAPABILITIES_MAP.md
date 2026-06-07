@@ -71,7 +71,7 @@
 |---|---|---|
 | #6 — لا عملية مالية بدون `FinanceOperationContext` | قاعدة lint `direct-posting-policy-in-route` تمنع استدعاء `assertPaymentSourceAllowed` مباشرةً داخل أي route؛ السياسة تُبلَغ فقط عبر `assertOperationValid` | ✅ مُفعَّلة (المصروفات + السندات حُوِّلت) |
 | #6 (مستوى الوحدة) | `financeJournalContextWiringSmoke` يثبّت تدفقَي الإنشاء على المحوّلات + `assertOperationValid` | ✅ |
-| #2 — منع `code.startsWith` كمنطق حسابات أساسي | قاعدة lint `account-code-startswith-in-finance-page` (ratchet، أساس 18) تمنع أي منطق بادئة-كود جديد في صفحات/مكوّنات المالية | ✅ مُفعَّلة (سقف ثابت ينزل مع كل ترحيل صفحة إلى `finance-account-usage`) |
+| #2 — منع `code.startsWith` كمنطق حسابات أساسي | قاعدة lint `account-code-startswith-in-finance-page` (ratchet، بدأ 18 ← الآن 13) تمنع أي منطق بادئة-كود جديد في صفحات/مكوّنات المالية | ✅ مُفعَّلة (مُنتقيات المال الأربعة — مصروف/سند/سلف/عُهد — على `isMoneyAccount` المركزي؛ السقف ينزل مع كل ترحيل) |
 
 > الموجات القادمة (الفواتير/المشتريات، الأصول/المخزون/العهد) تُضاف إلى نفس
 > قواعد الـlint بإسقاط استثناءاتها/أساسها تدريجياً حتى يصبح كامل سطح المالية

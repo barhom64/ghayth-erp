@@ -99,11 +99,8 @@ describe("admin — role management", () => {
     expect(section).toContain('authorize(');
   });
 
-  it("POST /roles requires admin:write", () => {
-    const idx = SRC.indexOf('router.post("/roles"');
-    const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('authorize(');
-  });
+  // #1791: POST /roles (legacy custom_roles create) removed — custom roles are
+  // now created via the RBAC v2 editor, so this endpoint no longer exists.
 
   it("GET /user-roles/:userId requires admin:read", () => {
     const idx = SRC.indexOf('"/user-roles/:userId"');
@@ -212,23 +209,10 @@ describe("admin — system registry", () => {
   });
 });
 
-describe("admin — role permissions CRUD", () => {
-  it("GET /role-permissions requires admin:read", () => {
-    const idx = SRC.indexOf('"/role-permissions"');
-    const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('authorize(');
-  });
-
-  it("bulk update endpoint exists", () => {
-    expect(SRC).toContain('"/role-permissions/bulk"');
-  });
-
-  it("DELETE /role-permissions/:id requires admin:write", () => {
-    const idx = SRC.indexOf('router.delete("/role-permissions/:id"');
-    const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('authorize(');
-  });
-});
+// #1791: the legacy role-permissions CRUD endpoints (GET /role-permissions,
+// /role-permissions/bulk, DELETE /role-permissions/:id) were removed — they
+// read/wrote the dropped legacy role_permissions table. RBAC v2 grants are
+// now managed via the rbacV2 routes, so these admin endpoints no longer exist.
 
 describe("admin — security patterns", () => {
   it("relies on global authMiddleware from index.ts", () => {
