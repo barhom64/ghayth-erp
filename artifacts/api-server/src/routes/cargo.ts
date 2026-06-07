@@ -43,6 +43,7 @@ import { fleetEngine } from "../lib/engines/index.js";
 import { logger } from "../lib/logger.js";
 import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
 import { assertVehicleCapacity } from "../lib/fleet/vehicleCapacity.js";
+import { FREIGHT_EVENTS } from "../lib/fleet/freightEvents.js";
 
 const router = Router();
 
@@ -251,6 +252,70 @@ router.get(
       res.json({ data: { ...manifest, items } });
     } catch (err) {
       handleRouteError(err, res, "Get cargo manifest error:");
+    }
+  },
+);
+
+// #1733 Comment 6 — operational timeline endpoint. Returns the merged,
+// chronologically-sorted event stream for one manifest: status
+// transitions, driver actions, capacity / eligibility exceptions, and
+// the billing handoff. Used by the cargo-detail SPA page to render the
+// per-manifest timeline ("الإسناد → قبول السائق → بدء الرحلة → وصول للتحميل
+// → تم التحميل → في الطريق → الوصول للتسليم → تم التسليم → الإغلاق
+// التشغيلي → الملاحظات والمرفقات").
+router.get(
+  "/manifests/:id/timeline",
+  authorize({ feature: "fleet.cargo", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+
+      // Guard: confirm the manifest belongs to a company the user can see.
+      const [exists] = await rawQuery<{ id: number }>(
+        `SELECT id FROM cargo_manifests
+          WHERE id = $1 AND "companyId" = ANY($2::int[]) AND "deletedAt" IS NULL`,
+        [id, scope.allowedCompanies],
+      );
+      if (!exists) throw new NotFoundError("بوليصة الشحن غير موجودة");
+
+      // Merge three sources:
+      //   • audit_logs (entity=cargo_manifests, entityId=id) — every PATCH
+      //   • event_logs (action LIKE 'fleet.cargo.%' AND entityId=id) — status changes
+      //   • billing_candidates events (action='finance.transport_billing.materialized') — accountant action
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT
+           'audit' AS source, action, "userId", "createdAt",
+           before::text AS before_json, after::text AS after_json,
+           NULL::text AS details
+         FROM audit_logs
+         WHERE entity = 'cargo_manifests' AND "entityId" = $1 AND "companyId" = ANY($2::int[])
+         UNION ALL
+         SELECT
+           'event' AS source, action, "userId", "createdAt",
+           NULL AS before_json, NULL AS after_json, details
+         FROM event_logs
+         WHERE entity = 'cargo_manifests' AND "entityId" = $1 AND "companyId" = ANY($2::int[])
+         UNION ALL
+         SELECT
+           'event' AS source, e.action, e."userId", e."createdAt",
+           NULL AS before_json, NULL AS after_json, e.details
+         FROM event_logs e
+         WHERE e.entity = 'transport_billing_candidates'
+           AND e."companyId" = ANY($2::int[])
+           AND EXISTS (
+             SELECT 1 FROM transport_billing_candidates tbc
+              WHERE tbc.id = e."entityId"
+                AND tbc."sourceType" = 'cargo_manifest'
+                AND tbc."sourceId" = $1
+           )
+         ORDER BY "createdAt" ASC
+         LIMIT 500`,
+        [id, scope.allowedCompanies],
+      );
+      res.json({ data: rows });
+    } catch (err) {
+      handleRouteError(err, res, "Get cargo timeline error:");
     }
   },
 );
@@ -570,6 +635,18 @@ router.patch(
             WHERE id = $1 AND "companyId" = $2 AND "billingStatus" = 'not_billable'`,
           [id, scope.companyId],
         );
+        // #1733 Comment 0 — emit the named "ready for invoice" event so
+        // listeners (audit indexer, future webhook subscribers, the
+        // dispatch board) get a single canonical signal.
+        emitEvent({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          userId: scope.userId,
+          action: FREIGHT_EVENTS.ReadyForInvoice,
+          entity: "cargo_manifests",
+          entityId: id,
+          details: JSON.stringify({ manifestId: id }),
+        }).catch((e) => logger.error(e, "ready_for_invoice event failed"));
       }
 
       res.json({ data: row });
