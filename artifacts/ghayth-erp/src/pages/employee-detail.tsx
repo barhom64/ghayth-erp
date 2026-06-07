@@ -198,7 +198,7 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
           <div>
             <p className="text-xs text-muted-foreground">تحويلة السنترال</p>
             {pbxExtension ? (
-              <p className="font-mono text-sm font-bold" dir="ltr" data-testid="finance-link-pbx-extension">{pbxExtension.extension}</p>
+              <ClickToCallButton extension={pbxExtension.extension} employeeId={Number(employeeId)} />
             ) : (
               <p className="text-xs text-muted-foreground">لا توجد تحويلة مرتبطة</p>
             )}
@@ -206,6 +206,48 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ClickToCallButton — POSTs to /communications/click-to-call. When a
+// PBX integration is wired (config.clickToCallUrl) the server originates
+// the call directly; when it isn't, the server returns mode='tel' with
+// a tel: URI the browser opens (system dialer). Either way the attempt
+// is logged so an operator can audit who tried to call whom.
+function ClickToCallButton({ extension, employeeId }: { extension: string; employeeId: number }) {
+  const { toast } = useToast();
+  const callMut = useApiMutation<
+    { data: { mode: "pbx" | "tel"; telUri: string; detail: string; callId: string } },
+    { target: string; relatedType?: string; relatedId?: number }
+  >("/communications/click-to-call", "POST", undefined, { silent: true });
+
+  const onClick = async () => {
+    try {
+      const r = await callMut.mutateAsync({ target: extension, relatedType: "employees", relatedId: employeeId });
+      if (r.data.mode === "tel") {
+        // Server didn't reach a PBX — fall back to the system dialer.
+        window.location.href = r.data.telUri;
+        toast({ title: "تم فتح برنامج الاتصال", description: "لم نتمكّن من توجيه السنترال — اتصل من جوالك" });
+      } else {
+        toast({ title: "تم بدء المكالمة", description: `السنترال يتصل بـ ${extension}` });
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "تعذّر بدء المكالمة", description: e?.message ?? String(e) });
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={callMut.isPending}
+      data-testid="finance-link-pbx-extension"
+      className="font-mono text-sm font-bold text-status-info-foreground hover:underline disabled:opacity-50 inline-flex items-center gap-1"
+      dir="ltr"
+    >
+      <Phone className="h-3.5 w-3.5" />
+      {extension}
+    </button>
   );
 }
 
