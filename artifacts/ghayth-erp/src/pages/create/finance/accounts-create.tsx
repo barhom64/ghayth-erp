@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, getErrorMessage } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -27,6 +28,20 @@ const CHILDREN_USAGE_POLICY_LABELS: Record<string, string> = {
   manual_required: "إلزام اختيار تصنيف يدوي لكل ابن",
 };
 
+// #1715 auto-numbering: suggest the next free child code under a parent.
+// Prefers numeric siblings sharing the parent's code prefix (the common COA
+// scheme), max+1; falls back to `${parentCode}01`. Pure suggestion — the
+// operator can always override the editable code field.
+function suggestChildCode(parentCode: string, accounts: any[]): string {
+  if (!parentCode) return "";
+  const siblings = accounts.filter(
+    (a) => typeof a.code === "string" && a.code.length > parentCode.length && a.code.startsWith(parentCode),
+  );
+  const nums = siblings.map((a) => Number(a.code)).filter((n) => Number.isFinite(n));
+  if (nums.length) return String(Math.max(...nums) + 1);
+  return `${parentCode}01`;
+}
+
 const DRAFT_KEY = "finance_accounts_create";
 const SHARED = "__shared__";
 const INITIAL = { code: "", name: "", nameEn: "", type: "asset", parentCode: "", nature: "debit", allowPosting: true, isAnalytical: false, branchScope: SHARED, accountUsage: USAGE_UNSET, childrenUsagePolicy: "inherit_default" };
@@ -40,6 +55,23 @@ export default function AccountsCreate() {
   const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
   const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  // #1715: when launched from a tree node's «إضافة حساب فرعي» (?parent=CODE),
+  // pre-fill the parent and suggest the next code once accounts have loaded.
+  // Guarded by a ref so it runs once and never clobbers an in-progress draft.
+  const prefilledRef = useRef(false);
+  useEffect(() => {
+    if (prefilledRef.current) return;
+    const parentParam = new URLSearchParams(window.location.search).get("parent");
+    if (!parentParam || accounts.length === 0) return;
+    prefilledRef.current = true;
+    if (form.parentCode) return; // a restored draft already has a parent — respect it
+    setForm((f) => ({
+      ...f,
+      parentCode: parentParam,
+      code: f.code || suggestChildCode(parentParam, accounts),
+    }));
+  }, [accounts.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
