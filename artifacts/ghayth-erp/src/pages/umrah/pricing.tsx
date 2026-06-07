@@ -14,7 +14,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 import { Plus, Pencil, Trash2, AlertTriangle, Tag, Hotel, Bus } from "lucide-react";
 
 interface PricingRow {
@@ -213,7 +213,7 @@ export default function UmrahPricing() {
                                 <span className="text-xs text-muted-foreground">/ معتمر</span>
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">
-                                {formatDateAr(r.validFrom)} — {formatDateAr(r.validTo)}
+                                {formatUmrahDate(r.validFrom)} — {formatUmrahDate(r.validTo)}
                               </p>
                             </div>
                             <div className="flex items-center gap-1.5 text-xs">
