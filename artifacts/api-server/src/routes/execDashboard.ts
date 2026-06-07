@@ -346,21 +346,30 @@ execDashboardRouter.get("/overdue-invoices", authorize({ feature: "dashboard.exe
   try {
     const scope = req.scope!;
     requireExec(scope);
+    // Was N+1: correlated MAX(stage) per invoice over dunning_letters.
+    // LIMIT 50 caps the surface but the CFO Cockpit refreshes this on
+    // every dashboard tick. Single GROUP BY CTE collapses to one scan.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT i.id, i.ref AS "invoiceNumber", i."dueDate",
+      `WITH dunning_stages AS (
+         SELECT "invoiceId", MAX(stage) AS stage
+           FROM dunning_letters
+          GROUP BY "invoiceId"
+       )
+       SELECT i.id, i.ref AS "invoiceNumber", i."dueDate",
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
               (i.total - COALESCE(i."paidAmount",0)) AS outstanding,
               (CURRENT_DATE - i."dueDate"::date)::int AS "daysPastDue",
-              COALESCE((SELECT MAX(dl.stage) FROM dunning_letters dl WHERE dl."invoiceId" = i.id), 0) AS "dunningStage",
+              COALESCE(ds.stage, 0) AS "dunningStage",
               c.name AS "clientName"
-       FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
-       WHERE i."companyId"=$1 AND i.status NOT IN ('paid','cancelled')
-         AND i."deletedAt" IS NULL
-         AND i."dueDate"::date < CURRENT_DATE
-         AND (i.total - COALESCE(i."paidAmount",0)) > 0
-       ORDER BY (CURRENT_DATE - i."dueDate"::date) DESC
-       LIMIT 50`,
+         FROM invoices i
+         LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
+         LEFT JOIN dunning_stages ds ON ds."invoiceId" = i.id
+        WHERE i."companyId"=$1 AND i.status NOT IN ('paid','cancelled')
+          AND i."deletedAt" IS NULL
+          AND i."dueDate"::date < CURRENT_DATE
+          AND (i.total - COALESCE(i."paidAmount",0)) > 0
+        ORDER BY (CURRENT_DATE - i."dueDate"::date) DESC
+        LIMIT 50`,
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows }));

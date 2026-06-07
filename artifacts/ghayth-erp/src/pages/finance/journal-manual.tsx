@@ -172,6 +172,7 @@ export default function JournalManualPage() {
         queryKey={queryKey}
         endpoint={endpoint}
         printEntityType="journal_entry"
+        exports={{ csv: true, excel: true, print: true }}
         columns={columns}
         rowKey={(row) => String(row.id)}
         onRowClick={(row) => navigate(`/finance/journal-manual/${row.id}`)}

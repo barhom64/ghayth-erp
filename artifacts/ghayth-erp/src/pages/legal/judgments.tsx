@@ -11,6 +11,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -99,7 +100,29 @@ export default function LegalJudgments() {
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المدفوع</p><p className="text-xl font-bold text-status-success-foreground">{formatCurrency(Number(totalPaid))}</p></CardContent></Card>
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المتبقي</p><p className="text-xl font-bold text-status-error-foreground">{formatCurrency(Number(outstanding))}</p></CardContent></Card>
       </div>
-      <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
+      <AdvancedFilters
+        config={{ searchPlaceholder: "بحث...", showDateRange: false }}
+        values={filters}
+        onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "caseTitle", label: "القضية" },
+              { key: "caseNumber", label: "رقم القضية" },
+              { key: "judgmentDate", label: "تاريخ الحكم" },
+              { key: "judgmentType", label: "نوع الحكم" },
+              { key: "verdict", label: "الحكم" },
+              { key: "amount", label: "المبلغ" },
+              { key: "paidAmount", label: "المدفوع" },
+              { key: "dueDate", label: "تاريخ الاستحقاق" },
+              { key: "riskLevel", label: "مستوى المخاطرة" },
+            ],
+            "أحكام-قانونية",
+          )
+        }
+        resultCount={filtered.length}
+      />
       <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} onRowClick={(j) => navigate(`/legal/judgments/${j.id}`)} />
     </PageShell>
   );
