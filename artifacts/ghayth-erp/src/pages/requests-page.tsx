@@ -62,6 +62,9 @@ import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/e
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { formatDateAr } from "@/lib/formatters";
 
 const iconMap: Record<string, any> = {
   Calendar, DollarSign, FileSignature, KeyRound, Wrench,
@@ -247,6 +250,7 @@ function RequestsList() {
     if (tagFilteredIds && !tagFilteredIds.has(r.id)) return false;
     return true;
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/requests",
@@ -434,9 +438,29 @@ function RequestsList() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-lg font-semibold">جميع الطلبات</h3>
-        <GuardedButton perm="requests:create" size="sm" onClick={() => setShowForm(!showForm)}>
-          {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />طلب جديد</>}
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_requests"
+            entityId="list"
+            size="icon"
+            label="طباعة قائمة الطلبات"
+            payload={() => ({
+              entity: { title: "قائمة الطلبات", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "المرجع": r.ref || `#${r.id}`,
+                "العنوان": r.title || "—",
+                "النوع": r.typeName || "—",
+                "مقدم الطلب": r.requesterName || "—",
+                "الأولوية": r.priority || "—",
+                "الحالة": r.status || "—",
+                "التاريخ": r.createdAt ? formatDateAr(r.createdAt) : "—",
+              })),
+            })}
+          />
+          <GuardedButton perm="requests:create" size="sm" onClick={() => setShowForm(!showForm)}>
+            {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />طلب جديد</>}
+          </GuardedButton>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -547,6 +571,7 @@ function RequestsList() {
       <DataTable
         columns={requestColumns}
         data={items}
+        onSortedDataChange={setPrintRows}
         noToolbar
         pageSize={20}
         emptyMessage="لا توجد طلبات"
