@@ -110,7 +110,19 @@ export default function MeDriver() {
     } finally { setBusy(null); }
   };
 
-  const cargoAdvance = async (manifestId: number, status: "in_transit" | "delivered") => {
+  // #1733 Blocker #3 — the driver now walks the 7 operational states the
+  // backend's DRIVER_ALLOWED_TRANSITIONS accepts (driver_accepted →
+  // trip_started → arrived_pickup → loaded → in_transit →
+  // arrived_delivery → delivered), one step per click.
+  type CargoDriverAdvance =
+    | "driver_accepted"
+    | "trip_started"
+    | "arrived_pickup"
+    | "loaded"
+    | "in_transit"
+    | "arrived_delivery"
+    | "delivered";
+  const cargoAdvance = async (manifestId: number, status: CargoDriverAdvance) => {
     setBusy(`cargo-${manifestId}-${status}`);
     try {
       await apiFetch(`/fleet/me/cargo/${manifestId}/advance`, {
@@ -262,12 +274,41 @@ export default function MeDriver() {
                     <div><p className="text-xs text-muted-foreground inline-flex items-center gap-1"><Weight className="h-3 w-3" />الوزن</p>
                       <p>{m.totalWeight ? `${Number(m.totalWeight).toFixed(0)} كغ` : "—"}</p></div>
                   </div>
-                  {(m.status === "confirmed" || m.status === "loading") && (
+                  {/* #1733 Blocker #3 — driver walks the operational
+                      states one step at a time. Each label matches the
+                      corresponding action verb so the cab UI reads as a
+                      real workflow, not a generic "advance" button. */}
+                  {m.status === "assigned_to_driver" && (
+                    <Button className="w-full mt-3" size="sm"
+                      disabled={busy === `cargo-${m.id}-driver_accepted`}
+                      onClick={() => cargoAdvance(m.id, "driver_accepted")}>قبول المهمة</Button>
+                  )}
+                  {m.status === "driver_accepted" && (
+                    <Button className="w-full mt-3" size="sm"
+                      disabled={busy === `cargo-${m.id}-trip_started`}
+                      onClick={() => cargoAdvance(m.id, "trip_started")}>بدء الرحلة</Button>
+                  )}
+                  {m.status === "trip_started" && (
+                    <Button className="w-full mt-3" size="sm"
+                      disabled={busy === `cargo-${m.id}-arrived_pickup`}
+                      onClick={() => cargoAdvance(m.id, "arrived_pickup")}>وصلت لموقع التحميل</Button>
+                  )}
+                  {m.status === "arrived_pickup" && (
+                    <Button className="w-full mt-3" size="sm"
+                      disabled={busy === `cargo-${m.id}-loaded`}
+                      onClick={() => cargoAdvance(m.id, "loaded")}>تم التحميل</Button>
+                  )}
+                  {m.status === "loaded" && (
                     <Button className="w-full mt-3" size="sm"
                       disabled={busy === `cargo-${m.id}-in_transit`}
                       onClick={() => cargoAdvance(m.id, "in_transit")}>بدء النقل (في الطريق)</Button>
                   )}
                   {m.status === "in_transit" && (
+                    <Button className="w-full mt-3" size="sm"
+                      disabled={busy === `cargo-${m.id}-arrived_delivery`}
+                      onClick={() => cargoAdvance(m.id, "arrived_delivery")}>وصلت لموقع التسليم</Button>
+                  )}
+                  {m.status === "arrived_delivery" && (
                     <Button className="w-full mt-3" size="sm" variant="outline"
                       disabled={busy === `cargo-${m.id}-delivered`}
                       onClick={() => cargoAdvance(m.id, "delivered")}>تأكيد التسليم</Button>

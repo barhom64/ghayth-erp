@@ -3762,6 +3762,28 @@ ALTER TABLE ONLY public.fleet_device_sync_logs
 ALTER TABLE ONLY public.fleet_drivers
     ADD CONSTRAINT fleet_drivers_pkey PRIMARY KEY (id);
 
+--
+-- #1733 Phase 2 — driver license-class index + eligibility-override table.
+--
+CREATE INDEX IF NOT EXISTS idx_fleet_drivers_license_class
+  ON public.fleet_drivers ("companyId", "licenseClass")
+  WHERE "licenseClass" IS NOT NULL AND "deletedAt" IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_req_class
+  ON public.fleet_vehicles ("companyId", "requiredLicenseClass")
+  WHERE "requiredLicenseClass" IS NOT NULL AND "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.driver_eligibility_overrides ALTER COLUMN id SET DEFAULT nextval('public.driver_eligibility_overrides_id_seq'::regclass);
+
+ALTER TABLE ONLY public.driver_eligibility_overrides
+    ADD CONSTRAINT driver_eligibility_overrides_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.driver_eligibility_overrides
+    ADD CONSTRAINT uq_eligibility_override_source UNIQUE ("companyId", "sourceType", "sourceId");
+
+CREATE INDEX idx_eligibility_overrides_driver
+  ON public.driver_eligibility_overrides ("companyId", "driverId", "approvedAt" DESC);
+
 
 --
 -- Name: fleet_fuel_logs fleet_fuel_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
