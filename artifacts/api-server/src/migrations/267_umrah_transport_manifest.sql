@@ -1,5 +1,14 @@
 -- Migration 267 — Bus manifest: check-in + seat allocation
 --
+-- @rollback:
+--   DROP INDEX IF EXISTS idx_umrah_transport_pilgrims_pending_checkin;
+--   DROP INDEX IF EXISTS uq_umrah_transport_pilgrims_seat;
+--   ALTER TABLE umrah_transport_pilgrims DROP COLUMN IF EXISTS "seatNumber";
+--   ALTER TABLE umrah_transport_pilgrims DROP COLUMN IF EXISTS "checkedInAt";
+--   ALTER TABLE umrah_transport_pilgrims DROP COLUMN IF EXISTS "checkedInBy";
+--   ALTER TABLE umrah_transport_pilgrims DROP COLUMN IF EXISTS "noShow";
+--   ALTER TABLE umrah_transport_pilgrims DROP COLUMN IF EXISTS "notes";
+--
 -- The pilgrim ↔ trip join already exists (migration 185), but it only
 -- says "this pilgrim is assigned to this trip", not "this pilgrim
 -- actually boarded the bus". On a real flight-day morning the agency
