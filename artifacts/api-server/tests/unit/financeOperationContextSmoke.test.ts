@@ -3,6 +3,7 @@ import {
   fromLegacyExpenseForm,
   fromLegacyVoucherForm,
   fromLegacyInvoiceLine,
+  fromLegacyCustodyForm,
 } from "../../src/lib/financeOperationContext.js";
 
 describe("financeOperationContext — legacy adapters", () => {
@@ -39,6 +40,27 @@ describe("financeOperationContext — legacy adapters", () => {
     expect(projCtx.allocationTarget).toBe("project");
     const noneCtx = fromLegacyExpenseForm({ companyId: 1, lineAllocation: {} });
     expect(noneCtx.allocationTarget).toBe("none");
+  });
+
+  it("fromLegacyCustodyForm builds a custody operation tied to the employee", () => {
+    const ctx = fromLegacyCustodyForm({
+      companyId: 1,
+      branchId: 2,
+      sourceAccountCode: "1100",
+      paymentMethod: "cash",
+      assignmentId: 17,
+      employeeName: "أحمد",
+    });
+    expect(ctx.operationType).toBe("custody");
+    expect(ctx.moneySource?.accountCode).toBe("1100");
+    expect(ctx.paymentMethod).toBe("cash");
+    expect(ctx.allocationTarget).toBe("employee");
+    expect(ctx.dimensions.employeeId).toBe(17);
+    expect(ctx.operationalEffect.kind).toBe("custody_update");
+    // No payment method → still a valid context (policy will no-op).
+    const noMethod = fromLegacyCustodyForm({ companyId: 1, sourceAccountCode: "1100" });
+    expect(noMethod.paymentMethod).toBeNull();
+    expect(noMethod.allocationTarget).toBe("none");
   });
 
   it("fromLegacyInvoiceLine maps the catalog + dims", () => {
