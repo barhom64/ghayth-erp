@@ -70,7 +70,14 @@ const trialLimitsGuard: GuardFn = async (companyId, context) => {
 
 // ─── Guard: Posting Failures Threshold ────────────────────────────────────
 
-const postingFailuresGuard: GuardFn = async (companyId) => {
+const postingFailuresGuard: GuardFn = async (companyId, context) => {
+  // Escape hatch: the posting-failure resolution endpoints (retry / resolve /
+  // bulk-resolve / retry-all) are the ONLY way to drain the backlog once this
+  // breaker trips. Blocking them with this same guard makes the lockout
+  // unrecoverable, so they bypass this one guard (all other guards still apply).
+  if (context?.bypassPostingFailures) {
+    return { allowed: true, guardName: "posting_failures_threshold" };
+  }
   const [result] = await rawQuery<{ cnt: number }>(
     `SELECT COUNT(*)::int AS cnt FROM financial_posting_failures
      WHERE "companyId" = $1 AND resolved = false`,
@@ -202,10 +209,24 @@ export function requireGuards(scope: GuardScope = "financial") {
       (body?.date as string | undefined) ??
       todayISO();
 
+    // The posting-failure resolution endpoints are the escape hatch for the
+    // posting-failures breaker — they must not be blocked by that same guard.
+    // SECURITY: match on req.path (NEVER req.originalUrl — that carries the
+    // query string), anchored to the exact remediation routes and their
+    // mutation verbs. Otherwise a crafted URL such as
+    // `POST /api/finance/invoices?x=/posting-failures` would slip past the
+    // lockout on unrelated financial mutations. The only escape-hatch routes
+    // are PATCH /posting-failures/:id/resolve, POST /posting-failures/:id/retry,
+    // POST /posting-failures/bulk-resolve, and POST /posting-failures/retry-all.
+    const isFailureResolution =
+      (req.method === "POST" || req.method === "PATCH") &&
+      /\/posting-failures\/(?:[^/]+\/(?:resolve|retry)|bulk-resolve|retry-all)$/.test(req.path);
+
     const result = await checkSystemGuards(companyId, scope, {
       date: postingDate,
       entity: req.path.split("/")[1],
       role: s?.role,
+      bypassPostingFailures: isFailureResolution,
     });
     if (!result.allowed) {
       const reasons = result.violations.map(v => v.reason).join(" | ");
