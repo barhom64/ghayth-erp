@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, ThumbsUp, ThumbsDown } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface KBArticle {
   id: number;
@@ -88,6 +89,26 @@ export default function KnowledgeBase() {
       subtitle="مقالات ومواد تعليمية لحل المشاكل الشائعة"
       breadcrumbs={[{ href: "/support", label: "الدعم" }, { label: "قاعدة المعرفة" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_support_kb_full"
+          entityId="list"
+          size="icon"
+          label="طباعة قاعدة المعرفة"
+          payload={() => ({
+            entity: { title: "قاعدة المعرفة — مقالات الدعم", total: rows.length },
+            items: rows.map((r: any) => ({
+              "العنوان": r.title || "—",
+              "التصنيف": r.category || "عام",
+              "الوسوم": Array.isArray(r.tags) ? r.tags.join("، ") : "—",
+              "المشاهدات": r.views ?? 0,
+              "مفيد": r.helpful ?? 0,
+              "غير مفيد": r.notHelpful ?? 0,
+              "تاريخ الإنشاء": r.createdAt ? formatDateAr(r.createdAt) : "—",
+            })),
+          })}
+        />
+      }
     >
       <SupportTabsNav />
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />

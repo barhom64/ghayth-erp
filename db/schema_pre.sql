@@ -7916,8 +7916,51 @@ CREATE TABLE public.fleet_drivers (
     "lastLocationUpdate" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "licenseClass" text
 );
+
+
+--
+-- Name: driver_eligibility_overrides; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Phase 2 — documented-exception log for unqualified-driver
+-- assignments. Mirror of vehicle_capacity_overrides.
+
+CREATE TABLE public.driver_eligibility_overrides (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "driverId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "driverLicenseClass" text,
+    "vehicleRequiredClass" text NOT NULL,
+    reason text NOT NULL,
+    "approvedBy" integer NOT NULL,
+    "approvedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: driver_eligibility_overrides_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.driver_eligibility_overrides_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: driver_eligibility_overrides_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.driver_eligibility_overrides_id_seq OWNED BY public.driver_eligibility_overrides.id;
 
 
 --
@@ -8584,7 +8627,8 @@ CREATE TABLE public.fleet_vehicles (
     "deletedAt" timestamp with time zone,
     "inspectionExpiry" date,
     "purchasePrice" numeric(14,2),
-    "purchaseDate" date
+    "purchaseDate" date,
+    "requiredLicenseClass" text
 );
 
 
@@ -19303,7 +19347,7 @@ CREATE TABLE public.cargo_manifests (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'confirmed'::character varying, 'loading'::character varying, 'in_transit'::character varying, 'delivered'::character varying, 'closed'::character varying, 'cancelled'::character varying])::text[])))
+    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'requested'::character varying, 'approved'::character varying, 'assigned_to_driver'::character varying, 'driver_accepted'::character varying, 'trip_started'::character varying, 'arrived_pickup'::character varying, 'loaded'::character varying, 'in_transit'::character varying, 'arrived_delivery'::character varying, 'delivered'::character varying, 'completed'::character varying, 'cancelled'::character varying])::text[])))
 );
 
 

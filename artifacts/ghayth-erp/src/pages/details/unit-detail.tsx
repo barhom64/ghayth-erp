@@ -714,7 +714,7 @@ export default function UnitDetail() {
         transitions stay in the dedicated /status flow because they
         trigger contract lifecycle side-effects. */}
     {unit && (
-      <EntityEditDialog<UnitEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         schema={unitEditSchema}
