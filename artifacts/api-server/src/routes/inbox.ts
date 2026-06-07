@@ -270,6 +270,78 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
   }
 });
 
+// ─────────────────────── GET /search ──────────────────────────────────────
+
+/**
+ * Full-text search across the user's inbox. Hits subject + body
+ * + fromAddress + toAddress so a customer-name query like "أحمد"
+ * matches both a message titled "طلب من أحمد" and a thread from
+ * a sender whose name appears in the body.
+ *
+ * Returns messages (not threads) ordered by recency so the user
+ * sees the most recent match first. Tenant-scoped, soft-delete aware.
+ *
+ * Query params:
+ *   q        — search term (required, 2+ chars after trim)
+ *   channel  — optional filter (email/whatsapp/sms/pbx)
+ *   from     — optional ISO date lower bound (inclusive)
+ *   to       — optional ISO date upper bound (inclusive)
+ *   limit    — 1-100, default 50
+ */
+router.get("/search", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const cid = req.scope!.companyId;
+    const q = String(req.query.q ?? "").trim();
+    if (q.length < 2) {
+      res.json({ data: [], total: 0, query: q });
+      return;
+    }
+    const channel = (req.query.channel as string | undefined) ?? null;
+    const fromDate = (req.query.from as string | undefined) ?? null;
+    const toDate = (req.query.to as string | undefined) ?? null;
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 50)));
+
+    const params: unknown[] = [cid, `%${q}%`];
+    let channelCond = "";
+    if (channel && ["email", "whatsapp", "sms", "pbx"].includes(channel)) {
+      params.push(channel);
+      channelCond = ` AND channel = $${params.length}`;
+    }
+    let dateCond = "";
+    if (fromDate) {
+      params.push(fromDate);
+      dateCond += ` AND "createdAt" >= $${params.length}`;
+    }
+    if (toDate) {
+      params.push(toDate);
+      dateCond += ` AND "createdAt" <= $${params.length}`;
+    }
+    params.push(limit);
+
+    const rows = await rawQuery(
+      `SELECT id, channel, direction,
+              "fromAddress" AS "fromNumber",
+              "toAddress"   AS "toNumber",
+              subject,
+              LEFT(body, 300) AS body_preview,
+              status, folder, "isStarred",
+              "relatedType", "relatedId", "createdAt"
+         FROM v_message_log_all
+        WHERE "companyId" = $1
+          AND "deletedAt" IS NULL
+          AND (subject ILIKE $2 OR body ILIKE $2
+               OR "fromAddress" ILIKE $2 OR "toAddress" ILIKE $2)
+          ${channelCond}${dateCond}
+        ORDER BY "createdAt" DESC
+        LIMIT $${params.length}`,
+      params,
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length, query: q }));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/search");
+  }
+});
+
 // ─────────────────────── GET /threads/:channel/:address ──────────────────
 
 router.get("/threads/:channel/:address", authorize({ feature: "communications", action: "list" }), async (req, res) => {

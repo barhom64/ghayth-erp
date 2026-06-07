@@ -88,3 +88,21 @@ describe("import wizard renders Arabic labels", () => {
     expect(WIZARD).toMatch(/\.sort\(\(a, b\) =>\s*\n?\s*\(labels\[a\] \?\? a\)\.localeCompare\(labels\[b\] \?\? b, "ar"\)/);
   });
 });
+
+describe("rejected-row diagnostics show Arabic field names", () => {
+  it("the field column maps e.fieldName through the Arabic labels", () => {
+    // Was: {e.fieldName || "—"} — showed raw "passportNumber".
+    expect(WIZARD).toMatch(/\{e\.fieldName \? \(errorLabels\[e\.fieldName\] \?\? e\.fieldName\) : "—"\}/);
+  });
+
+  it("formatSamplePreview translates the sample's keys via the labels map", () => {
+    // The helper takes a labels arg and renders `labels[k] ?? k`.
+    expect(WIZARD).toMatch(/function formatSamplePreview\([\s\S]{0,200}labels: Record<string, string> = \{\}/);
+    expect(WIZARD).toMatch(/`\$\{labels\[k\] \?\? k\}: \$\{String\(v\)\}`/);
+    expect(WIZARD).toMatch(/formatSamplePreview\(e\.sample, errorLabels\)/);
+  });
+
+  it("errorLabels sources from the same header-maps labels as the dropdown", () => {
+    expect(WIZARD).toMatch(/const errorLabels = headerMapsQ\.data\?\.\[fileType\]\?\.labels \?\? \{\}/);
+  });
+});
