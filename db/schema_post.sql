@@ -3924,6 +3924,45 @@ CREATE INDEX idx_fleet_rental_payments_overdue ON public.fleet_rental_payments U
 ALTER TABLE ONLY public.fleet_tires
     ADD CONSTRAINT fleet_tires_pkey PRIMARY KEY (id);
 
+--
+-- #1733 Vehicle profile extension — tire indices + components / assignments / schedules tables.
+--
+
+CREATE INDEX IF NOT EXISTS idx_fleet_tires_serial
+  ON public.fleet_tires ("companyId", "serialNumber")
+  WHERE "serialNumber" IS NOT NULL AND "deletedAt" IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_fleet_tires_axle
+  ON public.fleet_tires ("vehicleId", "axleNumber", side)
+  WHERE "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.vehicle_components ALTER COLUMN id SET DEFAULT nextval('public.vehicle_components_id_seq'::regclass);
+ALTER TABLE ONLY public.vehicle_components ADD CONSTRAINT vehicle_components_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_vehicle_components_vehicle
+  ON public.vehicle_components ("vehicleId", status) WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_vehicle_components_next_service
+  ON public.vehicle_components ("companyId", "nextServiceDate")
+  WHERE "deletedAt" IS NULL AND status IN ('active', 'serviceable', 'needs_service');
+
+ALTER TABLE ONLY public.vehicle_driver_assignments ALTER COLUMN id SET DEFAULT nextval('public.vehicle_driver_assignments_id_seq'::regclass);
+ALTER TABLE ONLY public.vehicle_driver_assignments ADD CONSTRAINT vehicle_driver_assignments_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_vehicle_assignments_vehicle
+  ON public.vehicle_driver_assignments ("vehicleId", status, "startDate" DESC);
+CREATE INDEX IF NOT EXISTS idx_vehicle_assignments_driver
+  ON public.vehicle_driver_assignments ("driverId", status, "startDate" DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vehicle_active_primary
+  ON public.vehicle_driver_assignments ("vehicleId")
+  WHERE status = 'active' AND "assignmentType" = 'primary';
+
+ALTER TABLE ONLY public.vehicle_maintenance_schedules ALTER COLUMN id SET DEFAULT nextval('public.vehicle_maintenance_schedules_id_seq'::regclass);
+ALTER TABLE ONLY public.vehicle_maintenance_schedules ADD CONSTRAINT vehicle_maintenance_schedules_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_due
+  ON public.vehicle_maintenance_schedules ("companyId", "nextDueDate")
+  WHERE "isActive" AND "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_vehicle
+  ON public.vehicle_maintenance_schedules ("vehicleId")
+  WHERE "vehicleId" IS NOT NULL AND "deletedAt" IS NULL;
+
 
 --
 -- Name: idx_fleet_tires_vehicle; Type: INDEX; Schema: public; Owner: -
@@ -15558,6 +15597,48 @@ CREATE INDEX idx_billing_candidates_customer
     ON public.transport_billing_candidates ("companyId", "customerId") WHERE "customerId" IS NOT NULL;
 CREATE INDEX idx_billing_candidates_vehicle
     ON public.transport_billing_candidates ("companyId", "vehicleId") WHERE "vehicleId" IS NOT NULL;
+
+
+--
+-- #1733 Booking + Dispatch layer (Issue Comment 9) — PKs + UNIQUE + indexes
+--
+
+ALTER TABLE ONLY public.transport_locations ALTER COLUMN id SET DEFAULT nextval('public.transport_locations_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_locations ADD CONSTRAINT transport_locations_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_transport_locations_company
+  ON public.transport_locations ("companyId", "isActive") WHERE "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_bookings ALTER COLUMN id SET DEFAULT nextval('public.transport_bookings_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_bookings ADD CONSTRAINT transport_bookings_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.transport_bookings ADD CONSTRAINT uq_transport_booking_number UNIQUE ("companyId", "bookingNumber");
+CREATE INDEX IF NOT EXISTS idx_bookings_company_status
+  ON public.transport_bookings ("companyId", status, "requestedPickupDate") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_bookings_customer
+  ON public.transport_bookings ("companyId", "customerId", "requestedPickupDate" DESC)
+  WHERE "deletedAt" IS NULL AND "customerId" IS NOT NULL;
+
+ALTER TABLE ONLY public.transport_booking_lines ALTER COLUMN id SET DEFAULT nextval('public.transport_booking_lines_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_booking_lines ADD CONSTRAINT transport_booking_lines_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.transport_booking_lines ADD CONSTRAINT uq_booking_line UNIQUE ("bookingId", "lineNumber");
+CREATE INDEX IF NOT EXISTS idx_booking_lines_booking
+  ON public.transport_booking_lines ("bookingId") WHERE "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_dispatch_orders ALTER COLUMN id SET DEFAULT nextval('public.transport_dispatch_orders_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_dispatch_orders ADD CONSTRAINT transport_dispatch_orders_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_dispatch_company_window
+  ON public.transport_dispatch_orders ("companyId", "scheduledStartAt", "scheduledEndAt")
+  WHERE status NOT IN ('declined', 'cancelled');
+CREATE INDEX IF NOT EXISTS idx_dispatch_driver_window
+  ON public.transport_dispatch_orders ("driverId", "scheduledStartAt")
+  WHERE status NOT IN ('declined', 'cancelled');
+CREATE INDEX IF NOT EXISTS idx_dispatch_vehicle_window
+  ON public.transport_dispatch_orders ("vehicleId", "scheduledStartAt")
+  WHERE status NOT IN ('declined', 'cancelled');
+
+ALTER TABLE ONLY public.vehicle_location_snapshots ALTER COLUMN id SET DEFAULT nextval('public.vehicle_location_snapshots_id_seq'::regclass);
+ALTER TABLE ONLY public.vehicle_location_snapshots ADD CONSTRAINT vehicle_location_snapshots_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_vehicle_snapshots_latest
+  ON public.vehicle_location_snapshots ("companyId", "vehicleId", "capturedAt" DESC);
 
 
 --
