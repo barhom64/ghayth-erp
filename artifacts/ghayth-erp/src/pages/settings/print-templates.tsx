@@ -31,6 +31,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Save, Eye, Trash2, Pencil, FileText, Receipt, Tag, Layers } from "lucide-react";
 import { PageHeader, PageShell } from "@workspace/ui-core";
 import { PrintButton } from "@/components/shared/print-button";
+import { cn } from "@/lib/utils";
 
 // Fallback list used while /api/print/entity-types loads. The full catalogue
 // (100+ types — every BESPOKE_PRESETS key + every ARABIC_TITLES key) is
@@ -168,6 +169,56 @@ function newBlock(type: VisualBlock["type"]): VisualBlock {
     case "spacer": return { id, type, height: 16 };
   }
 }
+
+// Built-in branded preset themes — mirrors lib/print/brandedThemes.ts.
+// Each carries a tiny visual swatch so the operator picks by sight, not
+// by reading a dropdown. Brand palette: teal #3FBFD9 / navy #0F3D5C.
+const PRESET_THEMES: Array<{
+  key: string;
+  label: string;
+  description: string;
+  swatch: React.ReactNode;
+}> = [
+  {
+    key: "classic",
+    label: "كلاسيكي",
+    description: "ترويسة كحلية، جداول محدّدة، رسمي. الخيار الآمن.",
+    swatch: (
+      <div className="p-1.5 flex flex-col gap-1">
+        <div style={{ height: 6, background: "#0F3D5C", borderRadius: 2 }} />
+        <div style={{ height: 3, background: "#cbd5e1", width: "60%", borderRadius: 2 }} />
+        <div style={{ flex: 1, border: "1px solid #cbd5e1", borderRadius: 2, marginTop: 2 }} />
+      </div>
+    ),
+  },
+  {
+    key: "modern",
+    label: "عصري",
+    description: "شريط فيروزي متدرّج، صفوف بدون حدود، مساحات واسعة.",
+    swatch: (
+      <div className="p-1.5 flex flex-col gap-1">
+        <div style={{ height: 8, background: "linear-gradient(90deg,#3FBFD9,#0F3D5C)", borderRadius: 3 }} />
+        <div style={{ height: 3, background: "#eaf7fb", borderRadius: 2 }} />
+        <div style={{ height: 3, background: "#f1f5f9", borderRadius: 2 }} />
+        <div style={{ height: 3, background: "#eaf7fb", borderRadius: 2 }} />
+      </div>
+    ),
+  },
+  {
+    key: "compact",
+    label: "مدمج",
+    description: "خط صغير، خطوط رفيعة — يسع بنوداً أكثر في الصفحة.",
+    swatch: (
+      <div className="p-1.5 flex flex-col gap-[3px]">
+        <div style={{ height: 4, background: "#3FBFD9", width: "50%", borderRadius: 1 }} />
+        <div style={{ height: 2, background: "#cbd5e1", borderRadius: 1 }} />
+        <div style={{ height: 2, background: "#cbd5e1", borderRadius: 1 }} />
+        <div style={{ height: 2, background: "#cbd5e1", borderRadius: 1 }} />
+        <div style={{ height: 2, background: "#cbd5e1", borderRadius: 1 }} />
+      </div>
+    ),
+  },
+];
 
 // Default margins follow the A4 adapter's seed (a4Adapter.ts:25):
 // 18mm top / 14mm sides / 22mm bottom.
@@ -844,17 +895,36 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
                 <TabsTrigger value="visual" className="gap-1"><Layers className="h-3 w-3" /> مرئي</TabsTrigger>
               </TabsList>
               <TabsContent value="preset" className="space-y-3">
-                <Label>اختر النمط</Label>
-                <Select value={presetKey} onValueChange={setPresetKey}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="classic">كلاسيكي</SelectItem>
-                    <SelectItem value="modern">عصري</SelectItem>
-                    <SelectItem value="compact">مدمج</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>اختر النمط الجاهز</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  {PRESET_THEMES.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setPresetKey(t.key)}
+                      className={cn(
+                        "text-right rounded-lg border-2 p-3 transition-all hover:shadow-md",
+                        presetKey === t.key
+                          ? "border-primary ring-2 ring-primary/20 bg-primary/5"
+                          : "border-border bg-white",
+                      )}
+                    >
+                      {/* Mini visual preview of each theme */}
+                      <div
+                        className="h-20 rounded mb-2 overflow-hidden flex flex-col"
+                        style={{ background: "#f8fafc", border: "1px solid #e2e8f0" }}
+                      >
+                        {t.swatch}
+                      </div>
+                      <div className="font-semibold text-sm">{t.label}</div>
+                      <div className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                        {t.description}
+                      </div>
+                    </button>
+                  ))}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  ترويسة الفرع وتذييله يأتيان تلقائياً من إعدادات الفرع. تخصيص الرأس/التذييل المتقدم متاح بعد الحفظ.
+                  ترويسة الفرع وتذييله (مع شعار غيث الافتراضي حتى ترفع شعارك) يأتيان تلقائياً. بعد الحفظ يمكنك تخصيص الرأس/التذييل والهوامش.
                 </p>
               </TabsContent>
               <TabsContent value="html" className="space-y-2">
