@@ -2771,7 +2771,7 @@ financeAlgorithmsRouter.get("/fx/revaluation", authorize({ feature: "finance.alg
     const scope = req.scope!;
     await ensureFxTables();
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM fx_revaluations WHERE "companyId"=$1 ORDER BY "revaluationDate" DESC LIMIT 120`,
+      `SELECT * FROM fx_revaluations WHERE "companyId"=$1 ORDER BY "postedAt" DESC NULLS LAST, id DESC LIMIT 120`,
       [scope.companyId]
     );
     res.json({ data: rows });
