@@ -500,10 +500,10 @@ function NewDlpRuleDialog({ open, onClose, onSubmit, isSubmitting }: {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label>القناة</Label>
-              <Select value={channel} onValueChange={setChannel}>
+              <Select value={channel || "_none"} onValueChange={(v) => setChannel(v === "_none" ? "" : v)}>
                 <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">الكل</SelectItem>
+                  <SelectItem value="_none">الكل</SelectItem>
                   <SelectItem value="email">Email</SelectItem>
                   <SelectItem value="whatsapp">WhatsApp</SelectItem>
                   <SelectItem value="sms">SMS</SelectItem>
