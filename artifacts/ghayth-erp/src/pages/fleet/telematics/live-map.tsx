@@ -175,7 +175,7 @@ export default function FleetTelematicsLiveMap() {
       />
       <Card className="mt-4">
         <CardContent className="p-0">
-          <DataTable<LiveRow>
+          <DataTable
             columns={columns}
             data={rows}
             isLoading={isLoading}

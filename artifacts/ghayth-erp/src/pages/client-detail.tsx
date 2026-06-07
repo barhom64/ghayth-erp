@@ -668,7 +668,7 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "tenancies" && (
-        <ClientRelationshipCard<any>
+        <ClientRelationshipCard
           icon={Home}
           title="الإيجارات المرتبطة"
           emptyMessage="لا توجد إيجارات مرتبطة بهذا العميل — اربط مستأجراً من صفحة تفاصيله ليظهر هنا"
@@ -691,7 +691,7 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "legal" && (
-        <ClientRelationshipCard<any>
+        <ClientRelationshipCard
           icon={Scale}
           title="القضايا القانونية"
           emptyMessage="لا توجد قضايا قانونية مرتبطة بهذا العميل"
