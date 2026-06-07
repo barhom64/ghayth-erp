@@ -39,7 +39,7 @@ import {
   ArrowDownLeft, ArrowUpRight, AlertOctagon, Sparkles,
   PhoneCall, PhoneIncoming, PhoneOutgoing, PhoneMissed,
   Inbox as InboxIcon, FileEdit, Star, Archive, Trash2, AlertTriangle,
-  Save, PenSquare, Settings,
+  Save, PenSquare, Settings, Zap, Users, User as UserIcon, X,
 } from "lucide-react";
 
 type Folder = "inbox" | "sent" | "drafts" | "starred" | "archive" | "trash" | "spam";
@@ -769,17 +769,241 @@ function ThreadView({ channel, address, onBack, onSent }: {
               }
             }}
           />
-          <Button
-            rateLimitAware
-            disabled={!reply.trim() || send.isPending}
-            onClick={() => send.mutate()}
-          >
-            <Send className="w-4 h-4 me-1" />{send.isPending ? "..." : "أرسل"}
-          </Button>
+          <div className="flex flex-col gap-1">
+            <Button
+              rateLimitAware
+              disabled={!reply.trim() || send.isPending}
+              onClick={() => send.mutate()}
+            >
+              <Send className="w-4 h-4 me-1" />{send.isPending ? "..." : "أرسل"}
+            </Button>
+            <QuickReplyPicker
+              channel={channel}
+              onPick={(text) => setReply((prev) => prev ? `${prev}\n${text}` : text)}
+            />
+          </div>
         </div>
         <p className="text-[10px] text-muted-foreground mt-1">Ctrl+Enter للإرسال السريع</p>
       </div>
     </Card>
+  );
+}
+
+// ─────────────────────── Quick-reply picker ────────────────────────────
+
+interface QuickReplyRow {
+  id: number;
+  title: string;
+  body: string;
+  channel: Channel | null;
+  isShared: boolean;
+  ownerUserId: number | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function QuickReplyPicker({ channel, onPick }: { channel: Channel; onPick: (body: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
+  const { data, refetch } = useApiQuery<{ data: QuickReplyRow[] }>(
+    ["inbox-quick-replies", channel],
+    `/inbox/quick-replies?channel=${channel}`,
+    { enabled: open || manageOpen },
+  );
+  const replies = data?.data ?? [];
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => setOpen((o) => !o)}
+        title="ردود سريعة"
+      >
+        <Zap className="w-3 h-3 me-1" />ردود
+      </Button>
+      {open && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-base flex items-center gap-2">
+                <Zap className="w-4 h-4" />الردود السريعة
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                اختر قالبًا ليُلصق في خانة الرد. تستطيع تعديل النص قبل الإرسال.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1 max-h-[50vh] overflow-y-auto">
+              {replies.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  لا توجد ردود سريعة بعد — أضف من زر "إدارة".
+                </p>
+              ) : (
+                replies.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => { onPick(r.body); setOpen(false); }}
+                    className="w-full text-start p-2 rounded hover:bg-surface-subtle border border-transparent hover:border-border"
+                  >
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-medium">{r.title}</span>
+                      {r.isShared ? (
+                        <Badge variant="outline" className="text-[9px] gap-1"><Users className="w-2.5 h-2.5" />مشترك</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[9px] gap-1"><UserIcon className="w-2.5 h-2.5" />شخصي</Badge>
+                      )}
+                      {r.channel && <Badge variant="outline" className="text-[9px]">{r.channel}</Badge>}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground truncate">{r.body}</p>
+                  </button>
+                ))
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => { setOpen(false); setManageOpen(true); }}>
+                <Settings className="w-3 h-3 me-1" />إدارة
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      <QuickReplyManageDialog
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        replies={replies}
+        onChange={refetch}
+      />
+    </>
+  );
+}
+
+function QuickReplyManageDialog({ open, onClose, replies, onChange }: {
+  open: boolean;
+  onClose: () => void;
+  replies: QuickReplyRow[];
+  onChange: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [channel, setChannel] = useState<Channel | "any">("any");
+  const [isShared, setIsShared] = useState(false);
+
+  const create = useMutation({
+    mutationFn: () =>
+      apiFetch("/inbox/quick-replies", {
+        method: "POST",
+        body: JSON.stringify({
+          title: title.trim(),
+          body: body.trim(),
+          channel: channel === "any" ? null : channel,
+          isShared,
+        }),
+      }),
+    onSuccess: () => {
+      setTitle(""); setBody(""); setChannel("any"); setIsShared(false);
+      toast({ title: "تمت إضافة القالب" });
+      onChange();
+    },
+    onError: (e: Error) => toast({ title: "تعذّر الحفظ", description: e.message, variant: "destructive" }),
+  });
+
+  const del = useMutation({
+    mutationFn: (id: number) => apiFetch(`/inbox/quick-replies/${id}`, { method: "DELETE" }),
+    onSuccess: () => { toast({ title: "حُذف القالب" }); onChange(); },
+    onError: (e: Error) => toast({ title: "تعذّر الحذف", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="text-base flex items-center gap-2">
+            <Settings className="w-4 h-4" />إدارة الردود السريعة
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            القوالب الشخصية تظهر لك فقط؛ القوالب المشتركة يراها كل الفريق.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="border-b pb-3 mb-3 space-y-2">
+          <Label className="text-xs">قالب جديد</Label>
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="العنوان (للمعرفة فقط)"
+            className="text-sm"
+          />
+          <Textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="نص الرد..."
+            rows={3}
+            className="text-sm"
+          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={channel} onValueChange={(v) => setChannel(v as Channel | "any")}>
+              <SelectTrigger className="w-32 text-xs h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">كل القنوات</SelectItem>
+                <SelectItem value="email">بريد</SelectItem>
+                <SelectItem value="whatsapp">واتساب</SelectItem>
+                <SelectItem value="sms">رسالة</SelectItem>
+              </SelectContent>
+            </Select>
+            <label className="flex items-center gap-1 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isShared}
+                onChange={(e) => setIsShared(e.target.checked)}
+              />
+              مشترك مع الفريق
+            </label>
+            <Button
+              size="sm"
+              disabled={!title.trim() || !body.trim() || create.isPending}
+              onClick={() => create.mutate()}
+              className="ms-auto"
+            >
+              <Plus className="w-3 h-3 me-1" />أضف
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-1 max-h-[40vh] overflow-y-auto">
+          {replies.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">لا توجد قوالب بعد.</p>
+          ) : (
+            replies.map((r) => (
+              <div key={r.id} className="flex items-start gap-2 p-2 rounded border border-border">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-sm font-medium">{r.title}</span>
+                    {r.isShared ? (
+                      <Badge variant="outline" className="text-[9px] gap-1"><Users className="w-2.5 h-2.5" />مشترك</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[9px] gap-1"><UserIcon className="w-2.5 h-2.5" />شخصي</Badge>
+                    )}
+                    {r.channel && <Badge variant="outline" className="text-[9px]">{r.channel}</Badge>}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground whitespace-pre-wrap break-words">{r.body}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => del.mutate(r.id)}
+                  className="p-1 hover:bg-status-error-surface rounded"
+                  title="حذف"
+                >
+                  <X className="w-3 h-3 text-muted-foreground" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

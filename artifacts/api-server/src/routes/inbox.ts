@@ -983,4 +983,175 @@ router.get("/folder-counts", authorize({ feature: "communications", action: "lis
   }
 });
 
+// ─────────────────────── Quick-reply templates ───────────────────────────
+
+const quickReplyChannelEnum = z.enum(["email", "sms", "whatsapp"]);
+
+const quickReplyCreateSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب").max(200),
+  body: z.string().min(1, "نص الرد مطلوب").max(20000),
+  channel: quickReplyChannelEnum.optional().nullable(),
+  isShared: z.boolean().default(false),
+  sortOrder: z.number().int().min(0).max(999).default(0),
+});
+
+const quickReplyUpdateSchema = quickReplyCreateSchema.partial();
+
+/**
+ * GET /inbox/quick-replies — list snippets visible to the current
+ * user: own personal snippets + every company-shared snippet.
+ * Optional `?channel=email` filter narrows to snippets pinned to
+ * that channel (or unscoped). Drives both the compose-box dropdown
+ * and the settings dialog.
+ */
+router.get("/quick-replies", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const channel = (req.query.channel as string | undefined) ?? null;
+    const params: unknown[] = [scope.companyId, scope.userId];
+    let channelCond = "";
+    if (channel && ["email", "sms", "whatsapp"].includes(channel)) {
+      params.push(channel);
+      // Include snippets unscoped to a channel AND snippets pinned to
+      // the requested channel — never the OTHER channels.
+      channelCond = ` AND (channel IS NULL OR channel = $${params.length})`;
+    }
+    const rows = await rawQuery(
+      `SELECT id, title, body, channel,
+              ("userId" IS NULL)::boolean AS "isShared",
+              "userId" AS "ownerUserId",
+              "sortOrder", "createdAt", "updatedAt"
+         FROM quick_reply_templates
+        WHERE "companyId" = $1
+          AND "deletedAt" IS NULL
+          AND ("userId" IS NULL OR "userId" = $2)
+          ${channelCond}
+        ORDER BY "sortOrder" ASC, title ASC
+        LIMIT 200`,
+      params,
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/quick-replies/list");
+  }
+});
+
+/**
+ * POST /inbox/quick-replies — create a snippet. isShared=true makes
+ * it company-wide (userId stored as NULL); isShared=false keeps it
+ * personal to the caller (userId=scope.userId).
+ */
+router.post("/quick-replies", authorize({ feature: "communications", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(quickReplyCreateSchema.safeParse(req.body));
+    const ownerUserId = body.isShared ? null : scope.userId;
+    const { insertId } = await rawExecute(
+      `INSERT INTO quick_reply_templates
+         ("companyId", "userId", title, body, channel, "sortOrder", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+      [scope.companyId, ownerUserId, body.title.trim(), body.body, body.channel ?? null, body.sortOrder],
+    );
+    assertInsert(insertId, "quick_reply_templates");
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "quick_reply_templates", entityId: insertId,
+      after: { title: body.title, isShared: body.isShared, channel: body.channel ?? null },
+    }).catch((e) => logger.warn(e, "[audit] quick-reply.create"));
+    res.status(201).json({ id: insertId });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/quick-replies/create");
+  }
+});
+
+/**
+ * PATCH /inbox/quick-replies/:id — edit a snippet. Ownership rule:
+ *   - personal snippet → only the owner can edit
+ *   - shared snippet   → caller needs communications.update on the
+ *     company (which authorize() above already enforced), no extra
+ *     ownership check
+ *
+ * Empty body = no-op (returns the current row).
+ */
+router.patch("/quick-replies/:id", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const body = zodParse(quickReplyUpdateSchema.safeParse(req.body));
+
+    const [existing] = await rawQuery<{ userId: number | null }>(
+      `SELECT "userId" FROM quick_reply_templates
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!existing) throw new NotFoundError("القالب غير موجود");
+    if (existing.userId !== null && existing.userId !== scope.userId) {
+      throw new ValidationError("لا يمكن تعديل قالب يخصّ موظفًا آخر");
+    }
+
+    // Build a sparse UPDATE so unprovided fields are left untouched.
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    const push = (col: string, val: unknown) => { params.push(val); sets.push(`"${col}" = $${params.length}`); };
+    if (body.title !== undefined) push("title", body.title!.trim());
+    if (body.body !== undefined) push("body", body.body);
+    if (body.channel !== undefined) push("channel", body.channel ?? null);
+    if (body.sortOrder !== undefined) push("sortOrder", body.sortOrder);
+    // isShared toggles userId between NULL (shared) and the caller's id.
+    if (body.isShared !== undefined) push("userId", body.isShared ? null : scope.userId);
+    if (sets.length === 0) {
+      res.json({ ok: true, unchanged: true });
+      return;
+    }
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(id, scope.companyId);
+    await rawExecute(
+      `UPDATE quick_reply_templates SET ${sets.join(", ")}
+        WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`,
+      params,
+    );
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "quick_reply_templates", entityId: id,
+      after: body,
+    }).catch((e) => logger.warn(e, "[audit] quick-reply.update"));
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/quick-replies/update");
+  }
+});
+
+/**
+ * DELETE /inbox/quick-replies/:id — soft-delete a snippet. Ownership
+ * rule mirrors PATCH (owner of personal snippets only; shared
+ * snippets are deletable by any communications.delete holder).
+ */
+router.delete("/quick-replies/:id", authorize({ feature: "communications", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [existing] = await rawQuery<{ userId: number | null }>(
+      `SELECT "userId" FROM quick_reply_templates
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!existing) throw new NotFoundError("القالب غير موجود");
+    if (existing.userId !== null && existing.userId !== scope.userId) {
+      throw new ValidationError("لا يمكن حذف قالب يخصّ موظفًا آخر");
+    }
+    await rawExecute(
+      `UPDATE quick_reply_templates SET "deletedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId],
+    );
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "quick_reply_templates", entityId: id,
+    }).catch((e) => logger.warn(e, "[audit] quick-reply.delete"));
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/quick-replies/delete");
+  }
+});
+
 export default router;
