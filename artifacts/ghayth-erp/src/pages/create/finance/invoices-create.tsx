@@ -309,7 +309,7 @@ export default function InvoicesCreate() {
             <SelectTrigger><SelectValue placeholder="اختر رمز الضريبة..." /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">— بدون —</SelectItem>
-              {taxCodes.map((t) => (
+              {taxCodes.filter((t: any) => t.code).map((t) => (
                 <SelectItem key={t.code} value={t.code}>
                   {t.code} ({Number(t.rate).toFixed(0)}%) — {t.name}
                 </SelectItem>
@@ -423,7 +423,7 @@ export default function InvoicesCreate() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_inherit">↓ يرث من الترويسة ({form.taxCode || "بدون"})</SelectItem>
-                      {taxCodes.map((t) => (
+                      {taxCodes.filter((t: any) => t.code).map((t) => (
                         <SelectItem key={t.code} value={t.code}>
                           {t.code} ({Number(t.rate).toFixed(0)}%)
                         </SelectItem>
