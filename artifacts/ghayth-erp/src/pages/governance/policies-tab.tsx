@@ -22,6 +22,8 @@ import { Link, useLocation } from "wouter";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export function PoliciesTab() {
   const [, navigate] = useLocation();
@@ -44,6 +46,7 @@ export function PoliciesTab() {
     { label: "الحالة", key: "status", type: "status" },
   ];
   const filteredPolicies = applyFilters(policies, filters, { searchFields: ["title", "category"], statusField: "status", dateField: "effectiveDate" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredPolicies);
 
   const handleNewVersion = async (policyId: number) => {
     try {
@@ -138,6 +141,22 @@ export function PoliciesTab() {
             resultCount={filteredPolicies.length}
           />
         </div>
+        <PrintButton
+          entityType="report_governance_policies"
+          entityId="list"
+          size="icon"
+          label="طباعة سجل السياسات"
+          payload={() => ({
+            entity: { title: "سجل السياسات", total: printRows.length },
+            items: printRows.map((p: any) => ({
+              "العنوان": p.title || "—",
+              "التصنيف": p.category || "—",
+              "الإصدار": `v${p.version ?? 1}`,
+              "تاريخ النفاذ": p.effectiveDate ? formatDateAr(p.effectiveDate) : "—",
+              "الحالة": p.status || "—",
+            })),
+          })}
+        />
         {canWrite && (
           <Link href="/governance/policies/create">
             <GuardedButton perm="governance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة سياسة</GuardedButton>
@@ -150,6 +169,7 @@ export function PoliciesTab() {
           <DataTable
             columns={columns}
             data={filteredPolicies}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -186,6 +187,31 @@ export default function ViolationsReportPage() {
       title="تقرير المخالفات"
       subtitle="تحليل وتتبع المخالفات الإدارية"
       breadcrumbs={[{ href: "/hr/violations", label: "المخالفات" }, { label: "التقرير" }]}
+      actions={
+        <PrintButton
+          entityType="report_violations_report"
+          entityId="list"
+          size="icon"
+          label="طباعة تقرير المخالفات"
+          payload={() => ({
+            entity: {
+              title: "تقرير المخالفات الإدارية",
+              totalViolations: violations.length,
+              filters: JSON.stringify(filters),
+            },
+            items: violations.map((v: any) => ({
+              "#": v.id,
+              "الموظف": v.employeeName || "—",
+              "النوع": TYPE_LABELS[v.type] || v.type || "—",
+              "القسم": DEPARTMENT_LABELS[v.department] || v.department || "—",
+              "الأولوية": PRIORITY_CONFIG[v.priority]?.label || v.priority || "—",
+              "الوصف": v.description || "—",
+              "التاريخ": v.createdAt ? formatDateAr(v.createdAt) : "—",
+              "الحالة": v.status === "resolved" ? "تم حلها" : "مفتوحة",
+            })),
+          })}
+        />
+      }
     >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {summaryCards.map((c) => (

@@ -447,6 +447,11 @@ async function createDefaultRoles(client: pg.PoolClient, companyId: number) {
     { role: "crm_manager", permissions: ["dashboard:read", "crm:*", "marketing:*", "documents:read", "requests:*", "comms:read"] },
     { role: "bi_manager", permissions: ["dashboard:read", "bi:*", "reports:*", "documents:read", "requests:*", "comms:read"] },
     { role: "branch_manager", permissions: ["dashboard:read", "employees:read", "attendance:*", "leaves:approve", "reports:read", "documents:read", "requests:*", "comms:read", "support:read"] },
+    // Self-service driver — fleet.* read for the dispatcher-board feeds
+    // their /me/driver consumes; the actual self-service capabilities
+    // (start/complete trip, advance cargo) come through the featureCatalog
+    // selfService floor, not this legacy role_permissions seed.
+    { role: "driver", permissions: ["dashboard:read", "profile:self", "attendance:self", "leaves:self", "fleet:read", "documents:read", "comms:read", "notifications:read"] },
     { role: "employee", permissions: ["dashboard:read", "attendance:self", "leaves:self", "profile:self", "requests:self", "documents:read", "comms:read"] },
   ];
   for (const r of roles) {
