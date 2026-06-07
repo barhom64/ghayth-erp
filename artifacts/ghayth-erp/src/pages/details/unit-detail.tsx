@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
+import { EntitySubsidiaryAccounts } from "@/components/shared/entity-subsidiary-accounts";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare, BookOpen } from "lucide-react";
 import {
@@ -671,6 +672,16 @@ export default function UnitDetail() {
             </CardHeader>
             <CardContent>
               <FinancialTab entityType="property" entityId={id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-status-info-foreground" /> الحسابات الفرعية للوحدة
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EntitySubsidiaryAccounts entityType="property_unit" entityId={id} />
             </CardContent>
           </Card>
         </div>
