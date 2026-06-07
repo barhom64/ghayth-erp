@@ -2450,18 +2450,34 @@ router.get("/reports/season-portfolio", authorize({ feature: "umrah", action: "l
     params.push(limit);
 
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT s.id, s.title, s.status, s."hijriYear", s."startDate", s."endDate",
-              (SELECT COUNT(*)::int FROM umrah_pilgrims p
-                WHERE p."seasonId" = s.id AND p."companyId" = s."companyId" AND p."deletedAt" IS NULL
-              ) AS "pilgrimsCount",
-              (SELECT COUNT(*)::int FROM umrah_groups g
-                WHERE g."seasonId" = s.id AND g."companyId" = s."companyId" AND g."deletedAt" IS NULL
-              ) AS "groupsCount",
+      // Pre-aggregate pilgrim + group counts per season via CTEs —
+      // the original carried TWO scalar COUNT subqueries per row.
+      // At LIMIT 200 that's ~400 redundant lookups. Two CTEs scan
+      // each child table once.
+      `WITH season_pilgrim_counts AS (
+         SELECT "seasonId", "companyId", COUNT(*) AS "pilgrimsCount"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL
+         GROUP BY "seasonId", "companyId"
+       ),
+       season_group_counts AS (
+         SELECT "seasonId", "companyId", COUNT(*) AS "groupsCount"
+         FROM umrah_groups
+         WHERE "deletedAt" IS NULL
+         GROUP BY "seasonId", "companyId"
+       )
+       SELECT s.id, s.title, s.status, s."hijriYear", s."startDate", s."endDate",
+              COALESCE(spc."pilgrimsCount", 0)::int AS "pilgrimsCount",
+              COALESCE(sgc."groupsCount", 0)::int AS "groupsCount",
               COALESCE(sales.revenue, 0) AS revenue,
               COALESCE(sales.paid, 0)    AS paid,
               COALESCE(nusk.cost, 0)     AS cost,
               (COALESCE(sales.revenue, 0) - COALESCE(nusk.cost, 0))::numeric(12,2) AS margin
          FROM umrah_seasons s
+    LEFT JOIN season_pilgrim_counts spc
+           ON spc."seasonId" = s.id AND spc."companyId" = s."companyId"
+    LEFT JOIN season_group_counts sgc
+           ON sgc."seasonId" = s.id AND sgc."companyId" = s."companyId"
     LEFT JOIN LATERAL (
            SELECT COALESCE(SUM(total), 0) AS revenue,
                   COALESCE(SUM("paidAmount"), 0) AS paid
@@ -2860,19 +2876,27 @@ router.get("/reports/agent-balances", authorize({ feature: "umrah", action: "lis
     // pilgrimCount = العدد الحالي للمعتمرين النشطين تحت هذا الوكيل
     // (مش من الفواتير، لأن وكيل ممكن يكون عنده معتمرين قبل ما يُفوتر).
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT a.id, a.name, a.country, a.phone, a.email, a.status, a."nuskAgentNumber",
+      // Pre-aggregate pilgrim counts per agent via CTE — original was
+      // N+1: one COUNT subquery per returned agent. The CTE scans
+      // umrah_pilgrims once filtered to active rows. Keyed by
+      // (agentId, companyId) to preserve the legacy tenant boundary.
+      `WITH agent_pilgrim_counts AS (
+         SELECT "agentId", "companyId", COUNT(*) AS "pilgrimCount"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL AND "agentId" IS NOT NULL
+         GROUP BY "agentId", "companyId"
+       )
+       SELECT a.id, a.name, a.country, a.phone, a.email, a.status, a."nuskAgentNumber",
               COALESCE(inv_agg.invoice_count, 0)::int AS "invoiceCount",
               COALESCE(inv_agg.total_invoiced, 0)    AS "totalInvoiced",
               COALESCE(inv_agg.total_paid, 0)        AS "totalPaid",
               COALESCE(inv_agg.outstanding, 0)       AS "outstanding",
               inv_agg.last_invoice_at                AS "lastInvoiceAt",
               inv_agg.last_invoice_ref               AS "lastInvoiceRef",
-              (SELECT COUNT(*)::int FROM umrah_pilgrims p
-                WHERE p."agentId" = a.id
-                  AND p."companyId" = a."companyId"
-                  AND p."deletedAt" IS NULL
-              ) AS "pilgrimCount"
+              COALESCE(apc."pilgrimCount", 0)::int AS "pilgrimCount"
          FROM umrah_agents a
+    LEFT JOIN agent_pilgrim_counts apc
+           ON apc."agentId" = a.id AND apc."companyId" = a."companyId"
     LEFT JOIN LATERAL (
            SELECT COUNT(*)::int            AS invoice_count,
                   SUM(inv.total)            AS total_invoiced,

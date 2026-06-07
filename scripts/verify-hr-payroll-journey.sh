@@ -50,19 +50,29 @@ SALEXP="$(psql "$DSN" -tA -c "select count(*) from journal_lines jl join journal
 PAYABLE="$(psql "$DSN" -tA -c "select count(*) from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" where je.\"companyId\"=2 and je.ref like 'PAYROLL-%' and je.ref not like 'PAYROLL-POST-%' and jl.credit>0 and jl.\"accountCode\"='2120';")"
 [ "${PAYABLE:-0}" -ge 1 ] && ok "net pay credited to salary_payable 2120" || no "salary_payable 2120 not credited ($PAYABLE)"
 
-# Approve + post (best-effort — maker-checker may require a second approver user).
-APP="$(patchw /hr/payroll/$RID/approve '{}' | py 'import sys,json;d=json.load(sys.stdin);print(d.get("status") or d.get("error") or "")' )"
-if echo "$APP" | grep -qiE "completed|approved"; then
-  ok "payroll run approved"
-  POST_="$(patchw /hr/payroll/$RID '{"status":"posted"}' | py 'import sys,json;d=json.load(sys.stdin);print(d.get("status") or d.get("error") or "")')"
-  if [ "$POST_" = "posted" ]; then
-    PBAL="$(psql "$DSN" -tA -c "select count(*) from (select je.id from journal_entries je join journal_lines jl on jl.\"journalId\"=je.id where je.\"companyId\"=2 and je.ref like 'PAYROLL-POST-%' group by je.id having sum(jl.debit)=sum(jl.credit) and sum(jl.debit)>0) t;")"
-    [ "${PBAL:-0}" -ge 1 ] && ok "payroll posted — payment GL balanced (DR 2120 / CR 1121)" || no "payment GL not balanced ($PBAL)"
-  else
-    echo "  ⚠️  post step: $POST_ (best-effort)"
-  fi
-else
-  echo "  ⚠️  approve blocked (maker-checker needs a separate approver user) — accrual link verified above. ($APP)"
-fi
+# Full approve + post via a SEPARATE approver (maker-checker: run.runBy must
+# differ from the approver's assignment). Create a dedicated approver employee,
+# give it a known password + owner role (test setup), approve as them, post as
+# the original owner. Completes the bank-payout GL (موظف→راتب→قيد→صرف).
+HASH='$2b$10$v6KtegUqgRLrlsDRWu2l4uUAnOeNREpHB1LQ/ZgvBxiwnMQtMVTVu'  # Test1234!
+APE="$(post /employees '{"name":"معتمِد الرواتب","phone":"0513334444","nationalId":"2055667788","nationality":"سعودي","department":"المالية","jobTitle":"مدير مالي","contractType":"full_time","salary":12000,"branchId":6,"internalEmail":"approver2@dr.local"}')"
+APASG="$(echo "$APE" | py 'import sys,json;d=json.load(sys.stdin);print(d.get("assignmentId") or "")')"
+psql "$DSN" -q -c "UPDATE users SET \"passwordHash\"='$HASH' WHERE email='approver2@dr.local';" >/dev/null 2>&1
+psql "$DSN" -q -c "UPDATE employee_assignments SET role='owner' WHERE id=${APASG:-0};" >/dev/null 2>&1
+ok "approver employee created (assignment #$APASG)"
+
+JA="$(mktemp)"
+curl -fsS -c "$JA" -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d '{"email":"approver2@dr.local","password":"Test1234!"}' -o /dev/null
+ACSRF="$(grep erp_csrf "$JA" | awk '{print $7}')"
+APP="$(curl -sS -b "$JA" -H "x-csrf-token: $ACSRF" -H "Content-Type: application/json" -X PATCH "$BASE/hr/payroll/$RID/approve" -d '{}' | py 'import sys,json;d=json.load(sys.stdin);print(d.get("status") or d.get("error") or "")')"
+echo "$APP" | grep -qiE "completed|approved" && ok "payroll run approved (by separate approver — maker-checker satisfied)" || no "approve failed ($APP)"
+rm -f "$JA"
+
+POST_="$(patchw /hr/payroll/$RID '{"status":"posted"}' | py 'import sys,json;d=json.load(sys.stdin);print(d.get("status") or d.get("error") or "")')"
+[ "$POST_" = "posted" ] && ok "payroll posted" || no "post failed ($POST_)"
+PBAL="$(psql "$DSN" -tA -c "select count(*) from (select je.id from journal_entries je join journal_lines jl on jl.\"journalId\"=je.id where je.\"companyId\"=2 and je.ref like 'PAYROLL-POST-%' group by je.id having sum(jl.debit)=sum(jl.credit) and sum(jl.debit)>0) t;")"
+[ "${PBAL:-0}" -ge 1 ] && ok "payment GL balanced (DR salary_payable 2120 / CR bank 1121)" || no "payment GL not balanced ($PBAL)"
+BANKPAY="$(psql "$DSN" -tA -c "select count(*) from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" where je.\"companyId\"=2 and je.ref like 'PAYROLL-POST-%' and jl.credit>0 and jl.\"accountCode\"='1121';")"
+[ "${BANKPAY:-0}" -ge 1 ] && ok "bank payout routed to 1121 (via accounting_mappings)" || no "bank payout not routed to 1121 ($BANKPAY)"
 
 rm -f "$J"; echo; echo "▶ Result: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ] || exit 1
