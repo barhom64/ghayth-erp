@@ -50,22 +50,32 @@ describe("#1733 — transport→finance handoff: engine", () => {
 });
 
 describe("#1733 — transport routes NEVER call postCargoDeliveryGL", () => {
-  it("cargo.ts on `delivered` calls createCargoBillingCandidate, not postCargoDeliveryGL", () => {
-    // Slice around the delivered transition.
-    const deliveryBlock = CARGO_ROUTE.match(
-      /b\.status === "delivered"[\s\S]{0,1800}?\n\s+\}/,
+  it("cargo.ts on `ready_for_invoice` calls createCargoBillingCandidate, never postCargoDeliveryGL", () => {
+    // #1733 Foundation moved the handoff off `delivered` (driver tap)
+    // onto `ready_for_invoice` (dispatcher gate) — until that flip
+    // fires, no candidate is created and no JE can be posted.
+    const handoffBlock = CARGO_ROUTE.match(
+      /b\.status === "ready_for_invoice"[\s\S]{0,2400}?\n\s+\}/,
     )?.[0];
-    expect(deliveryBlock, "could not locate delivered-transition block").toBeTruthy();
-    expect(deliveryBlock!).toContain("createCargoBillingCandidate");
-    expect(deliveryBlock!).not.toContain("postCargoDeliveryGL");
+    expect(handoffBlock, "could not locate ready_for_invoice-transition block").toBeTruthy();
+    expect(handoffBlock!).toContain("createCargoBillingCandidate");
+    expect(handoffBlock!).not.toContain("postCargoDeliveryGL");
+    // The OLD delivered-guarded handoff must be GONE — driver tap no
+    // longer triggers anything financial.
+    expect(CARGO_ROUTE).not.toMatch(
+      /if \(b\.status === "delivered"[\s\S]{0,400}?createCargoBillingCandidate/,
+    );
   });
 
-  it("fleet.ts driver /me/cargo/:id/advance calls createCargoBillingCandidate, not postCargoDeliveryGL", () => {
+  it("fleet.ts driver /me/cargo/:id/advance does NOT call createCargoBillingCandidate", () => {
+    // After #1733 Foundation the driver-self advance route is purely
+    // operational — no finance artefact gets created from the driver's
+    // hands. Only the dispatcher's ready_for_invoice flip does.
     const driverAdvance = FLEET_ROUTE.match(
-      /\/me\/cargo\/:id\/advance[\s\S]{0,6000}?\n\}\);/,
+      /\/me\/cargo\/:id\/advance[\s\S]{0,6000}?Driver cargo-advance error:/,
     )?.[0];
     expect(driverAdvance, "could not locate /me/cargo/:id/advance").toBeTruthy();
-    expect(driverAdvance!).toContain("createCargoBillingCandidate");
+    expect(driverAdvance!).not.toContain("createCargoBillingCandidate");
     expect(driverAdvance!).not.toContain("postCargoDeliveryGL");
   });
 });
@@ -83,7 +93,7 @@ describe("#1733 — accountant-facing route + RBAC", () => {
     // fleetEngine.postCargoDeliveryGL so a concurrent double-click can't
     // post two journals against the same candidate.
     const materialiseBlock = HANDOFF_ROUTE.match(
-      /\/materialize["'][\s\S]{0,4000}?\}\s*\);\s*\n/,
+      /\/materialize["'][\s\S]{0,7000}?\}\s*\);\s*\n/,
     )?.[0]!;
     expect(materialiseBlock).toContain("FOR UPDATE");
     expect(materialiseBlock).toContain("fleetEngine.postCargoDeliveryGL");

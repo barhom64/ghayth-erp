@@ -15517,6 +15517,30 @@ CREATE INDEX idx_cargo_items_hazmat
     ON public.cargo_items ("isHazmat", "companyId") WHERE "deletedAt" IS NULL AND "isHazmat" = true;
 
 --
+-- #1733 Foundation — billing-status queue index on cargo_manifests + the
+-- transport_service_lines bridge table.
+--
+
+CREATE INDEX IF NOT EXISTS idx_cargo_manifests_billing_status
+  ON public.cargo_manifests ("companyId", "billingStatus", "deliveryDate" DESC)
+  WHERE "billingStatus" IN ('ready_for_accounting', 'under_review');
+
+ALTER TABLE ONLY public.transport_service_lines ALTER COLUMN id SET DEFAULT nextval('public.transport_service_lines_id_seq'::regclass);
+
+ALTER TABLE ONLY public.transport_service_lines
+    ADD CONSTRAINT transport_service_lines_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.transport_service_lines
+    ADD CONSTRAINT uq_transport_service_line_source UNIQUE ("companyId", "sourceType", "sourceId");
+
+CREATE INDEX idx_service_lines_customer_status
+  ON public.transport_service_lines ("companyId", "customerId", "billingStatus", "serviceDate" DESC);
+
+CREATE INDEX idx_service_lines_invoice
+  ON public.transport_service_lines ("invoiceId")
+  WHERE "invoiceId" IS NOT NULL;
+
+--
 -- Transport billing candidates (#1733) — operational-to-finance handoff
 --
 

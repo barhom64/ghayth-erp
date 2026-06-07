@@ -46,18 +46,18 @@ import { assertVehicleCapacity } from "../lib/fleet/vehicleCapacity.js";
 
 const router = Router();
 
-// #1733 Blocker #3 — full 13-state operational lifecycle.
+// #1733 Foundation — full 15-state lifecycle bridges operations to finance.
 //
 //   draft → requested → approved → assigned_to_driver → driver_accepted →
 //   trip_started → arrived_pickup → loaded → in_transit → arrived_delivery →
-//   delivered → completed
+//   delivered → completed → ready_for_invoice → financially_closed
 //
-// Each step is a distinct audit moment #1733 needs so operations can answer
-// "where exactly is the bottleneck?" — driver hasn't accepted? truck
-// hasn't arrived at pickup? loaded but not departed? Cancellation is
-// reachable from every pre-`delivered` state; once delivered, the row
-// only moves forward to `completed` (the operational close that fires
-// the billing-candidate handoff in #1750).
+// The driver's reach ends at `delivered` (see /me/cargo/:id/advance).
+// `completed` is the dispatcher's operational close. `ready_for_invoice`
+// is the dispatcher's "this is good for finance" gate — until that
+// transition fires, NO billing candidate is created and NO JE is posted
+// (the #1733 Comment 0 directive). `financially_closed` is the terminal
+// state the accountant's materialize action flips the row into.
 const CARGO_STATUSES = [
   "draft",
   "requested",
@@ -71,6 +71,8 @@ const CARGO_STATUSES = [
   "arrived_delivery",
   "delivered",
   "completed",
+  "ready_for_invoice",
+  "financially_closed",
   "cancelled",
 ] as const;
 
@@ -86,9 +88,28 @@ const CARGO_TRANSITIONS: Record<typeof CARGO_STATUSES[number], string[]> = {
   in_transit:         ["arrived_delivery", "cancelled"],
   arrived_delivery:   ["delivered"],
   delivered:          ["completed"],
-  completed:          [],
+  completed:          ["ready_for_invoice"],
+  ready_for_invoice:  ["financially_closed"],
+  financially_closed: [],
   cancelled:          [],
 };
+
+const TRANSPORT_SERVICE_TYPES = [
+  "cargo_load",
+  "passenger_umrah",
+  "passenger_general",
+  "equipment_rental",
+  "internal_transfer",
+  "other",
+] as const;
+
+const BILLING_STATUSES = [
+  "not_billable",
+  "ready_for_accounting",
+  "under_review",
+  "invoiced",
+  "excluded",
+] as const;
 
 const createManifestSchema = z.object({
   manifestNumber: z.string().min(1, "رقم البوليصة مطلوب").max(64),
@@ -105,10 +126,19 @@ const createManifestSchema = z.object({
   freightRevenue: z.coerce.number().min(0).optional().nullable(),
   freightCost: z.coerce.number().min(0).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
+  // #1733 Foundation — required service classification. Defaults to
+  // `cargo_load` for back-compat; passenger / rental / internal flows
+  // must set this explicitly so the accountant can group and price.
+  transportServiceType: z.enum(TRANSPORT_SERVICE_TYPES).optional(),
 });
 
 const updateManifestSchema = createManifestSchema.partial().extend({
   status: z.enum(CARGO_STATUSES).optional(),
+  // #1733 Foundation — read-only finance badge; only the accountant
+  // materialize / reject paths flip this to `invoiced` / `excluded`.
+  // Operators can mark `not_billable` (internal transfer) before the
+  // first `ready_for_invoice` transition fires.
+  billingStatus: z.enum(BILLING_STATUSES).optional(),
   // #1733 — operator's documented reason for an assignment that fails
   // either Blocker #2's payload guard OR Phase 2's eligibility guard.
   // Without this, an over-capacity / unqualified-driver confirm is
@@ -453,13 +483,20 @@ router.patch(
         [id, scope.companyId],
       );
 
-      // #1733 — Transport drives operations; transport NEVER posts JE.
-      // On delivery we hand off a billing candidate to the accountant,
-      // who reviews it and materializes the JE from the finance side
-      // (POST /api/finance/transport-billing-candidates/:id/materialize).
-      // Idempotent via uq_billing_candidate_source so re-PATCH or the
-      // next state-machine hop (closed) never creates a duplicate.
-      if (b.status === "delivered" && existing.status !== "delivered" && row) {
+      // #1733 Foundation — Transport NEVER posts JE; the handoff is the
+      // dispatcher's `ready_for_invoice` action, not the driver's
+      // "delivered" tap. Two artifacts are created at the gate:
+      //
+      //   1. transport_billing_candidate (#1750) — the operational packet
+      //      the accountant reviews + materialises into a JE.
+      //   2. transport_service_lines (this PR) — the per-line billable
+      //      facts that flow into the merged customer invoice.
+      //
+      // Both are idempotent via their (companyId, sourceType, sourceId)
+      // unique constraint; re-PATCH cannot duplicate. We also flip the
+      // operational `billingStatus` badge so dispatcher / driver pages
+      // render the correct read-only finance-state label.
+      if (b.status === "ready_for_invoice" && existing.status !== "ready_for_invoice" && row) {
         try {
           await fleetEngine.createCargoBillingCandidate(
             { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
@@ -481,6 +518,58 @@ router.patch(
         } catch (handoffErr) {
           logger.error({ err: handoffErr, manifestId: id }, "[cargo] billing candidate handoff failed");
         }
+        try {
+          await rawExecute(
+            `INSERT INTO transport_service_lines (
+               "companyId", "branchId", "customerId",
+               "sourceType", "sourceId", "sourceRef",
+               "serviceType", "serviceDate",
+               "tripId", "manifestId",
+               "vehicleId", "driverId",
+               "routeFrom", "routeTo",
+               quantity, "unitOfMeasure",
+               "unitPrice", "lineTotal",
+               "billingStatus", "createdBy"
+             ) VALUES (
+               $1, $2, $3,
+               'cargo_manifest', $4, $5,
+               $6, COALESCE($7::date, CURRENT_DATE),
+               $8, $4,
+               $9, $10,
+               $11, $12,
+               $13, 'kg',
+               NULL, $14,
+               'ready_for_accounting', $15
+             )
+             ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING`,
+            [
+              scope.companyId,
+              scope.branchId ?? null,
+              (row.customerId as number | null) ?? null,
+              id,
+              String(row.manifestNumber ?? id),
+              (row.transportServiceType as string) ?? "cargo_load",
+              (row.deliveryDate as string | null) ?? null,
+              (row.fleetTripId as number | null) ?? null,
+              (row.vehicleId as number | null) ?? null,
+              (row.driverId as number | null) ?? null,
+              (row.fromLocation as string | null) ?? null,
+              (row.toLocation as string | null) ?? null,
+              Number(row.totalWeight) || 0,
+              Number(row.freightRevenue) || 0,
+              scope.userId,
+            ],
+          );
+        } catch (slErr) {
+          logger.error({ err: slErr, manifestId: id }, "[cargo] service line creation failed");
+        }
+        // Flip the operational badge so the dispatcher / driver pages
+        // see "ready_for_accounting" alongside the lifecycle state.
+        await rawExecute(
+          `UPDATE cargo_manifests SET "billingStatus" = 'ready_for_accounting', "updatedAt" = NOW()
+            WHERE id = $1 AND "companyId" = $2 AND "billingStatus" = 'not_billable'`,
+          [id, scope.companyId],
+        );
       }
 
       res.json({ data: row });

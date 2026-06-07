@@ -61,7 +61,9 @@ interface CargoItem {
 // drives draft → requested → approved → assigned_to_driver; the driver
 // carries it through driver_accepted → trip_started → arrived_pickup →
 // loaded → in_transit → arrived_delivery → delivered (from the driver
-// console — see me-driver.tsx); the dispatcher closes with `completed`.
+// console — see me-driver.tsx); the dispatcher closes with `completed`
+// then flips to `ready_for_invoice` to hand off to the accountant; the
+// accountant's materialize action sets `financially_closed`.
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "draft", label: "مسودة" },
   { value: "requested", label: "طلب جديد" },
@@ -74,9 +76,24 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "in_transit", label: "في الطريق" },
   { value: "arrived_delivery", label: "وصل لموقع التسليم" },
   { value: "delivered", label: "تم التسليم" },
-  { value: "completed", label: "مكتملة" },
+  { value: "completed", label: "مكتملة (إغلاق تشغيلي)" },
+  // #1733 Foundation — dispatcher's "ready for accounting" gate. Until
+  // this transition fires, no JE or billing candidate is created.
+  { value: "ready_for_invoice", label: "جاهزة للمحاسبة" },
+  // Terminal post-invoice state — set by the accountant's materialize action.
+  { value: "financially_closed", label: "مُغلقة ماليًا" },
   { value: "cancelled", label: "ملغاة" },
 ];
+
+// #1733 Foundation — read-only finance badge. The accountant's actions
+// flip this; the operator can only mark `not_billable` (internal transfer).
+export const BILLING_STATUS_LABEL: Record<string, string> = {
+  not_billable: "غير مرسلة للمحاسبة",
+  ready_for_accounting: "جاهزة للمحاسبة",
+  under_review: "قيد مراجعة المحاسب",
+  invoiced: "مفوترة",
+  excluded: "مستبعدة ماليًا",
+};
 
 export default function CargoDetail() {
   const [, params] = useRoute("/fleet/cargo/:id");
