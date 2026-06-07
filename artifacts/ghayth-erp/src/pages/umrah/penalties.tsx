@@ -33,6 +33,10 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
+import {
+  UMRAH_PENALTY_STATUS_OPTIONS,
+  umrahPenaltyStatusLabel,
+} from "@/lib/umrah-penalty-status";
 
 export default function UmrahPenalties() {
   const [, navigate] = useLocation();
@@ -166,7 +170,7 @@ export default function UmrahPenalties() {
     { key: "type", header: "النوع", render: (p) => p.type === "overstay" ? "تجاوز مدة" : p.type },
     { key: "daysOverstayed", header: "أيام التأخر" },
     { key: "amount", header: "المبلغ (ريال)", render: (p) => <span className="font-bold text-status-error-foreground">{formatCurrency(Number(p.amount))}</span> },
-    { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
+    { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} domain="umrah_penalty" /> },
     {
       key: "actions" as any,
       header: "إجراءات",
@@ -239,7 +243,7 @@ export default function UmrahPenalties() {
                 "الموسم": p.seasonName || "—",
                 "قيمة الغرامة": p.amount ?? 0,
                 "تاريخ الإصدار": p.detectedAt || p.createdAt || "—",
-                "الحالة": p.status || "—",
+                "الحالة": umrahPenaltyStatusLabel(p.status),
               })),
             })}
           />
@@ -306,13 +310,7 @@ export default function UmrahPenalties() {
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالاسم أو الجواز أو الوكيل...",
-          statuses: [
-            { value: "pending", label: "معلقة" },
-            { value: "invoiced", label: "مفوترة" },
-            { value: "paid", label: "مدفوعة" },
-            { value: "waived", label: "معفاة" },
-            { value: "cancelled", label: "ملغية" },
-          ],
+          statuses: [...UMRAH_PENALTY_STATUS_OPTIONS],
         }}
         values={filters}
         onChange={setFilters}

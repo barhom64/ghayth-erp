@@ -80,7 +80,9 @@ describe("pilgrims page — bulk-status picker on the multi-select toolbar", () 
     // dropdown, the filter strip, and `pilgrim-detail.tsx`'s header
     // badge all read the SAME wording. The page binds a local
     // PILGRIM_STATUS_OPTIONS to that import for callsite brevity.
-    expect(PAGE).toMatch(/import\s*\{\s*UMRAH_PILGRIM_STATUS_OPTIONS\s*\}\s*from\s*"@\/lib\/umrah-pilgrim-status"/);
+    // The import group may carry siblings (umrahPilgrimStatusLabel, etc.) — match
+    // any import statement that pulls UMRAH_PILGRIM_STATUS_OPTIONS from the module.
+    expect(PAGE).toMatch(/import\s*\{[^}]*\bUMRAH_PILGRIM_STATUS_OPTIONS\b[^}]*\}\s*from\s*"@\/lib\/umrah-pilgrim-status"/);
     expect(PAGE).toMatch(/const PILGRIM_STATUS_OPTIONS\s*=\s*UMRAH_PILGRIM_STATUS_OPTIONS/);
 
     // The literal label pairs live in the module — assert there, not on
