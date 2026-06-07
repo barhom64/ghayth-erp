@@ -225,6 +225,32 @@ eventsRouter.get("/log/stats", authorize({ feature: "admin", action: "view" }), 
   }
 });
 
+// ── Outbox stats (read-only gauge) — admin monitoring ─────────────────────
+// Read-only counterpart to the drain endpoint so the operator can watch the
+// outbox (pending vs processed + oldest-pending age) WITHOUT triggering a
+// drain. Powers the /admin/outbox monitoring page (#1603).
+eventsRouter.get("/outbox/stats", authorize({ feature: "admin", action: "view" }), async (_req, res) => {
+  try {
+    const rows = await rawQuery<{ status: string; count: number }>(
+      `SELECT status, COUNT(*)::int AS count FROM event_outbox GROUP BY status`,
+    );
+    const byStatus: Record<string, number> = {};
+    for (const r of rows) byStatus[r.status] = Number(r.count);
+    const [oldest] = await rawQuery<{ sec: string | null }>(
+      `SELECT extract(epoch FROM (now() - min("createdAt")))::text AS sec
+         FROM event_outbox WHERE status = 'pending'`,
+    );
+    res.json({
+      pending: byStatus.pending ?? 0,
+      processed: byStatus.processed ?? 0,
+      total: Object.values(byStatus).reduce((a, b) => a + b, 0),
+      oldestPendingAgeSec: oldest?.sec != null ? Math.round(Number(oldest.sec)) : null,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Outbox stats error:");
+  }
+});
+
 // ── Outbox drain (phase-2 relay) — admin maintenance trigger ──────────────
 // Marks captured-and-dispatched event_outbox rows 'processed' and reports the
 // pending gauge. Runs automatically on the maintenance interval; this endpoint
