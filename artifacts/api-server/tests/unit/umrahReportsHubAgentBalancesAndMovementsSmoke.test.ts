@@ -77,8 +77,17 @@ describe("GET /umrah/reports/agent-balances — consolidated rollup", () => {
     expect(BALANCES_HANDLER).toMatch(/inv\.status = 'paid'/);
   });
 
-  it("pilgrimCount comes from a tenant-scoped scalar subquery on umrah_pilgrims", () => {
-    expect(BALANCES_HANDLER).toMatch(/COUNT\(\*\)::int FROM umrah_pilgrims p\s+WHERE p\."agentId" = a\.id\s+AND p\."companyId" = a\."companyId"\s+AND p\."deletedAt" IS NULL/);
+  it("pilgrimCount comes from a tenant-scoped CTE (N+1 fix)", () => {
+    // After the N+1 fix the scalar subquery was lifted into an
+    // agent_pilgrim_counts CTE keyed by (agentId, companyId) so the
+    // tenant boundary is preserved on the LEFT JOIN.
+    expect(BALANCES_HANDLER).toContain("WITH agent_pilgrim_counts AS");
+    expect(BALANCES_HANDLER).toMatch(
+      /LEFT JOIN agent_pilgrim_counts apc\s+ON apc\."agentId" = a\.id AND apc\."companyId" = a\."companyId"/,
+    );
+    expect(BALANCES_HANDLER).toContain(
+      'COALESCE(apc."pilgrimCount", 0)::int AS "pilgrimCount"',
+    );
   });
 
   it("ORDER BY outstanding DESC — bookkeeper sees who owes most first", () => {
