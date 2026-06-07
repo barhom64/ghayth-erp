@@ -219,7 +219,7 @@ export default function VendorsEdit() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">— بدون فئة محددة —</SelectItem>
-                    {whtCategories.map((c) => (
+                    {whtCategories.filter((c) => c.code).map((c) => (
                       <SelectItem key={c.code} value={c.code}>
                         {c.code} ({Number(c.rate).toFixed(0)}%) — {c.name}
                       </SelectItem>

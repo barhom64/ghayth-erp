@@ -578,6 +578,15 @@ const RULES = [
       "`<Select value={state || \"_none\"} onValueChange={(v) => setState(v === \"_none\" ? \"\" : v)}>` " +
       "with `<SelectItem value=\"_none\">— الكل —</SelectItem>`.",
   },
+  // (No companion rule for unguarded `value={x.code}` in a .map.
+  //  Pure regex can't distinguish API-data arrays from module-scope
+  //  constants without a `skipMatch` hook the runner doesn't support.
+  //  All known API-data callsites have been manually filtered:
+  //    expenseAccounts → import-wizard.tsx
+  //    bankAccOptions  → bank-reconciliation.tsx
+  //    whtCategories   → vendors-create.tsx, vendors-edit.tsx
+  //    taxCodes        → cost-splitter.tsx, invoices-create.tsx ×2
+  //  Constants (COMMON_CURRENCIES, etc.) are compile-time safe.)
 ];
 
 // ─── Pure matchers (exported for self-tests) ─────────────────────────────

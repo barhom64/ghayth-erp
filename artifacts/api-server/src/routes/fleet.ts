@@ -500,6 +500,237 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
   } catch (err) { handleRouteError(err, res, "Create vehicle error:"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// Driver self-service surface (#1354).
+//
+// Replaces the standalone /driver-portal/* JWT-separated app. Drivers
+// log in with their regular ERP credentials (employees / users), get
+// the `driver` role on their employee_assignment, and call the same
+// endpoints below — bound to req.scope.employeeId via fleet_drivers.
+//
+// This is the architecturally-correct shape: one auth, one RBAC, one
+// session boundary. A driver who's fired (assignment ended) loses
+// access immediately — no separate driver_portal_accounts row to
+// chase. The operator-side fleet.cargo + fleet.trips features stay
+// invisible to the driver because the role doesn't carry them.
+// ─────────────────────────────────────────────────────────────────────────
+async function resolveDriverFromScope(req: import("express").Request): Promise<{ id: number; companyId: number; status: string } | null> {
+  const scope = req.scope!;
+  if (!scope.employeeId) return null;
+  const [driver] = await rawQuery<{ id: number; companyId: number; status: string }>(
+    `SELECT id, "companyId", status FROM fleet_drivers
+      WHERE "employeeId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+      LIMIT 1`,
+    [scope.employeeId, scope.companyId]
+  );
+  return driver ?? null;
+}
+
+router.get("/me", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const [row] = await rawQuery(
+      `SELECT id, name, phone, "licenseNumber", "licenseExpiry", "licenseType",
+              status, rating, "totalTrips"
+         FROM fleet_drivers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [driver.id, driver.companyId]
+    );
+    res.json({ data: row });
+  } catch (err) { handleRouteError(err, res, "Driver self-profile error:"); }
+});
+
+router.patch("/me/availability", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const status = String(req.body?.status ?? "");
+    if (status !== "available" && status !== "off_duty") {
+      throw new ValidationError("الحالة يجب أن تكون 'available' أو 'off_duty'");
+    }
+    if (driver.status === "on_trip") {
+      throw new ConflictError("لا يمكن تغيير الحالة أثناء وجود رحلة جارية");
+    }
+    if (driver.status === "suspended") {
+      throw new ConflictError("الحساب موقوف، الرجاء التواصل مع الإدارة");
+    }
+    await rawExecute(
+      `UPDATE fleet_drivers SET status = $1, "updatedAt" = NOW()
+        WHERE id = $2 AND "companyId" = $3`,
+      [status, driver.id, driver.companyId]
+    );
+    void createAuditLog({ companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "fleet_drivers", entityId: driver.id,
+      before: { status: driver.status }, after: { status, source: "driver_self" } });
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.driver.availability_changed", entity: "fleet_drivers", entityId: driver.id,
+      details: JSON.stringify({ from: driver.status, to: status, source: "driver_self" }) });
+    res.json({ data: { status } });
+  } catch (err) { handleRouteError(err, res, "Driver availability error:"); }
+});
+
+router.get("/me/trips", authorize({ feature: "fleet.trips.my", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) { res.json({ data: [] }); return; }
+    const { status } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [driver.id, scope.companyId];
+    let where = `t."driverId" = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL`;
+    if (status) { params.push(status); where += ` AND t.status = $${params.length}`; }
+    const rows = await rawQuery(
+      `SELECT t.id, t.status, t."tripDate", t."startTime", t."endTime",
+              t."fromLocation", t."toLocation", t.distance, t.cost, t.notes,
+              v."plateNumber" AS "vehiclePlate"
+         FROM fleet_trips t
+         LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId" AND v."companyId" = t."companyId" AND v."deletedAt" IS NULL
+        WHERE ${where}
+        ORDER BY COALESCE(t."startTime", t."tripDate", t."createdAt") DESC LIMIT 200`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "Driver trips error:"); }
+});
+
+router.post("/me/trips/:id/start", authorize({ feature: "fleet.trips.my", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const id = parseId(req.params.id, "id");
+    const [trip] = await rawQuery<{ status: string }>(
+      `SELECT status FROM fleet_trips
+        WHERE id = $1 AND "driverId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+      [id, driver.id, scope.companyId]
+    );
+    if (!trip) throw new NotFoundError("الرحلة غير موجودة");
+    if (trip.status !== "scheduled" && trip.status !== "planned") {
+      throw new ConflictError(`لا يمكن بدء رحلة بحالة ${trip.status}`);
+    }
+    await rawExecute(
+      `UPDATE fleet_trips
+          SET status = 'in_progress', "startTime" = COALESCE("startTime", NOW()), "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.driver_started", entity: "fleet_trips", entityId: id,
+      details: JSON.stringify({ driverId: driver.id }) });
+    res.json({ data: { id, status: "in_progress" } });
+  } catch (err) { handleRouteError(err, res, "Driver trip-start error:"); }
+});
+
+router.post("/me/trips/:id/complete", authorize({ feature: "fleet.trips.my", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const id = parseId(req.params.id, "id");
+    const [trip] = await rawQuery<{ status: string }>(
+      `SELECT status FROM fleet_trips
+        WHERE id = $1 AND "driverId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+      [id, driver.id, scope.companyId]
+    );
+    if (!trip) throw new NotFoundError("الرحلة غير موجودة");
+    if (trip.status !== "in_progress") {
+      throw new ConflictError(`لا يمكن إنهاء رحلة بحالة ${trip.status}`);
+    }
+    await rawExecute(
+      `UPDATE fleet_trips
+          SET status = 'completed', "endTime" = COALESCE("endTime", NOW()), "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    // Free the driver (only flip when they're on_trip — operator-only states stay).
+    await rawExecute(
+      `UPDATE fleet_drivers SET status = 'available', "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 AND status = 'on_trip'`,
+      [driver.id, scope.companyId]
+    );
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.driver_completed", entity: "fleet_trips", entityId: id,
+      details: JSON.stringify({ driverId: driver.id }) });
+    res.json({ data: { id, status: "completed" } });
+  } catch (err) { handleRouteError(err, res, "Driver trip-complete error:"); }
+});
+
+router.get("/me/cargo", authorize({ feature: "fleet.cargo.my", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) { res.json({ data: [] }); return; }
+    const { status } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [driver.id, scope.companyId];
+    let where = `m."driverId" = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL`;
+    if (status) { params.push(status); where += ` AND m.status = $${params.length}`; }
+    const rows = await rawQuery(
+      `SELECT m.id, m."manifestNumber", m.status, m."fromLocation", m."toLocation",
+              m."pickupDate", m."deliveryDate", m."customerName", m."totalWeight",
+              v."plateNumber" AS "vehiclePlate"
+         FROM cargo_manifests m
+         LEFT JOIN fleet_vehicles v ON v.id = m."vehicleId" AND v."companyId" = m."companyId" AND v."deletedAt" IS NULL
+        WHERE ${where}
+        ORDER BY COALESCE(m."pickupDate", m."createdAt") DESC LIMIT 200`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "Driver cargo error:"); }
+});
+
+router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const id = parseId(req.params.id, "id");
+    const status = String(req.body?.status ?? "");
+    if (status !== "in_transit" && status !== "delivered") {
+      throw new ValidationError("الانتقال المسموح: in_transit أو delivered");
+    }
+    const [manifest] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM cargo_manifests
+        WHERE id = $1 AND "driverId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+      [id, driver.id, scope.companyId]
+    );
+    if (!manifest) throw new NotFoundError("بوليصة الشحن غير موجودة");
+    const current = String(manifest.status);
+    const allowed: Record<string, string[]> = {
+      confirmed: ["in_transit"],
+      loading: ["in_transit"],
+      in_transit: ["delivered"],
+    };
+    if (!(allowed[current] ?? []).includes(status)) {
+      throw new ConflictError(`الانتقال من ${current} إلى ${status} غير مسموح للسائق`);
+    }
+    await rawExecute(
+      `UPDATE cargo_manifests SET status = $1, "updatedAt" = NOW()
+        WHERE id = $2 AND "companyId" = $3`,
+      [status, id, scope.companyId]
+    );
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.cargo.manifest.status_changed", entity: "cargo_manifests", entityId: id,
+      details: JSON.stringify({ from: current, to: status, source: "driver_self" }) });
+
+    if (status === "delivered") {
+      try {
+        await fleetEngine.postCargoDeliveryGL(
+          { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+          { id, manifestNumber: String(manifest.manifestNumber ?? id),
+            freightRevenue: Number(manifest.freightRevenue) || 0,
+            freightCost: Number(manifest.freightCost) || 0,
+            customerId: (manifest.customerId as number | null) ?? null,
+            vehicleId: (manifest.vehicleId as number | null) ?? null,
+            driverId: (manifest.driverId as number | null) ?? null }
+        );
+      } catch (glErr) {
+        logger.error({ err: glErr, manifestId: id }, "[fleet/me] cargo delivery GL failed");
+      }
+    }
+    res.json({ data: { id, status } });
+  } catch (err) { handleRouteError(err, res, "Driver cargo-advance error:"); }
+});
+
 router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;

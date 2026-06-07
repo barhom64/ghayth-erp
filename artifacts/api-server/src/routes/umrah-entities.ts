@@ -2876,19 +2876,27 @@ router.get("/reports/agent-balances", authorize({ feature: "umrah", action: "lis
     // pilgrimCount = العدد الحالي للمعتمرين النشطين تحت هذا الوكيل
     // (مش من الفواتير، لأن وكيل ممكن يكون عنده معتمرين قبل ما يُفوتر).
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT a.id, a.name, a.country, a.phone, a.email, a.status, a."nuskAgentNumber",
+      // Pre-aggregate pilgrim counts per agent via CTE — original was
+      // N+1: one COUNT subquery per returned agent. The CTE scans
+      // umrah_pilgrims once filtered to active rows. Keyed by
+      // (agentId, companyId) to preserve the legacy tenant boundary.
+      `WITH agent_pilgrim_counts AS (
+         SELECT "agentId", "companyId", COUNT(*) AS "pilgrimCount"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL AND "agentId" IS NOT NULL
+         GROUP BY "agentId", "companyId"
+       )
+       SELECT a.id, a.name, a.country, a.phone, a.email, a.status, a."nuskAgentNumber",
               COALESCE(inv_agg.invoice_count, 0)::int AS "invoiceCount",
               COALESCE(inv_agg.total_invoiced, 0)    AS "totalInvoiced",
               COALESCE(inv_agg.total_paid, 0)        AS "totalPaid",
               COALESCE(inv_agg.outstanding, 0)       AS "outstanding",
               inv_agg.last_invoice_at                AS "lastInvoiceAt",
               inv_agg.last_invoice_ref               AS "lastInvoiceRef",
-              (SELECT COUNT(*)::int FROM umrah_pilgrims p
-                WHERE p."agentId" = a.id
-                  AND p."companyId" = a."companyId"
-                  AND p."deletedAt" IS NULL
-              ) AS "pilgrimCount"
+              COALESCE(apc."pilgrimCount", 0)::int AS "pilgrimCount"
          FROM umrah_agents a
+    LEFT JOIN agent_pilgrim_counts apc
+           ON apc."agentId" = a.id AND apc."companyId" = a."companyId"
     LEFT JOIN LATERAL (
            SELECT COUNT(*)::int            AS invoice_count,
                   SUM(inv.total)            AS total_invoiced,
