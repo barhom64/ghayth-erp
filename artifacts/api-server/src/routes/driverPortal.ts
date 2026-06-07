@@ -38,6 +38,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { fleetEngine } from "../lib/engines/index.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger.js";
@@ -347,6 +348,175 @@ protectedRouter.get(
       res.json({ data: rows });
     } catch (err) {
       handleRouteError(err, res, "Driver portal cargo error:");
+    }
+  }),
+);
+
+// ── Driver operational write-actions ─────────────────────────────────
+// These make the lifecycle driven by the person doing the work, not
+// only by a back-office dispatcher. Each one is scoped to a trip/
+// manifest the driver is actually assigned to, with a state-machine
+// guard so the driver can only advance forward through their own legs.
+
+// Start an assigned trip: scheduled/planned → in_progress.
+protectedRouter.post(
+  "/me/trips/:id/start",
+  withDriverPortalScope(async (req, res) => {
+    try {
+      const scope = req.driverPortalScope;
+      const id = parseId(req.params.id, "id");
+      const [trip] = await rawQuery<{ status: string }>(
+        `SELECT status FROM fleet_trips
+          WHERE id = $1 AND "driverId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [id, scope.driverId, scope.companyId],
+      );
+      if (!trip) throw new NotFoundError("الرحلة غير موجودة");
+      if (trip.status !== "scheduled" && trip.status !== "planned") {
+        throw new ForbiddenError(`لا يمكن بدء رحلة بحالة ${trip.status}`);
+      }
+      await rawExecute(
+        `UPDATE fleet_trips
+            SET status = 'in_progress', "startTime" = COALESCE("startTime", NOW()), "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId],
+      );
+      createAuditLog({
+        companyId: scope.companyId, userId: 0,
+        action: "update", entity: "fleet_trips", entityId: id,
+        before: { status: trip.status }, after: { status: "in_progress", source: "driver_portal" },
+      }).catch((e) => logger.error(e, "driverPortal background task failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: 0, userId: 0,
+        action: "fleet.trip.driver_started", entity: "fleet_trips", entityId: id,
+        details: JSON.stringify({ driverId: scope.driverId }),
+      }).catch((e) => logger.error(e, "driverPortal background task failed"));
+      res.json({ data: { id, status: "in_progress" } });
+    } catch (err) {
+      handleRouteError(err, res, "Driver portal trip-start error:");
+    }
+  }),
+);
+
+// Mark an assigned trip arrived/completed: in_progress → completed.
+// Resets the driver back to `available` so the dispatcher's
+// availability board reflects reality the moment the driver finishes.
+// The operator-side cost GL (fuel/fare/depreciation) stays on the
+// /fleet/trips/:id/complete path — this driver action only records
+// the operational fact (arrived) + frees the driver.
+protectedRouter.post(
+  "/me/trips/:id/complete",
+  withDriverPortalScope(async (req, res) => {
+    try {
+      const scope = req.driverPortalScope;
+      const id = parseId(req.params.id, "id");
+      const [trip] = await rawQuery<{ status: string }>(
+        `SELECT status FROM fleet_trips
+          WHERE id = $1 AND "driverId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [id, scope.driverId, scope.companyId],
+      );
+      if (!trip) throw new NotFoundError("الرحلة غير موجودة");
+      if (trip.status !== "in_progress") {
+        throw new ForbiddenError(`لا يمكن إنهاء رحلة بحالة ${trip.status}`);
+      }
+      await rawExecute(
+        `UPDATE fleet_trips
+            SET status = 'completed', "endTime" = COALESCE("endTime", NOW()), "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId],
+      );
+      // Free the driver — only if they aren't suspended (operator-only).
+      await rawExecute(
+        `UPDATE fleet_drivers SET status = 'available', "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND status = 'on_trip'`,
+        [scope.driverId, scope.companyId],
+      );
+      createAuditLog({
+        companyId: scope.companyId, userId: 0,
+        action: "update", entity: "fleet_trips", entityId: id,
+        before: { status: trip.status }, after: { status: "completed", source: "driver_portal" },
+      }).catch((e) => logger.error(e, "driverPortal background task failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: 0, userId: 0,
+        action: "fleet.trip.driver_completed", entity: "fleet_trips", entityId: id,
+        details: JSON.stringify({ driverId: scope.driverId }),
+      }).catch((e) => logger.error(e, "driverPortal background task failed"));
+      res.json({ data: { id, status: "completed" } });
+    } catch (err) {
+      handleRouteError(err, res, "Driver portal trip-complete error:");
+    }
+  }),
+);
+
+// Advance an assigned cargo manifest. Drivers can only move forward
+// through the haul legs they execute: confirmed/loading → in_transit
+// → delivered. Draft/confirm/cancel stay operator-only. The delivered
+// hop posts the freight revenue+cost GL (idempotent via the engine
+// guard), so the financial recognition fires from the cab.
+const driverCargoAdvanceSchema = z.object({
+  status: z.enum(["in_transit", "delivered"]),
+});
+const DRIVER_CARGO_TRANSITIONS: Record<string, string[]> = {
+  confirmed: ["in_transit"],
+  loading: ["in_transit"],
+  in_transit: ["delivered"],
+};
+protectedRouter.post(
+  "/me/cargo/:id/advance",
+  withDriverPortalScope(async (req, res) => {
+    try {
+      const scope = req.driverPortalScope;
+      const id = parseId(req.params.id, "id");
+      const body = zodParse(driverCargoAdvanceSchema.safeParse(req.body));
+      const [manifest] = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM cargo_manifests
+          WHERE id = $1 AND "driverId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [id, scope.driverId, scope.companyId],
+      );
+      if (!manifest) throw new NotFoundError("بوليصة الشحن غير موجودة");
+      const current = String(manifest.status);
+      const allowed = DRIVER_CARGO_TRANSITIONS[current] ?? [];
+      if (!allowed.includes(body.status)) {
+        throw new ForbiddenError(`الانتقال من ${current} إلى ${body.status} غير مسموح للسائق`);
+      }
+      await rawExecute(
+        `UPDATE cargo_manifests SET status = $1, "updatedAt" = NOW()
+          WHERE id = $2 AND "companyId" = $3`,
+        [body.status, id, scope.companyId],
+      );
+      createAuditLog({
+        companyId: scope.companyId, userId: 0,
+        action: "update", entity: "cargo_manifests", entityId: id,
+        before: { status: current }, after: { status: body.status, source: "driver_portal" },
+      }).catch((e) => logger.error(e, "driverPortal background task failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: 0, userId: 0,
+        action: "fleet.cargo.manifest.status_changed", entity: "cargo_manifests", entityId: id,
+        details: JSON.stringify({ from: current, to: body.status, source: "driver_portal" }),
+      }).catch((e) => logger.error(e, "driverPortal background task failed"));
+
+      // Delivered → recognise revenue + cost. Same idempotent engine
+      // call the operator PATCH path uses.
+      if (body.status === "delivered") {
+        try {
+          await fleetEngine.postCargoDeliveryGL(
+            { companyId: scope.companyId, branchId: 0, createdBy: 0 },
+            {
+              id,
+              manifestNumber: String(manifest.manifestNumber ?? id),
+              freightRevenue: Number(manifest.freightRevenue) || 0,
+              freightCost: Number(manifest.freightCost) || 0,
+              customerId: (manifest.customerId as number | null) ?? null,
+              vehicleId: (manifest.vehicleId as number | null) ?? null,
+              driverId: (manifest.driverId as number | null) ?? null,
+            },
+          );
+        } catch (glErr) {
+          logger.error({ err: glErr, manifestId: id }, "[driverPortal] cargo delivery GL failed");
+        }
+      }
+      res.json({ data: { id, status: body.status } });
+    } catch (err) {
+      handleRouteError(err, res, "Driver portal cargo-advance error:");
     }
   }),
 );

@@ -75,6 +75,23 @@ export default function DriverPortalMyCargo() {
 
   useEffect(() => { if (driver) load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [driver, filter]);
 
+  const [acting, setActing] = useState<number | null>(null);
+  const advance = async (manifestId: number, status: "in_transit" | "delivered") => {
+    setActing(manifestId);
+    setError(null);
+    try {
+      await driverFetch(`/driver-portal/me/cargo/${manifestId}/advance`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      });
+      await load();
+    } catch (err: any) {
+      setError(err?.message || "تعذّر تنفيذ الإجراء");
+    } finally {
+      setActing(null);
+    }
+  };
+
   const logout = () => {
     clearDriverSession();
     navigate("/driver-portal/login");
@@ -179,6 +196,27 @@ export default function DriverPortalMyCargo() {
                     <p>{m.totalWeight ? `${Number(m.totalWeight).toFixed(0)} كغ` : "—"}</p>
                   </div>
                 </div>
+                {(m.status === "confirmed" || m.status === "loading") && (
+                  <Button
+                    className="w-full mt-3"
+                    size="sm"
+                    disabled={acting === m.id}
+                    onClick={() => advance(m.id, "in_transit")}
+                  >
+                    {acting === m.id ? "جاري…" : "بدء النقل (في الطريق)"}
+                  </Button>
+                )}
+                {m.status === "in_transit" && (
+                  <Button
+                    className="w-full mt-3"
+                    size="sm"
+                    variant="outline"
+                    disabled={acting === m.id}
+                    onClick={() => advance(m.id, "delivered")}
+                  >
+                    {acting === m.id ? "جاري…" : "تأكيد التسليم"}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))
