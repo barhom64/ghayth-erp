@@ -2603,11 +2603,20 @@ router.get("/room-blocks", authorize({ feature: "umrah", action: "list" }), asyn
     const hotelId = req.query.hotelId ? Number(req.query.hotelId) : null;
     const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
     const params: unknown[] = [scope.companyId];
-    let sql = `SELECT b.*, h.name AS "hotelName", h.city AS "hotelCity",
-                      (SELECT COUNT(*) FROM umrah_room_allocations a
-                        WHERE a."blockId" = b.id AND a."deletedAt" IS NULL) AS "allocatedCount"
+    // Pre-aggregate room allocations counts via CTE — original was
+    // N+1: 500 room blocks × COUNT subquery = 501 lookups through
+    // umrah_room_allocations. CTE collapses to one scan.
+    let sql = `WITH alloc_counts AS (
+                  SELECT "blockId", COUNT(*) AS "allocatedCount"
+                  FROM umrah_room_allocations
+                  WHERE "deletedAt" IS NULL
+                  GROUP BY "blockId"
+                )
+                SELECT b.*, h.name AS "hotelName", h.city AS "hotelCity",
+                       COALESCE(ac."allocatedCount", 0)::int AS "allocatedCount"
                  FROM umrah_room_blocks b
                  LEFT JOIN umrah_hotels h ON h.id = b."hotelId" AND h."deletedAt" IS NULL
+                 LEFT JOIN alloc_counts ac ON ac."blockId" = b.id
                 WHERE b."companyId" = $1 AND b."deletedAt" IS NULL`;
     if (hotelId) { params.push(hotelId); sql += ` AND b."hotelId" = $${params.length}`; }
     if (seasonId) { params.push(seasonId); sql += ` AND b."seasonId" = $${params.length}`; }
