@@ -2211,30 +2211,29 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
     );
 
     // 2. Mutamer count diff: file says X, system has Y in the linked group
+    // Pre-aggregate umrah_pilgrims counts via CTE — the original
+    // query ran the SAME scalar COUNT subquery THREE TIMES per row
+    // (SELECT column + WHERE filter + ORDER BY). At LIMIT 500 that's
+    // 1501 redundant lookups through umrah_pilgrims. One CTE scan +
+    // LEFT JOIN collapses it to a single pass.
     const countDiffs = await rawQuery<Record<string, unknown>>(
-      `SELECT ni.id, ni."nuskInvoiceNumber", ni."mutamerCount" AS "fileCount",
+      `WITH pilgrim_counts AS (
+         SELECT "groupId", "companyId", COUNT(*) AS "systemCount"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL
+         GROUP BY "groupId", "companyId"
+       )
+       SELECT ni.id, ni."nuskInvoiceNumber", ni."mutamerCount" AS "fileCount",
               ni."groupId", g.name AS "groupName",
-              (SELECT COUNT(*)::int FROM umrah_pilgrims p
-                WHERE p."groupId" = ni."groupId"
-                  AND p."companyId" = ni."companyId"
-                  AND p."deletedAt" IS NULL) AS "systemCount"
+              COALESCE(pc."systemCount", 0)::int AS "systemCount"
          FROM umrah_nusk_invoices ni
     LEFT JOIN umrah_groups g ON g.id = ni."groupId"
+    LEFT JOIN pilgrim_counts pc ON pc."groupId" = ni."groupId" AND pc."companyId" = ni."companyId"
         WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
           AND ni."groupId" IS NOT NULL${groupSeasonClause}
           AND ni."mutamerCount" IS NOT NULL
-          AND ni."mutamerCount" != (
-            SELECT COUNT(*)::int FROM umrah_pilgrims p
-              WHERE p."groupId" = ni."groupId"
-                AND p."companyId" = ni."companyId"
-                AND p."deletedAt" IS NULL
-          )
-        ORDER BY ABS(ni."mutamerCount" - (
-            SELECT COUNT(*) FROM umrah_pilgrims p
-              WHERE p."groupId" = ni."groupId"
-                AND p."companyId" = ni."companyId"
-                AND p."deletedAt" IS NULL
-          )) DESC
+          AND ni."mutamerCount" != COALESCE(pc."systemCount", 0)
+        ORDER BY ABS(ni."mutamerCount" - COALESCE(pc."systemCount", 0)) DESC
         LIMIT 500`,
       params
     );
