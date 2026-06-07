@@ -12,13 +12,24 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Switch } from "@/components/ui/switch";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { useAppContext } from "@/contexts/app-context";
+import { ACCOUNT_USAGE_LABELS_AR } from "@/lib/finance-account-usage";
 
 const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 const natureMap: Record<string, string> = { debit: "مدين", credit: "دائن" };
 
+// #1715: account-usage classification + how children inherit it. Mirrors the
+// backend financeAccountClassifier (ChildrenUsagePolicy + accountUsage).
+const USAGE_UNSET = "_unset";
+const CHILDREN_USAGE_POLICY_LABELS: Record<string, string> = {
+  inherit_locked: "إلزام تصنيف الأب (الأبناء يرثون ولا يُغيَّر)",
+  inherit_default: "وراثة افتراضية (قابلة للتغيير)",
+  mixed_allowed: "السماح بتصنيفات مختلطة للأبناء",
+  manual_required: "إلزام اختيار تصنيف يدوي لكل ابن",
+};
+
 const DRAFT_KEY = "finance_accounts_create";
 const SHARED = "__shared__";
-const INITIAL = { code: "", name: "", nameEn: "", type: "asset", parentCode: "", nature: "debit", allowPosting: true, isAnalytical: false, branchScope: SHARED };
+const INITIAL = { code: "", name: "", nameEn: "", type: "asset", parentCode: "", nature: "debit", allowPosting: true, isAnalytical: false, branchScope: SHARED, accountUsage: USAGE_UNSET, childrenUsagePolicy: "inherit_default" };
 
 export default function AccountsCreate() {
   const [, setLocation] = useLocation();
@@ -47,6 +58,9 @@ export default function AccountsCreate() {
       const payload = {
         ...rest,
         branchId: branchScope && branchScope !== SHARED ? Number(branchScope) : null,
+        // Sentinel → null so the backend treats "unset" as "inherit from
+        // parent / leave unclassified" (it runs the #1715 inheritance logic).
+        accountUsage: rest.accountUsage && rest.accountUsage !== USAGE_UNSET ? rest.accountUsage : null,
       };
       await createMut.mutateAsync(payload);
       clearDraft();
@@ -106,6 +120,23 @@ export default function AccountsCreate() {
               {filteredBranches.map((b) => (
                 <SelectItem key={b.id} value={String(b.id)}>خاص بفرع: {b.name}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="تصنيف الاستخدام (accountUsage)" hint="يحدّد كيف يُعامَل الحساب في طرق الدفع والترحيل (صندوق/بنك/عهدة/ذمم…). اتركه «يُورَّث من الأب» ليأخذ تصنيف الحساب الأب تلقائياً.">
+          <Select value={form.accountUsage} onValueChange={(v) => setForm((f) => ({ ...f, accountUsage: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={USAGE_UNSET}>— يُورَّث من الأب / غير مصنّف —</SelectItem>
+              {Object.entries(ACCOUNT_USAGE_LABELS_AR).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="سياسة استخدام الأبناء (childrenUsagePolicy)" hint="تحكم في تصنيف الحسابات الفرعية التي تُنشأ تحت هذا الحساب.">
+          <Select value={form.childrenUsagePolicy} onValueChange={(v) => setForm((f) => ({ ...f, childrenUsagePolicy: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(CHILDREN_USAGE_POLICY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
         </FormFieldWrapper>
