@@ -463,6 +463,47 @@ export function registerEventListeners() {
   eventBus.on("payroll.completed", async (payload) => {
     await logEvent("payroll.completed", payload);
     await logAudit("payroll.completed", { ...payload, action: "create" });
+    // Fan out a "payslip ready" notification to every employee in the
+    // run — each through their own channels (email/sms/whatsapp) in
+    // their preferred language, with their own net amount.
+    if (payload.companyId && payload.entityId) {
+      const lines = await rawQuery<{
+        employeeId: number | null;
+        netSalary: string | number | null;
+        period: string | null;
+        assignmentId: number | null;
+      }>(
+        `SELECT pl."employeeId", pl."netSalary", pr.period,
+                ea.id AS "assignmentId"
+         FROM payroll_lines pl
+         JOIN payroll_runs pr ON pr.id = pl."runId"
+         LEFT JOIN employee_assignments ea
+                ON ea."employeeId" = pl."employeeId"
+               AND ea."companyId" = pr."companyId"
+               AND ea.status = 'active'
+         WHERE pl."runId" = $1 AND pr."companyId" = $2 AND pl."deletedAt" IS NULL`,
+        [payload.entityId as number, payload.companyId],
+      ).catch(() => [] as Array<{ employeeId: number | null; netSalary: string | number | null; period: string | null; assignmentId: number | null }>);
+
+      for (const line of lines) {
+        if (!line.employeeId) continue;
+        const month = String(line.period ?? "—");
+        const amount = line.netSalary != null ? String(line.netSalary) : "0";
+        await notifyBusinessEvent({
+          companyId: payload.companyId,
+          templateKey: "payroll.ready",
+          templateVars: { month, amount },
+          fallbackTitle: "كشف الراتب جاهز",
+          fallbackBody: `كشف راتب شهر ${month} جاهز للمراجعة`,
+          assignmentId: line.assignmentId ?? undefined,
+          recipientUser: { type: "employee", id: line.employeeId },
+          priority: "normal",
+          refType: "payroll_run",
+          refId: payload.entityId as number,
+          actionUrl: `/my-payslip`,
+        });
+      }
+    }
   });
 
   eventBus.on("journal.entry.created", async (payload) => {
