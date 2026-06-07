@@ -232,6 +232,27 @@ check(
     `      await assertOperationValid(fromLegacyExpenseForm({ companyId, sourceAccountCode: sourceAcct, paymentMethod }));`,
   ),
 );
+check(
+  "account-code prefix logic IS flagged (#1715 guardrail #2)",
+  fires(
+    "account-code-startswith-in-finance-page",
+    `    const cashAccts = accounts.filter((a) => a.code?.startsWith("11") || a.code?.startsWith("12"));`,
+  ),
+);
+check(
+  "String(a.code).startsWith prefix logic IS flagged",
+  fires(
+    "account-code-startswith-in-finance-page",
+    `      .filter((a) => String(a.code).startsWith("23"))`,
+  ),
+);
+check(
+  "accountUsage-driven filtering is NOT flagged",
+  !fires(
+    "account-code-startswith-in-finance-page",
+    `    const cashAccts = accounts.filter((a) => isCashOrBankUsage(a.accountUsage));`,
+  ),
+);
 
 // ─── Save-button rate-limit rule (multiline) ────────────────────────────
 //
