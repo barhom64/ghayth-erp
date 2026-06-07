@@ -18,8 +18,10 @@
  * role_permissions per audit run. Audit fires daily + on-demand.
  *
  * The fix uses a single GROUP BY CTE (`role_perm_counts`) keyed by
- * `role_permissions.role`, then LEFT JOINs back to the assignment
- * query. COALESCE → 0 for roles that have no permission rows yet.
+ * role key, then LEFT JOINs back to the assignment query. COALESCE → 0
+ * for roles that have no grant rows yet. (#1791: the count source moved
+ * off the dropped legacy `role_permissions` onto v2 `rbac_role_grants`,
+ * which is strictly company-scoped — no global NULL-companyId bucket.)
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -47,7 +49,7 @@ describe("policyEngine.auditMaxPrivilege — N+1 fix", () => {
 
   it("uses a role_perm_counts CTE keyed by role", () => {
     expect(handler).toContain("WITH role_perm_counts AS");
-    expect(handler).toMatch(/GROUP BY role/);
+    expect(handler).toMatch(/GROUP BY r\.role_key/);
   });
 
   it("LEFT JOINs the CTE back to assignments by role name", () => {
@@ -60,8 +62,10 @@ describe("policyEngine.auditMaxPrivilege — N+1 fix", () => {
     expect(handler).toMatch(/COALESCE\(rpc\.c, 0\)\s+AS\s+"permCount"/);
   });
 
-  it("CTE scopes permissions to the company OR the global (NULL companyId) bucket", () => {
-    expect(handler).toMatch(/"companyId"\s*=\s*\$1\s+OR\s+"companyId"\s+IS\s+NULL/);
+  it("CTE scopes permissions to the company (rbac_roles are company-scoped)", () => {
+    // #1791: rbac_role_grants/rbac_roles have no global NULL-companyId bucket
+    // like legacy role_permissions did; scope is a plain company match.
+    expect(handler).toMatch(/r\."companyId"\s*=\s*\$1/);
   });
 
   it("preserves the active-assignment + employeeId filter", () => {

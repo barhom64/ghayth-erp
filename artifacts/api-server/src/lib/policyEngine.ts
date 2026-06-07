@@ -42,10 +42,7 @@ export async function getActiveRoleKeysForUser(
   companyId: number,
 ): Promise<string[]> {
   const rows = await rawQuery<{ role: string | null }>(
-    `SELECT "roleKey" AS role FROM user_roles
-       WHERE "userId" = $1 AND "companyId" = $2
-     UNION
-     SELECT r.role_key AS role FROM rbac_user_roles ur
+    `SELECT r.role_key AS role FROM rbac_user_roles ur
        JOIN rbac_roles r ON r.id = ur.role_id
        WHERE ur."userId" = $1 AND ur."companyId" = $2
          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
@@ -158,10 +155,11 @@ export async function auditMaxPrivilege(companyId: number): Promise<PolicyViolat
   // the outer join is one scan per assignment regardless of size.
   const rows = await rawQuery<{ userId: number; email: string; role: string; permCount: number }>(
     `WITH role_perm_counts AS (
-       SELECT role, COUNT(*)::int AS c
-         FROM role_permissions
-        WHERE "companyId" = $1 OR "companyId" IS NULL
-        GROUP BY role
+       SELECT r.role_key AS role, COUNT(*)::int AS c
+         FROM rbac_roles r
+         JOIN rbac_role_grants g ON g.role_id = r.id
+        WHERE r."companyId" = $1
+        GROUP BY r.role_key
      )
      SELECT u.id AS "userId", u.email, ea.role,
             COALESCE(rpc.c, 0) AS "permCount"
