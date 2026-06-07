@@ -48,7 +48,9 @@ describe("pilgrim detail — exemption card UI", () => {
   it("active-banner shows reason + 'منذ' date from server-side timestamp", () => {
     expect(PAGE).toContain('data-testid="exemption-active-banner"');
     expect(PAGE).toContain("المعتمر مستثنى من المسح اليومي للتأخّر");
-    expect(PAGE).toMatch(/formatDateAr\(data\.overstayExemptAt\)/);
+    // After the Hijri sweep the page renders timestamps via
+    // `formatUmrahDate` (dual Gregorian + Hijri); the test follows.
+    expect(PAGE).toMatch(/formatUmrahDate\(data\.overstayExemptAt\)/);
   });
 
   it("reason input is a textarea (operator can write a sentence)", () => {
