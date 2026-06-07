@@ -11,16 +11,19 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Switch } from "@/components/ui/switch";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { useAppContext } from "@/contexts/app-context";
 
 const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 const natureMap: Record<string, string> = { debit: "مدين", credit: "دائن" };
 
 const DRAFT_KEY = "finance_accounts_create";
-const INITIAL = { code: "", name: "", nameEn: "", type: "asset", parentCode: "", nature: "debit", allowPosting: true, isAnalytical: false };
+const SHARED = "__shared__";
+const INITIAL = { code: "", name: "", nameEn: "", type: "asset", parentCode: "", nature: "debit", allowPosting: true, isAnalytical: false, branchScope: SHARED };
 
 export default function AccountsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { filteredBranches } = useAppContext();
   const createMut = useApiMutation("/finance/accounts", "POST", [["accounts"], ["accounts-list"], ["accounts-posting"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
@@ -40,7 +43,12 @@ export default function AccountsCreate() {
       return;
     }
     try {
-      await createMut.mutateAsync(form);
+      const { branchScope, ...rest } = form;
+      const payload = {
+        ...rest,
+        branchId: branchScope && branchScope !== SHARED ? Number(branchScope) : null,
+      };
+      await createMut.mutateAsync(payload);
       clearDraft();
       toast({ title: "تم إضافة الحساب" });
       setLocation("/finance/accounts");
@@ -87,6 +95,17 @@ export default function AccountsCreate() {
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {Object.entries(natureMap).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="نطاق الحساب" hint="حساب مشترك يظهر لكل الفروع، أو حساب فرعي خاص بفرع واحد">
+          <Select value={form.branchScope} onValueChange={(v) => setForm((f) => ({ ...f, branchScope: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SHARED}>مشترك على مستوى الشركة</SelectItem>
+              {filteredBranches.map((b) => (
+                <SelectItem key={b.id} value={String(b.id)}>خاص بفرع: {b.name}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </FormFieldWrapper>

@@ -15,6 +15,8 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   present: { label: "حاضر", color: "text-status-success-foreground bg-status-success-surface" },
@@ -87,6 +89,7 @@ export default function MyAttendance() {
   if (isError) return <ErrorState />;
 
   const records: any[] = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(records);
   const monthly = data?.monthly;
 
   const presentDays = monthly?.presentDays ?? records.filter((r: any) => r.status === "present" || r.checkIn).length;
@@ -101,7 +104,31 @@ export default function MyAttendance() {
       breadcrumbs={[
         { href: "/my-space", label: "مساحاتي" },
         { label: "حضوري وانصرافي" },
-      ]} subtitle="سجل الحضور والانصراف الشهري">
+      ]} subtitle="سجل الحضور والانصراف الشهري"
+      actions={
+        <PrintButton
+          entityType="report_my_attendance"
+          entityId="list"
+          size="icon"
+          label="طباعة كشف الحضور"
+          payload={() => ({
+            entity: {
+              title: `كشف الحضور والانصراف — ${month}`,
+              total: printRows.length,
+              presentDays, absentDays, lateDays, totalDeduction,
+            },
+            items: printRows.map((r: any) => ({
+              "التاريخ": formatDateAr(r.date),
+              "الحضور": formatTimeAr(r.checkIn) || "—",
+              "الانصراف": formatTimeAr(r.checkOut) || "—",
+              "التأخير (د)": r.lateMinutes > 0 ? r.lateMinutes : "—",
+              "وقت إضافي (د)": r.overtimeMinutes > 0 ? r.overtimeMinutes : "—",
+              "خصم": Number(r.totalDeductions) > 0 ? Number(r.totalDeductions) : "—",
+              "الحالة": statusConfig[r.status]?.label || r.status,
+            })),
+          })}
+        />
+      }>
       <div className="flex items-center gap-3 mb-6">
         <label className="text-sm font-medium text-status-neutral-foreground">الشهر:</label>
         <input
@@ -139,6 +166,7 @@ export default function MyAttendance() {
       <DataTable
         columns={attendanceColumns}
         data={records}
+        onSortedDataChange={setPrintRows}
         emptyMessage="لا توجد سجلات حضور لهذا الشهر"
         emptyIcon={<Calendar size={36} className="opacity-40" />}
         searchPlaceholder="بحث بالتاريخ أو الحالة..."

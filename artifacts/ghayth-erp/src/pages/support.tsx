@@ -38,6 +38,8 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { formatDateAr } from "@/lib/formatters";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 function Support() {
   const [, navigate] = useLocation();
@@ -64,6 +66,7 @@ function Support() {
     dateField: "createdAt",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((t: any) => tagFilteredIds.has(t.id)) : preFiltered;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/support/tickets",
@@ -137,12 +140,37 @@ function Support() {
       subtitle="إدارة تذاكر الدعم الفني ومتابعة الطلبات"
       breadcrumbs={[{ label: "الدعم" }]}
       actions={
-        <Link href="/support/create">
-          <GuardedButton perm="support:create" className="gap-2">
-            <Plus className="h-4 w-4" />
-            تذكرة جديدة
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_support_tickets"
+            entityId="list"
+            size="icon"
+            label="طباعة قائمة التذاكر"
+            payload={() => ({
+              entity: {
+                title: "قائمة تذاكر الدعم",
+                total: printRows.length,
+                openTickets: stats?.openTickets ?? 0,
+                resolvedTickets: stats?.resolvedTickets ?? 0,
+              },
+              items: printRows.map((t: any) => ({
+                "الرقم": t.ref || "—",
+                "العنوان": t.title || "—",
+                "الفئة": t.category || "—",
+                "العميل": t.clientName || "—",
+                "المسؤول": t.assigneeName || "—",
+                "الأولوية": t.priority || "—",
+                "الحالة": t.status || "—",
+              })),
+            })}
+          />
+          <Link href="/support/create">
+            <GuardedButton perm="support:create" className="gap-2">
+              <Plus className="h-4 w-4" />
+              تذكرة جديدة
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <SupportTabsNav />
@@ -205,6 +233,7 @@ function Support() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
@@ -245,6 +274,7 @@ function KBManagement() {
   const [showNew, setShowNew] = useState(false);
 
   const filteredItems = applyFilters(items, filters, { searchFields: ["title", "category"], statusField: "status", dateField: "createdAt" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredItems);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/support/kb",
@@ -310,7 +340,26 @@ function KBManagement() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <AdvancedFilters config={{ searchPlaceholder: "بحث بالعنوان أو التصنيف...", statuses: [{ value: "published", label: "منشور" }, { value: "draft", label: "مسودة" }, { value: "archived", label: "مؤرشف" }] }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
-        {canWrite && <GuardedButton perm="support:create" size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />مقالة جديدة</GuardedButton>}
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_support_kb"
+            entityId="list"
+            size="icon"
+            label="طباعة قائمة قاعدة المعرفة"
+            payload={() => ({
+              entity: { title: "قاعدة المعرفة — مقالات الدعم", total: printRows.length },
+              items: printRows.map((it: any) => ({
+                "العنوان": it.title || "—",
+                "التصنيف": it.category || "—",
+                "المشاهدات": it.views ?? 0,
+                "مفيدة": it.helpful ?? 0,
+                "غير مفيدة": it.notHelpful ?? 0,
+                "الحالة": it.status || "—",
+              })),
+            })}
+          />
+          {canWrite && <GuardedButton perm="support:create" size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />مقالة جديدة</GuardedButton>}
+        </div>
       </div>
 
       {showNew && (
@@ -366,6 +415,7 @@ function KBManagement() {
           <DataTable
             columns={kbColumns}
             data={filteredItems}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

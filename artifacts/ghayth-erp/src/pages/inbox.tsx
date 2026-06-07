@@ -154,13 +154,38 @@ export default function Inbox() {
   // the query path entirely.
   const isDraftsFolder = folder === "drafts";
   const isCallsTab = tab === "calls";
+
+  // Entity filter — when the page is opened via /inbox?clientId=N (or
+  // ?supplierId / ?employeeId), narrow threads to that entity. Powers the
+  // "عرض كل المراسلات" link on client/supplier/employee detail pages so
+  // the inbox shows only their thread without forcing the operator to
+  // hunt with the search box.
+  const entityFilter = (() => {
+    if (typeof window === "undefined") return null;
+    const sp = new URLSearchParams(window.location.search);
+    const map: Array<[string, string]> = [
+      ["clientId", "clients"],
+      ["supplierId", "suppliers"],
+      ["employeeId", "employees"],
+    ];
+    for (const [param, relType] of map) {
+      const id = sp.get(param);
+      if (id) return { relatedType: relType, relatedId: Number(id) };
+    }
+    return null;
+  })();
+
   const threadsParams: string[] = [];
   if (tab !== "all" && tab !== "calls") threadsParams.push(`channel=${tab}`);
   if (folder !== "inbox") threadsParams.push(`folder=${folder}`);
+  if (entityFilter) {
+    threadsParams.push(`relatedType=${entityFilter.relatedType}`);
+    threadsParams.push(`relatedId=${entityFilter.relatedId}`);
+  }
   const threadsQs = threadsParams.length ? `?${threadsParams.join("&")}` : "";
 
   const { data: threadsResp, isLoading, refetch: refetchThreads } = useApiQuery<{ data: ThreadRow[] }>(
-    ["inbox-threads", tab, folder],
+    ["inbox-threads", tab, folder, entityFilter?.relatedType ?? "", String(entityFilter?.relatedId ?? "")],
     `/inbox/threads${threadsQs}`,
     { enabled: !isCallsTab && !isDraftsFolder },
   );
@@ -250,7 +275,23 @@ export default function Inbox() {
         </Card>
 
         {/* Tabs (channel filter) — only relevant when browsing threads, not drafts/calls */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-2">
+          {entityFilter && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2">
+              <span className="text-xs text-indigo-800">
+                مفلتر بمراسلات هذا الكيان:{" "}
+                <span className="font-mono font-semibold">{entityFilter.relatedType}#{entityFilter.relatedId}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => { if (typeof window !== "undefined") window.location.href = "/inbox"; }}
+                className="text-[11px] text-indigo-700 hover:underline"
+                data-testid="inbox-clear-entity-filter"
+              >
+                إلغاء الفلتر
+              </button>
+            </div>
+          )}
           <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setActiveThread(null); }} className="space-y-4">
             <TabsList>
               <TabsTrigger value="all">الكل</TabsTrigger>

@@ -5,6 +5,7 @@ import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency } from "@/lib/formatters";
 import { Scale, Users, AlertTriangle } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 // Reconciliation report — backs GET /api/umrah/reports/reconciliation
 // (PR #312). Three read-only diff tables: NUSK invoice totals vs posted
@@ -138,6 +139,55 @@ export default function UmrahReconciliation() {
       title="تقرير المطابقة — نسك ↔ النظام"
       subtitle="ثلاثة فحوصات للكشف عن انحرافات الاستيراد: مبالغ الفواتير، أعداد المعتمرين، تجاوزات بلا مخالفة مفتوحة"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المطابقة" }]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_reconciliation"
+          entityId="list"
+          size="icon"
+          label="طباعة تقرير المطابقة"
+          payload={() => ({
+            entity: {
+              title: "تقرير المطابقة — نسك ↔ النظام",
+              amountDiffsCount: summary.amountDiffs,
+              countDiffsCount: summary.countDiffs,
+              overstayGapsCount: summary.overstayGaps,
+            },
+            sections: [
+              {
+                title: "فروقات المبلغ",
+                rows: amountDiffs.map((r) => ({
+                  "رقم نسك": r.nuskInvoiceNumber,
+                  "الحالة": r.nuskStatus || "—",
+                  "إجمالي الملف": Number(r.fileTotal || 0),
+                  "AP مرحّل": Number(r.postedAp || 0),
+                  "إرجاع مرحّل": Number(r.postedRefund || 0),
+                  "الفرق": Number(r.diff || 0),
+                })),
+              },
+              {
+                title: "فروقات العدد",
+                rows: countDiffs.map((r) => ({
+                  "رقم نسك": r.nuskInvoiceNumber,
+                  "المجموعة": r.groupName || "—",
+                  "العدد بالملف": r.fileCount,
+                  "العدد بالنظام": r.systemCount,
+                  "الفرق": Number(r.fileCount) - Number(r.systemCount),
+                })),
+              },
+              {
+                title: "تجاوزات بلا مخالفة",
+                rows: overstayGaps.map((r) => ({
+                  "رقم نسك": r.nuskNumber,
+                  "المعتمر": r.fullName,
+                  "المجموعة": r.groupName || "—",
+                  "الوكيل الفرعي": r.subAgentName || "—",
+                  "أيام التجاوز": r.overstayDays,
+                })),
+              },
+            ],
+          })}
+        />
+      }
     >
       <UmrahTabsNav />
 
