@@ -64,6 +64,9 @@ const sendSchema = z.object({
   body: z.string().min(1, "نص الرسالة مطلوب").max(20000),
   relatedType: z.string().max(60).optional().nullable(),
   relatedId: z.number().int().positive().optional().nullable(),
+  // ISO 8601 datetime. When set, the row lands in outbound_queue with
+  // scheduledAt > NOW() so the cron worker leaves it alone until then.
+  scheduledAt: z.string().datetime({ offset: true }).optional().nullable(),
 });
 
 router.post("/send", authorize({ feature: "communications", action: "create" }), async (req, res) => {
@@ -81,6 +84,17 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
     }
     if (body.channel === "email" && !body.subject) {
       throw new ValidationError("عنوان البريد مطلوب", { field: "subject" });
+    }
+    if (body.scheduledAt) {
+      const when = new Date(body.scheduledAt);
+      // Reject obviously-broken values + dates in the past (no point
+      // scheduling something that already happened).
+      if (Number.isNaN(when.getTime())) {
+        throw new ValidationError("صيغة وقت الجدولة غير صحيحة", { field: "scheduledAt" });
+      }
+      if (when.getTime() < Date.now() - 60_000) {
+        throw new ValidationError("وقت الجدولة في الماضي", { field: "scheduledAt" });
+      }
     }
 
     const result = await sendMessage({
