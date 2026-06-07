@@ -10,6 +10,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   FormShell,
   FormTextField,
   FormTextareaField,
@@ -101,7 +102,26 @@ export function ComplianceActionsTab() {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <div className="flex-1">
-          <AdvancedFilters config={{ searchPlaceholder: "بحث بالإجراء أو اللائحة...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "done", label: "منجز" }, { value: "overdue", label: "متأخر" }], showDateRange: true }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
+          <AdvancedFilters
+            config={{ searchPlaceholder: "بحث بالإجراء أو اللائحة...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "done", label: "منجز" }, { value: "overdue", label: "متأخر" }], showDateRange: true }}
+            values={filters}
+            onChange={setFilters}
+            onExportCSV={() =>
+              exportToCSV(
+                filteredItems || [],
+                [
+                  { key: "title", label: "الإجراء" },
+                  { key: "regulation", label: "اللائحة" },
+                  { key: "owner", label: "المسؤول" },
+                  { key: "description", label: "الوصف" },
+                  { key: "dueDate", label: "تاريخ الاستحقاق" },
+                  { key: "status", label: "الحالة" },
+                ],
+                "إجراءات-امتثال",
+              )
+            }
+            resultCount={filteredItems.length}
+          />
         </div>
         {canWrite && <GuardedButton perm="governance:create" size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />إجراء جديد</GuardedButton>}
       </div>

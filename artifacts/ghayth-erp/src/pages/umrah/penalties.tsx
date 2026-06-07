@@ -10,6 +10,7 @@ import {
   AdvancedFilters,
   useFilters,
   PageShell,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
@@ -315,6 +316,21 @@ export default function UmrahPenalties() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filteredItems || [],
+            [
+              { key: "pilgrimName", label: "اسم المعتمر" },
+              { key: "passport", label: "الجواز" },
+              { key: "agentName", label: "الوكيل" },
+              { key: "kind", label: "نوع الغرامة" },
+              { key: "amount", label: "المبلغ" },
+              { key: "status", label: "الحالة" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "غرامات-العمرة",
+          )
+        }
         resultCount={filteredItems.length}
       />
 
