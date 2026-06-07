@@ -76,6 +76,7 @@ import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
 import { transportBillingCandidatesRouter } from "./transport-billing-candidates.js";
 import { transportBookingsRouter } from "./transport-bookings.js";
+import { vehicleProfileRouter } from "./vehicle-profile.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -384,6 +385,9 @@ router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRo
 // of /cargo so the URLs land at /transport/bookings, /transport/dispatch-orders,
 // /transport/locations. Same fleet-module + financial guards.
 router.use("/", requireModule("fleet"), requireGuards("financial"), transportBookingsRouter);
+// #1733 Vehicle profile sub-resources (Issue Comment 7). URLs land at
+// /fleet/vehicles/:vehicleId/{components,driver-assignments,maintenance-schedules}.
+router.use("/", requireModule("fleet"), requireGuards("financial"), vehicleProfileRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);
