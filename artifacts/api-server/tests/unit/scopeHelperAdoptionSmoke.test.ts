@@ -110,6 +110,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // (companyId, id) — no list cascade where buildScopedWhere would add
   // branch/department filtering. Manual companyId scoping is correct here.
   "transport-billing-candidates.ts",
+  // transport-bookings.ts: #1733 Booking + Dispatch layer. List queries
+  // filter by (companyId, status / customer / date window) — buildScopedWhere
+  // would unnecessarily branch-cascade. The booking lookup is by id keyed on
+  // (companyId, id) like the other transport surfaces.
+  "transport-bookings.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -194,9 +199,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 106,
+      total: 107,
       helperUsers: 36,
-      manualOnly: 67,
+      manualOnly: 68,
     });
   });
 });

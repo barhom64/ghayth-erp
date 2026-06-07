@@ -15561,6 +15561,48 @@ CREATE INDEX idx_billing_candidates_vehicle
 
 
 --
+-- #1733 Booking + Dispatch layer (Issue Comment 9) — PKs + UNIQUE + indexes
+--
+
+ALTER TABLE ONLY public.transport_locations ALTER COLUMN id SET DEFAULT nextval('public.transport_locations_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_locations ADD CONSTRAINT transport_locations_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_transport_locations_company
+  ON public.transport_locations ("companyId", "isActive") WHERE "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_bookings ALTER COLUMN id SET DEFAULT nextval('public.transport_bookings_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_bookings ADD CONSTRAINT transport_bookings_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.transport_bookings ADD CONSTRAINT uq_transport_booking_number UNIQUE ("companyId", "bookingNumber");
+CREATE INDEX IF NOT EXISTS idx_bookings_company_status
+  ON public.transport_bookings ("companyId", status, "requestedPickupDate") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_bookings_customer
+  ON public.transport_bookings ("companyId", "customerId", "requestedPickupDate" DESC)
+  WHERE "deletedAt" IS NULL AND "customerId" IS NOT NULL;
+
+ALTER TABLE ONLY public.transport_booking_lines ALTER COLUMN id SET DEFAULT nextval('public.transport_booking_lines_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_booking_lines ADD CONSTRAINT transport_booking_lines_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.transport_booking_lines ADD CONSTRAINT uq_booking_line UNIQUE ("bookingId", "lineNumber");
+CREATE INDEX IF NOT EXISTS idx_booking_lines_booking
+  ON public.transport_booking_lines ("bookingId") WHERE "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_dispatch_orders ALTER COLUMN id SET DEFAULT nextval('public.transport_dispatch_orders_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_dispatch_orders ADD CONSTRAINT transport_dispatch_orders_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_dispatch_company_window
+  ON public.transport_dispatch_orders ("companyId", "scheduledStartAt", "scheduledEndAt")
+  WHERE status NOT IN ('declined', 'cancelled');
+CREATE INDEX IF NOT EXISTS idx_dispatch_driver_window
+  ON public.transport_dispatch_orders ("driverId", "scheduledStartAt")
+  WHERE status NOT IN ('declined', 'cancelled');
+CREATE INDEX IF NOT EXISTS idx_dispatch_vehicle_window
+  ON public.transport_dispatch_orders ("vehicleId", "scheduledStartAt")
+  WHERE status NOT IN ('declined', 'cancelled');
+
+ALTER TABLE ONLY public.vehicle_location_snapshots ALTER COLUMN id SET DEFAULT nextval('public.vehicle_location_snapshots_id_seq'::regclass);
+ALTER TABLE ONLY public.vehicle_location_snapshots ADD CONSTRAINT vehicle_location_snapshots_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_vehicle_snapshots_latest
+  ON public.vehicle_location_snapshots ("companyId", "vehicleId", "capturedAt" DESC);
+
+
+--
 -- Multi-assignee tasks (migration 250) — task_assignees junction + tasks.createdBy
 --
 
