@@ -16,6 +16,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { PrintButton } from "@/components/shared/print-button";
 
 // Replaces the old `if (!form.name.trim())` toast guard. Schema also
 // trims so leading/trailing whitespace can't slip through.
@@ -148,9 +149,26 @@ export function CompaniesTab() {
           <Building2 className="h-5 w-5" />
           إدارة الشركات
         </h3>
-        <GuardedButton perm="admin:create" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
-          {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />شركة جديدة</>}
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_settings_companies"
+            entityId="list"
+            size="icon"
+            label="طباعة قائمة الشركات"
+            payload={() => ({
+              entity: { title: "قائمة الشركات", total: items.length },
+              items: items.map((r: any) => ({
+                "اسم الشركة": r.name || "—",
+                "بالإنجليزية": r.nameEn || "—",
+                "الرقم الضريبي": r.vatNumber || "—",
+                "السجل التجاري": r.crNumber || "—",
+              })),
+            })}
+          />
+          <GuardedButton perm="admin:create" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
+            {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />شركة جديدة</>}
+          </GuardedButton>
+        </div>
       </div>
 
       {lastBootstrapOps && (

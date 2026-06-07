@@ -25,7 +25,12 @@ const NAV = readFileSync(
 
 describe("umrah route — /import/preview wired through the engine", () => {
   it("imports previewMutamersImport + previewVouchersImport", () => {
-    expect(ROUTE).toMatch(/import\s*\{[\s\S]{1,400}previewMutamersImport,[\s\S]{1,80}previewVouchersImport,?[\s\S]{1,80}\}\s*from\s*"\.\.\/lib\/umrahImportEngine\.js"/);
+    // Both must be imported from the engine. The import block carries
+    // other engine exports too (normalizeImportRows, the header maps,
+    // UMRAH_FIELD_LABELS_AR), so the windows between the two names and
+    // the closing brace are generous — this pins presence + source,
+    // not field ordering.
+    expect(ROUTE).toMatch(/import\s*\{[\s\S]{1,600}previewMutamersImport,[\s\S]{1,400}previewVouchersImport,?[\s\S]{1,400}\}\s*from\s*"\.\.\/lib\/umrahImportEngine\.js"/);
   });
 
   it("delegates by fileType: vouchers → previewVouchersImport, default → previewMutamersImport", () => {

@@ -161,14 +161,10 @@ const CATEGORIES: WorkflowCategory[] = [
 
 export default function FinanceWorkflowsHubPage() {
   const [search, setSearch] = useState("");
-  const [showNewOnly, setShowNewOnly] = useState(false);
 
   const filtered = useMemo(() => {
     return CATEGORIES.map(cat => {
       let entries = cat.entries;
-      if (showNewOnly) {
-        entries = entries.filter(e => e.isNew);
-      }
       if (search) {
         const s = search.toLowerCase();
         entries = entries.filter(e =>
@@ -178,10 +174,9 @@ export default function FinanceWorkflowsHubPage() {
       }
       return { ...cat, entries };
     }).filter(cat => cat.entries.length > 0);
-  }, [search, showNewOnly]);
+  }, [search]);
 
   const totalEntries = CATEGORIES.reduce((s, c) => s + c.entries.length, 0);
-  const newEntries = CATEGORIES.reduce((s, c) => s + c.entries.filter(e => e.isNew).length, 0);
   const visibleEntries = filtered.reduce((s, c) => s + c.entries.length, 0);
 
   return (
@@ -203,7 +198,6 @@ export default function FinanceWorkflowsHubPage() {
               "المجموعة": c.title,
               "العنوان": e.title,
               "الوصف": e.description,
-              "جديد": e.isNew ? "نعم" : "لا",
             }))),
           }}
         />
@@ -226,34 +220,15 @@ export default function FinanceWorkflowsHubPage() {
               />
             </div>
           </div>
-          <Button
-            variant={showNewOnly ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowNewOnly(s => !s)}
-          >
-            <Sparkles className="w-4 h-4 ml-1" />
-            {showNewOnly ? "إظهار الكل" : `الجديد فقط (${newEntries})`}
-          </Button>
         </CardContent>
       </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-2 gap-3 mb-4">
         <Card>
           <CardContent className="pt-6">
             <div className="text-xs text-muted-foreground mb-1">إجمالي سير العمل</div>
             <div className="text-2xl font-bold tabular-nums">{totalEntries}</div>
-          </CardContent>
-        </Card>
-        <Card className={newEntries > 0 ? "border-status-success-foreground" : ""}>
-          <CardContent className="pt-6">
-            <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-status-success-foreground" />
-              جديد في هذه الدفعة
-            </div>
-            <div className="text-2xl font-bold tabular-nums text-status-success-foreground">
-              {newEntries}
-            </div>
           </CardContent>
         </Card>
         <Card>
@@ -296,11 +271,6 @@ export default function FinanceWorkflowsHubPage() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1 mb-0.5">
                                   <span className="font-semibold text-sm">{e.title}</span>
-                                  {e.isNew && (
-                                    <Badge className="text-[9px] h-4 bg-status-success-foreground text-white">
-                                      جديد
-                                    </Badge>
-                                  )}
                                 </div>
                                 <div className="text-[11px] text-muted-foreground leading-tight">
                                   {e.description}
