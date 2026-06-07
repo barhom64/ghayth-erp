@@ -59,6 +59,7 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node
         <Link href={`/finance/ledger/${node.code}`} className="flex-1 min-w-0 truncate font-medium text-gray-900 hover:text-status-info-foreground cursor-pointer" title={node.name}>
           {node.name}
           {node.nameEn && <span className="text-muted-foreground text-xs ms-2 font-normal">{node.nameEn}</span>}
+          {node.branchId && <Badge className="bg-teal-100 text-teal-700 text-xs ms-2 font-normal">خاص بفرع</Badge>}
         </Link>
 
         <div className="w-20 flex-shrink-0 flex justify-center">
