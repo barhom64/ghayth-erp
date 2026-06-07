@@ -27,6 +27,10 @@ const TRANSPORT = readFileSync(
   join(import.meta.dirname!, "../../../ghayth-erp/src/pages/umrah/transport.tsx"),
   "utf8",
 );
+const AGENTS = readFileSync(
+  join(import.meta.dirname!, "../../../ghayth-erp/src/pages/umrah/agents.tsx"),
+  "utf8",
+);
 
 describe("violations page — print payload uses the on-screen status labels", () => {
   it("STATUS_LABEL dictionary is still the canonical (regression guard)", () => {
@@ -46,6 +50,24 @@ describe("violations page — print payload uses the on-screen status labels", (
     expect(PAGE).toMatch(/"الحالة":\s*STATUS_LABEL\[v\.status as ViolationStatus\]\?\.label \?\? v\.status \?\? "—"/);
     // And the legacy raw fallback is gone.
     expect(PAGE).not.toMatch(/"الحالة":\s*v\.status\s*\|\|\s*"—"/);
+  });
+});
+
+describe("agents page — print payload uses STATUS_MAP via resolveStatus", () => {
+  it("resolveStatus is imported from @workspace/ui-core", () => {
+    // The page already imports PageStatusBadge from ui-core; pulling in
+    // resolveStatus from the same module lets the print payload route
+    // raw enum values through the canonical Arabic labels without
+    // duplicating a dictionary on the page.
+    expect(AGENTS).toMatch(/import\s*\{[^}]*\bresolveStatus\b[^}]*\}\s*from\s*"@workspace\/ui-core"/);
+  });
+
+  it("print payload resolves a.status through resolveStatus", () => {
+    // The cell is "نشط" (from STATUS_MAP.shared) when the row is
+    // active, and "—" when status is null. Forward-compat: unknown enums
+    // fall through to the raw value so the cell is never blank.
+    expect(AGENTS).toMatch(/"الحالة":\s*\(a\.status && resolveStatus\(a\.status\)\?\.label\) \?\? a\.status \?\? "—"/);
+    expect(AGENTS).not.toMatch(/"الحالة":\s*a\.status\s*\|\|\s*"—"/);
   });
 });
 
