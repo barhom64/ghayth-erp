@@ -1922,10 +1922,16 @@ const onboardSchema = z.object({
   branchId: z.coerce.number().int().positive().optional().nullable(),
   departmentId: z.coerce.number().int().positive().optional().nullable(),
   jobTitle: z.string().optional(),
+  // Picking a configured job title auto-provisions its default RBAC role +
+  // custody policy (job_titles.defaultRoleKey / opensCustody, seeded by
+  // migration 249) so activating a new employee is one choice, not a manual
+  // role hunt. Explicit `roles` below still override / extend it.
+  jobTitleId: z.coerce.number().int().positive().optional().nullable(),
   salary: z.coerce.number().optional(),
   // account
   password: z.string().min(8, "كلمة المرور 8 أحرف على الأقل").optional(),
-  // roles — one user, MULTIPLE roles, each with its own scope (#1413 core rule)
+  // roles — one user, MULTIPLE roles, each with its own scope (#1413 core rule).
+  // Optional: a job title with a defaultRoleKey can supply the role instead.
   roles: z
     .array(
       z.object({
@@ -1934,7 +1940,8 @@ const onboardSchema = z.object({
         departmentId: z.coerce.number().int().positive().optional().nullable(),
       }),
     )
-    .min(1, "يجب اختيار دور واحد على الأقل"),
+    .optional()
+    .default([]),
 });
 
 router.post("/onboard", authorize({ feature: "admin", action: "update" }), async (req, res) => {
@@ -1954,10 +1961,37 @@ router.post("/onboard", authorize({ feature: "admin", action: "update" }), async
       throw new ConflictError("البريد الإلكتروني مستخدم مسبقاً");
     }
 
+    // ── Job-title-driven activation (migration 249) ──
+    // A picked job title supplies its defaultRoleKey + opensCustody + display
+    // name, so a new employee is activated with the right role automatically.
+    // Explicit roles in the body still take precedence and are merged in.
+    const roleKeys = new Set(d.roles.map((r) => r.roleKey));
+    const wantedRoles = [...d.roles];
+    let jobTitleName = d.jobTitle;
+    let opensCustody = false;
+    if (d.jobTitleId) {
+      const [jt] = await rawQuery<{ name: string; defaultRoleKey: string | null; opensCustody: boolean }>(
+        `SELECT name, "defaultRoleKey", "opensCustody" FROM job_titles
+          WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
+        [d.jobTitleId, companyId],
+      );
+      if (!jt) throw new ValidationError(`المسمى الوظيفي غير موجود: ${d.jobTitleId}`);
+      if (!jobTitleName) jobTitleName = jt.name;
+      opensCustody = Boolean(jt.opensCustody);
+      // Auto-add the title's default role when the admin didn't already pick it.
+      if (jt.defaultRoleKey && !roleKeys.has(jt.defaultRoleKey)) {
+        wantedRoles.unshift({ roleKey: jt.defaultRoleKey, branchId: null, departmentId: null });
+        roleKeys.add(jt.defaultRoleKey);
+      }
+    }
+    if (wantedRoles.length === 0) {
+      throw new ValidationError("اختر دوراً واحداً على الأقل، أو مسمى وظيفياً له دور افتراضي");
+    }
+
     // Resolve EVERY role key to an rbac_roles.id up front so a bad key fails
     // the whole request instead of half-onboarding the person (#1413 §6).
     const resolvedRoles: { roleId: number; roleKey: string; branchId: number | null; departmentId: number | null }[] = [];
-    for (const r of d.roles) {
+    for (const r of wantedRoles) {
       const roleRow = await rawQuery<{ id: number }>(
         `SELECT id FROM rbac_roles WHERE role_key = $1 AND ("companyId" = $2 OR "companyId" IS NULL) ORDER BY "companyId" NULLS LAST LIMIT 1`,
         [r.roleKey, companyId],
@@ -2001,9 +2035,9 @@ router.post("/onboard", authorize({ feature: "admin", action: "update" }), async
       const employeeId = empRes.rows[0].id;
 
       await tx.query(
-        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle",role,salary,"hireDate","isPrimary",status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,'active')`,
-        [employeeId, companyId, defaultBranchId, d.departmentId ?? null, d.jobTitle || "موظف", primaryRole, d.salary ?? 0, todayISO()],
+        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,'active')`,
+        [employeeId, companyId, defaultBranchId, d.departmentId ?? null, jobTitleName || "موظف", d.jobTitleId ?? null, primaryRole, d.salary ?? 0, todayISO()],
       );
 
       const userRes = await tx.query(
@@ -2021,6 +2055,25 @@ router.post("/onboard", authorize({ feature: "admin", action: "update" }), async
            ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
           [userId, companyId, rr.roleId, rr.branchId, rr.departmentId, i === 0, scope.userId],
         );
+      }
+
+      // Job-title-driven custody account (mirrors employees.ts Step 8b). Soft —
+      // the employee is still activated if the chart account 1400 is missing.
+      if (opensCustody) {
+        const coa = await tx.query<{ id: number }>(
+          `SELECT id FROM chart_of_accounts
+            WHERE "companyId" = $1 AND code = '1400' AND "deletedAt" IS NULL LIMIT 1`,
+          [companyId],
+        );
+        if (coa.rows.length > 0) {
+          await tx.query(
+            `INSERT INTO subsidiary_accounts ("companyId","entityType","entityId","accountType","accountId","isActive")
+             VALUES ($1,'employee',$2,'custody',$3,true) ON CONFLICT DO NOTHING`,
+            [companyId, employeeId, coa.rows[0].id],
+          );
+        } else {
+          logger.warn({ companyId }, "[onboard] chart_of_accounts 1400 missing — custody sub-account skipped");
+        }
       }
       return { employeeId, userId };
     });
