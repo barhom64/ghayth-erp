@@ -150,14 +150,27 @@ async function createUserIfNotExists(
   const userId = userRes.rows[0].id;
   logger.info({ userId, email: user.email }, "Bootstrap created user");
 
-  // 4. Create user_role
+  // 4. Assign the v2 role (rbac_user_roles → rbac_roles). #1791 — legacy
+  //    user_roles removed; ensure the role exists then bind the user to it.
   const rd = user.roleDefinition;
   await client.query(
-    `INSERT INTO user_roles ("userId", "roleKey", label, level, modules, "companyId", "createdAt")
-     VALUES ($1, $2, $3, $4, $5, $6, NOW())
-     ON CONFLICT ("userId", "roleKey", "companyId") DO NOTHING`,
-    [userId, rd.roleKey, rd.label, rd.level, JSON.stringify(rd.modules), companyId],
+    `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
+     VALUES ($1, $2, $3, $4, '#3b82f6', true)
+     ON CONFLICT ("companyId", role_key) DO NOTHING`,
+    [companyId, rd.roleKey, rd.label, rd.level],
   );
+  const { rows: roleRows } = await client.query<{ id: number }>(
+    `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = $2`,
+    [companyId, rd.roleKey],
+  );
+  if (roleRows[0]) {
+    await client.query(
+      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary)
+       VALUES ($1, $2, $3, true)
+       ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+      [userId, companyId, roleRows[0].id],
+    );
+  }
   logger.info({ roleKey: rd.roleKey, level: rd.level, email: user.email }, "Bootstrap assigned role to user");
 
   return true;
@@ -183,20 +196,25 @@ async function ensureAdminDriverCapability(
   const adminEmployeeId: number | null = adminRows[0].employeeId;
 
   // 1. Driver role in the picker. The role picker (الصفة) is fed by the login
-  //    `userRoles` union, whose legacy half reads user_roles. Selecting "driver"
-  //    makes dashboard.tsx redirect the admin to /me/driver.
-  const { rows: existingRole } = await client.query(
-    `SELECT id FROM user_roles WHERE "userId" = $1 AND "roleKey" = 'driver' AND "companyId" = $2 LIMIT 1`,
-    [adminUserId, companyId],
+  //    `userRoles`, now sourced from rbac_user_roles → rbac_roles (#1791).
+  //    Selecting "driver" makes dashboard.tsx redirect the admin to /me/driver.
+  await client.query(
+    `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
+     VALUES ($1, 'driver', 'سائق', 10, '#0d9488', true)
+     ON CONFLICT ("companyId", role_key) DO NOTHING`,
+    [companyId],
   );
-  if (existingRole.length === 0) {
-    // ON CONFLICT (matches unique user_roles_userId_roleKey_companyId_key) keeps
-    // this race-safe under concurrent boots in addition to the check above.
+  const { rows: driverRoleRows } = await client.query<{ id: number }>(
+    `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = 'driver' LIMIT 1`,
+    [companyId],
+  );
+  if (driverRoleRows[0]) {
+    // is_primary=false so it never displaces the admin's owner primary role.
     const { rowCount } = await client.query(
-      `INSERT INTO user_roles ("userId", "roleKey", label, level, modules, "companyId", "createdAt")
-       VALUES ($1, 'driver', $2, 10, $3, $4, NOW())
-       ON CONFLICT ("userId", "roleKey", "companyId") DO NOTHING`,
-      [adminUserId, "سائق", JSON.stringify(["home", "fleet"]), companyId],
+      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary)
+       VALUES ($1, $2, $3, false)
+       ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+      [adminUserId, companyId, driverRoleRows[0].id],
     );
     if (rowCount && rowCount > 0) {
       logger.info({ userId: adminUserId }, "Bootstrap granted admin the driver (سائق) role");
