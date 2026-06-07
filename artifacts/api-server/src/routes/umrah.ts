@@ -2586,6 +2586,183 @@ router.post("/transport/:id/assign-pilgrims", authorize({ feature: "umrah", acti
   } catch (err) { handleRouteError(err, res, "Assign pilgrims to transport error"); }
 });
 
+// ─── Bus manifest: check-in + seat allocation (migration 267) ──────
+// The morning-of dispatcher flow: every pilgrim on the assigned list
+// gets checked in as they board the bus. Each row's `checkedInAt` +
+// `checkedInBy` carries the audit trail. `noShow` flags pilgrims the
+// dispatcher waited for and gave up on — used by downstream reports
+// to surface "we left behind pilgrim X".
+
+const manifestRowSchema = z.object({
+  pilgrimId: z.coerce.number().int().positive(),
+  seatNumber: z.string().max(10).nullable().optional(),
+  noShow: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+});
+
+const manifestBulkSchema = z.object({
+  rows: z.array(manifestRowSchema).min(1, "أدخل صفًا واحدًا على الأقل"),
+});
+
+router.get("/transport/:id/manifest", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const transportId = parseId(req.params.id, "id");
+    const [transport] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [transportId, scope.companyId],
+    );
+    if (!transport) throw new NotFoundError("رحلة النقل غير موجودة");
+    // Join the manifest rows back to the pilgrim record so the
+    // dispatcher sees names + phones + NUSK numbers alongside the
+    // seat / check-in status. Ordered by seat first then name so the
+    // printed sheet matches the bus layout.
+    const rows = await rawQuery(
+      `SELECT tp.id            AS "manifestRowId",
+              tp."pilgrimId",
+              p."fullName",
+              p."passportNumber",
+              p."nuskNumber",
+              p.phone,
+              tp."seatNumber",
+              tp."checkedInAt",
+              tp."checkedInBy",
+              tp."noShow",
+              tp.notes
+         FROM umrah_transport_pilgrims tp
+    LEFT JOIN umrah_pilgrims p
+           ON p.id = tp."pilgrimId"
+          AND p."companyId" = tp."companyId"
+          AND p."deletedAt" IS NULL
+        WHERE tp."transportId" = $1
+          AND tp."companyId"   = $2
+        ORDER BY tp."seatNumber" NULLS LAST, p."fullName"`,
+      [transportId, scope.companyId],
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) { handleRouteError(err, res, "Manifest fetch error"); }
+});
+
+router.post("/transport/:id/check-in", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const transportId = parseId(req.params.id, "id");
+    const b = zodParse(manifestRowSchema.safeParse(req.body));
+    // Trip must exist + be active. Completed/cancelled trips can't
+    // accept new check-ins — protect against a stale tab pressing
+    // the button after the operator already closed the trip.
+    const [trip] = await rawQuery<{ status: string }>(
+      `SELECT status FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [transportId, scope.companyId],
+    );
+    if (!trip) throw new NotFoundError("رحلة النقل غير موجودة");
+    if (trip.status === "completed" || trip.status === "cancelled") {
+      throw new ConflictError("لا يمكن تسجيل ركوب لرحلة مكتملة أو ملغاة");
+    }
+    // The pilgrim must already be assigned to this trip via the join
+    // table — manifest check-in doesn't auto-assign (assign-pilgrims
+    // is a separate authorised step).
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (b.noShow === true) {
+      sets.push(`"noShow" = TRUE`);
+      sets.push(`"checkedInAt" = NULL`);
+      sets.push(`"checkedInBy" = NULL`);
+    } else {
+      sets.push(`"noShow" = FALSE`);
+      sets.push(`"checkedInAt" = NOW()`);
+      params.push(scope.userId);
+      sets.push(`"checkedInBy" = $${params.length}`);
+    }
+    if (b.seatNumber !== undefined) {
+      params.push(b.seatNumber);
+      sets.push(`"seatNumber" = $${params.length}`);
+    }
+    if (b.notes !== undefined) {
+      params.push(b.notes);
+      sets.push(`"notes" = $${params.length}`);
+    }
+    params.push(transportId, b.pilgrimId, scope.companyId);
+    const { affectedRows } = await rawExecute(
+      `UPDATE umrah_transport_pilgrims
+          SET ${sets.join(", ")}
+        WHERE "transportId" = $${params.length - 2}
+          AND "pilgrimId"   = $${params.length - 1}
+          AND "companyId"   = $${params.length}`,
+      params,
+    );
+    if (!affectedRows) {
+      throw new NotFoundError("المعتمر غير مُسند لهذه الرحلة");
+    }
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: b.noShow ? "umrah.transport.no_show" : "umrah.transport.checked_in",
+      entity: "umrah_transport", entityId: transportId,
+      details: JSON.stringify({ pilgrimId: b.pilgrimId, seatNumber: b.seatNumber ?? null }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "Manifest check-in error"); }
+});
+
+router.post("/transport/:id/check-in-bulk", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const transportId = parseId(req.params.id, "id");
+    const { rows } = zodParse(manifestBulkSchema.safeParse(req.body));
+    const [trip] = await rawQuery<{ status: string }>(
+      `SELECT status FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [transportId, scope.companyId],
+    );
+    if (!trip) throw new NotFoundError("رحلة النقل غير موجودة");
+    if (trip.status === "completed" || trip.status === "cancelled") {
+      throw new ConflictError("لا يمكن تسجيل ركوب لرحلة مكتملة أو ملغاة");
+    }
+    let updated = 0;
+    let skipped = 0;
+    await withTransaction(async (client) => {
+      for (const row of rows) {
+        const sets: string[] = [];
+        const params: unknown[] = [];
+        if (row.noShow === true) {
+          sets.push(`"noShow" = TRUE`);
+          sets.push(`"checkedInAt" = NULL`);
+          sets.push(`"checkedInBy" = NULL`);
+        } else {
+          sets.push(`"noShow" = FALSE`);
+          sets.push(`"checkedInAt" = NOW()`);
+          params.push(scope.userId);
+          sets.push(`"checkedInBy" = $${params.length}`);
+        }
+        if (row.seatNumber !== undefined) {
+          params.push(row.seatNumber);
+          sets.push(`"seatNumber" = $${params.length}`);
+        }
+        if (row.notes !== undefined) {
+          params.push(row.notes);
+          sets.push(`"notes" = $${params.length}`);
+        }
+        params.push(transportId, row.pilgrimId, scope.companyId);
+        const r = await client.query(
+          `UPDATE umrah_transport_pilgrims
+              SET ${sets.join(", ")}
+            WHERE "transportId" = $${params.length - 2}
+              AND "pilgrimId"   = $${params.length - 1}
+              AND "companyId"   = $${params.length}`,
+          params,
+        );
+        if ((r.rowCount ?? 0) > 0) updated++;
+        else skipped++;
+      }
+    });
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.transport.bulk_check_in", entity: "umrah_transport", entityId: transportId,
+      details: JSON.stringify({ updated, skipped, total: rows.length }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json({ updated, skipped, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Manifest bulk check-in error"); }
+});
+
 // Surface the built-in Arabic-header dictionaries to the wizard so the
 // column-mapping step can pre-fill the operator's choices for known
 // NUSK / MOFA layouts. The operator only types when their source uses
