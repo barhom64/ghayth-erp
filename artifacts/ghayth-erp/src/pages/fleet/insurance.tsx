@@ -11,6 +11,7 @@ import {
   useFilters,
   applyFilters,
   PageShell,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -96,6 +97,24 @@ export default function InsurancePage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "plateNumber", label: "رقم اللوحة" },
+              { key: "vehicleName", label: "المركبة" },
+              { key: "insurer", label: "شركة التأمين" },
+              { key: "policyNumber", label: "رقم الوثيقة" },
+              { key: "startDate", label: "تاريخ البدء" },
+              { key: "endDate", label: "تاريخ الانتهاء" },
+              { key: "daysToExpiry", label: "أيام للانتهاء" },
+              { key: "premium", label: "القسط" },
+              { key: "coverageType", label: "نوع التغطية" },
+              { key: "status", label: "الحالة" },
+            ],
+            "وثائق-التأمين",
+          )
+        }
         resultCount={filtered.length}
       />
 
