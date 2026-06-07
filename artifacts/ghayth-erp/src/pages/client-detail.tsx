@@ -296,39 +296,11 @@ export default function ClientDetail() {
                   </div>
                   {client?.phone && <div>
                     <p className="text-xs text-muted-foreground">الجوال</p>
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={`tel:${client.phone.replace(/[^0-9+]/g, "")}`}
-                        className="font-medium text-status-info-foreground hover:underline inline-flex items-center gap-1"
-                        dir="ltr"
-                        data-testid="client-phone-tel"
-                      >
-                        <Phone className="h-3 w-3" />
-                        {client.phone}
-                      </a>
-                      <a
-                        href={`https://wa.me/${client.phone.replace(/[^0-9]/g, "")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="واتساب"
-                        className="text-xs text-emerald-600 hover:underline"
-                        data-testid="client-phone-wa"
-                      >
-                        واتساب
-                      </a>
-                    </div>
+                    <p className="font-medium" dir="ltr">{client?.phone}</p>
                   </div>}
                   {client?.email && <div>
                     <p className="text-xs text-muted-foreground">البريد</p>
-                    <a
-                      href={`mailto:${client.email}`}
-                      className="font-medium text-xs text-status-info-foreground hover:underline inline-flex items-center gap-1"
-                      dir="ltr"
-                      data-testid="client-email-mailto"
-                    >
-                      <Mail className="h-3 w-3" />
-                      {client.email}
-                    </a>
+                    <p className="font-medium text-xs">{client?.email}</p>
                   </div>}
                   <div>
                     <p className="text-xs text-muted-foreground">المصدر</p>
@@ -341,8 +313,6 @@ export default function ClientDetail() {
                 </div>
               </CardContent>
             </Card>
-
-            <ContactSummaryCard clientId={id ?? ""} />
 
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
@@ -698,7 +668,7 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "tenancies" && (
-        <ClientRelationshipCard<any>
+        <ClientRelationshipCard
           icon={Home}
           title="الإيجارات المرتبطة"
           emptyMessage="لا توجد إيجارات مرتبطة بهذا العميل — اربط مستأجراً من صفحة تفاصيله ليظهر هنا"
@@ -721,7 +691,7 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "legal" && (
-        <ClientRelationshipCard<any>
+        <ClientRelationshipCard
           icon={Scale}
           title="القضايا القانونية"
           emptyMessage="لا توجد قضايا قانونية مرتبطة بهذا العميل"
@@ -1141,79 +1111,5 @@ function PriorityBadge({ priority }: { priority: string }) {
     <Badge className={cn("text-[10px]", colors[priority] || "bg-surface-subtle text-status-neutral-foreground")}>
       {labels[priority] || priority}
     </Badge>
-  );
-}
-
-// ─── ContactSummaryCard ────────────────────────────────────────────
-// "When did we last contact this client, and through which channel?"
-// Pulls /clients/:id/contact-summary which surfaces the most recent
-// message_log row matching the client's phone/email + a per-channel
-// count breakdown. Saves the operator a trip to /inbox + manual filter.
-function ContactSummaryCard({ clientId }: { clientId: string }) {
-  const { data } = useApiQuery<{
-    data: {
-      lastContact: {
-        id: number; channel: string; direction: string;
-        fromAddress: string | null; toAddress: string | null;
-        subject: string | null; createdAt: string;
-      } | null;
-      channelCounts: Array<{ channel: string; count: number }>;
-      totalCount: number;
-    };
-  }>(["client-contact-summary", clientId], `/clients/${clientId}/contact-summary`, !!clientId);
-
-  const summary = data?.data;
-  if (!summary) return null;
-
-  const channelLabel: Record<string, string> = {
-    email: "البريد", sms: "SMS", whatsapp: "واتساب", pbx: "السنترال",
-    internal: "داخلي", push: "تنبيه", in_app: "داخل النظام",
-  };
-
-  return (
-    <Card className="border-0 shadow-sm">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <MessageCircle className="w-4 h-4 text-indigo-500" /> آخر تواصل
-          {summary.totalCount > 0 && (
-            <Badge variant="outline" className="text-[10px] ms-auto">{summary.totalCount} رسالة</Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {summary.lastContact ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Badge variant="outline" className="text-[10px]">
-                {channelLabel[summary.lastContact.channel] || summary.lastContact.channel}
-                {" · "}
-                {summary.lastContact.direction === "inbound" ? "وارد" : "صادر"}
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                {formatDateAr(summary.lastContact.createdAt)}
-              </span>
-            </div>
-            {summary.lastContact.subject && (
-              <p className="text-sm font-medium line-clamp-1">{summary.lastContact.subject}</p>
-            )}
-            <Link href={`/inbox?clientId=${clientId}`} className="text-xs text-status-info-foreground hover:underline inline-flex items-center gap-1">
-              <MessageCircle className="h-3 w-3" />
-              عرض كل المراسلات
-            </Link>
-            {summary.channelCounts.length > 1 && (
-              <div className="flex flex-wrap gap-1 pt-2 border-t">
-                {summary.channelCounts.map((c) => (
-                  <span key={c.channel} className="text-[11px] text-muted-foreground">
-                    {channelLabel[c.channel] || c.channel}: <span className="font-mono font-semibold">{c.count}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">لا توجد مراسلات سابقة مع هذا العميل</p>
-        )}
-      </CardContent>
-    </Card>
   );
 }
