@@ -277,8 +277,19 @@ accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action:
       extraWhere += ` AND "allowPosting" = true`;
     }
 
+    // Was N+1: scalar self-join lookup per child to resolve parentId
+    // from parentCode. With LIMIT 5000 that's up to 5000 extra hits
+    // against chart_of_accounts. A single LEFT JOIN does the lookup
+    // once per row in the same scan.
     const rows = await rawQuery(
-      `SELECT c.*, (SELECT p.id FROM chart_of_accounts p WHERE p.code = c."parentCode" AND p."companyId" = c."companyId" AND p."deletedAt" IS NULL LIMIT 1) AS "parentId" FROM chart_of_accounts c WHERE ${where} AND c."deletedAt" IS NULL${extraWhere} ORDER BY c.code LIMIT 5000`,
+      `SELECT c.*, p.id AS "parentId"
+         FROM chart_of_accounts c
+         LEFT JOIN chart_of_accounts p ON p.code = c."parentCode"
+                                       AND p."companyId" = c."companyId"
+                                       AND p."deletedAt" IS NULL
+        WHERE ${where} AND c."deletedAt" IS NULL${extraWhere}
+        ORDER BY c.code
+        LIMIT 5000`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
