@@ -38,6 +38,10 @@ const TelematicsScorecard = lazy(() => import("@/pages/fleet/telematics/scorecar
 const CargoList = lazy(() => import("@/pages/fleet/cargo"));
 const CargoCreate = lazy(() => import("@/pages/fleet/cargo-create"));
 const CargoDetail = lazy(() => import("@/pages/fleet/cargo-detail"));
+// Unified driver self-service surface (#1354). Replaces /driver-portal/*
+// — drivers log in to the regular ERP, get the `driver` role, and land
+// here as their dashboard (see dashboard.tsx role-based redirect).
+const MeDriver = lazy(() => import("@/pages/fleet/me-driver"));
 
 export const fleetRoutes = [
   { path: "/fleet", component: Fleet },
@@ -77,6 +81,9 @@ export const fleetRoutes = [
   { path: "/fleet/telematics/operations", component: TelematicsOperations },
   { path: "/fleet/telematics/evidence", component: TelematicsEvidence },
   { path: "/fleet/telematics/scorecard", component: TelematicsScorecard },
+  // Driver self-service dashboard — appears at /me/driver. Role gate
+  // happens in dashboard.tsx (drivers redirected here automatically).
+  { path: "/me/driver", component: MeDriver },
   // Cargo / freight (#1354 — نقل بري للبضائع). Manifest + items CRUD.
   { path: "/fleet/cargo", component: CargoList },
   { path: "/fleet/cargo/create", component: CargoCreate },
