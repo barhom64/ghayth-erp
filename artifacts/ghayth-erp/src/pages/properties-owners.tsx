@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
@@ -34,6 +36,7 @@ export default function PropertiesOwners() {
   const filtered = applyFilters(owners, filters, {
     searchFields: ["name", "phone", "nationalId", "crNumber"] as any,
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   // Delete dialog state. The previous `confirm()` window dialog
   // blocked the event loop, ignored RTL, and gave no preview of the
@@ -125,13 +128,32 @@ export default function PropertiesOwners() {
       title="الملاك"
       subtitle="سجل ملاك العقارات — للعقارات المُدارة لصالح الغير"
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
-      actions={canManage && (
-        <Link href="/properties/owners/create">
-          <GuardedButton perm="property:create" className="gap-2">
-            <Plus className="h-4 w-4" /> إضافة مالك
-          </GuardedButton>
-        </Link>
-      )}
+      actions={
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_properties_owners"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قائمة الملاك", total: printRows.length },
+              items: printRows.map((o: any) => ({
+                "الاسم": o.name || "—",
+                "الجوال": o.phone || "—",
+                "الهوية": o.nationalId || "—",
+                "عدد العقارات": o.propertiesCount ?? o.buildingsCount ?? "—",
+                "الآيبان": o.iban || "—",
+              })),
+            })}
+          />
+          {canManage && (
+            <Link href="/properties/owners/create">
+              <GuardedButton perm="property:create" className="gap-2">
+                <Plus className="h-4 w-4" /> إضافة مالك
+              </GuardedButton>
+            </Link>
+          )}
+        </div>
+      }
     >
       <PropertyTabsNav />
 
@@ -158,7 +180,8 @@ export default function PropertiesOwners() {
         <CardContent className="p-0">
           <DataTable
             columns={columns}
-            data={filtered}
+            onSortedDataChange={setPrintRows}
+        data={filtered}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

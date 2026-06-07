@@ -2211,30 +2211,29 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
     );
 
     // 2. Mutamer count diff: file says X, system has Y in the linked group
+    // Pre-aggregate umrah_pilgrims counts via CTE — the original
+    // query ran the SAME scalar COUNT subquery THREE TIMES per row
+    // (SELECT column + WHERE filter + ORDER BY). At LIMIT 500 that's
+    // 1501 redundant lookups through umrah_pilgrims. One CTE scan +
+    // LEFT JOIN collapses it to a single pass.
     const countDiffs = await rawQuery<Record<string, unknown>>(
-      `SELECT ni.id, ni."nuskInvoiceNumber", ni."mutamerCount" AS "fileCount",
+      `WITH pilgrim_counts AS (
+         SELECT "groupId", "companyId", COUNT(*) AS "systemCount"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL
+         GROUP BY "groupId", "companyId"
+       )
+       SELECT ni.id, ni."nuskInvoiceNumber", ni."mutamerCount" AS "fileCount",
               ni."groupId", g.name AS "groupName",
-              (SELECT COUNT(*)::int FROM umrah_pilgrims p
-                WHERE p."groupId" = ni."groupId"
-                  AND p."companyId" = ni."companyId"
-                  AND p."deletedAt" IS NULL) AS "systemCount"
+              COALESCE(pc."systemCount", 0)::int AS "systemCount"
          FROM umrah_nusk_invoices ni
     LEFT JOIN umrah_groups g ON g.id = ni."groupId"
+    LEFT JOIN pilgrim_counts pc ON pc."groupId" = ni."groupId" AND pc."companyId" = ni."companyId"
         WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
           AND ni."groupId" IS NOT NULL${groupSeasonClause}
           AND ni."mutamerCount" IS NOT NULL
-          AND ni."mutamerCount" != (
-            SELECT COUNT(*)::int FROM umrah_pilgrims p
-              WHERE p."groupId" = ni."groupId"
-                AND p."companyId" = ni."companyId"
-                AND p."deletedAt" IS NULL
-          )
-        ORDER BY ABS(ni."mutamerCount" - (
-            SELECT COUNT(*) FROM umrah_pilgrims p
-              WHERE p."groupId" = ni."groupId"
-                AND p."companyId" = ni."companyId"
-                AND p."deletedAt" IS NULL
-          )) DESC
+          AND ni."mutamerCount" != COALESCE(pc."systemCount", 0)
+        ORDER BY ABS(ni."mutamerCount" - COALESCE(pc."systemCount", 0)) DESC
         LIMIT 500`,
       params
     );
@@ -2357,13 +2356,20 @@ router.get("/reports/group-portfolio", authorize({ feature: "umrah", action: "li
     params.push(limit);
 
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT g.id, g.name, g."nuskGroupNumber", g.status, g."seasonId",
+      // Pre-aggregate umrah_pilgrims actual counts via CTE — same
+      // pattern as the rest of the N+1 sweep. Avoids one lookup per
+      // returned group row through umrah_pilgrims.
+      `WITH pilgrim_actuals AS (
+         SELECT "groupId", "companyId", COUNT(*) AS "actualPilgrims"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL
+         GROUP BY "groupId", "companyId"
+       )
+       SELECT g.id, g.name, g."nuskGroupNumber", g.status, g."seasonId",
               s.title AS "seasonTitle",
               g."agentId", a.name AS "agentName",
               g."mutamerCount" AS "expectedPilgrims",
-              (SELECT COUNT(*)::int FROM umrah_pilgrims p
-                WHERE p."groupId" = g.id AND p."companyId" = g."companyId" AND p."deletedAt" IS NULL
-              ) AS "actualPilgrims",
+              COALESCE(pa."actualPilgrims", 0)::int AS "actualPilgrims",
               COALESCE(sales.revenue, 0) AS revenue,
               COALESCE(sales.paid, 0)    AS paid,
               COALESCE(nusk.cost, 0)     AS cost,
@@ -2371,6 +2377,8 @@ router.get("/reports/group-portfolio", authorize({ feature: "umrah", action: "li
          FROM umrah_groups g
     LEFT JOIN umrah_seasons s
            ON s.id = g."seasonId" AND s."companyId" = g."companyId" AND s."deletedAt" IS NULL
+    LEFT JOIN pilgrim_actuals pa
+           ON pa."groupId" = g.id AND pa."companyId" = g."companyId"
     LEFT JOIN umrah_agents a
            ON a.id = g."agentId" AND a."companyId" = g."companyId" AND a."deletedAt" IS NULL
     LEFT JOIN LATERAL (
@@ -2442,18 +2450,34 @@ router.get("/reports/season-portfolio", authorize({ feature: "umrah", action: "l
     params.push(limit);
 
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT s.id, s.title, s.status, s."hijriYear", s."startDate", s."endDate",
-              (SELECT COUNT(*)::int FROM umrah_pilgrims p
-                WHERE p."seasonId" = s.id AND p."companyId" = s."companyId" AND p."deletedAt" IS NULL
-              ) AS "pilgrimsCount",
-              (SELECT COUNT(*)::int FROM umrah_groups g
-                WHERE g."seasonId" = s.id AND g."companyId" = s."companyId" AND g."deletedAt" IS NULL
-              ) AS "groupsCount",
+      // Pre-aggregate pilgrim + group counts per season via CTEs —
+      // the original carried TWO scalar COUNT subqueries per row.
+      // At LIMIT 200 that's ~400 redundant lookups. Two CTEs scan
+      // each child table once.
+      `WITH season_pilgrim_counts AS (
+         SELECT "seasonId", "companyId", COUNT(*) AS "pilgrimsCount"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL
+         GROUP BY "seasonId", "companyId"
+       ),
+       season_group_counts AS (
+         SELECT "seasonId", "companyId", COUNT(*) AS "groupsCount"
+         FROM umrah_groups
+         WHERE "deletedAt" IS NULL
+         GROUP BY "seasonId", "companyId"
+       )
+       SELECT s.id, s.title, s.status, s."hijriYear", s."startDate", s."endDate",
+              COALESCE(spc."pilgrimsCount", 0)::int AS "pilgrimsCount",
+              COALESCE(sgc."groupsCount", 0)::int AS "groupsCount",
               COALESCE(sales.revenue, 0) AS revenue,
               COALESCE(sales.paid, 0)    AS paid,
               COALESCE(nusk.cost, 0)     AS cost,
               (COALESCE(sales.revenue, 0) - COALESCE(nusk.cost, 0))::numeric(12,2) AS margin
          FROM umrah_seasons s
+    LEFT JOIN season_pilgrim_counts spc
+           ON spc."seasonId" = s.id AND spc."companyId" = s."companyId"
+    LEFT JOIN season_group_counts sgc
+           ON sgc."seasonId" = s.id AND sgc."companyId" = s."companyId"
     LEFT JOIN LATERAL (
            SELECT COALESCE(SUM(total), 0) AS revenue,
                   COALESCE(SUM("paidAmount"), 0) AS paid
@@ -2604,11 +2628,20 @@ router.get("/room-blocks", authorize({ feature: "umrah", action: "list" }), asyn
     const hotelId = req.query.hotelId ? Number(req.query.hotelId) : null;
     const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
     const params: unknown[] = [scope.companyId];
-    let sql = `SELECT b.*, h.name AS "hotelName", h.city AS "hotelCity",
-                      (SELECT COUNT(*) FROM umrah_room_allocations a
-                        WHERE a."blockId" = b.id AND a."deletedAt" IS NULL) AS "allocatedCount"
+    // Pre-aggregate room allocations counts via CTE — original was
+    // N+1: 500 room blocks × COUNT subquery = 501 lookups through
+    // umrah_room_allocations. CTE collapses to one scan.
+    let sql = `WITH alloc_counts AS (
+                  SELECT "blockId", COUNT(*) AS "allocatedCount"
+                  FROM umrah_room_allocations
+                  WHERE "deletedAt" IS NULL
+                  GROUP BY "blockId"
+                )
+                SELECT b.*, h.name AS "hotelName", h.city AS "hotelCity",
+                       COALESCE(ac."allocatedCount", 0)::int AS "allocatedCount"
                  FROM umrah_room_blocks b
                  LEFT JOIN umrah_hotels h ON h.id = b."hotelId" AND h."deletedAt" IS NULL
+                 LEFT JOIN alloc_counts ac ON ac."blockId" = b.id
                 WHERE b."companyId" = $1 AND b."deletedAt" IS NULL`;
     if (hotelId) { params.push(hotelId); sql += ` AND b."hotelId" = $${params.length}`; }
     if (seasonId) { params.push(seasonId); sql += ` AND b."seasonId" = $${params.length}`; }

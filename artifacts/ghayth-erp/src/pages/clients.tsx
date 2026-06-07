@@ -9,6 +9,8 @@ import {
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Link, useLocation } from "wouter";
 
 import { Button } from "@/components/ui/button";
@@ -78,6 +80,7 @@ export default function Clients() {
   const clients = clientsResponse?.data;
   const total = clientsResponse?.total || 0;
   const filteredClients = clients || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredClients);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/clients",
@@ -186,8 +189,25 @@ export default function Clients() {
       ]}
       loading={isLoading}
       actions={
-        canManage && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_clients"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قائمة العملاء", total: printRows.length },
+              items: printRows.map((c: any) => ({
+                "الاسم": c.name || "—",
+                "الجوال": c.phone || "—",
+                "البريد": c.email || "—",
+                "التصنيف": c.classification || "—",
+                "الرقم الضريبي": c.taxNumber || "—",
+                "الحالة": c.status || "—",
+              })),
+            })}
+          />
+          {canManage && (
+          <>
             <input
               value={quickPhone}
               onChange={(e) => setQuickPhone(e.target.value)}
@@ -217,8 +237,9 @@ export default function Clients() {
                 إضافة عميل
               </GuardedButton>
             </Link>
-          </div>
-        )
+          </>
+          )}
+        </div>
       }
     >
       <CrmTabsNav />
@@ -253,6 +274,7 @@ export default function Clients() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filteredClients}
         isLoading={isLoading}
         isError={isError}
