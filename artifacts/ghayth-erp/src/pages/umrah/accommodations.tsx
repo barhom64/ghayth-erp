@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Hotel, BedDouble, Plus } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 import { useToast } from "@/hooks/use-toast";
 import {
   DataTable,
@@ -92,6 +93,44 @@ export default function AccommodationsPage() {
     <PageShell
       title="الإقامة الفندقية"
       breadcrumbs={[{ href: "/umrah/dashboard", label: "العمرة" }, { label: "الإقامة" }]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_accommodations"
+          entityId="list"
+          size="icon"
+          label="طباعة كتالوج الإقامة"
+          payload={() => ({
+            entity: {
+              title: "كتالوج الفنادق والكتل السكنية",
+              hotelsCount: hotels.length,
+              blocksCount: blocks.length,
+            },
+            sections: [
+              {
+                title: "كتالوج الفنادق",
+                rows: hotels.map((h: any) => ({
+                  "اسم الفندق": h.name || "—",
+                  "المدينة": h.city || "—",
+                  "تصنيف": h.starRating ? `${h.starRating} نجوم` : "—",
+                  "العنوان": h.address || "—",
+                  "الهاتف": h.phone || "—",
+                })),
+              },
+              {
+                title: "الكتل السكنية المحجوزة",
+                rows: blocks.map((b: any) => ({
+                  "الفندق": b.hotelName || "—",
+                  "المجموعة": b.groupName || "—",
+                  "نوع الغرفة": b.roomType || "—",
+                  "عدد الغرف": b.roomCount ?? "—",
+                  "من": b.checkInDate || "—",
+                  "إلى": b.checkOutDate || "—",
+                })),
+              },
+            ],
+          })}
+        />
+      }
     >
       <UmrahTabsNav />
 
