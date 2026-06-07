@@ -194,6 +194,37 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
       folderCond = ` AND folder = $${params.length}`;
     }
 
+    // Entity filter: when the page is opened from a client/supplier/etc.
+    // detail page with ?relatedType=X&relatedId=Y, surface only messages
+    // linked to that entity. messageSender writes those columns on every
+    // outbound send (recipient.ts uses them); inbound emails get linked
+    // via matchSenderToEntity. Falls back to peer-address matching when
+    // an entity has registered phone/email addresses so legacy unlinked
+    // rows still show up.
+    let relatedCond = "";
+    const relatedType = (req.query.relatedType as string | undefined)?.trim();
+    const relatedId = Number(req.query.relatedId);
+    if (relatedType && Number.isFinite(relatedId) && relatedId > 0) {
+      params.push(relatedType, relatedId);
+      const tIdx = params.length - 1;
+      const iIdx = params.length;
+      // Resolve the entity's contact addresses so unlinked rows (e.g.
+      // imported emails before the entity existed) still surface.
+      let addrSubquery = "";
+      if (relatedType === "clients") {
+        addrSubquery = `SELECT phone FROM clients WHERE id = $${iIdx} AND "companyId" = $1 UNION SELECT email FROM clients WHERE id = $${iIdx} AND "companyId" = $1`;
+      } else if (relatedType === "suppliers") {
+        addrSubquery = `SELECT phone FROM suppliers WHERE id = $${iIdx} AND "companyId" = $1 UNION SELECT email FROM suppliers WHERE id = $${iIdx} AND "companyId" = $1`;
+      } else if (relatedType === "employees") {
+        addrSubquery = `SELECT phone FROM employees WHERE id = $${iIdx} AND "companyId" = $1 UNION SELECT email FROM employees WHERE id = $${iIdx} AND "companyId" = $1 UNION SELECT "personalEmail" FROM employees WHERE id = $${iIdx} AND "companyId" = $1 UNION SELECT "internalEmail" FROM employees WHERE id = $${iIdx} AND "companyId" = $1`;
+      }
+      if (addrSubquery) {
+        relatedCond = ` AND (("relatedType" = $${tIdx} AND "relatedId" = $${iIdx}) OR "fromAddress" IN (${addrSubquery}) OR "toAddress" IN (${addrSubquery}))`;
+      } else {
+        relatedCond = ` AND "relatedType" = $${tIdx} AND "relatedId" = $${iIdx}`;
+      }
+    }
+
     // Phase 4 contract step: read from v_message_log_all (the unified
     // view created in migration 221). Columns are aliased back to
     // fromNumber / toNumber so the frontend response shape is identical
@@ -220,7 +251,7 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
                 ) AS inbound_count
            FROM v_message_log_all
           WHERE "companyId" = $1 AND "deletedAt" IS NULL
-            ${channelCond}${folderCond}
+            ${channelCond}${folderCond}${relatedCond}
        )
        SELECT id, channel, direction, peer_addr AS peer, "fromNumber", "toNumber",
               subject, LEFT(body, 300) AS body_preview, status,
