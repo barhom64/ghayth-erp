@@ -19,6 +19,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Calculator, CheckCircle2, AlertTriangle, Play } from "lucide-react";
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
@@ -180,6 +181,39 @@ export default function CommissionCalculationsPage() {
       breadcrumbs={[{ label: "العمرة" }, { label: "حسابات العمولات" }]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_commission_calcs"
+            entityId="list"
+            size="icon"
+            label="طباعة سجل احتسابات العمولات"
+            payload={() => ({
+              entity: {
+                title: `سجل احتسابات العمولات — ${year}`,
+                year,
+                total: stats.total,
+                eligible: stats.eligible,
+                excluded: stats.excluded,
+                totalAmount: stats.totalAmount,
+              },
+              items: calcs.map((c: any) => ({
+                "خطة العمولة": c.planName ?? `خطة #${c.planId}`,
+                "الفترة": `${MONTHS_AR[c.month - 1]} ${c.year}`,
+                "عدد المعتمرين": c.totalMutamers ?? 0,
+                "الشرائح المكتملة": c.completedTiers ?? 0,
+                "قبل الخصومات": Number(c.commissionAmount || 0),
+                "المبلغ النهائي": Number(c.finalAmount || 0),
+                "الحالة": c.isExcludedMonth
+                  ? "شهر مستثنى"
+                  : !c.conditionMet
+                    ? "الشرط غير محقّق"
+                    : c.hasViolations
+                      ? "مع مخالفات"
+                      : c.status === "paid"
+                        ? "مدفوعة"
+                        : "محتسبة",
+              })),
+            })}
+          />
           <select
             className="border rounded px-3 py-1.5 text-sm bg-white"
             value={year}
