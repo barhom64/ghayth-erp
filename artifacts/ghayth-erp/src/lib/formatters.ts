@@ -39,7 +39,9 @@ export function formatTimeAr(dateStr: string | Date | null | undefined): string 
 }
 
 export function formatNumber(num: number | null | undefined): string {
-  if (num == null) return "-";
+  // Same NaN guard as formatCurrency — Number("") / parseFloat("")
+  // are NaN, and rendering "NaN" verbatim in a cell is worse than "-".
+  if (num == null || !Number.isFinite(num)) return "-";
   return toArabicNumerals(num.toLocaleString("en-US"));
 }
 
@@ -55,7 +57,12 @@ export function roundMoney(n: number | string | null | undefined, decimals = 2):
 }
 
 export function formatCurrency(num: number | null | undefined): string {
-  if (num == null) return "-";
+  // Guard NaN alongside null/undefined — Number("") / Number("abc") /
+  // parseFloat("") all return NaN, and `(NaN).toLocaleString()` then
+  // returns the literal "NaN" string. Operators see "NaN ر.س" in
+  // every cell that bound to a malformed value. Falling back to "-"
+  // keeps the table readable and signals "data missing".
+  if (num == null || !Number.isFinite(num)) return "-";
   const label = getGlobalCurrencyLabel();
   return `${toArabicNumerals(num.toLocaleString("en-US"))} ${label}`;
 }
