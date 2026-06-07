@@ -6,6 +6,7 @@ export const ROLES: Record<string, string> = {
   finance_manager: "مدير المالية",
   department_manager: "مدير القسم",
   employee: "موظف",
+  driver: "سائق",
   sales: "مبيعات",
   support: "دعم فني",
   gm: "مدير عام",
