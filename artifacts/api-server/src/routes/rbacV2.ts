@@ -98,13 +98,30 @@ router.get("/levels", authorize({ feature: "admin.roles", action: "list" }), asy
 router.get("/roles", authorize({ feature: "admin.roles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Pre-aggregate member + grant counts via sibling CTEs instead
+    // of running TWO scalar subqueries per row. Original was 2×N+1:
+    // every role triggered fresh COUNTs on rbac_user_roles and
+    // rbac_role_grants. The CTEs collapse to one scan + hash
+    // aggregate each.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT r.id, r.role_key, r.label_ar, r.label_en, r.description, r.level,
+      `WITH member_counts AS (
+         SELECT role_id, COUNT(*) AS member_count
+         FROM rbac_user_roles
+         GROUP BY role_id
+       ),
+       grant_counts AS (
+         SELECT role_id, COUNT(*) AS grant_count
+         FROM rbac_role_grants
+         GROUP BY role_id
+       )
+       SELECT r.id, r.role_key, r.label_ar, r.label_en, r.description, r.level,
               r.parent_role_id, r.color, r.is_system, r.is_template, r.is_active,
               r."createdAt", r."updatedAt",
-              (SELECT COUNT(*) FROM rbac_user_roles ur WHERE ur.role_id = r.id) AS member_count,
-              (SELECT COUNT(*) FROM rbac_role_grants g WHERE g.role_id = r.id) AS grant_count
+              COALESCE(mc.member_count, 0) AS member_count,
+              COALESCE(gc.grant_count, 0) AS grant_count
          FROM rbac_roles r
+         LEFT JOIN member_counts mc ON mc.role_id = r.id
+         LEFT JOIN grant_counts gc ON gc.role_id = r.id
         WHERE r."companyId" = $1 OR (r.is_template AND r."companyId" IS NULL)
         ORDER BY r.level DESC, r.role_key`,
       [scope.companyId]
