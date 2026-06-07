@@ -7,6 +7,7 @@ import {
   DataTable,
   type DataTableColumn,
   PageShell,
+  resolveStatus,
 } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -149,7 +150,7 @@ export default function UmrahAgents() {
               "البلد": a.country || "—",
               "الموسم": a.seasonName || "—",
               "هامش الربح": a.profitMargin ?? "—",
-              "الحالة": a.status || "—",
+              "الحالة": (a.status && resolveStatus(a.status)?.label) ?? a.status ?? "—",
             })),
           })}
         />

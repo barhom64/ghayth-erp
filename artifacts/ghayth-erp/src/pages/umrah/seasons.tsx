@@ -15,6 +15,7 @@ import {
   type DataTableColumn,
   PageStatusBadge,
   PageShell,
+  resolveStatus,
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
@@ -84,7 +85,7 @@ export default function UmrahSeasons() {
                 "السنة الميلادية": s.gregorianYear || "—",
                 "تاريخ البدء": s.startDate || "—",
                 "تاريخ النهاية": s.endDate || "—",
-                "الحالة": s.status || "—",
+                "الحالة": (s.status && resolveStatus(s.status)?.label) ?? s.status ?? "—",
               })),
             })}
           />

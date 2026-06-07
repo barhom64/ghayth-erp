@@ -20,6 +20,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   FormShell,
   FormTextField,
   FormNumberField,
@@ -303,6 +304,22 @@ export default function TrafficViolationsPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "plateNumber", label: "المركبة" },
+              { key: "driverName", label: "السائق" },
+              { key: "violationType", label: "نوع المخالفة" },
+              { key: "violationDate", label: "التاريخ" },
+              { key: "violationNumber", label: "رقم المخالفة" },
+              { key: "location", label: "الموقع" },
+              { key: "fineAmount", label: "الغرامة" },
+              { key: "status", label: "الحالة" },
+            ],
+            "مخالفات-مرورية",
+          )
+        }
         resultCount={filtered.length}
       />
 

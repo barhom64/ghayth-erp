@@ -11,6 +11,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
@@ -85,7 +86,29 @@ export default function LegalSessions() {
       }
     >
       <LegalTabsNav />
-      <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
+      <AdvancedFilters
+        config={{ searchPlaceholder: "بحث...", showDateRange: false }}
+        values={filters}
+        onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "caseTitle", label: "القضية" },
+              { key: "sessionDate", label: "تاريخ الجلسة" },
+              { key: "location", label: "الموقع / المحكمة" },
+              { key: "judge", label: "القاضي" },
+              { key: "lawyerName", label: "المحامي" },
+              { key: "priority", label: "الأولوية" },
+              { key: "result", label: "النتيجة" },
+              { key: "nextSessionDate", label: "الجلسة التالية" },
+              { key: "notes", label: "ملاحظات" },
+            ],
+            "جلسات-قانونية",
+          )
+        }
+        resultCount={filtered.length}
+      />
       <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} onRowClick={(s) => navigate(`/legal/sessions/${s.id}`)} />
     </PageShell>
   );

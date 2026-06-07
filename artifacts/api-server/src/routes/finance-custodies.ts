@@ -193,24 +193,43 @@ custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", acti
       dateFilter += ` AND je."createdAt" < ($${queryParams.length}::date + interval '1 day')`;
     }
 
+    // Was 2× correlated subquery per row over journal_lines — one
+    // for "find first debit-line accountCode", one for "the name of
+    // that account". With LIMIT 1000 custodies that's up to 2000
+    // extra lookups against the big journal_lines table.
+    //
+    // first_debit_line CTE picks ROW_NUMBER()=1 per journal so we get
+    // the canonical debit-line accountCode in one scan; the LEFT JOIN
+    // to chart_of_accounts pulls the display name without a second
+    // correlated subquery.
     const rows = await rawQuery<CustodyListRow>(
-      `SELECT je.id, je.ref, je.description, je.status AS "approvalStatus",
+      `WITH first_debit_line AS (
+         SELECT DISTINCT ON (jlx."journalId")
+                jlx."journalId",
+                jlx."accountCode"
+           FROM journal_lines jlx
+          WHERE jlx.debit > 0
+          ORDER BY jlx."journalId", jlx.id
+       )
+       SELECT je.id, je.ref, je.description, je.status AS "approvalStatus",
               COALESCE(SUM(jl.debit), 0) AS amount,
               je."createdAt" AS date,
               je.notes AS purpose,
               je."dueDate" AS "expectedReturnDate",
               e.name AS "employeeName",
               ea.id AS "assignmentId",
-              (SELECT jl2."accountCode" FROM journal_lines jl2 WHERE jl2."journalId" = je.id AND jl2.debit > 0 LIMIT 1) AS "custodyAccountCode",
-              (SELECT ca.name FROM journal_lines jl3 JOIN chart_of_accounts ca ON ca.code = jl3."accountCode" AND ca."companyId" = $1 WHERE jl3."journalId" = je.id AND jl3.debit > 0 LIMIT 1) AS "custodyAccountName"
-       FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
-       LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'${dateFilter}
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id
-       ORDER BY je."createdAt" DESC
-       LIMIT 1000`,
+              fdl."accountCode" AS "custodyAccountCode",
+              ca.name AS "custodyAccountName"
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
+         LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
+         LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
+         LEFT JOIN first_debit_line fdl ON fdl."journalId" = je.id
+         LEFT JOIN chart_of_accounts ca ON ca.code = fdl."accountCode" AND ca."companyId" = $1
+        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'${dateFilter}
+        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id, fdl."accountCode", ca.name
+        ORDER BY je."createdAt" DESC
+        LIMIT 1000`,
       queryParams
     );
 
@@ -424,22 +443,36 @@ custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 
+    // Same first-debit-line CTE shape as the list endpoint above —
+    // single-row lookup (WHERE je.id = $1) but keeping shapes uniform
+    // means the list and detail compose the same maintenance surface.
     const [custody] = await rawQuery<CustodyListRow>(
-      `SELECT je.id, je.ref, je.description, je.status AS "approvalStatus",
+      `WITH first_debit_line AS (
+         SELECT DISTINCT ON (jlx."journalId")
+                jlx."journalId",
+                jlx."accountCode"
+           FROM journal_lines jlx
+          WHERE jlx.debit > 0
+            AND jlx."journalId" = $1
+          ORDER BY jlx."journalId", jlx.id
+       )
+       SELECT je.id, je.ref, je.description, je.status AS "approvalStatus",
               COALESCE(SUM(jl.debit), 0) AS amount,
               je."createdAt" AS date,
               je.notes AS purpose,
               je."dueDate" AS "expectedReturnDate",
               e.name AS "employeeName",
               ea.id AS "assignmentId",
-              (SELECT jl2."accountCode" FROM journal_lines jl2 WHERE jl2."journalId" = je.id AND jl2.debit > 0 LIMIT 1) AS "custodyAccountCode",
-              (SELECT ca.name FROM journal_lines jl3 JOIN chart_of_accounts ca ON ca.code = jl3."accountCode" AND ca."companyId" = $2 WHERE jl3."journalId" = je.id AND jl3.debit > 0 LIMIT 1) AS "custodyAccountName"
-       FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
-       LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id`,
+              fdl."accountCode" AS "custodyAccountCode",
+              ca.name AS "custodyAccountName"
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
+         LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
+         LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
+         LEFT JOIN first_debit_line fdl ON fdl."journalId" = je.id
+         LEFT JOIN chart_of_accounts ca ON ca.code = fdl."accountCode" AND ca."companyId" = $2
+        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id, fdl."accountCode", ca.name`,
       [id, scope.companyId]
     );
 

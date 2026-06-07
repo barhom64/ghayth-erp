@@ -56,6 +56,7 @@ export const roleKeyColors: Record<string, string> = {
   crm_manager: "#E74C3C",
   bi_manager: "#2C3E50",
   branch_manager: "#16A085",
+  driver: "#0d9488",
   employee: "#95A5A6",
 };
 

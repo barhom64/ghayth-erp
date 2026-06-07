@@ -27,6 +27,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface Department {
   id: number;
@@ -146,9 +147,27 @@ export function DepartmentsTab() {
             هيكل تنظيمي بدعم الأقسام الأب-الفرع والربط بالفروع ومدير لكل قسم.
           </p>
         </div>
-        <GuardedButton perm="settings:update" onClick={() => { setShowForm((v) => !v); if (showForm) resetForm(); }} data-testid="button-toggle-dept-form">
-          {showForm ? <><X className="h-4 w-4 me-1" /> إلغاء</> : <><Plus className="h-4 w-4 me-1" /> قسم جديد</>}
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_settings_departments"
+            entityId="list"
+            size="icon"
+            label="طباعة الهيكل التنظيمي"
+            payload={() => ({
+              entity: { title: "الهيكل التنظيمي — الأقسام", total: departments.length },
+              items: departments.map((d) => ({
+                "اسم القسم": d.name,
+                "القسم الأب": d.parentId ? parentName(d.parentId) : "جذر",
+                "الفرع": branchName(d.branchId),
+                "مدير القسم": empName(d.managerId),
+                "الحالة": d.status === "active" ? "نشط" : "غير نشط",
+              })),
+            })}
+          />
+          <GuardedButton perm="settings:update" onClick={() => { setShowForm((v) => !v); if (showForm) resetForm(); }} data-testid="button-toggle-dept-form">
+            {showForm ? <><X className="h-4 w-4 me-1" /> إلغاء</> : <><Plus className="h-4 w-4 me-1" /> قسم جديد</>}
+          </GuardedButton>
+        </div>
       </div>
 
       {showForm && (

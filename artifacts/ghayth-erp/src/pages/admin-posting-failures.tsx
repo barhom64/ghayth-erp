@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 import {
   RefreshCw, AlertTriangle, CheckCircle, XCircle,
 } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function AdminPostingFailures() {
   const [showResolved, setShowResolved] = useState(false);
@@ -60,6 +61,27 @@ export default function AdminPostingFailures() {
       loading={isLoading}
       actions={
         <div className="flex gap-2">
+          <PrintButton
+            entityType="report_posting_failures"
+            entityId="list"
+            size="icon"
+            label="طباعة سجل فشل القيود"
+            payload={() => ({
+              entity: {
+                title: showResolved ? "سجل فشل القيود — المحلولة" : "سجل فشل القيود — المفتوحة",
+                total: rows.length,
+                showResolved,
+              },
+              items: rows.map((r: any) => ({
+                "#": r.id,
+                "العملية": r.operation || r.action || "—",
+                "الكيان": `${r.entity || "—"}${r.entityId ? ` #${r.entityId}` : ""}`,
+                "الخطأ": r.error || r.errorMessage || "—",
+                "التاريخ": r.createdAt ? formatDateAr(r.createdAt) : "—",
+                "الحالة": r.resolved ? "محلول" : "مفتوح",
+              })),
+            })}
+          />
           <Button
             variant={showResolved ? "default" : "outline"}
             size="sm"
