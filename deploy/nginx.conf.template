@@ -39,6 +39,17 @@ server {
         try_files $uri =404;
     }
 
+    # index.html MUST never be cached. It is the only file that references the
+    # current hashed chunk filenames; a new deploy purges old hashed chunks, so a
+    # browser holding a stale index.html 404s on dynamic imports ("Failed to fetch
+    # dynamically imported module"). no-cache forces revalidation on every load so
+    # the client always sees the latest chunk graph. Exact-match wins over the
+    # asset regex above, and try_files internal redirects re-enter this block.
+    location = /index.html {
+        add_header Cache-Control "no-cache, must-revalidate";
+        try_files $uri =404;
+    }
+
     location = /healthz {
         access_log off;
         add_header Content-Type text/plain;
