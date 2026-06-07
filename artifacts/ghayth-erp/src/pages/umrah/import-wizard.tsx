@@ -43,6 +43,22 @@ interface PreviewSummary {
   rows?: any[];
 }
 
+// Arabic labels for the `umrah_import_changes` audit trail. Engine writes
+// raw `entityType` / `changeType` strings ("mutamer", "created") to the
+// table — the wizard's "تفاصيل التعديلات" view translates them so the
+// operator reads "معتمر / أُنشئ" instead of the raw identifiers.
+const IMPORT_CHANGE_ENTITY_LABELS_AR: Record<string, string> = {
+  mutamer: "معتمر",
+  nusk_invoice: "فاتورة نُسك",
+};
+
+const IMPORT_CHANGE_TYPE_LABELS_AR: Record<string, string> = {
+  created: "أُنشئ",
+  updated: "حُدّث",
+  skipped: "تُجوهل",
+  error: "خطأ",
+};
+
 function formatSamplePreview(
   sample: Record<string, unknown>,
   labels: Record<string, string> = {},
@@ -1014,14 +1030,27 @@ export default function UmrahImportWizard() {
                 <p className="text-xs text-muted-foreground">جاري التحميل...</p>
               ) : changesQ.data ? (
                 <div className="text-xs space-y-1 max-h-48 overflow-y-auto">
-                  {Array.isArray(changesQ.data?.data) && changesQ.data.data.length > 0 ? (
-                    changesQ.data.data.slice(0, 30).map((c: any, i: number) => (
-                      <div key={c.id ?? i} className="flex items-center justify-between border-b pb-1">
-                        <span>{c.entityType ?? c.table ?? "—"} #{c.entityId ?? "?"}</span>
-                        <span className="text-muted-foreground">{c.changeKind ?? c.action ?? "—"}</span>
-                      </div>
-                    ))
-                  ) : (
+                  {Array.isArray(changesQ.data?.data) && changesQ.data.data.length > 0 ? (() => {
+                    // Field-name labels come from the same source the
+                    // column-mapping dropdown + rejected-row CSV use, so
+                    // "totalAmount" → "المبلغ الإجمالي" everywhere the
+                    // operator sees an engine field name.
+                    const fieldLabels: Record<string, string> = {
+                      ...(headerMapsQ.data?.mutamers?.labels ?? {}),
+                      ...(headerMapsQ.data?.vouchers?.labels ?? {}),
+                    };
+                    return changesQ.data.data.slice(0, 30).map((c: any, i: number) => {
+                      const entity = IMPORT_CHANGE_ENTITY_LABELS_AR[c.entityType] ?? c.entityType ?? "—";
+                      const change = IMPORT_CHANGE_TYPE_LABELS_AR[c.changeType] ?? c.changeType ?? "—";
+                      const field = c.fieldName ? (fieldLabels[c.fieldName] ?? c.fieldName) : null;
+                      return (
+                        <div key={c.id ?? i} className="flex items-center justify-between border-b pb-1">
+                          <span>{entity} #{formatNumber(c.entityId ?? 0)}{field ? ` — ${field}` : ""}</span>
+                          <span className="text-muted-foreground">{change}</span>
+                        </div>
+                      );
+                    });
+                  })() : (
                     <p className="text-muted-foreground">لا توجد تعديلات مسجلة</p>
                   )}
                 </div>
