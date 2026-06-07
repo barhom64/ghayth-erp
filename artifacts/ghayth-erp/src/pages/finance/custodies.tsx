@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { isMoneyAccount } from "@/lib/finance-account-usage";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -409,9 +410,7 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
   );
   const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
-  const sourceAccounts = (accountsData?.data || []).filter(
-    (a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"),
-  );
+  const sourceAccounts = (accountsData?.data || []).filter((a: any) => isMoneyAccount(a));
   const employees = employeesData?.data || [];
 
   return (
