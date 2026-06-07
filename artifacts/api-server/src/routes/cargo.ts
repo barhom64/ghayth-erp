@@ -39,6 +39,7 @@ import {
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { sendMessage } from "../lib/messageSender.js";
+import { fleetEngine } from "../lib/engines/index.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -363,10 +364,36 @@ router.patch(
         }).catch((e) => logger.error(e, "cargo background task failed"));
       }
 
-      const [row] = await rawQuery(
+      const [row] = await rawQuery<Record<string, unknown>>(
         `SELECT * FROM cargo_manifests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [id, scope.companyId],
       );
+
+      // Revenue + cost recognition fires the moment the manifest is
+      // marked delivered. Idempotent via the financialEngine guard
+      // (cargo_manifests / id) so the next-state-machine hop (closed)
+      // or a re-PATCH never double-posts. Best-effort: a GL failure
+      // logs but doesn't roll back the status change — the operator
+      // can re-trigger the transition once the cause is fixed.
+      if (b.status === "delivered" && existing.status !== "delivered" && row) {
+        try {
+          await fleetEngine.postCargoDeliveryGL(
+            { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+            {
+              id,
+              manifestNumber: String(row.manifestNumber ?? id),
+              freightRevenue: Number(row.freightRevenue) || 0,
+              freightCost: Number(row.freightCost) || 0,
+              customerId: (row.customerId as number | null) ?? null,
+              vehicleId: (row.vehicleId as number | null) ?? null,
+              driverId: (row.driverId as number | null) ?? null,
+            },
+          );
+        } catch (glErr) {
+          logger.error({ err: glErr, manifestId: id }, "[cargo] delivery GL posting failed");
+        }
+      }
+
       res.json({ data: row });
     } catch (err) {
       handleRouteError(err, res, "Update cargo manifest error:");
