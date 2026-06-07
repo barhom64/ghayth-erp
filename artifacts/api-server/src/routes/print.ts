@@ -276,6 +276,31 @@ router.post(
           isThermal: body.paperSize === "THERMAL_80" || body.paperSize === "THERMAL_58",
           version: 1,
         } as never;
+      } else if (body.presetKey) {
+        // Preset-theme preview — the operator picked a built-in style
+        // (classic/modern/compact) without typing custom HTML. Resolve the
+        // branded theme so the preview reflects the actual cliché the seed
+        // path would serve, not just the hard-coded classic. Without this
+        // branch the modern/compact preview was identical to classic.
+        const { getBrandedThemeHtml } = await import("../lib/print/brandedThemes.js");
+        const { html, css } = getBrandedThemeHtml(body.entityType, body.presetKey);
+        overrideTemplate = {
+          id: -998,
+          name: `preset-${body.presetKey}`,
+          entityType: body.entityType,
+          branchId: null,
+          companyId: null,
+          paperSize: body.paperSize ?? "A4",
+          mode: "html",
+          presetKey: body.presetKey,
+          htmlContent: html,
+          layoutJson: null,
+          cssOverrides: css || null,
+          headerOverride: body.headerOverride ?? null,
+          footerOverride: body.footerOverride ?? null,
+          isThermal: body.paperSize === "THERMAL_80" || body.paperSize === "THERMAL_58",
+          version: 1,
+        } as never;
       }
       const result = await renderPrint(
         scope,
@@ -356,6 +381,21 @@ router.post("/templates", requirePermission("templates:write"), async (req: Requ
   try {
     const body = zodParse(templateCreateBody.safeParse(req.body));
     const scope = scopeFromReq(req);
+    // When the operator picks a built-in preset theme (classic/modern/
+    // compact) and doesn't supply custom HTML, materialise the branded
+    // theme HTML now and store it as mode=html. This way the saved row is
+    // self-contained — the renderer doesn't have to re-derive the theme,
+    // and the operator can later tweak the materialised HTML if they want.
+    let effMode = body.mode;
+    let effHtml = body.htmlContent ?? null;
+    let effCss = body.cssOverrides ?? null;
+    if (body.mode === "preset" && !body.htmlContent && body.presetKey) {
+      const { getBrandedThemeHtml } = await import("../lib/print/brandedThemes.js");
+      const { html, css } = getBrandedThemeHtml(body.entityType, body.presetKey);
+      effMode = "html";
+      effHtml = html;
+      effCss = effCss || css || null;
+    }
     const rows = await rawQuery<{ id: number }>(
       `INSERT INTO document_templates
        (name, description, category, "type", "entityType", "branchId", "companyId",
@@ -371,11 +411,11 @@ router.post("/templates", requirePermission("templates:write"), async (req: Requ
         body.branchId ?? null,
         scope.companyId,
         body.paperSize,
-        body.mode,
+        effMode,
         body.presetKey ?? null,
-        body.htmlContent ?? null,
+        effHtml,
         body.layoutJson ? JSON.stringify(body.layoutJson) : null,
-        body.cssOverrides ?? null,
+        effCss,
         body.headerOverride ? JSON.stringify(body.headerOverride) : null,
         body.footerOverride ? JSON.stringify(body.footerOverride) : null,
         body.isThermal ?? false,

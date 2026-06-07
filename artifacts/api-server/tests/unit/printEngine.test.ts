@@ -1437,3 +1437,48 @@ describe("Print platform — finance reports wave 6 migrated (#1286 last sweep)"
     });
   }
 });
+
+describe("Print Engine v2 — branded default themes", () => {
+  it("exposes getBrandedThemeHtml with all three theme keys", async () => {
+    const mod = await import("../../src/lib/print/brandedThemes.js");
+    expect(typeof mod.getBrandedThemeHtml).toBe("function");
+    expect(mod.THEME_KEYS).toEqual(["classic", "modern", "compact"]);
+  });
+
+  it("invoice theme carries items loop + totals + ZATCA QR token", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    for (const theme of ["classic", "modern", "compact"] as const) {
+      const { html } = getBrandedThemeHtml("invoice", theme);
+      expect(html, `${theme} must loop items`).toContain("{{#each items}}");
+      expect(html, `${theme} must show grand total`).toContain("{{entity.total}}");
+      expect(html, `${theme} must embed ZATCA QR`).toContain("{{entity.zatcaQr}}");
+      expect(html, `${theme} must embed verify block`).toContain("{{system.verifyBlock}}");
+      expect(html, `${theme} must include letterhead`).toContain("{{branch.letterhead}}");
+    }
+  });
+
+  it("each theme produces visually distinct HTML", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    const classic = getBrandedThemeHtml("invoice", "classic").html;
+    const modern = getBrandedThemeHtml("invoice", "modern").html;
+    const compact = getBrandedThemeHtml("invoice", "compact").html;
+    expect(classic).not.toBe(modern);
+    expect(modern).not.toBe(compact);
+    // Modern uses the gradient title band; classic uses a bordered h2.
+    expect(modern).toContain("linear-gradient");
+    expect(classic).not.toContain("linear-gradient");
+  });
+
+  it("unknown preset key falls back to classic theme", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    const fallback = getBrandedThemeHtml("invoice", "nonsense");
+    expect(fallback.theme).toBe("classic");
+  });
+
+  it("non-invoice entity gets a branded generic document", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    const { html } = getBrandedThemeHtml("quotation", "modern");
+    expect(html).toContain("{{entity.itemsTable}}");
+    expect(html).toContain("{{branch.letterhead}}");
+  });
+});
