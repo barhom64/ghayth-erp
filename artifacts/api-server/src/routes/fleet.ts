@@ -38,6 +38,32 @@ const LICENSE_CLASS_VALUES = [
   "public_trans", "motorcycle", "equipment",
 ] as const;
 
+// #1733 Blocker #2 — vehicle technical profile.
+// Optional everywhere: the field set is large and most callers fill it
+// in incrementally (operator creates a stub, mechanic finishes the
+// profile). The capacity validator treats NULL as "unknown" — no hard
+// block, soft warning — so legacy vehicles keep working.
+const vehicleTechnicalProfileSchema = z.object({
+  vehicleType: z.enum(["truck", "bus", "van", "pickup", "sedan", "trailer", "equipment"]).optional(),
+  payloadKg: z.coerce.number().nonnegative().optional(),
+  boxLengthCm: z.coerce.number().int().nonnegative().optional(),
+  boxWidthCm: z.coerce.number().int().nonnegative().optional(),
+  boxHeightCm: z.coerce.number().int().nonnegative().optional(),
+  axleCount: z.coerce.number().int().positive().optional(),
+  tireCount: z.coerce.number().int().positive().optional(),
+  tireSize: z.string().max(50).optional(),
+  engineDisplacementCc: z.coerce.number().int().positive().optional(),
+  transmissionType: z.enum(["manual", "automatic", "amt", "cvt"]).optional(),
+  seatCount: z.coerce.number().int().positive().optional(),
+  hasAc: z.boolean().optional(),
+  screenCount: z.coerce.number().int().nonnegative().optional(),
+  doorCount: z.coerce.number().int().positive().optional(),
+  upholsteryType: z.enum(["fabric", "leather", "premium"]).optional(),
+  safetyFeatures: z.array(z.string()).optional(),
+  operatingHours: z.coerce.number().nonnegative().optional(),
+  equipmentAttachments: z.array(z.string()).optional(),
+});
+
 const createVehicleSchema = z.object({
   plateNumber: z.string().min(1),
   make: z.string().min(1),
@@ -66,7 +92,7 @@ const createVehicleSchema = z.object({
   // umrah assignment to refuse drivers who don't hold (or cover) the
   // required class.
   requiredLicenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
-});
+}).merge(vehicleTechnicalProfileSchema);
 
 const createDriverSchema = z.object({
   name: z.string().min(1),
@@ -142,7 +168,7 @@ const updateVehicleSchema = z.object({
   // #1733 Phase 2 — PATCHable so operators can set / change the
   // required class without re-creating the vehicle row.
   requiredLicenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
-});
+}).merge(vehicleTechnicalProfileSchema);
 
 const updateDriverSchema = z.object({
   name: z.string().optional(),
@@ -448,8 +474,12 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate","requiredLicenseClass") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
-      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null, b.requiredLicenseClass || null]
+      `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate","requiredLicenseClass",
+        "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,
+        $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)`,
+      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null, b.requiredLicenseClass || null,
+        b.vehicleType ?? null, b.payloadKg ?? null, b.boxLengthCm ?? null, b.boxWidthCm ?? null, b.boxHeightCm ?? null, b.axleCount ?? null, b.tireCount ?? null, b.tireSize ?? null, b.engineDisplacementCc ?? null, b.transmissionType ?? null, b.seatCount ?? null, b.hasAc ?? null, b.screenCount ?? null, b.doorCount ?? null, b.upholsteryType ?? null, b.safetyFeatures ? JSON.stringify(b.safetyFeatures) : null, b.operatingHours ?? null, b.equipmentAttachments ? JSON.stringify(b.equipmentAttachments) : null]
     );
     assertInsert(insertId, "fleet_vehicles");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -992,7 +1022,13 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
 
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: unknown[] = [];
-    const trackedFields = ["plateNumber","make","model","year","color","status","fuelType","notes","assignedDriverId","registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","vinNumber","requiredLicenseClass"] as const;
+    const trackedFields = [
+      "plateNumber","make","model","year","color","status","fuelType","notes","assignedDriverId","registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","vinNumber",
+      // #1733 Phase 2 — eligibility guard reads this column at PATCH time.
+      "requiredLicenseClass",
+      // #1733 Blocker #2 — technical profile fields.
+      "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments",
+    ] as const;
     const colMap: Record<string, string> = {
       plateNumber: '"plateNumber"',
       make: "make",
@@ -1012,14 +1048,37 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
       vinNumber: '"vinNumber"',
       // #1733 Phase 2.
       requiredLicenseClass: '"requiredLicenseClass"',
+      // #1733 Blocker #2 — technical profile column mapping.
+      vehicleType: '"vehicleType"',
+      payloadKg: '"payloadKg"',
+      boxLengthCm: '"boxLengthCm"',
+      boxWidthCm: '"boxWidthCm"',
+      boxHeightCm: '"boxHeightCm"',
+      axleCount: '"axleCount"',
+      tireCount: '"tireCount"',
+      tireSize: '"tireSize"',
+      engineDisplacementCc: '"engineDisplacementCc"',
+      transmissionType: '"transmissionType"',
+      seatCount: '"seatCount"',
+      hasAc: '"hasAc"',
+      screenCount: '"screenCount"',
+      doorCount: '"doorCount"',
+      upholsteryType: '"upholsteryType"',
+      safetyFeatures: '"safetyFeatures"',
+      operatingHours: '"operatingHours"',
+      equipmentAttachments: '"equipmentAttachments"',
     };
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     for (const f of trackedFields) {
       if (b[f] !== undefined && b[f] !== existing[f]) {
-        const val = (f === "registrationExpiry" || f === "inspectionDate" || f === "nextInspectionDate")
-          ? (b[f] || null)
-          : b[f];
+        let val: unknown = b[f];
+        if (f === "registrationExpiry" || f === "inspectionDate" || f === "nextInspectionDate") {
+          val = b[f] || null;
+        } else if (f === "safetyFeatures" || f === "equipmentAttachments") {
+          // jsonb columns — Array<string> must be stringified.
+          val = b[f] != null ? JSON.stringify(b[f]) : null;
+        }
         params.push(val);
         sets.push(`${colMap[f]}=$${params.length}`);
         before[f] = existing[f];

@@ -46,8 +46,9 @@ describe("RBAC v2 → flat bridge in GET /permissions/my", () => {
     // projection wrapped in try/catch so /permissions/my never throws here
     expect(section).toMatch(/rbacProjected: string\[\] = \[\]/);
     expect(section).toMatch(/projection skipped — using legacy set only/);
-    // unioned into the granted set alongside legacy rolePerms + user grants + delegation
-    expect(section).toMatch(/new Set\(\[\.\.\.rolePerms, \.\.\.grants, \.\.\.rbacProjected, \.\.\.delegatedProjected\]\)/);
+    // unioned into the granted set: per-user grants + RBAC projection + delegation
+    // (role_permissions is no longer read — RBAC v2 is the sole source)
+    expect(section).toMatch(/new Set\(\[\.\.\.grants, \.\.\.rbacProjected, \.\.\.delegatedProjected\]\)/);
     // per-user revokes still win over the projected set
     expect(section).toMatch(/\.filter\(\(p\) => !revokes\.has\(p\)\)/);
   });
