@@ -7917,8 +7917,66 @@ CREATE TABLE public.fleet_drivers (
     "createdAt" timestamp without time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
     "updatedAt" timestamp with time zone DEFAULT now(),
-    "licenseClass" text
+    "licenseClass" text,
+    "driverServiceProfile" text
 );
+
+
+--
+-- Name: transport_price_rules; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Pricing engine (Issue Comment 3).
+
+CREATE TABLE public.transport_price_rules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "customerId" integer,
+    "transportServiceType" text NOT NULL,
+    "vehicleType" text,
+    "routeFrom" text,
+    "routeTo" text,
+    "cargoType" text,
+    "unitOfMeasure" text NOT NULL,
+    "unitPrice" numeric(18,4) NOT NULL,
+    "minimumCharge" numeric(18,2),
+    currency text DEFAULT 'SAR'::text NOT NULL,
+    "vatRate" numeric(5,2),
+    "validFrom" date NOT NULL,
+    "validTo" date,
+    priority integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_price_rules_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
+);
+
+CREATE SEQUENCE public.transport_price_rules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_price_rules_id_seq OWNED BY public.transport_price_rules.id;
+
+
+--
+-- Name: transport_invoice_links; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Multi-trip invoice merging (Issue Comment 3).
+
+CREATE TABLE public.transport_invoice_links (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "serviceLineId" integer NOT NULL,
+    "invoiceId" integer NOT NULL,
+    "invoiceLineId" integer,
+    "appliedPriceRuleId" integer,
+    "appliedUnitPrice" numeric(18,4),
+    "linkedBy" integer,
+    "linkedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.transport_invoice_links_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_invoice_links_id_seq OWNED BY public.transport_invoice_links.id;
 
 
 --
