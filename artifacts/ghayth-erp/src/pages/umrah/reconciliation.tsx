@@ -1,6 +1,6 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, PageShell, resolveStatus } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency } from "@/lib/formatters";
@@ -157,7 +157,7 @@ export default function UmrahReconciliation() {
                 title: "فروقات المبلغ",
                 rows: amountDiffs.map((r) => ({
                   "رقم نسك": r.nuskInvoiceNumber,
-                  "الحالة": r.nuskStatus || "—",
+                  "الحالة": (r.nuskStatus && resolveStatus(r.nuskStatus)?.label) ?? r.nuskStatus ?? "—",
                   "إجمالي الملف": Number(r.fileTotal || 0),
                   "AP مرحّل": Number(r.postedAp || 0),
                   "إرجاع مرحّل": Number(r.postedRefund || 0),
