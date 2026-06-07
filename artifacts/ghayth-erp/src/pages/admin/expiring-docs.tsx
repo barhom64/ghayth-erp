@@ -17,6 +17,7 @@ import {
 import { Link } from "wouter";
 import { formatNumber } from "@/lib/formatters";
 import { Stamp, Car, AlertTriangle, RefreshCw, IdCard, Calendar } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface ExpiringEmployee {
   id: number;
@@ -245,6 +246,43 @@ export default function ExpiringDocsPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_expiring_docs"
+            entityId="list"
+            size="icon"
+            label="طباعة المستندات القاربة على الانتهاء"
+            payload={() => ({
+              entity: {
+                title: `المستندات القاربة على الانتهاء — خلال ${days} يوم`,
+                days,
+                employeesCount: employees.length,
+                vehiclesCount: vehicles.length,
+                empCritical,
+                vehCritical,
+              },
+              sections: [
+                {
+                  title: "وثائق الموظفين",
+                  rows: employees.map((e: any) => ({
+                    "اسم الموظف": e.name || "—",
+                    "الرقم الوظيفي": e.empNumber || "—",
+                    "إقامة (أيام متبقية)": e.iqamaDaysLeft ?? "—",
+                    "تأشيرة (أيام)": e.visaDaysLeft ?? "—",
+                    "رخصة عمل (أيام)": e.workPermitDaysLeft ?? "—",
+                  })),
+                },
+                {
+                  title: "وثائق المركبات",
+                  rows: vehicles.map((v: any) => ({
+                    "اللوحة": v.plateNumber || "—",
+                    "المركبة": [v.make, v.model].filter(Boolean).join(" ") || "—",
+                    "استمارة (أيام متبقية)": v.registrationDaysLeft ?? "—",
+                    "فحص دوري (أيام)": v.inspectionDaysLeft ?? "—",
+                  })),
+                },
+              ],
+            })}
+          />
           <Label className="text-xs whitespace-nowrap">خلال:</Label>
           <Input type="number" min={1} max={365} value={days}
             onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 30))}

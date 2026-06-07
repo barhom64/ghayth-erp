@@ -224,11 +224,11 @@ router.get("/cost-centers", authorize({ feature: "finance.cost_centers", action:
     void nextParamIndex; // reserved if a future filter needs more params
     const rows = await rawQuery<CostCenterListRow>(
       `SELECT cc.*,
-              CASE WHEN cc."relatedEntityType" = 'project' THEN (SELECT name FROM projects WHERE id = cc."relatedEntityId" AND "companyId" = cc."companyId" AND "deletedAt" IS NULL LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'vehicle' THEN (SELECT "plateNumber" FROM fleet_vehicles WHERE id = cc."relatedEntityId" AND "companyId" = cc."companyId" AND "deletedAt" IS NULL LIMIT 1)
+              CASE WHEN cc."relatedEntityType" = 'project' THEN (SELECT p.name FROM projects p WHERE p.id = cc."relatedEntityId" AND p."companyId" = cc."companyId" AND p."deletedAt" IS NULL LIMIT 1)
+                   WHEN cc."relatedEntityType" = 'vehicle' THEN (SELECT v."plateNumber" FROM fleet_vehicles v WHERE v.id = cc."relatedEntityId" AND v."companyId" = cc."companyId" AND v."deletedAt" IS NULL LIMIT 1)
                    WHEN cc."relatedEntityType" = 'employee' THEN (SELECT e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = cc."relatedEntityId" AND ea."companyId" = cc."companyId" AND e."deletedAt" IS NULL LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'department' THEN (SELECT name FROM departments WHERE id = cc."relatedEntityId" AND "companyId" = cc."companyId" LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'branch' THEN (SELECT name FROM branches WHERE id = cc."relatedEntityId" AND "companyId" = cc."companyId" LIMIT 1)
+                   WHEN cc."relatedEntityType" = 'department' THEN (SELECT d.name FROM departments d WHERE d.id = cc."relatedEntityId" AND d."companyId" = cc."companyId" LIMIT 1)
+                   WHEN cc."relatedEntityType" = 'branch' THEN (SELECT b.name FROM branches b WHERE b.id = cc."relatedEntityId" AND b."companyId" = cc."companyId" LIMIT 1)
                    ELSE NULL
               END AS "relatedEntityName"
        FROM cost_centers cc

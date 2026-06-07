@@ -631,6 +631,80 @@ vendorsRouter.get("/vendors/:id", authorize({ feature: "finance.vendors", action
   }
 });
 
+/**
+ * GET /finance/vendors/:id/contact-summary
+ *
+ * Mirror of /clients/:id/contact-summary for the supplier side. Surfaces
+ * the most recent message_log row matching the vendor's phone/email +
+ * a channel-by-channel count, so the vendor detail page can show "آخر
+ * تواصل" without bouncing to the inbox.
+ *
+ * Tenant-scoped via s."companyId" = ANY($2) (same allowedCompanies
+ * scope the GET /vendors/:id reads with). Falls back to a null payload
+ * when there's no history yet.
+ */
+vendorsRouter.get("/vendors/:id/contact-summary", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
+  try {
+    // as-any-reason: justified-external - Express Request augmentation; scope is injected by authMiddleware but not in Request types here
+    const scope = (req as any).scope!;
+    const id = parseId(req.params.id, "id");
+
+    const [vendor] = await rawQuery<{ phone: string | null; email: string | null }>(
+      `SELECT phone, email FROM suppliers
+        WHERE id = $1 AND "companyId" = ANY($2) AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [id, scope.allowedCompanies],
+    );
+    if (!vendor) throw new NotFoundError("المورد غير موجود");
+
+    const addresses: string[] = [];
+    if (vendor.phone) addresses.push(vendor.phone);
+    if (vendor.email) addresses.push(vendor.email);
+
+    if (addresses.length === 0) {
+      res.json({ data: { lastContact: null, channelCounts: [], totalCount: 0 } });
+      return;
+    }
+
+    type LastContactRow = {
+      id: number; channel: string; direction: string;
+      fromAddress: string | null; toAddress: string | null;
+      subject: string | null; createdAt: string;
+    };
+    const [lastContact] = await rawQuery<LastContactRow>(
+      `SELECT id, channel, direction, "fromAddress", "toAddress", subject, "createdAt"::text
+         FROM v_message_log_all
+        WHERE "companyId" = ANY($1)
+          AND ("fromAddress" = ANY($2) OR "toAddress" = ANY($2))
+          AND "deletedAt" IS NULL
+        ORDER BY "createdAt" DESC LIMIT 1`,
+      [scope.allowedCompanies, addresses],
+    ).catch(() => [] as LastContactRow[]);
+
+    const channelCounts: { channel: string; n: string }[] = await rawQuery<{ channel: string; n: string }>(
+      `SELECT channel, COUNT(*)::text AS n
+         FROM v_message_log_all
+        WHERE "companyId" = ANY($1)
+          AND ("fromAddress" = ANY($2) OR "toAddress" = ANY($2))
+          AND "deletedAt" IS NULL
+        GROUP BY channel
+        ORDER BY channel`,
+      [scope.allowedCompanies, addresses],
+    ).catch(() => [] as { channel: string; n: string }[]);
+
+    const totalCount = channelCounts.reduce((s, r) => s + Number(r.n || 0), 0);
+    res.json({
+      data: {
+        lastContact: lastContact ?? null,
+        channelCounts: channelCounts.map((r) => ({ channel: r.channel, count: Number(r.n) })),
+        totalCount,
+      },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Get vendor contact summary error:");
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // APPROVAL ENDPOINTS — commitments, receivables, vouchers, financial-requests, budgets
 // ─────────────────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, NotFoundError } from "../lib/errorHandler.js";
 import { maskFields, authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
+import { drainProcessedOutboxEntries, getOutboxStats } from "../lib/eventBus.js";
 import {
   EVENT_CATALOG,
   countEventsByDomain,
@@ -221,6 +222,21 @@ eventsRouter.get("/log/stats", authorize({ feature: "admin", action: "view" }), 
     res.json(maskFields(req, { windowDays: days, events: enriched }));
   } catch (err) {
     handleRouteError(err, res, "Event stats error:");
+  }
+});
+
+// ── Outbox drain (phase-2 relay) — admin maintenance trigger ──────────────
+// Marks captured-and-dispatched event_outbox rows 'processed' and reports the
+// pending gauge. Runs automatically on the maintenance interval; this endpoint
+// lets an operator drain on demand. graceSeconds=0 drains everything now.
+eventsRouter.post("/outbox/drain", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    const grace = Math.max(0, Number((req.body ?? {}).graceSeconds ?? 0));
+    const drained = await drainProcessedOutboxEntries(grace);
+    const stats = await getOutboxStats();
+    res.json({ drained, pending: stats.pending, oldestAgeSec: stats.oldestAgeSec });
+  } catch (err) {
+    handleRouteError(err, res, "Outbox drain error:");
   }
 });
 
