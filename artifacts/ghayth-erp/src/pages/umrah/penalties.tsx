@@ -315,8 +315,15 @@ export default function UmrahPenalties() {
         values={filters}
         onChange={setFilters}
         onExportCSV={() =>
+          // Pre-process the status column to its Arabic label so the
+          // operator opening the CSV in Excel sees "مفوترة" not "invoiced".
+          // exportToCSV doesn't accept a per-cell formatter — we
+          // materialise a translated `status` field on the row instead.
           exportToCSV(
-            filteredItems || [],
+            (filteredItems || []).map((p: any) => ({
+              ...p,
+              status: umrahPenaltyStatusLabel(p.status),
+            })),
             [
               { key: "pilgrimName", label: "اسم المعتمر" },
               { key: "passport", label: "الجواز" },
