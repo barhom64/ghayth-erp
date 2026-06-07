@@ -1271,6 +1271,147 @@ router.get("/provisioning/extensions", authorize({ feature: "communications", ac
   } catch (err) { handleRouteError(err, res, "Extensions provisioning error:"); }
 });
 
+/**
+ * POST /communications/click-to-call
+ *
+ * Body: { target: string }  — either a PBX extension ("101") or a full
+ * phone number ("+966500000000"). When a `target` is an extension we
+ * resolve the bound employee to enrich the audit row.
+ *
+ * Two outcomes:
+ *   - PBX integration is active AND exposes a click-to-call endpoint
+ *     (config.clickToCallUrl) → call it (POST originate-style) and log
+ *     the attempt as an outbound pbx row in message_log + pbx_calls.
+ *   - No integration / no endpoint configured → return `mode: 'tel'`
+ *     with the dial string so the UI falls back to a `tel:` link. The
+ *     attempt is still logged so the operator sees who tried to call.
+ *
+ * Never throws on network errors — they're reported as `mode: 'tel'`
+ * with the failure reason so the user can still place the call manually.
+ */
+const clickToCallSchema = z.object({
+  target: z.string().trim().min(1).max(40),
+  relatedType: z.string().optional(),
+  relatedId: z.coerce.number().int().positive().optional(),
+});
+
+router.post("/click-to-call", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(clickToCallSchema.safeParse(req.body));
+
+    // Find the caller's own extension (if any) so the originate call
+    // can pair it with the target. The bare-extension case (3-4 digits)
+    // also looks up the bound employee for the audit row.
+    const [callerExt] = await rawQuery<{ extension: string }>(
+      `SELECT pe.extension
+         FROM pbx_extensions pe
+         JOIN users u ON u."employeeId" = pe."employeeId"
+        WHERE u.id = $1 AND pe."companyId" = $2 AND pe.status = 'active'
+        LIMIT 1`,
+      [scope.userId, scope.companyId],
+    ).catch(() => []);
+
+    let targetEmployeeId: number | null = null;
+    const looksLikeExtension = /^\d{2,6}$/.test(body.target);
+    if (looksLikeExtension) {
+      const [bound] = await rawQuery<{ employeeId: number | null }>(
+        `SELECT "employeeId" FROM pbx_extensions
+          WHERE "companyId" = $1 AND extension = $2 AND status = 'active'
+          LIMIT 1`,
+        [scope.companyId, body.target],
+      ).catch(() => []);
+      targetEmployeeId = bound?.employeeId ?? null;
+    }
+
+    const [pbxIntegration] = await rawQuery<{ config: unknown }>(
+      `SELECT config FROM integrations
+        WHERE "companyId" = $1 AND type = 'pbx' AND status = 'active'
+        ORDER BY id DESC LIMIT 1`,
+      [scope.companyId],
+    ).catch(() => []);
+    const pbxConfig = (pbxIntegration?.config ?? {}) as {
+      clickToCallUrl?: string;
+      apiKey?: string;
+    };
+
+    const callId = `click-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let mode: "pbx" | "tel" = "tel";
+    let detail = "no PBX integration with clickToCallUrl configured";
+    let originatedHttpStatus: number | null = null;
+
+    if (pbxConfig.clickToCallUrl) {
+      try {
+        const resp = await fetch(pbxConfig.clickToCallUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(pbxConfig.apiKey ? { Authorization: `Bearer ${pbxConfig.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            callerExtension: callerExt?.extension ?? null,
+            target: body.target,
+            callId,
+            companyId: scope.companyId,
+          }),
+        });
+        originatedHttpStatus = resp.status;
+        if (resp.ok) {
+          mode = "pbx";
+          detail = "originate accepted by PBX";
+        } else {
+          detail = `PBX originate returned ${resp.status}`;
+        }
+      } catch (e) {
+        detail = e instanceof Error ? `PBX originate failed: ${e.message}` : "PBX originate failed";
+      }
+    }
+
+    // Always log the attempt — the operator should see who tried what
+    // even when the backend gracefully fell back to a tel: link.
+    const { insertId: callPk } = await rawExecute(
+      `INSERT INTO pbx_calls
+         ("companyId", "callId", "callerNumber", "calledNumber", direction, duration, status, "createdAt")
+       VALUES ($1, $2, $3, $4, 'outbound', 0, $5, NOW())`,
+      [scope.companyId, callId, callerExt?.extension ?? `user:${scope.userId}`, body.target, mode === "pbx" ? "initiated" : "pending"],
+    );
+    assertInsert(callPk, "pbx_calls");
+
+    await rawExecute(
+      `INSERT INTO message_log
+         ("companyId", channel, direction, "fromAddress", "toAddress",
+          body, status, folder, "relatedType", "relatedId", "createdAt")
+       VALUES ($1, 'pbx', 'outbound', $2, $3, $4, 'logged', 'sent', $5, $6, NOW())`,
+      [
+        scope.companyId,
+        callerExt?.extension ?? `user:${scope.userId}`,
+        body.target,
+        `click-to-call · mode=${mode} · ${detail}`,
+        body.relatedType ?? (targetEmployeeId ? "employees" : null),
+        body.relatedId ?? targetEmployeeId,
+      ],
+    );
+
+    void emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "communications.call.click_to_call",
+      entity: "pbx_calls", entityId: callPk,
+      details: JSON.stringify({ mode, target: body.target, originatedHttpStatus }),
+    }).catch((e) => logger.warn(e, "[event] click_to_call"));
+
+    res.json({
+      data: {
+        mode,
+        callId,
+        detail,
+        // `tel:` URI for the UI to open as a hyperlink when mode='tel'.
+        // We don't strip non-digits — phone apps handle "+" and "*".
+        telUri: `tel:${body.target.replace(/[^0-9+*#]/g, "")}`,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Click-to-call error:"); }
+});
+
 // Best-effort Arabic→latin local-part slug. Keeps ascii letters/digits,
 // maps common Arabic letters, collapses the rest to dots. Returns "" when
 // nothing usable remains (the form then falls back to the employee number).
