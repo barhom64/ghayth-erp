@@ -20,6 +20,7 @@ import {
   initiateApprovalChain,
   checkFinancialPeriodOpen,
   todayISO,
+  reverseAccountBalances,
 } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -1068,12 +1069,28 @@ custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.cu
       toState: newStatus,
       reason: notes ?? undefined,
       extraWhere: `"deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
-      onApply: async (_row, client) => {
+      onApply: async (row, client) => {
         await client.query(
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
            VALUES ('custody',$1,$2,$3,$4,$5)`,
           [custodyId, newStatus, notes || null, scope.userId, scope.companyId]
         );
+
+        // F10 (audit follow-up): when a custody auto-posted directly to
+        // 'posted' (sub-threshold amount) and is later rejected or
+        // returned, the GL balances that the original POST applied to
+        // chart_of_accounts.currentBalance must be reversed. Symmetric
+        // to the invoice reject/return path in finance-invoices.ts. The
+        // engine flips status='cancelled' after the reversal so the
+        // entry won't double-reverse on retry.
+        if ((newStatus === "rejected" || newStatus === "returned") && (row as any).balancesApplied) {
+          await reverseAccountBalances(scope.companyId, custodyId);
+          await client.query(
+            `UPDATE journal_entries SET status = 'cancelled'
+              WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved') AND "deletedAt" IS NULL`,
+            [custodyId, scope.companyId]
+          );
+        }
       },
       after: { ref: cust.ref, notes: notes ?? null, decision: newStatus },
     });
