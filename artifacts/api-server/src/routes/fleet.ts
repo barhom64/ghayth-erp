@@ -23,7 +23,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
-import { fleetEngine } from "../lib/engines/index.js";
+import { fleetEngine, hrEngine } from "../lib/engines/index.js";
 import { z } from "zod";
 
 // ─── Zod schemas for POST route body validation ─────────────────────────────
@@ -798,6 +798,33 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
       [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.employeeId || null, b.status || 'available']
     );
     assertInsert(insertId, "fleet_drivers");
+
+    // Auto-grant the `driver` role on the linked employee's PRIMARY
+    // active assignment so the SSO flow lands them on /me/driver next
+    // login. Routes through hrEngine to respect the fleet→hr domain
+    // boundary (employee_assignments is HR-owned). The engine method
+    // only upgrades from the lowest tiers ('employee' / '') so a GM
+    // doing a one-off driver assignment isn't silently demoted.
+    if (b.employeeId) {
+      try {
+        const upgraded = await hrEngine.upgradePrimaryAssignmentRoleIfLowTier({
+          companyId: scope.companyId,
+          employeeId: b.employeeId,
+          toRole: "driver",
+        });
+        if (upgraded > 0) {
+          void emitEvent({
+            companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+            action: "hr.assignment.role_auto_upgraded", entity: "employee_assignments", entityId: 0,
+            details: JSON.stringify({ employeeId: b.employeeId, to: "driver", reason: "fleet_driver_linked" }),
+          });
+        }
+      } catch (assignErr) {
+        logger.warn({ err: assignErr, employeeId: b.employeeId },
+          "[fleet] auto-upgrade to driver role failed — HR can set manually");
+      }
+    }
+
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch((e) => logger.error(e, "fleet background task failed"));
