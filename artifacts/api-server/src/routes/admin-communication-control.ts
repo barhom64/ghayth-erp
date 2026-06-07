@@ -101,7 +101,115 @@ router.get("/overview", authorize({ feature: "admin", action: "list" }), async (
   }
 });
 
-// ─────────────────────── unified inbox ────────────────────────────────────
+// ─────────────────────── channel readiness ────────────────────────────────
+
+/**
+ * GET /readiness — per-channel "is this actually wired?" snapshot.
+ *
+ * For each user-facing channel (email/sms/whatsapp/pbx) returns:
+ *   - status: 'ready' | 'partial' | 'inactive' | 'blocked'
+ *   - hasIntegration: active integration row with credentials configured
+ *   - hasRoutingRule: at least one rule (company or global) sending here
+ *   - pendingQueue: rows in outbound_queue waiting to drain
+ *   - failedQueue: rows that failed permanently
+ *   - extras per-channel (mailbox count for email, extension count for pbx)
+ *
+ * Answers the operator question "can I trust that an email actually
+ * arrives if I trigger an event right now?" — instead of having to chase
+ * three tabs and infer the answer.
+ */
+router.get("/readiness", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const cid = req.scope!.companyId;
+
+    const integrationCounts = await rawQuery<{ type: string; active: string }>(
+      `SELECT type, COUNT(*) FILTER (WHERE status = 'active')::text AS active
+         FROM integrations
+        WHERE "companyId" = $1 AND type IN ('email','smtp','sms','whatsapp','pbx')
+        GROUP BY type`,
+      [cid],
+    ).catch(() => [] as { type: string; active: string }[]);
+
+    const queueCounts = await rawQuery<{ channel: string; status: string; n: string }>(
+      `SELECT channel, status, COUNT(*)::text AS n
+         FROM outbound_queue
+        WHERE "companyId" = $1
+          AND "createdAt" > NOW() - INTERVAL '24 hours'
+        GROUP BY channel, status`,
+      [cid],
+    ).catch(() => [] as { channel: string; status: string; n: string }[]);
+
+    // A channel has a routing rule when any active rule (company or
+    // global) lists it. We pull the channels arrays and reduce in JS so
+    // we don't need a jsonb operator in the SELECT clause.
+    const rules = await rawQuery<{ channels: unknown; isActive: boolean }>(
+      `SELECT channels, "isActive"
+         FROM notification_routing_rules
+        WHERE ("companyId" = $1 OR "companyId" IS NULL) AND "isActive" = true`,
+      [cid],
+    ).catch(() => [] as { channels: unknown; isActive: boolean }[]);
+    const enabledByChannel = new Set<string>();
+    for (const r of rules) {
+      const arr = typeof r.channels === "string" ? JSON.parse(r.channels) : r.channels;
+      if (Array.isArray(arr)) for (const c of arr) enabledByChannel.add(String(c));
+    }
+
+    const mailboxCount = await rawQuery<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM mailbox_accounts
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+      [cid],
+    ).catch(() => [{ n: "0" }] as { n: string }[]);
+    const extensionCount = await rawQuery<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM pbx_extensions
+        WHERE "companyId" = $1 AND status = 'active'`,
+      [cid],
+    ).catch(() => [{ n: "0" }] as { n: string }[]);
+
+    type ChannelKey = "email" | "sms" | "whatsapp" | "pbx";
+    const integrationFor: Record<ChannelKey, string[]> = {
+      email: ["email", "smtp"],
+      sms: ["sms"],
+      whatsapp: ["whatsapp"],
+      pbx: ["pbx"],
+    };
+
+    const channelInfo = (k: ChannelKey) => {
+      const integrationTypes = integrationFor[k];
+      const hasIntegration = integrationCounts
+        .filter((r) => integrationTypes.includes(r.type))
+        .reduce((s, r) => s + Number(r.active || 0), 0) > 0;
+      const pending = queueCounts.find((q) => q.channel === k && q.status === "pending");
+      const failed = queueCounts.find((q) => q.channel === k && q.status === "failed");
+      const hasRoutingRule = enabledByChannel.has(k);
+      let status: "ready" | "partial" | "inactive" | "blocked";
+      if (!hasIntegration && !hasRoutingRule) status = "inactive";
+      else if (!hasIntegration || !hasRoutingRule) status = "partial";
+      else if (Number(failed?.n ?? 0) > 0) status = "blocked";
+      else status = "ready";
+      const base = {
+        channel: k,
+        status,
+        hasIntegration,
+        hasRoutingRule,
+        pendingQueue: Number(pending?.n ?? 0),
+        failedQueue: Number(failed?.n ?? 0),
+      };
+      if (k === "email") return { ...base, connectedMailboxes: Number(mailboxCount[0]?.n ?? 0) };
+      if (k === "pbx") return { ...base, activeExtensions: Number(extensionCount[0]?.n ?? 0) };
+      return base;
+    };
+
+    res.json({
+      data: {
+        channels: [channelInfo("email"), channelInfo("sms"), channelInfo("whatsapp"), channelInfo("pbx")],
+        // Routing rule + integration counts as a small at-a-glance bag.
+        rulesActive: rules.length,
+      },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "admin/communication-control/readiness");
+  }
+});
 
 /**
  * GET /inbox — unified inbound view across communications_log +
