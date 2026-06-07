@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { ShieldAlert, Plus, Trash2, AlertTriangle, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { actionLabelAr } from "@/lib/permission-labels";
 import {
   FormShell,
   FormTextField,
@@ -303,7 +304,7 @@ function ActionPicker({ pairKey, features }: { pairKey: "A" | "B"; features: Fea
       required
       options={[
         { value: "", label: selectedFeature ? "اختر الإجراء" : "اختر الميزة أولاً" },
-        ...(feat?.available_actions ?? []).map((a) => ({ value: a, label: a })),
+        ...(feat?.available_actions ?? []).map((a) => ({ value: a, label: actionLabelAr(a) })),
       ]}
     />
   );
