@@ -30,6 +30,8 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { useAppContext } from "@/contexts/app-context";
 import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 // Seed initial tab from the URL — /legal/cases, /legal/contracts, /legal/financial,
 // /legal/documents all route here, and without this seed each would land on
@@ -102,6 +104,7 @@ function ContractsTab() {
     statusField: "status",
     dateField: "",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/legal/contracts",
@@ -182,6 +185,24 @@ function ContractsTab() {
             resultCount={filtered.length}
           />
         </div>
+        <PrintButton
+          entityType="report_legal_contracts"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة العقود"
+          payload={() => ({
+            entity: { title: "قائمة العقود القانونية", total: printRows.length },
+            items: printRows.map((c: any) => ({
+              "العنوان": c.title || "—",
+              "النوع": c.contractType || "—",
+              "الطرف": c.partyName || "—",
+              "من": c.startDate ? formatDateAr(c.startDate) : "—",
+              "إلى": c.endDate ? formatDateAr(c.endDate) : "—",
+              "القيمة": Number(c.value || 0),
+              "الحالة": c.status || "—",
+            })),
+          })}
+        />
         {canManage && <Link href="/legal/create"><GuardedButton perm="legal:create" className="gap-2"><Plus className="h-4 w-4" /> عقد جديد</GuardedButton></Link>}
       </div>
 
@@ -209,6 +230,7 @@ function ContractsTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
@@ -245,6 +267,7 @@ function CasesTab() {
     searchFields: ["title", "opposingParty", "caseNumber"],
     statusField: "status",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/legal/cases",
@@ -321,6 +344,24 @@ function CasesTab() {
             resultCount={filtered.length}
           />
         </div>
+        <PrintButton
+          entityType="report_legal_cases"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة القضايا"
+          payload={() => ({
+            entity: { title: "قائمة القضايا القانونية", total: printRows.length },
+            items: printRows.map((c: any) => ({
+              "رقم القضية": c.caseNumber || "—",
+              "العنوان": c.title || "—",
+              "المحكمة": c.court || "—",
+              "الخصم": c.opposingParty || "—",
+              "المحامي": c.lawyerName || "—",
+              "الأولوية": c.priority || "—",
+              "الحالة": c.status || "—",
+            })),
+          })}
+        />
         <Link href="/legal/cases/create"><GuardedButton perm="legal:create" className="gap-2"><Plus className="h-4 w-4" /> قضية جديدة</GuardedButton></Link>
       </div>
       <Card>
@@ -328,6 +369,7 @@ function CasesTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

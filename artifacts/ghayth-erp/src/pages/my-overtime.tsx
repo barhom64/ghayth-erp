@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   pending: { label: "معلق", color: "text-status-warning-foreground bg-status-warning-surface" },
@@ -66,6 +68,7 @@ export default function MyOvertime() {
   if (isError) return <ErrorState />;
 
   const records: any[] = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(records);
 
   const totalHours = records.reduce((s: number, r: any) => s + Number(r.hours || 0), 0);
   const totalAmount = records.reduce((s: number, r: any) => s + Number(r.totalAmount || 0), 0);
@@ -77,7 +80,28 @@ export default function MyOvertime() {
       breadcrumbs={[
         { href: "/my-space", label: "مساحاتي" },
         { label: "ساعاتي الإضافية" },
-      ]} subtitle="متابعة ساعات العمل الإضافية والتعويضات">
+      ]} subtitle="متابعة ساعات العمل الإضافية والتعويضات"
+      actions={
+        <PrintButton
+          entityType="report_my_overtime"
+          entityId="list"
+          size="icon"
+          label="طباعة كشف ساعاتي الإضافية"
+          payload={() => ({
+            entity: { title: `كشف الساعات الإضافية — ${month}`, total: printRows.length, totalHours, totalAmount },
+            items: printRows.map((r: any) => ({
+              "الرقم": `#${r.overtimeNumber || r.id}`,
+              "التاريخ": formatDateAr(r.date),
+              "من": r.startTime || "—",
+              "إلى": r.endTime || "—",
+              "الساعات": Number(r.hours || 0).toFixed(1),
+              "المضاعف": multiplierLabels[String(r.multiplier ?? "1.25")] || `×${r.multiplier}`,
+              "المبلغ": Number(r.totalAmount || 0),
+              "الحالة": statusConfig[r.status]?.label || r.status,
+            })),
+          })}
+        />
+      }>
       <div className="flex items-center gap-3 mb-6">
         <label className="text-sm font-medium text-status-neutral-foreground">الشهر:</label>
         <input
@@ -113,6 +137,7 @@ export default function MyOvertime() {
       <DataTable
         columns={overtimeColumns}
         data={records}
+        onSortedDataChange={setPrintRows}
         onRowClick={(r) => navigate(`/hr/overtime/${r.id}`)}
         emptyMessage="لا توجد سجلات وقت إضافي لهذا الشهر"
         emptyIcon={<Timer size={36} className="opacity-40" />}
