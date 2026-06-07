@@ -39,6 +39,7 @@ import {
   VOUCHER_HEADER_MAP,
   UMRAH_FIELD_LABELS_AR,
 } from "../lib/umrahImportEngine.js";
+import { gccExclusionSqlFragment } from "../lib/umrahNationalityRules.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEASON LOCK — rejects writes on closed/archived seasons
@@ -469,13 +470,18 @@ router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), asyn
       ),
       // Visa-expiring within 7 days — mirrors the list-page banner +
       // the per-group card. Excludes pilgrims who already left.
+      // Also excludes GCC nationals — they don't require a visa to
+      // enter KSA, so a `visaExpiry` row for them is operator data
+      // entry from a different jurisdiction (or a typo); either way,
+      // alerting on them is a false positive.
       rawQuery<{ count: string }>(
         `SELECT COUNT(*)::text AS count
            FROM umrah_pilgrims
           WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
             AND "visaExpiry" IS NOT NULL
             AND "visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
-            AND status NOT IN ('departed', 'cancelled')`,
+            AND status NOT IN ('departed', 'cancelled')
+            AND ${gccExclusionSqlFragment(`"nationality"`)}`,
         [id, scope.companyId],
       ),
       rawQuery<{ count: string }>(
@@ -953,10 +959,13 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
     if (visaExpiringWithin) {
       const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
       params.push(days);
+      // GCC nationals don't need a KSA visa — exclude them from the
+      // expiring-alert list (same rule the season-detail KPI uses).
       where += ` AND p."visaExpiry" IS NOT NULL
                  AND p."visaExpiry" >= CURRENT_DATE
                  AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
-                 AND p.status NOT IN ('departed','cancelled')`;
+                 AND p.status NOT IN ('departed','cancelled')
+                 AND ${gccExclusionSqlFragment(`p."nationality"`)}`;
     }
     if (search) {
       // Search hits four columns:
@@ -1029,10 +1038,13 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     if (visaExpiringWithin) {
       const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
       params.push(days);
+      // GCC nationals don't need a KSA visa — exclude them from the
+      // expiring-alert list (same rule the season-detail KPI uses).
       where += ` AND p."visaExpiry" IS NOT NULL
                  AND p."visaExpiry" >= CURRENT_DATE
                  AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
-                 AND p.status NOT IN ('departed','cancelled')`;
+                 AND p.status NOT IN ('departed','cancelled')
+                 AND ${gccExclusionSqlFragment(`p."nationality"`)}`;
     }
     if (search) {
       const searchHash = blindIndex(String(search));
