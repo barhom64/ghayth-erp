@@ -8058,7 +8058,15 @@ CREATE TABLE public.fleet_fuel_logs (
     "stationName" character varying(200),
     "createdAt" timestamp without time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
-    "tripId" integer
+    "tripId" integer,
+    "accountingTreatment" text,
+    rechargeable boolean DEFAULT false NOT NULL,
+    "billToCustomer" integer,
+    "customerBillableAmount" numeric(14,2),
+    "linkedExpenseId" integer,
+    "liabilityParty" text,
+    CONSTRAINT fleet_fuel_logs_acct_treatment_check CHECK (("accountingTreatment" IS NULL OR "accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text]))),
+    CONSTRAINT fleet_fuel_logs_liability_check CHECK (("liabilityParty" IS NULL OR "liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text])))
 );
 
 
@@ -8179,7 +8187,15 @@ CREATE TABLE public.fleet_maintenance (
     "performedBy" character varying(200),
     status character varying(20) DEFAULT 'completed'::character varying,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "accountingTreatment" text,
+    rechargeable boolean DEFAULT false NOT NULL,
+    "billToCustomer" integer,
+    "customerBillableAmount" numeric(14,2),
+    "linkedExpenseId" integer,
+    "liabilityParty" text,
+    CONSTRAINT fleet_maintenance_acct_treatment_check CHECK (("accountingTreatment" IS NULL OR "accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text]))),
+    CONSTRAINT fleet_maintenance_liability_check CHECK (("liabilityParty" IS NULL OR "liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text])))
 );
 
 
@@ -8463,8 +8479,88 @@ CREATE TABLE public.fleet_traffic_violations (
     "paidBy" integer,
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "accountingTreatment" text,
+    rechargeable boolean DEFAULT false NOT NULL,
+    "billToCustomer" integer,
+    "customerBillableAmount" numeric(14,2),
+    "linkedExpenseId" integer,
+    "liabilityParty" text,
+    CONSTRAINT fleet_traffic_violations_acct_treatment_check CHECK (("accountingTreatment" IS NULL OR "accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text]))),
+    CONSTRAINT fleet_traffic_violations_liability_check CHECK (("liabilityParty" IS NULL OR "liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text])))
 );
+
+
+--
+-- Name: fleet_expense_rules; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Comment 7 — expense classification rules engine.
+
+CREATE TABLE public.fleet_expense_rules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "ruleName" text NOT NULL,
+    "expenseSource" text NOT NULL,
+    "vehicleId" integer,
+    "vehicleType" text,
+    "stationName" text,
+    "maintenanceType" text,
+    "violationType" text,
+    "defaultAccountingTreatment" text,
+    "defaultRechargeable" boolean DEFAULT false NOT NULL,
+    "defaultLiabilityParty" text,
+    "defaultCostCenterId" integer,
+    "requiresApproval" boolean DEFAULT false NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT fleet_expense_rules_source_check CHECK (("expenseSource" = ANY (ARRAY['fuel_log'::text, 'maintenance'::text, 'traffic_violation'::text]))),
+    CONSTRAINT fleet_expense_rules_acct_check CHECK (("defaultAccountingTreatment" IS NULL OR "defaultAccountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text])))
+);
+
+CREATE SEQUENCE public.fleet_expense_rules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.fleet_expense_rules_id_seq OWNED BY public.fleet_expense_rules.id;
+
+
+--
+-- Name: transport_intake_rules; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Comment 5/6 — Intake Engine for TRIP/SERVICE capture (NOT expenses).
+
+CREATE TABLE public.transport_intake_rules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "ruleName" text NOT NULL,
+    "operationType" text NOT NULL,
+    "transportServiceType" text NOT NULL,
+    "customerId" integer,
+    "bookingSource" text,
+    "requiredVehicleType" text,
+    "requiredLicenseClass" text,
+    "defaultCostCenterId" integer,
+    "requiresAttachment" boolean DEFAULT false NOT NULL,
+    "requiresApproval" boolean DEFAULT false NOT NULL,
+    "createsBookingDraft" boolean DEFAULT false NOT NULL,
+    "createsBillingCandidate" boolean DEFAULT false NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_intake_rules_op_check CHECK (("operationType" = ANY (ARRAY['booking'::text, 'dispatch'::text, 'service_line'::text]))),
+    CONSTRAINT transport_intake_rules_service_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
+);
+
+CREATE SEQUENCE public.transport_intake_rules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_intake_rules_id_seq OWNED BY public.transport_intake_rules.id;
 
 
 --

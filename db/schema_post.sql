@@ -3986,6 +3986,23 @@ CREATE INDEX IF NOT EXISTS idx_invoice_links_invoice
 
 
 --
+-- #1733 final gaps — fleet_expense_rules + transport_intake_rules.
+--
+
+ALTER TABLE ONLY public.fleet_expense_rules ALTER COLUMN id SET DEFAULT nextval('public.fleet_expense_rules_id_seq'::regclass);
+ALTER TABLE ONLY public.fleet_expense_rules ADD CONSTRAINT fleet_expense_rules_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_expense_rules_lookup
+  ON public.fleet_expense_rules ("companyId", "expenseSource", "vehicleId", "isActive")
+  WHERE "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_intake_rules ALTER COLUMN id SET DEFAULT nextval('public.transport_intake_rules_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_intake_rules ADD CONSTRAINT transport_intake_rules_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_intake_rules_lookup
+  ON public.transport_intake_rules ("companyId", "operationType", "transportServiceType", "customerId")
+  WHERE "isActive" AND "deletedAt" IS NULL;
+
+
+--
 -- Name: idx_fleet_tires_vehicle; Type: INDEX; Schema: public; Owner: -
 --
 
