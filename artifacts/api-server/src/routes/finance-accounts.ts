@@ -9,10 +9,10 @@ import {
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { authMiddleware, type RequestScope } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO, toDateISO } from "../lib/businessHelpers.js";
-import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { buildScopedWhere, parseScopeFilters, type ScopeFilters } from "../lib/scopedQuery.js";
 import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -30,6 +30,9 @@ const createAccountSchema = z.object({
   nature: z.string().refine((v) => (ACCOUNT_NATURES as readonly string[]).includes(v), { message: "طبيعة الحساب غير صالحة" }).optional().default("debit"),
   allowPosting: z.boolean().optional().default(true),
   isAnalytical: z.boolean().optional().default(false),
+  // Hybrid COA: null/omitted = shared company account; a branch id makes
+  // this a branch-specific sub-account under the shared tree.
+  branchId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const updateAccountSchema = z.object({
@@ -198,13 +201,51 @@ async function assertValidAccountParent(
   }
 }
 
+/**
+ * Hybrid per-branch chart of accounts scoping.
+ *
+ * The COA is a *company-level* tree (one set of codes per company). Each
+ * branch may add its own sub-accounts under that shared tree. So:
+ *   - Company codes (branchId IS NULL) are ALWAYS visible.
+ *   - Picking a specific branch additionally surfaces that branch's own
+ *     sub-accounts (branchId = picked) and hides other branches' ones.
+ *   - No branch picked (company / overview) → the whole company tree,
+ *     de-duplicated.
+ *
+ * It also fixes the duplicate-codes report: when the header picker sits on
+ * "all companies" the request carries no companyIds, and the generic
+ * buildScopedWhere would union every allowed company — so code 1000 shows
+ * up once per company. COA is per-company, so we default to the active
+ * company (scope.companyId) unless the caller explicitly filtered.
+ */
+function buildCoaScope(
+  scope: RequestScope,
+  filters: ScopeFilters,
+  alias = "",
+): { where: string; params: unknown[] } {
+  const col = (c: string) => (alias ? `${alias}."${c}"` : `"${c}"`);
+  const companyIds = filters.companyIds?.length
+    ? filters.companyIds.filter((id) => scope.allowedCompanies.includes(id))
+    : [scope.companyId];
+  const params: unknown[] = [companyIds.length ? companyIds : [scope.companyId]];
+  let where = `${col("companyId")} = ANY($1)`;
+  const branchIds = filters.branchIds?.length
+    ? filters.branchIds.filter((id) => scope.allowedBranches.includes(id))
+    : [];
+  if (branchIds.length) {
+    params.push(branchIds);
+    where += ` AND (${col("branchId")} IS NULL OR ${col("branchId")} = ANY($${params.length}))`;
+  }
+  return { where, params };
+}
+
 accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
+    const { where, params } = buildCoaScope(scope, filters);
     const accounts = await rawQuery<ChartOfAccountsBriefRow>(
-      `SELECT id, code, name, type, "parentCode", status
+      `SELECT id, code, name, type, "parentCode", status, "branchId"
        FROM chart_of_accounts
        WHERE ${where} AND "deletedAt" IS NULL
        ORDER BY code ASC`,
@@ -220,7 +261,7 @@ accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action:
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
+    const { where, params } = buildCoaScope(scope, filters, "c");
     const { search, type: accountType, postingOnly } = req.query as { search?: string; type?: string; postingOnly?: string };
 
     let extraWhere = "";
@@ -251,15 +292,57 @@ accountsRouter.post("/accounts", authorize({ feature: "finance.accounts", action
     const scope = req.scope!;
 
     const b = zodParse(createAccountSchema.safeParse(req.body ?? {}));
+    // Hybrid COA: branchId null = a shared company account; a branchId
+    // makes this a branch-specific sub-account that hangs under the shared
+    // company tree. Enforce the model invariants so branch accounts can't
+    // drift outside the shared tree or onto a foreign company's branch.
+    const branchId: number | null = b.branchId ?? null;
+    if (branchId !== null) {
+      if (!scope.allowedBranches.includes(branchId)) {
+        throw new ValidationError("الفرع المحدد خارج نطاق صلاحياتك", {
+          field: "branchId",
+          fix: "اختر فرعاً ضمن صلاحياتك أو اترك الحساب مشتركاً على مستوى الشركة",
+        });
+      }
+      // The branch must belong to THIS company — a privileged multi-company
+      // user could otherwise graft a company-A account onto a company-B branch.
+      const [branchRow] = await rawQuery<{ id: number }>(
+        `SELECT id FROM branches WHERE id = $1 AND "companyId" = $2`,
+        [branchId, scope.companyId],
+      );
+      if (!branchRow) {
+        throw new ValidationError("الفرع لا يتبع الشركة الحالية", {
+          field: "branchId",
+          fix: "اختر فرعاً تابعاً للشركة الحالية",
+        });
+      }
+      // A branch sub-account must sit under a shared (company-level) parent.
+      if (!b.parentCode) {
+        throw new ValidationError("الحساب الخاص بالفرع يجب أن يكون فرعياً تحت حساب أب مشترك", {
+          field: "parentCode",
+          fix: "اختر حساباً أباً مشتركاً على مستوى الشركة",
+        });
+      }
+      const [parentRow] = await rawQuery<{ branchId: number | null }>(
+        `SELECT "branchId" FROM chart_of_accounts WHERE code = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [b.parentCode, scope.companyId],
+      );
+      if (parentRow && parentRow.branchId !== null) {
+        throw new ValidationError("يجب أن يكون الحساب الأب مشتركاً على مستوى الشركة", {
+          field: "parentCode",
+          fix: "اختر حساباً أباً غير مرتبط بفرع",
+        });
+      }
+    }
     if (b.parentCode) {
       await assertValidAccountParent(scope.companyId, b.code, b.type, b.parentCode);
     }
     const [row] = await rawQuery<ChartOfAccountsRow>(
-      `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO chart_of_accounts ("companyId", "branchId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT ("companyId", code) DO NOTHING
        RETURNING *`,
-      [scope.companyId, b.code, b.name, b.type, b.parentCode ?? null, b.nameEn ?? null, b.nature, b.allowPosting, b.isAnalytical]
+      [scope.companyId, branchId, b.code, b.name, b.type, b.parentCode ?? null, b.nameEn ?? null, b.nature, b.allowPosting, b.isAnalytical]
     );
     if (!row) throw new ConflictError("رمز الحساب مستخدم مسبقاً", { field: "code", fix: "استخدم رمزاً مختلفاً للحساب" });
 

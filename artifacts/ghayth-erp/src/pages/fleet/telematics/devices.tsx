@@ -300,7 +300,7 @@ export default function FleetTelematicsDevices() {
       />
       <Card className="mt-4">
         <CardContent className="p-0">
-          <DataTable<DeviceRow>
+          <DataTable
             columns={columns}
             data={rows}
             isLoading={isLoading}

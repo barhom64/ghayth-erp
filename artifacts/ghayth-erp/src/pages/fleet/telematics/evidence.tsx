@@ -347,7 +347,7 @@ export default function FleetTelematicsEvidence() {
             النتائج محدودة بآخر 200 سطر؛ ضيّق المرشحات للبحث في
             فترات أوسع. الأدلة تُحفظ ما لم يُحذفها cron الـ retention.
           </p>
-          <DataTable<MediaEvidenceRow>
+          <DataTable
             columns={columns}
             data={rows}
             isLoading={isLoading}
