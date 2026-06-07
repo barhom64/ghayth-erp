@@ -15,6 +15,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { amountTaxSplit } from "@/lib/tax-math";
+import { filterAccountsForPaymentMethod } from "@/lib/finance-account-usage";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
@@ -205,14 +206,19 @@ export default function ExpensesCreate() {
   const projects = projectsData?.data || [];
   const accounts = accountsData?.data || [];
   const expenseAccounts = accounts.filter((a: any) => a.type === "expense" || a.code?.startsWith("5"));
-  // خزائن وبنوك فقط (11xx = نقد، 12xx = بنوك) — لتفادي اختيار حسابات مدينة/ذمم عن طريق الخطأ
-  const sourceAccounts = accounts.filter((a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"));
+  // #1715: money accounts (any payable/receivable source) classified by
+  // accountUsage; unclassified fall back to the legacy 11xx/12xx
+  // heuristic so the picker is never empty during the classification
+  // window. The per-payment-method narrowing happens below, once `form`
+  // is available.
+  const moneyAccounts = accounts.filter(
+    (a: any) =>
+      a.accountUsage
+        ? ["cash_box", "bank", "custody", "card", "cheque"].includes(a.accountUsage)
+        : a.code?.startsWith("11") || a.code?.startsWith("12"),
+  );
 
   const expenseOptions: AutocompleteOption[] = expenseAccounts.map((a: any) => ({
-    value: a.code || String(a.id),
-    label: `${a.code} - ${a.name}`,
-  }));
-  const sourceOptions: AutocompleteOption[] = sourceAccounts.map((a: any) => ({
     value: a.code || String(a.id),
     label: `${a.code} - ${a.name}`,
   }));
@@ -257,6 +263,16 @@ export default function ExpensesCreate() {
 
   const { form, setForm, clearDraft, isDirty, hasDraft } = useAutoDraft("expense-create", defaultForm);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  // #1715: narrow the money-source picker to accounts whose usage matches
+  // the chosen payment method (نقدي→صناديق فقط، تحويل→بنوك فقط، …). The
+  // backend (financePostingPolicy) rejects any mismatch even if the UI is
+  // bypassed.
+  const sourceAccounts = filterAccountsForPaymentMethod(moneyAccounts, form.paymentMethod);
+  const sourceOptions: AutocompleteOption[] = sourceAccounts.map((a: any) => ({
+    value: a.code || String(a.id),
+    label: `${a.code} - ${a.name}`,
+  }));
 
   // Audit item #2 — per-line allocation overrides. Default state mirrors
   // the auto-derived fields (accountCode + costCenter + relatedEntity)
