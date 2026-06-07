@@ -360,6 +360,7 @@ invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action:
       companyColumn: 'i."companyId"',
       branchColumn: 'i."branchId"',
       enforceBranchScope: true,
+      includeNullBranch: true,
       softDeleteColumn: 'i."deletedAt"',
     });
 

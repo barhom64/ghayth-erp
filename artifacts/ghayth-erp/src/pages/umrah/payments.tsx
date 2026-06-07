@@ -18,6 +18,8 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
+  resolveStatus,
 } from "@workspace/ui-core";
 import { Banknote, Plus, Wallet, TrendingUp, Users } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -172,7 +174,7 @@ export default function UmrahPayments() {
                 "المبلغ": Number(p.amount || 0),
                 "الطريقة": p.method || p.paymentMethod || "—",
                 "التاريخ": p.paymentDate || p.createdAt || "—",
-                "الحالة": p.status || "—",
+                "الحالة": (p.status && resolveStatus(p.status)?.label) ?? p.status ?? "—",
               })),
             })}
           />
@@ -221,6 +223,23 @@ export default function UmrahPayments() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered as unknown as Record<string, unknown>[] || [],
+            [
+              { key: "ref", label: "المرجع" },
+              { key: "subAgentName", label: "الوكيل الفرعي" },
+              { key: "amount", label: "المبلغ" },
+              { key: "currency", label: "العملة" },
+              { key: "sarAmount", label: "المبلغ بالريال" },
+              { key: "exchangeRate", label: "سعر الصرف" },
+              { key: "method", label: "طريقة الدفع" },
+              { key: "externalReference", label: "المرجع الخارجي" },
+              { key: "paymentDate", label: "تاريخ الدفع" },
+            ],
+            "مدفوعات-العمرة",
+          )
+        }
         resultCount={filtered.length}
       />
 

@@ -20,6 +20,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   PageShell,
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -237,6 +238,21 @@ export default function TiresPage() {
         config={{ searchPlaceholder: "ابحث بـ رقم اللوحة، البراند، المقاس..." }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "plateNumber", label: "المركبة" },
+              { key: "position", label: "الموقع" },
+              { key: "brand", label: "البراند" },
+              { key: "size", label: "المقاس" },
+              { key: "installMileage", label: "عند التركيب (كم)" },
+              { key: "installDate", label: "تاريخ التركيب" },
+              { key: "status", label: "الحالة" },
+            ],
+            "إطارات-الأسطول",
+          )
+        }
         resultCount={filtered.length}
       />
 

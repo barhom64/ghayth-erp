@@ -20,6 +20,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   FormShell,
   FormTextField,
   FormTextareaField,
@@ -295,6 +296,22 @@ export default function RisksPage() {
             }}
             values={filters}
             onChange={setFilters}
+            onExportCSV={() =>
+              exportToCSV(
+                filtered || [],
+                [
+                  { key: "title", label: "عنوان المخاطرة" },
+                  { key: "description", label: "التفاصيل" },
+                  { key: "riskLevel", label: "مستوى الخطورة" },
+                  { key: "probability", label: "الاحتمالية" },
+                  { key: "impact", label: "الأثر" },
+                  { key: "riskScore", label: "الدرجة" },
+                  { key: "mitigationPlan", label: "خطة التخفيف" },
+                  { key: "status", label: "الحالة" },
+                ],
+                "مخاطر-المشروع",
+              )
+            }
             resultCount={filtered.length}
           />
 

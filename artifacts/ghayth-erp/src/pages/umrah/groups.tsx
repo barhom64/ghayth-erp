@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, PageShell, resolveStatus } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
@@ -336,7 +336,7 @@ export default function UmrahGroups() {
                 "الوكيل": g.agentName || "—",
                 "الموسم": g.seasonName || "—",
                 "العدد": g.pilgrimCount ?? 0,
-                "الحالة": g.status || "—",
+                "الحالة": (g.status && resolveStatus(g.status)?.label) ?? g.status ?? "—",
               })),
             })}
           />

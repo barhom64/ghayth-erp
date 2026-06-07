@@ -175,13 +175,23 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
       // registry is populated (POST /parties/backfill), then "محمد" surfaces
       // once instead of N times across the silo tables.
       shouldSearch("parties") || shouldSearch("all") ? rawQuery<PartyHit>(
-        `SELECT p.id, p."displayName" AS name, p.phone, p.email, p."nationalId",
-                (SELECT string_agg(DISTINCT pl.role, ',') FROM party_links pl WHERE pl."partyId" = p.id) AS roles,
+        // Was N+1: correlated string_agg per party row over party_links.
+        // LIMIT 10 caps the surface but the per-row lookup still fires
+        // up to 10 times during search-as-you-type. Single GROUP BY CTE
+        // collapses the roles column to one scan.
+        `WITH party_roles AS (
+           SELECT "partyId", string_agg(DISTINCT role, ',') AS roles
+             FROM party_links
+            GROUP BY "partyId"
+         )
+         SELECT p.id, p."displayName" AS name, p.phone, p.email, p."nationalId",
+                pr.roles AS roles,
                 'party' AS type
-         FROM parties p
-         WHERE p."companyId" = $1
-           AND (p."displayName" ILIKE $2 OR p.phone ILIKE $2 OR p."nationalId" ILIKE $2 OR p.email ILIKE $2)
-         LIMIT 10`,
+           FROM parties p
+           LEFT JOIN party_roles pr ON pr."partyId" = p.id
+          WHERE p."companyId" = $1
+            AND (p."displayName" ILIKE $2 OR p.phone ILIKE $2 OR p."nationalId" ILIKE $2 OR p.email ILIKE $2)
+          LIMIT 10`,
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
