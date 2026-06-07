@@ -210,6 +210,33 @@ transportBillingCandidatesRouter.post(
           [journalEntryId, scope.userId, id, scope.companyId],
         );
 
+        // #1733 Foundation — close the operational loop:
+        //   • cargo_manifest: ready_for_invoice → financially_closed
+        //     (terminal post-invoice state).
+        //   • cargo_manifests.billingStatus: → invoiced.
+        //   • transport_service_lines.billingStatus: → invoiced (so the
+        //     accountant queue stops showing it).
+        if (candidate.sourceType === "cargo_manifest") {
+          await tx.query(
+            `UPDATE cargo_manifests
+                SET status = 'financially_closed',
+                    "billingStatus" = 'invoiced',
+                    "updatedAt" = NOW()
+              WHERE id = $1 AND "companyId" = $2 AND status = 'ready_for_invoice'`,
+            [candidate.sourceId, scope.companyId],
+          );
+          await tx.query(
+            `UPDATE transport_service_lines
+                SET "billingStatus" = 'invoiced',
+                    "invoiceId" = COALESCE("invoiceId", $1),
+                    "updatedAt" = NOW()
+              WHERE "companyId" = $2
+                AND "sourceType" = 'cargo_manifest'
+                AND "sourceId" = $3`,
+            [journalEntryId, scope.companyId, candidate.sourceId],
+          );
+        }
+
         return { journalEntryId };
       });
 

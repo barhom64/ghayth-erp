@@ -19489,8 +19489,72 @@ CREATE TABLE public.cargo_manifests (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'requested'::character varying, 'approved'::character varying, 'assigned_to_driver'::character varying, 'driver_accepted'::character varying, 'trip_started'::character varying, 'arrived_pickup'::character varying, 'loaded'::character varying, 'in_transit'::character varying, 'arrived_delivery'::character varying, 'delivered'::character varying, 'completed'::character varying, 'cancelled'::character varying])::text[])))
+    "billingStatus" text DEFAULT 'not_billable'::text NOT NULL,
+    "transportServiceType" text DEFAULT 'cargo_load'::text NOT NULL,
+    CONSTRAINT cargo_manifests_billing_status_check CHECK (("billingStatus" = ANY (ARRAY['not_billable'::text, 'ready_for_accounting'::text, 'under_review'::text, 'invoiced'::text, 'excluded'::text]))),
+    CONSTRAINT cargo_manifests_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text]))),
+    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'requested'::character varying, 'approved'::character varying, 'assigned_to_driver'::character varying, 'driver_accepted'::character varying, 'trip_started'::character varying, 'arrived_pickup'::character varying, 'loaded'::character varying, 'in_transit'::character varying, 'arrived_delivery'::character varying, 'delivered'::character varying, 'completed'::character varying, 'ready_for_invoice'::character varying, 'financially_closed'::character varying, 'cancelled'::character varying])::text[])))
 );
+
+
+--
+-- Name: transport_service_lines; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Foundation — operational-to-billable bridge.
+
+CREATE TABLE public.transport_service_lines (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "customerId" integer,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "sourceRef" text,
+    "serviceType" text NOT NULL,
+    "serviceDate" date NOT NULL,
+    "tripId" integer,
+    "manifestId" integer,
+    "umrahTransportId" integer,
+    "vehicleId" integer,
+    "driverId" integer,
+    "routeFrom" text,
+    "routeTo" text,
+    "cargoType" text,
+    "passengerCount" integer,
+    quantity numeric(18,3) DEFAULT 0 NOT NULL,
+    "unitOfMeasure" text,
+    "unitPrice" numeric(18,4),
+    "lineTotal" numeric(18,2),
+    "billingStatus" text DEFAULT 'ready_for_accounting'::text NOT NULL,
+    "invoiceId" integer,
+    "invoiceLineId" integer,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT transport_service_lines_billing_status_check CHECK (("billingStatus" = ANY (ARRAY['ready_for_accounting'::text, 'under_review'::text, 'invoiced'::text, 'excluded'::text]))),
+    CONSTRAINT transport_service_lines_service_type_check CHECK (("serviceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
+);
+
+
+--
+-- Name: transport_service_lines_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_service_lines_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_service_lines_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_service_lines_id_seq OWNED BY public.transport_service_lines.id;
 
 
 --

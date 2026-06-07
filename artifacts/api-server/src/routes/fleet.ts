@@ -785,29 +785,11 @@ router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", acti
       action: "fleet.cargo.manifest.status_changed", entity: "cargo_manifests", entityId: id,
       details: JSON.stringify({ from: current, to: status, source: "driver_self" }) });
 
-    if (status === "delivered") {
-      // #1733 — Driver's "تم التسليم" never posts a JE. We hand off a
-      // billing candidate; the accountant materializes it from the
-      // finance side. Idempotent via uq_billing_candidate_source.
-      try {
-        await fleetEngine.createCargoBillingCandidate(
-          { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
-          { id, manifestNumber: String(manifest.manifestNumber ?? id),
-            freightRevenue: Number(manifest.freightRevenue) || 0,
-            freightCost: Number(manifest.freightCost) || 0,
-            customerId: (manifest.customerId as number | null) ?? null,
-            vehicleId: (manifest.vehicleId as number | null) ?? null,
-            driverId: (manifest.driverId as number | null) ?? null,
-            fromLocation: (manifest.fromLocation as string | null) ?? null,
-            toLocation: (manifest.toLocation as string | null) ?? null,
-            totalWeight: Number(manifest.totalWeight) || 0,
-            deliveryDate: (manifest.deliveryDate as string | null) ?? null,
-            notes: (manifest.notes as string | null) ?? null }
-        );
-      } catch (handoffErr) {
-        logger.error({ err: handoffErr, manifestId: id }, "[fleet/me] cargo billing candidate handoff failed");
-      }
-    }
+    // #1733 Foundation — the driver's `delivered` tap never triggers
+    // any financial artefact. The dispatcher carries the manifest from
+    // `delivered → completed → ready_for_invoice`, and that last
+    // transition is where the candidate + service line are created
+    // (see cargo.ts PATCH /manifests/:id).
     res.json({ data: { id, status } });
   } catch (err) { handleRouteError(err, res, "Driver cargo-advance error:"); }
 });
