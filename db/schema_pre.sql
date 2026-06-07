@@ -17469,6 +17469,51 @@ ALTER SEQUENCE public.umrah_families_id_seq OWNED BY public.umrah_families.id;
 
 
 --
+-- Name: umrah_refund_requests; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 268_umrah_refund_workflow.sql.
+--
+
+CREATE TABLE public.umrah_refund_requests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "pilgrimId" integer,
+    "agentId" integer,
+    "salesInvoiceId" integer,
+    "nuskInvoiceId" integer,
+    "grossAmount" numeric(12,2) NOT NULL,
+    "mofaRetention" numeric(12,2) DEFAULT 0,
+    "netAmount" numeric(12,2) GENERATED ALWAYS AS (("grossAmount" - COALESCE("mofaRetention", (0)::numeric))) STORED,
+    currency character(3) DEFAULT 'SAR' NOT NULL,
+    status character varying(20) DEFAULT 'requested' NOT NULL,
+    reason text NOT NULL,
+    "rejectionReason" text,
+    "requestedBy" integer NOT NULL,
+    "requestedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "rejectedBy" integer,
+    "rejectedAt" timestamp with time zone,
+    "paidBy" integer,
+    "paidAt" timestamp with time zone,
+    "paymentReference" character varying(60),
+    "treasuryId" integer,
+    "creditMemoId" integer,
+    "settledAmount" numeric(12,2),
+    notes text,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_refund_amount_positive CHECK (("grossAmount" > (0)::numeric)),
+    CONSTRAINT umrah_refund_either_party_required CHECK ((("pilgrimId" IS NOT NULL) OR ("agentId" IS NOT NULL))),
+    CONSTRAINT umrah_refund_requests_status_check CHECK (((status)::text = ANY (ARRAY[('requested'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('paid'::character varying)::text, ('closed'::character varying)::text, ('cancelled'::character varying)::text])))
+);
+
+
+CREATE SEQUENCE public.umrah_refund_requests_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.umrah_refund_requests_id_seq OWNED BY public.umrah_refund_requests.id;
+
+
+--
 -- Name: umrah_room_blocks; Type: TABLE; Schema: public; Owner: -
 -- Source: migration 246_umrah_accommodations.sql.
 --
