@@ -3,7 +3,8 @@ import { lazy } from "react";
 const Admin = lazy(() => import("@/pages/admin"));
 const AdminUsers = lazy(() => import("@/pages/admin/users"));
 const AdminUserOnboarding = lazy(() => import("@/pages/admin/user-onboarding"));
-const AdminRoles = lazy(() => import("@/pages/admin/roles"));
+// Legacy classic roles editor retired — RBAC v2 (Role Composer) is the single
+// roles system. The old /admin/roles URL now serves the Composer.
 const AdminLogs = lazy(() => import("@/pages/admin/logs"));
 const AdminIntegrations = lazy(() => import("@/pages/admin-integrations"));
 const AdminMonitoring = lazy(() => import("@/pages/admin-monitoring"));
@@ -45,7 +46,7 @@ export const adminRoutes = [
   { path: "/admin", component: Admin },
   { path: "/admin/users", component: AdminUsers },
   { path: "/admin/user-onboarding", component: AdminUserOnboarding },
-  { path: "/admin/roles", component: AdminRoles },
+  { path: "/admin/roles", component: RbacSimpleEditor },
   { path: "/admin/logs", component: AdminLogs },
   { path: "/admin/integrations", component: AdminIntegrations },
   { path: "/admin/monitoring", component: AdminMonitoring },
