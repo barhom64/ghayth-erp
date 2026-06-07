@@ -34,7 +34,6 @@ import { CompaniesTab } from "./settings/companies-tab";
 import { LetterheadSettings } from "./settings/letterhead-tab";
 import { AccountingMappingsTab } from "./settings/accounting-mappings-tab";
 import { SystemControlsTab } from "./settings/system-controls-tab";
-import { RolePermissionsTab } from "./settings/role-permissions-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
 import { NumberingTab } from "./settings/numbering-tab";
 
@@ -338,7 +337,6 @@ export default function SettingsPage() {
           <TabsTrigger value="companies">الشركات</TabsTrigger>
           <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
           <TabsTrigger value="controls">التحكم</TabsTrigger>
-          <TabsTrigger value="roles">الصلاحيات</TabsTrigger>
           <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="approvals">الموافقات</TabsTrigger>
           <TabsTrigger value="numbering">الترقيم</TabsTrigger>
@@ -355,7 +353,6 @@ export default function SettingsPage() {
         <TabsContent value="companies"><CompaniesTab /></TabsContent>
         <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
         <TabsContent value="controls"><SystemControlsTab /></TabsContent>
-        <TabsContent value="roles"><RolePermissionsTab /></TabsContent>
         <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="approvals"><ApprovalWorkflowsTab /></TabsContent>
         <TabsContent value="numbering"><NumberingTab /></TabsContent>
