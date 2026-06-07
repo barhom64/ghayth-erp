@@ -132,7 +132,7 @@ budgetRouter.get("/budget", authorize({ feature: "finance.budget", action: "list
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"', enforceBranchScope: true, softDeleteColumn: 'b."deletedAt"' });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"', enforceBranchScope: true, includeNullBranch: true, softDeleteColumn: 'b."deletedAt"' });
     const rows = await rawQuery<BudgetWithAccountRow>(
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b
