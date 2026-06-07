@@ -262,7 +262,8 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "fleet.trips", parentKey: "fleet", moduleKey: "fleet", labelAr: "الرحلات",
     availableActions: ALL_ACTIONS, availableScopes: ["self", "team", "branch", "company"], displayOrder: 320 },
   { key: "fleet.trips.my", parentKey: "fleet.trips", moduleKey: "fleet", labelAr: "رحلاتي",
-    availableActions: ["view", "list", "create"], availableScopes: ["self"],
+    // `update` covers the driver self-actions (start / complete) added in #1354.
+    availableActions: ["view", "list", "create", "update"], availableScopes: ["self"],
     selfService: true, displayOrder: 321 },
   { key: "fleet.maintenance", parentKey: "fleet", moduleKey: "fleet", labelAr: "الصيانة",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
@@ -275,6 +276,20 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "fleet.cargo", parentKey: "fleet", moduleKey: "fleet", labelAr: "نقل البضائع",
     icon: "Package",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 335 },
+  // Self-service driver surface (#1354). Granted to the "driver" role
+  // and only the "driver" role — replaces the standalone driver portal
+  // that lived under a separate JWT type. The driver logs in with the
+  // regular ERP creds, the role grant unlocks these features, and the
+  // operator-side fleet.cargo / fleet.trips features stay invisible
+  // because the role doesn't carry them.
+  { key: "fleet.cargo.my", parentKey: "fleet.cargo", moduleKey: "fleet", labelAr: "بضائعي",
+    // `update` covers the driver cargo-advance action (in_transit / delivered) added in #1354.
+    availableActions: ["view", "list", "update"], availableScopes: ["self"],
+    selfService: true, displayOrder: 336 },
+  { key: "fleet.driver.me", parentKey: "fleet", moduleKey: "fleet", labelAr: "حالتي وملفي (سائق)",
+    icon: "User",
+    availableActions: ["view", "update"], availableScopes: ["self"],
+    selfService: true, displayOrder: 337 },
 
   // Telematics surface (#1354 — CMSV6 / AI MDVR / Sensors). Separate feature
   // keys per concern so the operator can grant "see live map" without
