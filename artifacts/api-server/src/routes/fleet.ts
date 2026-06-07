@@ -786,18 +786,26 @@ router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", acti
       details: JSON.stringify({ from: current, to: status, source: "driver_self" }) });
 
     if (status === "delivered") {
+      // #1733 — Driver's "تم التسليم" never posts a JE. We hand off a
+      // billing candidate; the accountant materializes it from the
+      // finance side. Idempotent via uq_billing_candidate_source.
       try {
-        await fleetEngine.postCargoDeliveryGL(
+        await fleetEngine.createCargoBillingCandidate(
           { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
           { id, manifestNumber: String(manifest.manifestNumber ?? id),
             freightRevenue: Number(manifest.freightRevenue) || 0,
             freightCost: Number(manifest.freightCost) || 0,
             customerId: (manifest.customerId as number | null) ?? null,
             vehicleId: (manifest.vehicleId as number | null) ?? null,
-            driverId: (manifest.driverId as number | null) ?? null }
+            driverId: (manifest.driverId as number | null) ?? null,
+            fromLocation: (manifest.fromLocation as string | null) ?? null,
+            toLocation: (manifest.toLocation as string | null) ?? null,
+            totalWeight: Number(manifest.totalWeight) || 0,
+            deliveryDate: (manifest.deliveryDate as string | null) ?? null,
+            notes: (manifest.notes as string | null) ?? null }
         );
-      } catch (glErr) {
-        logger.error({ err: glErr, manifestId: id }, "[fleet/me] cargo delivery GL failed");
+      } catch (handoffErr) {
+        logger.error({ err: handoffErr, manifestId: id }, "[fleet/me] cargo billing candidate handoff failed");
       }
     }
     res.json({ data: { id, status } });

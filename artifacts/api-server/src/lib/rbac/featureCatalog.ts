@@ -195,6 +195,17 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], systemCritical: true, displayOrder: 230 },
 
+  // #1733 — Operational-to-finance handoff queue. Lives in finance because
+  // only the accountant materialises a JE from it; transport routes can
+  // ONLY insert (via fleetEngine.createCargoBillingCandidate) and never
+  // see this feature. `approve` = materialise into JE; `reject` = decline
+  // with reason.
+  { key: "finance.transport_billing", parentKey: "finance", moduleKey: "finance",
+    labelAr: "ترشيحات فوترة النقل",
+    availableActions: ["view", "list", "approve", "reject"],
+    availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 231 },
+
   { key: "finance.accounts", parentKey: "finance", moduleKey: "finance", labelAr: "دليل الحسابات والأستاذ",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     systemCritical: true, displayOrder: 240 },

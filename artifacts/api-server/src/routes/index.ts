@@ -74,6 +74,7 @@ import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
+import { transportBillingCandidatesRouter } from "./transport-billing-candidates.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -360,6 +361,9 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), ven
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
+// #1733 — Transport-to-finance handoff queue. Lives under /finance because
+// only finance-side roles see it (transport NEVER materialises JEs).
+router.use("/finance", requireModule("finance"), requireGuards("financial"), transportBillingCandidatesRouter);
 // financeRouter (finance.ts monolith) removed in Phase 7.1 — the 13
 // singleton routes it still owned were migrated to finance-purchase.ts,
 // finance-vendors.ts, and finance-reports.ts during canonicalisation.

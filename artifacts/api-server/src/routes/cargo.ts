@@ -453,15 +453,15 @@ router.patch(
         [id, scope.companyId],
       );
 
-      // Revenue + cost recognition fires the moment the manifest is
-      // marked delivered. Idempotent via the financialEngine guard
-      // (cargo_manifests / id) so the next-state-machine hop (closed)
-      // or a re-PATCH never double-posts. Best-effort: a GL failure
-      // logs but doesn't roll back the status change — the operator
-      // can re-trigger the transition once the cause is fixed.
+      // #1733 — Transport drives operations; transport NEVER posts JE.
+      // On delivery we hand off a billing candidate to the accountant,
+      // who reviews it and materializes the JE from the finance side
+      // (POST /api/finance/transport-billing-candidates/:id/materialize).
+      // Idempotent via uq_billing_candidate_source so re-PATCH or the
+      // next state-machine hop (closed) never creates a duplicate.
       if (b.status === "delivered" && existing.status !== "delivered" && row) {
         try {
-          await fleetEngine.postCargoDeliveryGL(
+          await fleetEngine.createCargoBillingCandidate(
             { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
             {
               id,
@@ -471,10 +471,15 @@ router.patch(
               customerId: (row.customerId as number | null) ?? null,
               vehicleId: (row.vehicleId as number | null) ?? null,
               driverId: (row.driverId as number | null) ?? null,
+              fromLocation: (row.fromLocation as string | null) ?? null,
+              toLocation: (row.toLocation as string | null) ?? null,
+              totalWeight: Number(row.totalWeight) || 0,
+              deliveryDate: (row.deliveryDate as string | null) ?? null,
+              notes: (row.notes as string | null) ?? null,
             },
           );
-        } catch (glErr) {
-          logger.error({ err: glErr, manifestId: id }, "[cargo] delivery GL posting failed");
+        } catch (handoffErr) {
+          logger.error({ err: handoffErr, manifestId: id }, "[cargo] billing candidate handoff failed");
         }
       }
 
