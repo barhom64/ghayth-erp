@@ -467,7 +467,7 @@ export default function UmrahImportWizard() {
                     <SelectTrigger><SelectValue placeholder="افتراضي النظام (٥٢٠١)" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_none">— استخدم الافتراضي —</SelectItem>
-                      {expenseAccounts.map((a) => (
+                      {expenseAccounts.filter((a) => a.code).map((a) => (
                         <SelectItem key={a.id} value={a.code}>{a.code} — {a.name}</SelectItem>
                       ))}
                     </SelectContent>

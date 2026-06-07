@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { Bell, BellDot, Check, Clock, AlertCircle, Settings } from "lucide-react";
+import { Bell, BellDot, Check, Clock, AlertCircle, Settings, Moon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatDateAr } from "@/lib/formatters";
 
@@ -102,17 +103,20 @@ export default function Notifications() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">تفضيلات الإشعارات</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            {prefChannels.map((ch) => (
-              <div key={ch.key} className="flex items-center justify-between gap-2 border rounded p-2 bg-white">
-                <span className="text-xs">{ch.label}</span>
-                <Switch
-                  checked={enabledByChannel[ch.key] ?? true}
-                  onCheckedChange={(v) => togglePref(ch.key, v)}
-                  disabled={savePrefsMut.isPending}
-                />
-              </div>
-            ))}
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {prefChannels.map((ch) => (
+                <div key={ch.key} className="flex items-center justify-between gap-2 border rounded p-2 bg-white">
+                  <span className="text-xs">{ch.label}</span>
+                  <Switch
+                    checked={enabledByChannel[ch.key] ?? true}
+                    onCheckedChange={(v) => togglePref(ch.key, v)}
+                    disabled={savePrefsMut.isPending}
+                  />
+                </div>
+              ))}
+            </div>
+            <QuietHoursPanel />
           </CardContent>
         </Card>
       )}
@@ -195,5 +199,80 @@ export default function Notifications() {
         </CardContent>
       </Card>
     </PageShell>
+  );
+}
+
+/**
+ * Quiet-hours editor — two HH:MM inputs plus a clear/save row. The
+ * underlying record lives on the (channel='in_app', category='general')
+ * preference row, so it doesn't multiply notifications_preferences
+ * entries. The engine consults isWithinQuietHours() at dispatch time:
+ * inside the window, non-urgent events drop email/sms/whatsapp/push
+ * and only land in_app — so the user sees them when they come back
+ * online but isn't pinged at 2am.
+ */
+function QuietHoursPanel() {
+  const q = useApiQuery<{ data: { quietHoursStart: string | null; quietHoursEnd: string | null } }>(
+    ["notifications-quiet-hours"],
+    "/notifications/quiet-hours",
+  );
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  useEffect(() => {
+    if (q.data?.data) {
+      setStart((q.data.data.quietHoursStart ?? "").slice(0, 5));
+      setEnd((q.data.data.quietHoursEnd ?? "").slice(0, 5));
+    }
+  }, [q.data?.data?.quietHoursStart, q.data?.data?.quietHoursEnd]);
+
+  const saveMut = useApiMutation<unknown, { start: string | null; end: string | null }>(
+    "/notifications/quiet-hours", "POST",
+    [["notifications-quiet-hours"]],
+    { successMessage: "تم حفظ ساعات الهدوء" },
+  );
+
+  const valid =
+    /^([01]\d|2[0-3]):[0-5]\d$/.test(start) &&
+    /^([01]\d|2[0-3]):[0-5]\d$/.test(end) &&
+    start !== end;
+
+  return (
+    <div className="border rounded p-3 bg-white space-y-2">
+      <div className="flex items-center gap-2 text-xs font-medium">
+        <Moon className="h-3.5 w-3.5 text-indigo-500" />
+        ساعات الهدوء
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        داخل هذه الفترة لن تصلك إشعارات على البريد/SMS/واتساب — تبقى الإشعارات داخل النظام فقط.
+        الأمور العاجلة (urgent) تتجاوز هذه الفترة دائماً.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[11px] text-muted-foreground">من</label>
+          <Input dir="ltr" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-[11px] text-muted-foreground">إلى</label>
+          <Input dir="ltr" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex justify-between items-center">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={saveMut.isPending}
+          onClick={() => { setStart(""); setEnd(""); saveMut.mutate({ start: null, end: null }); }}
+        >
+          إلغاء التفعيل
+        </Button>
+        <Button
+          size="sm"
+          disabled={!valid || saveMut.isPending}
+          onClick={() => saveMut.mutate({ start, end })}
+        >
+          حفظ
+        </Button>
+      </div>
+    </div>
   );
 }
