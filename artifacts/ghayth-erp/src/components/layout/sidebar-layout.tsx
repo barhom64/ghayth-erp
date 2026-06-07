@@ -807,8 +807,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className={cn("flex-1 flex flex-col min-w-0 h-screen overflow-hidden transition-all duration-300", isSidebarCollapsed ? "lg:ms-16" : "lg:ms-64")}>
-        <header className="bg-white border-b border-border h-14 flex items-center justify-between px-4 lg:px-6 flex-shrink-0 z-40">
-          <div className="flex items-center gap-3">
+        <header className="bg-white border-b border-border h-14 flex items-center justify-between gap-2 px-4 lg:px-6 flex-shrink-0 z-40">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <Button
               variant="ghost"
               size="icon"
@@ -829,9 +829,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </Button>
             )}
-            <h1 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-              <PageIcon className="h-[18px] w-[18px] text-status-info-foreground" />
-              <span className="hidden sm:inline">{pageTitle}</span>
+            <h1 className="text-base font-semibold text-gray-800 flex items-center gap-2 min-w-0">
+              <PageIcon className="h-[18px] w-[18px] text-status-info-foreground shrink-0" />
+              <span className="hidden sm:inline truncate">{pageTitle}</span>
             </h1>
             {currentQuickActions.length > 0 && (
               <div className="hidden md:flex items-center gap-1.5 ms-3">
@@ -850,11 +850,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <div className="hidden sm:block">
               <button
                 onClick={() => { setCommandPaletteFilter(null); setCommandPaletteOpen(true); }}
-                className="flex items-center gap-2 h-9 px-3 text-sm text-muted-foreground border border-border rounded-lg bg-surface-subtle hover:bg-white hover:border-status-info-surface hover:text-muted-foreground transition-all w-72"
+                className="flex items-center gap-2 h-9 px-3 text-sm text-muted-foreground border border-border rounded-lg bg-surface-subtle hover:bg-white hover:border-status-info-surface hover:text-muted-foreground transition-all w-44 lg:w-56 xl:w-72"
               >
                 <Search className="h-4 w-4 shrink-0" />
                 <span className="flex-1 text-start">بحث في الصفحات والإجراءات...</span>
@@ -871,7 +871,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                     style={{ color: currentRoleColor }}
                   >
                     <Shield className="h-3.5 w-3.5" />
-                    <span className="hidden md:inline-block text-xs font-medium">
+                    <span className="hidden xl:inline-block text-xs font-medium">
                       {jobTitle || selectedRoleLabel}
                     </span>
                     <ChevronDown className="h-3 w-3 opacity-50" />
@@ -916,7 +916,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="gap-1.5 px-2 h-8 text-emerald-700 hover:bg-white">
                         <Building className="h-3.5 w-3.5 text-emerald-600" />
-                        <span className="hidden md:inline-block text-xs font-medium">
+                        <span className="hidden xl:inline-block text-xs font-medium">
                           {selectedCompanyIds.length === 0
                             ? "جميع الشركات"
                             : selectedCompanyIds.length === 1
@@ -988,7 +988,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="gap-1.5 px-2 h-8 text-status-info-foreground hover:bg-white">
                     <Building2 className="h-3.5 w-3.5 text-status-info-foreground" />
-                    <span className="hidden md:inline-block text-xs font-medium">
+                    <span className="hidden xl:inline-block text-xs font-medium">
                       {selectedBranchIds.length === 0
                         ? "جميع الفروع"
                         : selectedBranchIds.length === 1

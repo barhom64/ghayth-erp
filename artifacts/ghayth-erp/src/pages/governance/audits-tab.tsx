@@ -18,6 +18,8 @@ import { Link, useLocation } from "wouter";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export function AuditsTab() {
   const [, navigate] = useLocation();
@@ -36,6 +38,7 @@ export function AuditsTab() {
     { label: "الحالة", key: "status", type: "status" },
   ];
   const filteredAudits = applyFilters(audits, filters, { searchFields: ["title", "auditorName"], statusField: "status", dateField: "createdAt" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredAudits);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/governance/audits",
@@ -98,6 +101,21 @@ export function AuditsTab() {
             resultCount={filteredAudits.length}
           />
         </div>
+        <PrintButton
+          entityType="report_governance_audits"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة التدقيق"
+          payload={() => ({
+            entity: { title: "قائمة عمليات التدقيق", total: printRows.length },
+            items: printRows.map((a: any) => ({
+              "العنوان": a.title || "—",
+              "المدقق": a.auditorName || "—",
+              "النطاق": a.scope || "—",
+              "الحالة": a.status || "—",
+            })),
+          })}
+        />
         {canWrite && (
           <Link href="/governance/audits/create">
             <GuardedButton perm="governance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة تدقيق</GuardedButton>
@@ -110,6 +128,7 @@ export function AuditsTab() {
           <DataTable
             columns={columns}
             data={filteredAudits}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
