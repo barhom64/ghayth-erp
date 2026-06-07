@@ -24,6 +24,7 @@ const AdminPostingFailures = lazy(() => import("@/pages/admin-posting-failures")
 const AdminLifecycleMonitor = lazy(() => import("@/pages/admin-lifecycle-monitor"));
 const AdminRbacMatrix = lazy(() => import("@/pages/admin-rbac-matrix"));
 const RbacSimpleEditor = lazy(() => import("@/pages/admin/rbac-simple-editor"));
+const AdminJobTitles = lazy(() => import("@/pages/admin/job-titles"));
 const AssistantAsk = lazy(() => import("@/pages/assistant-ask"));
 const AdminGlReconciliation = lazy(() => import("@/pages/admin-gl-reconciliation"));
 const AdminSystemRegistry = lazy(() => import("@/pages/admin-system-registry"));
@@ -64,6 +65,7 @@ export const adminRoutes = [
   { path: "/admin/lifecycle-monitor", component: AdminLifecycleMonitor },
   { path: "/admin/rbac-matrix", component: AdminRbacMatrix },
   { path: "/admin/roles-simple", component: RbacSimpleEditor },
+  { path: "/admin/job-titles", component: AdminJobTitles },
   { path: "/assistant", component: AssistantAsk },
   { path: "/admin/gl-reconciliation", component: AdminGlReconciliation },
   { path: "/admin/system-registry", component: AdminSystemRegistry },
