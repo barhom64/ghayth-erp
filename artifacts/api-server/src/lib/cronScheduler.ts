@@ -3397,8 +3397,12 @@ async function umrahWeeklyAgentPerformance(): Promise<string> {
 
 async function umrahVisaExpiryAlerts(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
+  const { gccExclusionSqlFragment } = await import("./umrahNationalityRules.js");
   let alerted = 0;
   for (const c of companies) {
+    // GCC nationals enter KSA visa-free — their `visaExpiry` row (if
+    // any) is operator data entry from another jurisdiction; alerting
+    // on it is a false positive that nags the GM every morning.
     const expiring = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g.name AS "groupName"
        FROM umrah_pilgrims p
@@ -3406,7 +3410,8 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
          AND p.status NOT IN ('departed','cancelled')
          AND p."visaExpiry" IS NOT NULL
-         AND p."visaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`,
+         AND p."visaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+         AND ${gccExclusionSqlFragment(`p."nationality"`)}`,
       [c.id]
     );
     if (expiring.length === 0) continue;
