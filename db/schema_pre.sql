@@ -17833,7 +17833,12 @@ CREATE TABLE public.umrah_transport_pilgrims (
     "companyId" integer NOT NULL,
     "transportId" integer NOT NULL,
     "pilgrimId" integer NOT NULL,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "seatNumber" character varying(10),
+    "checkedInAt" timestamp with time zone,
+    "checkedInBy" integer,
+    "noShow" boolean DEFAULT false NOT NULL,
+    notes text
 );
 
 
