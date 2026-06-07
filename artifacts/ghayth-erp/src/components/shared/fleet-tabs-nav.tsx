@@ -3,11 +3,15 @@ import { cn } from "@/lib/utils";
 import {
   Car, Users, Navigation, Wrench, Fuel, Shield, Bell,
   BarChart3, Calendar, AlertTriangle, Satellite, Package, Disc,
+  Clipboard,
 } from "lucide-react";
 
 const TABS = [
   { href: "/fleet", label: "المركبات", icon: Car, match: ["/fleet"], exact: true },
   { href: "/fleet/drivers", label: "السائقون", icon: Users, match: ["/fleet/drivers"] },
+  // #1733 Comment 9 — booking + dispatch surface lives next to trips
+  // because operators reach for it before the trip exists.
+  { href: "/fleet/transport/bookings", label: "حجوزات النقل", icon: Clipboard, match: ["/fleet/transport"] },
   { href: "/fleet/trips", label: "الرحلات", icon: Navigation, match: ["/fleet/trips"] },
   { href: "/fleet/cargo", label: "نقل البضائع", icon: Package, match: ["/fleet/cargo"] },
   { href: "/fleet/maintenance", label: "الصيانة", icon: Wrench, match: ["/fleet/maintenance"] },

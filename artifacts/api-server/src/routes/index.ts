@@ -76,6 +76,8 @@ import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
 import { transportBillingCandidatesRouter } from "./transport-billing-candidates.js";
 import { transportBookingsRouter } from "./transport-bookings.js";
+import { vehicleProfileRouter } from "./vehicle-profile.js";
+import { transportPricingRouter } from "./transport-pricing.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -380,10 +382,17 @@ router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetTe
 // URLs stay /cargo/* at the top level (not /fleet/cargo/*) because
 // cargo is its own RBAC feature (fleet.cargo) and its own SPA tab.
 router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRouter);
-// #1733 Booking + Dispatch layer (Issue Comment 9). Mounted as a sibling
-// of /cargo so the URLs land at /transport/bookings, /transport/dispatch-orders,
-// /transport/locations. Same fleet-module + financial guards.
-router.use("/", requireModule("fleet"), requireGuards("financial"), transportBookingsRouter);
+// #1733 Booking + Dispatch (Issue Comment 9). The routers carry their
+// own full paths (/transport/bookings, /transport/dispatch-orders,
+// /fleet/vehicles/:vehicleId/...) so they mount without a prefix.
+// Same fleet-module + financial guards.
+router.use(requireModule("fleet"), requireGuards("financial"), transportBookingsRouter);
+// #1733 Vehicle profile sub-resources (Issue Comment 7). URLs land at
+// /fleet/vehicles/:vehicleId/{components,driver-assignments,maintenance-schedules}.
+router.use(requireModule("fleet"), requireGuards("financial"), vehicleProfileRouter);
+// #1733 Pricing engine + invoice merging (Issue Comment 3). URLs land at
+// /transport/price-rules, /transport/service-lines, /transport/invoice-batches.
+router.use(requireModule("fleet"), requireGuards("financial"), transportPricingRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);

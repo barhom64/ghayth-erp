@@ -9,9 +9,10 @@ import {
 // #1605 covered POST /admin/user-roles. This locks in:
 //   1. The pure check still detects the canonical conflicts.
 //   2. POST /rbac/v2/users/:userId/roles also gates (closes the bypass).
-//   3. The shared helper getActiveRoleKeysForUser unions all three role
-//      tables so a v1-granted role still blocks a conflicting v2 grant
-//      (and vice versa).
+//   3. The shared helper getActiveRoleKeysForUser unions the RBAC-v2 grant
+//      table and active employee_assignments so a role granted via either
+//      surface still blocks a conflicting grant on the other.
+//      (#1791: the legacy user_roles table was dropped and removed here.)
 
 const apiSrc = join(import.meta.dirname!, "../../../../artifacts/api-server/src");
 const read = (f: string) => readFileSync(join(apiSrc, f), "utf8");
@@ -66,13 +67,14 @@ describe("policyEngine.SEPARATION_OF_DUTIES catalogue", () => {
 });
 
 describe("policyEngine.getActiveRoleKeysForUser — SQL coverage", () => {
-  it("queries all three role-bearing tables", () => {
+  it("queries both role-bearing tables (rbac_user_roles + employee_assignments)", () => {
     expect(POLICY).toContain("export async function getActiveRoleKeysForUser");
-    // Must union the legacy user_roles, the v2 rbac_user_roles, and active
-    // employee_assignments — missing any one of these opens a SoD bypass.
-    expect(POLICY).toMatch(/FROM user_roles/);
+    // Must union the v2 rbac_user_roles and active employee_assignments —
+    // missing either one opens a SoD bypass. (#1791: legacy user_roles dropped.)
     expect(POLICY).toMatch(/FROM rbac_user_roles/);
     expect(POLICY).toMatch(/FROM employee_assignments/);
+    // The dropped legacy table must no longer be referenced.
+    expect(POLICY).not.toMatch(/FROM user_roles\b/);
     // v2 grants can have an expiry; expired ones must not count as "active".
     expect(POLICY).toMatch(/expires_at/);
   });

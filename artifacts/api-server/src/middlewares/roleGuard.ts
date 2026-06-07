@@ -45,8 +45,14 @@ async function getUserModules(userId: number, fallbackRole?: string, companyId?:
   const cached = roleModuleCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached;
 
-  const rows = await rawQuery<{ roleKey: string; modules: any; level: number }>(
-    `SELECT "roleKey", modules, level FROM user_roles WHERE "userId" = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
+  // #1791 — legacy user_roles (with its per-user `modules` JSON) is removed.
+  // Roles + levels now come from RBAC v2 (rbac_user_roles → rbac_roles); the
+  // module set is derived from each role's default module map below.
+  const rows = await rawQuery<{ roleKey: string; level: number }>(
+    `SELECT r.role_key AS "roleKey", r.level AS level
+       FROM rbac_user_roles ur
+       JOIN rbac_roles r ON r.id = ur.role_id
+      WHERE ur."userId" = $1 AND ur."companyId" = $2`,
     [userId, companyId ?? 0]
   );
 
@@ -55,11 +61,7 @@ async function getUserModules(userId: number, fallbackRole?: string, companyId?:
   let maxLevel = 0;
   for (const row of rows) {
     roles.push(row.roleKey);
-    let mods = typeof row.modules === "string" ? JSON.parse(row.modules) : row.modules;
-    // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
-    if (mods && typeof mods === "object" && !Array.isArray(mods) && (mods as any).all === true) {
-      mods = ROLE_DEFAULT_MODULES[row.roleKey] || ROLE_DEFAULT_MODULES.owner;
-    }
+    const mods = ROLE_DEFAULT_MODULES[row.roleKey] || (row.roleKey === "owner" ? ROLE_DEFAULT_MODULES.owner : undefined);
     if (Array.isArray(mods)) mods.forEach((m: string) => allModules.add(m));
     if (row.level > maxLevel) maxLevel = row.level;
   }
