@@ -20,6 +20,7 @@ import { PageShell } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -154,13 +155,38 @@ export default function Inbox() {
   // the query path entirely.
   const isDraftsFolder = folder === "drafts";
   const isCallsTab = tab === "calls";
+
+  // Entity filter — when the page is opened via /inbox?clientId=N (or
+  // ?supplierId / ?employeeId), narrow threads to that entity. Powers the
+  // "عرض كل المراسلات" link on client/supplier/employee detail pages so
+  // the inbox shows only their thread without forcing the operator to
+  // hunt with the search box.
+  const entityFilter = (() => {
+    if (typeof window === "undefined") return null;
+    const sp = new URLSearchParams(window.location.search);
+    const map: Array<[string, string]> = [
+      ["clientId", "clients"],
+      ["supplierId", "suppliers"],
+      ["employeeId", "employees"],
+    ];
+    for (const [param, relType] of map) {
+      const id = sp.get(param);
+      if (id) return { relatedType: relType, relatedId: Number(id) };
+    }
+    return null;
+  })();
+
   const threadsParams: string[] = [];
   if (tab !== "all" && tab !== "calls") threadsParams.push(`channel=${tab}`);
   if (folder !== "inbox") threadsParams.push(`folder=${folder}`);
+  if (entityFilter) {
+    threadsParams.push(`relatedType=${entityFilter.relatedType}`);
+    threadsParams.push(`relatedId=${entityFilter.relatedId}`);
+  }
   const threadsQs = threadsParams.length ? `?${threadsParams.join("&")}` : "";
 
   const { data: threadsResp, isLoading, refetch: refetchThreads } = useApiQuery<{ data: ThreadRow[] }>(
-    ["inbox-threads", tab, folder],
+    ["inbox-threads", tab, folder, entityFilter?.relatedType ?? "", String(entityFilter?.relatedId ?? "")],
     `/inbox/threads${threadsQs}`,
     { enabled: !isCallsTab && !isDraftsFolder },
   );
@@ -178,6 +204,29 @@ export default function Inbox() {
     ["inbox-folder-counts"],
     "/inbox/folder-counts",
   );
+
+  // Free-text search across subject + body + addresses. Only enabled
+  // when the user has typed a 2+ char query; otherwise the regular
+  // threads listing renders.
+  const [searchTerm, setSearchTerm] = useState("");
+  const trimmedSearch = searchTerm.trim();
+  const isSearching = trimmedSearch.length >= 2;
+  const { data: searchHitsResp, isLoading: searchLoading } = useApiQuery<{
+    data: Array<{
+      id: number; channel: string; direction: "inbound" | "outbound";
+      fromNumber: string | null; toNumber: string | null;
+      subject: string | null; body_preview: string;
+      status: string; folder: string; isStarred: boolean;
+      relatedType: string | null; relatedId: number | null;
+      createdAt: string;
+    }>;
+  }>(
+    ["inbox-search", trimmedSearch, tab],
+    `/inbox/search?q=${encodeURIComponent(trimmedSearch)}${tab !== "all" && tab !== "calls" ? `&channel=${tab}` : ""}`,
+    { enabled: isSearching },
+  );
+  const searchHits = searchHitsResp?.data ?? [];
+
   const threads = threadsResp?.data ?? [];
   const drafts = draftsResp?.data ?? [];
   const calls = callsResp?.data ?? [];
@@ -250,7 +299,30 @@ export default function Inbox() {
         </Card>
 
         {/* Tabs (channel filter) — only relevant when browsing threads, not drafts/calls */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-2">
+          {entityFilter && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2">
+              <span className="text-xs text-indigo-800">
+                مفلتر بمراسلات هذا الكيان:{" "}
+                <span className="font-mono font-semibold">{entityFilter.relatedType}#{entityFilter.relatedId}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => { if (typeof window !== "undefined") window.location.href = "/inbox"; }}
+                className="text-[11px] text-indigo-700 hover:underline"
+                data-testid="inbox-clear-entity-filter"
+              >
+                إلغاء الفلتر
+              </button>
+            </div>
+          )}
+          <Input
+            placeholder="ابحث في الرسائل (الموضوع، النص، العنوان...)"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="text-sm"
+            data-testid="inbox-search-input"
+          />
           <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setActiveThread(null); }} className="space-y-4">
             <TabsList>
               <TabsTrigger value="all">الكل</TabsTrigger>
@@ -262,9 +334,11 @@ export default function Inbox() {
           </Tabs>
         </div>
 
-        {/* Left content: thread list / draft list / call list */}
+        {/* Left content: search hits / thread list / draft list / call list */}
         <div className={cn(activeThread && "hidden lg:block")}>
-          {isCallsTab ? (
+          {isSearching ? (
+            <SearchHitsList hits={searchHits} isLoading={searchLoading} query={trimmedSearch} />
+          ) : isCallsTab ? (
             <CallList calls={calls} />
           ) : isDraftsFolder ? (
             <DraftsList drafts={drafts} onOpen={openDraft} onChange={refreshAll} />
@@ -729,10 +803,16 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
   const [dlpInfo, setDlpInfo] = useState<SendResult | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [draftId, setDraftId] = useState<number | null>(editingDraft?.id ?? null);
+  // Scheduled-send: when set, the body is queued with scheduledAt in
+  // the future and the cron worker leaves it alone until then. Empty
+  // string = send immediately (the default).
+  const [scheduledAt, setScheduledAt] = useState<string>(
+    editingDraft?.scheduledAt ? editingDraft.scheduledAt.slice(0, 16) : "",
+  );
 
   const reset = () => {
     setRecipient(""); setRecipientName(""); setSubject(""); setBody("");
-    setDlpInfo(null); setDraftId(null);
+    setDlpInfo(null); setDraftId(null); setScheduledAt("");
   };
 
   // Hydrate from props whenever the dialog opens.
@@ -800,6 +880,10 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
           subject: channel === "email" ? subject : undefined, body,
           relatedType: initialRelated?.type,
           relatedId: initialRelated?.id,
+          // Convert datetime-local (no zone) → ISO with the browser's TZ
+          // so the backend knows when 'now' is for this user. Empty
+          // string → omit (immediate send).
+          scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
         }),
       });
     },
@@ -976,6 +1060,24 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
             </div>
           )}
         </div>
+        <div className="border-t pt-3 flex items-end gap-2">
+          <div className="flex-1">
+            <Label className="text-xs">جدولة الإرسال (اختياري)</Label>
+            <Input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+              className="h-8 text-xs"
+              data-testid="compose-scheduled-at"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {scheduledAt
+                ? `سيتم الإرسال في ${formatDateAr(new Date(scheduledAt).toISOString())}`
+                : "اتركه فارغاً للإرسال الفوري"}
+            </p>
+          </div>
+        </div>
         <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button
@@ -991,7 +1093,8 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
             disabled={send.isPending || !recipient || !body || (channel === "email" && !subject)}
             onClick={() => send.mutate()}
           >
-            <Send className="w-4 h-4 me-1" />{send.isPending ? "جارٍ الإرسال..." : "أرسل"}
+            <Send className="w-4 h-4 me-1" />
+            {send.isPending ? "جارٍ الإرسال..." : (scheduledAt ? "جدولة الإرسال" : "أرسل")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1183,5 +1286,80 @@ function SignaturesDialog({ open, onClose }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── SearchHitsList ─────────────────────────────────────────────
+// Renders /inbox/search hits as a flat list (no thread grouping —
+// the user typed a query, they want to see every match). Each row
+// shows channel + direction + subject + body preview + date, and
+// the user can click to open the original thread.
+function SearchHitsList({ hits, isLoading, query }: {
+  hits: Array<{
+    id: number; channel: string; direction: "inbound" | "outbound";
+    fromNumber: string | null; toNumber: string | null;
+    subject: string | null; body_preview: string;
+    folder: string; isStarred: boolean; createdAt: string;
+  }>;
+  isLoading: boolean;
+  query: string;
+}) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-4 space-y-2">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+  if (hits.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-12 text-center text-sm text-muted-foreground">
+          لا توجد نتائج لـ <span className="font-mono">{query}</span>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs flex items-center justify-between">
+          <span>{hits.length} نتيجة لـ <span className="font-mono">{query}</span></span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0 divide-y">
+        {hits.map((h) => {
+          const meta = CHANNEL_META[h.channel] ?? CHANNEL_META.sms;
+          const Icon = meta.icon;
+          return (
+            <div key={h.id} className="p-3 hover:bg-muted/30 cursor-pointer">
+              <div className="flex items-start gap-3">
+                <div className={cn("rounded-md p-1.5", meta.color)}>
+                  <Icon className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium" dir="ltr">
+                      {h.direction === "inbound" ? (h.fromNumber ?? "—") : (h.toNumber ?? "—")}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {formatDateAr(h.createdAt)}
+                    </span>
+                  </div>
+                  {h.subject && (
+                    <p className="text-sm font-medium line-clamp-1 mt-1">{h.subject}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{h.body_preview}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }

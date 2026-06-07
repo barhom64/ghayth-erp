@@ -20,6 +20,7 @@ import {
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function PropertiesDashboard() {
   const { scopeQueryString } = useAppContext();
@@ -171,6 +172,30 @@ export default function PropertiesDashboard() {
 
   const actions = (
     <>
+      <PrintButton
+        entityType="report_properties_dashboard"
+        entityId="list"
+        size="icon"
+        label="طباعة تقرير لوحة العقارات"
+        payload={() => ({
+          entity: {
+            title: "تقرير أداء العقارات",
+            totalUnits,
+            rented,
+            available,
+            overdueAmount,
+            openMaintenanceTickets,
+            totalBuildings: buildingPerf.length,
+          },
+          items: buildingPerf.map((b: any) => ({
+            "المبنى": b.name || b.buildingName || "—",
+            "الوحدات": b.unitCount ?? b.units ?? "—",
+            "المؤجرة": b.rentedCount ?? b.rented ?? "—",
+            "الإيراد": Number(b.revenue || b.totalRevenue || 0),
+            "نسبة الإشغال": b.occupancyRate != null ? `${Number(b.occupancyRate).toFixed(0)}%` : "—",
+          })),
+        })}
+      />
       <Link href="/properties/buildings/create">
         <GuardedButton perm="properties:create" variant="outline" size="sm" className="gap-1">
           <Plus className="h-4 w-4" /> مبنى جديد

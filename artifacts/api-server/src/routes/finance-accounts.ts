@@ -9,14 +9,22 @@ import {
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { authMiddleware, type RequestScope } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO, toDateISO } from "../lib/businessHelpers.js";
-import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { buildScopedWhere, parseScopeFilters, type ScopeFilters } from "../lib/scopedQuery.js";
 import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { logger } from "../lib/logger.js";
+import {
+  classifyAccountUsage,
+  isValidUsage,
+  isValidChildrenPolicy,
+  DEFAULT_CHILDREN_USAGE_POLICY,
+  type AccountUsage,
+  type ChildrenUsagePolicy,
+} from "../lib/financeAccountClassifier.js";
 
 const ACCOUNT_TYPES = ["asset", "liability", "equity", "revenue", "expense"] as const;
 const ACCOUNT_NATURES = ["debit", "credit"] as const;
@@ -30,6 +38,15 @@ const createAccountSchema = z.object({
   nature: z.string().refine((v) => (ACCOUNT_NATURES as readonly string[]).includes(v), { message: "طبيعة الحساب غير صالحة" }).optional().default("debit"),
   allowPosting: z.boolean().optional().default(true),
   isAnalytical: z.boolean().optional().default(false),
+  // Account-usage classification (#1715). What the account IS
+  // operationally (cash_box / bank / custody / …) on top of the
+  // accounting type. Optional — resolved via parent-inheritance +
+  // auto-classifier when omitted.
+  accountUsage: z.string().optional().nullable(),
+  childrenUsagePolicy: z.string().optional().nullable(),
+  // Hybrid COA: null/omitted = shared company account; a branch id makes
+  // this a branch-specific sub-account under the shared tree.
+  branchId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const updateAccountSchema = z.object({
@@ -198,13 +215,51 @@ async function assertValidAccountParent(
   }
 }
 
+/**
+ * Hybrid per-branch chart of accounts scoping.
+ *
+ * The COA is a *company-level* tree (one set of codes per company). Each
+ * branch may add its own sub-accounts under that shared tree. So:
+ *   - Company codes (branchId IS NULL) are ALWAYS visible.
+ *   - Picking a specific branch additionally surfaces that branch's own
+ *     sub-accounts (branchId = picked) and hides other branches' ones.
+ *   - No branch picked (company / overview) → the whole company tree,
+ *     de-duplicated.
+ *
+ * It also fixes the duplicate-codes report: when the header picker sits on
+ * "all companies" the request carries no companyIds, and the generic
+ * buildScopedWhere would union every allowed company — so code 1000 shows
+ * up once per company. COA is per-company, so we default to the active
+ * company (scope.companyId) unless the caller explicitly filtered.
+ */
+function buildCoaScope(
+  scope: RequestScope,
+  filters: ScopeFilters,
+  alias = "",
+): { where: string; params: unknown[] } {
+  const col = (c: string) => (alias ? `${alias}."${c}"` : `"${c}"`);
+  const companyIds = filters.companyIds?.length
+    ? filters.companyIds.filter((id) => scope.allowedCompanies.includes(id))
+    : [scope.companyId];
+  const params: unknown[] = [companyIds.length ? companyIds : [scope.companyId]];
+  let where = `${col("companyId")} = ANY($1)`;
+  const branchIds = filters.branchIds?.length
+    ? filters.branchIds.filter((id) => scope.allowedBranches.includes(id))
+    : [];
+  if (branchIds.length) {
+    params.push(branchIds);
+    where += ` AND (${col("branchId")} IS NULL OR ${col("branchId")} = ANY($${params.length}))`;
+  }
+  return { where, params };
+}
+
 accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
+    const { where, params } = buildCoaScope(scope, filters);
     const accounts = await rawQuery<ChartOfAccountsBriefRow>(
-      `SELECT id, code, name, type, "parentCode", status
+      `SELECT id, code, name, type, "parentCode", status, "branchId", "accountUsage", "childrenUsagePolicy"
        FROM chart_of_accounts
        WHERE ${where} AND "deletedAt" IS NULL
        ORDER BY code ASC`,
@@ -216,11 +271,39 @@ accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts"
   }
 });
 
+// GET /finance/accounts/usage-gaps — accounts the auto-classifier could
+// not classify (accountUsage IS NULL). Drives the «classify before you
+// post» governance workflow (#1715). Postable, asset/liability accounts
+// without a usage are the highest priority since they may be selected as
+// payment sources.
+accountsRouter.get("/accounts/usage-gaps", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, code, name, type, "allowPosting", "branchId"
+         FROM chart_of_accounts
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL
+          AND "accountUsage" IS NULL
+        ORDER BY ("allowPosting" = true) DESC, type, code
+        LIMIT 1000`,
+      [scope.companyId],
+    );
+    const byType: Record<string, number> = {};
+    for (const r of rows) {
+      const t = String(r.type ?? "other");
+      byType[t] = (byType[t] ?? 0) + 1;
+    }
+    res.json(maskFields(req, { data: rows, total: rows.length, byType }));
+  } catch (err) {
+    handleRouteError(err, res, "Usage-gaps report error:");
+  }
+});
+
 accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
+    const { where, params } = buildCoaScope(scope, filters, "c");
     const { search, type: accountType, postingOnly } = req.query as { search?: string; type?: string; postingOnly?: string };
 
     let extraWhere = "";
@@ -236,8 +319,20 @@ accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action:
       extraWhere += ` AND "allowPosting" = true`;
     }
 
+    // Was N+1: scalar self-join lookup per child to resolve parentId
+    // from parentCode. With LIMIT 5000 that's up to 5000 extra hits
+    // against chart_of_accounts.
+    //
+    // The c."parentId" column is populated by POST /accounts itself
+    // (see UPDATE chart_of_accounts SET "parentId" = (SELECT p.id ...)
+    // a few handlers below) — so the lookup-by-parentCode was just a
+    // safety net for rows where parentId drifted away from the FK.
+    // Project c."parentId" directly; the tree-builder on the client
+    // (pages/finance/accounts.tsx) treats a NULL parentId as "no
+    // parent", which matches the legacy fallback when the lookup
+    // returned no row anyway.
     const rows = await rawQuery(
-      `SELECT c.*, (SELECT p.id FROM chart_of_accounts p WHERE p.code = c."parentCode" AND p."companyId" = c."companyId" AND p."deletedAt" IS NULL LIMIT 1) AS "parentId" FROM chart_of_accounts c WHERE ${where} AND c."deletedAt" IS NULL${extraWhere} ORDER BY c.code LIMIT 5000`,
+      `SELECT c.* FROM chart_of_accounts c WHERE ${where} AND c."deletedAt" IS NULL${extraWhere} ORDER BY c.code LIMIT 5000`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -251,15 +346,105 @@ accountsRouter.post("/accounts", authorize({ feature: "finance.accounts", action
     const scope = req.scope!;
 
     const b = zodParse(createAccountSchema.safeParse(req.body ?? {}));
+    // Hybrid COA: branchId null = a shared company account; a branchId
+    // makes this a branch-specific sub-account that hangs under the shared
+    // company tree. Enforce the model invariants so branch accounts can't
+    // drift outside the shared tree or onto a foreign company's branch.
+    const branchId: number | null = b.branchId ?? null;
+    if (branchId !== null) {
+      if (!scope.allowedBranches.includes(branchId)) {
+        throw new ValidationError("الفرع المحدد خارج نطاق صلاحياتك", {
+          field: "branchId",
+          fix: "اختر فرعاً ضمن صلاحياتك أو اترك الحساب مشتركاً على مستوى الشركة",
+        });
+      }
+      // The branch must belong to THIS company — a privileged multi-company
+      // user could otherwise graft a company-A account onto a company-B branch.
+      const [branchRow] = await rawQuery<{ id: number }>(
+        `SELECT id FROM branches WHERE id = $1 AND "companyId" = $2`,
+        [branchId, scope.companyId],
+      );
+      if (!branchRow) {
+        throw new ValidationError("الفرع لا يتبع الشركة الحالية", {
+          field: "branchId",
+          fix: "اختر فرعاً تابعاً للشركة الحالية",
+        });
+      }
+      // A branch sub-account must sit under a shared (company-level) parent.
+      if (!b.parentCode) {
+        throw new ValidationError("الحساب الخاص بالفرع يجب أن يكون فرعياً تحت حساب أب مشترك", {
+          field: "parentCode",
+          fix: "اختر حساباً أباً مشتركاً على مستوى الشركة",
+        });
+      }
+      const [parentRow] = await rawQuery<{ branchId: number | null }>(
+        `SELECT "branchId" FROM chart_of_accounts WHERE code = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [b.parentCode, scope.companyId],
+      );
+      if (parentRow && parentRow.branchId !== null) {
+        throw new ValidationError("يجب أن يكون الحساب الأب مشتركاً على مستوى الشركة", {
+          field: "parentCode",
+          fix: "اختر حساباً أباً غير مرتبط بفرع",
+        });
+      }
+    }
     if (b.parentCode) {
       await assertValidAccountParent(scope.companyId, b.code, b.type, b.parentCode);
     }
+
+    // ── accountUsage resolution with parent inheritance (#1715) ──────────
+    // Load the parent's usage + childrenUsagePolicy to decide how this
+    // child is classified. The policy on the PARENT governs the CHILD:
+    //   inherit_locked  → child MUST equal parent usage (override rejected)
+    //   inherit_default → child = body usage ?? parent usage
+    //   manual_required → child must supply usage explicitly
+    //   mixed_allowed   → child uses body usage as-is (may be null)
+    // When no parent or still unresolved, fall back to the auto-classifier.
+    let resolvedUsage: AccountUsage | null = isValidUsage(b.accountUsage) ? b.accountUsage : null;
+    let parentPolicy: ChildrenUsagePolicy | null = null;
+    if (b.parentCode) {
+      const [parent] = await rawQuery<{ accountUsage: string | null; childrenUsagePolicy: string | null }>(
+        `SELECT "accountUsage", "childrenUsagePolicy" FROM chart_of_accounts
+          WHERE code = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        [b.parentCode, scope.companyId],
+      );
+      const parentUsage = isValidUsage(parent?.accountUsage) ? parent!.accountUsage as AccountUsage : null;
+      parentPolicy = isValidChildrenPolicy(parent?.childrenUsagePolicy)
+        ? parent!.childrenUsagePolicy as ChildrenUsagePolicy
+        : DEFAULT_CHILDREN_USAGE_POLICY;
+      if (parentPolicy === "inherit_locked") {
+        if (resolvedUsage && parentUsage && resolvedUsage !== parentUsage) {
+          throw new ValidationError(
+            "تصنيف الحساب الأب مقفل — لا يُسمح بتجاوز تصنيف الأبناء",
+            { field: "accountUsage", fix: `استخدم نفس تصنيف الأب أو غيّر سياسة الأب` },
+          );
+        }
+        resolvedUsage = parentUsage;
+      } else if (parentPolicy === "inherit_default") {
+        resolvedUsage = resolvedUsage ?? parentUsage;
+      } else if (parentPolicy === "manual_required") {
+        if (!resolvedUsage) {
+          throw new ValidationError(
+            "سياسة الحساب الأب تتطلب تحديد تصنيف الحساب يدوياً",
+            { field: "accountUsage", fix: "اختر تصنيف استخدام الحساب (صندوق/بنك/عهدة/…)" },
+          );
+        }
+      }
+      // mixed_allowed: leave resolvedUsage as the body value (may be null).
+    }
+    if (!resolvedUsage) {
+      resolvedUsage = classifyAccountUsage({ code: b.code, type: b.type, name: b.name });
+    }
+    const childrenPolicy: ChildrenUsagePolicy = isValidChildrenPolicy(b.childrenUsagePolicy)
+      ? b.childrenUsagePolicy
+      : DEFAULT_CHILDREN_USAGE_POLICY;
+
     const [row] = await rawQuery<ChartOfAccountsRow>(
-      `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO chart_of_accounts ("companyId", "branchId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical", "accountUsage", "childrenUsagePolicy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT ("companyId", code) DO NOTHING
        RETURNING *`,
-      [scope.companyId, b.code, b.name, b.type, b.parentCode ?? null, b.nameEn ?? null, b.nature, b.allowPosting, b.isAnalytical]
+      [scope.companyId, branchId, b.code, b.name, b.type, b.parentCode ?? null, b.nameEn ?? null, b.nature, b.allowPosting, b.isAnalytical, resolvedUsage, childrenPolicy]
     );
     if (!row) throw new ConflictError("رمز الحساب مستخدم مسبقاً", { field: "code", fix: "استخدم رمزاً مختلفاً للحساب" });
 

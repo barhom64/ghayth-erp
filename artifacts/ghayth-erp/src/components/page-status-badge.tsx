@@ -324,6 +324,34 @@ export const STATUS_MAP = {
     off_duty:             { label: "خارج الخدمة",     tone: "neutral"  },
   },
 
+  // ── Umrah pilgrim lifecycle ──────────────────────────────────────────
+  // Was leaking raw English (arrived / overstayed / departed / violated)
+  // through PageStatusBadge — none were in any domain, so the badge fell
+  // back to `def?.label ?? status` and rendered the English value to an
+  // Arabic operator. These mirror the backend lifecycle states the
+  // run-daily-status engine sets on umrah_pilgrims. `active`/`pending`/
+  // `cancelled` already live in `shared`; only the umrah-specific states
+  // are added here.
+  umrah: {
+    arrived:              { label: "وصل",              tone: "success"  },
+    overstayed:           { label: "متجاوز",           tone: "danger"   },
+    departed:             { label: "غادر",             tone: "neutral"  },
+    violated:             { label: "مخالف",            tone: "danger"   },
+  },
+
+  // ── Umrah penalty lifecycle ────────────────────────────────────────
+  // The penalty list / detail badges were falling back to `shared` for
+  // `pending` + `cancelled` (which resolved correctly) but the
+  // penalty-specific states — `invoiced`, `paid`, `waived` — were
+  // rendering as raw English text because no domain block claimed them.
+  // Same canonical-labels rule as the pilgrim block: feminine forms
+  // because `الغرامة` is feminine.
+  umrah_penalty: {
+    invoiced:             { label: "مفوترة",          tone: "info"     },
+    paid:                 { label: "مدفوعة",          tone: "success"  },
+    waived:               { label: "معفاة",            tone: "neutral"  },
+  },
+
   // ── Projects ───────────────────────────────────────────────────────
   project: {
     planning:             { label: "تخطيط",           tone: "info"     },

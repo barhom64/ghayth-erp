@@ -10,6 +10,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ErrorState } from "@/components/shared/loading-error-states";
@@ -243,6 +244,23 @@ export default function PropertiesBuildings() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "name", label: "اسم المبنى" },
+              { key: "type", label: "النوع" },
+              { key: "address", label: "العنوان" },
+              { key: "city", label: "المدينة" },
+              { key: "ownerName", label: "المالك" },
+              { key: "totalUnits", label: "إجمالي الوحدات" },
+              { key: "occupiedUnits", label: "المؤجرة" },
+              { key: "availableUnits", label: "المتاحة" },
+              { key: "monthlyRevenue", label: "الإيراد الشهري" },
+            ],
+            "قائمة-المباني",
+          )
+        }
         resultCount={filtered.length}
       />
 

@@ -57,13 +57,24 @@ interface CargoItem {
   notes: string | null;
 }
 
+// #1733 Blocker #3 — full 13-state operational lifecycle. The dispatcher
+// drives draft → requested → approved → assigned_to_driver; the driver
+// carries it through driver_accepted → trip_started → arrived_pickup →
+// loaded → in_transit → arrived_delivery → delivered (from the driver
+// console — see me-driver.tsx); the dispatcher closes with `completed`.
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "draft", label: "مسودة" },
-  { value: "confirmed", label: "مؤكدة" },
-  { value: "loading", label: "تحميل" },
+  { value: "requested", label: "طلب جديد" },
+  { value: "approved", label: "معتمدة" },
+  { value: "assigned_to_driver", label: "مسندة للسائق" },
+  { value: "driver_accepted", label: "قَبِلها السائق" },
+  { value: "trip_started", label: "بدأت الرحلة" },
+  { value: "arrived_pickup", label: "وصل لموقع التحميل" },
+  { value: "loaded", label: "تم التحميل" },
   { value: "in_transit", label: "في الطريق" },
-  { value: "delivered", label: "مسلّمة" },
-  { value: "closed", label: "مغلقة" },
+  { value: "arrived_delivery", label: "وصل لموقع التسليم" },
+  { value: "delivered", label: "تم التسليم" },
+  { value: "completed", label: "مكتملة" },
   { value: "cancelled", label: "ملغاة" },
 ];
 

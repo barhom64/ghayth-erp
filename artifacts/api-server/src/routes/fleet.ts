@@ -23,10 +23,21 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
-import { fleetEngine } from "../lib/engines/index.js";
+import { fleetEngine, hrEngine } from "../lib/engines/index.js";
 import { z } from "zod";
 
 // ─── Zod schemas for POST route body validation ─────────────────────────────
+
+// #1733 Phase 2 — KSA-aligned license-class enum used by the
+// eligibility helper (lib/fleet/driverEligibility.ts). The driver row
+// carries `licenseClass`; the vehicle row carries `requiredLicenseClass`;
+// the helper enforces hierarchy + override rules at cargo/umrah
+// assignment time.
+const LICENSE_CLASS_VALUES = [
+  "private", "light_trans", "medium", "heavy",
+  "public_trans", "motorcycle", "equipment",
+] as const;
+
 const createVehicleSchema = z.object({
   plateNumber: z.string().min(1),
   make: z.string().min(1),
@@ -51,6 +62,10 @@ const createVehicleSchema = z.object({
   // stripped the fields and both were dead.
   purchasePrice: z.coerce.number().optional(),
   purchaseDate: z.string().optional(),
+  // #1733 Phase 2 — eligibility guard reads this column on cargo /
+  // umrah assignment to refuse drivers who don't hold (or cover) the
+  // required class.
+  requiredLicenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
 });
 
 const createDriverSchema = z.object({
@@ -59,6 +74,7 @@ const createDriverSchema = z.object({
   licenseNumber: z.string().min(1),
   licenseExpiry: z.string().optional(),
   licenseType: z.string().optional(),
+  licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
   employeeId: z.coerce.number().optional(),
   status: z.string().optional(),
 });
@@ -123,6 +139,9 @@ const updateVehicleSchema = z.object({
   plateType: z.string().optional(),
   sequenceNumber: z.string().optional(),
   vinNumber: z.string().optional(),
+  // #1733 Phase 2 — PATCHable so operators can set / change the
+  // required class without re-creating the vehicle row.
+  requiredLicenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
 });
 
 const updateDriverSchema = z.object({
@@ -132,6 +151,7 @@ const updateDriverSchema = z.object({
   licenseExpiry: z.string().optional(),
   status: z.string().optional(),
   licenseType: z.string().optional(),
+  licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
 });
 
 const createTripSchema = z.object({
@@ -428,8 +448,8 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
-      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null]
+      `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate","requiredLicenseClass") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null, b.requiredLicenseClass || null]
     );
     assertInsert(insertId, "fleet_vehicles");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -580,13 +600,13 @@ router.get("/me/trips", authorize({ feature: "fleet.trips.my", action: "list" })
     let where = `t."driverId" = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL`;
     if (status) { params.push(status); where += ` AND t.status = $${params.length}`; }
     const rows = await rawQuery(
-      `SELECT t.id, t.status, t."tripDate", t."startTime", t."endTime",
+      `SELECT t.id, t.status, t."startTime" AS "tripDate", t."startTime", t."endTime",
               t."fromLocation", t."toLocation", t.distance, t.cost, t.notes,
               v."plateNumber" AS "vehiclePlate"
          FROM fleet_trips t
          LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId" AND v."companyId" = t."companyId" AND v."deletedAt" IS NULL
         WHERE ${where}
-        ORDER BY COALESCE(t."startTime", t."tripDate", t."createdAt") DESC LIMIT 200`,
+        ORDER BY COALESCE(t."startTime", t."createdAt") DESC LIMIT 200`,
       params
     );
     res.json({ data: rows });
@@ -685,8 +705,24 @@ router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", acti
     if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
     const id = parseId(req.params.id, "id");
     const status = String(req.body?.status ?? "");
-    if (status !== "in_transit" && status !== "delivered") {
-      throw new ValidationError("الانتقال المسموح: in_transit أو delivered");
+    // #1733 Blocker #3 — driver-controlled forward path. The dispatcher
+    // owns draft / requested / approved / assigned_to_driver; the moment
+    // the assignment lands the driver carries it through the operational
+    // states up to `delivered`. Operational close (`completed`) and the
+    // billing-candidate handoff are dispatcher / accountant moves.
+    const DRIVER_ALLOWED_TRANSITIONS = [
+      "driver_accepted",
+      "trip_started",
+      "arrived_pickup",
+      "loaded",
+      "in_transit",
+      "arrived_delivery",
+      "delivered",
+    ];
+    if (!DRIVER_ALLOWED_TRANSITIONS.includes(status)) {
+      throw new ValidationError(
+        `الانتقال المسموح للسائق: ${DRIVER_ALLOWED_TRANSITIONS.join(" / ")}`,
+      );
     }
     const [manifest] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM cargo_manifests
@@ -695,10 +731,17 @@ router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", acti
     );
     if (!manifest) throw new NotFoundError("بوليصة الشحن غير موجودة");
     const current = String(manifest.status);
+    // Strict forward-only walk. The dispatcher's machine in cargo.ts
+    // owns cancellation; this map only allows the driver to advance one
+    // step at a time so an operator can audit the timeline cleanly.
     const allowed: Record<string, string[]> = {
-      confirmed: ["in_transit"],
-      loading: ["in_transit"],
-      in_transit: ["delivered"],
+      assigned_to_driver: ["driver_accepted"],
+      driver_accepted:    ["trip_started"],
+      trip_started:       ["arrived_pickup"],
+      arrived_pickup:     ["loaded"],
+      loaded:             ["in_transit"],
+      in_transit:         ["arrived_delivery"],
+      arrived_delivery:   ["delivered"],
     };
     if (!(allowed[current] ?? []).includes(status)) {
       throw new ConflictError(`الانتقال من ${current} إلى ${status} غير مسموح للسائق`);
@@ -794,10 +837,37 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.employeeId || null, b.status || 'available']
+      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","licenseClass","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.licenseClass || null, b.employeeId || null, b.status || 'available']
     );
     assertInsert(insertId, "fleet_drivers");
+
+    // Auto-grant the `driver` role on the linked employee's PRIMARY
+    // active assignment so the SSO flow lands them on /me/driver next
+    // login. Routes through hrEngine to respect the fleet→hr domain
+    // boundary (employee_assignments is HR-owned). The engine method
+    // only upgrades from the lowest tiers ('employee' / '') so a GM
+    // doing a one-off driver assignment isn't silently demoted.
+    if (b.employeeId) {
+      try {
+        const upgraded = await hrEngine.upgradePrimaryAssignmentRoleIfLowTier({
+          companyId: scope.companyId,
+          employeeId: b.employeeId,
+          toRole: "driver",
+        });
+        if (upgraded > 0) {
+          void emitEvent({
+            companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+            action: "hr.assignment.role_auto_upgraded", entity: "employee_assignments", entityId: 0,
+            details: JSON.stringify({ employeeId: b.employeeId, to: "driver", reason: "fleet_driver_linked" }),
+          });
+        }
+      } catch (assignErr) {
+        logger.warn({ err: assignErr, employeeId: b.employeeId },
+          "[fleet] auto-upgrade to driver role failed — HR can set manually");
+      }
+    }
+
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch((e) => logger.error(e, "fleet background task failed"));
@@ -922,7 +992,7 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
 
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: unknown[] = [];
-    const trackedFields = ["plateNumber","make","model","year","color","status","fuelType","notes","assignedDriverId","registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","vinNumber"] as const;
+    const trackedFields = ["plateNumber","make","model","year","color","status","fuelType","notes","assignedDriverId","registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","vinNumber","requiredLicenseClass"] as const;
     const colMap: Record<string, string> = {
       plateNumber: '"plateNumber"',
       make: "make",
@@ -940,6 +1010,8 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
       plateType: '"plateType"',
       sequenceNumber: '"sequenceNumber"',
       vinNumber: '"vinNumber"',
+      // #1733 Phase 2.
+      requiredLicenseClass: '"requiredLicenseClass"',
     };
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
@@ -1109,7 +1181,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       }
     }
 
-    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType"] as const;
+    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType","licenseClass"] as const;
     const colMap: Record<string, string> = {
       name: "name",
       phone: "phone",
@@ -1117,6 +1189,8 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       licenseExpiry: '"licenseExpiry"',
       status: "status",
       licenseType: '"licenseType"',
+      // #1733 Phase 2 — KSA driving-licence stack used by the eligibility guard.
+      licenseClass: '"licenseClass"',
     };
     const sets: string[] = [];
     const params: unknown[] = [];

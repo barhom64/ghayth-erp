@@ -316,7 +316,7 @@ export default function FleetTelematicsScorecard() {
               critical×{meta.weights.critical}) — أدنى صفر، أعلى 100.
             </p>
           )}
-          <DataTable<LeaderboardRow>
+          <DataTable
             columns={columns}
             data={rows}
             searchPlaceholder="ابحث عن سائق…"

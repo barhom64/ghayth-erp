@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
+import { EntitySubsidiaryAccounts } from "@/components/shared/entity-subsidiary-accounts";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare, Video } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -868,6 +869,12 @@ export default function VehicleDetail() {
             <CardHeader><CardTitle className="text-base">دفتر الأستاذ المساعد</CardTitle></CardHeader>
             <CardContent>
               <FinancialTab entityType="vehicle" entityId={id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><BookOpen className="h-4 w-4 text-status-info-foreground" /> الحسابات الفرعية للمركبة</CardTitle></CardHeader>
+            <CardContent>
+              <EntitySubsidiaryAccounts entityType="vehicle" entityId={id} />
             </CardContent>
           </Card>
         </div>

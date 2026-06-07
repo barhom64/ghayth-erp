@@ -11,6 +11,7 @@ import {
   useFilters,
   applyFilters,
   PageShell,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -169,6 +170,22 @@ export default function FleetAlerts() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "plateNumber", label: "رقم اللوحة" },
+              { key: "vehicleName", label: "المركبة" },
+              { key: "type", label: "نوع التنبيه" },
+              { key: "severity", label: "الخطورة" },
+              { key: "message", label: "الرسالة" },
+              { key: "dueDate", label: "تاريخ الاستحقاق" },
+              { key: "status", label: "الحالة" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "تنبيهات-الأسطول",
+          )
+        }
         resultCount={filtered.length}
       />
 

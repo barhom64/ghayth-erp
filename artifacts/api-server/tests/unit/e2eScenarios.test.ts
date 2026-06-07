@@ -177,9 +177,9 @@ describe("E2E: Permission isolation", () => {
     expect(indexTs).toContain('requireModule("comms")');
   });
 
-  it("Permission middleware checks wildcard, grant/revoke, and logs denials", () => {
-    expect(permMw).toContain("grant");
-    expect(permMw).toContain("revoke");
+  it("Permission middleware enforces via RBAC v2 and logs denials", () => {
+    expect(permMw).toContain("checkAccess");
+    expect(permMw).toContain("FLAT_TO_RBAC");
     expect(permMw).toContain("security_log");
   });
 
