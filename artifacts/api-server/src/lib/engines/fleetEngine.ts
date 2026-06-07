@@ -16,16 +16,12 @@ interface FleetGLContext {
   createdBy: number;
 }
 
-// Look up the auto-created cost-centre for a vehicle (mirrors what
-// costCenterAutoCreate.ts mints on vehicle insert). Returns null when
-// the CC row was never created (legacy vehicles or autoCreate disabled).
-// Used by the fuel/maintenance/insurance JE posters so every fleet GL
-// line carries costCenterId directly — per-vehicle P&L can drill on
-// the CC without joining through journal_lines.vehicleId.
+// Look up the auto-created cost-centre for a vehicle so every fleet
+// GL line carries costCenterId directly. Soft fail → NULL when no CC
+// row exists yet (legacy vehicles pre-autoCreate).
 async function resolveVehicleCostCenter(
   companyId: number,
   vehicleId: number,
-  _activity: string,
 ): Promise<number | null> {
   try {
     const [row] = await rawQuery<{ id: number }>(
@@ -55,13 +51,7 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5200"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
     ]);
-
-    // Resolver auto-derives the cost-centre from the vehicle so
-    // per-vehicle P&L can drill on costCenterId directly (without
-    // joining through journal_lines.vehicleId → cost_centers.linkedEntityId).
-    const costCenterId = await resolveVehicleCostCenter(
-      ctx.companyId, fuelLog.vehicleId, "fuel"
-    );
+    const costCenterId = await resolveVehicleCostCenter(ctx.companyId, fuelLog.vehicleId);
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -91,9 +81,7 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
     ]);
 
-    const costCenterId = await resolveVehicleCostCenter(
-      ctx.companyId, maintenance.vehicleId, "maintenance"
-    );
+    const costCenterId = await resolveVehicleCostCenter(ctx.companyId, maintenance.vehicleId);
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -123,9 +111,7 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
     ]);
 
-    const costCenterId = await resolveVehicleCostCenter(
-      ctx.companyId, insurance.vehicleId, "insurance"
-    );
+    const costCenterId = await resolveVehicleCostCenter(ctx.companyId, insurance.vehicleId);
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -155,9 +141,7 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2100"),
     ]);
 
-    const costCenterId = await resolveVehicleCostCenter(
-      ctx.companyId, violation.vehicleId, "violation"
-    );
+    const costCenterId = await resolveVehicleCostCenter(ctx.companyId, violation.vehicleId);
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
