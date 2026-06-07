@@ -11,6 +11,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
@@ -332,7 +333,24 @@ export default function SubsidiaryAccountsPage() {
         </CardContent>
       </Card>
       <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()}>
-        <AdvancedFilters values={filters} onChange={setFilters} />
+        <AdvancedFilters
+          values={filters}
+          onChange={setFilters}
+          onExportCSV={() =>
+            exportToCSV(
+              filtered || [],
+              [
+                { key: "accountCode", label: "رمز الحساب" },
+                { key: "accountName", label: "اسم الحساب" },
+                { key: "type", label: "النوع" },
+                { key: "balance", label: "الرصيد" },
+                { key: "currency", label: "العملة" },
+                { key: "status", label: "الحالة" },
+              ],
+              "حسابات-فرعية",
+            )
+          }
+        />
         <DataTable
           columns={columns}
           onSortedDataChange={setPrintRows}

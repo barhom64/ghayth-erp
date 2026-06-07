@@ -10,6 +10,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   FormShell,
   FormTextField,
   FormTextareaField,
@@ -108,7 +109,27 @@ export function CAPATab() {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <div className="flex-1">
-          <AdvancedFilters config={{ searchPlaceholder: "بحث بالإجراءات التصحيحية...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "overdue", label: "متأخر" }], showDateRange: true }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
+          <AdvancedFilters
+            config={{ searchPlaceholder: "بحث بالإجراءات التصحيحية...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "overdue", label: "متأخر" }], showDateRange: true }}
+            values={filters}
+            onChange={setFilters}
+            onExportCSV={() =>
+              exportToCSV(
+                filteredItems || [],
+                [
+                  { key: "finding", label: "الملاحظة" },
+                  { key: "rootCause", label: "السبب الجذري" },
+                  { key: "correctiveAction", label: "الإجراء التصحيحي" },
+                  { key: "preventiveAction", label: "الإجراء الوقائي" },
+                  { key: "responsiblePerson", label: "المسؤول" },
+                  { key: "dueDate", label: "تاريخ الاستحقاق" },
+                  { key: "status", label: "الحالة" },
+                ],
+                "إجراءات-تصحيحية",
+              )
+            }
+            resultCount={filteredItems.length}
+          />
         </div>
         <PrintButton
           entityType="report_governance_capa"
