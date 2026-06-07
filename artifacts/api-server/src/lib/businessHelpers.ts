@@ -1215,9 +1215,11 @@ export async function getCfoAssignmentId(companyId: number, branchId: number): P
   const [row] = await rawQuery<{ id: number }>(
     `SELECT ea.id FROM employee_assignments ea
      JOIN users u ON u."employeeId" = ea."employeeId"
-     JOIN user_roles ur ON ur."userId" = u.id
+     JOIN rbac_user_roles ur ON ur."userId" = u.id AND ur."companyId" = ea."companyId"
+     JOIN rbac_roles r ON r.id = ur.role_id
      WHERE ea."companyId" = $1 AND ea."branchId" = $2
-       AND ur."roleKey" = 'finance_manager' AND ea.status = 'active'
+       AND r.role_key = 'finance_manager' AND ea.status = 'active'
+       AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
      LIMIT 1`,
     [companyId, branchId]
   );
