@@ -773,9 +773,9 @@ describe("Module coverage: Infrastructure guards and wiring", () => {
     expect(financialLines.length).toBeGreaterThanOrEqual(10);
   });
 
-  it("permission middleware enforces grant/revoke and logs denials to security_log", () => {
-    expect(permMw).toContain("grant");
-    expect(permMw).toContain("revoke");
+  it("permission middleware enforces via RBAC v2 and logs denials to security_log", () => {
+    expect(permMw).toContain("checkAccess");
+    expect(permMw).toContain("FLAT_TO_RBAC");
     expect(permMw).toContain("security_log");
   });
 

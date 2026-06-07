@@ -257,21 +257,33 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
 
     let assigneeId = b.assigneeId || null;
     if (!assigneeId) {
+      // Was N+1: the avg-resolution scalar subquery fired once per
+      // active employee scanned BEFORE the LIMIT 5 cap kicked in. A
+      // company with 200 active employees would hit support_tickets
+      // 200 times for what's a single AVG-per-assignee number. Single
+      // GROUP BY CTE replaces the correlated subquery — one scan.
       const agents = await rawQuery<{ id: number; name: string; openTickets: number | string; avgResolution: number | string | null }>(
-        `SELECT e.id, e.name,
+        `WITH avg_resolution AS (
+           SELECT st2."assigneeId" AS "assigneeId",
+                  AVG(EXTRACT(EPOCH FROM (st2."resolvedAt" - st2."createdAt")) / 3600) AS "avgHours"
+             FROM support_tickets st2
+            WHERE st2.status = 'resolved'
+              AND st2."resolvedAt" IS NOT NULL
+              AND st2."deletedAt" IS NULL
+              AND st2."assigneeId" IS NOT NULL
+            GROUP BY st2."assigneeId"
+         )
+         SELECT e.id, e.name,
                 COUNT(st.id) AS "openTickets",
-                COALESCE(
-                  (SELECT AVG(EXTRACT(EPOCH FROM (st2."resolvedAt" - st2."createdAt"))/3600)
-                   FROM support_tickets st2 WHERE st2."assigneeId"=e.id AND st2.status='resolved' AND st2."resolvedAt" IS NOT NULL AND st2."deletedAt" IS NULL),
-                  999
-                ) AS "avgResolution"
-         FROM employees e
-         JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-         LEFT JOIN support_tickets st ON st."assigneeId"=e.id AND st.status NOT IN ('resolved','closed') AND st."deletedAt" IS NULL
-         WHERE e.status='active' AND e."deletedAt" IS NULL
-         GROUP BY e.id, e.name
-         ORDER BY "openTickets" ASC, "avgResolution" ASC
-         LIMIT 5`,
+                COALESCE(ar."avgHours", 999) AS "avgResolution"
+           FROM employees e
+           JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
+           LEFT JOIN support_tickets st ON st."assigneeId" = e.id AND st.status NOT IN ('resolved','closed') AND st."deletedAt" IS NULL
+           LEFT JOIN avg_resolution ar ON ar."assigneeId" = e.id
+          WHERE e.status = 'active' AND e."deletedAt" IS NULL
+          GROUP BY e.id, e.name, ar."avgHours"
+          ORDER BY "openTickets" ASC, "avgResolution" ASC
+          LIMIT 5`,
         [scope.companyId]
       );
       if (agents.length > 0) {

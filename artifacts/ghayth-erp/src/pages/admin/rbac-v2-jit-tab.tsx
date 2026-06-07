@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Clock, Check, X, AlertTriangle, Plus, Hourglass, ShieldCheck, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { actionLabelAr } from "@/lib/permission-labels";
 import {
   FormShell,
   FormNumberField,
@@ -343,7 +344,7 @@ function ActionField({ features }: { features: Feature[] }) {
       name="action"
       label="الإجراء"
       required
-      options={(feat?.available_actions || ["view"]).map((a) => ({ value: a, label: a }))}
+      options={(feat?.available_actions || ["view"]).map((a) => ({ value: a, label: actionLabelAr(a) }))}
     />
   );
 }

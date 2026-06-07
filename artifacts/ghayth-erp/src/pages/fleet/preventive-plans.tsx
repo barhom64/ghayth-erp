@@ -14,6 +14,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   FormShell,
   FormTextField,
   FormNumberField,
@@ -343,6 +344,21 @@ export default function PreventivePlansPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "plateNumber", label: "المركبة" },
+              { key: "serviceType", label: "نوع الخدمة" },
+              { key: "intervalKm", label: "الفاصل (كم)" },
+              { key: "intervalDays", label: "الفاصل (أيام)" },
+              { key: "lastServiceDate", label: "آخر صيانة" },
+              { key: "nextServiceDate", label: "الصيانة القادمة" },
+              { key: "lastServiceKm", label: "العداد آخر مرة" },
+            ],
+            "خطط-صيانة-وقائية",
+          )
+        }
         resultCount={filtered.length}
       />
 
