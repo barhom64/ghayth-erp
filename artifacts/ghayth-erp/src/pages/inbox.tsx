@@ -387,6 +387,42 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
     onSuccess: () => { toast({ title: "تم النقل" }); onChange?.(); },
   });
 
+  // Bulk selection: selected message ids. Single round-trip move via
+  // /inbox/messages/bulk-folder so 50 threads → 1 request, not 50.
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const allOnPageSelected = threads.length > 0 && threads.every((t) => selected.has(t.id));
+  const toggleOne = (id: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAll = () =>
+    setSelected((prev) => {
+      if (threads.every((t) => prev.has(t.id))) {
+        const next = new Set(prev);
+        for (const t of threads) next.delete(t.id);
+        return next;
+      }
+      const next = new Set(prev);
+      for (const t of threads) next.add(t.id);
+      return next;
+    });
+  const bulkMove = useMutation({
+    mutationFn: (folder: string) =>
+      apiFetch<{ affected: number }>("/inbox/messages/bulk-folder", {
+        method: "POST",
+        body: JSON.stringify({ ids: Array.from(selected), folder }),
+      }),
+    onSuccess: (r) => {
+      toast({ title: `نُقلت ${r?.affected ?? "—"} رسالة` });
+      setSelected(new Set());
+      onChange?.();
+    },
+    onError: (e: Error) => toast({ title: "فشل النقل", description: e.message, variant: "destructive" }),
+  });
+
   if (threads.length === 0 && !isLoading) {
     return (
       <Card>
@@ -398,21 +434,82 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
   }
   return (
     <Card>
+      {(selected.size > 0 || threads.length > 0) && (
+        <div className="flex items-center justify-between gap-2 border-b px-3 py-2 bg-muted/30">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allOnPageSelected}
+              onChange={toggleAll}
+              className="cursor-pointer"
+              data-testid="inbox-bulk-toggle-all"
+              aria-label="تحديد الكل"
+            />
+            <span className="text-xs text-muted-foreground">
+              {selected.size > 0 ? `${selected.size} محدّدة` : "اختر للنقل الجماعي"}
+            </span>
+          </div>
+          {selected.size > 0 && (
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={bulkMove.isPending}
+                onClick={() => bulkMove.mutate("archive")}
+                title="أرشفة المحدّدة"
+              >
+                <Archive className="w-3.5 h-3.5 me-1" />
+                أرشفة
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={bulkMove.isPending}
+                onClick={() => bulkMove.mutate("trash")}
+                title="نقل للسلّة"
+              >
+                <Trash2 className="w-3.5 h-3.5 me-1 text-status-error-foreground" />
+                سلّة
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={bulkMove.isPending}
+                onClick={() => bulkMove.mutate("spam")}
+                title="رسائل سبام"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 me-1 text-orange-600" />
+                سبام
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
       <CardContent className="p-0">
         <div className="divide-y">
           {threads.map((t) => {
             const meta = CHANNEL_META[t.channel] ?? CHANNEL_META.email;
             const Icon = meta.icon;
             const isActive = active?.channel === t.channel && active.address === t.peer;
+            const isChecked = selected.has(t.id);
             return (
               <div
                 key={`${t.channel}-${t.peer}-${t.id}`}
                 className={cn(
                   "p-3 hover:bg-surface-subtle/60 flex gap-2 items-start transition-colors group",
                   isActive && "bg-status-info-surface",
+                  isChecked && "bg-indigo-50/30",
                   t.channel === "pbx" && "opacity-60",
                 )}
               >
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => toggleOne(t.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="mt-2 shrink-0 cursor-pointer"
+                  aria-label="تحديد الرسالة"
+                />
                 <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", meta.color.split(" ")[1])}>
                   <Icon className={cn("w-4 h-4", meta.color.split(" ")[0])} />
                 </div>

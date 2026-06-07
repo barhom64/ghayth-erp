@@ -535,6 +535,51 @@ router.post("/messages/:id/folder", authorize({ feature: "communications", actio
 });
 
 /**
+ * POST /inbox/messages/bulk-folder — move many messages to a folder in
+ * one round trip. Used by the inbox UI's "select all → archive" / "→
+ * trash" affordance which would otherwise issue one PATCH per row.
+ *
+ * Body: { ids: number[]; folder: "inbox"|"sent"|"archive"|"trash"|"spam" }
+ *
+ * Caps at 500 ids per call so a runaway client can't lock the table.
+ * Returns the count actually updated (rows that matched tenant + id +
+ * not-deleted). All rows that match get one audit log entry summarizing
+ * the bulk action so the audit table doesn't balloon by 500x.
+ */
+const bulkFolderSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(500),
+  folder: z.enum(["inbox", "sent", "archive", "trash", "spam"]),
+});
+
+router.post("/messages/bulk-folder", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(bulkFolderSchema.safeParse(req.body));
+
+    const { affectedRows } = await rawExecute(
+      `UPDATE message_log
+          SET folder = $1
+        WHERE id = ANY($2::int[])
+          AND "companyId" = $3
+          AND "deletedAt" IS NULL`,
+      [body.folder, body.ids, scope.companyId],
+    );
+
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "message_log",
+      // 0 marks "bulk action" — actual ids are in the metadata.
+      entityId: 0,
+      after: { folder: body.folder, idsCount: body.ids.length, affected: affectedRows, ids: body.ids.slice(0, 50) },
+    }).catch((e) => logger.warn(e, "[audit] message.bulk_folder"));
+
+    res.json({ ok: true, folder: body.folder, affected: affectedRows });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/messages/bulk-folder");
+  }
+});
+
+/**
  * POST /inbox/messages/:id/star — toggle the starred flag.
  */
 router.post("/messages/:id/star", authorize({ feature: "communications", action: "update" }), async (req, res) => {
