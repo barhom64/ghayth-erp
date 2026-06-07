@@ -30,6 +30,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { Bell, GitBranch, Plus, Trash2, RefreshCw } from "lucide-react";
+import { ROUTING_CATEGORIES } from "@/lib/notification-categories";
 
 interface RuleRow {
   id: number;
@@ -254,7 +255,23 @@ function NewRuleDialog({ open, chains, onClose, onSubmit, isSubmitting }: {
       <DialogContent>
         <DialogHeader><DialogTitle>قاعدة توجيه جديدة</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div><Label>فئة الحدث</Label><Input value={eventCategory} onChange={(e) => setEventCategory(e.target.value)} placeholder="invoice.created" /></div>
+          <div>
+            <Label>فئة الحدث</Label>
+            <Select value={eventCategory} onValueChange={setEventCategory}>
+              <SelectTrigger><SelectValue placeholder="اختر فئة الحدث" /></SelectTrigger>
+              <SelectContent>
+                {ROUTING_CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    <span className="font-mono text-xs me-2">{c.value}</span>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              المحرك يطابق القاعدة بفئة الحدث (المقطع الأول) — اختر من القائمة لضمان عمل التوجيه.
+            </p>
+          </div>
           <div>
             <Label>القنوات</Label>
             <div className="flex flex-wrap gap-2 mt-2">
