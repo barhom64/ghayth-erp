@@ -165,8 +165,47 @@ router.get("/my", async (req, res) => {
       }
     }
 
-    const highestLevel = Math.max(...roles.map((r) => Number(r.level) || 0));
-    const allModules = Array.from(new Set(roles.flatMap((r) => parseModules(r.modules, r.roleKey))));
+    // ── RBAC v2 drives visibility too (Ghaith #1413) ──
+    // Derive the caller's roles + modules from RBAC as well, so a user
+    // provisioned only in RBAC (rbac_user_roles) gets the right picker entries,
+    // level, and sidebar modules. Additive + guarded — never hides what the
+    // legacy path already returned, and degrades silently on any failure.
+    try {
+      const rr = await rawQuery<{ role_key: string; label_ar: string; level: number }>(
+        `SELECT DISTINCT r.role_key, r.label_ar, r.level
+           FROM rbac_user_roles ur JOIN rbac_roles r ON r.id = ur.role_id
+          WHERE ur."userId" = $1 AND ur."companyId" = $2
+            AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+        [scope.userId, scope.companyId]
+      );
+      const known = new Set(roles.map((r) => r.roleKey));
+      for (const x of rr) {
+        if (requestedRole && x.role_key !== requestedRole && roles.length > 0) continue;
+        if (!known.has(x.role_key)) {
+          roles.push({ roleKey: x.role_key, label: x.label_ar || x.role_key, modules: [], level: Number(x.level) || 10 });
+          known.add(x.role_key);
+        }
+      }
+    } catch (e) { logger.warn(e, "[permissions/my] RBAC roles derive skipped"); }
+
+    let rbacModules: string[] = [];
+    try {
+      const gm = await rawQuery<{ feature_key: string }>(
+        `SELECT DISTINCT g.feature_key
+           FROM rbac_user_roles ur JOIN rbac_role_grants g ON g.role_id = ur.role_id
+          WHERE ur."userId" = $1 AND ur."companyId" = $2
+            AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+        [scope.userId, scope.companyId]
+      );
+      const ALL_MODULES = PREDEFINED_ROLE_DEFAULTS.owner.modules;
+      for (const x of gm) {
+        if (x.feature_key === "*") { rbacModules.push(...ALL_MODULES); continue; }
+        rbacModules.push(x.feature_key.split(".")[0]);
+      }
+    } catch (e) { logger.warn(e, "[permissions/my] RBAC modules derive skipped"); }
+
+    const highestLevel = Math.max(0, ...roles.map((r) => Number(r.level) || 0));
+    const allModules = Array.from(new Set([...roles.flatMap((r) => parseModules(r.modules, r.roleKey)), ...rbacModules]));
 
     const permRows = await rawQuery<PermissionNameRow>(
       `SELECT permission FROM role_permissions
