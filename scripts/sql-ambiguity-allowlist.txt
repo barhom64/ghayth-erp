@@ -1,0 +1,24 @@
+# scripts/sql-ambiguity-allowlist.txt
+#
+# Ambiguous-column scanner exceptions — see scripts/src/check-sql-ambiguity.mjs.
+#
+# Each line is one of:
+#   routes/<file>.ts                  → skip the whole file
+#   routes/<file>.ts:<col>            → skip only that column within the file
+#
+# Use sparingly. The scanner exists because a bare column that exists on
+# two or more joined relations makes Postgres raise
+#   "column reference <col> is ambiguous"
+# — a parse-time 500 that shipped to users (the 360° evaluation page).
+# The correct fix is almost always to qualify the column with its table
+# alias (alias."col"). Only add an entry here for a genuine false
+# positive the static scanner can't disambiguate.
+#
+# Format reminder: paths are relative to artifacts/api-server/src/, so
+# the file `artifacts/api-server/src/routes/foo.ts` is `routes/foo.ts`.
+
+# ──────────────────────────────────────────────────────────────────────
+# Baseline: clean. main has zero ambiguous multi-table references at the
+# time this guard shipped (verified by a route-wide static scan plus a
+# runtime sweep of the evaluation / dashboard / action-center surfaces).
+# ──────────────────────────────────────────────────────────────────────
