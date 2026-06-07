@@ -5,6 +5,7 @@ import {
   DataTable,
   type DataTableColumn,
   PageShell,
+  resolveStatus,
 } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -178,7 +179,7 @@ export default function UmrahPackages() {
               "نقل": p.includesTransport ? "نعم" : "لا",
               "إقامة": p.includesHotel ? "نعم" : "لا",
               "وجبات": p.includesMeals ? "نعم" : "لا",
-              "الحالة": p.status || "—",
+              "الحالة": (p.status && resolveStatus(p.status)?.label) ?? p.status ?? "—",
             })),
           })}
         />

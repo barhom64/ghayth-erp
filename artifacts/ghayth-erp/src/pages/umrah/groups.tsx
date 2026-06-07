@@ -17,14 +17,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, PageShell, resolveStatus } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { Users, Split, Merge, ChevronRight } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { formatUmrahDate, formatCurrency } from "@/lib/formatters";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
@@ -252,7 +252,7 @@ export default function UmrahGroups() {
     } },
     { key: "programDuration", header: "المدة", render: (g) => g.programDuration ? `${g.programDuration} يوم` : "—" },
     { key: "status", header: "الحالة" },
-    { key: "createdAt", header: "تاريخ الإنشاء", render: (g) => formatDateAr(g.createdAt) },
+    { key: "createdAt", header: "تاريخ الإنشاء", render: (g) => formatUmrahDate(g.createdAt) },
     {
       key: "actions" as any,
       header: "إجراءات",
@@ -336,7 +336,7 @@ export default function UmrahGroups() {
                 "الوكيل": g.agentName || "—",
                 "الموسم": g.seasonName || "—",
                 "العدد": g.pilgrimCount ?? 0,
-                "الحالة": g.status || "—",
+                "الحالة": (g.status && resolveStatus(g.status)?.label) ?? g.status ?? "—",
               })),
             })}
           />

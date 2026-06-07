@@ -3,48 +3,48 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // ══════════════════════════════════════════════════════════════════════════
-// Legacy enforcement now consults RBAC v2 (Ghaith Operating Foundation #1413)
+// Legacy flat gates now enforce ENTIRELY via RBAC v2 (Ghaith #1413).
 //
-// requirePermission / requireAnyPermission / userHasPermission historically
-// resolved ONLY against role_permissions. They now ALSO fold in the user's
-// RBAC v2 grants (projected to the flat vocabulary), additively — so RBAC is a
-// co-equal authority for the ~34 legacy-enforced routes and role_permissions is
-// no longer the sole source of truth (الخطة الجذرية §3 م5). Static source scan.
+// requirePermission / requireAnyPermission / userHasPermission no longer read
+// role_permissions / user_roles / permissions — they translate each legacy
+// `module:action` to a feature.action and resolve through authzEngine.checkAccess.
+// RBAC v2 is the single security authority. Static source scan.
 // ══════════════════════════════════════════════════════════════════════════
 
 const root = join(import.meta.dirname!, "../../../../artifacts/api-server");
 const MW = readFileSync(join(root, "src/middlewares/permissionMiddleware.ts"), "utf8");
 
-describe("permissionMiddleware — RBAC v2 unification", () => {
-  it("imports the shared flat projection helper", () => {
-    expect(MW).toMatch(/import \{ projectGrantsToFlat \} from "\.\.\/lib\/rbac\/flatProjection\.js"/);
+describe("permissionMiddleware — RBAC v2 is the single enforcement authority", () => {
+  it("resolves via authzEngine.checkAccess, not the legacy tables", () => {
+    expect(MW).toMatch(/import \{ checkAccess \} from "\.\.\/lib\/rbac\/authzEngine\.js"/);
+    expect(MW).toMatch(/checkAccess\(scope, \{ feature: spec\.feature, action: spec\.action \}\)/);
   });
 
-  it("loads the user's RBAC grants from the enforced tables, projected to flat", () => {
-    const idx = MW.indexOf("async function loadRbacFlatPermissions");
-    expect(idx).toBeGreaterThan(-1);
-    const section = MW.slice(idx, idx + 1400);
-    expect(section).toMatch(/FROM rbac_user_roles ur/);
-    expect(section).toMatch(/JOIN rbac_role_grants g ON g\.role_id = r\.id/);
-    expect(section).toMatch(/projectGrantsToFlat\(rows\)/);
-    expect(section).toMatch(/expires_at IS NULL OR ur\.expires_at > NOW\(\)/);
+  it("no longer reads role_permissions / user_roles / permissions for enforcement", () => {
+    expect(MW).not.toMatch(/FROM role_permissions/);
+    expect(MW).not.toMatch(/FROM user_roles/);
+    expect(MW).not.toMatch(/SELECT permission, type FROM permissions/);
   });
 
-  it("folds the RBAC set into the effective permissions of every enforcement path", () => {
-    // requirePermission, requireAnyPermission, userHasPermission all union it
-    const unions = MW.match(/new Set\(\[\.\.\.role[Pp]erms, \.\.\.rbacPerms\]\)/g) ?? [];
-    expect(unions.length).toBeGreaterThanOrEqual(3);
+  it("maps every legacy flat perm to an RBAC feature.action", () => {
+    expect(MW).toMatch(/FLAT_TO_RBAC/);
+    expect(MW).toMatch(/"audit:read":\s*\{ feature: "admin\.audit", action: "view" \}/);
+    expect(MW).toMatch(/"settings:read":\s*\{ feature: "settings",\s*action: "view" \}/);
+    expect(MW).toMatch(/"print:reprint:approve":\s*\{ feature: "documents",\s*action: "approve" \}/);
+    expect(MW).toMatch(/"templates:write":\s*\{ feature: "admin",\s*action: "update" \}/);
   });
 
-  it("degrades safely when RBAC projection fails (legacy set only)", () => {
-    const idx = MW.indexOf("async function loadRbacFlatPermissions");
-    const section = MW.slice(idx, idx + 1400);
-    expect(section).toMatch(/legacy set only/);
+  it("keeps the owner bypass on all three gates", () => {
+    const matches = MW.match(/scope\.isOwner \|\| scope\.role === "owner"/g) ?? [];
+    expect(matches.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("invalidates the RBAC projection cache on grant changes", () => {
-    const idx = MW.indexOf("export function invalidatePermissionCache");
-    const section = MW.slice(idx, idx + 600);
-    expect(section).toMatch(/rbacFlatCache/);
+  it("invalidatePermissionCache is retained (no-op) for call-site compatibility", () => {
+    expect(MW).toMatch(/export function invalidatePermissionCache/);
+  });
+
+  it("unmapped perms degrade to a best-effort feature.action translation", () => {
+    expect(MW).toMatch(/best-effort RBAC translation/);
+    expect(MW).toMatch(/read: "view"/);
   });
 });

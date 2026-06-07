@@ -58,6 +58,30 @@ const expenseImpactPreviewSchema = z.object({
   branchId: z.any().optional(),
 });
 
+// Shared line-allocation payload (the LineAllocationPanel /
+// AllocationTargetSelect output). Accepted by expense + voucher create so
+// both flows carry the same dim parity into the JE. #1715.
+const lineAllocationSchema = z.object({
+  accountCode: z.string().optional(),
+  costCenterId: z.coerce.number().optional(),
+  activityType: z.string().optional(),
+  projectId: z.coerce.number().optional(),
+  vehicleId: z.coerce.number().optional(),
+  propertyId: z.coerce.number().optional(),
+  unitId: z.coerce.number().optional(),
+  assetId: z.coerce.number().optional(),
+  contractId: z.coerce.number().optional(),
+  umrahAgentId: z.coerce.number().optional(),
+  clientId: z.coerce.number().optional(),
+  vendorId: z.coerce.number().optional(),
+  driverId: z.coerce.number().optional(),
+  productId: z.coerce.number().optional(),
+  umrahSeasonId: z.coerce.number().optional(),
+  departmentId: z.coerce.number().optional(),
+  employeeId: z.coerce.number().optional(),
+  manualOverrideReason: z.string().optional(),
+}).optional();
+
 const createExpenseSchema = z.object({
   accountCode: z.string().optional(),
   amount: z.any().optional(),
@@ -99,33 +123,7 @@ const createExpenseSchema = z.object({
   // override the auto-resolved allocation (rule-driven) on the expense
   // JE line. `manualOverrideReason` is required when overriding any
   // resolved dimension and gets logged via logAllocationOverride().
-  lineAllocation: z.object({
-    accountCode: z.string().optional(),
-    costCenterId: z.coerce.number().optional(),
-    activityType: z.string().optional(),
-    projectId: z.coerce.number().optional(),
-    vehicleId: z.coerce.number().optional(),
-    propertyId: z.coerce.number().optional(),
-    unitId: z.coerce.number().optional(),
-    assetId: z.coerce.number().optional(),
-    contractId: z.coerce.number().optional(),
-    umrahAgentId: z.coerce.number().optional(),
-    // Same gap as journalLineSchema — pre-fix expense lineAllocation
-    // schema dropped 6 fields silently. LineAllocationPanel exposes all
-    // 17 in buildAllocationPayload, but the Zod validator stripped these
-    // 6 → the expense JE line never carried them → drilldown reports
-    // for client / vendor / driver / product / umrahSeason / department
-    // came back empty. Accept all 17 now so an expense allocation
-    // matches manual-journal parity.
-    clientId: z.coerce.number().optional(),
-    vendorId: z.coerce.number().optional(),
-    driverId: z.coerce.number().optional(),
-    productId: z.coerce.number().optional(),
-    umrahSeasonId: z.coerce.number().optional(),
-    departmentId: z.coerce.number().optional(),
-    employeeId: z.coerce.number().optional(),
-    manualOverrideReason: z.string().optional(),
-  }).optional(),
+  lineAllocation: lineAllocationSchema,
 });
 
 const updateDescriptionSchema = z.object({
@@ -172,6 +170,8 @@ const createVoucherSchema = z.object({
   date: z.string().optional(),
   costCenter: z.string().optional(),
   allocations: z.array(voucherAllocationSchema).optional(),
+  // #1715: master «ربط السند بـ» allocation dims (AllocationTargetSelect).
+  lineAllocation: lineAllocationSchema,
 });
 
 const createSalaryAdvanceSchema = z.object({
@@ -1038,7 +1038,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       contractId, invoiceId, reference, attachmentUrl, attachmentType,
       vatRate: rawVatRate, vatAmount: rawVatAmount,
       beneficiaryType, entitlementType, branchId, departmentId,
-      autoDescription, operationType, allocations,
+      autoDescription, operationType, allocations, lineAllocation,
     } = b;
 
     // C4 + C5 — allocations tie this voucher to specific AP obligations
@@ -1218,6 +1218,22 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     if (contractId) voucherDims.contractId = Number(contractId);
     if (departmentId) voucherDims.departmentId = Number(departmentId);
     if (b.costCenter) voucherDims.costCenter = b.costCenter;
+
+    // #1715: merge the master «ربط السند بـ» allocation dims on top of the
+    // relatedEntity-derived ones. The AllocationTargetSelect ships the full
+    // dim set (vehicle / property / unit / contract / project / umrah / …)
+    // so vouchers reach the same dim parity as expenses + manual journals.
+    if (lineAllocation) {
+      const la = lineAllocation as Record<string, any>;
+      for (const k of [
+        "costCenterId", "activityType", "projectId", "vehicleId", "propertyId",
+        "unitId", "assetId", "contractId", "umrahAgentId", "umrahSeasonId",
+        "clientId", "vendorId", "driverId", "productId", "departmentId",
+        "employeeId", "manualOverrideReason",
+      ]) {
+        if (la[k] != null && la[k] !== "") voucherDims[k] = la[k];
+      }
+    }
 
     // Centralised resolver — fills cost-centre from rule when operator
     // left it empty + records the rule reference for the Manual

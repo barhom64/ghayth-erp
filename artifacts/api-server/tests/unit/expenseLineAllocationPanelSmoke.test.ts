@@ -20,12 +20,15 @@ const FORM = readFileSync(
 // into the request body.
 
 describe("expense schema accepts lineAllocation", () => {
-  it("createExpenseSchema declares lineAllocation field", () => {
-    expect(ROUTE).toContain("lineAllocation: z.object({");
+  it("createExpenseSchema references the shared lineAllocation schema", () => {
+    // #1715 PR-4 extracted the inline object into a shared
+    // `lineAllocationSchema` reused by expense + voucher create.
+    expect(ROUTE).toContain("const lineAllocationSchema = z.object({");
+    expect(ROUTE).toContain("lineAllocation: lineAllocationSchema");
   });
 
   it("lineAllocation supports every LineAllocationPanel field", () => {
-    const idx = ROUTE.indexOf("lineAllocation: z.object({");
+    const idx = ROUTE.indexOf("const lineAllocationSchema = z.object({");
     expect(idx).toBeGreaterThan(-1);
     // Widened from 800 → 2000 chars after the schema grew to cover the 7
     // dims (client/vendor/driver/product/umrahSeason/department/employee)

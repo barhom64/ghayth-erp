@@ -4,7 +4,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-import { formatDateAr } from "@/lib/formatters";
+import { formatUmrahDate } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   type DataTableColumn,
   PageStatusBadge,
   PageShell,
+  resolveStatus,
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
@@ -53,8 +54,8 @@ export default function UmrahSeasons() {
 
   const columns: DataTableColumn<any>[] = [
     { key: "title", header: "العنوان", sortable: true, searchable: true },
-    { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => formatDateAr(r.startDate) },
-    { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => formatDateAr(r.endDate) },
+    { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => formatUmrahDate(r.startDate) },
+    { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => formatUmrahDate(r.endDate) },
     { key: "status", header: "الحالة", render: (r: any) => <PageStatusBadge status={r.status} /> },
     {
       key: "actions" as any, header: "إجراءات", render: (r: any) =>
@@ -84,7 +85,7 @@ export default function UmrahSeasons() {
                 "السنة الميلادية": s.gregorianYear || "—",
                 "تاريخ البدء": s.startDate || "—",
                 "تاريخ النهاية": s.endDate || "—",
-                "الحالة": s.status || "—",
+                "الحالة": (s.status && resolveStatus(s.status)?.label) ?? s.status ?? "—",
               })),
             })}
           />

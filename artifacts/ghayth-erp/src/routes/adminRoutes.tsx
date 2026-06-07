@@ -3,7 +3,8 @@ import { lazy } from "react";
 const Admin = lazy(() => import("@/pages/admin"));
 const AdminUsers = lazy(() => import("@/pages/admin/users"));
 const AdminUserOnboarding = lazy(() => import("@/pages/admin/user-onboarding"));
-const AdminRoles = lazy(() => import("@/pages/admin/roles"));
+// Legacy classic roles editor retired — RBAC v2 (Role Composer) is the single
+// roles system. The old /admin/roles URL now serves the Composer.
 const AdminLogs = lazy(() => import("@/pages/admin/logs"));
 const AdminIntegrations = lazy(() => import("@/pages/admin-integrations"));
 const AdminMonitoring = lazy(() => import("@/pages/admin-monitoring"));
@@ -20,6 +21,8 @@ const AdminSystemGovernor = lazy(() => import("@/pages/admin-system-governor"));
 const AdminPolicyEngine = lazy(() => import("@/pages/admin-policy-engine"));
 const AdminDomainRegistry = lazy(() => import("@/pages/admin-domain-registry"));
 const AdminEventMonitor = lazy(() => import("@/pages/admin-event-monitor"));
+const AdminEventOutbox = lazy(() => import("@/pages/admin-event-outbox"));
+const AdminJourneys = lazy(() => import("@/pages/admin-journeys"));
 const AdminPostingFailures = lazy(() => import("@/pages/admin-posting-failures"));
 const AdminLifecycleMonitor = lazy(() => import("@/pages/admin-lifecycle-monitor"));
 const AdminRbacMatrix = lazy(() => import("@/pages/admin-rbac-matrix"));
@@ -44,7 +47,7 @@ export const adminRoutes = [
   { path: "/admin", component: Admin },
   { path: "/admin/users", component: AdminUsers },
   { path: "/admin/user-onboarding", component: AdminUserOnboarding },
-  { path: "/admin/roles", component: AdminRoles },
+  { path: "/admin/roles", component: RbacSimpleEditor },
   { path: "/admin/logs", component: AdminLogs },
   { path: "/admin/integrations", component: AdminIntegrations },
   { path: "/admin/monitoring", component: AdminMonitoring },
@@ -61,6 +64,8 @@ export const adminRoutes = [
   { path: "/admin/policy-engine", component: AdminPolicyEngine },
   { path: "/admin/domain-registry", component: AdminDomainRegistry },
   { path: "/admin/event-monitor", component: AdminEventMonitor },
+  { path: "/admin/outbox", component: AdminEventOutbox },
+  { path: "/admin/journeys", component: AdminJourneys },
   { path: "/admin/posting-failures", component: AdminPostingFailures },
   { path: "/admin/lifecycle-monitor", component: AdminLifecycleMonitor },
   { path: "/admin/rbac-matrix", component: AdminRbacMatrix },
