@@ -211,7 +211,16 @@ export function requireGuards(scope: GuardScope = "financial") {
 
     // The posting-failure resolution endpoints are the escape hatch for the
     // posting-failures breaker — they must not be blocked by that same guard.
-    const isFailureResolution = req.originalUrl.includes("/posting-failures");
+    // SECURITY: match on req.path (NEVER req.originalUrl — that carries the
+    // query string), anchored to the exact remediation routes and their
+    // mutation verbs. Otherwise a crafted URL such as
+    // `POST /api/finance/invoices?x=/posting-failures` would slip past the
+    // lockout on unrelated financial mutations. The only escape-hatch routes
+    // are PATCH /posting-failures/:id/resolve, POST /posting-failures/:id/retry,
+    // POST /posting-failures/bulk-resolve, and POST /posting-failures/retry-all.
+    const isFailureResolution =
+      (req.method === "POST" || req.method === "PATCH") &&
+      /\/posting-failures\/(?:[^/]+\/(?:resolve|retry)|bulk-resolve|retry-all)$/.test(req.path);
 
     const result = await checkSystemGuards(companyId, scope, {
       date: postingDate,
