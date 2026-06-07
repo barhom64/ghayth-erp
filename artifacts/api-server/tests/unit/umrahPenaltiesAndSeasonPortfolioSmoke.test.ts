@@ -89,9 +89,19 @@ describe("GET /umrah/reports/season-portfolio — endpoint contract", () => {
     expect(SEASON_PORT).toMatch(/"nuskStatus" <> 'cancelled'/);
   });
 
-  it("groupsCount + pilgrimsCount come from tenant-scoped scalar subqueries", () => {
-    expect(SEASON_PORT).toMatch(/COUNT\(\*\)::int FROM umrah_pilgrims p\s+WHERE p\."seasonId" = s\.id AND p\."companyId" = s\."companyId" AND p\."deletedAt" IS NULL/);
-    expect(SEASON_PORT).toMatch(/COUNT\(\*\)::int FROM umrah_groups g\s+WHERE g\."seasonId" = s\.id AND g\."companyId" = s\."companyId" AND g\."deletedAt" IS NULL/);
+  it("groupsCount + pilgrimsCount come from tenant-scoped CTEs (N+1 fix)", () => {
+    // After the N+1 fix the two count aggregates were lifted out of
+    // per-row correlated subqueries into sibling CTEs keyed by
+    // (seasonId, companyId). The tenant boundary now lives on the
+    // LEFT JOIN's ON clause instead of inside the subquery WHERE.
+    expect(SEASON_PORT).toContain("WITH season_pilgrim_counts AS");
+    expect(SEASON_PORT).toContain("season_group_counts AS");
+    expect(SEASON_PORT).toMatch(
+      /LEFT JOIN season_pilgrim_counts spc\s+ON spc\."seasonId" = s\.id AND spc\."companyId" = s\."companyId"/,
+    );
+    expect(SEASON_PORT).toMatch(
+      /LEFT JOIN season_group_counts sgc\s+ON sgc\."seasonId" = s\.id AND sgc\."companyId" = s\."companyId"/,
+    );
   });
 
   it("ORDER BY margin DESC + bounded LIMIT 1..200", () => {
