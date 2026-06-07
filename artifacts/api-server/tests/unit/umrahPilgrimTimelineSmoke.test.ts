@@ -112,7 +112,12 @@ describe("pilgrim detail — timeline rendering", () => {
 
   it("each row shows username (or 'النظام') + Arabic-formatted timestamp", () => {
     expect(PAGE).toMatch(/ev\.userName \?\? "النظام"/);
-    expect(PAGE).toMatch(/formatDateAr\(ev\.createdAt\)/);
+    // The pilgrim detail moved from `formatDateAr` to `formatUmrahDate`
+    // (the umrah-specific wrapper that always renders Gregorian/Hijri
+    // dual). The Arabic-formatted timestamp contract is unchanged —
+    // the helper just delegates to formatDateBoth — but the smoke test
+    // has to match the new symbol.
+    expect(PAGE).toMatch(/formatUmrahDate\(ev\.createdAt\)/);
   });
 
   it("each row has a stable data-testid for e2e", () => {

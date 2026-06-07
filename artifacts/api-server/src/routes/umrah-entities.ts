@@ -17,6 +17,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { issueNumber } from "../lib/numberingService.js";
+import { gccExclusionSqlFragment } from "../lib/umrahNationalityRules.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -657,6 +658,7 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
                   WHERE status NOT IN ('departed','cancelled','deceased','visa_rejected')
                     AND "visaExpiry" IS NOT NULL
                     AND "visaExpiry" < CURRENT_DATE + INTERVAL '7 days'
+                    AND ${gccExclusionSqlFragment(`"nationality"`)}
                 ) AS "visaAtRisk"
          FROM umrah_pilgrims
          WHERE "deletedAt" IS NULL
@@ -792,7 +794,8 @@ router.get("/groups/:id", authorize({ feature: "umrah", action: "view" }), async
          WHERE "groupId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
            AND "visaExpiry" IS NOT NULL
            AND "visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
-           AND status NOT IN ('departed', 'cancelled')`,
+           AND status NOT IN ('departed', 'cancelled')
+           AND ${gccExclusionSqlFragment(`"nationality"`)}`,
         [id, scope.companyId]
       ),
       // Date range + distinct flight codes — answers "when does this
@@ -2808,13 +2811,15 @@ router.get("/reports/compliance", authorize({ feature: "umrah", action: "list" }
         params,
       ),
       // Visa-expiring within 7d (same window as the list-page banner)
+      // — GCC nationals are excluded; they don't need a KSA visa.
       rawQuery<{ c: string }>(
         `SELECT COUNT(*)::text AS c
            FROM umrah_pilgrims p
           WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
             AND p."visaExpiry" IS NOT NULL
             AND p."visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
-            AND p.status NOT IN ('departed', 'cancelled')${seasonP}`,
+            AND p.status NOT IN ('departed', 'cancelled')
+            AND ${gccExclusionSqlFragment(`p."nationality"`)}${seasonP}`,
         params,
       ),
       // Currently overstaying (status + the auto-flagged penalty status)

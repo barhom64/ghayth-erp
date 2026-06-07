@@ -3397,8 +3397,12 @@ async function umrahWeeklyAgentPerformance(): Promise<string> {
 
 async function umrahVisaExpiryAlerts(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
+  const { gccExclusionSqlFragment } = await import("./umrahNationalityRules.js");
   let alerted = 0;
   for (const c of companies) {
+    // GCC nationals enter KSA visa-free — their `visaExpiry` row (if
+    // any) is operator data entry from another jurisdiction; alerting
+    // on it is a false positive that nags the GM every morning.
     const expiring = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g.name AS "groupName"
        FROM umrah_pilgrims p
@@ -3406,7 +3410,8 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
          AND p.status NOT IN ('departed','cancelled')
          AND p."visaExpiry" IS NOT NULL
-         AND p."visaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`,
+         AND p."visaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+         AND ${gccExclusionSqlFragment(`p."nationality"`)}`,
       [c.id]
     );
     if (expiring.length === 0) continue;
@@ -3547,6 +3552,70 @@ async function umrahDailyStatusAdvance(): Promise<string> {
     }
   }
   return `تقديم حالة المعتمرين: ${arrived} وصول، ${overstayed} تجاوز، ${departed} مغادرة عبر ${companies.length} شركة`;
+}
+
+// Automated overstay-penalty generation (#5 of the maturity gap report).
+//
+// `umrahDailyStatusAdvance` above transitions pilgrims into `overstayed`
+// state, but the penalty engine (financial impact) had remained manual
+// — operators had to click "تشغيل المحرك" daily. That was a deliberate
+// safety choice (manual supervision of GL postings), but it left a
+// long-running operational debt: forgotten clicks let penalties stack
+// silently.
+//
+// The fix makes auto-penalty OPT-IN per company via three settings:
+//   `umrah.auto_penalty.enabled`       — boolean, default false
+//   `umrah.auto_penalty.overstay_days` — number, default 3
+//   `umrah.auto_penalty.daily_rate`    — number, default 500 (SAR/day)
+//
+// Companies that prefer manual supervision keep the current behavior
+// (their flag stays false, the cron returns "skipped"). Companies that
+// want automation flip the flag in Settings and the cron creates the
+// penalties + GL entries on schedule. Exempt pilgrims (migration 242)
+// are honoured by the engine query.
+//
+// Schedule: 0 7 * * * (7 AM, one hour after the 6 AM violation scan and
+// the 5 AM status advance, so all upstream signals are settled).
+async function umrahDailyAutoPenaltyGeneration(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
+  const { resolveSettings } = await import("./settings.js");
+  const { generateOverstayPenalties } = await import("./umrahPenaltyEngine.js");
+  let enabled = 0, totalCreated = 0, totalChecked = 0, totalSkippedExempt = 0;
+  for (const c of companies) {
+    const flagRaw = await resolveSettings("umrah.auto_penalty.enabled", c.id);
+    const flag = flagRaw === true || flagRaw === "true" || flagRaw === 1;
+    if (!flag) continue;
+    enabled++;
+    const overstayDaysRaw = await resolveSettings("umrah.auto_penalty.overstay_days", c.id);
+    const dailyRateRaw = await resolveSettings("umrah.auto_penalty.daily_rate", c.id);
+    const overstayDays = Number(overstayDaysRaw ?? 3);
+    const dailyRate = Number(dailyRateRaw ?? 500);
+    try {
+      const result = await generateOverstayPenalties(
+        { companyId: c.id, branchId: null, userId: 0 },
+        { overstayDays, dailyRate },
+      );
+      totalCreated += result.penaltiesCreated;
+      totalChecked += result.checked;
+      totalSkippedExempt += result.skippedExempt;
+      emitEvent({
+        companyId: c.id, userId: null,
+        action: "umrah.auto_penalty.cron_run", entity: "umrah_penalties", entityId: 0,
+        details: JSON.stringify({
+          source: "cron",
+          checked: result.checked,
+          penaltiesCreated: result.penaltiesCreated,
+          violationsLinked: result.violationsLinked,
+          skippedExempt: result.skippedExempt,
+          overstayDays,
+          dailyRate,
+        }),
+      }).catch((e) => logger.error(e, "[cronScheduler] umrah auto penalty event failed"));
+    } catch (e) {
+      logger.error(e, `[cronScheduler] umrah auto penalty failed for company ${c.id}`);
+    }
+  }
+  return `تشغيل تلقائي لمحرك الغرامات: ${enabled}/${companies.length} شركة مفعلة، فُحص ${totalChecked} معتمر، أُنشئت ${totalCreated} غرامة، تم تجاهل ${totalSkippedExempt} (معفى)`;
 }
 
 // --- Rate-limit fallback alerter (Task #176) ---------------------------------
@@ -3915,6 +3984,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "umrah_visa_expiry_alerts", description: "تنبيهات انتهاء تأشيرات العمرة", schedule: "0 7 * * *", handler: umrahVisaExpiryAlerts },
   { name: "umrah_monthly_financial_summary", description: "ملخص العمرة المالي الشهري", schedule: "0 9 1 * *", handler: umrahMonthlyFinancialSummary },
   { name: "umrah_daily_status_advance", description: "C5 — تقديم حالة المعتمرين اليومية (وصول/تجاوز/مغادرة) — حالة فقط دون غرامات", schedule: "0 5 * * *", handler: umrahDailyStatusAdvance },
+  { name: "umrah_daily_auto_penalty_generation", description: "توليد تلقائي لغرامات التأخر للشركات المفعّلة (umrah.auto_penalty.enabled)", schedule: "0 7 * * *", handler: umrahDailyAutoPenaltyGeneration },
   { name: "daily_invoice_overdue", description: "تصعيد الفواتير المتأخرة 6 مراحل", schedule: "0 8 * * *", handler: dailyInvoiceOverdueEscalation },
   { name: "daily_fuel_monitor", description: "مراقبة استهلاك الوقود", schedule: "0 9 * * *", handler: dailyFuelMonitor },
   { name: "daily_inventory_check", description: "فحص المخزون + طلب شراء تلقائي", schedule: "0 10 * * *", handler: dailyInventoryCheck },

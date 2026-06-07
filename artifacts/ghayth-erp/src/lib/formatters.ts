@@ -31,6 +31,25 @@ export function formatDateBoth(dateStr: string | Date | null | undefined): strin
   return `${fmtGregorian(d, "long")} / ${fmtHijri(d, "long")}`;
 }
 
+/**
+ * Umrah-specific date formatter. Operators in this module think in
+ * Hijri ("حج ١٤٤٦") more than Gregorian, but the system stores dates
+ * as Gregorian. Rendering both side-by-side everywhere in the umrah
+ * pages keeps the operator's mental model intact without forcing them
+ * to flip the global calendar setting (which would affect every other
+ * module too).
+ *
+ * Identity-equal to `formatDateBoth` today — the alias exists so:
+ *   1. The intent is documented at the callsite ("this is an umrah
+ *      date display") for future readers.
+ *   2. If a per-module calendar preference lands later (an operator
+ *      wants umrah dates in Hijri-only, finance in Gregorian-only),
+ *      only this wrapper changes, not every umrah callsite.
+ */
+export function formatUmrahDate(dateStr: string | Date | null | undefined): string {
+  return formatDateBoth(dateStr);
+}
+
 export function formatTimeAr(dateStr: string | Date | null | undefined): string {
   if (!dateStr) return "-";
   const d = dateStr instanceof Date ? dateStr : new Date(dateStr);
