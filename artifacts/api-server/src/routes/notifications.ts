@@ -263,6 +263,73 @@ router.post("/preferences", authorize({ feature: "notifications", action: "updat
   }
 });
 
+/* ── Quiet hours ─────────────────────────────────────────────────────
+ * The notification_preferences table already carries quietHoursStart /
+ * quietHoursEnd columns — but the UI never set them and the engine
+ * never read them, so a user who didn't want pings after midnight had
+ * no way to enforce that. These two endpoints surface them; the engine
+ * suppresses non-urgent dispatches inside the window.
+ *
+ * Stored on the row keyed (userId, channel='in_app', category='general')
+ * so a single user record carries both the channel toggles and the
+ * quiet-hours window — the UI's master switch row.
+ */
+const quietHoursSchema = z.object({
+  start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+  end:   z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
+});
+
+router.get("/quiet-hours", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<{ quietHoursStart: string | null; quietHoursEnd: string | null }>(
+      `SELECT "quietHoursStart"::text, "quietHoursEnd"::text
+         FROM notification_preferences
+        WHERE "userId" = $1 AND "companyId" = $2
+          AND channel = 'in_app' AND category = 'general'
+        LIMIT 1`,
+      [scope.userId, scope.companyId],
+    );
+    res.json({ data: rows[0] ?? { quietHoursStart: null, quietHoursEnd: null } });
+  } catch (err) {
+    handleRouteError(err, res, "Get quiet hours error:");
+  }
+});
+
+router.post("/quiet-hours", authorize({ feature: "notifications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(quietHoursSchema.safeParse(req.body));
+    const start = body.start ?? null;
+    const end = body.end ?? null;
+
+    // Upsert against the master in_app/general row — the same row the
+    // channel toggle UI writes to. The unique constraint on
+    // (userId, channel, category) makes this idempotent.
+    const { insertId } = await rawExecute(
+      `INSERT INTO notification_preferences
+         ("userId","companyId",channel,category,enabled,"quietHoursStart","quietHoursEnd")
+       VALUES ($1,$2,'in_app','general',true,$3,$4)
+       ON CONFLICT ("userId", channel, category) DO UPDATE
+         SET "quietHoursStart" = $3, "quietHoursEnd" = $4, "updatedAt" = NOW()
+       RETURNING id`,
+      [scope.userId, scope.companyId, start, end],
+    );
+    assertInsert(insertId, "notification_preferences");
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "notification.quiet_hours.updated",
+      entity: "notification_preferences", entityId: insertId,
+      after: { start, end },
+    }).catch((e) => logger.error(e, "notifications background task failed"));
+
+    res.json({ data: { quietHoursStart: start, quietHoursEnd: end } });
+  } catch (err) {
+    handleRouteError(err, res, "Save quiet hours error:");
+  }
+});
+
 router.patch("/mark-all-read", authorize({ feature: "notifications", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
