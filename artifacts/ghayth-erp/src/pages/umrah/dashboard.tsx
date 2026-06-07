@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { formatDateAr, formatNumber } from "@/lib/formatters";
+import { formatUmrahDate, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -344,7 +344,7 @@ export default function UmrahDashboard() {
                 { key: "fullName", header: "الاسم", render: (r) => <span className="font-medium">{r.fullName}</span> },
                 { key: "passportNumber", header: "الجواز" },
                 { key: "nationality", header: "الجنسية" },
-                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => formatDateAr(r.actualArrival) },
+                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => formatUmrahDate(r.actualArrival) },
                 { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
               ] as DataTableColumn<any>[]}
               data={dash?.recentArrivals || []}

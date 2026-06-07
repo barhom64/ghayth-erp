@@ -39,6 +39,7 @@ import {
   VOUCHER_HEADER_MAP,
   UMRAH_FIELD_LABELS_AR,
 } from "../lib/umrahImportEngine.js";
+import { gccExclusionSqlFragment } from "../lib/umrahNationalityRules.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEASON LOCK — rejects writes on closed/archived seasons
@@ -469,13 +470,18 @@ router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), asyn
       ),
       // Visa-expiring within 7 days — mirrors the list-page banner +
       // the per-group card. Excludes pilgrims who already left.
+      // Also excludes GCC nationals — they don't require a visa to
+      // enter KSA, so a `visaExpiry` row for them is operator data
+      // entry from a different jurisdiction (or a typo); either way,
+      // alerting on them is a false positive.
       rawQuery<{ count: string }>(
         `SELECT COUNT(*)::text AS count
            FROM umrah_pilgrims
           WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
             AND "visaExpiry" IS NOT NULL
             AND "visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
-            AND status NOT IN ('departed', 'cancelled')`,
+            AND status NOT IN ('departed', 'cancelled')
+            AND ${gccExclusionSqlFragment(`"nationality"`)}`,
         [id, scope.companyId],
       ),
       rawQuery<{ count: string }>(
@@ -953,10 +959,13 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
     if (visaExpiringWithin) {
       const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
       params.push(days);
+      // GCC nationals don't need a KSA visa — exclude them from the
+      // expiring-alert list (same rule the season-detail KPI uses).
       where += ` AND p."visaExpiry" IS NOT NULL
                  AND p."visaExpiry" >= CURRENT_DATE
                  AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
-                 AND p.status NOT IN ('departed','cancelled')`;
+                 AND p.status NOT IN ('departed','cancelled')
+                 AND ${gccExclusionSqlFragment(`p."nationality"`)}`;
     }
     if (search) {
       // Search hits four columns:
@@ -1029,10 +1038,13 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     if (visaExpiringWithin) {
       const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
       params.push(days);
+      // GCC nationals don't need a KSA visa — exclude them from the
+      // expiring-alert list (same rule the season-detail KPI uses).
       where += ` AND p."visaExpiry" IS NOT NULL
                  AND p."visaExpiry" >= CURRENT_DATE
                  AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
-                 AND p.status NOT IN ('departed','cancelled')`;
+                 AND p.status NOT IN ('departed','cancelled')
+                 AND ${gccExclusionSqlFragment(`p."nationality"`)}`;
     }
     if (search) {
       const searchHash = blindIndex(String(search));
@@ -1816,75 +1828,27 @@ router.post("/run-penalty-engine", authorize({ feature: "umrah", action: "create
   try {
     const scope = req.scope!;
     const { overstayDays = 3, dailyRate = 500 } = zodParse(runPenaltyEngineSchema.safeParse(req.body));
-    const today = todayISO();
-    const overstayed = await rawQuery(
-      `SELECT p.id, p."passportNumber", p."fullName", p."agentId", p."seasonId", p."departureDate",
-        ($1::date - p."departureDate"::date) as "daysOver"
-       FROM umrah_pilgrims p
-       WHERE p."companyId"=$2 AND p."deletedAt" IS NULL AND p.status='overstayed' AND p."departureDate" < $1
-         AND NOT EXISTS (SELECT 1 FROM umrah_penalties pen WHERE pen."pilgrimId"=p.id AND pen."deletedAt" IS NULL AND pen.type='overstay' AND pen.status IN ('pending','invoiced'))`,
-      [today, scope.companyId]
+    const { generateOverstayPenalties } = await import("../lib/umrahPenaltyEngine.js");
+    const result = await generateOverstayPenalties(
+      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      { overstayDays, dailyRate },
     );
-    let created = 0;
-    let violationsLinked = 0;
-    for (const p of overstayed) {
-      if (Number(p.daysOver) >= overstayDays) {
-        const amount = Number(p.daysOver) * dailyRate;
-        const result = await withTransaction(async (client) => {
-          const penRes = await client.query(
-            `INSERT INTO umrah_penalties ("companyId","pilgrimId","agentId","seasonId",type,"daysOverstayed",amount,notes)
-             VALUES ($1,$2,$3,$4,'overstay',$5,$6,$7) RETURNING id`,
-            [scope.companyId, p.id, p.agentId, p.seasonId, p.daysOver, amount, `غرامة تأخر ${p.daysOver} يوم — ${p.fullName}`]
-          );
-          // DT-2 (C3): attach the operational violation to its financial
-          // penalty. The detection cron writes the umrah_violations row;
-          // this links that row to the penalty just created so the two
-          // parallel systems are no longer disjoint.
-          const penaltyId = penRes.rows[0]?.id;
-          let linked = 0;
-          if (penaltyId) {
-            const upd = await client.query(
-              `UPDATE umrah_violations SET "linkedPenaltyId" = $1, "updatedAt" = NOW()
-               WHERE "mutamerId" = $2 AND type = 'overstay' AND "companyId" = $3
-                 AND "linkedPenaltyId" IS NULL AND "deletedAt" IS NULL`,
-              [penaltyId, p.id, scope.companyId]
-            );
-            linked = upd.rowCount ?? 0;
-          }
-          return { rows: penRes.rows, linked };
-        });
-        const penRows = result.rows;
-        violationsLinked += result.linked;
-        await applyTransition({
-          entity: "umrah_pilgrims",
-          id: p.id,
-          scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
-          action: "umrah.pilgrim.violated",
-          fromStates: ["overstayed"],
-          toState: "violated",
-          extraWhere: `"deletedAt" IS NULL`,
-        });
-        if (penRows[0]?.id) {
-          try {
-            const { umrahEngine } = await import("../lib/engines/index.js");
-            await umrahEngine.postPenaltyGL(
-              { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-              {
-                id: penRows[0].id, amount,
-                pilgrimName: p.fullName, agentName: undefined,
-                type: "overstay",
-                agentId: p.agentId as number | undefined,
-                seasonId: p.seasonId as number | undefined,
-              }
-            );
-          } catch (e) { logger.error(e, "umrah penalty GL posting failed (non-blocking)"); }
-        }
-        created++;
-      }
-    }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: 0, after: { checked: overstayed.length, penaltiesCreated: created, violationsLinked } }).catch((e) => logger.error(e, "umrah background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0, details: JSON.stringify({ checked: overstayed.length, penaltiesCreated: created, violationsLinked }) }).catch((e) => logger.error(e, "umrah background task failed"));
-    res.json({ checked: overstayed.length, penaltiesCreated: created, violationsLinked });
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "umrah_penalties", entityId: 0,
+      after: {
+        checked: result.checked,
+        penaltiesCreated: result.penaltiesCreated,
+        violationsLinked: result.violationsLinked,
+        skippedExempt: result.skippedExempt,
+      },
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0,
+      details: JSON.stringify(result),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json(result);
   } catch (err) { handleRouteError(err, res, "Penalty engine error"); }
 });
 
