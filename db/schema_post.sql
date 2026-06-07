@@ -2301,6 +2301,12 @@ ALTER TABLE ONLY public.umrah_families ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
+-- Name: umrah_refund_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_refund_requests ALTER COLUMN id SET DEFAULT nextval('public.umrah_refund_requests_id_seq'::regclass);
+
+
+--
 -- Name: umrah_room_blocks id; Type: DEFAULT; Schema: public; Owner: -
 --
 ALTER TABLE ONLY public.umrah_room_blocks ALTER COLUMN id SET DEFAULT nextval('public.umrah_room_blocks_id_seq'::regclass);
@@ -5841,6 +5847,13 @@ ALTER TABLE ONLY public.umrah_hotels
 --
 ALTER TABLE ONLY public.umrah_families
     ADD CONSTRAINT umrah_families_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: umrah_refund_requests umrah_refund_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_refund_requests
+    ADD CONSTRAINT umrah_refund_requests_pkey PRIMARY KEY (id);
 
 CREATE INDEX idx_umrah_hotels_city ON public.umrah_hotels USING btree ("companyId", city) WHERE ("deletedAt" IS NULL);
 
