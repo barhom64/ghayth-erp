@@ -67,18 +67,6 @@ interface RoutingRule {
   fallbackChainId: number | null;
 }
 
-interface UserPreference {
-  category: string;
-  inApp: boolean;
-  email: boolean;
-  sms: boolean;
-  whatsapp: boolean;
-  push: boolean;
-  webhook: boolean;
-  quietHoursStart: string | null;
-  quietHoursEnd: string | null;
-}
-
 interface TemplateRow {
   id: number;
   templateKey: string;
@@ -160,30 +148,54 @@ async function getRoutingRule(companyId: number, eventCategory: string): Promise
   };
 }
 
-async function getUserPreferences(companyId: number, userId: number, category: string): Promise<UserPreference | null> {
-  const rows = await rawQuery<UserPreference>(
-    `SELECT category, "inApp", email, sms, whatsapp, push, webhook, "quietHoursStart"::text, "quietHoursEnd"::text
-     FROM notification_preferences
-     WHERE "companyId" = $1 AND "userId" = $2 AND category = $3
-     LIMIT 1`,
-    [companyId, userId, category]
-  );
-  return rows[0] ?? null;
+/**
+ * Channels a user has explicitly opted OUT of, for a given event
+ * category. Reads the row-per-channel shape the preferences UI actually
+ * writes (notification_preferences: channel + category + enabled, the
+ * shape the UNIQUE(userId, channel, category) constraint enforces).
+ *
+ * A category-specific row (e.g. category='leave') overrides the global
+ * 'general' master switch the UI toggles. Returns the set of disabled
+ * channel names; absence of a row means "not opted out" (default on).
+ *
+ * Before this, the engine read the legacy boolean columns (inApp/email/…)
+ * which the UI never wrote — so every user channel toggle was silently
+ * ignored. This makes the preference panel actually take effect.
+ */
+export interface PreferenceRow {
+  channel: string;
+  category: string;
+  enabled: boolean;
 }
 
-function applyUserPreferences(channels: EngineChannel[], prefs: UserPreference | null): EngineChannel[] {
-  if (!prefs) return channels;
-  return channels.filter((ch) => {
-    switch (ch) {
-      case "in_app": return prefs.inApp;
-      case "email": return prefs.email;
-      case "sms": return prefs.sms;
-      case "whatsapp": return prefs.whatsapp;
-      case "push": return prefs.push;
-      case "webhook": return prefs.webhook;
-      default: return true;
-    }
-  });
+/**
+ * Pure reducer: given the preference rows for a user and the target
+ * category, return the set of channels the user has opted out of. The
+ * global 'general' master switch applies first; a category-specific row
+ * then overrides it, so a per-category preference always wins.
+ */
+export function computeDisabledChannels(rows: PreferenceRow[], category: string): Set<string> {
+  const byChannel = new Map<string, boolean>();
+  for (const r of rows) if (r.category === "general") byChannel.set(r.channel, r.enabled);
+  for (const r of rows) if (r.category === category) byChannel.set(r.channel, r.enabled);
+  const disabled = new Set<string>();
+  for (const [ch, enabled] of byChannel) if (!enabled) disabled.add(ch);
+  return disabled;
+}
+
+async function getDisabledChannels(companyId: number, userId: number, category: string): Promise<Set<string>> {
+  const rows = await rawQuery<PreferenceRow>(
+    `SELECT channel, category, enabled
+       FROM notification_preferences
+      WHERE "companyId" = $1 AND "userId" = $2 AND category IN ($3, 'general')`,
+    [companyId, userId, category]
+  );
+  return computeDisabledChannels(rows, category);
+}
+
+function applyUserPreferences(channels: EngineChannel[], disabled: Set<string>): EngineChannel[] {
+  if (disabled.size === 0) return channels;
+  return channels.filter((ch) => !disabled.has(ch));
 }
 
 async function resolveLanguage(companyId: number, payload: EnginePayload): Promise<"ar" | "en"> {
@@ -417,8 +429,8 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
       [payload.assignmentId]
     );
     if (userRow) {
-      const prefs = await getUserPreferences(companyId, userRow.id, eventCategory.split(".")[0] ?? eventCategory);
-      channels = applyUserPreferences(channels, prefs);
+      const disabled = await getDisabledChannels(companyId, userRow.id, eventCategory.split(".")[0] ?? eventCategory);
+      channels = applyUserPreferences(channels, disabled);
     }
   }
 
