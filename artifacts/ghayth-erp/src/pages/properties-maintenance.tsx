@@ -1,4 +1,6 @@
 import { Link, useLocation } from "wouter";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useApiQuery, asList } from "@/lib/api";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +34,7 @@ export default function PropertiesMaintenance() {
     searchFields: ["unitNumber", "buildingName", "description"] as any,
     statusField: "status" as any,
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "unitNumber", header: "الوحدة", sortable: true, render: (r) => r.unitNumber || "-" },
@@ -67,9 +70,27 @@ export default function PropertiesMaintenance() {
       subtitle="إدارة ومتابعة طلبات الصيانة"
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={
-        <Link href="/properties/maintenance/create">
-          <GuardedButton perm="property:create" className="gap-2"><Plus className="h-4 w-4" /> طلب صيانة جديد</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_properties_maintenance"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "طلبات الصيانة", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "المرجع": r.ref || r.id,
+                "العقار/الوحدة": r.unitName || r.buildingName || "—",
+                "النوع": r.type || r.category || "—",
+                "الأولوية": r.priority || "—",
+                "تاريخ الطلب": r.createdAt || r.requestDate || "—",
+                "الحالة": r.status || "—",
+              })),
+            })}
+          />
+          <Link href="/properties/maintenance/create">
+            <GuardedButton perm="property:create" className="gap-2"><Plus className="h-4 w-4" /> طلب صيانة جديد</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <PropertyTabsNav />
@@ -102,7 +123,8 @@ export default function PropertiesMaintenance() {
         <CardContent>
           <DataTable
             columns={columns}
-            data={filtered}
+            onSortedDataChange={setPrintRows}
+        data={filtered}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
