@@ -260,6 +260,15 @@ const patchPilgrimSchema = z.object({
   // compliance reviewer can see WHY each exemption was granted.
   overstayExempt: z.boolean().optional(),
   overstayExemptReason: z.string().optional().nullable(),
+  // Visa application workflow (migration 266). Transitions are
+  // validated against `VISA_TRANSITIONS` in the handler below so an
+  // operator can't jump from `requested` straight to `delivered` and
+  // skip the issuance milestone.
+  visaStatus: z.enum([
+    "not_requested", "requested", "under_review", "approved",
+    "issued", "delivered", "rejected", "cancelled",
+  ]).optional(),
+  visaRejectionReason: z.string().optional().nullable(),
 });
 
 // `columnMapping` lets the wizard's column-mapping step override the
@@ -1312,6 +1321,42 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
           sets.push(`"overstayExemptBy"=NULL`);
           sets.push(`"overstayExemptAt"=NULL`);
         }
+      }
+      // Visa application workflow (migration 266). Validate the
+      // transition against VISA_TRANSITIONS so an invalid jump is
+      // rejected BEFORE the UPDATE — operators get a clear error
+      // instead of a silent unchanged state.
+      if (b.visaStatus !== undefined) {
+        const { canTransition, timestampColumnFor } = await import("../lib/umrahVisaWorkflow.js");
+        const [currentRow] = await rawQuery<{ visaStatus: string }>(
+          `SELECT "visaStatus" FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+          [pilgrimId, scope.companyId],
+        );
+        if (!currentRow) throw new NotFoundError("المعتمر غير موجود");
+        const currentStatus = currentRow.visaStatus ?? "not_requested";
+        if (currentStatus !== b.visaStatus && !canTransition(currentStatus, b.visaStatus)) {
+          throw new ValidationError(
+            `انتقال غير مسموح من حالة التأشيرة "${currentStatus}" إلى "${b.visaStatus}"`,
+            { field: "visaStatus", fix: "اختر حالة انتقال متاحة (راجع آلة الحالة للتأشيرة)" },
+          );
+        }
+        // Reject requires a written reason — compliance can audit WHY.
+        if (b.visaStatus === "rejected") {
+          const reason = (b.visaRejectionReason ?? "").trim();
+          if (!reason) {
+            throw new ValidationError("سبب الرفض مطلوب — لا يمكن رفض تأشيرة بدون مبرّر مكتوب", {
+              field: "visaRejectionReason",
+              fix: "اكتب سبباً واضحاً (مثل: نقص مستند، رفض جهة المخالصات)",
+            });
+          }
+          params.push(reason);
+          sets.push(`"visaRejectionReason"=$${params.length}`);
+        }
+        params.push(b.visaStatus);
+        sets.push(`"visaStatus"=$${params.length}`);
+        // Capture the milestone timestamp when the state has one.
+        const tsCol = timestampColumnFor(b.visaStatus as never);
+        if (tsCol) sets.push(`"${tsCol}"=NOW()`);
       }
       if (sets.length === 0) {
         const [row] = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [pilgrimId, scope.companyId]);
@@ -3517,6 +3562,50 @@ router.get("/nusk-wallet", authorize({ feature: "umrah", action: "view" }), asyn
       totalRefunds,
     });
   } catch (err) { handleRouteError(err, res, "Get NUSK wallet error"); }
+});
+
+// Test internal notification — the operator clicks "اختبار" in
+// settings and we send a one-off in-app notification to their own
+// assignment. Confirms the notification seam is wired without
+// forcing a real pilgrim row through the pipeline.
+router.post("/notifications/test", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    // Find this operator's assignment id — that's where the test
+    // notification lands. NULL means the user has no active
+    // employee assignment; we surface a clear error instead of
+    // silently dropping.
+    const [me] = await rawQuery<{ id: number }>(
+      `SELECT ea.id FROM employee_assignments ea
+        WHERE ea."userId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+        ORDER BY ea.id DESC LIMIT 1`,
+      [scope.userId, scope.companyId],
+    );
+    if (!me) {
+      throw new ValidationError("ليس لديك تكليف موظف نشط — لا يمكن استلام إشعار تجريبي", {
+        field: "userId",
+        fix: "تأكد من ربط حسابك بـemployee_assignment نشط في إعدادات الموارد البشرية",
+      });
+    }
+    const { createNotification } = await import("../lib/businessHelpers.js");
+    await createNotification({
+      companyId: scope.companyId,
+      assignmentId: me.id,
+      type: "umrah",
+      title: "🔔 إشعار تجريبي من نظام العمرة",
+      body: `اختبار نظام الإشعارات الداخلية — التاريخ: ${todayISO()}. إذا وصلتك هذه الرسالة فالنظام جاهز.`,
+      priority: "normal",
+      refType: "umrah_notifications",
+      refId: undefined,
+      actionUrl: "/umrah/settings",
+    });
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.notifications.test.sent", entity: "notifications", entityId: me.id,
+      details: JSON.stringify({ recipientAssignmentId: me.id }),
+    }).catch((e) => logger.error(e, "umrah test notify event failed"));
+    res.json({ ok: true, recipientAssignmentId: me.id });
+  } catch (err) { handleRouteError(err, res, "Test notification error"); }
 });
 
 export default router;

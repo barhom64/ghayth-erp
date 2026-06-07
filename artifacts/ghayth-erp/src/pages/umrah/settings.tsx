@@ -520,7 +520,176 @@ export default function UmrahSettings() {
             </CardContent>
           </Card>
         )}
+
+        <UmrahNotificationsCard />
       </div>
     </PageShell>
+  );
+}
+
+// ─── Notifications card — in-app alerts via the platform seam ─────
+//
+// Cron handlers call `createNotification` which writes to the
+// `notifications` table — the same one the bell icon reads. No
+// external provider, no per-message cost, audit trail by default.
+
+const NOTIFY_KEYS = [
+  {
+    key: "umrah.notify.visa_expiry",
+    label: "تنبيه انتهاء التأشيرة",
+    description: "إشعار للمدير قبل ٧ أيام من انتهاء تأشيرة معتمر. يحترم استبعاد دول الخليج تلقائيًا.",
+  },
+  {
+    key: "umrah.notify.departure_reminder",
+    label: "تذكير وصول معتمر غدًا",
+    description: "إشعار للمدير مساء كل يوم للمعتمرين الذين رحلتهم غدًا — لتأمين النقل ونقطة الاستلام.",
+  },
+  {
+    key: "umrah.notify.overstay_warning",
+    label: "تنبيه تجاوز مدة الإقامة",
+    description: "إشعار يومي للمدير عن كل معتمر تجاوز موعد المغادرة (لا تُرسَل للمعفيين).",
+  },
+  {
+    key: "umrah.auto_penalty.enabled",
+    label: "تشغيل تلقائي لمحرك الغرامات",
+    description: "ينشئ غرامة التجاوز تلقائيًا الساعة ٧ صباحًا. يحترم المعتمرين المعفيين.",
+  },
+] as const;
+
+function UmrahNotificationsCard() {
+  const { toast } = useToast();
+  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [testSending, setTestSending] = useState(false);
+
+  // Initial load — one resolve call per key. Settings layer is fast +
+  // we render the card in a section that's already scrolled into view.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const out: Record<string, boolean> = {};
+      for (const k of NOTIFY_KEYS) {
+        try {
+          const res = await apiFetch<{ value: unknown }>(
+            `/settings/resolve?key=${encodeURIComponent(k.key)}`,
+          );
+          out[k.key] = res.value === true || res.value === "true" || res.value === 1;
+        } catch {
+          out[k.key] = false;
+        }
+      }
+      if (!cancelled) {
+        setFlags(out);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const toggle = async (key: string, next: boolean) => {
+    setSaving(key);
+    try {
+      await apiFetch("/settings", {
+        method: "PUT",
+        body: JSON.stringify({ key, value: next }),
+      });
+      setFlags((prev) => ({ ...prev, [key]: next }));
+      toast({ title: next ? "تم التفعيل" : "تم الإيقاف" });
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "فشل الحفظ",
+        description: e?.message ?? "تعذّر تحديث الإعداد",
+      });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const sendTest = async () => {
+    setTestSending(true);
+    try {
+      await apiFetch("/umrah/notifications/test", { method: "POST" });
+      toast({
+        title: "أُرسل إشعار تجريبي",
+        description: "افتح رمز الجرس أعلى الصفحة — يجب أن ترى الإشعار خلال ثوانٍ.",
+      });
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "فشل الاختبار",
+        description: e?.message ?? "تعذّر إرسال الإشعار",
+      });
+    } finally {
+      setTestSending(false);
+    }
+  };
+
+  return (
+    <Card data-testid="umrah-notifications-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          إشعارات تلقائية للمدير + المحركات
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">
+          الإشعارات تظهر في رمز الجرس أعلى الصفحة (نفس النظام الذي يستخدمه باقي الـERP). لا تحتاج
+          ضبط أي مزوّد خارجي.
+        </p>
+
+        {loading ? (
+          <p className="text-sm text-muted-foreground">جاري التحميل...</p>
+        ) : (
+          <div className="space-y-3">
+            {NOTIFY_KEYS.map((k) => (
+              <div
+                key={k.key}
+                className="flex items-start justify-between gap-3 py-2 border-b last:border-b-0"
+                data-testid={`notify-row-${k.key}`}
+              >
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{k.label}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {k.description}
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={flags[k.key] ?? false}
+                    disabled={saving === k.key}
+                    onChange={(e) => toggle(k.key, e.target.checked)}
+                    className="h-4 w-4"
+                    data-testid={`notify-toggle-${k.key}`}
+                  />
+                  <span className="text-xs">
+                    {flags[k.key] ? "مفعّل" : "متوقف"}
+                  </span>
+                </label>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="pt-3 border-t flex items-center justify-between gap-3">
+          <div className="text-xs text-muted-foreground">
+            اضغط الزر لإرسال إشعار تجريبي لحسابك — يتأكد من ضبط الـemployee_assignment
+            وأن الجرس يستقبل.
+          </div>
+          <GuardedButton
+            perm="umrah:create"
+            onClick={sendTest}
+            disabled={testSending}
+            size="sm"
+            data-testid="notify-test-send"
+          >
+            {testSending ? "جارٍ..." : "إرسال إشعار تجريبي"}
+          </GuardedButton>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

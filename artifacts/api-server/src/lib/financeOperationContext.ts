@@ -234,3 +234,21 @@ export function fromLegacyInvoiceLine(line: {
     projectId: line.projectId ?? null,
   };
 }
+
+export function fromLegacyCustodyForm(b: {
+  companyId: number; branchId?: number | null;
+  sourceAccountCode?: string | null; paymentMethod?: string | null;
+  assignmentId?: number | null; employeeName?: string | null;
+}): FinanceOperationContext {
+  return {
+    operationType: "custody",
+    companyId: b.companyId,
+    branchId: b.branchId ?? null,
+    party: { type: "employee", id: b.assignmentId ?? null, name: b.employeeName ?? null },
+    moneySource: { accountCode: b.sourceAccountCode ?? null },
+    paymentMethod: b.paymentMethod ?? null,
+    allocationTarget: b.assignmentId ? "employee" : "none",
+    dimensions: { employeeId: b.assignmentId ?? null },
+    operationalEffect: { kind: "custody_update" },
+  };
+}
