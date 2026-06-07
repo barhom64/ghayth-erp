@@ -530,6 +530,11 @@ const PREDEFINED_ROLES = [
   { roleKey: "crm_manager", label: "مدير المبيعات", modules: ["home","crm","marketing","requests","documents","comms"], level: 70 },
   { roleKey: "bi_manager", label: "مدير ذكاء الأعمال", modules: ["home","bi","reports","requests","documents","comms"], level: 70 },
   { roleKey: "branch_manager", label: "مدير فرع", modules: ["home","hr","finance","requests","documents","comms","support"], level: 60 },
+  // Self-service driver — sees only their assigned trips + cargo via
+  // /me/driver (fleet.trips.my, fleet.cargo.my, fleet.driver.me from
+  // the featureCatalog self-service floor). `home` keeps the basic
+  // notifications surface; `requests` lets them file leave/expense.
+  { roleKey: "driver", label: "سائق", modules: ["home","fleet","requests","documents","comms"], level: 10 },
   { roleKey: "employee", label: "موظف", modules: ["home","requests","documents","comms"], level: 10 },
 ];
 
