@@ -528,7 +528,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", authorize({ feature: "finance.zatca", 
 
     const invoiceScope = buildScopedWhere(
       scope, filters,
-      { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true, softDeleteColumn: 'i."deletedAt"' },
+      { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true, includeNullBranch: true, softDeleteColumn: 'i."deletedAt"' },
     );
     const [invoice] = await rawQuery<ZatcaInvoiceRow>(
       `SELECT i.*, c.name AS "clientName", NULL AS "clientVat",

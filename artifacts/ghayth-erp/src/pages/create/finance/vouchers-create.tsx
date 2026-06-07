@@ -13,6 +13,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { amountTaxSplit } from "@/lib/tax-math";
+import { allowedUsagesForPaymentMethod } from "@/lib/finance-account-usage";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
@@ -353,7 +354,20 @@ export default function VouchersCreate() {
             onChange={(v) => setField("sourceAccountCode", v)}
             label="الخزنة / البنك"
             placeholder="اختر الخزنة أو البنك..."
-            filter={(a: any) => a.code?.startsWith("11") || a.code?.startsWith("12")}
+            // #1715: narrow by accountUsage matching the chosen method
+            // (نقدي→صندوق، تحويل→بنك، شيك→بنك/شيكات). Unclassified accounts
+            // fall back to the legacy 11xx/12xx money heuristic. Backend
+            // enforces the same rule.
+            filter={(a: any) => {
+              const allowed = allowedUsagesForPaymentMethod(form.method);
+              const isMoney = a.accountUsage
+                ? ["cash_box", "bank", "custody", "card", "cheque"].includes(a.accountUsage)
+                : a.code?.startsWith("11") || a.code?.startsWith("12");
+              if (!allowed) return isMoney;
+              return a.accountUsage
+                ? allowed.includes(a.accountUsage)
+                : a.code?.startsWith("11") || a.code?.startsWith("12");
+            }}
           />
         </div>
       </div>

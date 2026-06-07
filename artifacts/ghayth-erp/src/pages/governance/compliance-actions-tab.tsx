@@ -27,6 +27,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const complianceActionSchema = z.object({
   title: z.string().trim().min(1, "العنوان مطلوب"),
@@ -58,6 +60,7 @@ export function ComplianceActionsTab() {
   const qc = useQueryClient();
 
   const filteredItems = applyFilters(items, filters, { searchFields: ["title", "regulation", "owner"], statusField: "status", dateField: "dueDate" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredItems);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/governance/compliance-actions",
@@ -123,6 +126,23 @@ export function ComplianceActionsTab() {
             resultCount={filteredItems.length}
           />
         </div>
+        <PrintButton
+          entityType="report_governance_compliance_actions"
+          entityId="list"
+          size="icon"
+          label="طباعة سجل إجراءات الامتثال"
+          payload={() => ({
+            entity: { title: "سجل إجراءات الامتثال", total: printRows.length },
+            items: printRows.map((it: any) => ({
+              "العنوان": it.title || "—",
+              "اللائحة": it.regulation || "—",
+              "المسؤول": it.owner || "—",
+              "الوصف": it.description || "—",
+              "تاريخ الاستحقاق": it.dueDate ? formatDateAr(it.dueDate) : "—",
+              "الحالة": it.status || "—",
+            })),
+          })}
+        />
         {canWrite && <GuardedButton perm="governance:create" size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />إجراء جديد</GuardedButton>}
       </div>
       {showNew && (
@@ -175,6 +195,7 @@ export function ComplianceActionsTab() {
               },
             ]}
             data={filteredItems}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

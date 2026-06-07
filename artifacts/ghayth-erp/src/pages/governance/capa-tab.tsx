@@ -26,6 +26,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 // New: validation now lives in zod (was: bare `if (!newForm.finding) return`).
 // status enum is closed — typo in the option list fails typecheck.
@@ -60,6 +62,7 @@ export function CAPATab() {
   const qc = useQueryClient();
 
   const filteredItems = applyFilters(items, filters, { searchFields: ["finding", "rootCause", "responsiblePerson"], statusField: "status", dateField: "dueDate" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredItems);
 
   // CAPA records are audit artifacts — closed via status change, never
   // hard-deleted. Backend deliberately exposes only PATCH (no DELETE).
@@ -128,6 +131,24 @@ export function CAPATab() {
             resultCount={filteredItems.length}
           />
         </div>
+        <PrintButton
+          entityType="report_governance_capa"
+          entityId="list"
+          size="icon"
+          label="طباعة سجل CAPA"
+          payload={() => ({
+            entity: { title: "سجل الإجراءات التصحيحية والوقائية (CAPA)", total: printRows.length },
+            items: printRows.map((it: any) => ({
+              "الملاحظة": it.finding || "—",
+              "السبب الجذري": it.rootCause || "—",
+              "الإجراء التصحيحي": it.correctiveAction || "—",
+              "الإجراء الوقائي": it.preventiveAction || "—",
+              "المسؤول": it.responsiblePerson || "—",
+              "تاريخ الاستحقاق": it.dueDate ? formatDateAr(it.dueDate) : "—",
+              "الحالة": it.status || "—",
+            })),
+          })}
+        />
         {canWrite && <GuardedButton perm="governance:create" size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />إجراء تصحيحي جديد</GuardedButton>}
       </div>
       {showNew && (
@@ -178,6 +199,7 @@ export function CAPATab() {
               },
             ]}
             data={filteredItems}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
