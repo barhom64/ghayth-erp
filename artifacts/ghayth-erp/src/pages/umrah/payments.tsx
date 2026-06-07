@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -19,6 +19,7 @@ import {
   useFilters,
   applyFilters,
   exportToCSV,
+  resolveStatus,
 } from "@workspace/ui-core";
 import { Banknote, Plus, Wallet, TrendingUp, Users } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -126,7 +127,7 @@ export default function UmrahPayments() {
     { key: "ref", header: "المرجع", sortable: true,
       render: (p) => <span className="font-mono">{p.ref || "-"}</span> },
     { key: "paymentDate", header: "تاريخ الدفع", sortable: true,
-      render: (p) => formatDateAr(p.paymentDate) },
+      render: (p) => formatUmrahDate(p.paymentDate) },
     { key: "subAgentName", header: "الوكيل الفرعي", sortable: true,
       render: (p) => <span className="font-medium">{p.subAgentName || `#${p.subAgentId}`}</span> },
     { key: "sarAmount", header: "المبلغ (ر.س)", sortable: true,
@@ -173,7 +174,7 @@ export default function UmrahPayments() {
                 "المبلغ": Number(p.amount || 0),
                 "الطريقة": p.method || p.paymentMethod || "—",
                 "التاريخ": p.paymentDate || p.createdAt || "—",
-                "الحالة": p.status || "—",
+                "الحالة": (p.status && resolveStatus(p.status)?.label) ?? p.status ?? "—",
               })),
             })}
           />

@@ -1,159 +1,84 @@
 import type { Request, Response, NextFunction } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import type { RequestScope } from "./authMiddleware.js";
+import { rawExecute } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
-import { projectGrantsToFlat } from "../lib/rbac/flatProjection.js";
+import { checkAccess } from "../lib/rbac/authzEngine.js";
+import type { Action } from "../lib/rbac/featureCatalog.js";
 
-interface UserPermissionOverrides {
-  granted: Set<string>;
-  revoked: Set<string>;
+// ─────────────────────────────────────────────────────────────────────────────
+// permissionMiddleware — legacy flat gates (`requirePermission`/`requireAnyPermission`/
+// `userHasPermission`) now resolve EXCLUSIVELY through RBAC v2 (authzEngine.checkAccess).
+//
+// The legacy `role_permissions` / `user_roles` / `permissions` tables are no
+// longer an enforcement source — RBAC v2 is the single security authority for
+// the whole system (#1413). These thin adapters keep the ~34 call sites working
+// by translating each legacy `module:action` string to its RBAC feature.action
+// via FLAT_TO_RBAC, so no per-route change was needed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Every legacy flat permission still used by requirePermission/requireAnyPermission,
+// mapped to its RBAC v2 feature + action. (Print/templates have no dedicated
+// feature, so they gate on the documents/admin features they logically belong to.)
+const FLAT_TO_RBAC: Record<string, { feature: string; action: Action }> = {
+  "audit:read":             { feature: "admin.audit", action: "view" },
+  "settings:read":          { feature: "settings",    action: "view" },
+  "templates:read":         { feature: "admin",       action: "view" },
+  "templates:write":        { feature: "admin",       action: "update" },
+  "print:create":           { feature: "documents",   action: "create" },
+  "print:download":         { feature: "documents",   action: "export" },
+  "print:preview:create":   { feature: "documents",   action: "view" },
+  "print:reprint:create":   { feature: "documents",   action: "create" },
+  "print:reprint:approve":  { feature: "documents",   action: "approve" },
+  "print:archive:delete":   { feature: "documents",   action: "delete" },
+  "print:verify:read":      { feature: "documents",   action: "view" },
+  "print:diagnostics:read": { feature: "admin",       action: "view" },
+  "print_jobs:read":        { feature: "documents",   action: "list" },
+};
+
+// Resolve a legacy flat perm → RBAC spec. Falls back to a best-effort
+// module→feature / action translation for any unmapped string.
+function toRbacSpec(perm: string): { feature: string; action: Action } {
+  const mapped = FLAT_TO_RBAC[perm];
+  if (mapped) return mapped;
+  logger.warn({ perm }, "[permissionMiddleware] unmapped legacy perm — best-effort RBAC translation");
+  const parts = perm.split(":");
+  const module = parts[0];
+  const legacyAction = parts[parts.length - 1];
+  const ACTION_MAP: Record<string, Action> = {
+    read: "view", list: "list", write: "update", update: "update", create: "create",
+    delete: "delete", approve: "approve", reject: "reject", export: "export", print: "print", download: "export",
+  };
+  return { feature: module, action: ACTION_MAP[legacyAction] ?? "view" };
 }
 
-const permissionCache = new Map<string, { perms: Set<string>; expiresAt: number }>();
-// RBAC v2 grants projected to the flat vocabulary, per user — the unification
-// source so legacy-enforced routes honor RBAC too (#1413, الخطة الجذرية §3 م5).
-const rbacFlatCache = new Map<string, { perms: Set<string>; expiresAt: number }>();
-const CACHE_TTL_MS = 60_000;
-const PERMISSION_CACHE_MAX_SIZE = 10_000;
-
-function evictPermissionCacheIfNeeded(): void {
-  if (permissionCache.size <= PERMISSION_CACHE_MAX_SIZE) return;
-  // Delete the oldest half (Map iterates in insertion order)
-  const toDelete = Math.floor(permissionCache.size / 2);
-  let deleted = 0;
-  for (const key of permissionCache.keys()) {
-    if (deleted >= toDelete) break;
-    permissionCache.delete(key);
-    deleted++;
-  }
-}
-
-async function loadRolePermissions(role: string, companyId: number, branchId: number | null = null): Promise<Set<string>> {
-  // Migration 173 added branchId to role_permissions. Cache key includes
-  // branchId so a user picking branch A vs branch B sees the correct
-  // tier of permissions. branchId=null targets the company-wide rows
-  // only; passing the actual branchId unions in branch-specific extras.
-  const cacheKey = `${role}:${companyId}:${branchId ?? "null"}`;
-  const cached = permissionCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.perms;
-
-  // Three-tier union — global default (companyId NULL), company-wide
-  // (branchId NULL), and branch-specific (branchId = scope.branchId).
-  // Branch-specific rows ADD to the company-wide set rather than
-  // replacing it, matching the audit's "least surprise" rule for
-  // explicit grants.
-  const rows = await rawQuery<{ permission: string }>(
-    `SELECT rp.permission FROM role_permissions rp
-     WHERE rp.role = $1
-       AND (rp."companyId" IS NULL OR rp."companyId" = $2)
-       AND (rp."branchId"  IS NULL OR rp."branchId"  = $3)`,
-    [role, companyId, branchId]
-  );
-
-  const perms = new Set(rows.map((r) => r.permission));
-  evictPermissionCacheIfNeeded();
-  permissionCache.set(cacheKey, { perms, expiresAt: Date.now() + CACHE_TTL_MS });
-  return perms;
-}
-
-// Load the user's RBAC v2 grants projected to the flat vocabulary so legacy
-// `requirePermission` checks resolve against RBAC too — RBAC becomes a co-equal
-// authority, additively (never removes an existing legacy grant). Failures
-// degrade to the legacy set. Cached like role permissions.
-async function loadRbacFlatPermissions(userId: number, companyId: number): Promise<Set<string>> {
-  const cacheKey = `${userId}:${companyId}`;
-  const cached = rbacFlatCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.perms;
-
-  let perms = new Set<string>();
+async function allows(scope: RequestScope, perm: string): Promise<boolean> {
+  const spec = toRbacSpec(perm);
   try {
-    const rows = await rawQuery<{ feature_key: string; actions: string[] }>(
-      `SELECT g.feature_key, g.actions
-         FROM rbac_user_roles ur
-         JOIN rbac_roles r ON r.id = ur.role_id
-         JOIN rbac_role_grants g ON g.role_id = r.id
-        WHERE ur."userId" = $1 AND ur."companyId" = $2
-          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
-      [userId, companyId]
-    );
-    perms = new Set(projectGrantsToFlat(rows));
+    const res = await checkAccess(scope, { feature: spec.feature, action: spec.action });
+    return res.allowed;
   } catch (e) {
-    logger.warn(e, "[permissionMiddleware] RBAC flat projection failed — legacy set only");
+    logger.error(e, "[permissionMiddleware] checkAccess failed");
+    return false;
   }
-
-  if (rbacFlatCache.size > PERMISSION_CACHE_MAX_SIZE) {
-    const toDelete = Math.floor(rbacFlatCache.size / 2);
-    let deleted = 0;
-    for (const key of rbacFlatCache.keys()) { if (deleted >= toDelete) break; rbacFlatCache.delete(key); deleted++; }
-  }
-  rbacFlatCache.set(cacheKey, { perms, expiresAt: Date.now() + CACHE_TTL_MS });
-  return perms;
-}
-
-async function loadUserPermissions(userId: number, companyId: number): Promise<UserPermissionOverrides> {
-  const rows = await rawQuery<{ permission: string; type: string }>(
-    `SELECT permission, type FROM permissions
-     WHERE "userId" = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
-    [userId, companyId]
-  );
-
-  const granted = new Set<string>();
-  const revoked = new Set<string>();
-  for (const r of rows) {
-    if (r.type === "grant") granted.add(r.permission);
-    else if (r.type === "revoke") revoked.add(r.permission);
-  }
-  return { granted, revoked };
 }
 
 async function logSecurityEvent(opts: {
-  userId: number;
-  companyId: number;
-  role: string;
-  path: string;
-  method: string;
-  requiredPerms: string[];
-  reason: string;
-  ip?: string;
+  userId: number; companyId: number; role: string; path: string; method: string;
+  requiredPerms: string[]; reason: string; ip?: string;
 }): Promise<void> {
   try {
     await rawExecute(
       `INSERT INTO security_log ("userId","companyId",role,path,method,"requiredPerms",reason,ip,"createdAt")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
-      [
-        opts.userId,
-        opts.companyId,
-        opts.role,
-        opts.path,
-        opts.method,
-        JSON.stringify(opts.requiredPerms),
-        opts.reason,
-        opts.ip || null,
-      ]
+      [opts.userId, opts.companyId, opts.role, opts.path, opts.method,
+       JSON.stringify(opts.requiredPerms), opts.reason, opts.ip || null]
     );
   } catch {
-    // do not block the request if logging fails
+    // never block the request on logging failure
   }
 }
 
-async function loadAllUserRolePermissions(userId: number, primaryRole: string, companyId: number, branchId: number | null = null): Promise<Set<string>> {
-  const userRoleRows = await rawQuery<{ roleKey: string }>(
-    `SELECT "roleKey" FROM user_roles WHERE "userId" = $1 AND "companyId" = $2`,
-    [userId, companyId]
-  ).catch(() => [] as { roleKey: string }[]);
-
-  const roleKeys = new Set<string>(userRoleRows.map((r) => r.roleKey));
-  roleKeys.add(primaryRole);
-
-  const allPerms = new Set<string>();
-  await Promise.all(
-    Array.from(roleKeys).map(async (role) => {
-      const perms = await loadRolePermissions(role, companyId, branchId);
-      for (const p of perms) allPerms.add(p);
-    })
-  );
-  return allPerms;
-}
-
+/** ALL-of: the caller must satisfy every listed permission (via RBAC v2). */
 export function requirePermission(...requiredPerms: string[]) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const scope = req.scope;
@@ -161,49 +86,19 @@ export function requirePermission(...requiredPerms: string[]) {
       res.status(401).json({ error: "غير مصرح", code: "AUTH_MISSING", fix: "يرجى تسجيل الدخول" });
       return;
     }
-
-    if (scope.isOwner || scope.role === "owner") {
-      next();
-      return;
-    }
+    if (scope.isOwner || scope.role === "owner") { next(); return; }
 
     try {
-      const [rolePerms, rbacPerms, userOverrides] = await Promise.all([
-        loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null),
-        loadRbacFlatPermissions(scope.userId, scope.companyId),
-        loadUserPermissions(scope.userId, scope.companyId),
-      ]);
-
-      const effectivePerms = new Set([...rolePerms, ...rbacPerms]);
-      for (const p of userOverrides.granted) effectivePerms.add(p);
-      for (const p of userOverrides.revoked) effectivePerms.delete(p);
-
-      const hasWildcard = effectivePerms.has("*");
-      const missingPerms = requiredPerms.filter((perm) => {
-        if (hasWildcard) return false;
-        if (effectivePerms.has(perm)) return false;
-        const [module] = perm.split(":");
-        if (effectivePerms.has(`${module}:*`)) return false;
-        return true;
-      });
+      const results = await Promise.all(requiredPerms.map((p) => allows(scope, p)));
+      const missingPerms = requiredPerms.filter((_, i) => !results[i]);
 
       if (missingPerms.length > 0) {
         const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket?.remoteAddress;
         logSecurityEvent({
-          userId: scope.userId,
-          companyId: scope.companyId,
-          role: scope.role,
-          path: req.path,
-          method: req.method,
-          requiredPerms: missingPerms,
-          reason: "permission_denied",
-          ip,
+          userId: scope.userId, companyId: scope.companyId, role: scope.role,
+          path: req.path, method: req.method, requiredPerms: missingPerms, reason: "permission_denied", ip,
         }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
-        // Typed-error shape (P0.3) so the frontend's PageErrorBoundary and
-        // useApiMutation toast pipeline can read the code + meta without
-        // re-parsing the message. `meta.requiredPermissions` shows the user
-        // exactly what they're missing so admins can grant it quickly.
         res.status(403).json({
           error: "لا تملك الصلاحية اللازمة",
           code: "FORBIDDEN",
@@ -212,24 +107,15 @@ export function requirePermission(...requiredPerms: string[]) {
         });
         return;
       }
-
       next();
     } catch (err) {
       logger.error(err, "Permission check error:");
-      res.status(500).json({
-        error: "خطأ في التحقق من الصلاحيات",
-        code: "SERVER_ERROR",
-      });
+      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };
 }
 
-/**
- * Variant of `requirePermission` that passes when the user holds ANY of the
- * supplied permissions (OR semantics), versus `requirePermission` which
- * requires ALL of them (AND semantics). Useful for cross-role dashboards
- * where several roles should reach the same endpoint for different reasons.
- */
+/** ANY-of: the caller must satisfy at least one listed permission (via RBAC v2). */
 export function requireAnyPermission(...candidatePerms: string[]) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const scope = req.scope;
@@ -237,42 +123,15 @@ export function requireAnyPermission(...candidatePerms: string[]) {
       res.status(401).json({ error: "غير مصرح", code: "AUTH_MISSING", fix: "يرجى تسجيل الدخول" });
       return;
     }
-
-    if (scope.isOwner || scope.role === "owner") {
-      next();
-      return;
-    }
+    if (scope.isOwner || scope.role === "owner") { next(); return; }
 
     try {
-      const [rolePerms, rbacPerms, userOverrides] = await Promise.all([
-        loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null),
-        loadRbacFlatPermissions(scope.userId, scope.companyId),
-        loadUserPermissions(scope.userId, scope.companyId),
-      ]);
-
-      const effectivePerms = new Set([...rolePerms, ...rbacPerms]);
-      for (const p of userOverrides.granted) effectivePerms.add(p);
-      for (const p of userOverrides.revoked) effectivePerms.delete(p);
-
-      const hasWildcard = effectivePerms.has("*");
-      const hasAny = candidatePerms.some((perm) => {
-        if (hasWildcard) return true;
-        if (effectivePerms.has(perm)) return true;
-        const [module] = perm.split(":");
-        return effectivePerms.has(`${module}:*`);
-      });
-
-      if (!hasAny) {
+      const results = await Promise.all(candidatePerms.map((p) => allows(scope, p)));
+      if (!results.some(Boolean)) {
         const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket?.remoteAddress;
         logSecurityEvent({
-          userId: scope.userId,
-          companyId: scope.companyId,
-          role: scope.role,
-          path: req.path,
-          method: req.method,
-          requiredPerms: candidatePerms,
-          reason: "permission_denied_any",
-          ip,
+          userId: scope.userId, companyId: scope.companyId, role: scope.role,
+          path: req.path, method: req.method, requiredPerms: candidatePerms, reason: "permission_denied_any", ip,
         }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
@@ -283,68 +142,36 @@ export function requireAnyPermission(...candidatePerms: string[]) {
         });
         return;
       }
-
       next();
     } catch (err) {
       logger.error(err, "Permission check error:");
-      res.status(500).json({
-        error: "خطأ في التحقق من الصلاحيات",
-        code: "SERVER_ERROR",
-      });
+      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات", code: "SERVER_ERROR" });
     }
   };
 }
 
 /**
- * Inline permission check for routes that need to combine permission state
- * with runtime conditions (e.g. "allow if user has hr:read OR is the data
- * subject"). Use this instead of hardcoded role-name checks.
+ * Inline permission check (RBAC v2) for routes that combine permission state
+ * with runtime conditions (e.g. "allow if user can hr.employees OR is the data
+ * subject"). Callers pass req.scope.
  */
 export async function userHasPermission(
-  scope: { userId: number; companyId: number; role: string; isOwner?: boolean; branchId?: number | null },
-  permission: string
+  scope: { userId: number; companyId: number; role: string; isOwner?: boolean; branchId?: number | null; employeeId?: number | null; selectedRoleKey?: string | null },
+  permission: string,
 ): Promise<boolean> {
   if (scope.isOwner || scope.role === "owner") return true;
-  const [rolePerms, rbacPerms, userOverrides] = await Promise.all([
-    loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null),
-    loadRbacFlatPermissions(scope.userId, scope.companyId),
-    loadUserPermissions(scope.userId, scope.companyId),
-  ]);
-  const effective = new Set([...rolePerms, ...rbacPerms]);
-  for (const p of userOverrides.granted) effective.add(p);
-  for (const p of userOverrides.revoked) effective.delete(p);
-  if (effective.has("*")) return true;
-  if (effective.has(permission)) return true;
-  const [module] = permission.split(":");
-  if (effective.has(`${module}:*`)) return true;
-  return false;
+  // Plain feature.action checks don't read the record-scope fields, so a
+  // reduced scope (e.g. PrintScope) is sufficient for checkAccess.
+  return allows(scope as unknown as RequestScope, permission);
 }
 
-export function invalidatePermissionCache(role?: string, companyId?: number, branchId?: number | null): void {
-  // RBAC grants are keyed per user:company, not per role — drop the whole
-  // company's RBAC projections (or all of them) so a grant edit takes effect.
-  if (companyId) {
-    for (const key of Array.from(rbacFlatCache.keys())) {
-      if (key.endsWith(`:${companyId}`)) rbacFlatCache.delete(key);
-    }
-  } else {
-    rbacFlatCache.clear();
-  }
-  if (role && companyId) {
-    // Migration 173 widened the cache key with branchId. Selective
-    // invalidation needs the full triplet; callers that omit branchId
-    // wipe both the company-default cache entry and any branch-specific
-    // entries to keep them in sync.
-    if (branchId !== undefined) {
-      permissionCache.delete(`${role}:${companyId}:${branchId ?? "null"}`);
-    } else {
-      for (const key of Array.from(permissionCache.keys())) {
-        if (key.startsWith(`${role}:${companyId}:`)) permissionCache.delete(key);
-      }
-    }
-  } else {
-    permissionCache.clear();
-  }
+/**
+ * Retained for call-site compatibility. RBAC v2 manages its own cache
+ * (rbac_cache_version, bumped on role mutations), so this is now a no-op —
+ * the legacy role_permissions cache it used to clear no longer exists.
+ */
+export function invalidatePermissionCache(_role?: string, _companyId?: number, _branchId?: number | null): void {
+  // intentionally empty — see doc comment.
 }
 
 export { logSecurityEvent };

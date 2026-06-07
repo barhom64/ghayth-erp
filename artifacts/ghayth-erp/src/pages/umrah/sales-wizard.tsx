@@ -10,7 +10,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 import { Receipt, Sparkles, Hand, TagsIcon } from "lucide-react";
 
 // ── Sales-invoice wizard ─────────────────────────────────────────────────
@@ -247,7 +247,7 @@ export default function UmrahSalesWizard() {
                             <div className="text-xs text-muted-foreground">{g.name ?? "—"}</div>
                           </td>
                           <td className="py-2 px-2">{g.mutamerCount}</td>
-                          <td className="py-2 px-2 text-xs">{g.entryDate ? formatDateAr(g.entryDate) : "—"}</td>
+                          <td className="py-2 px-2 text-xs">{g.entryDate ? formatUmrahDate(g.entryDate) : "—"}</td>
                           <td className="py-2 px-2">
                             <Input
                               type="number"

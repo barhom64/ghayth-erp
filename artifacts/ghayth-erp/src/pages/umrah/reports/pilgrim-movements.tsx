@@ -11,7 +11,7 @@ import {
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PlaneTakeoff, PlaneLanding, AlertTriangle, Clock, MapPin, Calendar } from "lucide-react";
-import { todayLocal, formatDateAr } from "@/lib/formatters";
+import { todayLocal, formatUmrahDate } from "@/lib/formatters";
 import { Badge } from "@/components/ui/badge";
 
 // تقرير حركة المعتمرين — لقطة يومية: من اللي وصل، من اللي طلع، المتجاوز،
@@ -288,7 +288,7 @@ function DetailCard({ title, testid, icon: Icon, rows, columns, tone }: DetailCa
                         );
                       }
                       if (c === "departureDate" && val) {
-                        return <td key={String(c)} className="p-2">{formatDateAr(String(val))}</td>;
+                        return <td key={String(c)} className="p-2">{formatUmrahDate(String(val))}</td>;
                       }
                       if (c === "overstayDays" || c === "daysOverdue") {
                         const n = Number(val ?? 0);
