@@ -33,11 +33,11 @@ describe("RBAC v2 → flat bridge in GET /permissions/my", () => {
     expect(section).toMatch(/expires_at IS NULL OR ur\.expires_at > NOW\(\)/);
   });
 
-  it("emits BOTH coarse module:action and fine feature.action keys", () => {
+  it("projects grants via the shared pure helper (parity gate)", () => {
     const idx = PERMS.indexOf('router.get("/my"');
     const section = PERMS.slice(idx, idx + 7000);
-    expect(section).toMatch(/\$\{moduleKey\}:\$\{a\}/);       // coarse
-    expect(section).toMatch(/\$\{g\.feature_key\}:\$\{a\}/);  // fine
+    expect(section).toMatch(/rbacProjected = projectGrantsToFlat\(grantRows\)/);
+    expect(PERMS).toMatch(/import \{ projectGrantsToFlat \} from "\.\.\/lib\/rbac\/flatProjection\.js"/);
   });
 
   it("is strictly additive (UNION with legacy) and degrades on failure", () => {

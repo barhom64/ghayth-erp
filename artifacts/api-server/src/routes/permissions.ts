@@ -4,6 +4,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { projectGrantsToFlat } from "../lib/rbac/flatProjection.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -203,16 +204,7 @@ router.get("/my", async (req, res) => {
             AND r.role_key = ANY($3::text[])`,
         [scope.userId, scope.companyId, roles.map((r) => r.roleKey)]
       );
-      const projected = new Set<string>();
-      for (const g of grantRows) {
-        const moduleKey = (g.feature_key || "").split(".")[0];
-        const acts = Array.isArray(g.actions) ? g.actions : [];
-        for (const a of acts) {
-          if (moduleKey) projected.add(`${moduleKey}:${a}`); // coarse — lights existing module:action gates
-          projected.add(`${g.feature_key}:${a}`);            // fine — for future feature.action gates
-        }
-      }
-      rbacProjected = [...projected];
+      rbacProjected = projectGrantsToFlat(grantRows);
     } catch (e) {
       logger.warn(e, "[permissions/my] RBAC v2 projection skipped — using legacy set only");
     }
