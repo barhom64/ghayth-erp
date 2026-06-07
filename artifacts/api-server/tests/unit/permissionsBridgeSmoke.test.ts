@@ -46,9 +46,22 @@ describe("RBAC v2 → flat bridge in GET /permissions/my", () => {
     // projection wrapped in try/catch so /permissions/my never throws here
     expect(section).toMatch(/rbacProjected: string\[\] = \[\]/);
     expect(section).toMatch(/projection skipped — using legacy set only/);
-    // unioned into the granted set alongside legacy rolePerms + user grants
-    expect(section).toMatch(/new Set\(\[\.\.\.rolePerms, \.\.\.grants, \.\.\.rbacProjected\]\)/);
+    // unioned into the granted set alongside legacy rolePerms + user grants + delegation
+    expect(section).toMatch(/new Set\(\[\.\.\.rolePerms, \.\.\.grants, \.\.\.rbacProjected, \.\.\.delegatedProjected\]\)/);
     // per-user revokes still win over the projected set
     expect(section).toMatch(/\.filter\(\(p\) => !revokes\.has\(p\)\)/);
+  });
+
+  it("surfaces ACTIVE delegations so the UI shows delegated actions (نظام التفويض)", () => {
+    const idx = PERMS.indexOf('router.get("/my"');
+    const section = PERMS.slice(idx, idx + 8000);
+    // loads the caller's active delegations and the delegator's grants
+    expect(section).toMatch(/getActiveDelegationsFor\(scope\.companyId, scope\.employeeId/);
+    expect(section).toMatch(/d\.delegatorUserId/);
+    // only features the delegation covers are surfaced, projected fine
+    expect(section).toMatch(/delegationCoversFeature\(d\.features/);
+    expect(section).toMatch(/projectGrantsToFine\(covered\)/);
+    // imported from the same service the engine enforces with
+    expect(PERMS).toMatch(/import \{ getActiveDelegationsFor, delegationCoversFeature \} from "\.\.\/lib\/rbac\/delegationService\.js"/);
   });
 });
