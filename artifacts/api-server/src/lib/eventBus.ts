@@ -370,17 +370,33 @@ export async function getOutboxStats(): Promise<OutboxStats> {
 }
 
 /**
- * Delete aged event_outbox rows. Phase 2 — the outbox is a durable capture
- * log and the in-process emitter is still the dispatcher, so aged rows are
- * purged wholesale to bound table growth. When the relay becomes the
- * dispatcher (phase 3) this MUST become status-aware so an unprocessed
- * 'pending' row is never purged. Idempotent; safe to run concurrently.
+ * Phase-2 outbox drain. The in-process emitter dispatches every event
+ * synchronously at emit time (`super.emit` runs before this), so a captured
+ * row older than the grace window has already been delivered to its listeners.
+ * Mark such rows 'processed' so (a) `outbox.pending` reflects only just-captured
+ * / in-flight rows, (b) the purge can be status-aware, and (c) the table is
+ * replay-ready. This does NOT re-dispatch — re-dispatch is the phase-3
+ * dispatch-source switch and would double-fire handlers. Idempotent.
+ */
+export async function drainProcessedOutboxEntries(graceSeconds: number = 30): Promise<number> {
+  const result = await rawExecute(
+    `UPDATE event_outbox SET status = 'processed', "processedAt" = now()
+     WHERE status = 'pending' AND "createdAt" < now() - make_interval(secs => $1)`,
+    [graceSeconds],
+  );
+  return result.affectedRows;
+}
+
+/**
+ * Delete aged event_outbox rows. Status-aware (phase 2): only rows already
+ * marked 'processed' by the drain are purged, so an unprocessed / in-flight
+ * 'pending' row is never lost. Idempotent; safe to run concurrently.
  */
 export async function purgeAgedOutboxEntries(
   retentionDays: number = OUTBOX_RETENTION_DAYS,
 ): Promise<number> {
   const result = await rawExecute(
-    `DELETE FROM event_outbox WHERE "createdAt" < now() - make_interval(days => $1)`,
+    `DELETE FROM event_outbox WHERE status = 'processed' AND "createdAt" < now() - make_interval(days => $1)`,
     [retentionDays],
   );
   return result.affectedRows;
@@ -401,13 +417,14 @@ async function runDlqMaintenance(): Promise<void> {
     logger.error(err, "[DLQ] maintenance pass failed");
   }
   try {
+    const drained = await drainProcessedOutboxEntries();
     const purged = await purgeAgedOutboxEntries();
     const stats = await getOutboxStats();
     setGauge("outbox.pending", stats.pending);
-    if (purged > 0) {
+    if (drained > 0 || purged > 0) {
       logger.info(
-        { purged, pending: stats.pending },
-        "[outbox] maintenance pass — purged aged entries",
+        { drained, purged, pending: stats.pending },
+        "[outbox] maintenance pass — drained processed + purged aged entries",
       );
     }
   } catch (err) {
