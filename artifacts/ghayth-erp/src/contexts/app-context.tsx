@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
+import { permissionMatches } from "@/lib/permission-match";
 import { useQueryClient } from "@tanstack/react-query";
 
 export type ModuleType =
@@ -481,14 +482,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const rawPermissions = apiData?.permissions ?? [];
   const isOwnerRole = selectedRole?.roleKey === "owner" || effectiveRoleLevel >= 100;
+  // Unified matcher: accepts both coarse `module:action` and fine
+  // `module.feature:action`, with a coarse fallback for fine asks so migrating
+  // a gate to the granular form never hides it (strict superset). See
+  // lib/permission-match.ts (#1413, الخطة الجذرية §3 م4).
   const can = useCallback((permission: string): boolean => {
     if (isOwnerRole) return true;
     if (!permission) return true;
-    if (rawPermissions.includes("*")) return true;
-    if (rawPermissions.includes(permission)) return true;
-    const [module] = permission.split(":");
-    if (module && rawPermissions.includes(`${module}:*`)) return true;
-    return false;
+    return permissionMatches(rawPermissions, permission);
   }, [rawPermissions, isOwnerRole]);
 
   const canAccessSubPage = useCallback((module: string, subKey: string) => {
