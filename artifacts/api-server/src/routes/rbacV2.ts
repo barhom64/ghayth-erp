@@ -702,13 +702,28 @@ router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "cre
 
 router.get("/templates", authorize({ feature: "admin.roles", action: "list" }), async (req, res) => {
   try {
+    // 3×N+1 → 3 GROUP BY CTEs. Templates are bounded to ~10-15 rows so
+    // the absolute speed-up is small, but the query plan is uniform
+    // across the rbacV2 list endpoints — keeps the codebase's N+1
+    // story coherent.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT id, role_key, label_ar, label_en, description, level, color,
-              (SELECT COUNT(*) FROM rbac_role_grants WHERE role_id = r.id) AS grant_count,
-              (SELECT COUNT(*) FROM rbac_field_policies WHERE role_id = r.id) AS field_count,
-              (SELECT COUNT(*) FROM rbac_approval_limits WHERE role_id = r.id) AS limit_count
-         FROM rbac_roles r WHERE is_template = TRUE
-         ORDER BY level DESC, role_key`
+      `WITH grant_counts AS (
+         SELECT role_id, COUNT(*)::int AS c FROM rbac_role_grants GROUP BY role_id
+       ), field_counts AS (
+         SELECT role_id, COUNT(*)::int AS c FROM rbac_field_policies GROUP BY role_id
+       ), limit_counts AS (
+         SELECT role_id, COUNT(*)::int AS c FROM rbac_approval_limits GROUP BY role_id
+       )
+       SELECT r.id, r.role_key, r.label_ar, r.label_en, r.description, r.level, r.color,
+              COALESCE(gc.c, 0) AS grant_count,
+              COALESCE(fc.c, 0) AS field_count,
+              COALESCE(lc.c, 0) AS limit_count
+         FROM rbac_roles r
+         LEFT JOIN grant_counts gc ON gc.role_id = r.id
+         LEFT JOIN field_counts fc ON fc.role_id = r.id
+         LEFT JOIN limit_counts lc ON lc.role_id = r.id
+        WHERE r.is_template = TRUE
+        ORDER BY r.level DESC, r.role_key`
     );
     res.json(maskFields(req, { templates: rows }));
   } catch (err) {
