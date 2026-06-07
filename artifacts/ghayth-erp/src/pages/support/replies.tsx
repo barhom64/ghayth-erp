@@ -11,6 +11,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface Reply {
   id: number;
@@ -66,6 +67,31 @@ export default function SupportReplies() {
       title="ردود الدعم الفني"
       breadcrumbs={[{ href: "/support", label: "الدعم" }, { label: "ردود الدعم الفني" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_support_replies"
+          entityId="list"
+          size="icon"
+          label="طباعة سجل الردود"
+          payload={() => ({
+            entity: {
+              title: "سجل ردود الدعم الفني",
+              total: data?.total ?? 0,
+              resolved: data?.resolved ?? 0,
+              pending: data?.pending ?? 0,
+              activeAgents: data?.activeAgents ?? 0,
+            },
+            items: replies.map((r: any) => ({
+              "رقم التذكرة": r.ticketId,
+              "عنوان التذكرة": r.ticketTitle || "—",
+              "الرد": r.reply || "—",
+              "الوكيل": r.agent || "—",
+              "التاريخ": r.date ? formatDateAr(r.date) : "—",
+              "الحالة": r.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <SupportTabsNav />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

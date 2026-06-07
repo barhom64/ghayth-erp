@@ -9,6 +9,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   PageShell,
   PageStatusBadge,
 } from "@workspace/ui-core";
@@ -251,6 +252,19 @@ export default function FiscalPeriodsPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered as unknown as Record<string, unknown>[] || [],
+            [
+              { key: "period", label: "الفترة" },
+              { key: "name", label: "الاسم" },
+              { key: "entries", label: "عدد القيود" },
+              { key: "totalAmount", label: "إجمالي الحركات" },
+              { key: "status", label: "الحالة" },
+            ],
+            "فترات-مالية",
+          )
+        }
         resultCount={filtered.length}
       />
 

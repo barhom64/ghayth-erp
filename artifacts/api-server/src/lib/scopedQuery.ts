@@ -48,6 +48,18 @@ export interface ScopedQueryOptions {
    */
   enforceBranchScope?: boolean;
   /**
+   * When true, rows whose branch column is NULL are treated as
+   * company-level (not branch-private) and remain visible even under
+   * an active branch predicate. Without this, `branchId = ANY($branches)`
+   * silently drops every NULL-branch row — so a finance document created
+   * without a branch vanishes for any branch-scoped user while the
+   * (unscoped) summary card still counts it. The two then disagree and
+   * the table looks empty. Default false to preserve existing behaviour;
+   * finance list endpoints opt in because their documents legitimately
+   * sit at company level when no branch was chosen.
+   */
+  includeNullBranch?: boolean;
+  /**
    * When true, completely disables branch filtering — even if the frontend
    * sent a `?branchIds=...` query param. Use this for tables that do not
    * have a `branchId` column (e.g. `clients`, `projects`, `crm_opportunities`,
@@ -144,12 +156,15 @@ export function buildScopedWhere(
       branchIds = scope.allowedBranches;
     }
 
+    // When includeNullBranch is set, NULL-branch (company-level) rows
+    // survive the predicate alongside the scoped branch ids.
+    const nullClause = options.includeNullBranch ? `${branchCol} IS NULL OR ` : "";
     if (branchIds.length === 1) {
-      conditions.push(`${branchCol} = $${paramIdx}`);
+      conditions.push(`(${nullClause}${branchCol} = $${paramIdx})`);
       params.push(branchIds[0]);
       paramIdx++;
     } else if (branchIds.length > 1) {
-      conditions.push(`${branchCol} = ANY($${paramIdx})`);
+      conditions.push(`(${nullClause}${branchCol} = ANY($${paramIdx}))`);
       params.push(branchIds);
       paramIdx++;
     }

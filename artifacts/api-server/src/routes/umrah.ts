@@ -37,6 +37,7 @@ import {
   normalizeImportRows,
   MUTAMER_HEADER_MAP,
   VOUCHER_HEADER_MAP,
+  UMRAH_FIELD_LABELS_AR,
 } from "../lib/umrahImportEngine.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,6 +58,21 @@ async function requireOpenSeason(seasonId: number, companyId: number): Promise<v
 // LIFECYCLE STATE MACHINES — Umrah domain
 // ─────────────────────────────────────────────────────────────────────────────
 const PILGRIM_STATUSES = ["pending", "arrived", "active", "overstayed", "departed", "violated", "cancelled"] as const;
+// Arabic labels for the lifecycle states above. Mirrored from the
+// client-side canonical dictionary in
+// `ghayth-erp/src/lib/umrah-pilgrim-status.ts` so the pilgrims CSV
+// export ships "متجاوز" / "ملغى" instead of raw "overstayed" /
+// "cancelled". Operators opening the file in Excel see the same word
+// they see in the list, the badge, and the bulk-status dropdown.
+const PILGRIM_STATUS_LABELS_AR: Record<string, string> = {
+  pending:    "لم يصل",
+  arrived:    "وصل",
+  active:     "نشط",
+  overstayed: "متجاوز",
+  departed:   "غادر",
+  violated:   "مخالف",
+  cancelled:  "ملغى",
+};
 const PILGRIM_TRANSITIONS: Record<string, readonly string[]> = {
   pending:    ["arrived", "cancelled"],
   arrived:    ["active", "departed", "overstayed", "cancelled"],
@@ -1086,7 +1102,20 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     ] as const;
     const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
     const decrypted = rows.map(decryptPilgrimRow) as Array<Record<string, unknown>>;
-    const dataRows = decrypted.map((r) => headers.map(([key]) => csvEscape(r[key])).join(","));
+    const dataRows = decrypted.map((r) =>
+      headers
+        .map(([key]) => {
+          // The `status` column ships as the raw lifecycle enum
+          // ("pending" / "arrived" / ...) at the DB layer; translate
+          // it to the same Arabic word the operator sees in the list.
+          const raw = r[key];
+          if (key === "status" && typeof raw === "string") {
+            return csvEscape(PILGRIM_STATUS_LABELS_AR[raw] ?? raw);
+          }
+          return csvEscape(raw);
+        })
+        .join(","),
+    );
     // BOM so Excel detects UTF-8 Arabic — without it the file opens as
     // mojibake (same lesson as PR #1420's rejected-rows CSV).
     const BOM = "﻿";
@@ -2611,14 +2640,19 @@ router.get("/import/header-maps", authorize({ feature: "umrah", action: "create"
       }
       return out;
     };
+    // labels: { dbField → canonical Arabic label } so the wizard's
+    // column-mapping dropdown shows comprehensible Arabic instead of raw
+    // English identifiers (nuskInvoiceNumber, mutamerCount, ...).
     res.json({
       mutamers: {
         forward: MUTAMER_HEADER_MAP,
         targets: invertMap(MUTAMER_HEADER_MAP),
+        labels: UMRAH_FIELD_LABELS_AR,
       },
       vouchers: {
         forward: VOUCHER_HEADER_MAP,
         targets: invertMap(VOUCHER_HEADER_MAP),
+        labels: UMRAH_FIELD_LABELS_AR,
       },
     });
   } catch (err) { handleRouteError(err, res, "Import header maps error"); }

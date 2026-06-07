@@ -22,6 +22,7 @@ import {
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
+import { EntitySubsidiaryAccounts } from "@/components/shared/entity-subsidiary-accounts";
 import { ClientPortalLinkCard } from "@/components/shared/client-portal-link-card";
 import {
   Users2, Phone, Mail, CreditCard, FileText,
@@ -270,6 +271,16 @@ export default function TenantDetail() {
             </CardHeader>
             <CardContent>
               <FinancialTab entityType="client" entityId={id} />
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-status-info-foreground" /> الحسابات الفرعية للمستأجر
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EntitySubsidiaryAccounts entityType="client" entityId={id} />
             </CardContent>
           </Card>
         </div>

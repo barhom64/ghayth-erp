@@ -130,9 +130,6 @@ export default function Tasks() {
 
   const saving = updateMut.isPending || deleteMut.isPending;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const tasks = asList(tasksResp);
   // Client-side filter mirrors backend so the count chip ("X نتيجة") in
   // AdvancedFilters reflects what's visible; backend already narrowed
@@ -143,7 +140,14 @@ export default function Tasks() {
     dateField: "scheduledDate",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((t: any) => tagFilteredIds.has(t.id)) : preFiltered;
+  // usePrintRows is a hook — it MUST run on every render, so it has to be
+  // called BEFORE the isLoading/isError early returns (Rules of Hooks).
+  // Previously it sat after them, so the hook count changed once data
+  // arrived and React threw "change in the order of Hooks" → blank page.
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const startEdit = (task: any) => {
     setEditingId(task.id);
