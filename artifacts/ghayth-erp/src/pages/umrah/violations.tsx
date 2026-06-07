@@ -19,7 +19,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
+import { formatCurrency, formatUmrahDate, formatNumber } from "@/lib/formatters";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Eye, Plus, Pencil, Trash2, AlertTriangle, Clock, HelpCircle, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -251,7 +251,7 @@ export default function UmrahViolations() {
     {
       key: "detectedAt",
       header: "تاريخ الرصد",
-      render: (v) => formatDateAr(v.detectedAt),
+      render: (v) => formatUmrahDate(v.detectedAt),
     },
     {
       key: "__actions",

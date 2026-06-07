@@ -35,7 +35,8 @@ import { invalidateSodCache } from "../lib/rbac/sodEnforcement.js";
 import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
 import { getPermissionLevelCatalog, expandLevel, scopeForTier, PERMISSION_LEVELS, SCOPE_TIERS } from "../lib/rbac/permissionLevels.js";
-import { handleRouteError, ValidationError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, parseId, zodParse } from "../lib/errorHandler.js";
+import { findSeparationOfDutiesConflict, getActiveRoleKeysForUser } from "../lib/policyEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -985,11 +986,23 @@ router.post("/users/:userId/roles", authorize({ feature: "admin.roles", action: 
 
     // Security: the role being assigned must be the caller's own company
     // role (or a global template) — never another tenant's role.
-    const [roleRow] = await rawQuery<{ id: number }>(
-      `SELECT id FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`,
+    const [roleRow] = await rawQuery<{ id: number; role_key: string }>(
+      `SELECT id, role_key FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`,
       [roleId, scope.companyId]
     );
     if (!roleRow) throw new NotFoundError("الدور غير موجود");
+
+    // #1605 — Separation-of-Duties block at the v2 grant path too. Reads the
+    // user's effective role keys across user_roles ∪ rbac_user_roles ∪ active
+    // employee_assignments so a role granted via the legacy admin path still
+    // blocks a conflicting v2 grant (and vice versa).
+    const existingRoles = await getActiveRoleKeysForUser(userId, scope.companyId);
+    const sodConflict = findSeparationOfDutiesConflict(existingRoles, roleRow.role_key);
+    if (sodConflict) {
+      throw new ForbiddenError(
+        `فصل المهام (SoD): لا يمكن الجمع بين الدورين "${sodConflict.roleA}" و"${sodConflict.roleB}" لنفس المستخدم — ${sodConflict.reason}`,
+      );
+    }
 
     await rawExecute(
       `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary, expires_at, "assignedBy")

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -127,7 +127,7 @@ export default function UmrahPayments() {
     { key: "ref", header: "المرجع", sortable: true,
       render: (p) => <span className="font-mono">{p.ref || "-"}</span> },
     { key: "paymentDate", header: "تاريخ الدفع", sortable: true,
-      render: (p) => formatDateAr(p.paymentDate) },
+      render: (p) => formatUmrahDate(p.paymentDate) },
     { key: "subAgentName", header: "الوكيل الفرعي", sortable: true,
       render: (p) => <span className="font-medium">{p.subAgentName || `#${p.subAgentId}`}</span> },
     { key: "sarAmount", header: "المبلغ (ر.س)", sortable: true,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { formatDateAr, todayLocal } from "@/lib/formatters";
+import { formatUmrahDate, todayLocal } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   PageStatusBadge,
@@ -234,13 +234,13 @@ export default function UmrahPilgrims() {
       key: "arrivalDate",
       header: "الوصول",
       sortable: true,
-      render: (p) => formatDateAr(p.arrivalDate),
+      render: (p) => formatUmrahDate(p.arrivalDate),
     },
     {
       key: "departureDate",
       header: "المغادرة",
       sortable: true,
-      render: (p) => formatDateAr(p.departureDate),
+      render: (p) => formatUmrahDate(p.departureDate),
     },
     {
       key: "status",

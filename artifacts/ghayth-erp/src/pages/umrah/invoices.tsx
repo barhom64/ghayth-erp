@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -290,7 +290,7 @@ function SalesInvoicesTab() {
       },
     },
     { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
-    { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => (r.createdAt ? formatDateAr(r.createdAt) : "—") },
+    { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => (r.createdAt ? formatUmrahDate(r.createdAt) : "—") },
     {
       key: "_quickStatus",
       header: "",
@@ -382,7 +382,7 @@ function SalesInvoicesTab() {
               "الإجمالي": Number(r.total || r.totalAmount || 0),
               "الهامش": r.marginBase == null ? "—" : Number(r.marginBase),
               "الحالة": (r.status && resolveStatus(r.status)?.label) ?? r.status ?? "—",
-              "تاريخ الإنشاء": r.createdAt ? formatDateAr(r.createdAt) : "—",
+              "تاريخ الإنشاء": r.createdAt ? formatUmrahDate(r.createdAt) : "—",
             })),
           })}
         />
@@ -533,7 +533,7 @@ function NuskInvoicesTab() {
         </SelectContent>
       </Select>
     )},
-    { key: "expiryDate", header: "تنتهي في", render: (r) => (r.expiryDate ? formatDateAr(r.expiryDate) : "—") },
+    { key: "expiryDate", header: "تنتهي في", render: (r) => (r.expiryDate ? formatUmrahDate(r.expiryDate) : "—") },
     {
       key: "actions",
       header: "إجراء",
@@ -598,7 +598,7 @@ function NuskInvoicesTab() {
                 "المعتمرون": r.mutamerCount ?? "—",
                 "الإجمالي": Number(r.totalAmount || 0),
                 "الحالة": (r.nuskStatus && resolveStatus(r.nuskStatus)?.label) ?? r.nuskStatus ?? "—",
-                "تنتهي في": r.expiryDate ? formatDateAr(r.expiryDate) : "—",
+                "تنتهي في": r.expiryDate ? formatUmrahDate(r.expiryDate) : "—",
               })),
             })}
           />

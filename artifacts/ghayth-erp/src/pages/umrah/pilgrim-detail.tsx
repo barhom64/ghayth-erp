@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { z } from "zod";
-import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { formatUmrahDate, formatCurrency } from "@/lib/formatters";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
@@ -203,7 +203,7 @@ export default function PilgrimDetail() {
     // visaExpiry / mofaNumber / borderNumber surfaced because operators
     // routinely field calls asking these exact values — pre-PR they had
     // to drop the call and re-open the source Excel file to answer.
-    { label: "صلاحية التأشيرة", value: data?.visaExpiry ? formatDateAr(data.visaExpiry) : "-" },
+    { label: "صلاحية التأشيرة", value: data?.visaExpiry ? formatUmrahDate(data.visaExpiry) : "-" },
     { label: "رقم الموفا", value: data?.mofaNumber },
     { label: "رقم الحدود", value: data?.borderNumber },
     { label: "الجنسية", value: data?.nationality },
@@ -220,10 +220,10 @@ export default function PilgrimDetail() {
     { label: "الوكيل الرئيسي", value: data?.agentName },
     { label: "الوكيل الفرعي", value: data?.subAgentName },
     { label: "الباقة", value: data?.packageName },
-    { label: "تاريخ الوصول المخطط", value: data?.arrivalDate ? formatDateAr(data.arrivalDate) : "-" },
-    { label: "تاريخ المغادرة المخطط", value: data?.departureDate ? formatDateAr(data.departureDate) : "-" },
-    { label: "الوصول الفعلي", value: data?.actualArrival ? formatDateAr(data.actualArrival) : "-" },
-    { label: "المغادرة الفعلية", value: data?.actualDeparture ? formatDateAr(data.actualDeparture) : "-" },
+    { label: "تاريخ الوصول المخطط", value: data?.arrivalDate ? formatUmrahDate(data.arrivalDate) : "-" },
+    { label: "تاريخ المغادرة المخطط", value: data?.departureDate ? formatUmrahDate(data.departureDate) : "-" },
+    { label: "الوصول الفعلي", value: data?.actualArrival ? formatUmrahDate(data.actualArrival) : "-" },
+    { label: "المغادرة الفعلية", value: data?.actualDeparture ? formatUmrahDate(data.actualDeparture) : "-" },
     // Flight numbers — pair with the pilgrims-list flight filter
     // (?flight=) and bulk-status flip for the canonical flight-day
     // workflow: search "PIA-310" → select all → mark arrived in one
@@ -307,7 +307,7 @@ export default function PilgrimDetail() {
                 </div>
                 {data.overstayExemptAt && (
                   <div className="text-xs">
-                    منذ: {formatDateAr(data.overstayExemptAt)}
+                    منذ: {formatUmrahDate(data.overstayExemptAt)}
                   </div>
                 )}
               </div>
@@ -390,7 +390,7 @@ export default function PilgrimDetail() {
                     <div className="flex-1">
                       <div className="font-medium">{actionLabel}</div>
                       <div className="text-xs text-muted-foreground">
-                        {ev.userName ?? "النظام"} — {formatDateAr(ev.createdAt)}
+                        {ev.userName ?? "النظام"} — {formatUmrahDate(ev.createdAt)}
                       </div>
                     </div>
                   </li>
