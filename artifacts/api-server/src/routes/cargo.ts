@@ -42,6 +42,7 @@ import { sendMessage } from "../lib/messageSender.js";
 import { fleetEngine } from "../lib/engines/index.js";
 import { logger } from "../lib/logger.js";
 import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
+import { assertVehicleCapacity } from "../lib/fleet/vehicleCapacity.js";
 
 const router = Router();
 
@@ -108,10 +109,11 @@ const createManifestSchema = z.object({
 
 const updateManifestSchema = createManifestSchema.partial().extend({
   status: z.enum(CARGO_STATUSES).optional(),
-  // #1733 Phase 2 — operator's documented reason for assigning a driver
-  // whose licence class does not cover the vehicle's required class.
-  // Without this, an unqualified-driver confirm is rejected; with it,
-  // the row + reason are recorded in driver_eligibility_overrides.
+  // #1733 — operator's documented reason for an assignment that fails
+  // either Blocker #2's payload guard OR Phase 2's eligibility guard.
+  // Without this, an over-capacity / unqualified-driver confirm is
+  // rejected; with it, the row + reason are recorded in
+  // vehicle_capacity_overrides / driver_eligibility_overrides.
   overrideReason: z.string().min(1).max(500).optional(),
 });
 
@@ -350,8 +352,9 @@ router.patch(
         status: typeof CARGO_STATUSES[number];
         vehicleId: number | null;
         driverId: number | null;
+        totalWeight: string | number | null;
       }>(
-        `SELECT status, "vehicleId", "driverId" FROM cargo_manifests
+        `SELECT status, "vehicleId", "driverId", "totalWeight" FROM cargo_manifests
           WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [id, scope.companyId],
       );
@@ -366,12 +369,12 @@ router.patch(
         }
       }
 
-      // #1733 Phase 2 — driver eligibility guard. After Blocker #3
-      // renamed the lock-in state from "confirmed" to "approved", the
-      // hookpoint is the dispatcher-approval moment or any driver /
-      // vehicle swap. If both vehicleId and driverId are set, ensure
-      // the driver's class covers the vehicle's required class
-      // (honouring overrideReason).
+      // #1733 — both guards fire on the dispatcher-approval moment or
+      // on any driver / vehicle swap. The eligibility guard (Phase 2)
+      // refuses an unqualified driver; the capacity guard (Blocker #2)
+      // refuses an over-payload assignment. Both share `overrideReason`
+      // — the operator's one documented reason covers whichever check
+      // would have rejected the assignment.
       const movingToApproved = b.status === "approved" && existing.status !== "approved";
       const switchingDriver = b.driverId !== undefined && b.driverId !== existing.driverId;
       const switchingVehicle = b.vehicleId !== undefined && b.vehicleId !== existing.vehicleId;
@@ -390,6 +393,20 @@ router.patch(
             overrideReason: b.overrideReason ?? null,
           });
         }
+        const totalWeight = Number(existing.totalWeight) || 0;
+        if (targetVehicleId && totalWeight > 0) {
+          await assertVehicleCapacity({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            userId: scope.userId,
+            vehicleId: targetVehicleId,
+            kind: "payload_kg",
+            amount: totalWeight,
+            sourceType: "cargo_manifest",
+            sourceId: id,
+            overrideReason: b.overrideReason ?? null,
+          });
+        }
       }
 
       const sets: string[] = [];
@@ -400,8 +417,8 @@ router.patch(
         params.push(val);
       };
       for (const [col, val] of Object.entries(b)) {
-        // `overrideReason` is a body-only signal for the eligibility guard
-        // above — it doesn't map to a cargo_manifests column.
+        // `overrideReason` is a body-only signal for the eligibility +
+        // capacity guards above — it doesn't map to a cargo_manifests column.
         if (col === "overrideReason") continue;
         if (val !== undefined) setField(col, val);
       }
