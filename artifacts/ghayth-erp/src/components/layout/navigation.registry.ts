@@ -638,6 +638,7 @@ export const allNavSections: NavSection[] = [
           { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
           { label: "مراقبة الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "صندوق الأحداث الصادرة", path: "/admin/outbox", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "تتبّع الرحلات الحيّة", path: "/admin/journeys", icon: GitBranch, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "مراقبة دورة الحياة", path: "/admin/lifecycle-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "حاكم النظام", path: "/admin/system-governor", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "سجل الكيانات", path: "/admin/system-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
