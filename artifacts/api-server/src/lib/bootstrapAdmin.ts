@@ -163,6 +163,68 @@ async function createUserIfNotExists(
   return true;
 }
 
+// Give the bootstrap admin a self-service "driver" (سائق) capability: a
+// legacy user_roles entry so "سائق" shows up in the role picker (الصفة), and a
+// fleet_drivers record bound to the admin's employee so /api/fleet/me resolves
+// and /me/driver works end-to-end. The admin keeps owner ("*") access, so the
+// fleet.driver.me authorize() check passes; the driver record is the only
+// missing piece. Idempotent — runs on every boot so existing (dev/prod) DBs and
+// fresh installs all converge to the same state.
+async function ensureAdminDriverCapability(
+  client: pg.PoolClient,
+  companyId: number,
+): Promise<void> {
+  const { rows: adminRows } = await client.query(
+    `SELECT id, "employeeId" FROM users WHERE email = $1 LIMIT 1`,
+    [ADMIN_EMAIL],
+  );
+  if (adminRows.length === 0) return;
+  const adminUserId: number = adminRows[0].id;
+  const adminEmployeeId: number | null = adminRows[0].employeeId;
+
+  // 1. Driver role in the picker. The role picker (الصفة) is fed by the login
+  //    `userRoles` union, whose legacy half reads user_roles. Selecting "driver"
+  //    makes dashboard.tsx redirect the admin to /me/driver.
+  const { rows: existingRole } = await client.query(
+    `SELECT id FROM user_roles WHERE "userId" = $1 AND "roleKey" = 'driver' AND "companyId" = $2 LIMIT 1`,
+    [adminUserId, companyId],
+  );
+  if (existingRole.length === 0) {
+    // ON CONFLICT (matches unique user_roles_userId_roleKey_companyId_key) keeps
+    // this race-safe under concurrent boots in addition to the check above.
+    const { rowCount } = await client.query(
+      `INSERT INTO user_roles ("userId", "roleKey", label, level, modules, "companyId", "createdAt")
+       VALUES ($1, 'driver', $2, 10, $3, $4, NOW())
+       ON CONFLICT ("userId", "roleKey", "companyId") DO NOTHING`,
+      [adminUserId, "سائق", JSON.stringify(["home", "fleet"]), companyId],
+    );
+    if (rowCount && rowCount > 0) {
+      logger.info({ userId: adminUserId }, "Bootstrap granted admin the driver (سائق) role");
+    }
+  }
+
+  // 2. fleet_drivers record bound to the admin's employee. Driver self-service
+  //    (resolveDriverFromScope) looks up fleet_drivers by req.scope.employeeId
+  //    + companyId, so without this row /api/fleet/me returns 404.
+  if (adminEmployeeId != null) {
+    const { rows: existingDriver } = await client.query(
+      `SELECT id FROM fleet_drivers WHERE "employeeId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [adminEmployeeId, companyId],
+    );
+    if (existingDriver.length === 0) {
+      const licenseExpiry = new Date(Date.now() + 2 * 365 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      await client.query(
+        `INSERT INTO fleet_drivers ("companyId", "employeeId", name, phone, "licenseNumber", "licenseType", "licenseExpiry", status)
+         VALUES ($1, $2, $3, $4, $5, 'private', $6, 'available')`,
+        [companyId, adminEmployeeId, ADMIN_USER.name, ADMIN_USER.phone, "ADMIN-DRV-0001", licenseExpiry],
+      );
+      logger.info({ employeeId: adminEmployeeId }, "Bootstrap linked a fleet_drivers record to admin");
+    }
+  }
+}
+
 export async function bootstrapAdminUser(): Promise<void> {
   // Check if company with id=1 exists
   const { rows: companies } = await pool.query(
@@ -191,6 +253,10 @@ export async function bootstrapAdminUser(): Promise<void> {
   try {
     const adminCreated = await createUserIfNotExists(client, ADMIN_USER, companyId, branchId);
     const fleetCreated = await createUserIfNotExists(client, FLEET_USER, companyId, branchId);
+
+    // Idempotently enable the driver (سائق) role for the admin (role picker +
+    // linked fleet_drivers record) — applies to existing and fresh DBs alike.
+    await ensureAdminDriverCapability(client, companyId);
 
     await client.query("COMMIT");
 
