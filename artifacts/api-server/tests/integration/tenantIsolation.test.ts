@@ -73,6 +73,13 @@ const ALLOWLIST: Allow[] = [
       "Same refresh-token bootstrap flow as L297/L327 — third active-assignment lookup in the refresh handler. Runs after the verified refresh token is loaded; tenant boundary is the token's employeeId, not scope.companyId (scope is being rebuilt). (Line shifted +1 by the RBAC-007 is_primary ordering edit in the /login union query above.)",
   },
   {
+    file: "auth.ts",
+    line: 564,
+    table: "employee_assignments",
+    reason:
+      "Same refresh-token bootstrap flow as L297/L327/L423 — fourth active-assignment lookup, added when the refresh handler grew the onboarding/subscription checks (#1497). Tenant boundary is the verified refresh token's employeeId, not scope.companyId (scope is being rebuilt at this point).",
+  },
+  {
     file: "hr.ts",
     line: 1702,
     table: "hr_leave_requests",

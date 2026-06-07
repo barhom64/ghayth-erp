@@ -583,7 +583,7 @@ router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance.accounti
 // ─────────────────────────────────────────────────────────────────────────────
 export async function createSubsidiaryAccountsForEntity(
   companyId: number,
-  entityType: "employee" | "client" | "vendor" | "vehicle" | "driver" | "property",
+  entityType: "employee" | "client" | "vendor" | "vehicle" | "driver" | "property" | "umrah_agent",
   entityId: number,
   entityName: string
 ): Promise<void> {
@@ -628,6 +628,16 @@ export async function createSubsidiaryAccountsForEntity(
         { accountType: "fuel", parentCode: "5510", suffix: "وقود" },
         { accountType: "maintenance", parentCode: "5520", suffix: "صيانة" },
         { accountType: "depreciation", parentCode: "5710", suffix: "إهلاك" }
+      );
+    } else if (entityType === "umrah_agent") {
+      // Per-agent revenue routing (#1594): each umrah agent gets its own
+      // postable revenue leaf under the umrah/service revenue parent, so
+      // sales per agent roll up to the parent for consolidated reporting.
+      // resolveRevenueAccount() picks it up automatically via the
+      // umrah_agent → accountType='revenue' subsidiary lookup. Editable
+      // later from /finance/subsidiary-accounts.
+      accountsToCreate.push(
+        { accountType: "revenue", parentCode: "4130", suffix: "إيراد عمرة" }
       );
     }
 
