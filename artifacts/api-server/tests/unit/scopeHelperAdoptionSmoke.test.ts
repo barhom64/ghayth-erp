@@ -120,6 +120,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // (companyId, vehicleId) and the vehicle ownership is checked up front
   // by assertVehicleBelongsToTenant — buildScopedWhere has nothing to add.
   "vehicle-profile.ts",
+  // transport-pricing.ts: #1733 pricing engine + service-line queue +
+  // invoice-batch merger. All queries are scoped on (companyId, customerId
+  // / serviceType / status / date window) — buildScopedWhere has no
+  // branch cascade to add.
+  "transport-pricing.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -204,9 +209,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 108,
+      total: 109,
       helperUsers: 36,
-      manualOnly: 69,
+      manualOnly: 70,
     });
   });
 });

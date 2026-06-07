@@ -77,6 +77,7 @@ import { recurringRouter } from "./finance-recurring.js";
 import { transportBillingCandidatesRouter } from "./transport-billing-candidates.js";
 import { transportBookingsRouter } from "./transport-bookings.js";
 import { vehicleProfileRouter } from "./vehicle-profile.js";
+import { transportPricingRouter } from "./transport-pricing.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -388,6 +389,9 @@ router.use("/", requireModule("fleet"), requireGuards("financial"), transportBoo
 // #1733 Vehicle profile sub-resources (Issue Comment 7). URLs land at
 // /fleet/vehicles/:vehicleId/{components,driver-assignments,maintenance-schedules}.
 router.use("/", requireModule("fleet"), requireGuards("financial"), vehicleProfileRouter);
+// #1733 Pricing engine + invoice merging (Issue Comment 3). URLs land at
+// /transport/price-rules, /transport/service-lines, /transport/invoice-batches.
+router.use("/", requireModule("fleet"), requireGuards("financial"), transportPricingRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);

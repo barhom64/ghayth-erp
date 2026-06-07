@@ -3965,6 +3965,27 @@ CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_vehicle
 
 
 --
+-- #1733 Pricing engine + invoice merging (Issue Comment 3) + driverServiceProfile.
+--
+
+CREATE INDEX IF NOT EXISTS idx_fleet_drivers_service_profile
+  ON public.fleet_drivers ("companyId", "driverServiceProfile")
+  WHERE "driverServiceProfile" IS NOT NULL AND "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_price_rules ALTER COLUMN id SET DEFAULT nextval('public.transport_price_rules_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_price_rules ADD CONSTRAINT transport_price_rules_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_price_rules_lookup
+  ON public.transport_price_rules ("companyId", "transportServiceType", "customerId", "validFrom", "validTo")
+  WHERE "isActive" AND "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_invoice_links ALTER COLUMN id SET DEFAULT nextval('public.transport_invoice_links_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_invoice_links ADD CONSTRAINT transport_invoice_links_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.transport_invoice_links ADD CONSTRAINT uq_transport_invoice_link_service UNIQUE ("companyId", "serviceLineId");
+CREATE INDEX IF NOT EXISTS idx_invoice_links_invoice
+  ON public.transport_invoice_links ("companyId", "invoiceId");
+
+
+--
 -- Name: idx_fleet_tires_vehicle; Type: INDEX; Schema: public; Owner: -
 --
 
