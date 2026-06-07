@@ -520,7 +520,201 @@ export default function UmrahSettings() {
             </CardContent>
           </Card>
         )}
+
+        <UmrahNotificationsCard />
       </div>
     </PageShell>
+  );
+}
+
+// ─── Notifications card — opt-in SMS triggers + Twilio config link ────
+//
+// The SMS infrastructure is already wired: the queue worker
+// (`processSmsQueue` in cronScheduler.ts) reads Twilio credentials
+// from `system_settings` and delivers. This card adds the umrah-side
+// switches that tell the cron handlers WHICH notifications to send +
+// links the operator to the Twilio settings page if they haven't
+// configured the channel yet.
+
+const NOTIFY_KEYS = [
+  {
+    key: "umrah.notify.visa_expiry",
+    label: "تنبيه انتهاء التأشيرة",
+    description: "SMS للمعتمر قبل ٧ أيام من انتهاء تأشيرته. يحترم استبعاد دول الخليج تلقائيًا.",
+  },
+  {
+    key: "umrah.notify.departure_reminder",
+    label: "تذكير الرحيل غدًا",
+    description: "SMS مساء كل يوم للمعتمرين الذين رحلتهم غدًا (يحتاج رقم هاتف في السجل).",
+  },
+  {
+    key: "umrah.notify.overstay_warning",
+    label: "تنبيه تجاوز مدة الإقامة",
+    description: "SMS يومي للمعتمر بعد تجاوز موعد المغادرة، حتى يتواصل مع وكيله.",
+  },
+  {
+    key: "umrah.auto_penalty.enabled",
+    label: "تشغيل تلقائي لمحرك الغرامات",
+    description: "ينشئ غرامة التجاوز تلقائيًا الساعة ٧ صباحًا. يحترم المعتمرين المعفيين.",
+  },
+] as const;
+
+function UmrahNotificationsCard() {
+  const { toast } = useToast();
+  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [testPhone, setTestPhone] = useState("");
+  const [testSending, setTestSending] = useState(false);
+
+  // Initial load — one resolve call per key. Settings layer is fast +
+  // we render the card in a section that's already scrolled into view.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const out: Record<string, boolean> = {};
+      for (const k of NOTIFY_KEYS) {
+        try {
+          const res = await apiFetch<{ value: unknown }>(
+            `/settings/resolve?key=${encodeURIComponent(k.key)}`,
+          );
+          out[k.key] = res.value === true || res.value === "true" || res.value === 1;
+        } catch {
+          out[k.key] = false;
+        }
+      }
+      if (!cancelled) {
+        setFlags(out);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const toggle = async (key: string, next: boolean) => {
+    setSaving(key);
+    try {
+      await apiFetch("/settings", {
+        method: "PUT",
+        body: JSON.stringify({ key, value: next }),
+      });
+      setFlags((prev) => ({ ...prev, [key]: next }));
+      toast({ title: next ? "تم التفعيل" : "تم الإيقاف" });
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "فشل الحفظ",
+        description: e?.message ?? "تعذّر تحديث الإعداد",
+      });
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const sendTest = async () => {
+    const phone = testPhone.trim();
+    if (!phone) {
+      toast({ variant: "destructive", title: "أدخل رقم الهاتف للاختبار" });
+      return;
+    }
+    setTestSending(true);
+    try {
+      await apiFetch("/umrah/notifications/test-sms", {
+        method: "POST",
+        body: JSON.stringify({ phone }),
+      });
+      toast({
+        title: "أُرسل الطلب إلى قائمة الانتظار",
+        description: "إذا كان provider مضبوطًا، ستصل الرسالة خلال دقيقة.",
+      });
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "فشل الاختبار",
+        description: e?.message ?? "تعذّر إرسال الرسالة",
+      });
+    } finally {
+      setTestSending(false);
+    }
+  };
+
+  return (
+    <Card data-testid="umrah-notifications-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          تنبيهات تلقائية للمعتمرين (SMS) + المحركات
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">
+          الـSMS يمرّ عبر قناة الإرسال المضبوطة في{" "}
+          <a
+            href="/settings/communication-channels"
+            className="underline text-status-info-foreground"
+          >
+            إعدادات قنوات الاتصال
+          </a>
+          . لا حاجة لتفعيل أي خيار هنا حتى تضبط الـprovider هناك أولًا.
+        </p>
+
+        {loading ? (
+          <p className="text-sm text-muted-foreground">جاري التحميل...</p>
+        ) : (
+          <div className="space-y-3">
+            {NOTIFY_KEYS.map((k) => (
+              <div
+                key={k.key}
+                className="flex items-start justify-between gap-3 py-2 border-b last:border-b-0"
+                data-testid={`notify-row-${k.key}`}
+              >
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{k.label}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {k.description}
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={flags[k.key] ?? false}
+                    disabled={saving === k.key}
+                    onChange={(e) => toggle(k.key, e.target.checked)}
+                    className="h-4 w-4"
+                    data-testid={`notify-toggle-${k.key}`}
+                  />
+                  <span className="text-xs">
+                    {flags[k.key] ? "مفعّل" : "متوقف"}
+                  </span>
+                </label>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="pt-3 border-t space-y-2">
+          <Label className="text-sm">اختبار SMS — أدخل رقمك للتجربة</Label>
+          <div className="flex gap-2">
+            <Input
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value)}
+              placeholder="+9665xxxxxxxx"
+              dir="ltr"
+              className="text-sm"
+              data-testid="notify-test-phone"
+            />
+            <GuardedButton
+              perm="umrah:create"
+              onClick={sendTest}
+              disabled={testSending || !testPhone.trim()}
+              size="sm"
+              data-testid="notify-test-send"
+            >
+              {testSending ? "جارٍ..." : "إرسال اختبار"}
+            </GuardedButton>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
