@@ -15,6 +15,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -691,6 +692,9 @@ router.post("/agents", authorize({ feature: "umrah", action: "create" }), async 
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء الوكيل");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agents", entityId: rows[0].id, after: { name: b.name } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.created", entity: "umrah_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, country: b.country }) }).catch((e) => logger.error(e, "umrah background task failed"));
+    // Per-agent revenue subsidiary account (#1594) — fire-and-forget; sales for
+    // this agent route to its own revenue leaf via resolveRevenueAccount.
+    createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });

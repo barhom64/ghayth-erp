@@ -1475,10 +1475,60 @@ describe("Print Engine v2 — branded default themes", () => {
     expect(fallback.theme).toBe("classic");
   });
 
-  it("non-invoice entity gets a branded generic document", async () => {
+  it("entity without a bespoke recipe falls back to a branded generic document", async () => {
     const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
-    const { html } = getBrandedThemeHtml("quotation", "modern");
+    // `campaign` has no recipe -> generic doc with the auto itemsTable token.
+    const { html } = getBrandedThemeHtml("campaign", "modern");
     expect(html).toContain("{{entity.itemsTable}}");
     expect(html).toContain("{{branch.letterhead}}");
+  });
+});
+
+describe("Print Engine v2 — branded document families", () => {
+  it("exposes branded recipes for all major document families", async () => {
+    const { brandedRecipeKeys } = await import("../../src/lib/print/brandedThemes.js");
+    const keys = brandedRecipeKeys();
+    // Spot-check one from each family.
+    for (const k of [
+      "quotation", "purchase_order", "delivery_note",       // line-item
+      "payment_voucher", "receipt_voucher", "salary_advance", // vouchers
+      "customer_statement", "vendor_statement",               // statements
+      "journal_entry", "recurring_journal",                   // journals
+      "payslip", "payroll",                                   // payslips
+      "official_letter", "correspondence",                    // letters
+      "employee_contract", "rental_contract",                 // contracts
+    ]) {
+      expect(keys, `${k} must have a branded recipe`).toContain(k);
+    }
+    expect(keys.length).toBeGreaterThanOrEqual(30);
+  });
+
+  it("every recipe renders in all three themes with letterhead + footer + verify", async () => {
+    const { getBrandedThemeHtml, brandedRecipeKeys } = await import("../../src/lib/print/brandedThemes.js");
+    for (const entity of brandedRecipeKeys()) {
+      for (const theme of ["classic", "modern", "compact"] as const) {
+        const { html } = getBrandedThemeHtml(entity, theme);
+        expect(html, `${entity}/${theme} letterhead`).toContain("{{branch.letterhead}}");
+        expect(html, `${entity}/${theme} footer`).toContain("{{branch.footer}}");
+        expect(html, `${entity}/${theme} verify`).toContain("{{system.verifyBlock}}");
+      }
+    }
+  });
+
+  it("voucher family shows an amount box, statement family a running balance", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    const voucher = getBrandedThemeHtml("payment_voucher", "classic").html;
+    expect(voucher).toContain("المبلغ");
+    expect(voucher).toContain("{{entity.amountInWords}}");
+    const stmt = getBrandedThemeHtml("customer_statement", "classic").html;
+    expect(stmt).toContain("{{this.balance}}");
+    expect(stmt).toContain("الرصيد الختامي");
+  });
+
+  it("journal family shows debit/credit totals", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    const j = getBrandedThemeHtml("journal_entry", "modern").html;
+    expect(j).toContain("{{entity.totalDebit}}");
+    expect(j).toContain("{{entity.totalCredit}}");
   });
 });
