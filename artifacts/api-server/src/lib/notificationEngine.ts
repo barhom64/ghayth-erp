@@ -198,6 +198,42 @@ function applyUserPreferences(channels: EngineChannel[], disabled: Set<string>):
   return channels.filter((ch) => !disabled.has(ch));
 }
 
+/**
+ * Pure reducer: is `now` inside the user's quiet-hours window? Handles
+ * windows that wrap past midnight (e.g. 22:00 → 07:00).
+ *
+ * Returns false when either bound is missing — quiet hours are
+ * unconfigured. Returns false when the bounds are equal — no window.
+ */
+export function isWithinQuietHours(start: string | null, end: string | null, now: Date): boolean {
+  if (!start || !end) return false;
+  const parse = (s: string) => {
+    const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(s);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  };
+  const s = parse(start);
+  const e = parse(end);
+  if (s == null || e == null || s === e) return false;
+  const cur = now.getHours() * 60 + now.getMinutes();
+  // Same-day window (e.g. 12:00 → 14:00): inclusive of start, exclusive of end.
+  if (s < e) return cur >= s && cur < e;
+  // Wrap-around window (e.g. 22:00 → 07:00): midnight is inside the window.
+  return cur >= s || cur < e;
+}
+
+async function getUserQuietHours(companyId: number, userId: number): Promise<{ start: string | null; end: string | null }> {
+  const rows = await rawQuery<{ quietHoursStart: string | null; quietHoursEnd: string | null }>(
+    `SELECT "quietHoursStart"::text, "quietHoursEnd"::text
+       FROM notification_preferences
+      WHERE "companyId" = $1 AND "userId" = $2
+        AND channel = 'in_app' AND category = 'general'
+      LIMIT 1`,
+    [companyId, userId]
+  );
+  return { start: rows[0]?.quietHoursStart ?? null, end: rows[0]?.quietHoursEnd ?? null };
+}
+
 async function resolveLanguage(companyId: number, payload: EnginePayload): Promise<"ar" | "en"> {
   if (payload.language) return payload.language;
   if (payload.recipientUserId) {
@@ -431,6 +467,19 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
     if (userRow) {
       const disabled = await getDisabledChannels(companyId, userRow.id, eventCategory.split(".")[0] ?? eventCategory);
       channels = applyUserPreferences(channels, disabled);
+
+      // Quiet-hours suppression: inside the user's window, drop every
+      // external channel (email/sms/whatsapp/push) so they don't get
+      // pinged at 2am. in_app + webhook still fire so the record lands
+      // and the user sees it when they look in the morning. `urgent`
+      // priority bypasses the window — actual emergencies (sla breach,
+      // security incident) cut through.
+      if (priority !== "urgent") {
+        const { start, end } = await getUserQuietHours(companyId, userRow.id);
+        if (isWithinQuietHours(start, end, new Date())) {
+          channels = channels.filter((ch) => ch === "in_app" || ch === "webhook");
+        }
+      }
     }
   }
 
