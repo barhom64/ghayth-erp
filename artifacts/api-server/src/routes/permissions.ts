@@ -179,7 +179,45 @@ router.get("/my", async (req, res) => {
     ).catch((e) => { logger.error(e, "permissions query failed"); return [] as UserPermissionRow[]; });
     const grants = userPermRows.filter((p) => p.type === "grant").map((p) => p.permission);
     const revokes = new Set(userPermRows.filter((p) => p.type === "revoke").map((p) => p.permission));
-    const grantedPerms = Array.from(new Set([...rolePerms, ...grants])).filter((p) => !revokes.has(p));
+
+    // ── Unified authorization bridge (Ghaith Operating Foundation, #1413) ──
+    // The backend ENFORCES with RBAC v2 (rbac_role_grants, feature.action) but
+    // the frontend `can()` historically reads only the legacy flat set
+    // (role_permissions, module:action) — two parallel sources of truth, the
+    // root of "weak / inflexible roles". Here we project the caller's RBAC v2
+    // grants into the flat vocabulary and UNION them in, so editing a role in
+    // the RBAC v2 editor now also drives which buttons appear. Strictly
+    // additive: it can only widen UI visibility to match what the backend
+    // already allows (never hides a currently-shown action), and any failure
+    // degrades silently to the legacy set — /permissions/my is load-bearing
+    // for the whole UI, so it must never throw here.
+    let rbacProjected: string[] = [];
+    try {
+      const grantRows = await rawQuery<{ feature_key: string; actions: string[] }>(
+        `SELECT g.feature_key, g.actions
+           FROM rbac_user_roles ur
+           JOIN rbac_roles r ON r.id = ur.role_id
+           JOIN rbac_role_grants g ON g.role_id = r.id
+          WHERE ur."userId" = $1 AND ur."companyId" = $2
+            AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+            AND r.role_key = ANY($3::text[])`,
+        [scope.userId, scope.companyId, roles.map((r) => r.roleKey)]
+      );
+      const projected = new Set<string>();
+      for (const g of grantRows) {
+        const moduleKey = (g.feature_key || "").split(".")[0];
+        const acts = Array.isArray(g.actions) ? g.actions : [];
+        for (const a of acts) {
+          if (moduleKey) projected.add(`${moduleKey}:${a}`); // coarse — lights existing module:action gates
+          projected.add(`${g.feature_key}:${a}`);            // fine — for future feature.action gates
+        }
+      }
+      rbacProjected = [...projected];
+    } catch (e) {
+      logger.warn(e, "[permissions/my] RBAC v2 projection skipped — using legacy set only");
+    }
+
+    const grantedPerms = Array.from(new Set([...rolePerms, ...grants, ...rbacProjected])).filter((p) => !revokes.has(p));
 
     // VIS-002 (Ghaith Operating Foundation): partial activation. Return the
     // company's explicitly DISABLED feature keys so the frontend can hide
