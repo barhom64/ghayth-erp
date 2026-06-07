@@ -13,6 +13,7 @@ import { useState } from "react";
 import {
   RefreshCw, Activity, Zap, Filter,
 } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function AdminEventMonitor() {
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -62,9 +63,33 @@ export default function AdminEventMonitor() {
       subtitle="جميع الأحداث المسجلة في النظام وآخر الأحداث الفعلية"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_event_catalog"
+            entityId="list"
+            size="icon"
+            label="طباعة كتالوج الأحداث"
+            payload={() => ({
+              entity: {
+                title: domainFilter === "all" ? "كتالوج أحداث النظام" : `كتالوج أحداث النطاق — ${domainFilter}`,
+                total,
+                domainCount: domainKeys.length,
+                criticalCount: catalog.filter((e: any) => e.critical).length,
+                recentEventsCount: recentEvents.length,
+                filter: domainFilter,
+              },
+              items: filteredCatalog.map((r: any) => ({
+                "الحدث": r.action,
+                "النطاق": r.domain || "—",
+                "الوصف": r.label || "—",
+                "حرج": r.critical ? "نعم" : "لا",
+              })),
+            })}
+          />
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 me-1" />تحديث
+          </Button>
+        </div>
       }
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
