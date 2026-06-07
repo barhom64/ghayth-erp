@@ -218,6 +218,20 @@ check(
   "direct process.env access IS flagged",
   fires("direct-process-env-read", `const url = process.env.DATABASE_URL;`),
 );
+check(
+  "direct assertPaymentSourceAllowed in a route IS flagged (#1715 guardrail #6)",
+  fires(
+    "direct-posting-policy-in-route",
+    `      await assertPaymentSourceAllowed({ companyId, accountCode: sourceAcct, paymentMethod });`,
+  ),
+);
+check(
+  "routing through assertOperationValid is NOT flagged",
+  !fires(
+    "direct-posting-policy-in-route",
+    `      await assertOperationValid(fromLegacyExpenseForm({ companyId, sourceAccountCode: sourceAcct, paymentMethod }));`,
+  ),
+);
 
 // ─── Save-button rate-limit rule (multiline) ────────────────────────────
 //
