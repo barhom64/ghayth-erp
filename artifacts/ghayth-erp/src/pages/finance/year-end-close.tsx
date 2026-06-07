@@ -11,6 +11,7 @@ import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-det
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, currentYearRiyadh } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
 import { Archive, TrendingUp, TrendingDown, Calculator, CheckCircle } from "lucide-react";
 import {
   AlertDialog,
@@ -220,9 +221,36 @@ export default function YearEndClosePage() {
 
           <Card>
             <CardContent className="p-6">
-              <p className="text-sm font-semibold mb-3">
-                قيد إقفال السنة المقترح ({preview.lines.length} بند)
-              </p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold">
+                  قيد إقفال السنة المقترح ({preview.lines.length} بند)
+                </p>
+                <PrintButton
+                  entityType="report_year_end_close"
+                  entityId="list"
+                  size="icon"
+                  label="طباعة قيد إقفال السنة"
+                  payload={() => ({
+                    entity: {
+                      title: `قيد إقفال السنة المالية ${year}`,
+                      year,
+                      retainedEarningsAccountCode,
+                      totalRevenue: preview.totalRevenue,
+                      totalExpense: preview.totalExpense,
+                      netIncome: preview.netIncome,
+                      linesCount: preview.lines.length,
+                      ref: preview.ref || "—",
+                      status: closed ? "مُرحَّل" : "مسودة",
+                    },
+                    items: preview.lines.map((l: any) => ({
+                      "الحساب": l.accountCode,
+                      "البيان": l.description || "—",
+                      "مدين": l.debit > 0 ? Number(l.debit) : "—",
+                      "دائن": l.credit > 0 ? Number(l.credit) : "—",
+                    })),
+                  })}
+                />
+              </div>
               <DataTable
                 columns={closingEntryColumns}
                 data={preview.lines}

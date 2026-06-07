@@ -6,6 +6,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, pool } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
+import { findSeparationOfDutiesConflict } from "../lib/policyEngine.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { logger } from "../lib/logger.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
@@ -529,6 +530,11 @@ const PREDEFINED_ROLES = [
   { roleKey: "crm_manager", label: "مدير المبيعات", modules: ["home","crm","marketing","requests","documents","comms"], level: 70 },
   { roleKey: "bi_manager", label: "مدير ذكاء الأعمال", modules: ["home","bi","reports","requests","documents","comms"], level: 70 },
   { roleKey: "branch_manager", label: "مدير فرع", modules: ["home","hr","finance","requests","documents","comms","support"], level: 60 },
+  // Self-service driver — sees only their assigned trips + cargo via
+  // /me/driver (fleet.trips.my, fleet.cargo.my, fleet.driver.me from
+  // the featureCatalog self-service floor). `home` keeps the basic
+  // notifications surface; `requests` lets them file leave/expense.
+  { roleKey: "driver", label: "سائق", modules: ["home","fleet","requests","documents","comms"], level: 10 },
   { roleKey: "employee", label: "موظف", modules: ["home","requests","documents","comms"], level: 10 },
 ];
 
@@ -598,6 +604,23 @@ router.post("/user-roles", authorize({ feature: "admin", action: "update" }), as
       }
     }
     if (!def) { throw new ValidationError("دور غير معروف"); }
+    // #1605 — Separation-of-Duties enforcement at the source: reject granting a
+    // role that conflicts with a role the user already holds (across user_roles
+    // and their active employee_assignments). Audit-only before; a hard block now.
+    const existingRoleRows = await rawQuery<{ role: string }>(
+      `SELECT "roleKey" AS role FROM user_roles WHERE "userId"=$1 AND "companyId"=$2
+       UNION
+       SELECT ea.role FROM employee_assignments ea
+         JOIN users u ON u."employeeId" = ea."employeeId"
+        WHERE u.id=$1 AND ea."companyId"=$2 AND ea.status='active' AND ea.role IS NOT NULL`,
+      [userId, scope.companyId]
+    );
+    const sodConflict = findSeparationOfDutiesConflict(existingRoleRows.map((r) => r.role), def.roleKey);
+    if (sodConflict) {
+      throw new ForbiddenError(
+        `فصل المهام (SoD): لا يمكن الجمع بين الدورين "${sodConflict.roleA}" و"${sodConflict.roleB}" لنفس المستخدم — ${sodConflict.reason}`,
+      );
+    }
     await rawExecute(
       `INSERT INTO user_roles ("userId", "roleKey", label, modules, level, "companyId") VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, modules=EXCLUDED.modules, level=EXCLUDED.level`,

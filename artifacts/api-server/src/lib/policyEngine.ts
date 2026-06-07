@@ -9,6 +9,27 @@ export const SEPARATION_OF_DUTIES: Array<{ roleA: string; roleB: string; reason:
   { roleA: "owner", roleB: "bi_manager", reason: "المالك لا يحتاج دور BI منفصل — wildcard كافي" },
 ];
 
+/**
+ * Request-time SoD enforcement (#1605). Given the roles a user ALREADY holds and
+ * a role about to be granted, return the conflicting pair (or null). Pure +
+ * synchronous so it can gate role-assignment routes before the write. This turns
+ * the previously audit-only SoD definitions into an actual block at the source
+ * (preventing a conflicting combination from ever being created), rather than
+ * detecting it after the fact.
+ */
+export function findSeparationOfDutiesConflict(
+  existingRoles: string[],
+  newRole: string,
+): { roleA: string; roleB: string; reason: string } | null {
+  const have = new Set(existingRoles.filter(Boolean));
+  for (const rule of SEPARATION_OF_DUTIES) {
+    if (newRole === rule.roleA && have.has(rule.roleB)) return rule;
+    if (newRole === rule.roleB && have.has(rule.roleA)) return rule;
+  }
+  return null;
+}
+
+
 // ─── Maximum Privilege Rules ──────────────────────────────────────────────
 // Prevents over-privileged accounts.
 
