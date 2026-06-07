@@ -33,4 +33,20 @@ OKCODE="$(echo "$RESP2" | py 'import sys,json;d=json.load(sys.stdin);print(d.get
 GRANTED2="$(psql "$DSN" -tA -c "select count(*) from user_roles where \"userId\"=$UID2 and \"roleKey\"='hr_manager';")"
 [ "${GRANTED2:-0}" -ge 1 ] && ok "non-conflicting role (hr_manager) granted normally" || no "non-conflicting grant failed ($OKCODE / $GRANTED2)"
 
+# Symmetric coverage: the same block must fire at the RBAC-v2 grant endpoint.
+# Owner still holds 'owner'; attempting to grant the v2 'bi_manager' role must
+# be refused with the same Arabic SoD message and must not write a row to
+# rbac_user_roles. Skip cleanly if the v2 catalogue isn't seeded for the tenant.
+CID2="$(psql "$DSN" -tA -c "select ea.\"companyId\" from employee_assignments ea join users u on u.\"employeeId\"=ea.\"employeeId\" where u.id=$UID2 and ea.status='active' limit 1;")"
+RBAC_BI_ID="$(psql "$DSN" -tA -c "select id from rbac_roles where role_key='bi_manager' and (\"companyId\"=$CID2 or is_template) limit 1;")"
+if [ -n "$RBAC_BI_ID" ]; then
+  RESP3="$(postw /rbac/v2/users/$UID2/roles "{\"roleId\":$RBAC_BI_ID}")"
+  ERR3="$(echo "$RESP3" | py 'import sys,json;d=json.load(sys.stdin);print(d.get("error") or "")')"
+  echo "$ERR3" | grep -q "فصل المهام" && ok "v2: conflicting role (owner+bi_manager) BLOCKED with Arabic SoD message" || no "v2 SoD not enforced (err=$ERR3)"
+  GRANTED3="$(psql "$DSN" -tA -c "select count(*) from rbac_user_roles where \"userId\"=$UID2 and role_id=$RBAC_BI_ID;")"
+  [ "${GRANTED3:-x}" = "0" ] && ok "v2: rbac_user_roles row NOT written (block held at the source)" || no "v2: row was written despite SoD ($GRANTED3)"
+else
+  echo "  ⏭  rbac_roles.bi_manager not seeded for company $CID2 — v2 leg skipped"
+fi
+
 rm -f "$J"; echo; echo "▶ Result: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ] || exit 1
