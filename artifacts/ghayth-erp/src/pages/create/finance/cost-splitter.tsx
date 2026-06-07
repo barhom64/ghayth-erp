@@ -384,7 +384,7 @@ export default function CostSplitterPage() {
                 <SelectItem value="_none">
                   <span className="text-blue-700 font-semibold">— بدون ضريبة —</span>
                 </SelectItem>
-                {taxCodes.map((t) => (
+                {taxCodes.filter((t: any) => t.code).map((t) => (
                   <SelectItem key={t.id} value={t.code}>
                     {t.code} ({Number(t.rate)}%)
                   </SelectItem>

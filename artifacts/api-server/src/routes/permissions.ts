@@ -4,6 +4,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { projectGrantsToFine } from "../lib/rbac/flatProjection.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -179,7 +180,40 @@ router.get("/my", async (req, res) => {
     ).catch((e) => { logger.error(e, "permissions query failed"); return [] as UserPermissionRow[]; });
     const grants = userPermRows.filter((p) => p.type === "grant").map((p) => p.permission);
     const revokes = new Set(userPermRows.filter((p) => p.type === "revoke").map((p) => p.permission));
-    const grantedPerms = Array.from(new Set([...rolePerms, ...grants])).filter((p) => !revokes.has(p));
+
+    // ── Unified authorization bridge (Ghaith Operating Foundation, #1413) ──
+    // The backend ENFORCES with RBAC v2 (rbac_role_grants, feature.action) but
+    // the frontend `can()` historically reads only the legacy flat set
+    // (role_permissions, module:action) — two parallel sources of truth, the
+    // root of "weak / inflexible roles". Here we project the caller's RBAC v2
+    // grants (fine `feature.action` form) and UNION them in, so editing a role
+    // in the RBAC v2 editor now also drives which buttons appear. The frontend
+    // matcher keeps coarse gates working by prefix-matching the fine keys.
+    // Strictly additive: it can only widen UI visibility to match what the
+    // backend already allows (never hides a currently-shown action), and any
+    // failure degrades silently to the legacy set — /permissions/my is
+    // load-bearing for the whole UI, so it must never throw here.
+    let rbacProjected: string[] = [];
+    try {
+      const grantRows = await rawQuery<{ feature_key: string; actions: string[] }>(
+        `SELECT g.feature_key, g.actions
+           FROM rbac_user_roles ur
+           JOIN rbac_roles r ON r.id = ur.role_id
+           JOIN rbac_role_grants g ON g.role_id = r.id
+          WHERE ur."userId" = $1 AND ur."companyId" = $2
+            AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+            AND r.role_key = ANY($3::text[])`,
+        [scope.userId, scope.companyId, roles.map((r) => r.roleKey)]
+      );
+      // Fine-only projection: the frontend matcher keeps coarse gates working
+      // by prefix-matching these, while fine gates stay precise (no coarse key
+      // to leak across a module). الخطة الجذرية §3 م4.
+      rbacProjected = projectGrantsToFine(grantRows);
+    } catch (e) {
+      logger.warn(e, "[permissions/my] RBAC v2 projection skipped — using legacy set only");
+    }
+
+    const grantedPerms = Array.from(new Set([...rolePerms, ...grants, ...rbacProjected])).filter((p) => !revokes.has(p));
 
     // VIS-002 (Ghaith Operating Foundation): partial activation. Return the
     // company's explicitly DISABLED feature keys so the frontend can hide
