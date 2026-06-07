@@ -28,6 +28,10 @@ const PAGE = readFileSync(
   join(import.meta.dirname!, "../../../ghayth-erp/src/pages/umrah/pilgrims.tsx"),
   "utf8",
 );
+const STATUS_MODULE = readFileSync(
+  join(import.meta.dirname!, "../../../ghayth-erp/src/lib/umrah-pilgrim-status.ts"),
+  "utf8",
+);
 
 describe("POST /umrah/pilgrims/status-bulk", () => {
   it("declares the zod schema for bulkStatusSchema with the right shape", () => {
@@ -71,10 +75,20 @@ describe("POST /umrah/pilgrims/status-bulk", () => {
 });
 
 describe("pilgrims page — bulk-status picker on the multi-select toolbar", () => {
-  it("declares a status options array mirroring the backend enum", () => {
-    expect(PAGE).toMatch(/PILGRIM_STATUS_OPTIONS\s*=\s*\[/);
-    expect(PAGE).toMatch(/value:\s*"arrived",\s*label:\s*"وصل"/);
-    expect(PAGE).toMatch(/value:\s*"departed",\s*label:\s*"غادر"/);
+  it("imports the canonical status list (no per-page re-declaration)", () => {
+    // Labels live in `@/lib/umrah-pilgrim-status` so the page-level
+    // dropdown, the filter strip, and `pilgrim-detail.tsx`'s header
+    // badge all read the SAME wording. The page binds a local
+    // PILGRIM_STATUS_OPTIONS to that import for callsite brevity.
+    // The import group may carry siblings (umrahPilgrimStatusLabel, etc.) — match
+    // any import statement that pulls UMRAH_PILGRIM_STATUS_OPTIONS from the module.
+    expect(PAGE).toMatch(/import\s*\{[^}]*\bUMRAH_PILGRIM_STATUS_OPTIONS\b[^}]*\}\s*from\s*"@\/lib\/umrah-pilgrim-status"/);
+    expect(PAGE).toMatch(/const PILGRIM_STATUS_OPTIONS\s*=\s*UMRAH_PILGRIM_STATUS_OPTIONS/);
+
+    // The literal label pairs live in the module — assert there, not on
+    // the page that just imports them.
+    expect(STATUS_MODULE).toMatch(/value:\s*"arrived",\s*label:\s*"وصل"/);
+    expect(STATUS_MODULE).toMatch(/value:\s*"departed",\s*label:\s*"غادر"/);
   });
 
   it("mutation hits the new endpoint with the right shape", () => {

@@ -299,7 +299,7 @@ export default function UmrahViolations() {
                 "المعتمر": v.mutamerName || "—",
                 "قيمة الغرامة": v.penaltyAmount ?? 0,
                 "تاريخ الرصد": v.detectedAt || v.createdAt || "—",
-                "الحالة": v.status || "—",
+                "الحالة": STATUS_LABEL[v.status as ViolationStatus]?.label ?? v.status ?? "—",
               })),
             })}
           />

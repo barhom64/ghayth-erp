@@ -339,6 +339,19 @@ export const STATUS_MAP = {
     violated:             { label: "مخالف",            tone: "danger"   },
   },
 
+  // ── Umrah penalty lifecycle ────────────────────────────────────────
+  // The penalty list / detail badges were falling back to `shared` for
+  // `pending` + `cancelled` (which resolved correctly) but the
+  // penalty-specific states — `invoiced`, `paid`, `waived` — were
+  // rendering as raw English text because no domain block claimed them.
+  // Same canonical-labels rule as the pilgrim block: feminine forms
+  // because `الغرامة` is feminine.
+  umrah_penalty: {
+    invoiced:             { label: "مفوترة",          tone: "info"     },
+    paid:                 { label: "مدفوعة",          tone: "success"  },
+    waived:               { label: "معفاة",            tone: "neutral"  },
+  },
+
   // ── Projects ───────────────────────────────────────────────────────
   project: {
     planning:             { label: "تخطيط",           tone: "info"     },
