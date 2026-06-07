@@ -179,7 +179,7 @@ export default function BankReconciliationPage() {
               <Select value={accountCode} onValueChange={setAccountCode}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {bankAccOptions.length > 0 ? bankAccOptions.map((a: any) => (
+                  {bankAccOptions.length > 0 ? bankAccOptions.filter((a: any) => a.code).map((a: any) => (
                     <SelectItem key={a.code} value={a.code}>{a.code} - {a.name}</SelectItem>
                   )) : (
                     <>
