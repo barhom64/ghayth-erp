@@ -43,10 +43,16 @@ interface PreviewSummary {
   rows?: any[];
 }
 
-function formatSamplePreview(sample: Record<string, unknown>): string {
+function formatSamplePreview(
+  sample: Record<string, unknown>,
+  labels: Record<string, string> = {},
+): string {
   const entries = Object.entries(sample).filter(([, v]) => v !== null && v !== undefined && v !== "");
   if (entries.length === 0) return "—";
-  return entries.map(([k, v]) => `${k}: ${String(v)}`).join(" · ");
+  // Translate the sample's field keys to Arabic so the rejected-row
+  // diagnostics read "رقم الجواز: ..." not "passportNumber: ...".
+  // Falls back to the raw key only when a label is missing.
+  return entries.map(([k, v]) => `${labels[k] ?? k}: ${String(v)}`).join(" · ");
 }
 
 /**
@@ -833,7 +839,13 @@ export default function UmrahImportWizard() {
           )}
 
           {/* Errors */}
-          {preview.errors && preview.errors.length > 0 && (
+          {preview.errors && preview.errors.length > 0 && (() => {
+            // Arabic field labels for the rejected-row diagnostics — same
+            // source the column-mapping dropdown uses, so "passportNumber"
+            // shows as "رقم الجواز" in both the field column and the
+            // row-values preview.
+            const errorLabels = headerMapsQ.data?.[fileType]?.labels ?? {};
+            return (
             <Card className="border-status-error-surface">
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
@@ -865,12 +877,12 @@ export default function UmrahImportWizard() {
                           <td className="p-2 align-top">
                             <Badge variant="outline" className="font-mono">{formatNumber(e.row)}</Badge>
                           </td>
-                          <td className="p-2 align-top font-mono text-muted-foreground">
-                            {e.fieldName || "—"}
+                          <td className="p-2 align-top text-muted-foreground">
+                            {e.fieldName ? (errorLabels[e.fieldName] ?? e.fieldName) : "—"}
                           </td>
                           <td className="p-2 align-top">{e.message}</td>
                           <td className="p-2 align-top text-muted-foreground">
-                            {e.sample ? formatSamplePreview(e.sample) : "—"}
+                            {e.sample ? formatSamplePreview(e.sample, errorLabels) : "—"}
                           </td>
                         </tr>
                       ))}
@@ -879,7 +891,8 @@ export default function UmrahImportWizard() {
                 </div>
               </CardContent>
             </Card>
-          )}
+            );
+          })()}
 
           {/* Actions */}
           {!confirmResult && (
