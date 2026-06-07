@@ -505,6 +505,15 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     const targetPeriod = period ?? currentPeriod();
     const sourceAcct = sourceAccountCode || "1100";
 
+    // #1715 posting policy: the money-source account must match the
+    // payment method (cash→cash_box, bank_transfer→bank, custody→custody,
+    // …). Enforced in the backend so a UI bypass can't post a cash
+    // expense against a bank account. Soft-allows unclassified accounts.
+    {
+      const { assertPaymentSourceAllowed } = await import("../lib/financePostingPolicy.js");
+      await assertPaymentSourceAllowed({ companyId: effectiveCompanyId, accountCode: sourceAcct, paymentMethod });
+    }
+
     // F3 (audit follow-up): pre-flight ONLY validates the budget here;
     // the actual UPDATE budgets SET used = newUsed happens inside the
     // same withTransaction as the JE post below. The previous shape
@@ -1129,6 +1138,14 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const cashAcct = sourceAccountCode || "1100";
+
+    // #1715 posting policy: voucher money account must match the chosen
+    // method (نقدي→صندوق, تحويل→بنك, شيك→بنك/شيكات, …). Backend-enforced.
+    {
+      const { assertPaymentSourceAllowed } = await import("../lib/financePostingPolicy.js");
+      await assertPaymentSourceAllowed({ companyId: scope.companyId, accountCode: cashAcct, paymentMethod: method });
+    }
+
     const outputVatCode = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300") : "2300";
     const inputVatCode2 = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1400") : "1400";
 
