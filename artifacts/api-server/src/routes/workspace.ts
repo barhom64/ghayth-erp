@@ -194,7 +194,7 @@ router.get("/team", authorize({ feature: "workspace.manager", action: "view" }),
                 COUNT(t.id) FILTER (WHERE t.status IN ('pending','in_progress')) AS "openCount",
                 COUNT(t.id) FILTER (WHERE t.status IN ('pending','in_progress') AND t."scheduledDate" < $2) AS "overdueCount"
            FROM employees e
-           JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."isActive" = true
+           JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
            LEFT JOIN tasks t ON t."assignedTo" = ea.id AND t."deletedAt" IS NULL
           WHERE e."companyId" = $1 AND e."deletedAt" IS NULL
           GROUP BY e.id, e.name
