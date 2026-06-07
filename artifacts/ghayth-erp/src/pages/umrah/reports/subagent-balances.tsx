@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Wallet, TrendingUp, AlertTriangle, Users, Download, Receipt } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 
 // تقرير أرصدة الوكلاء الفرعيين — مكمِّل لتقرير الوكلاء. الفرق:
 // • paidAmount هنا عمود حقيقي (مش status='paid' فقط)
@@ -326,7 +326,7 @@ export default function UmrahSubAgentBalancesReport() {
                             <>
                               <div className="flex items-center gap-1">
                                 <Receipt className="h-3 w-3" />
-                                {formatDateAr(r.lastPaymentAt)}
+                                {formatUmrahDate(r.lastPaymentAt)}
                               </div>
                               {r.lastPaymentRef && (
                                 <p className="text-[10px] font-mono text-muted-foreground">{r.lastPaymentRef}</p>

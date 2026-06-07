@@ -118,84 +118,53 @@ function parseModules(raw: unknown, roleKey?: string): string[] {
 router.get("/my", async (req, res) => {
   try {
     const scope = req.scope!;
-    const roleRows = await rawQuery<RoleSummaryRow>(
-      `SELECT "roleKey", label, modules, level FROM user_roles WHERE "userId" = $1 AND ("companyId" = $2 OR "companyId" IS NULL) ORDER BY level DESC`,
-      [scope.userId, scope.companyId]
-    );
-
-    // Header "تغيير الصفة" picker — when the user picks a single role from
-    // their assigned set, scope this endpoint to that role's modules and
-    // permissions only. Without this, the union of every assigned role was
-    // returned and the sidebar never reflected the picker ("فلتر الدور لا
-    // يعمل"). The picker may only narrow to a role the user actually owns;
-    // an unknown / unassigned key falls back to the full union so we don't
-    // accidentally lock the user out.
-    // Prefer the scope's already-validated selectedRoleKey (set from the
-    // `x-selected-role` header by authMiddleware) — that's gone through
-    // the canonical validation against user_roles. Fall back to the
-    // query param for older callers.
+    // Header "تغيير الصفة" picker — narrow to the picked role when set.
     const requestedRole = scope.selectedRoleKey
       ?? (typeof req.query.role === "string" && req.query.role.trim()
         ? req.query.role.trim()
         : null);
 
-    let roles: RoleSummaryRow[];
-    if (roleRows.length > 0) {
-      roles = roleRows;
-      if (requestedRole) {
-        const picked = roleRows.filter((r) => r.roleKey === requestedRole);
-        if (picked.length > 0) roles = picked;
-      }
-    } else {
-      const roleKey = scope.role || "employee";
-      const customRow = await rawQuery<RoleSummaryRow>(
-        `SELECT "roleKey", label, modules, level FROM custom_roles WHERE "roleKey"=$1 AND "companyId"=$2 LIMIT 1`,
-        [roleKey, scope.companyId]
-      ).catch((e) => { logger.error(e, "permissions query failed"); return [] as RoleSummaryRow[]; });
-      if (customRow.length > 0) {
-        roles = customRow;
-      } else {
-        const predefined = PREDEFINED_ROLE_DEFAULTS[roleKey];
-        roles = [{
-          roleKey,
-          label: roleKey,
-          modules: predefined ? predefined.modules : ["home"],
-          level: predefined ? predefined.level : 10,
-        }];
-      }
-    }
-
-    // ── RBAC v2 drives visibility too (Ghaith #1413) ──
-    // Derive the caller's roles + modules from RBAC as well, so a user
-    // provisioned only in RBAC (rbac_user_roles) gets the right picker entries,
-    // level, and sidebar modules. Additive + guarded — never hides what the
-    // legacy path already returned, and degrades silently on any failure.
+    // Roles now come from RBAC v2 (rbac_user_roles → rbac_roles) ONLY — the
+    // legacy user_roles / role_permissions tables are no longer read here.
+    // Falls back to the scope role's PREDEFINED defaults only when the user has
+    // no RBAC roles, so navigation is never locked out. (#1413 — single system)
+    let roles: RoleSummaryRow[] = [];
     try {
       const rr = await rawQuery<{ role_key: string; label_ar: string; level: number }>(
         `SELECT DISTINCT r.role_key, r.label_ar, r.level
            FROM rbac_user_roles ur JOIN rbac_roles r ON r.id = ur.role_id
           WHERE ur."userId" = $1 AND ur."companyId" = $2
-            AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+            AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+          ORDER BY r.level DESC`,
         [scope.userId, scope.companyId]
       );
-      const known = new Set(roles.map((r) => r.roleKey));
-      for (const x of rr) {
-        if (requestedRole && x.role_key !== requestedRole && roles.length > 0) continue;
-        if (!known.has(x.role_key)) {
-          roles.push({ roleKey: x.role_key, label: x.label_ar || x.role_key, modules: [], level: Number(x.level) || 10 });
-          known.add(x.role_key);
-        }
-      }
-    } catch (e) { logger.warn(e, "[permissions/my] RBAC roles derive skipped"); }
+      roles = rr.map((x) => ({ roleKey: x.role_key, label: x.label_ar || x.role_key, modules: [], level: Number(x.level) || 10 }));
+    } catch (e) { logger.warn(e, "[permissions/my] RBAC roles load failed"); }
 
-    let rbacModules: string[] = [];
+    if (roles.length === 0) {
+      const roleKey = scope.role || "employee";
+      const predefined = PREDEFINED_ROLE_DEFAULTS[roleKey];
+      roles = [{ roleKey, label: roleKey, modules: predefined ? predefined.modules : ["home"], level: predefined ? predefined.level : 10 }];
+    }
+
+    if (requestedRole) {
+      const picked = roles.filter((r) => r.roleKey === requestedRole);
+      if (picked.length > 0) roles = picked;
+    }
+
+    // Sidebar modules = moduleKeys of the (picker-narrowed) roles' RBAC grants,
+    // plus any PREDEFINED-fallback modules. Scoped to the selected roles so the
+    // picker actually narrows the sidebar.
+    const rbacModules: string[] = [];
     try {
       const gm = await rawQuery<{ feature_key: string }>(
         `SELECT DISTINCT g.feature_key
-           FROM rbac_user_roles ur JOIN rbac_role_grants g ON g.role_id = ur.role_id
+           FROM rbac_user_roles ur JOIN rbac_roles r ON r.id = ur.role_id
+           JOIN rbac_role_grants g ON g.role_id = ur.role_id
           WHERE ur."userId" = $1 AND ur."companyId" = $2
-            AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
-        [scope.userId, scope.companyId]
+            AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+            AND r.role_key = ANY($3::text[])`,
+        [scope.userId, scope.companyId, roles.map((r) => r.roleKey)]
       );
       const ALL_MODULES = PREDEFINED_ROLE_DEFAULTS.owner.modules;
       for (const x of gm) {
@@ -207,13 +176,9 @@ router.get("/my", async (req, res) => {
     const highestLevel = Math.max(0, ...roles.map((r) => Number(r.level) || 0));
     const allModules = Array.from(new Set([...roles.flatMap((r) => parseModules(r.modules, r.roleKey)), ...rbacModules]));
 
-    const permRows = await rawQuery<PermissionNameRow>(
-      `SELECT permission FROM role_permissions
-       WHERE role = ANY($1::text[]) AND ("companyId" IS NULL OR "companyId" = $2)`,
-      [roles.map((r) => r.roleKey), scope.companyId]
-    );
-    const rolePerms = permRows.map((p) => p.permission);
-
+    // role_permissions (legacy) is no longer read — RBAC projection below is the
+    // permission source. Per-user explicit overrides (legacy `permissions`
+    // table) are still honored as grant/revoke on top.
     const userPermRows = await rawQuery<UserPermissionRow>(
       `SELECT permission, type FROM permissions WHERE "userId" = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
       [scope.userId, scope.companyId]
@@ -281,7 +246,7 @@ router.get("/my", async (req, res) => {
       logger.warn(e, "[permissions/my] delegation projection skipped");
     }
 
-    const grantedPerms = Array.from(new Set([...rolePerms, ...grants, ...rbacProjected, ...delegatedProjected])).filter((p) => !revokes.has(p));
+    const grantedPerms = Array.from(new Set([...grants, ...rbacProjected, ...delegatedProjected])).filter((p) => !revokes.has(p));
 
     // VIS-002 (Ghaith Operating Foundation): partial activation. Return the
     // company's explicitly DISABLED feature keys so the frontend can hide
