@@ -39,7 +39,7 @@ echo "▶ Finance posting journey — #1594"
 echo "  API: $BASE"
 
 # --- auth (HttpOnly cookies + CSRF) ---
-curl -fsS -c "$J" -X POST "$BASE/auth/login" \
+curl -fsS -c "$J" -H "X-E2E-Test: 1" -X POST "$BASE/auth/login" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" -o /dev/null
 CSRF="$(grep erp_csrf "$J" | awk '{print $7}')"
@@ -54,7 +54,12 @@ CID="$(post /clients '{"name":"عميل تحقق الرحلة المالية","c
 [ -n "$CID" ] && ok "client created (#$CID)" || no "client create"
 
 # --- open period ---
-PID="$(get /finance/fiscal-periods-v2 | py 'import sys,json;d=json.load(sys.stdin)["data"];print([p["id"] for p in d if p["status"]=="open" and p["companyId"]==1][0])')"
+# Self-heal: a prior run of this script (or any company-1 journey) may have
+# left the 2026 period closed — step 5 closes it on purpose to prove the
+# guard. Reopen any closed company-1 period first so the lookup below always
+# finds an open one and the script is re-runnable from any state.
+psql "$DSN" -c "UPDATE financial_periods SET status='open', \"closedAt\"=NULL, \"closedBy\"=NULL WHERE \"companyId\"=1 AND status='closed' AND \"deletedAt\" IS NULL;" >/dev/null 2>&1 || true
+PID="$(get /finance/fiscal-periods-v2 | py 'import sys,json;d=json.load(sys.stdin)["data"];print(([p["id"] for p in d if p["status"]=="open" and p["companyId"]==1] or [""])[0])')"
 [ -n "$PID" ] && ok "open fiscal period (#$PID)" || no "no open period"
 
 # --- 2. invoice ---
@@ -86,6 +91,16 @@ CODE="$(postw /finance/invoices "{\"clientId\":$CID,\"date\":\"$(date +%Y-%m-%d)
 # --- 7. journey engine wired (#1604): invoice journey tracked + completed ---
 JST="$(psql "$DSN" -tA -c "select status from journey_instances where \"journeyType\"='finance_invoice' and \"entityType\"='invoices' and \"entityId\"=$IID;")"
 [ "$JST" = "completed" ] && ok "journey_instances tracked finance_invoice → completed" || no "journey not completed (status=$JST)"
+
+# --- teardown: reopen the period we closed in step 5 ---
+# Step 5 deliberately CLOSES company 1's period to prove the guard (step 6).
+# Leaving it closed poisons every other company-1 journey (fleet/hr/etc.)
+# run afterwards against the same DB — they get a (correct) SYSTEM_GUARD_BLOCK
+# from the financial_period guard. Reopen it now so the verify suite is
+# re-runnable in any order without manual `psql` surgery. The block was
+# already proven above, so reopening loses no coverage.
+psql "$DSN" -c "UPDATE financial_periods SET status='open', \"closedAt\"=NULL, \"closedBy\"=NULL WHERE id=$PID;" >/dev/null 2>&1 \
+  && ok "period reopened (teardown — suite stays re-runnable)" || no "period reopen teardown failed"
 
 rm -f "$J"
 echo
