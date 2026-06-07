@@ -565,10 +565,9 @@ describe("POST /vouchers — atomic JE + metadata + allocations", () => {
   it("wraps engine post, metadata UPDATE, and allocations loop in one withTransaction", () => {
     const idx = JRN_ROUTE.indexOf('journalRouter.post("/vouchers"');
     expect(idx).toBeGreaterThan(-1);
-    // Widened from 12000 → 16000 after voucherDims block + ...voucherDims
-    // spread on every line grew the handler (silent dim-loss bug fix —
-    // voucher JE legs now carry vendorId/clientId/contractId/etc.).
-    const block = JRN_ROUTE.slice(idx, idx + 16000);
+    // Widened 12000 → 16000 (voucherDims spread) → 17500 (#1715 posting-
+    // policy assertPaymentSourceAllowed block added before the engine post).
+    const block = JRN_ROUTE.slice(idx, idx + 17500);
     const txnStart = block.indexOf("withTransaction(async ()");
     expect(txnStart).toBeGreaterThan(-1);
     const enginePostIdx = block.indexOf("financialEngine.postJournalEntry({", txnStart);
