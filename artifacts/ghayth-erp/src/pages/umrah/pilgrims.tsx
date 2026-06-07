@@ -23,7 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 
-import { UMRAH_PILGRIM_STATUS_OPTIONS } from "@/lib/umrah-pilgrim-status";
+import { UMRAH_PILGRIM_STATUS_OPTIONS, umrahPilgrimStatusLabel } from "@/lib/umrah-pilgrim-status";
 
 // PILGRIM_STATUSES is mirrored from the backend enum in routes/umrah.ts;
 // the bulk-status dropdown should match the same option set so an
@@ -274,7 +274,7 @@ export default function UmrahPilgrims() {
                 "الجنسية": p.nationality || "—",
                 "المجموعة": p.groupName || "—",
                 "الوكيل الفرعي": p.subAgentName || "—",
-                "الحالة": p.status || "—",
+                "الحالة": umrahPilgrimStatusLabel(p.status),
               })),
             })}
           />

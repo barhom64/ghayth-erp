@@ -25,3 +25,16 @@ export const UMRAH_PILGRIM_STATUS_OPTIONS: readonly UmrahPilgrimStatusOption[] =
   { value: "violated",   label: "مخالف" },
   { value: "cancelled",  label: "ملغى" },
 ];
+
+/**
+ * Look up the Arabic label for a raw lifecycle status (the same enum
+ * value the API returns). Unknown values fall through to the raw
+ * string so a future backend state can't silently render as blank.
+ * Null / undefined / empty render as "—" — the project-wide "missing
+ * value" glyph used everywhere else.
+ */
+export function umrahPilgrimStatusLabel(status: string | null | undefined): string {
+  if (!status) return "—";
+  const hit = UMRAH_PILGRIM_STATUS_OPTIONS.find((o) => o.value === status);
+  return hit?.label ?? status;
+}
