@@ -210,15 +210,20 @@ export function registerEventListeners() {
     await logEvent("leave.approved", payload);
     await logAudit("leave.approved", { ...payload, action: "approve" });
     if (payload.companyId && payload.assignmentId) {
-      await createNotification({
+      const leaveType = String(payload.leaveType ?? "—");
+      const startDate = String(payload.startDate ?? "—");
+      const endDate = String(payload.endDate ?? "—");
+      await notifyBusinessEvent({
         companyId: payload.companyId,
+        templateKey: "leave.request.approved",
+        templateVars: { leaveType, startDate, endDate },
+        fallbackTitle: "تمت الموافقة على إجازتك",
+        fallbackBody: "تمت الموافقة على طلب الإجازة الخاص بك",
         assignmentId: payload.assignmentId as number,
-        type: "hr",
-        title: "تمت الموافقة على إجازتك",
-        body: "تمت الموافقة على طلب الإجازة الخاص بك",
         priority: "normal",
         refType: "leave_request",
         refId: payload.entityId as number,
+        actionUrl: `/hr/leaves/${payload.entityId}`,
       });
     }
   });
@@ -227,15 +232,19 @@ export function registerEventListeners() {
     await logEvent("leave.rejected", payload);
     await logAudit("leave.rejected", { ...payload, action: "reject" });
     if (payload.companyId && payload.assignmentId) {
-      await createNotification({
+      const leaveType = String(payload.leaveType ?? "—");
+      const reason = String(payload.reason ?? "غير محدد");
+      await notifyBusinessEvent({
         companyId: payload.companyId,
+        templateKey: "leave.request.rejected",
+        templateVars: { leaveType, reason },
+        fallbackTitle: "تم رفض إجازتك",
+        fallbackBody: `تم رفض طلب الإجازة الخاص بك. السبب: ${reason}`,
         assignmentId: payload.assignmentId as number,
-        type: "hr",
-        title: "تم رفض إجازتك",
-        body: "تم رفض طلب الإجازة الخاص بك",
         priority: "normal",
         refType: "leave_request",
         refId: payload.entityId as number,
+        actionUrl: `/hr/leaves/${payload.entityId}`,
       });
     }
   });
@@ -261,6 +270,24 @@ export function registerEventListeners() {
   eventBus.on("purchase_request.created", async (payload) => {
     await logEvent("purchase_request.created", payload);
     await logAudit("purchase_request.created", { ...payload, action: "create" });
+    if (payload.companyId && payload.branchId) {
+      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+      const prNumber = String(payload.entityId ?? "—");
+      const requesterName = String(payload.requesterName ?? "—");
+      const amount = String(payload.amount ?? "0");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "purchase_request.created",
+        templateVars: { prNumber, requesterName, amount },
+        fallbackTitle: "طلب شراء",
+        fallbackBody: `طلب شراء جديد #${prNumber} من ${requesterName}`,
+        assignmentId: managerId ?? undefined,
+        priority: "normal",
+        refType: "purchase_request",
+        refId: payload.entityId as number,
+        actionUrl: `/finance/purchase-requests/${payload.entityId}`,
+      });
+    }
   });
 
   eventBus.on("purchase_request.approved", async (payload) => {
@@ -276,6 +303,23 @@ export function registerEventListeners() {
   eventBus.on("crm.deal.won", async (payload) => {
     await logEvent("crm.deal.won", payload);
     await logAudit("crm.deal.won", { ...payload, action: "update" });
+    if (payload.companyId && payload.branchId) {
+      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+      const opportunityName = String(payload.opportunityName ?? payload.title ?? "—");
+      const amount = String(payload.amount ?? payload.value ?? "0");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "opportunity.won",
+        templateVars: { opportunityName, amount },
+        fallbackTitle: "فرصة بيع مكتسبة",
+        fallbackBody: `تم كسب الفرصة ${opportunityName}`,
+        assignmentId: managerId ?? undefined,
+        priority: "high",
+        refType: "opportunity",
+        refId: payload.entityId as number,
+        actionUrl: `/crm/${payload.entityId}`,
+      });
+    }
   });
 
   eventBus.on("crm.deal.lost", async (payload) => {
@@ -419,6 +463,47 @@ export function registerEventListeners() {
   eventBus.on("payroll.completed", async (payload) => {
     await logEvent("payroll.completed", payload);
     await logAudit("payroll.completed", { ...payload, action: "create" });
+    // Fan out a "payslip ready" notification to every employee in the
+    // run — each through their own channels (email/sms/whatsapp) in
+    // their preferred language, with their own net amount.
+    if (payload.companyId && payload.entityId) {
+      const lines = await rawQuery<{
+        employeeId: number | null;
+        netSalary: string | number | null;
+        period: string | null;
+        assignmentId: number | null;
+      }>(
+        `SELECT pl."employeeId", pl."netSalary", pr.period,
+                ea.id AS "assignmentId"
+         FROM payroll_lines pl
+         JOIN payroll_runs pr ON pr.id = pl."runId"
+         LEFT JOIN employee_assignments ea
+                ON ea."employeeId" = pl."employeeId"
+               AND ea."companyId" = pr."companyId"
+               AND ea.status = 'active'
+         WHERE pl."runId" = $1 AND pr."companyId" = $2 AND pl."deletedAt" IS NULL`,
+        [payload.entityId as number, payload.companyId],
+      ).catch(() => [] as Array<{ employeeId: number | null; netSalary: string | number | null; period: string | null; assignmentId: number | null }>);
+
+      for (const line of lines) {
+        if (!line.employeeId) continue;
+        const month = String(line.period ?? "—");
+        const amount = line.netSalary != null ? String(line.netSalary) : "0";
+        await notifyBusinessEvent({
+          companyId: payload.companyId,
+          templateKey: "payroll.ready",
+          templateVars: { month, amount },
+          fallbackTitle: "كشف الراتب جاهز",
+          fallbackBody: `كشف راتب شهر ${month} جاهز للمراجعة`,
+          assignmentId: line.assignmentId ?? undefined,
+          recipientUser: { type: "employee", id: line.employeeId },
+          priority: "normal",
+          refType: "payroll_run",
+          refId: payload.entityId as number,
+          actionUrl: `/my-payslip`,
+        });
+      }
+    }
   });
 
   eventBus.on("journal.entry.created", async (payload) => {
@@ -1948,6 +2033,23 @@ export function registerEventListeners() {
   // ── HR — employee loans ──
   eventBus.on("hr.loan.created", async (payload) => {
     await logEvent("hr.loan.created", payload);
+    if (payload.companyId && payload.branchId) {
+      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+      const employeeName = String(payload.employeeName ?? "—");
+      const amount = String(payload.amount ?? "0");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "loan.request.created",
+        templateVars: { employeeName, amount },
+        fallbackTitle: "طلب قرض جديد",
+        fallbackBody: `طلب قرض من ${employeeName} بمبلغ ${amount} ريال`,
+        assignmentId: managerId ?? undefined,
+        priority: "normal",
+        refType: "employee_loan",
+        refId: payload.entityId as number,
+        actionUrl: `/hr/loans/${payload.entityId}`,
+      });
+    }
   });
   eventBus.on("hr.loan.approved", async (payload) => {
     await logEvent("hr.loan.approved", payload);
@@ -1991,6 +2093,24 @@ export function registerEventListeners() {
   // ── HR — overtime requests ──
   eventBus.on("hr.overtime.created", async (payload) => {
     await logEvent("hr.overtime.created", payload);
+    if (payload.companyId && payload.branchId) {
+      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+      const employeeName = String(payload.employeeName ?? "—");
+      const hours = String(payload.hours ?? payload.totalHours ?? "0");
+      const date = String(payload.date ?? "—");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "overtime.request.created",
+        templateVars: { employeeName, hours, date },
+        fallbackTitle: "طلب وقت إضافي",
+        fallbackBody: `طلب وقت إضافي من ${employeeName} (${hours} ساعة)`,
+        assignmentId: managerId ?? undefined,
+        priority: "normal",
+        refType: "overtime_request",
+        refId: payload.entityId as number,
+        actionUrl: `/hr/overtime/${payload.entityId}`,
+      });
+    }
   });
   eventBus.on("hr.overtime.approved", async (payload) => {
     await logEvent("hr.overtime.approved", payload);
@@ -2002,6 +2122,23 @@ export function registerEventListeners() {
   // ── HR — exit / end-of-service ──
   eventBus.on("hr.exit.created", async (payload) => {
     await logEvent("hr.exit.created", payload);
+    if (payload.companyId && payload.branchId) {
+      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+      const employeeName = String(payload.employeeName ?? "—");
+      const lastDay = String(payload.lastDay ?? payload.lastWorkingDay ?? "—");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "exit.request.created",
+        templateVars: { employeeName, lastDay },
+        fallbackTitle: "طلب إخلاء طرف",
+        fallbackBody: `طلب إخلاء طرف من ${employeeName}`,
+        assignmentId: managerId ?? undefined,
+        priority: "high",
+        refType: "exit_request",
+        refId: payload.entityId as number,
+        actionUrl: `/hr/exit-requests/${payload.entityId}`,
+      });
+    }
   });
   eventBus.on("hr.exit.approved", async (payload) => {
     await logEvent("hr.exit.approved", payload);

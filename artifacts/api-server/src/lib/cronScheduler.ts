@@ -23,6 +23,7 @@ import {
   roundTo2,
 } from "./businessHelpers.js";
 import { broadcastAlert, sendNotification } from "./notificationService.js";
+import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
 import { syncMailbox } from "./mailboxSync.js";
 import { processFallbackChains } from "./notificationEngine.js";
 import { runPendingTranscription } from "./pbxControl.js";
@@ -341,18 +342,30 @@ async function documentExpiryAlerts(): Promise<string> {
           });
           alerted++;
         }
-        // Also notify the employee directly
+        // Also notify the employee directly — fan out across the
+        // employee's channels (email/sms/whatsapp) via the bilingual
+        // `document.expiring` template, picking the language from the
+        // employee's linked user preferredLocale.
         const [empAsgn] = await rawQuery<Record<string, unknown>>(
           `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
           [doc.employeeId, company.id]
         );
         if (empAsgn && empAsgn.id !== hrAsgn?.id) {
-          await createNotification({
-            companyId: company.id, assignmentId: empAsgn.id as number,
-            type: "document_expiry_employee", title: `وثيقتك تنتهي خلال ${daysLeft} يوم`,
-            body: `${doc.documentType} — تاريخ الانتهاء: ${doc.expiryDate}. يرجى تجديدها في أقرب وقت.`,
+          await notifyBusinessEvent({
+            companyId: company.id,
+            templateKey: "document.expiring",
+            templateVars: {
+              documentType: String(doc.documentType ?? "—"),
+              documentNumber: String(doc.documentNumber ?? doc.id ?? "—"),
+              expiryDate: String(doc.expiryDate ?? "—"),
+            },
+            fallbackTitle: `وثيقتك تنتهي خلال ${daysLeft} يوم`,
+            fallbackBody: `${doc.documentType} — تاريخ الانتهاء: ${doc.expiryDate}. يرجى تجديدها في أقرب وقت.`,
+            assignmentId: empAsgn.id as number,
+            recipientUser: doc.employeeId ? { type: "employee", id: doc.employeeId as number } : undefined,
             priority: daysLeft <= 14 ? "high" : "normal",
-            refType: "employee_document", refId: doc.id ?? doc.employeeId,
+            refType: "employee_document",
+            refId: (doc.id ?? doc.employeeId) as number,
           });
           alerted++;
         }
@@ -1196,6 +1209,33 @@ async function dailyInventoryCheck(): Promise<string> {
           logger.error(e, "[cronScheduler] auto purchase order issue+insert failed");
         }
       }
+
+      // Notify the warehouse / general manager that a product hit its
+      // reorder threshold — fan out via the bilingual `inventory.low_stock`
+      // template (in_app + email/sms/whatsapp per routing rule).
+      const [whMgr] = await rawQuery<Record<string, unknown>>(
+        `SELECT id FROM employee_assignments
+         WHERE "companyId" = $1 AND role IN ('warehouse_manager','general_manager','owner') AND status = 'active'
+         LIMIT 1`,
+        [company.id]
+      );
+      if (whMgr) {
+        await notifyBusinessEvent({
+          companyId: company.id,
+          templateKey: "inventory.low_stock",
+          templateVars: {
+            productName: String(p.name ?? "—"),
+            currentQty: String(p.currentStock ?? "0"),
+          },
+          fallbackTitle: "مخزون منخفض",
+          fallbackBody: `الصنف ${p.name} وصل لحد المخزون الأدنى (${p.currentStock} متبقي)`,
+          assignmentId: whMgr.id as number,
+          priority: "normal",
+          refType: "warehouse_product",
+          refId: p.id as number,
+          actionUrl: `/warehouse/products/${p.id}`,
+        });
+      }
     }
   }
   return `Inventory check: ${pos} purchase orders created`;
@@ -1256,6 +1296,50 @@ async function dailyPropertyCheck(): Promise<string> {
         });
       } catch (e) { logger.error(e, "[cronScheduler] rental renewal notice event failed"); }
       renewalNotices++;
+    }
+
+    // 2b. Rent-due reminders — notify the property manager about rent
+    // installments due within 3 days that are still unpaid, via the
+    // bilingual `property.rent.due` template. Once per (payment, 3-day
+    // window) — keyed on dueDate landing exactly 3/1/0 days out so we
+    // don't spam every run.
+    const dueSoon = await rawQuery<Record<string, unknown>>(
+      `SELECT rp.id, rp."dueDate", rp.amount,
+              (rp."dueDate"::date - CURRENT_DATE) AS "daysLeft",
+              rc."tenantName", rc."unitId",
+              pu.name AS "unitName"
+       FROM rent_payments rp
+       JOIN rental_contracts rc ON rc.id = rp."contractId"
+       LEFT JOIN property_units pu ON pu.id = rc."unitId"
+       WHERE rc."companyId" = $1
+         AND rp.status IN ('pending','partial')
+         AND (rp."dueDate"::date - CURRENT_DATE) IN (3, 1, 0)`,
+      [company.id]
+    );
+    const [propMgr] = await rawQuery<Record<string, unknown>>(
+      `SELECT id FROM employee_assignments
+       WHERE "companyId" = $1 AND role IN ('property_manager','general_manager','owner') AND status = 'active'
+       LIMIT 1`,
+      [company.id]
+    );
+    for (const rp of dueSoon) {
+      await notifyBusinessEvent({
+        companyId: company.id,
+        templateKey: "property.rent.due",
+        templateVars: {
+          unitName: String(rp.unitName ?? rp.tenantName ?? "—"),
+          dueDate: String(rp.dueDate ?? "—"),
+          amount: String(rp.amount ?? "0"),
+        },
+        fallbackTitle: "إيجار مستحق",
+        fallbackBody: `إيجار الوحدة ${rp.unitName ?? "—"} مستحق بتاريخ ${rp.dueDate}`,
+        assignmentId: propMgr?.id as number | undefined,
+        priority: Number(rp.daysLeft) <= 0 ? "high" : "normal",
+        refType: "rent_payment",
+        refId: rp.id as number,
+        actionUrl: `/properties/rent-payments/${rp.id}`,
+      });
+      alerted++;
     }
 
     // 3. Auto-expire contracts whose endDate has passed — mark expired, free the unit, cancel pending rent_payments
