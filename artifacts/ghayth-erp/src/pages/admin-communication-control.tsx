@@ -35,7 +35,7 @@ import { toast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
-  Radio, Inbox, Shield, AlertOctagon, Plus, RefreshCw, FlaskConical, Phone, MessageSquare, Mail,
+  Radio, Inbox, Shield, AlertOctagon, Plus, RefreshCw, FlaskConical, Phone, MessageSquare, Mail, Send,
 } from "lucide-react";
 
 interface ProviderRow {
@@ -259,6 +259,7 @@ export default function AdminCommunicationControl() {
           <TabsList>
             <TabsTrigger value="overview"><Radio className="w-4 h-4 me-1" />نظرة عامة</TabsTrigger>
             <TabsTrigger value="inbox"><Inbox className="w-4 h-4 me-1" />الصندوق الموحّد</TabsTrigger>
+            <TabsTrigger value="outbound"><Send className="w-4 h-4 me-1" />قائمة الإرسال</TabsTrigger>
             <TabsTrigger value="providers"><Radio className="w-4 h-4 me-1" />المزوّدات ({providers.length})</TabsTrigger>
             <TabsTrigger value="dlp"><Shield className="w-4 h-4 me-1" />قواعد DLP ({rules.length})</TabsTrigger>
           </TabsList>
@@ -359,6 +360,11 @@ export default function AdminCommunicationControl() {
                 </PageStateWrapper>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ── Outbound Queue ────────────────────────────────────── */}
+          <TabsContent value="outbound" className="space-y-3">
+            <OutboundQueuePanel />
           </TabsContent>
 
           {/* ── Providers ─────────────────────────────────────────── */}
@@ -725,5 +731,197 @@ function ReadinessPanel() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ─── OutboundQueuePanel ───────────────────────────────────────
+// Operational view of outbound_queue rows. When a channel jams (bad
+// credentials, provider outage, DNS flake) rows pile up at 'failed'
+// with their last errorMessage. This panel surfaces them + offers a
+// one-click bulk retry once the cause is fixed.
+type OutboundRow = {
+  id: number;
+  channel: string;
+  recipient: string;
+  recipientName: string | null;
+  subject: string | null;
+  status: "pending" | "sending" | "sent" | "failed" | "cancelled";
+  attempts: number;
+  maxAttempts: number;
+  errorMessage: string | null;
+  scheduledAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+};
+
+function OutboundQueuePanel() {
+  const [statusFilter, setStatusFilter] = useState<string>("failed");
+  const [channelFilter, setChannelFilter] = useState<string>("all");
+  const [hours, setHours] = useState<number>(24);
+
+  const qs = new URLSearchParams();
+  if (statusFilter !== "all") qs.set("status", statusFilter);
+  if (channelFilter !== "all") qs.set("channel", channelFilter);
+  qs.set("hours", String(hours));
+
+  const { data, isLoading, refetch } = useApiQuery<{
+    data: OutboundRow[];
+    total: number;
+    windowHours: number;
+    totalsByStatus: Record<string, number>;
+  }>(
+    ["comm-outbound-queue", statusFilter, channelFilter, String(hours)],
+    `/admin/communication-control/outbound-queue?${qs.toString()}`,
+  );
+
+  const bulkRetry = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; queueReset: number }>(
+      "/admin/communication-control/outbound-queue/bulk-retry",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          channel: channelFilter === "all" ? undefined : channelFilter,
+          hours,
+        }),
+      },
+    ),
+    onSuccess: (r) => {
+      toast({ title: `أُعيدت ${r.queueReset} رسالة إلى قائمة الإرسال` });
+      void refetch();
+    },
+    onError: (e: Error) => toast({ title: "فشلت إعادة المحاولة الجماعية", description: e.message, variant: "destructive" }),
+  });
+
+  const totals = data?.totalsByStatus ?? {};
+  const rows = data?.data ?? [];
+  const failedCount = totals.failed ?? 0;
+
+  return (
+    <div className="space-y-3">
+      {/* Status pills + counts */}
+      <Card>
+        <CardContent className="p-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+            {[
+              { key: "all",       label: "الإجمالي",  tone: "bg-muted" },
+              { key: "pending",   label: "في الانتظار", tone: "bg-status-info-surface text-status-info-foreground" },
+              { key: "sent",      label: "أُرسلت",     tone: "bg-status-success-surface text-status-success-foreground" },
+              { key: "failed",    label: "فاشلة",      tone: "bg-status-error-surface text-status-error-foreground" },
+              { key: "cancelled", label: "أُلغيت",     tone: "bg-muted" },
+            ].map((s) => {
+              const count = s.key === "all"
+                ? Object.values(totals).reduce((a, b) => a + b, 0)
+                : (totals[s.key] ?? 0);
+              return (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setStatusFilter(s.key)}
+                  className={cn(
+                    "rounded-lg p-2 text-start transition border",
+                    statusFilter === s.key ? "ring-2 ring-status-info-surface" : "",
+                    s.tone,
+                  )}
+                  data-testid={`status-filter-${s.key}`}
+                >
+                  <p className="text-[10px] opacity-80">{s.label}</p>
+                  <p className="text-lg font-bold">{count}</p>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Filters + bulk action */}
+      <Card>
+        <CardContent className="p-3 flex flex-wrap items-end gap-2">
+          <div>
+            <Label className="text-xs">القناة</Label>
+            <Select value={channelFilter} onValueChange={setChannelFilter}>
+              <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="email">email</SelectItem>
+                <SelectItem value="sms">sms</SelectItem>
+                <SelectItem value="whatsapp">whatsapp</SelectItem>
+                <SelectItem value="push">push</SelectItem>
+                <SelectItem value="pbx">pbx</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">النافذة الزمنية (ساعة)</Label>
+            <Select value={String(hours)} onValueChange={(v) => setHours(Number(v))}>
+              <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">آخر ساعة</SelectItem>
+                <SelectItem value="6">آخر 6 ساعات</SelectItem>
+                <SelectItem value="24">آخر 24 ساعة</SelectItem>
+                <SelectItem value="72">آخر 3 أيام</SelectItem>
+                <SelectItem value="168">آخر أسبوع</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => void refetch()} disabled={isLoading}>
+            <RefreshCw className={cn("w-3 h-3 me-1", isLoading && "animate-spin")} />تحديث
+          </Button>
+          <div className="ms-auto" />
+          {failedCount > 0 && (
+            <Button
+              size="sm"
+              onClick={() => bulkRetry.mutate()}
+              disabled={bulkRetry.isPending}
+              data-testid="bulk-retry-failed"
+            >
+              <RefreshCw className={cn("w-3 h-3 me-1", bulkRetry.isPending && "animate-spin")} />
+              إعادة محاولة الفاشلة ({failedCount})
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Rows */}
+      <Card>
+        <CardContent className="p-0">
+          {rows.length === 0 ? (
+            <p className="text-xs text-center text-muted-foreground p-8">لا توجد رسائل بهذه المعايير</p>
+          ) : (
+            <div className="divide-y">
+              {rows.map((r) => (
+                <div key={r.id} className="p-3 text-xs">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="outline" className="text-[10px]">{r.channel}</Badge>
+                    <Badge
+                      className={cn("text-[10px]", {
+                        "bg-status-info-surface text-status-info-foreground": r.status === "pending" || r.status === "sending",
+                        "bg-status-success-surface text-status-success-foreground": r.status === "sent",
+                        "bg-status-error-surface text-status-error-foreground": r.status === "failed",
+                        "bg-muted text-muted-foreground": r.status === "cancelled",
+                      })}
+                    >
+                      {r.status}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">
+                      محاولة {r.attempts}/{r.maxAttempts}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground ms-auto">
+                      {formatDateAr(r.createdAt)}
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs" dir="ltr">{r.recipient}</div>
+                  {r.subject && <div className="text-xs font-medium mt-0.5">{r.subject}</div>}
+                  {r.errorMessage && (
+                    <div className="mt-1 text-[11px] text-status-error-foreground bg-status-error-surface/40 rounded p-1.5 font-mono" dir="ltr">
+                      {r.errorMessage}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
