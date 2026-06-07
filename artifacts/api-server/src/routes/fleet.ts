@@ -27,6 +27,17 @@ import { fleetEngine, hrEngine } from "../lib/engines/index.js";
 import { z } from "zod";
 
 // ─── Zod schemas for POST route body validation ─────────────────────────────
+
+// #1733 Phase 2 — KSA-aligned license-class enum used by the
+// eligibility helper (lib/fleet/driverEligibility.ts). The driver row
+// carries `licenseClass`; the vehicle row carries `requiredLicenseClass`;
+// the helper enforces hierarchy + override rules at cargo/umrah
+// assignment time.
+const LICENSE_CLASS_VALUES = [
+  "private", "light_trans", "medium", "heavy",
+  "public_trans", "motorcycle", "equipment",
+] as const;
+
 const createVehicleSchema = z.object({
   plateNumber: z.string().min(1),
   make: z.string().min(1),
@@ -51,6 +62,10 @@ const createVehicleSchema = z.object({
   // stripped the fields and both were dead.
   purchasePrice: z.coerce.number().optional(),
   purchaseDate: z.string().optional(),
+  // #1733 Phase 2 — eligibility guard reads this column on cargo /
+  // umrah assignment to refuse drivers who don't hold (or cover) the
+  // required class.
+  requiredLicenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
 });
 
 const createDriverSchema = z.object({
@@ -59,6 +74,7 @@ const createDriverSchema = z.object({
   licenseNumber: z.string().min(1),
   licenseExpiry: z.string().optional(),
   licenseType: z.string().optional(),
+  licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
   employeeId: z.coerce.number().optional(),
   status: z.string().optional(),
 });
@@ -123,6 +139,9 @@ const updateVehicleSchema = z.object({
   plateType: z.string().optional(),
   sequenceNumber: z.string().optional(),
   vinNumber: z.string().optional(),
+  // #1733 Phase 2 — PATCHable so operators can set / change the
+  // required class without re-creating the vehicle row.
+  requiredLicenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
 });
 
 const updateDriverSchema = z.object({
@@ -132,6 +151,7 @@ const updateDriverSchema = z.object({
   licenseExpiry: z.string().optional(),
   status: z.string().optional(),
   licenseType: z.string().optional(),
+  licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
 });
 
 const createTripSchema = z.object({
@@ -428,8 +448,8 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
-      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null]
+      `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate","requiredLicenseClass") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null, b.requiredLicenseClass || null]
     );
     assertInsert(insertId, "fleet_vehicles");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -817,8 +837,8 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.employeeId || null, b.status || 'available']
+      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","licenseClass","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.licenseClass || null, b.employeeId || null, b.status || 'available']
     );
     assertInsert(insertId, "fleet_drivers");
 
@@ -972,7 +992,7 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
 
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: unknown[] = [];
-    const trackedFields = ["plateNumber","make","model","year","color","status","fuelType","notes","assignedDriverId","registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","vinNumber"] as const;
+    const trackedFields = ["plateNumber","make","model","year","color","status","fuelType","notes","assignedDriverId","registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","vinNumber","requiredLicenseClass"] as const;
     const colMap: Record<string, string> = {
       plateNumber: '"plateNumber"',
       make: "make",
@@ -990,6 +1010,8 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
       plateType: '"plateType"',
       sequenceNumber: '"sequenceNumber"',
       vinNumber: '"vinNumber"',
+      // #1733 Phase 2.
+      requiredLicenseClass: '"requiredLicenseClass"',
     };
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
@@ -1159,7 +1181,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       }
     }
 
-    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType"] as const;
+    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType","licenseClass"] as const;
     const colMap: Record<string, string> = {
       name: "name",
       phone: "phone",
@@ -1167,6 +1189,8 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       licenseExpiry: '"licenseExpiry"',
       status: "status",
       licenseType: '"licenseType"',
+      // #1733 Phase 2 — KSA driving-licence stack used by the eligibility guard.
+      licenseClass: '"licenseClass"',
     };
     const sets: string[] = [];
     const params: unknown[] = [];
