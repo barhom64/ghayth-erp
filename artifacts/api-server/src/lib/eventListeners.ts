@@ -1,11 +1,20 @@
 import { eventBus, registerCrossDomainHandler, type EventPayload } from "./eventBus.js";
 import { pool, rawQuery, rawExecute } from "./rawdb.js";
 import { logger } from "./logger.js";
-import { createNotification, getManagerAssignmentId, createGuardedJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear, currentMonthPadded } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, createGuardedJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear, currentMonthPadded, createAuditLog } from "./businessHelpers.js";
 import { computeDiff } from "./auditDiff.js";
+import {
+  INBOX_RULES,
+  SLA_HOURS_BY_PRIORITY,
+  classifyInboxMessage,
+  liftPriorityForClassification,
+  type Priority,
+} from "./inboxClassifier.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
 import { registerObligation, markObligationMet } from "./obligationsEngine.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
+import { sendMessage } from "./messageSender.js";
+import { pickBestMatch, composeAutoReplyBody } from "./inboxAutoReply.js";
 
 async function logEvent(event: string, payload: EventPayload) {
   try {
@@ -1504,58 +1513,230 @@ export function registerEventListeners() {
     }
   });
 
-  // N10 fix: inbox auto-classifier. Rule-based, deliberately simple:
-  // matches Arabic + English keywords in the subject and decides whether
-  // the message warrants an open `tasks` row so a human picks it up.
-  // For NLP-quality classification we'd plug in a model later; for now
-  // these rules close the gap where messages just sat in /communications/
-  // inbox with no signal to anyone.
+  // Inbox auto-classifier v2 — closes the gap where v1 read only the
+  // subject and ignored body, sender identity, and entity linkage.
   //
-  // Match the LONGER keywords first — "complaint" is a strict subset of
-  // "complaint received" but we want the more specific category to win.
+  // v2 changes:
+  //   1. Reads the full body from message_log (not the slim event
+  //      payload) so a "شكوى" buried in the body still matches.
+  //   2. Resolves the sender against clients/employees, links the
+  //      generated task with linkedEntityType=clients|employees|message_log.
+  //   3. VIP clients lift the matched priority one notch
+  //      (normal→high, high→urgent).
+  //   4. Sets a dueAt based on priority so the SLA worker
+  //      (workflowEngine.checkSlaStatus) has a deadline to enforce.
+  //   5. Skips silently when a duplicate task already exists for this
+  //      message id, so a retry-replay doesn't create twins.
   eventBus.on("inbox.message.received", async (payload) => {
     await logEvent("inbox.message.received", payload);
     if (!payload.companyId || !payload.entityId) return;
 
-    const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
-    const subject = String(details.subject ?? "").toLowerCase();
-    const fromAddress = String(details.fromAddress ?? "");
-    if (!subject.trim()) return;
+    // Hydrate the message row — the event payload was deliberately
+    // light, but classification quality wants the full body.
+    const [msg] = await rawQuery<{
+      subject: string | null; body: string | null;
+      fromAddress: string | null; channel: string;
+    }>(
+      `SELECT subject, body, "fromAddress", channel FROM message_log
+        WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+      [payload.entityId as number, payload.companyId],
+    ).catch(() => []);
+    if (!msg) return;
 
-    // Rule table — keyword → (taskType, priority, title prefix). Arabic
-    // matching is case-insensitive at the regex level even though
-    // toLowerCase is a no-op for Arabic characters.
-    const RULES: Array<{ patterns: RegExp[]; type: string; priority: string; titlePrefix: string }> = [
-      { patterns: [/شكوى/i, /complaint/i],            type: "complaint",  priority: "high",   titlePrefix: "شكوى من" },
-      { patterns: [/عاجل/i, /urgent/i, /asap/i],      type: "urgent",     priority: "urgent", titlePrefix: "عاجل من" },
-      { patterns: [/فاتورة/i, /invoice/i, /payment/i, /دفع/i], type: "billing",    priority: "normal", titlePrefix: "استفسار فاتورة" },
-      { patterns: [/طلب/i, /request/i, /apply/i],     type: "request",    priority: "normal", titlePrefix: "طلب من" },
-      { patterns: [/استفسار/i, /inquiry/i, /question/i], type: "inquiry", priority: "low",    titlePrefix: "استفسار من" },
-    ];
+    // Match against subject + first 600 chars of body. We cap the body
+    // window to keep regex cost predictable on large emails.
+    const haystack = `${msg.subject ?? ""}\n${(msg.body ?? "").slice(0, 600)}`.toLowerCase();
+    if (!haystack.trim()) return;
 
-    let matched: { type: string; priority: string; titlePrefix: string } | null = null;
-    for (const rule of RULES) {
-      if (rule.patterns.some(p => p.test(subject))) {
-        matched = rule;
-        break;
+    const fromAddress = msg.fromAddress ?? "";
+
+    const matched = classifyInboxMessage(haystack);
+    if (!matched) return;
+
+    // Idempotency: skip if we already opened a task for this message.
+    const [existing] = await rawQuery<{ id: number }>(
+      `SELECT id FROM tasks
+        WHERE "companyId" = $1 AND "linkedEntityType" = 'message_log' AND "linkedEntityId" = $2
+        LIMIT 1`,
+      [payload.companyId, payload.entityId as number],
+    ).catch(() => []);
+    if (existing) return;
+
+    // Sender resolution — last 9 digits of phone match clients; email
+    // matches clients then employees. The linked task gets the entity
+    // ref so /tasks shows it under the customer/staff record directly.
+    let linkedEntityType: "clients" | "employees" | "message_log" = "message_log";
+    let linkedEntityId: number = payload.entityId as number;
+    let senderName: string = fromAddress || "—";
+    let senderClassification: string | null = null;
+
+    if (fromAddress) {
+      // Phone match first (sms/whatsapp/pbx). digits-only fast path.
+      const digits = fromAddress.replace(/\D/g, "");
+      if (digits.length >= 9) {
+        const last9 = digits.slice(-9);
+        const [client] = await rawQuery<{ id: number; name: string; classification: string | null }>(
+          `SELECT id, name, classification FROM clients
+            WHERE "companyId" = $1
+              AND REPLACE(REPLACE(COALESCE(phone,''),'+',''),'-','') LIKE $2
+              AND "deletedAt" IS NULL LIMIT 1`,
+          [payload.companyId, `%${last9}`],
+        ).catch(() => []);
+        if (client) {
+          linkedEntityType = "clients"; linkedEntityId = client.id;
+          senderName = client.name; senderClassification = client.classification;
+        }
+      }
+      // Email match if phone match missed.
+      if (linkedEntityType === "message_log" && fromAddress.includes("@")) {
+        const [client] = await rawQuery<{ id: number; name: string; classification: string | null }>(
+          `SELECT id, name, classification FROM clients
+            WHERE "companyId" = $1 AND LOWER(COALESCE(email,'')) = LOWER($2)
+              AND "deletedAt" IS NULL LIMIT 1`,
+          [payload.companyId, fromAddress],
+        ).catch(() => []);
+        if (client) {
+          linkedEntityType = "clients"; linkedEntityId = client.id;
+          senderName = client.name; senderClassification = client.classification;
+        } else {
+          const [emp] = await rawQuery<{ id: number; name: string }>(
+            `SELECT id, name FROM employees
+              WHERE "companyId" = $1 AND (LOWER(COALESCE(email,'')) = LOWER($2)
+                                          OR LOWER(COALESCE("personalEmail",'')) = LOWER($2)
+                                          OR LOWER(COALESCE("internalEmail",'')) = LOWER($2))
+                AND "deletedAt" IS NULL LIMIT 1`,
+            [payload.companyId, fromAddress],
+          ).catch(() => []);
+          if (emp) { linkedEntityType = "employees"; linkedEntityId = emp.id; senderName = emp.name; }
+        }
       }
     }
-    if (!matched) return;
+
+    const priority: Priority = liftPriorityForClassification(matched.priority, senderClassification);
+    const slaHours = SLA_HOURS_BY_PRIORITY[priority];
+    const dueAt = new Date(Date.now() + slaHours * 3600 * 1000);
 
     try {
       await rawExecute(
-        `INSERT INTO tasks ("companyId", title, description, type, status, priority, "linkedEntityType", "linkedEntityId", "createdAt")
-         VALUES ($1, $2, $3, $4, 'pending', $5, 'message_log', $6, NOW())`,
+        `INSERT INTO tasks ("companyId", title, description, type, status, priority,
+                            "linkedEntityType", "linkedEntityId", "slaDeadline", "slaHours", "createdAt")
+         VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, NOW())`,
         [
           payload.companyId,
-          `${matched.titlePrefix} ${fromAddress || "—"}: ${String(details.subject ?? "").slice(0, 120)}`,
-          `رسالة واردة من ${fromAddress}\nالموضوع: ${details.subject}\n\nتم تصنيفها تلقائياً كـ ${matched.type}.`,
+          `${matched.titlePrefix} ${senderName}: ${(msg.subject ?? "").slice(0, 120)}`,
+          `رسالة واردة من ${fromAddress || "—"}\nالموضوع: ${msg.subject ?? "—"}\nالقناة: ${msg.channel}\n\nتم تصنيفها تلقائياً كـ ${matched.type}${senderClassification ? ` · العميل ${senderClassification}` : ""}.\nموعد الاستجابة: ${dueAt.toISOString()}\nرسالة #${payload.entityId}`,
           matched.type,
-          matched.priority,
-          payload.entityId,
-        ]
+          priority,
+          linkedEntityType,
+          linkedEntityId,
+          dueAt,
+          slaHours,
+        ],
       );
     } catch (e) { logger.error(e, "[EventListener] inbox auto-classifier task insert failed"); }
+  });
+
+  // PR-D — FAQ auto-reply. Independent listener that runs after the
+  // classifier above. If the inbound message's content matches a
+  // published kb_articles entry with high confidence (score >= 8),
+  // we send an auto-reply with the article so the customer gets an
+  // immediate answer instead of waiting for a human pick-up.
+  //
+  // Guards:
+  //   - skips when there's no clear FAQ match (silent confusion is
+  //     worse than no reply at all).
+  //   - only auto-replies on customer-facing channels (email/whatsapp
+  //     /sms) where the sender address is replyable; pbx/internal/in_app
+  //     are skipped.
+  //   - idempotent: tags the message_log row with relatedType='kb_auto_reply'
+  //     after sending so a replay doesn't double-reply.
+  eventBus.on("inbox.message.received", async (payload) => {
+    if (!payload.companyId || !payload.entityId) return;
+    try {
+      // Hydrate the inbound message.
+      const [msg] = await rawQuery<{
+        id: number; channel: string; subject: string | null;
+        body: string | null; fromAddress: string | null;
+        relatedType: string | null;
+      }>(
+        `SELECT id, channel, subject, body, "fromAddress", "relatedType"
+           FROM message_log WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [payload.entityId as number, payload.companyId],
+      );
+      if (!msg) return;
+      if (!msg.fromAddress) return;
+      if (msg.channel !== "email" && msg.channel !== "whatsapp" && msg.channel !== "sms") return;
+
+      // Idempotency check — relatedType is set by us after a successful auto-reply.
+      if (msg.relatedType === "kb_auto_reply") return;
+
+      // Look for an existing auto-reply log row for this message (covers
+      // a crash between sending and the relatedType update).
+      const [prior] = await rawQuery<{ id: number }>(
+        `SELECT id FROM message_log
+          WHERE "companyId" = $1
+            AND "relatedType" = 'kb_auto_reply'
+            AND "relatedId" = $2
+            AND direction = 'outbound'
+          LIMIT 1`,
+        [payload.companyId, msg.id],
+      ).catch(() => []);
+      if (prior) return;
+
+      type KbRow = { id: number; title: string; content: string | null; category: string | null; tags: string[] | null };
+      const articles: KbRow[] = await rawQuery<KbRow>(
+        `SELECT id, title, content, category, tags
+           FROM kb_articles
+          WHERE ("companyId" = $1 OR "companyId" IS NULL)
+            AND status = 'published'
+            AND "deletedAt" IS NULL`,
+        [payload.companyId],
+      ).catch(() => [] as KbRow[]);
+      if (articles.length === 0) return;
+
+      const haystack = `${msg.subject ?? ""}\n${msg.body ?? ""}`;
+      const match = pickBestMatch(articles, haystack);
+      if (!match) return;
+
+      const article = articles.find((a) => a.id === match.articleId);
+      if (!article) return;
+
+      const replyBody = composeAutoReplyBody(article, msg.channel);
+      const replySubject = msg.channel === "email" ? `Re: ${msg.subject ?? article.title}` : null;
+
+      await sendMessage({
+        channel: msg.channel,
+        recipient: msg.fromAddress,
+        subject: replySubject,
+        body: replyBody,
+        companyId: payload.companyId,
+        userId: null,
+        relatedType: "kb_auto_reply",
+        relatedId: msg.id,
+        templateKey: `kb.article.${article.id}`,
+        eventAction: "communications.faq.auto_replied",
+      }).catch((e) => logger.warn(e, "[EventListener] FAQ auto-reply send failed"));
+
+      // Mark the inbound message so a replay doesn't fire again.
+      await rawExecute(
+        `UPDATE message_log
+            SET "relatedType" = 'kb_auto_reply', "relatedId" = $1
+          WHERE id = $2 AND "companyId" = $3 AND "relatedType" IS NULL`,
+        [article.id, msg.id, payload.companyId],
+      ).catch((e) => logger.warn(e, "[EventListener] FAQ auto-reply tag update failed"));
+
+      // Visible audit so an operator can review every FAQ auto-reply.
+      void createAuditLog({
+        companyId: payload.companyId,
+        userId: 0,
+        action: "create",
+        entity: "kb_auto_reply",
+        entityId: msg.id,
+        after: { articleId: article.id, articleTitle: article.title, score: match.score, matchedTerms: match.matchedTerms },
+      }).catch((e) => logger.warn(e, "[audit] kb.auto_reply"));
+    } catch (e) {
+      logger.error(e, "[EventListener] FAQ auto-reply failed");
+    }
   });
 
   // M9 recovery: umrah AGENT invoice (commission billing) — checks for

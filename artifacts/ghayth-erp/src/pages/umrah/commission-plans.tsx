@@ -17,7 +17,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { PrintButton } from "@/components/shared/print-button";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency, formatDateAr, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
+import { formatCurrency, formatUmrahDate, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import { Plus, Eye, Pencil, CheckCircle2, Briefcase, Calculator } from "lucide-react";
 
 type PlanStatus = "active" | "suspended" | "expired" | "pending";
@@ -157,7 +157,7 @@ export default function UmrahCommissionPlans() {
     {
       key: "approvedAt",
       header: "تاريخ الاعتماد",
-      render: (p) => p.approvedAt ? formatDateAr(p.approvedAt) : "—",
+      render: (p) => p.approvedAt ? formatUmrahDate(p.approvedAt) : "—",
     },
     {
       key: "__actions",
@@ -217,7 +217,7 @@ export default function UmrahCommissionPlans() {
                 "الراتب الأساسي": Number(p.baseSalary || 0),
                 "نوع العمولة": (TYPE_LABEL as any)[p.commissionType] ?? p.commissionType ?? "—",
                 "عدد الشرائح": p.tierCount ?? "—",
-                "تاريخ الاعتماد": p.approvedAt ? formatDateAr(p.approvedAt) : "—",
+                "تاريخ الاعتماد": p.approvedAt ? formatUmrahDate(p.approvedAt) : "—",
                 "الحالة": (STATUS_LABEL as any)[p.status]?.label ?? p.status ?? "—",
               })),
             })}

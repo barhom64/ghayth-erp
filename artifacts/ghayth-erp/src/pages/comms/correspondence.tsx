@@ -25,6 +25,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import {
   Plus,
   MoreHorizontal,
@@ -93,6 +95,7 @@ export default function CorrespondencePage() {
     "/correspondence",
   );
   const items = corrResp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const { data: stats } = useApiQuery<CorrespondenceStats>(
     ["correspondence-stats"],
@@ -196,9 +199,36 @@ export default function CorrespondencePage() {
       title="المراسلات"
       subtitle="إدارة المراسلات الصادرة والواردة"
       actions={
-        <Link href="/correspondence/create">
-          <GuardedButton perm="communications:create" className="gap-1.5"><Plus className="h-4 w-4" /> مراسلة جديدة</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_correspondence"
+            entityId="list"
+            size="icon"
+            label="طباعة سجل المراسلات"
+            payload={() => ({
+              entity: {
+                title: "سجل المراسلات",
+                total: printRows.length,
+                totalOutgoing: stats?.totalOutgoing ?? 0,
+                totalIncoming: stats?.totalIncoming ?? 0,
+                totalDraft: stats?.totalDraft ?? 0,
+                totalSent: stats?.totalSent ?? 0,
+              },
+              items: printRows.map((r: any) => ({
+                "المرجع": r.ref || "—",
+                "الاتجاه": r.direction === "outgoing" ? "صادر" : "وارد",
+                "الموضوع": r.subject || "—",
+                "المرسل": r.senderName || r.senderOrg || "—",
+                "المستلم": r.recipientName || r.recipientOrg || "—",
+                "الحالة": r.status === "draft" ? "مسودة" : "مرسل",
+                "التاريخ": r.createdAt ? formatDateAr(r.createdAt) : "—",
+              })),
+            })}
+          />
+          <Link href="/correspondence/create">
+            <GuardedButton perm="communications:create" className="gap-1.5"><Plus className="h-4 w-4" /> مراسلة جديدة</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
@@ -220,6 +250,7 @@ export default function CorrespondencePage() {
       <DataTable
         columns={columns}
         data={items}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         isError={isError}
         onRetry={() => refetch()}

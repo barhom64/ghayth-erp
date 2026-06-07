@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { actionLabelAr, scopeLabelAr } from "@/lib/permission-labels";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -280,8 +281,8 @@ export default function UserOnboarding() {
                   {(eff.permissions || []).map((p: any, i: number) => (
                     <TableRow key={i}>
                       <TableCell className="font-mono text-xs">{p.feature}</TableCell>
-                      <TableCell>{(p.actions || []).map((a: string) => <Badge key={a} variant="outline" className="ml-1">{a}</Badge>)}</TableCell>
-                      <TableCell><Badge variant="secondary">{p.scope}</Badge></TableCell>
+                      <TableCell>{(p.actions || []).map((a: string) => <Badge key={a} variant="outline" className="ml-1">{actionLabelAr(a)}</Badge>)}</TableCell>
+                      <TableCell><Badge variant="secondary">{scopeLabelAr(p.scope)}</Badge></TableCell>
                       <TableCell>{p.source?.roleLabel || p.source?.roleKey}{p.source?.isPrimary ? " ★" : ""}</TableCell>
                     </TableRow>
                   ))}
@@ -295,7 +296,7 @@ export default function UserOnboarding() {
                   <span className="font-semibold">استثناءات على مستوى المستخدم: </span>
                   {eff.overrides.map((o: any, i: number) => (
                     <Badge key={i} variant={o.type === "revoke" ? "destructive" : "default"} className="ml-1">
-                      {o.type === "revoke" ? "منع" : "منح"} {o.feature}{o.action ? `:${o.action}` : ""}
+                      {o.type === "revoke" ? "منع" : "منح"} {o.feature}{o.action ? ` — ${actionLabelAr(o.action)}` : ""}
                     </Badge>
                   ))}
                 </div>
@@ -321,7 +322,7 @@ export default function UserOnboarding() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {["view", "list", "create", "update", "delete", "approve", "reject", "export", "print"].map((a) => (
-                    <SelectItem key={a} value={a}>{a}</SelectItem>
+                    <SelectItem key={a} value={a}>{actionLabelAr(a)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

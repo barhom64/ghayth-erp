@@ -12,6 +12,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntitySubsidiaryAccounts } from "@/components/shared/entity-subsidiary-accounts";
 import { Button } from "@/components/ui/button";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -329,6 +330,19 @@ export default function UmrahAgentDetail() {
           balance number. The fetch is gated on `!!id` so we don't
           probe `/umrah/agents/0/invoices`. */}
       {id && <AgentRecentInvoicesCard agentId={id} />}
+
+      {id && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-status-info-foreground" /> الحسابات الفرعية للوكيل
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EntitySubsidiaryAccounts entityType="umrah_agent" entityId={id} />
+          </CardContent>
+        </Card>
+      )}
 
       {id && <EntityComments entityType="umrah-agent" entityId={id} />}
       {id && <EntityTags entityType="umrah-agent" entityId={id} />}

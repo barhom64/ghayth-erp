@@ -900,10 +900,16 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
   const [dlpInfo, setDlpInfo] = useState<SendResult | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [draftId, setDraftId] = useState<number | null>(editingDraft?.id ?? null);
+  // Scheduled-send: when set, the body is queued with scheduledAt in
+  // the future and the cron worker leaves it alone until then. Empty
+  // string = send immediately (the default).
+  const [scheduledAt, setScheduledAt] = useState<string>(
+    editingDraft?.scheduledAt ? editingDraft.scheduledAt.slice(0, 16) : "",
+  );
 
   const reset = () => {
     setRecipient(""); setRecipientName(""); setSubject(""); setBody("");
-    setDlpInfo(null); setDraftId(null);
+    setDlpInfo(null); setDraftId(null); setScheduledAt("");
   };
 
   // Hydrate from props whenever the dialog opens.
@@ -971,6 +977,10 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
           subject: channel === "email" ? subject : undefined, body,
           relatedType: initialRelated?.type,
           relatedId: initialRelated?.id,
+          // Convert datetime-local (no zone) → ISO with the browser's TZ
+          // so the backend knows when 'now' is for this user. Empty
+          // string → omit (immediate send).
+          scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
         }),
       });
     },
@@ -1147,6 +1157,24 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
             </div>
           )}
         </div>
+        <div className="border-t pt-3 flex items-end gap-2">
+          <div className="flex-1">
+            <Label className="text-xs">جدولة الإرسال (اختياري)</Label>
+            <Input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+              className="h-8 text-xs"
+              data-testid="compose-scheduled-at"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {scheduledAt
+                ? `سيتم الإرسال في ${formatDateAr(new Date(scheduledAt).toISOString())}`
+                : "اتركه فارغاً للإرسال الفوري"}
+            </p>
+          </div>
+        </div>
         <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button
@@ -1162,7 +1190,8 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
             disabled={send.isPending || !recipient || !body || (channel === "email" && !subject)}
             onClick={() => send.mutate()}
           >
-            <Send className="w-4 h-4 me-1" />{send.isPending ? "جارٍ الإرسال..." : "أرسل"}
+            <Send className="w-4 h-4 me-1" />
+            {send.isPending ? "جارٍ الإرسال..." : (scheduledAt ? "جدولة الإرسال" : "أرسل")}
           </Button>
         </DialogFooter>
       </DialogContent>
