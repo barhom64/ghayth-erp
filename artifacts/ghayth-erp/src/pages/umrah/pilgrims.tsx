@@ -23,19 +23,15 @@ import { useToast } from "@/hooks/use-toast";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 
+import { UMRAH_PILGRIM_STATUS_OPTIONS } from "@/lib/umrah-pilgrim-status";
+
 // PILGRIM_STATUSES is mirrored from the backend enum in routes/umrah.ts;
 // the bulk-status dropdown should match the same option set so an
-// operator picking a state can never send something the backend
-// rejects.
-const PILGRIM_STATUS_OPTIONS = [
-  { value: "pending", label: "لم يصل" },
-  { value: "arrived", label: "وصل" },
-  { value: "active", label: "نشط" },
-  { value: "overstayed", label: "متأخر" },
-  { value: "departed", label: "غادر" },
-  { value: "violated", label: "مخالف" },
-  { value: "cancelled", label: "ملغي" },
-];
+// operator picking a state can never send something the backend rejects.
+// Labels live in `@/lib/umrah-pilgrim-status` so this dropdown, the
+// AdvancedFilters strip below, and `pilgrim-detail.tsx`'s header badge
+// all read the SAME wording — no divergence between cells.
+const PILGRIM_STATUS_OPTIONS = UMRAH_PILGRIM_STATUS_OPTIONS;
 
 export default function UmrahPilgrims() {
   const { toast } = useToast();
@@ -401,15 +397,7 @@ export default function UmrahPilgrims() {
           // Placeholder enumerates everything the search box hits so the
           // operator stops asking "can I search by NUSK?" — answer is yes.
           searchPlaceholder: "بحث بالاسم / الجواز / التأشيرة / رقم نسك...",
-          statuses: [
-            { value: "pending", label: "لم يصل" },
-            { value: "arrived", label: "وصل" },
-            { value: "active", label: "نشط" },
-            { value: "overstayed", label: "متأخر" },
-            { value: "departed", label: "غادر" },
-            { value: "violated", label: "مخالف" },
-            { value: "cancelled", label: "ملغي" },
-          ],
+          statuses: [...PILGRIM_STATUS_OPTIONS],
           extraFilters: [
             {
               key: "seasonId",
