@@ -19,11 +19,14 @@ interface DriverMe {
   status: string; rating: number | null; totalTrips: number | null;
 }
 
+// #1733 — Driver UI is finance-blacked-out. The backend `/api/fleet/me/trips`
+// endpoint may return `cost`, but the driver type intentionally OMITS it
+// so a future render-by-accident can't leak pricing to the cab screen.
 interface DriverTrip {
   id: number; status: string; tripDate: string | null;
   startTime: string | null; endTime: string | null;
   fromLocation: string | null; toLocation: string | null;
-  distance: number | null; cost: number | null;
+  distance: number | null;
   notes: string | null; vehiclePlate: string | null;
 }
 
