@@ -266,6 +266,7 @@ export default function AdminCommunicationControl() {
           {/* ── Overview ──────────────────────────────────────────── */}
           <TabsContent value="overview" className="space-y-4">
             <ReadinessPanel />
+            <ValidationFunnelPanel />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {Object.entries(inboundByChannel).map(([ch, v]) => {
                 const Icon = CHANNEL_ICON[ch] ?? Radio;
@@ -723,6 +724,96 @@ function ReadinessPanel() {
             );
           })}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── ValidationFunnelPanel ──────────────────────────────────────
+// "Is the system actually receiving → triaging → tasking?" Renders the
+// 24h funnel from GET /admin/communication-control/validation. The
+// unmatched-senders list is the actionable bit: each row is a real
+// address the classifier couldn't link, so the admin creates the
+// client/employee and future messages route automatically.
+type ValidationData = {
+  windowHours: number;
+  inbound: { total: number; byChannel: Array<{ channel: string; count: number }> };
+  triage: {
+    matched: number; unmatched: number; matchedPct: number;
+    unmatchedSenders: Array<{ fromAddress: string; count: number }>;
+  };
+  tasks: { opened: number; resolved: number; breached: number; resolvedPct: number };
+};
+
+function ValidationFunnelPanel() {
+  const { data, isLoading } = useApiQuery<{ data: ValidationData }>(
+    ["comm-control-validation"],
+    "/admin/communication-control/validation",
+  );
+  if (isLoading || !data?.data) return null;
+  const v = data.data;
+  const channelLabel: Record<string, string> = {
+    email: "بريد", sms: "SMS", whatsapp: "واتساب", pbx: "مكالمات", internal: "داخلي", in_app: "داخل النظام",
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center justify-between">
+          <span>قمع التحقق التشغيلي (آخر {v.windowHours} ساعة)</span>
+          <span className="text-xs text-muted-foreground font-normal">يستقبل → يفرز → يُنشئ مهام</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Funnel stages */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-lg p-3 bg-status-info-surface text-status-info-foreground">
+            <p className="text-2xl font-bold">{v.inbound.total}</p>
+            <p className="text-xs">رسائل واردة</p>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {v.inbound.byChannel.map((c) => (
+                <span key={c.channel} className="text-[10px] bg-white/40 rounded px-1.5 py-0.5">
+                  {channelLabel[c.channel] ?? c.channel}: {c.count}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg p-3 bg-status-warning-surface text-status-warning-foreground">
+            <p className="text-2xl font-bold">{v.triage.matchedPct}%</p>
+            <p className="text-xs">مطابَقة لكيان ({v.triage.matched}/{v.inbound.total})</p>
+            <p className="text-[11px] mt-2 opacity-90">{v.triage.unmatched} غير مطابَقة</p>
+          </div>
+          <div className="rounded-lg p-3 bg-status-success-surface text-status-success-foreground">
+            <p className="text-2xl font-bold">{v.tasks.opened}</p>
+            <p className="text-xs">مهام أُنشئت · {v.tasks.resolved} محلولة ({v.tasks.resolvedPct}%)</p>
+            {v.tasks.breached > 0 && (
+              <p className="text-[11px] mt-2 text-status-error-foreground font-semibold">
+                ⚠️ {v.tasks.breached} تجاوزت SLA
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Actionable: unmatched senders to link manually */}
+        {v.triage.unmatchedSenders.length > 0 && (
+          <div className="border-t pt-3">
+            <p className="text-xs font-medium mb-2">
+              مرسِلون بلا ربط — أنشئ لهم عميلاً/مورداً ليُوجَّهوا تلقائياً لاحقاً
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {v.triage.unmatchedSenders.map((s) => (
+                <span
+                  key={s.fromAddress}
+                  className="text-[11px] font-mono bg-muted rounded px-2 py-1"
+                  dir="ltr"
+                  title={`${s.count} رسالة`}
+                >
+                  {s.fromAddress} <span className="text-muted-foreground">×{s.count}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
