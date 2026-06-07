@@ -73,6 +73,20 @@ export default function DriverPortalMyTrips() {
 
   useEffect(() => { if (driver) load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [driver, filter]);
 
+  const [acting, setActing] = useState<number | null>(null);
+  const act = async (tripId: number, action: "start" | "complete") => {
+    setActing(tripId);
+    setError(null);
+    try {
+      await driverFetch(`/driver-portal/me/trips/${tripId}/${action}`, { method: "POST" });
+      await load();
+    } catch (err: any) {
+      setError(err?.message || "تعذّر تنفيذ الإجراء");
+    } finally {
+      setActing(null);
+    }
+  };
+
   const logout = () => {
     clearDriverSession();
     navigate("/driver-portal/login");
@@ -178,6 +192,27 @@ export default function DriverPortalMyTrips() {
                 </div>
                 {t.notes && (
                   <p className="text-xs text-muted-foreground mt-2 border-t pt-2">{t.notes}</p>
+                )}
+                {(t.status === "scheduled" || t.status === "planned") && (
+                  <Button
+                    className="w-full mt-3"
+                    size="sm"
+                    disabled={acting === t.id}
+                    onClick={() => act(t.id, "start")}
+                  >
+                    {acting === t.id ? "جاري…" : "بدء الرحلة"}
+                  </Button>
+                )}
+                {t.status === "in_progress" && (
+                  <Button
+                    className="w-full mt-3"
+                    size="sm"
+                    variant="outline"
+                    disabled={acting === t.id}
+                    onClick={() => act(t.id, "complete")}
+                  >
+                    {acting === t.id ? "جاري…" : "إنهاء الرحلة (وصلت)"}
+                  </Button>
                 )}
               </CardContent>
             </Card>
