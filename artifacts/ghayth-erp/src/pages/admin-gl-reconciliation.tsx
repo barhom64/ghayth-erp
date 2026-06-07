@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import {
   RefreshCw, CheckCircle, AlertTriangle, Scale,
 } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 function formatAmount(n: number | string): string {
   const num = typeof n === "string" ? parseFloat(n) : n;
@@ -49,9 +50,33 @@ export default function AdminGlReconciliation() {
       subtitle="مقارنة الأرصدة المخزنة بالأرصدة المحسوبة من القيود"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />فحص
-        </Button>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_gl_reconciliation"
+            entityId="list"
+            size="icon"
+            label="طباعة تقرير المطابقة"
+            payload={() => ({
+              entity: {
+                title: "مطابقة دفتر الأستاذ",
+                healthy,
+                driftCount,
+                totalMismatches: mismatches.length,
+                status: healthy ? "جميع الحسابات متطابقة" : `${driftCount} حساب بانحراف`,
+              },
+              items: mismatches.map((r: any) => ({
+                "الكود": r.code,
+                "اسم الحساب": r.name,
+                "الرصيد المخزن": formatAmount(r.stored_balance),
+                "الرصيد المحسوب": formatAmount(r.computed_balance),
+                "الانحراف": formatAmount(r.drift),
+              })),
+            })}
+          />
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 me-1" />فحص
+          </Button>
+        </div>
       }
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
