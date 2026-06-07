@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Link, useLocation } from "wouter";
 import {
   PageShell,
@@ -37,6 +39,7 @@ export default function PropertiesTenants() {
   const filtered = applyFilters(tenants, filters, {
     searchFields: ["name", "phone", "email", "nationalId"] as any,
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const rowKeyOf = (t: any) => t.id ?? t.name;
 
@@ -139,9 +142,26 @@ export default function PropertiesTenants() {
       subtitle="سجل كامل لجميع المستأجرين الحاليين والسابقين"
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={
-        <Link href="/properties/tenants/create">
-          <GuardedButton perm="property:create" className="gap-2"><Plus className="h-4 w-4" /> مستأجر جديد</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_properties_tenants"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قائمة المستأجرين", total: printRows.length },
+              items: printRows.map((t: any) => ({
+                "الاسم": t.name || "—",
+                "الجوال": t.phone || "—",
+                "الهوية": t.nationalId || "—",
+                "الوحدة": t.unitName || t.unitNumber || "—",
+                "الحالة": t.status || "—",
+              })),
+            })}
+          />
+          <Link href="/properties/tenants/create">
+            <GuardedButton perm="property:create" className="gap-2"><Plus className="h-4 w-4" /> مستأجر جديد</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <PropertyTabsNav />
@@ -172,7 +192,8 @@ export default function PropertiesTenants() {
         <CardContent className="p-0">
           <DataTable
             columns={columns}
-            data={filtered}
+            onSortedDataChange={setPrintRows}
+        data={filtered}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
