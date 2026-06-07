@@ -2356,13 +2356,20 @@ router.get("/reports/group-portfolio", authorize({ feature: "umrah", action: "li
     params.push(limit);
 
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT g.id, g.name, g."nuskGroupNumber", g.status, g."seasonId",
+      // Pre-aggregate umrah_pilgrims actual counts via CTE — same
+      // pattern as the rest of the N+1 sweep. Avoids one lookup per
+      // returned group row through umrah_pilgrims.
+      `WITH pilgrim_actuals AS (
+         SELECT "groupId", "companyId", COUNT(*) AS "actualPilgrims"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL
+         GROUP BY "groupId", "companyId"
+       )
+       SELECT g.id, g.name, g."nuskGroupNumber", g.status, g."seasonId",
               s.title AS "seasonTitle",
               g."agentId", a.name AS "agentName",
               g."mutamerCount" AS "expectedPilgrims",
-              (SELECT COUNT(*)::int FROM umrah_pilgrims p
-                WHERE p."groupId" = g.id AND p."companyId" = g."companyId" AND p."deletedAt" IS NULL
-              ) AS "actualPilgrims",
+              COALESCE(pa."actualPilgrims", 0)::int AS "actualPilgrims",
               COALESCE(sales.revenue, 0) AS revenue,
               COALESCE(sales.paid, 0)    AS paid,
               COALESCE(nusk.cost, 0)     AS cost,
@@ -2370,6 +2377,8 @@ router.get("/reports/group-portfolio", authorize({ feature: "umrah", action: "li
          FROM umrah_groups g
     LEFT JOIN umrah_seasons s
            ON s.id = g."seasonId" AND s."companyId" = g."companyId" AND s."deletedAt" IS NULL
+    LEFT JOIN pilgrim_actuals pa
+           ON pa."groupId" = g.id AND pa."companyId" = g."companyId"
     LEFT JOIN umrah_agents a
            ON a.id = g."agentId" AND a."companyId" = g."companyId" AND a."deletedAt" IS NULL
     LEFT JOIN LATERAL (
