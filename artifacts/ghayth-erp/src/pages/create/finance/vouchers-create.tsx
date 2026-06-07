@@ -14,6 +14,8 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { amountTaxSplit } from "@/lib/tax-math";
 import { allowedUsagesForPaymentMethod } from "@/lib/finance-account-usage";
+import { AllocationTargetSelect, EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
+import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
@@ -133,6 +135,8 @@ export default function VouchersCreate() {
   };
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_vouchers_create", INITIAL_FORM);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  // #1715 PR-4: master «ربط السند بـ» field shared with expenses.
+  const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const operationTypes = form.type === "receipt" ? OPERATION_TYPES_RECEIPT : OPERATION_TYPES_PAYMENT;
@@ -230,6 +234,9 @@ export default function VouchersCreate() {
         relatedEntityName: form.relatedEntityName || undefined,
         autoDescription: form.autoDescription,
         beneficiaryType: form.beneficiaryType || undefined,
+        lineAllocation: allocTarget.target !== "none"
+          ? buildAllocationPayload(allocTarget.allocation)
+          : undefined,
       });
       clearDraft();
       toast({ title: "تم إنشاء السند بنجاح" });
@@ -370,6 +377,15 @@ export default function VouchersCreate() {
             }}
           />
         </div>
+      </div>
+
+      <div className="border rounded-lg p-4 mb-4 space-y-3">
+        <h3 className="font-semibold text-sm text-muted-foreground">ربط السند بـ</h3>
+        <p className="text-xs text-muted-foreground">
+          اختر ما يُربط به السند، وستظهر الحقول المناسبة فقط. الربط يُنتج
+          الأبعاد المحاسبية ومركز التكلفة تلقائياً.
+        </p>
+        <AllocationTargetSelect value={allocTarget} onChange={setAllocTarget} label="ربط السند بـ" />
       </div>
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
