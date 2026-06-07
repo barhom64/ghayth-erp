@@ -329,6 +329,19 @@ export const allNavSections: NavSection[] = [
         { label: "محلّل مزيج المصاريف", path: "/finance/expense-mix", icon: TrendingUp },
         { label: "اتجاه DSO للسيولة", path: "/finance/reports/dso-trend", icon: Activity },
       ]},
+      // #1715 موجة التقارير — مجموعتا التقارير متجاورتان: «الضرائب والتقارير»
+      // أعلاه و«تقارير محاسبية متقدمة» هنا، فيجدها المستخدم في مكان واحد.
+      // F6 (audit) — تقارير المخزون والمحاسبية المتقدمة (CoGS، تقييم، دوران،
+      // صلاحيات، مخزون سالب) كلها تحت /finance/reports/* مجمَّعة في مدخل واحد.
+      { label: "تقارير محاسبية متقدمة", path: "/finance/reports", icon: FileBarChart, module: "finance", children: [
+        { label: "ملخص التكلفة (CoGS)", path: "/finance/reports/cogs-summary", icon: TrendingDown2 },
+        { label: "تقييم المخزون", path: "/finance/reports/inventory-valuation", icon: Package },
+        { label: "دوران المخزون", path: "/finance/reports/inventory-turnover", icon: RefreshCw },
+        { label: "تنبيهات صلاحية الدفعات", path: "/finance/reports/lot-expiry-alerts", icon: AlertTriangle },
+        { label: "مخزون سالب", path: "/finance/reports/negative-stock", icon: AlertTriangle },
+        { label: "انحرافات الميزانية", path: "/finance/budget-variance", icon: BarChart3 },
+        { label: "اعتماد الميزانية", path: "/finance/budget-approvals", icon: ClipboardCheck },
+      ]},
       { label: "صناديق الواردات", path: "/finance/approvals-inbox", icon: Bell, module: "finance", children: [
         { label: "Approvals Inbox", path: "/finance/approvals-inbox", icon: Bell },
         { label: "ملف الجهة 360°", path: "/finance/entity-360", icon: Sparkles },
@@ -337,20 +350,6 @@ export const allNavSections: NavSection[] = [
         { label: "GL Integrity Gaps", path: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
         { label: "Unmapped Lines", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
         { label: "Posting Activity", path: "/finance/journal/activity", icon: Activity },
-      ]},
-      // محرك التوجيه المحاسبي — صفحات Line-Level Allocation cluster (PRs 1291,
-      // 1297, 1304, 1307, 1309, 1311). الترابط بينها مكتمل عبر AllocationTabsNav
-      // و AllocationHealthCard، وهذا المدخل في القائمة الجانبية يخلي الكلستر
-      // قابلاً للوصول من أي صفحة في النظام (ليس من finance فقط).
-      { label: "محرك التوجيه المحاسبي", path: "/finance/settings", icon: Network, module: "finance", children: [
-        { label: "مركز الإعدادات", path: "/finance/settings", icon: Settings },
-        { label: "قواعد التوجيه", path: "/finance/allocation-rules", icon: Network },
-        { label: "التوجيه البُعدي", path: "/finance/dimensional-routing", icon: Network },
-        { label: "كتالوج المنتجات", path: "/finance/product-catalog", icon: Package },
-        { label: "تشخيص التغطية", path: "/finance/allocation-coverage", icon: Target },
-        { label: "سجل التوجيه", path: "/finance/allocation-results", icon: Activity },
-        { label: "التعديلات اليدوية", path: "/finance/overrides-report", icon: BookOpen },
-        { label: "تجاوزات الإلزام", path: "/finance/allocation-override-log", icon: ShieldAlert },
       ]},
       { label: "ارتباطات الموظفين", path: "/finance/salary-advances", icon: DollarSign, module: "finance", children: [
         { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
@@ -373,17 +372,20 @@ export const allNavSections: NavSection[] = [
         { label: "إعادة التقييم", path: "/finance/fx-revaluation", icon: RefreshCw },
         { label: "سجل إعادة التقييم", path: "/finance/fx-revaluation/history", icon: Activity },
       ]},
-      // F6 (audit) — تقارير المخزون والمحاسبية المتقدمة (CoGS، تقييم،
-      // دوران، صلاحيات، مخزون سالب) كلها تحت /finance/reports/* لكن لم
-      // يكن لها مدخل sidebar — مرئية الآن في مجموعة واحدة.
-      { label: "تقارير محاسبية متقدمة", path: "/finance/reports", icon: FileBarChart, module: "finance", children: [
-        { label: "ملخص التكلفة (CoGS)", path: "/finance/reports/cogs-summary", icon: TrendingDown2 },
-        { label: "تقييم المخزون", path: "/finance/reports/inventory-valuation", icon: Package },
-        { label: "دوران المخزون", path: "/finance/reports/inventory-turnover", icon: RefreshCw },
-        { label: "تنبيهات صلاحية الدفعات", path: "/finance/reports/lot-expiry-alerts", icon: AlertTriangle },
-        { label: "مخزون سالب", path: "/finance/reports/negative-stock", icon: AlertTriangle },
-        { label: "انحرافات الميزانية", path: "/finance/budget-variance", icon: BarChart3 },
-        { label: "اعتماد الميزانية", path: "/finance/budget-approvals", icon: ClipboardCheck },
+      // محرك التوجيه المحاسبي (الإعدادات) — مُبقاة في آخر مجموعة المالية
+      // اتساقاً مع معيار #1715 «الإعدادات في آخر القائمة». صفحات Line-Level
+      // Allocation cluster (PRs 1291, 1297, 1304, 1307, 1309, 1311) مترابطة
+      // عبر AllocationTabsNav و AllocationHealthCard، وهذا المدخل يخلي الكلستر
+      // قابلاً للوصول من أي صفحة في النظام (ليس من finance فقط).
+      { label: "محرك التوجيه المحاسبي", path: "/finance/settings", icon: Network, module: "finance", children: [
+        { label: "مركز الإعدادات", path: "/finance/settings", icon: Settings },
+        { label: "قواعد التوجيه", path: "/finance/allocation-rules", icon: Network },
+        { label: "التوجيه البُعدي", path: "/finance/dimensional-routing", icon: Network },
+        { label: "كتالوج المنتجات", path: "/finance/product-catalog", icon: Package },
+        { label: "تشخيص التغطية", path: "/finance/allocation-coverage", icon: Target },
+        { label: "سجل التوجيه", path: "/finance/allocation-results", icon: Activity },
+        { label: "التعديلات اليدوية", path: "/finance/overrides-report", icon: BookOpen },
+        { label: "تجاوزات الإلزام", path: "/finance/allocation-override-log", icon: ShieldAlert },
       ]},
     ],
   },
