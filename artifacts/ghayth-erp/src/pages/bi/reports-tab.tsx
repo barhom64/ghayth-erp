@@ -15,6 +15,8 @@ import { useAppContext } from "@/contexts/app-context";
 import { FileBarChart, Plus } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export function ReportsTab() {
   const { data: reportsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-reports"], "/bi/reports");
@@ -25,6 +27,7 @@ export function ReportsTab() {
   const filtered = applyFilters(allItems, filters, {
     searchFields: ["title", "type", "description"],
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   // GET /bi/reports/umrah-season-summary — server returns {data, summary}
   // where summary aggregates totalSeasons, totalPilgrims, totalInvoiced,
@@ -63,6 +66,27 @@ export function ReportsTab() {
             resultCount={filtered.length}
           />
         </div>
+        <PrintButton
+          entityType="report_bi_reports"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة التقارير"
+          payload={() => ({
+            entity: {
+              title: "قائمة تقارير الأعمال (BI)",
+              total: printRows.length,
+              umrahTotalSeasons: umrahSummary?.totalSeasons ?? null,
+              umrahTotalPilgrims: umrahSummary?.totalPilgrims ?? null,
+              umrahTotalInvoiced: umrahSummary?.totalInvoiced ?? null,
+              umrahTotalPaid: umrahSummary?.totalPaid ?? null,
+            },
+            items: printRows.map((r: any) => ({
+              "العنوان": r.title || "—",
+              "النوع": r.type || "—",
+              "التاريخ": r.createdAt ? formatDateAr(r.createdAt) : "—",
+            })),
+          })}
+        />
         {canWrite && <Link href="/bi/reports/create"><GuardedButton perm="bi:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة تقرير</GuardedButton></Link>}
       </div>
       {umrahSummary && (
@@ -105,6 +129,7 @@ export function ReportsTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
