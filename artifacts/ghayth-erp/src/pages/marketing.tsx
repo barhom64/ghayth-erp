@@ -8,6 +8,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -415,6 +416,24 @@ function CampaignsTab() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "name", label: "اسم الحملة" },
+              { key: "channel", label: "القناة" },
+              { key: "startDate", label: "تاريخ البدء" },
+              { key: "endDate", label: "تاريخ الانتهاء" },
+              { key: "budget", label: "الميزانية" },
+              { key: "spent", label: "المصروف" },
+              { key: "leads", label: "العملاء المحتملين" },
+              { key: "conversions", label: "التحويلات" },
+              { key: "roi", label: "العائد على الاستثمار" },
+              { key: "status", label: "الحالة" },
+            ],
+            "حملات-التسويق",
+          )
+        }
         resultCount={filtered.length}
       />
 
