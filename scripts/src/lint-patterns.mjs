@@ -156,6 +156,31 @@ const RULES = [
       "(e.g. fleetEngine, propertiesEngine) via financialEngine.resolveAccountCode().",
   },
   {
+    // ─── #1715 finance consolidation — guardrail #6 ──────────────────────
+    // Every finance operation must be described by a FinanceOperationContext
+    // and validated through `assertOperationValid(ctx)`. The posting policy
+    // (`assertPaymentSourceAllowed`) is reached ONLY through that wrapper, so
+    // the money-source ↔ payment-method check can never be bypassed or drift
+    // per-route. The policy definition lives in lib/financePostingPolicy.ts
+    // and the sanctioned wrapper in lib/financeOperationContext.ts — both in
+    // lib/, outside this routes-only scan, so they are naturally exempt.
+    // Hard rule (baseline 0): the expense + voucher create flows in
+    // finance-journal.ts were migrated to the context in the wave-1 slice, so
+    // no route calls the policy directly anymore.
+    id: "direct-posting-policy-in-route",
+    scan: [ROUTES_DIR],
+    regex: /\bassertPaymentSourceAllowed\b/,
+    message:
+      "Direct `assertPaymentSourceAllowed(...)` inside a route is forbidden " +
+      "(#1715 finance consolidation, guardrail #6). Build a " +
+      "`FinanceOperationContext` with the matching adapter " +
+      "(fromLegacyExpenseForm / fromLegacyVoucherForm / …) and validate via " +
+      "`assertOperationValid(ctx)` from `lib/financeOperationContext.js`. The " +
+      "posting policy must be reached only through that wrapper so the " +
+      "money-source ↔ payment-method check stays unified and cannot be " +
+      "bypassed by a route that forgets to call it.",
+  },
+  {
     id: "unlocalized-toLocaleString",
     scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
     extensions: [".tsx", ".ts"],

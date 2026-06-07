@@ -505,13 +505,27 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     const targetPeriod = period ?? currentPeriod();
     const sourceAcct = sourceAccountCode || "1100";
 
-    // #1715 posting policy: the money-source account must match the
-    // payment method (cash→cash_box, bank_transfer→bank, custody→custody,
-    // …). Enforced in the backend so a UI bypass can't post a cash
-    // expense against a bank account. Soft-allows unclassified accounts.
+    // #1715 wave-1 consolidation: the expense create flow now converges on
+    // the unified FinanceOperationContext (guardrail #6 — no finance
+    // operation without a context). The adapter maps this legacy payload
+    // into a context; assertOperationValid wraps the same posting policy
+    // (cash→cash_box, bank_transfer→bank, custody→custody, …) so a UI
+    // bypass still can't post a cash expense against a bank account.
+    // Behaviour is identical — the policy receives the same money account +
+    // method — but the operation is now described by one object the rest of
+    // the waves build on. Soft-allows unclassified accounts.
     {
-      const { assertPaymentSourceAllowed } = await import("../lib/financePostingPolicy.js");
-      await assertPaymentSourceAllowed({ companyId: effectiveCompanyId, accountCode: sourceAcct, paymentMethod });
+      const { assertOperationValid, fromLegacyExpenseForm } = await import("../lib/financeOperationContext.js");
+      const opCtx = fromLegacyExpenseForm({
+        companyId: effectiveCompanyId,
+        branchId: branchId ?? scope.branchId ?? null,
+        sourceAccountCode: sourceAcct,
+        paymentMethod,
+        relatedEntityType,
+        relatedEntityId: relatedEntityId != null ? Number(relatedEntityId) : null,
+        lineAllocation,
+      });
+      await assertOperationValid(opCtx);
     }
 
     // F3 (audit follow-up): pre-flight ONLY validates the budget here;
@@ -1139,11 +1153,25 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     const { financialEngine } = await import("../lib/engines/index.js");
     const cashAcct = sourceAccountCode || "1100";
 
-    // #1715 posting policy: voucher money account must match the chosen
-    // method (نقدي→صندوق, تحويل→بنك, شيك→بنك/شيكات, …). Backend-enforced.
+    // #1715 wave-1 consolidation: the voucher create flow converges on the
+    // unified FinanceOperationContext (guardrail #6). The adapter maps the
+    // legacy voucher fields into a context; assertOperationValid wraps the
+    // same posting policy (نقدي→صندوق, تحويل→بنك, شيك→بنك/شيكات, …) so the
+    // money account must still match the chosen method. Behaviour-identical,
+    // backend-enforced.
     {
-      const { assertPaymentSourceAllowed } = await import("../lib/financePostingPolicy.js");
-      await assertPaymentSourceAllowed({ companyId: scope.companyId, accountCode: cashAcct, paymentMethod: method });
+      const { assertOperationValid, fromLegacyVoucherForm } = await import("../lib/financeOperationContext.js");
+      const opCtx = fromLegacyVoucherForm({
+        companyId: scope.companyId,
+        branchId: branchId ?? scope.branchId ?? null,
+        type,
+        sourceAccountCode: cashAcct,
+        method,
+        relatedEntityType,
+        relatedEntityId: relatedEntityId != null ? Number(relatedEntityId) : null,
+        lineAllocation,
+      });
+      await assertOperationValid(opCtx);
     }
 
     const outputVatCode = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300") : "2300";
