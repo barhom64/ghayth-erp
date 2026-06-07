@@ -627,7 +627,7 @@ export const allNavSections: NavSection[] = [
           { label: "إنشاء سريع وصلاحيات", path: "/admin/user-onboarding", icon: UserPlus, perm: ["admin:update"], permMode: "any" },
           { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
           { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
-          { label: "الصلاحيات المبسّطة", path: "/admin/roles-simple", icon: Shield, perm: "admin.roles:update" },
+          { label: "مُركّب الأدوار", path: "/admin/roles-simple", icon: Shield, perm: "admin.roles:update" },
           { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
         ]},
         { label: "المراقبة والمتابعة", path: "/admin/monitoring", icon: Activity, children: [
