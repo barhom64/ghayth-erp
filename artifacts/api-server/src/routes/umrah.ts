@@ -3564,4 +3564,37 @@ router.get("/nusk-wallet", authorize({ feature: "umrah", action: "view" }), asyn
   } catch (err) { handleRouteError(err, res, "Get NUSK wallet error"); }
 });
 
+// Test SMS — the operator enters their phone in the umrah settings
+// page and we drop a one-off message into the queue. Confirms the
+// Twilio config + the umrahNotifications seam without forcing a real
+// pilgrim row through the pipeline.
+const testSmsSchema = z.object({
+  phone: z.string().min(5, "رقم الهاتف غير صحيح"),
+});
+
+router.post("/notifications/test-sms", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { phone } = zodParse(testSmsSchema.safeParse(req.body));
+    const { sendMessage } = await import("../lib/messageSender.js");
+    const result = await sendMessage({
+      channel: "sms",
+      recipient: phone.trim(),
+      body: `رسالة اختبار من نظام عمرة غيث — التاريخ: ${todayISO()}`,
+      companyId: scope.companyId,
+      userId: scope.userId,
+      relatedType: "umrah_notifications",
+      relatedId: null,
+      templateKey: "umrah.test_sms",
+      eventAction: "umrah.notifications.test_sms.sent",
+    });
+    res.json({
+      ok: !result.blocked,
+      blocked: result.blocked,
+      reason: result.reason,
+      logId: result.logId,
+    });
+  } catch (err) { handleRouteError(err, res, "Test SMS error"); }
+});
+
 export default router;
