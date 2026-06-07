@@ -323,6 +323,70 @@ class FleetEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+   * Post the financial impact of a delivered cargo manifest in ONE
+   * balanced journal entry. A road-freight shipment has two money
+   * flows that net to a single balanced JE:
+   *   • Revenue earned from the customer  → DR A/R, CR freight revenue
+   *   • Cost owed for hauling the freight → DR freight cost, CR payable
+   * Total debits (revenue + cost) == total credits (revenue + cost),
+   * so the entry balances even when only one side is non-zero (the
+   * zero-amount lines are dropped before posting).
+   *
+   * Posted on the `delivered` transition — revenue is earned when the
+   * goods reach the consignee, not when the manifest is drafted. The
+   * financialEngine guard (cargo_manifests / id) makes this idempotent
+   * so re-running the transition never double-posts.
+   */
+  async postCargoDeliveryGL(
+    ctx: FleetGLContext,
+    manifest: {
+      id: number;
+      manifestNumber: string;
+      freightRevenue: number;
+      freightCost: number;
+      customerId?: number | null;
+      vehicleId?: number | null;
+      driverId?: number | null;
+    }
+  ) {
+    const revenue = Number(manifest.freightRevenue) || 0;
+    const cost = Number(manifest.freightCost) || 0;
+    if (revenue <= 0 && cost <= 0) return null;
+
+    const [arCode, revenueCode, costCode, payableCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_receivable", "debit", "1210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4300"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_cost", "debit", "5310"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2100"),
+    ]);
+
+    const lines: JournalEntryLine[] = [];
+    if (revenue > 0) {
+      lines.push({ accountCode: arCode, debit: revenue, credit: 0, description: `ذمم شحن — بوليصة ${manifest.manifestNumber}`, clientId: manifest.customerId ?? undefined, vehicleId: manifest.vehicleId ?? undefined, driverId: manifest.driverId ?? undefined });
+      lines.push({ accountCode: revenueCode, debit: 0, credit: revenue, description: `إيراد شحن — بوليصة ${manifest.manifestNumber}`, clientId: manifest.customerId ?? undefined, vehicleId: manifest.vehicleId ?? undefined });
+    }
+    if (cost > 0) {
+      lines.push({ accountCode: costCode, debit: cost, credit: 0, description: `تكلفة شحن — بوليصة ${manifest.manifestNumber}`, vehicleId: manifest.vehicleId ?? undefined, driverId: manifest.driverId ?? undefined });
+      lines.push({ accountCode: payableCode, debit: 0, credit: cost, description: `مستحقات شحن — بوليصة ${manifest.manifestNumber}`, vehicleId: manifest.vehicleId ?? undefined });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-CARGO-${manifest.id}`,
+      description: `تسليم بوليصة شحن ${manifest.manifestNumber} — إيراد: ${revenue.toFixed(2)} / تكلفة: ${cost.toFixed(2)} ريال`,
+      type: "general",
+      sourceType: "cargo_manifest",
+      sourceId: manifest.id,
+      sourceKey: `fleet:cargo:${manifest.id}`,
+      guardTable: "cargo_manifests",
+      guardId: manifest.id,
+      lines,
+    });
+  }
+
   async requestFixedAssetRegistration(
     ctx: FleetGLContext,
     asset: {
