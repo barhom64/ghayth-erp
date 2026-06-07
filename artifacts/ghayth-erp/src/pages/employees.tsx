@@ -46,6 +46,8 @@ import {
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
@@ -91,6 +93,7 @@ export default function Employees() {
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("employee");
   const preFiltered = employees || [];
   const filtered = tagFilteredIds ? preFiltered.filter((e: any) => tagFilteredIds.has(e.id)) : preFiltered;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   // HR-U4 — قائمة الحالات التشغيلية عبر useApiQuery بدل apiFetch+useEffect.
   const { data: operationalStatusData } = useApiQuery<{
@@ -261,14 +264,33 @@ export default function Employees() {
       subtitle="قائمة الموظفين والمسميات الوظيفية والحسابات"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الموظفين" }]}
       actions={
-        (canWrite || canManage) ? (
-          <Link href="/employees/create">
-            <GuardedButton perm="hr:create" className="gap-2">
-              <Plus className="h-4 w-4" />
-              إضافة موظف
-            </GuardedButton>
-          </Link>
-        ) : null
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_employees"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قائمة الموظفين", total: printRows.length },
+              items: printRows.map((e: any) => ({
+                "الاسم": e.name || "—",
+                "المسمى الوظيفي": e.jobTitle || "—",
+                "القسم": e.departmentName || "—",
+                "الجوال": e.phone || "—",
+                "الهوية/الإقامة": e.nationalId || e.iqamaNumber || "—",
+                "تاريخ التعيين": e.hireDate || e.startDate || "—",
+                "الحالة": e.status || "—",
+              })),
+            })}
+          />
+          {(canWrite || canManage) ? (
+            <Link href="/employees/create">
+              <GuardedButton perm="hr:create" className="gap-2">
+                <Plus className="h-4 w-4" />
+                إضافة موظف
+              </GuardedButton>
+            </Link>
+          ) : null}
+        </div>
       }
     >
       <HrTabsNav />
@@ -317,6 +339,7 @@ export default function Employees() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}
