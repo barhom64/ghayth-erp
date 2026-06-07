@@ -21,9 +21,15 @@ export default function UmrahDashboard() {
   const { data: seasons, isLoading: seasonsLoading, isError: seasonsError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const activeSeason = (seasons?.data || []).find((s: any) => s.status === "open");
   const seasonId = activeSeason?.id;
+  // Don't fire the dashboard query when no active season is found —
+  // sending `seasonId=0` makes the backend respond with a 400 or a
+  // bogus empty-shape that the rest of the page reads as "loading
+  // forever" or "missing data". Passing path=null short-circuits the
+  // fetch entirely; the no-active-season branch below renders the
+  // empty-state CTA instead.
   const { data: dash, refetch, isLoading: dashLoading, isError: dashError } = useApiQuery<any>(
     ["umrah-dashboard", String(seasonId || "")],
-    `/umrah/dashboard?seasonId=${seasonId ?? 0}`
+    seasonId ? `/umrah/dashboard?seasonId=${seasonId}` : null,
   );
   const { toast } = useToast();
   const p = dash?.pilgrims || {};
