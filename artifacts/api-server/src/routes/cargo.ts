@@ -44,20 +44,48 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
-const CARGO_STATUSES = ["draft", "confirmed", "loading", "in_transit", "delivered", "closed", "cancelled"] as const;
+// #1733 Blocker #3 — full 13-state operational lifecycle.
+//
+//   draft → requested → approved → assigned_to_driver → driver_accepted →
+//   trip_started → arrived_pickup → loaded → in_transit → arrived_delivery →
+//   delivered → completed
+//
+// Each step is a distinct audit moment #1733 needs so operations can answer
+// "where exactly is the bottleneck?" — driver hasn't accepted? truck
+// hasn't arrived at pickup? loaded but not departed? Cancellation is
+// reachable from every pre-`delivered` state; once delivered, the row
+// only moves forward to `completed` (the operational close that fires
+// the billing-candidate handoff in #1750).
+const CARGO_STATUSES = [
+  "draft",
+  "requested",
+  "approved",
+  "assigned_to_driver",
+  "driver_accepted",
+  "trip_started",
+  "arrived_pickup",
+  "loaded",
+  "in_transit",
+  "arrived_delivery",
+  "delivered",
+  "completed",
+  "cancelled",
+] as const;
 
-// Lifecycle: who can transition from where. Mirrors the fleet/umrah
-// state machines for consistency (see fleet.ts:330 for the driver
-// example). The dispatcher can cancel from any non-terminal state;
-// otherwise transitions are strictly forward.
 const CARGO_TRANSITIONS: Record<typeof CARGO_STATUSES[number], string[]> = {
-  draft:      ["confirmed", "cancelled"],
-  confirmed:  ["loading", "cancelled"],
-  loading:    ["in_transit", "cancelled"],
-  in_transit: ["delivered", "cancelled"],
-  delivered:  ["closed"],
-  closed:     [],
-  cancelled:  [],
+  draft:              ["requested", "cancelled"],
+  requested:          ["approved", "cancelled"],
+  approved:           ["assigned_to_driver", "cancelled"],
+  assigned_to_driver: ["driver_accepted", "cancelled"],
+  driver_accepted:    ["trip_started", "cancelled"],
+  trip_started:       ["arrived_pickup", "cancelled"],
+  arrived_pickup:     ["loaded", "cancelled"],
+  loaded:             ["in_transit", "cancelled"],
+  in_transit:         ["arrived_delivery", "cancelled"],
+  arrived_delivery:   ["delivered"],
+  delivered:          ["completed"],
+  completed:          [],
+  cancelled:          [],
 };
 
 const createManifestSchema = z.object({

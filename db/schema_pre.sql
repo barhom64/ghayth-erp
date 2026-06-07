@@ -19303,7 +19303,7 @@ CREATE TABLE public.cargo_manifests (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'confirmed'::character varying, 'loading'::character varying, 'in_transit'::character varying, 'delivered'::character varying, 'closed'::character varying, 'cancelled'::character varying])::text[])))
+    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'requested'::character varying, 'approved'::character varying, 'assigned_to_driver'::character varying, 'driver_accepted'::character varying, 'trip_started'::character varying, 'arrived_pickup'::character varying, 'loaded'::character varying, 'in_transit'::character varying, 'arrived_delivery'::character varying, 'delivered'::character varying, 'completed'::character varying, 'cancelled'::character varying])::text[])))
 );
 
 
