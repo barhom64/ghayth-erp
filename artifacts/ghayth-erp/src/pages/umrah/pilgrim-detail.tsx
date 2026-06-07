@@ -30,14 +30,19 @@ import {
   DetailActionButtons,
 } from "@/components/shared/detail-edit-delete-actions";
 
+// Pilgrim status labels — kept in sync with the canonical `STATUS_MAP`
+// in `<PageStatusBadge>` (the `shared` + `umrah` blocks). The data table
+// uses PageStatusBadge directly; this dropdown + the page-header badge
+// MUST read the same wording so the same pilgrim's status doesn't render
+// as "متجاوز" in one cell and "متأخر" in another.
 const STATUS_OPTIONS = [
   { value: "pending", label: "لم يصل" },
   { value: "arrived", label: "وصل" },
   { value: "active", label: "نشط" },
-  { value: "overstayed", label: "متأخر" },
+  { value: "overstayed", label: "متجاوز" },
   { value: "departed", label: "غادر" },
   { value: "violated", label: "مخالف" },
-  { value: "cancelled", label: "ملغي" },
+  { value: "cancelled", label: "ملغى" },
 ];
 
 const STATUS_TONES: Record<string, "success" | "warning" | "info" | "muted" | "destructive" | "default"> = {
