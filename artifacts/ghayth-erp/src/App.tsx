@@ -33,10 +33,9 @@ import NotFound from "@/pages/not-found";
 
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const PrintVerify = lazy(() => import("@/pages/print-verify"));
-const DriverPortalLogin = lazy(() => import("@/pages/driver-portal/login"));
-const DriverPortalMyTrips = lazy(() => import("@/pages/driver-portal/my-trips"));
-const DriverPortalMyCargo = lazy(() => import("@/pages/driver-portal/my-cargo"));
-const DriverPortalProfile = lazy(() => import("@/pages/driver-portal/profile"));
+// Standalone /driver-portal/* retired (#1354) — drivers now log in
+// via the regular /login and land on /me/driver (dashboard auto-
+// redirects them based on user.role === "driver").
 
 interface RouteConfig {
   path: string;
@@ -171,24 +170,8 @@ function Router() {
           <PrintVerify />
         </Suspense>
       </Route>
-      {/* Driver portal — separate auth surface from the main ERP (#1354).
-          Drivers log in with their portal credentials (driver_portal_accounts
-          table), session lives in localStorage, the pages manage their own
-          auth via pages/driver-portal/lib.ts → driverFetch. Routes are
-          anonymous at the SPA boundary; auth is enforced inside each page
-          by the bounce-to-login useEffect. */}
-      <Route path="/driver-portal/login">
-        <Suspense fallback={<PageLoader />}><DriverPortalLogin /></Suspense>
-      </Route>
-      <Route path="/driver-portal/my-trips">
-        <Suspense fallback={<PageLoader />}><DriverPortalMyTrips /></Suspense>
-      </Route>
-      <Route path="/driver-portal/my-cargo">
-        <Suspense fallback={<PageLoader />}><DriverPortalMyCargo /></Suspense>
-      </Route>
-      <Route path="/driver-portal/profile">
-        <Suspense fallback={<PageLoader />}><DriverPortalProfile /></Suspense>
-      </Route>
+      {/* /driver-portal/* retired (#1354) — drivers now use the regular
+          /login + RBAC role gating; their dashboard is /me/driver. */}
       <Route>
         {isAuthenticated ? <ProtectedRoutes /> : <Redirect to="/login" />}
       </Route>

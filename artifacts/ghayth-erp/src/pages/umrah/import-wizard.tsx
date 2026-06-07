@@ -450,10 +450,10 @@ export default function UmrahImportWizard() {
                 <div>
                   <Label className="text-xs">الخزنة (الصندوق النقدي)</Label>
                   <p className="text-[11px] text-muted-foreground mb-1">حساب الأصول الذي ستُسحب منه دفعات نسك. اختياري — اتركه فارغًا لتأجيل الربط.</p>
-                  <Select value={treasuryId} onValueChange={setTreasuryId}>
+                  <Select value={treasuryId || "_none"} onValueChange={(v) => setTreasuryId(v === "_none" ? "" : v)}>
                     <SelectTrigger><SelectValue placeholder="اختر الخزنة" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— بلا ربط الآن —</SelectItem>
+                      <SelectItem value="_none">— بلا ربط الآن —</SelectItem>
                       {treasuryAccounts.map((a) => (
                         <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
                       ))}
@@ -463,11 +463,11 @@ export default function UmrahImportWizard() {
                 <div>
                   <Label className="text-xs">حساب المشتريات (تجاوز الافتراضي)</Label>
                   <p className="text-[11px] text-muted-foreground mb-1">رمز حساب المصاريف الذي سيُحمَّل بتكلفة هذه الدُفعة. اختياري — يستخدم الافتراضي (٥٢٠١) إن تُرك فارغًا.</p>
-                  <Select value={purchaseAccountCode} onValueChange={setPurchaseAccountCode}>
+                  <Select value={purchaseAccountCode || "_none"} onValueChange={(v) => setPurchaseAccountCode(v === "_none" ? "" : v)}>
                     <SelectTrigger><SelectValue placeholder="افتراضي النظام (٥٢٠١)" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— استخدم الافتراضي —</SelectItem>
-                      {expenseAccounts.map((a) => (
+                      <SelectItem value="_none">— استخدم الافتراضي —</SelectItem>
+                      {expenseAccounts.filter((a) => a.code).map((a) => (
                         <SelectItem key={a.id} value={a.code}>{a.code} — {a.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -509,10 +509,12 @@ export default function UmrahImportWizard() {
                 <div className="flex items-center gap-2 pb-2 border-b border-muted/40">
                   <Label className="text-xs whitespace-nowrap">قالب محفوظ:</Label>
                   <Select
-                    value={selectedPresetId}
+                    value={selectedPresetId || "_none"}
                     onValueChange={(v) => {
-                      setSelectedPresetId(v);
-                      const p = presets.find((x) => String(x.id) === v);
+                      const id = v === "_none" ? "" : v;
+                      setSelectedPresetId(id);
+                      if (!id) return;
+                      const p = presets.find((x) => String(x.id) === id);
                       if (!p) return;
                       // Re-seed mapping from preset values, falling back
                       // to built-in for headers the preset doesn't cover.
@@ -526,7 +528,7 @@ export default function UmrahImportWizard() {
                   >
                     <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="— بدون قالب —" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— بدون قالب —</SelectItem>
+                      <SelectItem value="_none">— بدون قالب —</SelectItem>
                       {presets.map((p) => (
                         <SelectItem key={p.id} value={String(p.id)}>
                           {p.name}{p.isDefault ? " ⭐" : ""}
@@ -635,10 +637,10 @@ export default function UmrahImportWizard() {
                       <div key={h} className="flex flex-col gap-1 text-xs">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-muted-foreground truncate w-1/2" title={h}>{h}</span>
-                          <Select value={value} onValueChange={(v) => setColumnMapping((m) => ({ ...m, [h]: v }))}>
+                          <Select value={value || "_none"} onValueChange={(v) => setColumnMapping((m) => ({ ...m, [h]: v === "_none" ? "" : v }))}>
                             <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="— تجاهل —" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">— تجاهل العمود —</SelectItem>
+                              <SelectItem value="_none">— تجاهل العمود —</SelectItem>
                               {dbFields.map((field) => (
                                 <SelectItem key={field} value={field}>{field}</SelectItem>
                               ))}

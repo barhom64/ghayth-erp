@@ -99,7 +99,6 @@ import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { rawQuery } from "../lib/rawdb.js";
 import clientPortalRouter from "./clientPortal.js";
-import driverPortalRouter from "./driverPortal.js";
 import publicDataRouter from "./publicData.js";
 import careersPortalRouter from "./careersPortal.js";
 import { exportRouter } from "./export.js";
@@ -166,12 +165,11 @@ router.use("/auth", authRouter);
 // middleware on the rest, so adding a router-wide IP limiter here would
 // double-cap authenticated portal users. Skip it.
 router.use("/portal", clientPortalRouter);
-// /driver-portal — same shape as /portal but for fleet drivers
-// (driver_portal_accounts table, JWT type='driver_portal'). The portal
-// is the only surface a non-employee driver has to see their trips
-// and self-mark availability. Same anonymous-login + JWT structure
-// → same skip-the-router-wide-cap reasoning.
-router.use("/driver-portal", driverPortalRouter);
+// /driver-portal retired (#1354). Driver self-service now lives at
+// /api/fleet/me/* under the regular ERP auth + RBAC plumbing — the
+// "driver" role on the user's employee_assignment unlocks the
+// fleet.trips.my / fleet.cargo.my / fleet.driver.me features that
+// power /me/driver in the SPA.
 // /careers mixes anonymous applicant flows with authenticated ones
 // behind a careers JWT. Same reasoning as /portal — don't add a
 // router-wide IP cap; portalLimiter inside careersPortal.ts handles the

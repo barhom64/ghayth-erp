@@ -90,7 +90,7 @@ export async function runSaudizationSnapshot(asOfDate?: string): Promise<Snapsho
   const out: SnapshotRunOutcome = { scanned: 0, written: 0, errors: [], snapshots: [] };
 
   const companies = await rawQuery<{ id: number }>(
-    `SELECT id FROM companies WHERE status = 'active' AND "deletedAt" IS NULL`,
+    `SELECT id FROM companies WHERE status = 'active'`,
   );
   out.scanned = companies.length;
 
