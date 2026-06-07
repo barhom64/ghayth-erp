@@ -3054,8 +3054,11 @@ async function monthlyBadDebtReminder(): Promise<string> {
     try {
       const [cfoRow] = await rawQuery<{ id: number }>(
         `SELECT ea.id FROM employee_assignments ea
-         JOIN user_roles ur ON ur."userId" = ea."employeeId"
-         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         JOIN users u ON u."employeeId" = ea."employeeId"
+         JOIN rbac_user_roles ur ON ur."userId" = u.id AND ur."companyId" = ea."companyId"
+         JOIN rbac_roles r ON r.id = ur.role_id
+         WHERE ea."companyId"=$1 AND ea.status='active' AND r.role_key='finance_manager'
+           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
          LIMIT 1`,
         [c.id]
         // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
@@ -3098,8 +3101,11 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
 
       const [cfoRow] = await rawQuery<{ id: number }>(
         `SELECT ea.id FROM employee_assignments ea
-         JOIN user_roles ur ON ur."userId" = ea."employeeId"
-         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         JOIN users u ON u."employeeId" = ea."employeeId"
+         JOIN rbac_user_roles ur ON ur."userId" = u.id AND ur."companyId" = ea."companyId"
+         JOIN rbac_roles r ON r.id = ur.role_id
+         WHERE ea."companyId"=$1 AND ea.status='active' AND r.role_key='finance_manager'
+           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
          LIMIT 1`,
         [c.id]
         // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
@@ -3165,8 +3171,11 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
 
       const [cfoRow] = await rawQuery<{ id: number }>(
         `SELECT ea.id FROM employee_assignments ea
-         JOIN user_roles ur ON ur."userId" = ea."employeeId"
-         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         JOIN users u ON u."employeeId" = ea."employeeId"
+         JOIN rbac_user_roles ur ON ur."userId" = u.id AND ur."companyId" = ea."companyId"
+         JOIN rbac_roles r ON r.id = ur.role_id
+         WHERE ea."companyId"=$1 AND ea.status='active' AND r.role_key='finance_manager'
+           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
          LIMIT 1`,
         [c.id]
         // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing

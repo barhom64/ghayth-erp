@@ -135,7 +135,7 @@ describe("#1733 Vehicle profile — route surface", () => {
   it("router is mounted with module + financial guards", () => {
     expect(ROUTES_INDEX).toContain("vehicleProfileRouter");
     expect(ROUTES_INDEX).toMatch(
-      /router\.use\("\/",\s*requireModule\("fleet"\),\s*requireGuards\("financial"\),\s*vehicleProfileRouter\)/,
+      /router\.use\(\s*requireModule\("fleet"\),\s*requireGuards\("financial"\),\s*vehicleProfileRouter\)/,
     );
   });
 });

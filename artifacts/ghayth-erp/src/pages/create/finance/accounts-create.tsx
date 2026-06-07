@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, getErrorMessage } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -12,13 +13,38 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Switch } from "@/components/ui/switch";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { useAppContext } from "@/contexts/app-context";
+import { ACCOUNT_USAGE_LABELS_AR } from "@/lib/finance-account-usage";
 
 const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 const natureMap: Record<string, string> = { debit: "مدين", credit: "دائن" };
 
+// #1715: account-usage classification + how children inherit it. Mirrors the
+// backend financeAccountClassifier (ChildrenUsagePolicy + accountUsage).
+const USAGE_UNSET = "_unset";
+const CHILDREN_USAGE_POLICY_LABELS: Record<string, string> = {
+  inherit_locked: "إلزام تصنيف الأب (الأبناء يرثون ولا يُغيَّر)",
+  inherit_default: "وراثة افتراضية (قابلة للتغيير)",
+  mixed_allowed: "السماح بتصنيفات مختلطة للأبناء",
+  manual_required: "إلزام اختيار تصنيف يدوي لكل ابن",
+};
+
+// #1715 auto-numbering: suggest the next free child code under a parent.
+// Prefers numeric siblings sharing the parent's code prefix (the common COA
+// scheme), max+1; falls back to `${parentCode}01`. Pure suggestion — the
+// operator can always override the editable code field.
+function suggestChildCode(parentCode: string, accounts: any[]): string {
+  if (!parentCode) return "";
+  const siblings = accounts.filter(
+    (a) => typeof a.code === "string" && a.code.length > parentCode.length && a.code.startsWith(parentCode),
+  );
+  const nums = siblings.map((a) => Number(a.code)).filter((n) => Number.isFinite(n));
+  if (nums.length) return String(Math.max(...nums) + 1);
+  return `${parentCode}01`;
+}
+
 const DRAFT_KEY = "finance_accounts_create";
 const SHARED = "__shared__";
-const INITIAL = { code: "", name: "", nameEn: "", type: "asset", parentCode: "", nature: "debit", allowPosting: true, isAnalytical: false, branchScope: SHARED };
+const INITIAL = { code: "", name: "", nameEn: "", type: "asset", parentCode: "", nature: "debit", allowPosting: true, isAnalytical: false, branchScope: SHARED, accountUsage: USAGE_UNSET, childrenUsagePolicy: "inherit_default" };
 
 export default function AccountsCreate() {
   const [, setLocation] = useLocation();
@@ -29,6 +55,23 @@ export default function AccountsCreate() {
   const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
   const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  // #1715: when launched from a tree node's «إضافة حساب فرعي» (?parent=CODE),
+  // pre-fill the parent and suggest the next code once accounts have loaded.
+  // Guarded by a ref so it runs once and never clobbers an in-progress draft.
+  const prefilledRef = useRef(false);
+  useEffect(() => {
+    if (prefilledRef.current) return;
+    const parentParam = new URLSearchParams(window.location.search).get("parent");
+    if (!parentParam || accounts.length === 0) return;
+    prefilledRef.current = true;
+    if (form.parentCode) return; // a restored draft already has a parent — respect it
+    setForm((f) => ({
+      ...f,
+      parentCode: parentParam,
+      code: f.code || suggestChildCode(parentParam, accounts),
+    }));
+  }, [accounts.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -47,6 +90,9 @@ export default function AccountsCreate() {
       const payload = {
         ...rest,
         branchId: branchScope && branchScope !== SHARED ? Number(branchScope) : null,
+        // Sentinel → null so the backend treats "unset" as "inherit from
+        // parent / leave unclassified" (it runs the #1715 inheritance logic).
+        accountUsage: rest.accountUsage && rest.accountUsage !== USAGE_UNSET ? rest.accountUsage : null,
       };
       await createMut.mutateAsync(payload);
       clearDraft();
@@ -106,6 +152,23 @@ export default function AccountsCreate() {
               {filteredBranches.map((b) => (
                 <SelectItem key={b.id} value={String(b.id)}>خاص بفرع: {b.name}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="تصنيف الاستخدام (accountUsage)" hint="يحدّد كيف يُعامَل الحساب في طرق الدفع والترحيل (صندوق/بنك/عهدة/ذمم…). اتركه «يُورَّث من الأب» ليأخذ تصنيف الحساب الأب تلقائياً.">
+          <Select value={form.accountUsage} onValueChange={(v) => setForm((f) => ({ ...f, accountUsage: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={USAGE_UNSET}>— يُورَّث من الأب / غير مصنّف —</SelectItem>
+              {Object.entries(ACCOUNT_USAGE_LABELS_AR).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="سياسة استخدام الأبناء (childrenUsagePolicy)" hint="تحكم في تصنيف الحسابات الفرعية التي تُنشأ تحت هذا الحساب.">
+          <Select value={form.childrenUsagePolicy} onValueChange={(v) => setForm((f) => ({ ...f, childrenUsagePolicy: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(CHILDREN_USAGE_POLICY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
         </FormFieldWrapper>

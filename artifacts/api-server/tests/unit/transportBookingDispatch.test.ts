@@ -131,7 +131,7 @@ describe("#1733 Booking + Dispatch — route surface", () => {
   it("router is mounted under /api with module + financial guards", () => {
     expect(ROUTES_INDEX).toContain("transportBookingsRouter");
     expect(ROUTES_INDEX).toMatch(
-      /router\.use\("\/",\s*requireModule\("fleet"\),\s*requireGuards\("financial"\),\s*transportBookingsRouter\)/,
+      /router\.use\(\s*requireModule\("fleet"\),\s*requireGuards\("financial"\),\s*transportBookingsRouter\)/,
     );
   });
 });

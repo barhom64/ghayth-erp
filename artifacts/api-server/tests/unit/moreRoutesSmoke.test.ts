@@ -294,29 +294,19 @@ describe("permissions — access control", () => {
     expect(PERMS).toContain('router.get("/my"');
   });
 
-  it("role-permissions requires permissions:read for GET", () => {
-    const idx = PERMS.indexOf('router.get("/role-permissions"');
-    const section = PERMS.slice(idx, idx + 200);
-    expect(section).toContain('authorize(');
+  // #1791: the legacy role-permissions and user-permissions CRUD endpoints
+  // (GET/POST/DELETE /role-permissions, /user-permissions) were removed. Role
+  // permissions are now RBAC v2 grants (rbac_role_grants) and per-user overrides
+  // are rbac_user_grants — both managed through the /api/admin/rbac/v2 editor and
+  // enforced by authzEngine. Only the read-only GET /my survives here.
+  it("legacy role-permissions CRUD endpoints are removed", () => {
+    expect(PERMS).not.toContain('router.get("/role-permissions"');
+    expect(PERMS).not.toContain('router.post("/role-permissions"');
+    expect(PERMS).not.toContain('router.delete("/role-permissions"');
   });
 
-  it("role-permissions POST requires dual permission (admin + permissions)", () => {
-    const idx = PERMS.indexOf('router.post("/role-permissions"');
-    const section = PERMS.slice(idx, idx + 200);
-    expect(section).toContain('authorize(');
-    expect(section).toContain('authorize(');
-  });
-
-  it("user-permissions endpoints exist", () => {
-    expect(PERMS).toContain('"/user-permissions"');
-    expect(PERMS).toContain('router.post("/user-permissions"');
-    expect(PERMS).toContain('router.delete("/user-permissions"');
-  });
-
-  it("delete requires dual permission (admin + permissions)", () => {
-    const idx = PERMS.indexOf('router.delete("/role-permissions"');
-    const section = PERMS.slice(idx, idx + 200);
-    expect(section).toContain('authorize(');
-    expect(section).toContain('authorize(');
+  it("legacy user-permissions endpoints are removed", () => {
+    expect(PERMS).not.toContain('router.post("/user-permissions"');
+    expect(PERMS).not.toContain('router.delete("/user-permissions"');
   });
 });

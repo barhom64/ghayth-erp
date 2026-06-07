@@ -187,13 +187,13 @@ const RULES = [
     // into `lib/finance-account-usage.ts` (accountUsage-driven). This ratchet
     // locks the current count so no NEW in-page prefix logic is added; each
     // migration of a page to finance-account-usage drops the baseline by the
-    // same number. Started at 18; dropped to 15 when the expense + voucher
-    // money-account pickers moved to the centralised `isMoneyAccount` helper.
+    // same number. Started at 18; → 15 (expense + voucher money pickers) → 13
+    // (salary-advances + custodies money pickers), all on `isMoneyAccount`.
     id: "account-code-startswith-in-finance-page",
     scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
     extensions: [".tsx"],
     regex: /\bcode\??\)?\.startsWith\(\s*["'`][0-9]/,
-    countBaseline: 15,
+    countBaseline: 13,
     message:
       "Account-code prefix logic (`code.startsWith(\"11\"/\"12\"/\"23\"…)`) " +
       "inside a finance page/component is forbidden as CORE logic (#1715 " +
