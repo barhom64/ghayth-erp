@@ -33,11 +33,11 @@ describe("RBAC v2 → flat bridge in GET /permissions/my", () => {
     expect(section).toMatch(/expires_at IS NULL OR ur\.expires_at > NOW\(\)/);
   });
 
-  it("projects grants via the shared pure helper (parity gate)", () => {
+  it("projects grants (fine-only) via the shared pure helper (parity gate)", () => {
     const idx = PERMS.indexOf('router.get("/my"');
     const section = PERMS.slice(idx, idx + 7000);
-    expect(section).toMatch(/rbacProjected = projectGrantsToFlat\(grantRows\)/);
-    expect(PERMS).toMatch(/import \{ projectGrantsToFlat \} from "\.\.\/lib\/rbac\/flatProjection\.js"/);
+    expect(section).toMatch(/rbacProjected = projectGrantsToFine\(grantRows\)/);
+    expect(PERMS).toMatch(/import \{ projectGrantsToFine \} from "\.\.\/lib\/rbac\/flatProjection\.js"/);
   });
 
   it("is strictly additive (UNION with legacy) and degrades on failure", () => {

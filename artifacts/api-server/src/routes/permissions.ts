@@ -4,7 +4,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { projectGrantsToFlat } from "../lib/rbac/flatProjection.js";
+import { projectGrantsToFine } from "../lib/rbac/flatProjection.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -186,12 +186,13 @@ router.get("/my", async (req, res) => {
     // the frontend `can()` historically reads only the legacy flat set
     // (role_permissions, module:action) — two parallel sources of truth, the
     // root of "weak / inflexible roles". Here we project the caller's RBAC v2
-    // grants into the flat vocabulary and UNION them in, so editing a role in
-    // the RBAC v2 editor now also drives which buttons appear. Strictly
-    // additive: it can only widen UI visibility to match what the backend
-    // already allows (never hides a currently-shown action), and any failure
-    // degrades silently to the legacy set — /permissions/my is load-bearing
-    // for the whole UI, so it must never throw here.
+    // grants (fine `feature.action` form) and UNION them in, so editing a role
+    // in the RBAC v2 editor now also drives which buttons appear. The frontend
+    // matcher keeps coarse gates working by prefix-matching the fine keys.
+    // Strictly additive: it can only widen UI visibility to match what the
+    // backend already allows (never hides a currently-shown action), and any
+    // failure degrades silently to the legacy set — /permissions/my is
+    // load-bearing for the whole UI, so it must never throw here.
     let rbacProjected: string[] = [];
     try {
       const grantRows = await rawQuery<{ feature_key: string; actions: string[] }>(
@@ -204,7 +205,10 @@ router.get("/my", async (req, res) => {
             AND r.role_key = ANY($3::text[])`,
         [scope.userId, scope.companyId, roles.map((r) => r.roleKey)]
       );
-      rbacProjected = projectGrantsToFlat(grantRows);
+      // Fine-only projection: the frontend matcher keeps coarse gates working
+      // by prefix-matching these, while fine gates stay precise (no coarse key
+      // to leak across a module). الخطة الجذرية §3 م4.
+      rbacProjected = projectGrantsToFine(grantRows);
     } catch (e) {
       logger.warn(e, "[permissions/my] RBAC v2 projection skipped — using legacy set only");
     }

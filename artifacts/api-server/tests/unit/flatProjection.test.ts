@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { projectGrantsToFlat } from "../../src/lib/rbac/flatProjection.js";
+import { projectGrantsToFlat, projectGrantsToFine, projectGrantsToCoarse } from "../../src/lib/rbac/flatProjection.js";
 
 // ══════════════════════════════════════════════════════════════════════════
 // Parity gate — RBAC v2 → flat projection (Ghaith Operating Foundation #1413)
@@ -53,5 +53,34 @@ describe("projectGrantsToFlat — RBAC v2 → flat parity", () => {
 
   it("returns an empty array for no grants", () => {
     expect(projectGrantsToFlat([])).toEqual([]);
+    expect(projectGrantsToFine([])).toEqual([]);
+    expect(projectGrantsToCoarse([])).toEqual([]);
+  });
+});
+
+describe("projectGrantsToFine — bridge form (precise, no coarse leak)", () => {
+  it("emits ONLY fine feature.action keys", () => {
+    const out = projectGrantsToFine([{ feature_key: "finance.invoices", actions: ["create", "approve"] }]);
+    expect(out).toEqual(["finance.invoices:create", "finance.invoices:approve"]);
+    expect(out.some((k) => k === "finance:approve")).toBe(false); // no coarse key
+  });
+  it("keeps two features of the same module distinct (so the matcher stays precise)", () => {
+    const out = projectGrantsToFine([
+      { feature_key: "finance.invoices", actions: ["approve"] },
+      { feature_key: "finance.payments", actions: ["view"] },
+    ]);
+    expect(out).toContain("finance.invoices:approve");
+    expect(out).toContain("finance.payments:view");
+    expect(out).not.toContain("finance.payments:approve"); // payments has no approve ⇒ precise
+  });
+});
+
+describe("projectGrantsToCoarse — legacy-cache form", () => {
+  it("emits ONLY coarse module:action keys, de-duplicated", () => {
+    const out = projectGrantsToCoarse([
+      { feature_key: "finance.invoices", actions: ["approve"] },
+      { feature_key: "finance.payments", actions: ["approve"] },
+    ]);
+    expect(out).toEqual(["finance:approve"]);
   });
 });

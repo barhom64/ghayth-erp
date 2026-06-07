@@ -3,34 +3,49 @@
 //
 // الواجهة قد تطلب صلاحية إمّا خشنة `module:action` (مثل finance:approve) أو دقيقة
 // `module.feature:action` (مثل finance.invoices:approve). جسر /permissions/my صار
-// يصدر النوعين معًا من منح RBAC v2، لكن قد لا تملك بعض الشركات سوى المجموعة
-// القديمة الخشنة. لذا تعتبر هذه الدالة الصلاحية الدقيقة مُحقَّقة أيضًا بمنحة خشنة
-// مطابقة — مجموعة فوقية صارمة: تُرجِع true في كل الحالات التي كانت تُرجِعها سابقًا
-// وتزيد عليها، فلا يختفي أي زرّ كان ظاهرًا (ترحيل البوّابات إلى الدقيق بلا انحدار).
+// يُصدِر منح RBAC v2 بالصيغة الدقيقة فقط (feature.action)، بينما تبقى المجموعة
+// القديمة في `role_permissions` خشنة. هذه الدالة توحّد القراءة:
+//
+//   • طلب خشن `module:action` ← يتحقّق إن مُنح حرفيًا، أو `module:*`، أو **أي**
+//     منحة دقيقة داخل الموديول `module.<أي>:action` (فتُضيء البوّابات الخشنة من
+//     منح RBAC الدقيقة).
+//   • طلب دقيق `module.feature:action` ← يتحقّق حرفيًا، أو `feature:*`، أو
+//     `module:*`، أو منحة خشنة قديمة `module:action` (توافقية مع الشركات التي لم
+//     تتبنَّ التحكّم الدقيق). للشركات على RBAC (لا منح خشنة) يكون الطلب الدقيق
+//     **دقيقًا تمامًا** — لا تسرّب بين ميزات الموديول.
+//
+// مجموعة فوقية صارمة لمنطق ما قبلها: تُرجِع true في كل ما كانت تُرجِعه وتزيد، فلا
+// يختفي أي زرّ كان ظاهرًا.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * هل تُغطّي مجموعة الصلاحيات الممنوحة الصلاحيةَ المطلوبة؟
- *
- * يطابق بالترتيب: الكلّي `*` ← المطابقة الحرفية ← `scope:*` (وايلدكارد على نفس
- * النطاق) ← `module:*` (وايلدكارد الموديول) ← `module:action` (تراجُع خشن لمفتاح
- * دقيق). `module` هو الجزء قبل أوّل نقطة من النطاق.
- */
+/** هل تُغطّي مجموعة الصلاحيات الممنوحة الصلاحيةَ المطلوبة؟ */
 export function permissionMatches(granted: readonly string[], required: string): boolean {
   if (!required) return true;
   if (granted.includes("*")) return true;
-  if (granted.includes(required)) return true; // exact (fine or coarse)
+  if (granted.includes(required)) return true; // exact (fine or legacy coarse)
 
   const [scopePart, action] = required.split(":");
   if (!scopePart) return false;
-  if (granted.includes(`${scopePart}:*`)) return true; // feature/scope wildcard
+  if (granted.includes(`${scopePart}:*`)) return true; // wildcard on the same scope
 
-  const moduleKey = scopePart.split(".")[0]; // coarse module of a fine key
-  if (moduleKey && moduleKey !== scopePart) {
-    if (granted.includes(`${moduleKey}:*`)) return true;                 // module wildcard
-    if (action && granted.includes(`${moduleKey}:${action}`)) return true; // coarse grant satisfies fine ask
-  } else if (granted.includes(`${moduleKey}:*`)) {
-    return true; // coarse key whose module wildcard is granted
+  const moduleKey = scopePart.split(".")[0];
+  const isFineAsk = scopePart.includes(".");
+
+  if (granted.includes(`${moduleKey}:*`)) return true; // module wildcard
+
+  if (isFineAsk) {
+    // legacy coarse grant satisfies a fine ask (compat for non-granular tenants)
+    if (action && granted.includes(`${moduleKey}:${action}`)) return true;
+    return false;
+  }
+
+  // coarse ask: any fine grant within the module for the same action satisfies it
+  if (action) {
+    const prefix = `${moduleKey}.`;
+    const suffix = `:${action}`;
+    for (const g of granted) {
+      if (g.startsWith(prefix) && g.endsWith(suffix)) return true;
+    }
   }
   return false;
 }

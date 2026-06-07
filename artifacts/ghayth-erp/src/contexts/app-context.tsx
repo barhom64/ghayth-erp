@@ -278,10 +278,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const permissions = useMemo(() => {
     if (apiData !== null) {
+      // Coarse preset flags — route through the unified matcher so a fine
+      // RBAC grant (module.feature:action) lights the coarse preset too, now
+      // that the bridge projects RBAC grants as fine-only.
       const has = (module: string, action: string) =>
-        apiData.permissions.includes(`${module}:${action}`) ||
-        apiData.permissions.includes(`${module}:*`) ||
-        apiData.permissions.includes("*");
+        permissionMatches(apiData.permissions, `${module}:${action}`);
       return {
         canViewAllBranches: has("admin", "read") || has("reports", "read"),
         canManageViolations: has("hr", "approve") || has("hr", "write"),
