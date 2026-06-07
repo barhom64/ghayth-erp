@@ -151,12 +151,24 @@ export async function auditSeparationOfDuties(companyId: number): Promise<Policy
 
 export async function auditMaxPrivilege(companyId: number): Promise<PolicyViolation[]> {
   const violations: PolicyViolation[] = [];
+  // Was N+1: scalar COUNT subquery per active assignment over
+  // role_permissions, keyed by ea.role. For 200 active assignments
+  // that's 200 lookups against role_permissions per audit run. Single
+  // CTE pre-aggregates the company's permission counts by role, so
+  // the outer join is one scan per assignment regardless of size.
   const rows = await rawQuery<{ userId: number; email: string; role: string; permCount: number }>(
-    `SELECT u.id AS "userId", u.email, ea.role,
-            (SELECT COUNT(*) FROM role_permissions rp WHERE rp.role = ea.role AND (rp."companyId" = $1 OR rp."companyId" IS NULL))::int AS "permCount"
-     FROM users u
-     JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
-     WHERE u."employeeId" IS NOT NULL AND ea."companyId" = $1 AND ea.status = 'active'`,
+    `WITH role_perm_counts AS (
+       SELECT role, COUNT(*)::int AS c
+         FROM role_permissions
+        WHERE "companyId" = $1 OR "companyId" IS NULL
+        GROUP BY role
+     )
+     SELECT u.id AS "userId", u.email, ea.role,
+            COALESCE(rpc.c, 0) AS "permCount"
+       FROM users u
+       JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
+       LEFT JOIN role_perm_counts rpc ON rpc.role = ea.role
+      WHERE u."employeeId" IS NOT NULL AND ea."companyId" = $1 AND ea.status = 'active'`,
     [companyId]
   );
   for (const r of rows) {
