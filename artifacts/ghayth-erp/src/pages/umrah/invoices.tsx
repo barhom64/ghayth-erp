@@ -22,6 +22,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Receipt, DollarSign, FileText, Plus, X, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * UMR-005 + UMR-016 — unified umrah invoices page with three tabs:
@@ -88,6 +90,7 @@ function AgentInvoicesTab() {
     }
     return true;
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredItems);
 
   const totalAmount = items.reduce((sum: number, inv: any) => sum + Number(inv.total || 0), 0);
   const paidAmount = items.filter((inv: any) => inv.status === "paid").reduce((sum: number, inv: any) => sum + Number(inv.total || 0), 0);
@@ -157,6 +160,33 @@ function AgentInvoicesTab() {
         resultCount={filteredItems.length}
       />
 
+      <div className="flex justify-end">
+        <PrintButton
+          entityType="report_umrah_agent_invoices"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة فواتير الوكلاء"
+          payload={() => ({
+            entity: {
+              title: "قائمة فواتير وكلاء العمرة",
+              total: printRows.length,
+              totalAmount,
+              paidAmount,
+            },
+            items: printRows.map((inv: any) => ({
+              "المرجع": inv.ref || "—",
+              "الوكيل": inv.agentName || "—",
+              "الموسم": inv.seasonTitle || "—",
+              "عدد المعتمرين": inv.pilgrimCount ?? "—",
+              "الخدمات": Number(inv.servicesTotal || 0),
+              "الغرامات": Number(inv.penaltiesTotal || 0),
+              "الإجمالي": Number(inv.total || 0),
+              "الحالة": inv.status || "—",
+            })),
+          })}
+        />
+      </div>
+
       <DataTable
         columns={[
           { key: "ref", header: "المرجع", render: (inv) => <span className="font-mono text-sm">{inv.ref}</span> },
@@ -167,8 +197,18 @@ function AgentInvoicesTab() {
           { key: "penaltiesTotal", header: "الغرامات (ريال)", render: (inv) => <span className="text-status-error-foreground">{formatCurrency(Number(inv.penaltiesTotal))}</span> },
           { key: "total", header: "الإجمالي (ريال)", render: (inv) => <span className="font-bold">{formatCurrency(Number(inv.total))}</span> },
           { key: "status", header: "الحالة", render: (inv) => <PageStatusBadge status={inv.status} /> },
+          {
+            key: "_print",
+            header: "",
+            render: (inv) => (
+              <span onClick={(e) => e.stopPropagation()}>
+                <PrintButton entityType="umrah_agent_invoice" entityId={inv.id} size="icon" variant="ghost" label="طباعة فاتورة الوكيل" />
+              </span>
+            ),
+          },
         ] as DataTableColumn<any>[]}
         data={filteredItems}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
@@ -215,6 +255,7 @@ function SalesInvoicesTab() {
   const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const { data: subAgents } = useApiQuery<any>(["umrah-sub-agents"], "/umrah/sub-agents");
   const items = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const columns: DataTableColumn<any>[] = [
     { key: "invoiceNumber", header: "رقم الفاتورة", render: (r) => <span className="font-mono text-sm">{r.invoiceNumber || r.ref || `#${r.id}`}</span> },
@@ -271,6 +312,15 @@ function SalesInvoicesTab() {
         ) : null
       ),
     },
+    {
+      key: "_print",
+      header: "",
+      render: (r) => (
+        <span onClick={(e) => e.stopPropagation()}>
+          <PrintButton entityType="umrah_sales_invoice" entityId={r.id} size="icon" variant="ghost" label="طباعة الفاتورة" />
+        </span>
+      ),
+    },
   ];
 
   return (
@@ -313,9 +363,34 @@ function SalesInvoicesTab() {
         </CardContent>
       </Card>
 
+      <div className="flex justify-end">
+        <PrintButton
+          entityType="report_umrah_sales_invoices"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة فواتير المبيعات"
+          payload={() => ({
+            entity: {
+              title: "قائمة فواتير مبيعات العمرة",
+              total: printRows.length,
+            },
+            items: printRows.map((r: any) => ({
+              "رقم الفاتورة": r.invoiceNumber || r.ref || `#${r.id}`,
+              "العميل": r.clientName || "—",
+              "الوكيل الفرعي": r.subAgentName || "—",
+              "الإجمالي": Number(r.total || r.totalAmount || 0),
+              "الهامش": r.marginBase == null ? "—" : Number(r.marginBase),
+              "الحالة": r.status || "—",
+              "تاريخ الإنشاء": r.createdAt ? formatDateAr(r.createdAt) : "—",
+            })),
+          })}
+        />
+      </div>
+
       <DataTable
         columns={columns}
         data={items}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
@@ -357,6 +432,7 @@ function NuskInvoicesTab() {
   const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
   const { data: subAgents } = useApiQuery<any>(["umrah-sub-agents"], "/umrah/sub-agents");
   const items = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const createMut = useApiMutation<any, Record<string, unknown>>(
     "/umrah/nusk-invoices",
@@ -503,11 +579,34 @@ function NuskInvoicesTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">إدارة فواتير nusk الصادرة عن النظام السعودي.</p>
-        {!showNew && (
-          <GuardedButton perm="umrah:create" onClick={() => setShowNew(true)}>
-            <Plus className="h-4 w-4 ml-1" /> فاتورة نسك جديدة
-          </GuardedButton>
-        )}
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_nusk_invoices"
+            entityId="list"
+            size="icon"
+            label="طباعة قائمة فواتير نسك"
+            payload={() => ({
+              entity: {
+                title: "قائمة فواتير نُسك",
+                total: printRows.length,
+              },
+              items: printRows.map((r: any) => ({
+                "رقم النسك": r.nuskInvoiceNumber || `#${r.id}`,
+                "الوكيل": r.agentName || `#${r.agentId}`,
+                "الوكيل الفرعي": r.subAgentName || "—",
+                "المعتمرون": r.mutamerCount ?? "—",
+                "الإجمالي": Number(r.totalAmount || 0),
+                "الحالة": r.nuskStatus || "—",
+                "تنتهي في": r.expiryDate ? formatDateAr(r.expiryDate) : "—",
+              })),
+            })}
+          />
+          {!showNew && (
+            <GuardedButton perm="umrah:create" onClick={() => setShowNew(true)}>
+              <Plus className="h-4 w-4 ml-1" /> فاتورة نسك جديدة
+            </GuardedButton>
+          )}
+        </div>
       </div>
 
       {showNew && (
@@ -572,6 +671,7 @@ function NuskInvoicesTab() {
       <DataTable
         columns={columns}
         data={items}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
