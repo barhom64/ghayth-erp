@@ -13,7 +13,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { amountTaxSplit } from "@/lib/tax-math";
-import { allowedUsagesForPaymentMethod } from "@/lib/finance-account-usage";
+import { allowedUsagesForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
 import { AllocationTargetSelect, EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
 import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { AlertCircle, Paperclip } from "lucide-react";
@@ -367,13 +367,10 @@ export default function VouchersCreate() {
             // enforces the same rule.
             filter={(a: any) => {
               const allowed = allowedUsagesForPaymentMethod(form.method);
-              const isMoney = a.accountUsage
-                ? ["cash_box", "bank", "custody", "card", "cheque"].includes(a.accountUsage)
-                : a.code?.startsWith("11") || a.code?.startsWith("12");
-              if (!allowed) return isMoney;
+              if (!allowed) return isMoneyAccount(a);
               return a.accountUsage
                 ? allowed.includes(a.accountUsage)
-                : a.code?.startsWith("11") || a.code?.startsWith("12");
+                : isMoneyAccount(a);
             }}
           />
         </div>
