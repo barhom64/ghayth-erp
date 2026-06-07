@@ -9,17 +9,26 @@ export interface AlertResult {
 }
 
 async function checkEmployeeOverload(companyId: number): Promise<number> {
+  // Was 2× N+1: same correlated COUNT(*) subquery in both SELECT and
+  // WHERE, evaluated per active assignment over `tasks`. For 200
+  // active assignments that's 400 lookups per hourly alert run. The
+  // overload check is on the cron path so it fires every hour.
+  // Single CTE collapses both to one GROUP BY scan.
   const rows = await rawQuery<{ assignmentId: number; employeeId: number; name: string; activeTasks: number }>(
-    `SELECT ea.id AS "assignmentId", ea."employeeId", e.name,
-            (SELECT COUNT(*) FROM tasks t
-             WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-             AND t.status NOT IN ('completed','cancelled'))::int AS "activeTasks"
-     FROM employee_assignments ea
-     JOIN employees e ON e.id = ea."employeeId"
-     WHERE ea."companyId" = $1 AND ea.status = 'active'
-       AND (SELECT COUNT(*) FROM tasks t
-            WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-            AND t.status NOT IN ('completed','cancelled'))::int > 6`,
+    `WITH active_task_counts AS (
+       SELECT t."assignedTo" AS "assignmentId", COUNT(*)::int AS c
+         FROM tasks t
+        WHERE t."companyId" = $1
+          AND t.status NOT IN ('completed','cancelled')
+        GROUP BY t."assignedTo"
+     )
+     SELECT ea.id AS "assignmentId", ea."employeeId", e.name,
+            atc.c AS "activeTasks"
+       FROM employee_assignments ea
+       JOIN employees e ON e.id = ea."employeeId"
+       JOIN active_task_counts atc ON atc."assignmentId" = ea.id
+      WHERE ea."companyId" = $1 AND ea.status = 'active'
+        AND atc.c > 6`,
     [companyId]
   );
 
@@ -35,15 +44,24 @@ async function checkEmployeeOverload(companyId: number): Promise<number> {
     );
 
     try {
+      // Same N+1 shape: workload-per-assignment via correlated COUNT.
+      // CTE collapses to one scan; LEFT JOIN + COALESCE so candidates
+      // with zero active tasks still surface (and rank lowest).
       const leastLoaded = await rawQuery<{ assignmentId: number; employeeId: number; name: string; workload: number }>(
-        `SELECT ea.id AS "assignmentId", ea."employeeId", e.name,
-                (SELECT COUNT(*) FROM tasks t
-                 WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-                 AND t.status NOT IN ('completed','cancelled'))::int AS workload
-         FROM employee_assignments ea
-         JOIN employees e ON e.id = ea."employeeId"
-         WHERE ea."companyId" = $1 AND ea.status = 'active' AND ea."employeeId" != $2
-         ORDER BY workload ASC LIMIT 1`,
+        `WITH active_task_counts AS (
+           SELECT t."assignedTo" AS "assignmentId", COUNT(*)::int AS c
+             FROM tasks t
+            WHERE t."companyId" = $1
+              AND t.status NOT IN ('completed','cancelled')
+            GROUP BY t."assignedTo"
+         )
+         SELECT ea.id AS "assignmentId", ea."employeeId", e.name,
+                COALESCE(atc.c, 0) AS workload
+           FROM employee_assignments ea
+           JOIN employees e ON e.id = ea."employeeId"
+           LEFT JOIN active_task_counts atc ON atc."assignmentId" = ea.id
+          WHERE ea."companyId" = $1 AND ea.status = 'active' AND ea."employeeId" != $2
+          ORDER BY workload ASC LIMIT 1`,
         [companyId, row.employeeId]
       );
 
