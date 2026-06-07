@@ -19,6 +19,7 @@ import {
   useFilters,
   applyFilters,
   exportToCSV,
+  resolveStatus,
 } from "@workspace/ui-core";
 import { Banknote, Plus, Wallet, TrendingUp, Users } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -173,7 +174,7 @@ export default function UmrahPayments() {
                 "المبلغ": Number(p.amount || 0),
                 "الطريقة": p.method || p.paymentMethod || "—",
                 "التاريخ": p.paymentDate || p.createdAt || "—",
-                "الحالة": p.status || "—",
+                "الحالة": (p.status && resolveStatus(p.status)?.label) ?? p.status ?? "—",
               })),
             })}
           />

@@ -15,6 +15,8 @@ import { TrendingUp, Plus } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export function KPIsTab() {
   const { data: kpisResp, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-kpis"], "/bi/kpis");
@@ -25,6 +27,7 @@ export function KPIsTab() {
   const filtered = applyFilters(allItems, filters, {
     searchFields: ["name", "module", "description"],
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "name", header: "المؤشر", sortable: true, render: (k) => <span className="font-medium">{k.name}</span> },
@@ -56,6 +59,22 @@ export function KPIsTab() {
             resultCount={filtered.length}
           />
         </div>
+        <PrintButton
+          entityType="report_bi_kpis"
+          entityId="list"
+          size="icon"
+          label="طباعة مؤشرات الأداء"
+          payload={() => ({
+            entity: { title: "مؤشرات الأداء (KPIs)", total: printRows.length },
+            items: printRows.map((k: any) => ({
+              "المؤشر": k.name || "—",
+              "الوحدة": k.module || "—",
+              "الهدف": Number(k.target || 0),
+              "القيمة الحالية": Number(k.currentValue || 0),
+              "% الإنجاز": k.target ? `${Math.round((Number(k.currentValue || 0) / Number(k.target)) * 100)}%` : "—",
+            })),
+          })}
+        />
         {canWrite && <Link href="/bi/kpis/create"><GuardedButton perm="bi:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة مؤشر</GuardedButton></Link>}
       </div>
       <Card>
@@ -64,6 +83,7 @@ export function KPIsTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
