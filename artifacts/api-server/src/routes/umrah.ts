@@ -3564,4 +3564,48 @@ router.get("/nusk-wallet", authorize({ feature: "umrah", action: "view" }), asyn
   } catch (err) { handleRouteError(err, res, "Get NUSK wallet error"); }
 });
 
+// Test internal notification — the operator clicks "اختبار" in
+// settings and we send a one-off in-app notification to their own
+// assignment. Confirms the notification seam is wired without
+// forcing a real pilgrim row through the pipeline.
+router.post("/notifications/test", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    // Find this operator's assignment id — that's where the test
+    // notification lands. NULL means the user has no active
+    // employee assignment; we surface a clear error instead of
+    // silently dropping.
+    const [me] = await rawQuery<{ id: number }>(
+      `SELECT ea.id FROM employee_assignments ea
+        WHERE ea."userId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+        ORDER BY ea.id DESC LIMIT 1`,
+      [scope.userId, scope.companyId],
+    );
+    if (!me) {
+      throw new ValidationError("ليس لديك تكليف موظف نشط — لا يمكن استلام إشعار تجريبي", {
+        field: "userId",
+        fix: "تأكد من ربط حسابك بـemployee_assignment نشط في إعدادات الموارد البشرية",
+      });
+    }
+    const { createNotification } = await import("../lib/businessHelpers.js");
+    await createNotification({
+      companyId: scope.companyId,
+      assignmentId: me.id,
+      type: "umrah",
+      title: "🔔 إشعار تجريبي من نظام العمرة",
+      body: `اختبار نظام الإشعارات الداخلية — التاريخ: ${todayISO()}. إذا وصلتك هذه الرسالة فالنظام جاهز.`,
+      priority: "normal",
+      refType: "umrah_notifications",
+      refId: undefined,
+      actionUrl: "/umrah/settings",
+    });
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.notifications.test.sent", entity: "notifications", entityId: me.id,
+      details: JSON.stringify({ recipientAssignmentId: me.id }),
+    }).catch((e) => logger.error(e, "umrah test notify event failed"));
+    res.json({ ok: true, recipientAssignmentId: me.id });
+  } catch (err) { handleRouteError(err, res, "Test notification error"); }
+});
+
 export default router;

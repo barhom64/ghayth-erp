@@ -2301,6 +2301,12 @@ ALTER TABLE ONLY public.umrah_families ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
+-- Name: umrah_refund_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_refund_requests ALTER COLUMN id SET DEFAULT nextval('public.umrah_refund_requests_id_seq'::regclass);
+
+
+--
 -- Name: umrah_room_blocks id; Type: DEFAULT; Schema: public; Owner: -
 --
 ALTER TABLE ONLY public.umrah_room_blocks ALTER COLUMN id SET DEFAULT nextval('public.umrah_room_blocks_id_seq'::regclass);
@@ -5841,6 +5847,13 @@ ALTER TABLE ONLY public.umrah_hotels
 --
 ALTER TABLE ONLY public.umrah_families
     ADD CONSTRAINT umrah_families_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: umrah_refund_requests umrah_refund_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_refund_requests
+    ADD CONSTRAINT umrah_refund_requests_pkey PRIMARY KEY (id);
 
 CREATE INDEX idx_umrah_hotels_city ON public.umrah_hotels USING btree ("companyId", city) WHERE ("deletedAt" IS NULL);
 
@@ -15502,6 +15515,91 @@ CREATE INDEX idx_cargo_items_manifest
     ON public.cargo_items ("manifestId") WHERE "deletedAt" IS NULL;
 CREATE INDEX idx_cargo_items_hazmat
     ON public.cargo_items ("isHazmat", "companyId") WHERE "deletedAt" IS NULL AND "isHazmat" = true;
+
+--
+-- #1733 Foundation — billing-status queue index on cargo_manifests + the
+-- transport_service_lines bridge table.
+--
+
+CREATE INDEX IF NOT EXISTS idx_cargo_manifests_billing_status
+  ON public.cargo_manifests ("companyId", "billingStatus", "deliveryDate" DESC)
+  WHERE "billingStatus" IN ('ready_for_accounting', 'under_review');
+
+ALTER TABLE ONLY public.transport_service_lines ALTER COLUMN id SET DEFAULT nextval('public.transport_service_lines_id_seq'::regclass);
+
+ALTER TABLE ONLY public.transport_service_lines
+    ADD CONSTRAINT transport_service_lines_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.transport_service_lines
+    ADD CONSTRAINT uq_transport_service_line_source UNIQUE ("companyId", "sourceType", "sourceId");
+
+CREATE INDEX idx_service_lines_customer_status
+  ON public.transport_service_lines ("companyId", "customerId", "billingStatus", "serviceDate" DESC);
+
+CREATE INDEX idx_service_lines_invoice
+  ON public.transport_service_lines ("invoiceId")
+  WHERE "invoiceId" IS NOT NULL;
+
+--
+-- Transport billing candidates (#1733) — operational-to-finance handoff
+--
+
+ALTER TABLE ONLY public.transport_billing_candidates ALTER COLUMN id SET DEFAULT nextval('public.transport_billing_candidates_id_seq'::regclass);
+
+ALTER TABLE ONLY public.transport_billing_candidates
+    ADD CONSTRAINT transport_billing_candidates_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.transport_billing_candidates
+    ADD CONSTRAINT uq_billing_candidate_source UNIQUE ("companyId", "sourceType", "sourceId");
+
+CREATE INDEX idx_billing_candidates_company_status
+    ON public.transport_billing_candidates ("companyId", status, "createdAt" DESC);
+CREATE INDEX idx_billing_candidates_customer
+    ON public.transport_billing_candidates ("companyId", "customerId") WHERE "customerId" IS NOT NULL;
+CREATE INDEX idx_billing_candidates_vehicle
+    ON public.transport_billing_candidates ("companyId", "vehicleId") WHERE "vehicleId" IS NOT NULL;
+
+
+--
+-- #1733 Booking + Dispatch layer (Issue Comment 9) — PKs + UNIQUE + indexes
+--
+
+ALTER TABLE ONLY public.transport_locations ALTER COLUMN id SET DEFAULT nextval('public.transport_locations_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_locations ADD CONSTRAINT transport_locations_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_transport_locations_company
+  ON public.transport_locations ("companyId", "isActive") WHERE "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_bookings ALTER COLUMN id SET DEFAULT nextval('public.transport_bookings_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_bookings ADD CONSTRAINT transport_bookings_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.transport_bookings ADD CONSTRAINT uq_transport_booking_number UNIQUE ("companyId", "bookingNumber");
+CREATE INDEX IF NOT EXISTS idx_bookings_company_status
+  ON public.transport_bookings ("companyId", status, "requestedPickupDate") WHERE "deletedAt" IS NULL;
+CREATE INDEX IF NOT EXISTS idx_bookings_customer
+  ON public.transport_bookings ("companyId", "customerId", "requestedPickupDate" DESC)
+  WHERE "deletedAt" IS NULL AND "customerId" IS NOT NULL;
+
+ALTER TABLE ONLY public.transport_booking_lines ALTER COLUMN id SET DEFAULT nextval('public.transport_booking_lines_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_booking_lines ADD CONSTRAINT transport_booking_lines_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.transport_booking_lines ADD CONSTRAINT uq_booking_line UNIQUE ("bookingId", "lineNumber");
+CREATE INDEX IF NOT EXISTS idx_booking_lines_booking
+  ON public.transport_booking_lines ("bookingId") WHERE "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.transport_dispatch_orders ALTER COLUMN id SET DEFAULT nextval('public.transport_dispatch_orders_id_seq'::regclass);
+ALTER TABLE ONLY public.transport_dispatch_orders ADD CONSTRAINT transport_dispatch_orders_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_dispatch_company_window
+  ON public.transport_dispatch_orders ("companyId", "scheduledStartAt", "scheduledEndAt")
+  WHERE status NOT IN ('declined', 'cancelled');
+CREATE INDEX IF NOT EXISTS idx_dispatch_driver_window
+  ON public.transport_dispatch_orders ("driverId", "scheduledStartAt")
+  WHERE status NOT IN ('declined', 'cancelled');
+CREATE INDEX IF NOT EXISTS idx_dispatch_vehicle_window
+  ON public.transport_dispatch_orders ("vehicleId", "scheduledStartAt")
+  WHERE status NOT IN ('declined', 'cancelled');
+
+ALTER TABLE ONLY public.vehicle_location_snapshots ALTER COLUMN id SET DEFAULT nextval('public.vehicle_location_snapshots_id_seq'::regclass);
+ALTER TABLE ONLY public.vehicle_location_snapshots ADD CONSTRAINT vehicle_location_snapshots_pkey PRIMARY KEY (id);
+CREATE INDEX IF NOT EXISTS idx_vehicle_snapshots_latest
+  ON public.vehicle_location_snapshots ("companyId", "vehicleId", "capturedAt" DESC);
 
 
 --
