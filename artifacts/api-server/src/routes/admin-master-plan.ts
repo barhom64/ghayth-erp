@@ -92,8 +92,8 @@ router.get(
         items: [
           {
             key: "identity_rbac", label: "Identity / RBAC",
-            status: ifTable("role_permissions", "implemented"),
-            evidence: "RBAC v2 — feature_catalog + role_permissions + authorize() على كل endpoint",
+            status: ifTable("rbac_roles", "implemented"),
+            evidence: "RBAC v2 — feature_catalog + rbac_roles + rbac_role_grants + authorize() على كل endpoint",
             linkPath: "/admin/rbac-matrix",
           },
           {
