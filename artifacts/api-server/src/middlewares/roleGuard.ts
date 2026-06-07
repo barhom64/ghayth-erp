@@ -45,10 +45,12 @@ async function getUserModules(userId: number, fallbackRole?: string, companyId?:
   const cached = roleModuleCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached;
 
+  // Legacy user_roles was dropped (migration 261); degrade to [] so module
+  // resolution falls through to the fallbackRole defaults below.
   const rows = await rawQuery<{ roleKey: string; modules: any; level: number }>(
     `SELECT "roleKey", modules, level FROM user_roles WHERE "userId" = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
     [userId, companyId ?? 0]
-  );
+  ).catch(() => [] as { roleKey: string; modules: any; level: number }[]);
 
   const allModules = new Set<string>();
   const roles: string[] = [];

@@ -454,16 +454,26 @@ async function createDefaultRoles(client: pg.PoolClient, companyId: number) {
     { role: "driver", permissions: ["dashboard:read", "profile:self", "attendance:self", "leaves:self", "fleet:read", "documents:read", "comms:read", "notifications:read"] },
     { role: "employee", permissions: ["dashboard:read", "attendance:self", "leaves:self", "profile:self", "requests:self", "documents:read", "comms:read"] },
   ];
-  for (const r of roles) {
-    for (const perm of r.permissions) {
-      await exec(
-        client,
-        `INSERT INTO role_permissions (role, permission, "companyId")
-         VALUES ($1, $2, $3)
-         ON CONFLICT DO NOTHING`,
-        [r.role, perm, companyId]
-      );
+  // Legacy role_permissions was dropped (migration 261); RBAC v2 is the
+  // authority for role definitions. This flat seed is best-effort: wrap the
+  // whole loop in a SAVEPOINT so a missing table cannot poison the bootstrap
+  // transaction (a plain catch inside BEGIN would abort it).
+  await client.query("SAVEPOINT sp_default_role_permissions");
+  try {
+    for (const r of roles) {
+      for (const perm of r.permissions) {
+        await exec(
+          client,
+          `INSERT INTO role_permissions (role, permission, "companyId")
+           VALUES ($1, $2, $3)
+           ON CONFLICT DO NOTHING`,
+          [r.role, perm, companyId]
+        );
+      }
     }
+    await client.query("RELEASE SAVEPOINT sp_default_role_permissions");
+  } catch {
+    await client.query("ROLLBACK TO SAVEPOINT sp_default_role_permissions");
   }
 }
 

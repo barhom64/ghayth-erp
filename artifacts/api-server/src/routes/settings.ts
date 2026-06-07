@@ -788,10 +788,11 @@ router.get("/role-modules", authorize({ feature: "settings", action: "view" }), 
     // existing behavior exactly. See docs/audit/SCOPE_NORMALIZATION_RCA_685.md
     // "Branch Scope Decision Matrix" for the schema-driven category mapping.
     const { where, params } = buildScopedWhere(scope, {}, { disableBranchScope: true });
+    // Legacy user_roles was dropped (migration 261); degrade to [] if absent.
     const roles = await rawQuery(
       `SELECT DISTINCT "roleKey", label, modules, level FROM user_roles WHERE ${where} ORDER BY level DESC`,
       params
-    );
+    ).catch(() => [] as any[]);
     res.json(maskFields(req, { data: roles }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -802,10 +803,11 @@ router.put("/role-modules/:roleKey", authorize({ feature: "settings", action: "u
     const scope = req.scope!;
     const { roleKey } = req.params;
     const { modules } = body;
+    // Legacy user_roles was dropped (migration 261); best-effort write.
     await rawExecute(
       `UPDATE user_roles SET modules=$1 WHERE "roleKey"=$2 AND "companyId"=$3`,
       [JSON.stringify(modules), roleKey, scope.companyId]
-    );
+    ).catch(() => undefined);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "user_roles", entityId: 0,

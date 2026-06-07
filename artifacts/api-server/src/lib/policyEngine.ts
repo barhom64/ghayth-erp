@@ -41,11 +41,11 @@ export async function getActiveRoleKeysForUser(
   userId: number,
   companyId: number,
 ): Promise<string[]> {
+  // Legacy user_roles was dropped (migration 261); active role keys now come
+  // from RBAC v2 (rbac_user_roles JOIN rbac_roles) unioned with active
+  // employee_assignments. The legacy union arm is gone.
   const rows = await rawQuery<{ role: string | null }>(
-    `SELECT "roleKey" AS role FROM user_roles
-       WHERE "userId" = $1 AND "companyId" = $2
-     UNION
-     SELECT r.role_key AS role FROM rbac_user_roles ur
+    `SELECT r.role_key AS role FROM rbac_user_roles ur
        JOIN rbac_roles r ON r.id = ur.role_id
        WHERE ur."userId" = $1 AND ur."companyId" = $2
          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
@@ -55,7 +55,7 @@ export async function getActiveRoleKeysForUser(
        WHERE u.id = $1 AND ea."companyId" = $2
          AND ea.status = 'active' AND ea.role IS NOT NULL`,
     [userId, companyId],
-  );
+  ).catch(() => [] as { role: string | null }[]);
   return rows.map((r) => r.role).filter((x): x is string => !!x);
 }
 
@@ -151,14 +151,16 @@ export async function auditSeparationOfDuties(companyId: number): Promise<Policy
 
 export async function auditMaxPrivilege(companyId: number): Promise<PolicyViolation[]> {
   const violations: PolicyViolation[] = [];
+  // Legacy role_permissions was dropped (migration 261). The per-role
+  // permission-count was sourced from that table; with it gone permCount is 0
+  // (no max-privilege violations can be derived from the retired flat model).
   const rows = await rawQuery<{ userId: number; email: string; role: string; permCount: number }>(
-    `SELECT u.id AS "userId", u.email, ea.role,
-            (SELECT COUNT(*) FROM role_permissions rp WHERE rp.role = ea.role AND (rp."companyId" = $1 OR rp."companyId" IS NULL))::int AS "permCount"
+    `SELECT u.id AS "userId", u.email, ea.role, 0::int AS "permCount"
      FROM users u
      JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
      WHERE u."employeeId" IS NOT NULL AND ea."companyId" = $1 AND ea.status = 'active'`,
     [companyId]
-  );
+  ).catch(() => [] as { userId: number; email: string; role: string; permCount: number }[]);
   for (const r of rows) {
     const rule = MAX_PRIVILEGE_RULES.find((mp) => mp.role === r.role);
     if (rule && r.permCount > rule.maxPermissions) {

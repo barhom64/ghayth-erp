@@ -1212,6 +1212,9 @@ export async function getDirectorAssignmentId(companyId: number, branchId: numbe
 }
 
 export async function getCfoAssignmentId(companyId: number, branchId: number): Promise<number | null> {
+  // Legacy user_roles was dropped (migration 261). If the finance_manager
+  // lookup fails (table missing) we degrade to [] and fall back to the
+  // director (general_manager/owner) assignment below, same as a no-match.
   const [row] = await rawQuery<{ id: number }>(
     `SELECT ea.id FROM employee_assignments ea
      JOIN users u ON u."employeeId" = ea."employeeId"
@@ -1220,7 +1223,7 @@ export async function getCfoAssignmentId(companyId: number, branchId: number): P
        AND ur."roleKey" = 'finance_manager' AND ea.status = 'active'
      LIMIT 1`,
     [companyId, branchId]
-  );
+  ).catch(() => [] as { id: number }[]);
   if (row?.id) return row.id;
   return getDirectorAssignmentId(companyId, branchId);
 }

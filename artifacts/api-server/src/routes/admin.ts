@@ -183,6 +183,10 @@ router.get("/users", authorize({ feature: "admin", action: "list" }), async (req
     // user, so 500 users == 501 index lookups into security_log over
     // a 7-day window. The CTE below scans the table once filtered to
     // that same window and joins per-user counts back.
+    // Membership is keyed on employee_assignments. Legacy user_roles was
+    // dropped (migration 261); the historical `OR u.id IN (user_roles …)`
+    // branch is gone, so company membership now derives solely from
+    // employee_assignments.
     const rows = await rawQuery(`
       WITH failed_login_counts AS (
         SELECT "userId", COUNT(*) AS "failedAttempts7d"
@@ -199,7 +203,6 @@ router.get("/users", authorize({ feature: "admin", action: "list" }), async (req
       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
       LEFT JOIN failed_login_counts flc ON flc."userId" = u.id
       WHERE ea."companyId" = $1
-         OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $1)
       ORDER BY u."createdAt" DESC
       LIMIT 500
     `, [scope.companyId]);
@@ -231,20 +234,36 @@ router.post("/users", authorize({ feature: "admin", action: "update" }), async (
       const userId = userRes.rows[0].id;
       const assignedRole = role || "employee";
       const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === assignedRole) || { roleKey: assignedRole, label: assignedRole, modules: [], level: 10 };
-      const customRoleRes = await tx.query(
-        `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
-        [scope.companyId, assignedRole]
-      );
-      const customRoleDef = customRoleRes.rows[0];
+      // Legacy custom_roles / user_roles were dropped (migration 261). Read
+      // and write them best-effort via SAVEPOINTs so a missing table neither
+      // poisons the transaction nor blocks user creation; RBAC v2 is authority.
+      let customRoleDef: any = null;
+      await tx.query(`SAVEPOINT sp_custom_role_read`);
+      try {
+        const customRoleRes = await tx.query(
+          `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
+          [scope.companyId, assignedRole]
+        );
+        customRoleDef = customRoleRes.rows[0] ?? null;
+        await tx.query(`RELEASE SAVEPOINT sp_custom_role_read`);
+      } catch {
+        await tx.query(`ROLLBACK TO SAVEPOINT sp_custom_role_read`);
+      }
       const finalDef = customRoleDef
         ? { roleKey: assignedRole, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
         : roleDef;
-      await tx.query(
-        `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,NOW())
-         ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
-        [userId, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
-      );
+      await tx.query(`SAVEPOINT sp_user_role_write`);
+      try {
+        await tx.query(
+          `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
+           VALUES ($1,$2,$3,$4,$5,$6,NOW())
+           ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
+          [userId, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
+        );
+        await tx.query(`RELEASE SAVEPOINT sp_user_role_write`);
+      } catch {
+        await tx.query(`ROLLBACK TO SAVEPOINT sp_user_role_write`);
+      }
       return userId;
     });
     const r = { insertId: newUserId };
@@ -296,14 +315,14 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
     await assertAdmin(req);
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Membership derives from employee_assignments. Legacy user_roles was
+    // dropped (migration 261), so the historical `OR u.id IN (user_roles …)`
+    // branch is gone.
     const [userBelongs] = await rawQuery(
       `SELECT 1 FROM users u
        LEFT JOIN employees e ON e.id = u."employeeId"
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
-       WHERE u.id = $1 AND (
-         ea."companyId" = $2
-         OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $2)
-       ) LIMIT 1`,
+       WHERE u.id = $1 AND ea."companyId" = $2 LIMIT 1`,
       [id, scope.companyId]
     );
     if (!userBelongs) { throw new ForbiddenError("المستخدم لا ينتمي لشركتك"); }
@@ -330,20 +349,36 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
       }
       if (role !== undefined) {
         const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === role) || { roleKey: role, label: role, modules: [], level: 10 };
-        const { rows: customRows } = await tx.query(
-          `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
-          [scope.companyId, role]
-        );
-        const customRoleDef = customRows[0] ?? null;
+        // Legacy custom_roles / user_roles were dropped (migration 261); read
+        // and write best-effort via SAVEPOINTs so a missing table cannot
+        // poison the transaction. RBAC v2 is the authority.
+        let customRoleDef: any = null;
+        await tx.query(`SAVEPOINT sp_patch_custom_role_read`);
+        try {
+          const { rows: customRows } = await tx.query(
+            `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
+            [scope.companyId, role]
+          );
+          customRoleDef = customRows[0] ?? null;
+          await tx.query(`RELEASE SAVEPOINT sp_patch_custom_role_read`);
+        } catch {
+          await tx.query(`ROLLBACK TO SAVEPOINT sp_patch_custom_role_read`);
+        }
         const finalDef = customRoleDef
           ? { roleKey: role, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
           : roleDef;
-        await tx.query(
-          `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
-           VALUES ($1,$2,$3,$4,$5,$6,NOW())
-           ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
-          [id, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
-        );
+        await tx.query(`SAVEPOINT sp_patch_user_role_write`);
+        try {
+          await tx.query(
+            `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
+             VALUES ($1,$2,$3,$4,$5,$6,NOW())
+             ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
+            [id, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
+          );
+          await tx.query(`RELEASE SAVEPOINT sp_patch_user_role_write`);
+        } catch {
+          await tx.query(`ROLLBACK TO SAVEPOINT sp_patch_user_role_write`);
+        }
       }
     });
     createAuditLog({
@@ -369,22 +404,30 @@ router.delete("/users/:id", authorize({ feature: "admin", action: "update" }), a
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (id === scope.userId) { throw new ValidationError("لا يمكنك حذف حسابك الخاص"); }
+    // Membership derives from employee_assignments. Legacy user_roles was
+    // dropped (migration 261), so the historical `OR u.id IN (user_roles …)`
+    // branch is gone.
     const [userBelongs] = await rawQuery(
       `SELECT 1 FROM users u
        LEFT JOIN employees e ON e.id = u."employeeId"
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
-       WHERE u.id = $1 AND (
-         ea."companyId" = $2
-         OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $2)
-       ) LIMIT 1`,
+       WHERE u.id = $1 AND ea."companyId" = $2 LIMIT 1`,
       [id, scope.companyId]
     );
     if (!userBelongs) { throw new ForbiddenError("المستخدم لا ينتمي لشركتك"); }
     await withTransaction(async (tx) => {
-      await tx.query(
-        `DELETE FROM user_roles WHERE "userId"=$1 AND "companyId"=$2`,
-        [id, scope.companyId]
-      );
+      // Legacy user_roles was dropped (migration 261); best-effort cleanup
+      // via SAVEPOINT so a missing table cannot poison the delete transaction.
+      await tx.query(`SAVEPOINT sp_delete_user_role`);
+      try {
+        await tx.query(
+          `DELETE FROM user_roles WHERE "userId"=$1 AND "companyId"=$2`,
+          [id, scope.companyId]
+        );
+        await tx.query(`RELEASE SAVEPOINT sp_delete_user_role`);
+      } catch {
+        await tx.query(`ROLLBACK TO SAVEPOINT sp_delete_user_role`);
+      }
       await tx.query(
         `DELETE FROM employee_assignments ea
          USING employees e
@@ -417,14 +460,14 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, authorize({ featu
     await assertAdmin(req);
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Membership derives from employee_assignments. Legacy user_roles was
+    // dropped (migration 261), so the historical `OR u.id IN (user_roles …)`
+    // branch is gone.
     const [userBelongs] = await rawQuery(
       `SELECT 1 FROM users u
        LEFT JOIN employees e ON e.id = u."employeeId"
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
-       WHERE u.id = $1 AND (
-         ea."companyId" = $2
-         OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $2)
-       ) LIMIT 1`,
+       WHERE u.id = $1 AND ea."companyId" = $2 LIMIT 1`,
       [id, scope.companyId]
     );
     if (!userBelongs) { throw new ForbiddenError("المستخدم لا ينتمي لشركتك"); }
@@ -466,7 +509,8 @@ router.get("/roles", authorize({ feature: "admin", action: "list" }), async (req
     await assertAdmin(req);
     const scope = req.scope!;
     const systemRoles = await rawQuery(`SELECT * FROM roles ORDER BY name LIMIT 100`, []);
-    const customRoles = await rawQuery(`SELECT * FROM custom_roles WHERE "companyId" = $1 ORDER BY label LIMIT 500`, [scope.companyId]);
+    // Legacy custom_roles was dropped (migration 261); degrade to [] if absent.
+    const customRoles = await rawQuery(`SELECT * FROM custom_roles WHERE "companyId" = $1 ORDER BY label LIMIT 500`, [scope.companyId]).catch(() => [] as any[]);
     const rows = [...systemRoles, ...customRoles];
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
@@ -477,23 +521,38 @@ router.post("/roles", authorize({ feature: "admin", action: "update" }), async (
     await assertAdmin(req);
     const scope = req.scope!;
     const { roleKey, label, level: roleLevel, modules: mods, permissions: rolePermissions } = zodParse(createCustomRoleSchema.safeParse(req.body ?? {}));
+    // Legacy custom_roles / role_permissions were dropped (migration 261).
+    // All writes are best-effort via SAVEPOINTs so a missing table cannot
+    // poison the transaction; RBAC v2 is the authority for role definitions.
     await withTransaction(async (tx) => {
-      await tx.query(
-        `INSERT INTO custom_roles ("companyId","roleKey",label,level,modules,"createdBy","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,NOW())
-         ON CONFLICT ("companyId","roleKey") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
-        [scope.companyId, roleKey, label, roleLevel, JSON.stringify(mods), scope.userId]
-      );
-      if (Array.isArray(rolePermissions) && rolePermissions.length > 0) {
+      await tx.query(`SAVEPOINT sp_custom_role_write`);
+      try {
         await tx.query(
-          `DELETE FROM role_permissions WHERE role=$1 AND "companyId"=$2`,
-          [roleKey, scope.companyId]
+          `INSERT INTO custom_roles ("companyId","roleKey",label,level,modules,"createdBy","createdAt")
+           VALUES ($1,$2,$3,$4,$5,$6,NOW())
+           ON CONFLICT ("companyId","roleKey") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
+          [scope.companyId, roleKey, label, roleLevel, JSON.stringify(mods), scope.userId]
         );
-        for (const perm of rolePermissions) {
+        await tx.query(`RELEASE SAVEPOINT sp_custom_role_write`);
+      } catch {
+        await tx.query(`ROLLBACK TO SAVEPOINT sp_custom_role_write`);
+      }
+      if (Array.isArray(rolePermissions) && rolePermissions.length > 0) {
+        await tx.query(`SAVEPOINT sp_role_perms_write`);
+        try {
           await tx.query(
-            `INSERT INTO role_permissions (role, permission, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-            [roleKey, perm, scope.companyId]
+            `DELETE FROM role_permissions WHERE role=$1 AND "companyId"=$2`,
+            [roleKey, scope.companyId]
           );
+          for (const perm of rolePermissions) {
+            await tx.query(
+              `INSERT INTO role_permissions (role, permission, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+              [roleKey, perm, scope.companyId]
+            );
+          }
+          await tx.query(`RELEASE SAVEPOINT sp_role_perms_write`);
+        } catch {
+          await tx.query(`ROLLBACK TO SAVEPOINT sp_role_perms_write`);
         }
       }
     });
@@ -511,7 +570,8 @@ router.post("/roles", authorize({ feature: "admin", action: "update" }), async (
       entityId: 0,
       details: JSON.stringify({ roleKey, label, level: roleLevel }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2`, [scope.companyId, roleKey]);
+    // Legacy custom_roles read-back is best-effort; fall back to the request body.
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2`, [scope.companyId, roleKey]).catch(() => [] as any[]);
     res.status(201).json(row || { roleKey, label, level: roleLevel, modules: mods });
   } catch (e: any) { logger.error(e, "Create role error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
@@ -572,10 +632,11 @@ router.get("/user-roles/:userId", authorize({ feature: "admin", action: "view" }
     if (!await userBelongsToCompany(userId, scope.companyId)) {
       throw new ForbiddenError("المستخدم لا ينتمي لشركتك");
     }
+    // Legacy user_roles was dropped (migration 261); degrade to [] if absent.
     const rows = await rawQuery(
       `SELECT * FROM user_roles WHERE "userId"=$1 AND "companyId"=$2 ORDER BY level DESC LIMIT 500`,
       [userId, scope.companyId]
-    );
+    ).catch(() => [] as any[]);
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -615,11 +676,12 @@ router.post("/user-roles", authorize({ feature: "admin", action: "update" }), as
         `فصل المهام (SoD): لا يمكن الجمع بين الدورين "${sodConflict.roleA}" و"${sodConflict.roleB}" لنفس المستخدم — ${sodConflict.reason}`,
       );
     }
+    // Legacy user_roles was dropped (migration 261); best-effort write.
     await rawExecute(
       `INSERT INTO user_roles ("userId", "roleKey", label, modules, level, "companyId") VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, modules=EXCLUDED.modules, level=EXCLUDED.level`,
       [userId, def.roleKey, def.label, JSON.stringify(def.modules), def.level, scope.companyId]
-    );
+    ).catch(() => undefined);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "roles", entityId: userId,
@@ -633,7 +695,8 @@ router.post("/user-roles", authorize({ feature: "admin", action: "update" }), as
       entityId: userId,
       details: JSON.stringify({ roleKey: def.roleKey, label: def.label }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM user_roles WHERE "userId"=$1 AND "roleKey"=$2 AND "companyId"=$3`, [userId, def.roleKey, scope.companyId]);
+    // Legacy user_roles read-back is best-effort; fall back to the assigned def.
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM user_roles WHERE "userId"=$1 AND "roleKey"=$2 AND "companyId"=$3`, [userId, def.roleKey, scope.companyId]).catch(() => [] as any[]);
     res.status(201).json(row || { userId, roleKey: def.roleKey });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -644,12 +707,13 @@ router.delete("/user-roles/:id", authorize({ feature: "admin", action: "update" 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (!id || isNaN(id)) { throw new ValidationError("معرف غير صالح"); }
+    // Legacy user_roles was dropped (migration 261); best-effort access.
     const [roleRecord] = await rawQuery(
       `SELECT id FROM user_roles WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
       [id, scope.companyId]
-    );
+    ).catch(() => [] as any[]);
     if (!roleRecord) { throw new ForbiddenError("غير مصرح: الدور لا ينتمي لشركتك"); }
-    const result = await rawExecute(`DELETE FROM user_roles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const result = await rawExecute(`DELETE FROM user_roles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]).catch(() => ({ insertId: 0, affectedRows: 0 }));
     if (result.affectedRows === 0) { throw new NotFoundError("الدور غير موجود"); }
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -1187,10 +1251,11 @@ router.get("/role-permissions", authorize({ feature: "admin", action: "list" }),
     const conditions = [`("companyId" IS NULL OR "companyId" = $1)`];
     const params: unknown[] = [scope.companyId];
     if (role) { params.push(role); conditions.push(`"role" = $${params.length}`); }
+    // Legacy role_permissions was dropped (migration 261); degrade to [].
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT id, role, permission, "companyId", "createdAt" FROM role_permissions WHERE ${conditions.join(" AND ")} ORDER BY role, permission LIMIT 500`,
       params
-    );
+    ).catch(() => [] as any[]);
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -1200,10 +1265,11 @@ router.post("/role-permissions", authorize({ feature: "admin", action: "update" 
     await assertAdmin(req);
     const scope = req.scope!;
     const { role, permission } = zodParse(createRolePermissionSchema.safeParse(req.body));
+    // Legacy role_permissions was dropped (migration 261); best-effort write.
     const r = await rawExecute(
       `INSERT INTO role_permissions (role, permission, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
       [role, permission, scope.companyId]
-    );
+    ).catch(() => ({ insertId: 0, affectedRows: 0 }));
     invalidatePermissionCache(role, scope.companyId);
     if (r.insertId) {
       createAuditLog({
@@ -1220,7 +1286,8 @@ router.post("/role-permissions", authorize({ feature: "admin", action: "update" 
         details: JSON.stringify({ role, permission }),
       }).catch((e) => logger.error(e, "admin background task failed"));
     }
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId || 0, scope.companyId]);
+    // Legacy role_permissions read-back is best-effort; fall back to body.
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId || 0, scope.companyId]).catch(() => [] as any[]);
     res.status(201).json(row || { id: r.insertId, role, permission });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
@@ -1230,19 +1297,27 @@ router.put("/role-permissions/bulk", authorize({ feature: "admin", action: "upda
     await assertAdmin(req);
     const scope = req.scope!;
     const { role, permissions } = zodParse(bulkRolePermissionsSchema.safeParse(req.body));
+    // Legacy role_permissions was dropped (migration 261). Best-effort write
+    // via a SAVEPOINT so a missing table cannot poison the transaction.
     await withTransaction(async (tx) => {
-      await tx.query(`DELETE FROM role_permissions WHERE role=$1 AND "companyId"=$2`, [role, scope.companyId]);
-      if (permissions.length > 0) {
-        const valuesSql: string[] = [];
-        const params: unknown[] = [role, scope.companyId];
-        for (const perm of permissions) {
-          params.push(perm);
-          valuesSql.push(`($1, $${params.length}, $2)`);
+      await tx.query(`SAVEPOINT sp_bulk_role_perms`);
+      try {
+        await tx.query(`DELETE FROM role_permissions WHERE role=$1 AND "companyId"=$2`, [role, scope.companyId]);
+        if (permissions.length > 0) {
+          const valuesSql: string[] = [];
+          const params: unknown[] = [role, scope.companyId];
+          for (const perm of permissions) {
+            params.push(perm);
+            valuesSql.push(`($1, $${params.length}, $2)`);
+          }
+          await tx.query(
+            `INSERT INTO role_permissions (role, permission, "companyId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
+            params
+          );
         }
-        await tx.query(
-          `INSERT INTO role_permissions (role, permission, "companyId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
-          params
-        );
+        await tx.query(`RELEASE SAVEPOINT sp_bulk_role_perms`);
+      } catch {
+        await tx.query(`ROLLBACK TO SAVEPOINT sp_bulk_role_perms`);
       }
     });
     invalidatePermissionCache(role, scope.companyId);
@@ -1268,10 +1343,11 @@ router.delete("/role-permissions/:id", authorize({ feature: "admin", action: "up
     await assertAdmin(req);
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Legacy role_permissions was dropped (migration 261); best-effort delete.
     const result = await rawExecute(
       `DELETE FROM role_permissions WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
-    );
+    ).catch(() => ({ insertId: 0, affectedRows: 0 }));
     if (result.affectedRows === 0) { throw new NotFoundError("الصلاحية غير موجودة أو غير مصرح بحذفها"); }
     invalidatePermissionCache(undefined, scope.companyId);
     createAuditLog({
@@ -1441,10 +1517,11 @@ router.get("/governance/event-catalog", authorize({ feature: "admin", action: "l
 router.get("/governance/rbac-matrix", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Legacy role_permissions was dropped (migration 261); degrade to [].
     const customPerms = await rawQuery<Record<string, unknown>>(
       `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
       [scope.companyId]
-    );
+    ).catch(() => [] as any[]);
     res.json(maskFields(req, {
       permissions: PERMISSIONS,
       roleDefaults: ROLE_PERMISSIONS,

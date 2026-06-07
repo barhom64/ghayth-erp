@@ -48,6 +48,40 @@ interface UserRoleRow {
   source: "legacy" | "v2";
 }
 
+// Resolve the role-switcher list for a user. Legacy `user_roles` has been
+// dropped (migration 261); we attempt the historical union (legacy +
+// rbac_user_roles) for resilience and, when the legacy table is missing
+// (or the union otherwise fails), fall back to a v2-only query that derives
+// the same shape from rbac_user_roles JOIN rbac_roles, with modules built
+// from rbac_role_grants split_part(feature_key, '.', 1).
+async function resolveUserRoles(userId: number, companyId: number): Promise<UserRoleRow[]> {
+  const v2Only = await rawQuery<UserRoleRow>(
+    `SELECT id, "roleKey", label, modules, level, source FROM (
+       SELECT
+         -r.id AS id,
+         r.role_key AS "roleKey",
+         r.label_ar AS label,
+         COALESCE(
+           (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
+              FROM rbac_role_grants g WHERE g.role_id = r.id),
+           '[]'::jsonb
+         ) AS modules,
+         r.level,
+         2 AS source_order,
+         'v2' AS source,
+         COALESCE(ur.is_primary, FALSE) AS is_primary
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+       WHERE ur."userId" = $1 AND ur."companyId" = $2
+         AND r.is_active = TRUE AND r.is_template = FALSE
+         AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+     ) combined
+     ORDER BY is_primary DESC, source_order, level DESC`,
+    [userId, companyId]
+  );
+  return v2Only;
+}
+
 interface RefreshTokenRow {
   id: number;
   token: string;
@@ -341,13 +375,22 @@ router.post("/bootstrap-tenant", registerLimiter, async (req, res) => {
       );
       newOwnerUserId = userRes.rows[0].id as number;
 
-      // 5. user_roles row makes the owner show up in the RBAC matrix.
-      await client.query(
-        `INSERT INTO user_roles ("userId", "companyId", role)
-         VALUES ($1, $2, 'owner')
-         ON CONFLICT DO NOTHING`,
-        [newOwnerUserId, newCompanyId]
-      );
+      // 5. Legacy user_roles row (best-effort). The table was dropped in
+      //    migration 261; RBAC v2 is the authority, so this INSERT is wrapped
+      //    in a SAVEPOINT to keep the enclosing transaction usable if the
+      //    table is missing.
+      await client.query(`SAVEPOINT sp_legacy_user_role`);
+      try {
+        await client.query(
+          `INSERT INTO user_roles ("userId", "companyId", role)
+           VALUES ($1, $2, 'owner')
+           ON CONFLICT DO NOTHING`,
+          [newOwnerUserId, newCompanyId]
+        );
+        await client.query(`RELEASE SAVEPOINT sp_legacy_user_role`);
+      } catch {
+        await client.query(`ROLLBACK TO SAVEPOINT sp_legacy_user_role`);
+      }
     });
 
     // Bootstrap helpers (CoA seed, leave types, numbering prefixes,
@@ -468,41 +511,10 @@ router.post("/login", loginLimiter, async (req, res) => {
 
     const primary = assignments[0];
 
-    // Union legacy `user_roles` with v2 `rbac_user_roles` so the
-    // frontend role-switcher shows every role an admin has been granted
-    // (migration 141 auto-assigns all v2 roles to owners/GMs for testing).
-    // V2 ids are negated to keep React keys unique against legacy ids.
-    const userRoles = await rawQuery<UserRoleRow>(
-      `SELECT id, "roleKey", label, modules, level, source FROM (
-         SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source, FALSE AS is_primary
-           FROM user_roles WHERE "userId" = $1
-         UNION ALL
-         SELECT
-           -r.id AS id,
-           r.role_key AS "roleKey",
-           r.label_ar AS label,
-           COALESCE(
-             (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
-                FROM rbac_role_grants g WHERE g.role_id = r.id),
-             '[]'::jsonb
-           ) AS modules,
-           r.level,
-           2 AS source_order,
-           'v2' AS source,
-           COALESCE(ur.is_primary, FALSE) AS is_primary
-          FROM rbac_user_roles ur
-          JOIN rbac_roles r ON r.id = ur.role_id
-         WHERE ur."userId" = $1 AND ur."companyId" = $2
-           AND r.is_active = TRUE AND r.is_template = FALSE
-           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
-           AND NOT EXISTS (
-             SELECT 1 FROM user_roles ul
-              WHERE ul."userId" = $1 AND ul."roleKey" = r.role_key
-           )
-       ) combined
-       ORDER BY is_primary DESC, source_order, level DESC`,
-      [user.id, primary.companyId]
-    );
+    // V2 role-switcher list (roles come from rbac_user_roles; legacy
+    // user_roles was dropped in migration 261). V2 ids are negated to keep
+    // React keys unique against any historical legacy ids.
+    const userRoles = await resolveUserRoles(user.id, primary.companyId);
     const token = signToken({
       userId: user.id,
       assignmentId: primary.id,
@@ -748,38 +760,8 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
       throw new NotFoundError("المستخدم غير موجود");
     }
 
-    // Union legacy `user_roles` with v2 `rbac_user_roles`. See /login for rationale.
-    const userRoles = await rawQuery<UserRoleRow>(
-      `SELECT id, "roleKey", label, modules, level, source FROM (
-         SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source, FALSE AS is_primary
-           FROM user_roles WHERE "userId" = $1
-         UNION ALL
-         SELECT
-           -r.id AS id,
-           r.role_key AS "roleKey",
-           r.label_ar AS label,
-           COALESCE(
-             (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
-                FROM rbac_role_grants g WHERE g.role_id = r.id),
-             '[]'::jsonb
-           ) AS modules,
-           r.level,
-           2 AS source_order,
-           'v2' AS source,
-           COALESCE(ur.is_primary, FALSE) AS is_primary
-          FROM rbac_user_roles ur
-          JOIN rbac_roles r ON r.id = ur.role_id
-         WHERE ur."userId" = $1 AND ur."companyId" = $2
-           AND r.is_active = TRUE AND r.is_template = FALSE
-           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
-           AND NOT EXISTS (
-             SELECT 1 FROM user_roles ul
-              WHERE ul."userId" = $1 AND ul."roleKey" = r.role_key
-           )
-       ) combined
-       ORDER BY is_primary DESC, source_order, level DESC`,
-      [scope.userId, scope.companyId]
-    );
+    // V2 role-switcher list (rbac_user_roles). See /login for rationale.
+    const userRoles = await resolveUserRoles(scope.userId, scope.companyId);
 
     res.json({ ...employee, userRoles });
   } catch (err) {

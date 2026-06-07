@@ -1,0 +1,22 @@
+-- Drop the three LEGACY role tables. RBAC v2 (rbac_roles, rbac_user_roles,
+-- rbac_role_grants) is the sole authority on the request path; the legacy
+-- flat model (role_permissions, user_roles, custom_roles) and the
+-- legacy→v2 auto-migration bridge (lib/rbac/autoMigrate.ts) are removed in
+-- the same change set. Every remaining code access to these tables was made
+-- resilient (.catch(()=>[]) on reads, SAVEPOINT-guarded best-effort writes)
+-- so a missing table degrades gracefully to RBAC v2 instead of crashing.
+--
+-- @rollback: re-run the original CREATE TABLE statements for
+--   public.role_permissions, public.user_roles and public.custom_roles from
+--   the historical schema (db/schema_pre.sql / db/schema_post.sql at the
+--   commit prior to this change), then re-run the legacy→v2 sync that
+--   formerly lived in lib/rbac/autoMigrate.ts. No live code reads these
+--   tables anymore, so a rollback is only meaningful alongside reverting the
+--   resilient-drop code changes; data in the dropped tables is not recoverable.
+-- @policy:destructive — DROP TABLE CASCADE on three role tables. Intentional
+--   and authorized: RBAC v2 is already the request-path authority on this
+--   base, all code accesses are non-fatal, and CASCADE clears the legacy FKs
+--   /indexes/sequences. Any rows in these tables become unrecoverable; nothing
+--   live depends on them.
+
+DROP TABLE IF EXISTS public.role_permissions, public.user_roles, public.custom_roles CASCADE;

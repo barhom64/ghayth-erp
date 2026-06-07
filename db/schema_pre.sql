@@ -3,7 +3,6 @@
 --
 
 
-
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
@@ -49,7 +48,6 @@ ALTER TABLE IF EXISTS ONLY public.warehouse_categories DROP CONSTRAINT IF EXISTS
 ALTER TABLE IF EXISTS ONLY public.vouchers DROP CONSTRAINT IF EXISTS "vouchers_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS "users_employeeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.user_sessions DROP CONSTRAINT IF EXISTS "user_sessions_userId_fkey";
-ALTER TABLE IF EXISTS ONLY public.user_roles DROP CONSTRAINT IF EXISTS "user_roles_userId_fkey";
 ALTER TABLE IF EXISTS ONLY public.user_activity_log DROP CONSTRAINT IF EXISTS "user_activity_log_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.umrah_violations DROP CONSTRAINT IF EXISTS "umrah_violations_responsibleAssignmentId_fkey";
 ALTER TABLE IF EXISTS ONLY public.umrah_transport DROP CONSTRAINT IF EXISTS "umrah_transport_updatedBy_fkey";
@@ -118,8 +116,6 @@ ALTER TABLE IF EXISTS ONLY public.shifts DROP CONSTRAINT IF EXISTS "shifts_branc
 ALTER TABLE IF EXISTS ONLY public.scheduled_report_history DROP CONSTRAINT IF EXISTS "scheduled_report_history_reportId_fkey";
 ALTER TABLE IF EXISTS ONLY public.saudization_snapshots DROP CONSTRAINT IF EXISTS "saudization_snapshots_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.salary_components DROP CONSTRAINT IF EXISTS "salary_components_companyId_fkey";
-ALTER TABLE IF EXISTS ONLY public.role_permissions DROP CONSTRAINT IF EXISTS "role_permissions_companyId_fkey";
-ALTER TABLE IF EXISTS ONLY public.role_permissions DROP CONSTRAINT IF EXISTS "role_permissions_branchId_fkey";
 ALTER TABLE IF EXISTS ONLY public.requests DROP CONSTRAINT IF EXISTS "requests_typeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.requests DROP CONSTRAINT IF EXISTS "requests_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.request_types DROP CONSTRAINT IF EXISTS "request_types_companyId_fkey";
@@ -492,7 +488,6 @@ DROP INDEX IF EXISTS public.warehouse_stock_lots_writeoff_journal_idx;
 DROP INDEX IF EXISTS public.warehouse_movements_gl_status_failed_idx;
 DROP INDEX IF EXISTS public.viol_regulation_idx;
 DROP INDEX IF EXISTS public.viol_memo_idx;
-DROP INDEX IF EXISTS public."user_roles_userId_roleKey_companyId_key";
 DROP INDEX IF EXISTS public.uq_wps_skip_alerts_company_run;
 DROP INDEX IF EXISTS public.uq_wps_runs_company_period_bank;
 DROP INDEX IF EXISTS public.uq_wps_bank_credentials_company_bank;
@@ -534,10 +529,6 @@ DROP INDEX IF EXISTS public.settings_system_key_uq;
 DROP INDEX IF EXISTS public.settings_scoped_key_uq;
 DROP INDEX IF EXISTS public.settings_scope_id_idx;
 DROP INDEX IF EXISTS public.salary_components_company_idx;
-DROP INDEX IF EXISTS public.role_permissions_role_perm_global_uq;
-DROP INDEX IF EXISTS public.role_permissions_role_perm_company_uq;
-DROP INDEX IF EXISTS public.role_permissions_role_perm_branch_uq;
-DROP INDEX IF EXISTS public.role_permissions_role_company_idx;
 DROP INDEX IF EXISTS public.requests_ref_idx;
 DROP INDEX IF EXISTS public.requests_branch_idx;
 DROP INDEX IF EXISTS public.purchase_requests_ref_company_uq;
@@ -645,7 +636,6 @@ DROP INDEX IF EXISTS public.idx_warehouse_categories_companyid;
 DROP INDEX IF EXISTS public.idx_vouchers_company;
 DROP INDEX IF EXISTS public.idx_violations_excluded;
 DROP INDEX IF EXISTS public.idx_user_sessions_user;
-DROP INDEX IF EXISTS public.idx_user_roles_companyid;
 DROP INDEX IF EXISTS public.idx_umrah_violations_responsible_assignment;
 DROP INDEX IF EXISTS public.idx_umrah_violations_deletedat;
 DROP INDEX IF EXISTS public.idx_umrah_violations_companyid;
@@ -750,8 +740,6 @@ DROP INDEX IF EXISTS public.idx_salary_history_company;
 DROP INDEX IF EXISTS public.idx_routing_rules_event;
 DROP INDEX IF EXISTS public.idx_routing_rules_company;
 DROP INDEX IF EXISTS public.idx_roles_companyid;
-DROP INDEX IF EXISTS public.idx_role_permissions_role;
-DROP INDEX IF EXISTS public.idx_role_permissions_branchid;
 DROP INDEX IF EXISTS public.idx_rfm_segment;
 DROP INDEX IF EXISTS public.idx_rfm_company;
 DROP INDEX IF EXISTS public.idx_rfm_churn;
@@ -1099,7 +1087,6 @@ DROP INDEX IF EXISTS public.idx_cycle_counts_warehouse_status;
 DROP INDEX IF EXISTS public.idx_customer_advances_companyid;
 DROP INDEX IF EXISTS public.idx_customer_advances_company;
 DROP INDEX IF EXISTS public.idx_customer_advances_client;
-DROP INDEX IF EXISTS public.idx_custom_roles_company;
 DROP INDEX IF EXISTS public.idx_csat_company;
 DROP INDEX IF EXISTS public.idx_csat_assignee;
 DROP INDEX IF EXISTS public.idx_cron_logs_companyid;
@@ -1299,7 +1286,6 @@ ALTER TABLE IF EXISTS ONLY public.vendor_secrets DROP CONSTRAINT IF EXISTS vendo
 ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS users_pkey;
 ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS users_email_key;
 ALTER TABLE IF EXISTS ONLY public.user_sessions DROP CONSTRAINT IF EXISTS user_sessions_pkey;
-ALTER TABLE IF EXISTS ONLY public.user_roles DROP CONSTRAINT IF EXISTS user_roles_pkey;
 ALTER TABLE IF EXISTS ONLY public.user_activity_log DROP CONSTRAINT IF EXISTS user_activity_log_pkey;
 ALTER TABLE IF EXISTS ONLY public.client_portal_accounts DROP CONSTRAINT IF EXISTS uq_client_portal_accounts_client;
 ALTER TABLE IF EXISTS ONLY public.umrah_violations DROP CONSTRAINT IF EXISTS umrah_violations_pkey;
@@ -1363,7 +1349,6 @@ ALTER TABLE IF EXISTS ONLY public.saudization_snapshots DROP CONSTRAINT IF EXIST
 ALTER TABLE IF EXISTS ONLY public.salary_history DROP CONSTRAINT IF EXISTS salary_history_pkey;
 ALTER TABLE IF EXISTS ONLY public.salary_components DROP CONSTRAINT IF EXISTS salary_components_pkey;
 ALTER TABLE IF EXISTS ONLY public.roles DROP CONSTRAINT IF EXISTS roles_pkey;
-ALTER TABLE IF EXISTS ONLY public.role_permissions DROP CONSTRAINT IF EXISTS role_permissions_pkey;
 ALTER TABLE IF EXISTS ONLY public.requests DROP CONSTRAINT IF EXISTS requests_pkey;
 ALTER TABLE IF EXISTS ONLY public.request_types DROP CONSTRAINT IF EXISTS request_types_pkey;
 ALTER TABLE IF EXISTS ONLY public.rental_contracts DROP CONSTRAINT IF EXISTS rental_contracts_pkey;
@@ -1620,8 +1605,6 @@ ALTER TABLE IF EXISTS ONLY public.daily_closures DROP CONSTRAINT IF EXISTS "dail
 ALTER TABLE IF EXISTS ONLY public.daily_close_log DROP CONSTRAINT IF EXISTS daily_close_log_pkey;
 ALTER TABLE IF EXISTS ONLY public.daily_close_log DROP CONSTRAINT IF EXISTS "daily_close_log_companyId_closeDate_key";
 ALTER TABLE IF EXISTS ONLY public.customer_advances DROP CONSTRAINT IF EXISTS customer_advances_pkey;
-ALTER TABLE IF EXISTS ONLY public.custom_roles DROP CONSTRAINT IF EXISTS custom_roles_pkey;
-ALTER TABLE IF EXISTS ONLY public.custom_roles DROP CONSTRAINT IF EXISTS "custom_roles_companyId_roleKey_key";
 ALTER TABLE IF EXISTS ONLY public.cron_logs DROP CONSTRAINT IF EXISTS cron_logs_pkey;
 ALTER TABLE IF EXISTS ONLY public.cron_locks DROP CONSTRAINT IF EXISTS cron_locks_pkey;
 ALTER TABLE IF EXISTS ONLY public.cron_locks DROP CONSTRAINT IF EXISTS cron_locks_job_name_key;
@@ -1721,7 +1704,6 @@ ALTER TABLE IF EXISTS public.vouchers ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.vendor_secrets ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.users ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.user_sessions ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.user_roles ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.user_activity_log ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_violations ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_transport_pilgrims ALTER COLUMN id DROP DEFAULT;
@@ -1776,7 +1758,6 @@ ALTER TABLE IF EXISTS public.saudization_snapshots ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.salary_history ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.salary_components ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.roles ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.role_permissions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.requests ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.request_types ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.rental_contracts ALTER COLUMN id DROP DEFAULT;
@@ -1993,7 +1974,6 @@ ALTER TABLE IF EXISTS public.data_access_requests ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.daily_closures ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.daily_close_log ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.customer_advances ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.custom_roles ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.cron_logs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.cron_locks ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.cron_jobs ALTER COLUMN id DROP DEFAULT;
@@ -2115,8 +2095,6 @@ DROP SEQUENCE IF EXISTS public.users_id_seq;
 DROP TABLE IF EXISTS public.users;
 DROP SEQUENCE IF EXISTS public.user_sessions_id_seq;
 DROP TABLE IF EXISTS public.user_sessions;
-DROP SEQUENCE IF EXISTS public.user_roles_id_seq;
-DROP TABLE IF EXISTS public.user_roles;
 DROP SEQUENCE IF EXISTS public.user_activity_log_id_seq;
 DROP TABLE IF EXISTS public.user_activity_log;
 DROP SEQUENCE IF EXISTS public.umrah_violations_id_seq;
@@ -2230,8 +2208,6 @@ DROP SEQUENCE IF EXISTS public.salary_components_id_seq;
 DROP TABLE IF EXISTS public.salary_components;
 DROP SEQUENCE IF EXISTS public.roles_id_seq;
 DROP TABLE IF EXISTS public.roles;
-DROP SEQUENCE IF EXISTS public.role_permissions_id_seq;
-DROP TABLE IF EXISTS public.role_permissions;
 DROP SEQUENCE IF EXISTS public.requests_id_seq;
 DROP TABLE IF EXISTS public.requests;
 DROP SEQUENCE IF EXISTS public.request_types_id_seq;
@@ -2672,8 +2648,6 @@ DROP SEQUENCE IF EXISTS public.daily_close_log_id_seq;
 DROP TABLE IF EXISTS public.daily_close_log;
 DROP SEQUENCE IF EXISTS public.customer_advances_id_seq;
 DROP TABLE IF EXISTS public.customer_advances;
-DROP SEQUENCE IF EXISTS public.custom_roles_id_seq;
-DROP TABLE IF EXISTS public.custom_roles;
 DROP SEQUENCE IF EXISTS public.cron_logs_id_seq;
 DROP TABLE IF EXISTS public.cron_logs;
 DROP SEQUENCE IF EXISTS public.cron_locks_id_seq;
@@ -5346,42 +5320,6 @@ CREATE SEQUENCE public.cron_logs_id_seq
 --
 
 ALTER SEQUENCE public.cron_logs_id_seq OWNED BY public.cron_logs.id;
-
-
---
--- Name: custom_roles; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.custom_roles (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "roleKey" character varying(100) NOT NULL,
-    label character varying(200) NOT NULL,
-    level integer DEFAULT 10 NOT NULL,
-    modules jsonb DEFAULT '[]'::jsonb,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now()
-);
-
-
---
--- Name: custom_roles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.custom_roles_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: custom_roles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.custom_roles_id_seq OWNED BY public.custom_roles.id;
 
 
 --
@@ -15377,40 +15315,6 @@ ALTER SEQUENCE public.requests_id_seq OWNED BY public.requests.id;
 
 
 --
--- Name: role_permissions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.role_permissions (
-    id integer NOT NULL,
-    role character varying(50) NOT NULL,
-    permission character varying(100) NOT NULL,
-    "companyId" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "branchId" integer
-);
-
-
---
--- Name: role_permissions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.role_permissions_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: role_permissions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.role_permissions_id_seq OWNED BY public.role_permissions.id;
-
-
---
 -- Name: roles; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -18039,42 +17943,6 @@ CREATE SEQUENCE public.user_activity_log_id_seq
 --
 
 ALTER SEQUENCE public.user_activity_log_id_seq OWNED BY public.user_activity_log.id;
-
-
---
--- Name: user_roles; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.user_roles (
-    id integer NOT NULL,
-    "userId" integer NOT NULL,
-    "roleKey" character varying(50) NOT NULL,
-    label character varying(100) NOT NULL,
-    modules jsonb DEFAULT '[]'::jsonb NOT NULL,
-    level integer DEFAULT 10 NOT NULL,
-    "createdAt" timestamp without time zone DEFAULT now(),
-    "companyId" integer
-);
-
-
---
--- Name: user_roles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.user_roles_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: user_roles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.user_roles_id_seq OWNED BY public.user_roles.id;
 
 
 --

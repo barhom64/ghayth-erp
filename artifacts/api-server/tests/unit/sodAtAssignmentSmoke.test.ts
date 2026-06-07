@@ -66,11 +66,13 @@ describe("policyEngine.SEPARATION_OF_DUTIES catalogue", () => {
 });
 
 describe("policyEngine.getActiveRoleKeysForUser — SQL coverage", () => {
-  it("queries all three role-bearing tables", () => {
+  it("queries the active role-bearing tables", () => {
     expect(POLICY).toContain("export async function getActiveRoleKeysForUser");
-    // Must union the legacy user_roles, the v2 rbac_user_roles, and active
-    // employee_assignments — missing any one of these opens a SoD bypass.
-    expect(POLICY).toMatch(/FROM user_roles/);
+    // Legacy user_roles was dropped (migration 261); RBAC v2 is the authority.
+    // The active-role set must union the v2 rbac_user_roles with active
+    // employee_assignments — missing either opens a SoD bypass. The legacy
+    // user_roles arm is intentionally gone.
+    expect(POLICY).not.toMatch(/FROM user_roles\b/);
     expect(POLICY).toMatch(/FROM rbac_user_roles/);
     expect(POLICY).toMatch(/FROM employee_assignments/);
     // v2 grants can have an expiry; expired ones must not count as "active".

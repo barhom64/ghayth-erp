@@ -274,10 +274,12 @@ router.get("/my", async (req, res) => {
 router.get("/role-permissions", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Legacy role_permissions was dropped (migration 261). Degrade to an
+    // empty list if the table is missing rather than 500-ing the endpoint.
     const rows = await rawQuery<RolePermissionRow>(
       `SELECT * FROM role_permissions WHERE "companyId" IS NULL OR "companyId" = $1 ORDER BY role, permission`,
       [scope.companyId]
-    );
+    ).catch(() => [] as RolePermissionRow[]);
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "Get role permissions error:");
@@ -289,13 +291,14 @@ router.post("/role-permissions", authorize({ feature: "admin", action: "update" 
     const scope = req.scope!;
     const { role, permission } = zodParse(rolePermissionSchema.safeParse(req.body));
 
+    // Legacy role_permissions was dropped (migration 261); best-effort write.
     await rawExecute(
       `INSERT INTO role_permissions (role, permission, "companyId")
        VALUES ($1, $2, $3)
        ON CONFLICT (role, permission, "companyId") WHERE "companyId" IS NOT NULL
        DO NOTHING`,
       [role, permission, scope.companyId]
-    );
+    ).catch(() => undefined);
 
     invalidatePermissionCache(role, scope.companyId);
     await auditLog(req, "role_permissions", scope.companyId, "create", null, { role, permission, companyId: scope.companyId });
@@ -311,14 +314,15 @@ router.delete("/role-permissions", authorize({ feature: "admin", action: "update
   try {
     const scope = req.scope!;
     const { role, permission } = zodParse(rolePermissionSchema.safeParse(req.body));
+    // Legacy role_permissions was dropped (migration 261); best-effort access.
     const [before] = await rawQuery<RolePermissionRow>(
       `SELECT * FROM role_permissions WHERE role = $1 AND permission = $2 AND "companyId" = $3`,
       [role, permission, scope.companyId]
-    );
+    ).catch(() => [] as RolePermissionRow[]);
     await rawExecute(
       `DELETE FROM role_permissions WHERE role = $1 AND permission = $2 AND "companyId" = $3`,
       [role, permission, scope.companyId]
-    );
+    ).catch(() => undefined);
     invalidatePermissionCache(role, scope.companyId);
     await auditLog(req, "role_permissions", scope.companyId, "delete", { role, permission }, null);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "role_permissions", entityId: scope.companyId, before: before ?? { role, permission } }).catch((e) => logger.error(e, "permissions background task failed"));

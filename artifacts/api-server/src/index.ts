@@ -12,7 +12,6 @@ import "./lib/engines/hrEngine.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
-import { syncLegacyToV2 } from "./lib/rbac/autoMigrate.js";
 import { warmVendorSettingsCache } from "./lib/vendorSettings.js";
 import { pool } from "./lib/rawdb.js";
 import { config, assertEnvOrExit, describeConfig } from "./lib/config.js";
@@ -99,8 +98,6 @@ async function start() {
   try {
     const cat = await syncFeatureCatalog();
     logger.info({ ...cat }, "RBAC v2: feature catalog synced");
-    const sync = await syncLegacyToV2();
-    logger.info({ ...sync }, "RBAC v2: legacy roles auto-migrated");
   } catch (rbacErr) {
     logger.warn({ err: rbacErr }, "RBAC v2 sync skipped or failed (legacy RBAC still active)");
   }

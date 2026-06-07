@@ -420,13 +420,6 @@ ALTER TABLE ONLY public.cron_logs ALTER COLUMN id SET DEFAULT nextval('public.cr
 
 
 --
--- Name: custom_roles id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.custom_roles ALTER COLUMN id SET DEFAULT nextval('public.custom_roles_id_seq'::regclass);
-
-
---
 -- Name: customer_advances id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1967,13 +1960,6 @@ ALTER TABLE ONLY public.requests ALTER COLUMN id SET DEFAULT nextval('public.req
 
 
 --
--- Name: role_permissions id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.role_permissions ALTER COLUMN id SET DEFAULT nextval('public.role_permissions_id_seq'::regclass);
-
-
---
 -- Name: roles id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2373,13 +2359,6 @@ ALTER TABLE ONLY public.umrah_violations ALTER COLUMN id SET DEFAULT nextval('pu
 --
 
 ALTER TABLE ONLY public.user_activity_log ALTER COLUMN id SET DEFAULT nextval('public.user_activity_log_id_seq'::regclass);
-
-
---
--- Name: user_roles id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_roles ALTER COLUMN id SET DEFAULT nextval('public.user_roles_id_seq'::regclass);
 
 
 --
@@ -3150,22 +3129,6 @@ ALTER TABLE ONLY public.cron_locks
 
 ALTER TABLE ONLY public.cron_logs
     ADD CONSTRAINT cron_logs_pkey PRIMARY KEY (id);
-
-
---
--- Name: custom_roles custom_roles_companyId_roleKey_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.custom_roles
-    ADD CONSTRAINT "custom_roles_companyId_roleKey_key" UNIQUE ("companyId", "roleKey");
-
-
---
--- Name: custom_roles custom_roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.custom_roles
-    ADD CONSTRAINT custom_roles_pkey PRIMARY KEY (id);
 
 
 --
@@ -5406,14 +5369,6 @@ ALTER TABLE ONLY public.requests
 
 
 --
--- Name: role_permissions role_permissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.role_permissions
-    ADD CONSTRAINT role_permissions_pkey PRIMARY KEY (id);
-
-
---
 -- Name: roles roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5951,14 +5906,6 @@ ALTER TABLE ONLY public.client_portal_accounts
 
 ALTER TABLE ONLY public.user_activity_log
     ADD CONSTRAINT user_activity_log_pkey PRIMARY KEY (id);
-
-
---
--- Name: user_roles user_roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_roles
-    ADD CONSTRAINT user_roles_pkey PRIMARY KEY (id);
 
 
 --
@@ -7389,13 +7336,6 @@ CREATE INDEX idx_csat_assignee ON public.ticket_csat_ratings USING btree ("assig
 --
 
 CREATE INDEX idx_csat_company ON public.ticket_csat_ratings USING btree ("companyId");
-
-
---
--- Name: idx_custom_roles_company; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_custom_roles_company ON public.custom_roles USING btree ("companyId");
 
 
 --
@@ -9828,20 +9768,6 @@ CREATE INDEX idx_rfm_segment ON public.client_rfm_scores USING btree ("companyId
 
 
 --
--- Name: idx_role_permissions_branchid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_role_permissions_branchid ON public.role_permissions USING btree ("branchId") WHERE ("branchId" IS NOT NULL);
-
-
---
--- Name: idx_role_permissions_role; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_role_permissions_role ON public.role_permissions USING btree (role);
-
-
---
 -- Name: idx_roles_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10567,13 +10493,6 @@ CREATE INDEX idx_umrah_violations_deletedat ON public.umrah_violations USING btr
 --
 
 CREATE INDEX idx_umrah_violations_responsible_assignment ON public.umrah_violations USING btree ("responsibleAssignmentId") WHERE (("deletedAt" IS NULL) AND ("responsibleAssignmentId" IS NOT NULL));
-
-
---
--- Name: idx_user_roles_companyid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_user_roles_companyid ON public.user_roles USING btree ("companyId");
 
 
 --
@@ -11326,34 +11245,6 @@ CREATE INDEX requests_ref_idx ON public.requests USING btree (ref);
 
 
 --
--- Name: role_permissions_role_company_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX role_permissions_role_company_idx ON public.role_permissions USING btree (role, "companyId");
-
-
---
--- Name: role_permissions_role_perm_branch_uq; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX role_permissions_role_perm_branch_uq ON public.role_permissions USING btree (role, permission, "companyId", "branchId") WHERE ("branchId" IS NOT NULL);
-
-
---
--- Name: role_permissions_role_perm_company_uq; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX role_permissions_role_perm_company_uq ON public.role_permissions USING btree (role, permission, "companyId") WHERE (("companyId" IS NOT NULL) AND ("branchId" IS NULL));
-
-
---
--- Name: role_permissions_role_perm_global_uq; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX role_permissions_role_perm_global_uq ON public.role_permissions USING btree (role, permission) WHERE (("companyId" IS NULL) AND ("branchId" IS NULL));
-
-
---
 -- Name: salary_components_company_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -11638,13 +11529,6 @@ CREATE UNIQUE INDEX uq_wps_runs_company_period_bank ON public.wps_runs USING btr
 --
 
 CREATE UNIQUE INDEX uq_wps_skip_alerts_company_run ON public.wps_skip_alerts USING btree ("companyId", "wpsRunId");
-
-
---
--- Name: user_roles_userId_roleKey_companyId_key; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX "user_roles_userId_roleKey_companyId_key" ON public.user_roles USING btree ("userId", "roleKey", "companyId");
 
 
 --
@@ -14616,22 +14500,6 @@ ALTER TABLE ONLY public.requests
 
 
 --
--- Name: role_permissions role_permissions_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.role_permissions
-    ADD CONSTRAINT "role_permissions_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE CASCADE;
-
-
---
--- Name: role_permissions role_permissions_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.role_permissions
-    ADD CONSTRAINT "role_permissions_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
-
-
---
 -- Name: salary_components salary_components_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15173,14 +15041,6 @@ ALTER TABLE ONLY public.umrah_violations
 
 ALTER TABLE ONLY public.user_activity_log
     ADD CONSTRAINT "user_activity_log_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
-
-
---
--- Name: user_roles user_roles_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_roles
-    ADD CONSTRAINT "user_roles_userId_fkey" FOREIGN KEY ("userId") REFERENCES public.users(id) ON DELETE CASCADE;
 
 
 --

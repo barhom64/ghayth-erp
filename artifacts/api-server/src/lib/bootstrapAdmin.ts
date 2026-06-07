@@ -150,15 +150,23 @@ async function createUserIfNotExists(
   const userId = userRes.rows[0].id;
   logger.info({ userId, email: user.email }, "Bootstrap created user");
 
-  // 4. Create user_role
+  // 4. Create user_role (best-effort). Legacy user_roles was dropped in
+  //    migration 261; RBAC v2 is the authority. Wrap in a SAVEPOINT so a
+  //    missing table does not poison the bootstrap transaction.
   const rd = user.roleDefinition;
-  await client.query(
-    `INSERT INTO user_roles ("userId", "roleKey", label, level, modules, "companyId", "createdAt")
-     VALUES ($1, $2, $3, $4, $5, $6, NOW())
-     ON CONFLICT ("userId", "roleKey", "companyId") DO NOTHING`,
-    [userId, rd.roleKey, rd.label, rd.level, JSON.stringify(rd.modules), companyId],
-  );
-  logger.info({ roleKey: rd.roleKey, level: rd.level, email: user.email }, "Bootstrap assigned role to user");
+  await client.query(`SAVEPOINT sp_bootstrap_user_role`);
+  try {
+    await client.query(
+      `INSERT INTO user_roles ("userId", "roleKey", label, level, modules, "companyId", "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT ("userId", "roleKey", "companyId") DO NOTHING`,
+      [userId, rd.roleKey, rd.label, rd.level, JSON.stringify(rd.modules), companyId],
+    );
+    await client.query(`RELEASE SAVEPOINT sp_bootstrap_user_role`);
+    logger.info({ roleKey: rd.roleKey, level: rd.level, email: user.email }, "Bootstrap assigned role to user");
+  } catch {
+    await client.query(`ROLLBACK TO SAVEPOINT sp_bootstrap_user_role`);
+  }
 
   return true;
 }
@@ -185,22 +193,31 @@ async function ensureAdminDriverCapability(
   // 1. Driver role in the picker. The role picker (الصفة) is fed by the login
   //    `userRoles` union, whose legacy half reads user_roles. Selecting "driver"
   //    makes dashboard.tsx redirect the admin to /me/driver.
-  const { rows: existingRole } = await client.query(
-    `SELECT id FROM user_roles WHERE "userId" = $1 AND "roleKey" = 'driver' AND "companyId" = $2 LIMIT 1`,
-    [adminUserId, companyId],
-  );
-  if (existingRole.length === 0) {
-    // ON CONFLICT (matches unique user_roles_userId_roleKey_companyId_key) keeps
-    // this race-safe under concurrent boots in addition to the check above.
-    const { rowCount } = await client.query(
-      `INSERT INTO user_roles ("userId", "roleKey", label, level, modules, "companyId", "createdAt")
-       VALUES ($1, 'driver', $2, 10, $3, $4, NOW())
-       ON CONFLICT ("userId", "roleKey", "companyId") DO NOTHING`,
-      [adminUserId, "سائق", JSON.stringify(["home", "fleet"]), companyId],
+  //    Best-effort: legacy user_roles was dropped in migration 261; RBAC v2 is
+  //    the authority. Wrap in a SAVEPOINT so a missing table does not poison
+  //    the bootstrap transaction.
+  await client.query(`SAVEPOINT sp_admin_driver_role`);
+  try {
+    const { rows: existingRole } = await client.query(
+      `SELECT id FROM user_roles WHERE "userId" = $1 AND "roleKey" = 'driver' AND "companyId" = $2 LIMIT 1`,
+      [adminUserId, companyId],
     );
-    if (rowCount && rowCount > 0) {
-      logger.info({ userId: adminUserId }, "Bootstrap granted admin the driver (سائق) role");
+    if (existingRole.length === 0) {
+      // ON CONFLICT (matches unique user_roles_userId_roleKey_companyId_key) keeps
+      // this race-safe under concurrent boots in addition to the check above.
+      const { rowCount } = await client.query(
+        `INSERT INTO user_roles ("userId", "roleKey", label, level, modules, "companyId", "createdAt")
+         VALUES ($1, 'driver', $2, 10, $3, $4, NOW())
+         ON CONFLICT ("userId", "roleKey", "companyId") DO NOTHING`,
+        [adminUserId, "سائق", JSON.stringify(["home", "fleet"]), companyId],
+      );
+      if (rowCount && rowCount > 0) {
+        logger.info({ userId: adminUserId }, "Bootstrap granted admin the driver (سائق) role");
+      }
     }
+    await client.query(`RELEASE SAVEPOINT sp_admin_driver_role`);
+  } catch {
+    await client.query(`ROLLBACK TO SAVEPOINT sp_admin_driver_role`);
   }
 
   // 2. fleet_drivers record bound to the admin's employee. Driver self-service
