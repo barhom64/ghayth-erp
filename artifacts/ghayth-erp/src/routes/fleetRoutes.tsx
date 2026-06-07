@@ -38,6 +38,10 @@ const TelematicsScorecard = lazy(() => import("@/pages/fleet/telematics/scorecar
 const CargoList = lazy(() => import("@/pages/fleet/cargo"));
 const CargoCreate = lazy(() => import("@/pages/fleet/cargo-create"));
 const CargoDetail = lazy(() => import("@/pages/fleet/cargo-detail"));
+// #1733 Comment 9 — Booking + Dispatch SPA surface.
+const TransportBookings = lazy(() => import("@/pages/fleet/transport-bookings"));
+const TransportBookingDetail = lazy(() => import("@/pages/fleet/transport-booking-detail"));
+const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
 // Unified driver self-service surface (#1354). Replaces /driver-portal/*
 // — drivers log in to the regular ERP, get the `driver` role, and land
 // here as their dashboard (see dashboard.tsx role-based redirect).
@@ -88,6 +92,12 @@ export const fleetRoutes = [
   { path: "/fleet/cargo", component: CargoList },
   { path: "/fleet/cargo/create", component: CargoCreate },
   { path: "/fleet/cargo/:id", component: CargoDetail },
+  // #1733 Booking + Dispatch (Comment 9). Pre-trip pipeline:
+  //   intake → booking → lines → dispatch order → cargo manifest.
+  // The dispatch board groups orders by driver with conflict detection.
+  { path: "/fleet/transport/bookings", component: TransportBookings },
+  { path: "/fleet/transport/bookings/:id", component: TransportBookingDetail },
+  { path: "/fleet/transport/dispatch", component: TransportDispatch },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },
 ];
