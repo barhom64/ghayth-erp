@@ -97,55 +97,84 @@ describe("calcOvertimeAmount contracts", () => {
   });
 });
 
-// ─── yearsOfService contracts ──────────────────────────────────────────────
+// ─── yearsOfService contracts (calendar-date arithmetic, TZ-safe) ─────────
 
 describe("yearsOfService contracts", () => {
-  it("calculates millisecond difference between dates", () => {
+  it("uses Date.UTC for calendar-date arithmetic (TZ-safe)", () => {
     const idx = HELPERS_SRC.indexOf("function yearsOfService");
-    const section = HELPERS_SRC.slice(idx, idx + 300);
-    expect(section).toContain("end.getTime() - start.getTime()");
+    const section = HELPERS_SRC.slice(idx, idx + 600);
+    expect(section).toContain("Date.UTC(ny, nm - 1, nd)");
+    expect(section).toContain("Date.UTC(hy, hm - 1, hd)");
   });
 
   it("uses 365.25 days per year for accurate year calculation", () => {
     const idx = HELPERS_SRC.indexOf("function yearsOfService");
-    const section = HELPERS_SRC.slice(idx, idx + 300);
+    const section = HELPERS_SRC.slice(idx, idx + 600);
     expect(section).toContain("365.25");
   });
 
   it("rounds to 2 decimal places", () => {
     const idx = HELPERS_SRC.indexOf("function yearsOfService");
-    const section = HELPERS_SRC.slice(idx, idx + 300);
+    const section = HELPERS_SRC.slice(idx, idx + 600);
     expect(section).toContain("roundTo2(");
   });
 
   it("accepts both string and Date inputs", () => {
-    expect(HELPERS_SRC).toContain("startDate: string | Date, endDate: string | Date");
+    expect(HELPERS_SRC).toContain("startDate: string | Date,");
+    expect(HELPERS_SRC).toContain("endDate: string | Date,");
   });
 });
 
-// ─── calcGratuity contracts (Saudi Article 84) ────────────────────────────
+// ─── calcGratuity contracts (Saudi Articles 84 + 85 + 80) ─────────────────
 
 describe("calcGratuity contracts", () => {
-  it("first 5 years: half month salary per year", () => {
+  it("first 5 years tier: half month salary per year (Article 84)", () => {
     const idx = HELPERS_SRC.indexOf("function calcGratuity");
-    const section = HELPERS_SRC.slice(idx, idx + 500);
-    expect(section).toContain("Math.min(years, 5)");
+    const section = HELPERS_SRC.slice(idx, idx + 1200);
+    expect(section).toContain("Math.min(safeYears, 5)");
     expect(section).toContain("monthlySalary * 0.5 * first5");
   });
 
-  it("after 5 years: full month salary per year", () => {
+  it("after 5 years tier: full month salary per year (Article 84)", () => {
     const idx = HELPERS_SRC.indexOf("function calcGratuity");
-    const section = HELPERS_SRC.slice(idx, idx + 500);
-    expect(section).toContain("Math.max(0, years - 5)");
+    const section = HELPERS_SRC.slice(idx, idx + 1200);
+    expect(section).toContain("Math.max(0, safeYears - 5)");
     expect(section).toContain("monthlySalary * 1 * after5");
   });
 
-  it("returns breakdown {first5Years, after5Years, total}", () => {
+  it("accepts ExitType to apply Articles 85 + 80", () => {
+    expect(HELPERS_SRC).toContain(
+      "exitType: ExitType = \"termination\""
+    );
+    expect(HELPERS_SRC).toContain(
+      "export type ExitType = \"termination\" | \"resignation\" | \"just_cause\""
+    );
+  });
+
+  it("Article 85 resignation tiers — 0 / 1/3 / 2/3 / 1", () => {
     const idx = HELPERS_SRC.indexOf("function calcGratuity");
-    const section = HELPERS_SRC.slice(idx, idx + 500);
+    const section = HELPERS_SRC.slice(idx, idx + 1500);
+    expect(section).toContain('if (safeYears < 2) resignationFraction = 0');
+    expect(section).toContain("else if (safeYears < 5) resignationFraction = 1 / 3");
+    expect(section).toContain("else if (safeYears < 10) resignationFraction = 2 / 3");
+    expect(section).toContain("else resignationFraction = 1");
+  });
+
+  it("Article 80 just_cause: no gratuity", () => {
+    const idx = HELPERS_SRC.indexOf("function calcGratuity");
+    const section = HELPERS_SRC.slice(idx, idx + 1500);
+    expect(section).toContain('if (exitType === "just_cause")');
+    expect(section).toContain("resignationFraction = 0");
+  });
+
+  it("returns full breakdown {first5Years, after5Years, fullGratuity, resignationFraction, total}", () => {
+    const idx = HELPERS_SRC.indexOf("function calcGratuity");
+    const section = HELPERS_SRC.slice(idx, idx + 1500);
     expect(section).toContain("first5Years,");
     expect(section).toContain("after5Years,");
-    expect(section).toContain("total: roundTo2(first5Years + after5Years)");
+    expect(section).toContain("fullGratuity,");
+    expect(section).toContain("resignationFraction,");
+    expect(section).toContain("total: roundTo2(fullGratuity * resignationFraction)");
   });
 });
 

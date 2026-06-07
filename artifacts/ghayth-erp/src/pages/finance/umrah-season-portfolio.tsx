@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { Calendar, TrendingUp, TrendingDown, Download } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 
@@ -72,35 +74,30 @@ export default function UmrahSeasonPortfolioDashboard() {
     return { best: sorted[0], worst: sorted[sorted.length - 1], winCount: wins, lossCount: losses };
   }, [rows]);
 
+  // GAP_MATRIX item #7 — uses the unified export helper for audit + letterhead.
   const exportCsv = () => {
-    const header = [
-      "id", "title", "status", "hijriYear",
-      "startDate", "endDate",
-      "pilgrimsCount", "groupsCount",
-      "revenue", "paid", "cost", "margin", "marginPct",
-    ];
-    const escape = (v: unknown) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
     const pct = (m: number, r: number) => r > 0 ? ((m / r) * 100).toFixed(1) : "0";
-    const lines = [
-      header.join(","),
-      ...rows.map((r) => [
-        r.id, r.title, r.status, r.hijriYear,
-        r.startDate, r.endDate,
-        r.pilgrimsCount, r.groupsCount,
-        r.revenue, r.paid, r.cost, r.margin,
-        pct(Number(r.margin), Number(r.revenue)),
-      ].map(escape).join(",")),
-    ];
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `umrah-season-portfolio.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void exportRowsToCsv({
+      entityType: "report_umrah_season_portfolio",
+      title: "محفظة مواسم العمرة",
+      rows: rows as unknown as Record<string, unknown>[],
+      columns: [
+        { key: "id",             label: "id" },
+        { key: "title",          label: "title" },
+        { key: "status",         label: "status" },
+        { key: "hijriYear",      label: "hijriYear" },
+        { key: "startDate",      label: "startDate" },
+        { key: "endDate",        label: "endDate" },
+        { key: "pilgrimsCount",  label: "pilgrimsCount" },
+        { key: "groupsCount",    label: "groupsCount" },
+        { key: "revenue",        label: "revenue" },
+        { key: "paid",           label: "paid" },
+        { key: "cost",           label: "cost" },
+        { key: "margin",         label: "margin" },
+        { key: "marginPct",      label: "marginPct",
+          format: (_, row: any) => pct(Number(row.margin), Number(row.revenue)) },
+      ],
+    }).catch((err) => console.error("[export] failed", err));
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -144,16 +141,39 @@ export default function UmrahSeasonPortfolioDashboard() {
         { label: "محفظة مواسم العمرة" },
       ]}
       actions={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={exportCsv}
-          disabled={rows.length === 0}
-          className="gap-1"
-          data-testid="season-portfolio-export-csv"
-        >
-          <Download className="h-3 w-3" /> تصدير CSV
-        </Button>
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={rows.length === 0}
+            className="gap-1"
+            data-testid="season-portfolio-export-csv"
+          >
+            <Download className="h-3 w-3" /> تصدير CSV
+          </Button>
+          <PrintButton
+            entityType="report_umrah_season_portfolio"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "محفظة مواسم العمرة", total: rows.length },
+              items: rows.map((r) => ({
+                "الموسم": r.title,
+                "السنة الهجرية": r.hijriYear || "—",
+                "البداية": r.startDate || "—",
+                "النهاية": r.endDate || "—",
+                "عدد المعتمرين": r.pilgrimsCount,
+                "عدد المجموعات": r.groupsCount,
+                "الإيراد": Number(r.revenue || 0),
+                "المدفوع": Number(r.paid || 0),
+                "التكلفة": Number(r.cost || 0),
+                "الهامش": Number(r.margin || 0),
+                "الحالة": STATUS_LABELS[r.status] || r.status,
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

@@ -19,7 +19,11 @@ const Warehouse = lazy(() => import("@/pages/warehouse"));
 const WarehouseCreate = lazy(() => import("@/pages/create/warehouse-create"));
 const WarehouseMovementsCreate = lazy(() => import("@/pages/create/warehouse/movements-create"));
 const WarehouseCategoriesCreate = lazy(() => import("@/pages/create/warehouse/categories-create"));
-const WarehouseSuppliersCreate = lazy(() => import("@/pages/create/warehouse/suppliers-create"));
+// Warehouse supplier form deleted — the warehouse/suppliers + finance/
+// vendors UI duplication wrote to the same `suppliers` table. The
+// /warehouse/suppliers/create route below now lazy-loads the unified
+// finance/vendors-create form (same table, fuller field set).
+const WarehouseSuppliersCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
 const WarehouseProductDetail = lazy(() => import("@/pages/details/warehouse-product-detail"));
 const WarehouseMovementDetail = lazy(() => import("@/pages/details/warehouse-movement-detail"));
 const WarehouseCategoryDetail = lazy(() => import("@/pages/details/warehouse-category-detail"));
@@ -81,7 +85,9 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 40 },
   { path: "/obligations", component: Obligations, module: "operations" },
   { path: "/calendar", component: CalendarPage },
-  { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 60 },
+  // Agent-5 (route↔backend consistency): /api/exec-dashboard mounts with
+  // requireMinLevel(70). Route gate raised from 60 → 70 to match.
+  { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 70 },
   { path: "/manager-board", component: ManagerBoard, minRoleLevel: 40 },
   { path: "/manager-board/reprint-approvals", component: ReprintApprovals, minRoleLevel: 40 },
   { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 40 },

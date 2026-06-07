@@ -13,6 +13,7 @@ import { formatCurrency, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/l
 import { TrendingUp, TrendingDown, Globe, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface RevalDetail {
   kind: "AR" | "AP" | string;
@@ -120,6 +121,27 @@ export default function FxRevaluationPage() {
         { href: "/finance/fx-rates", label: "أسعار الصرف" },
         { label: "إعادة التقييم" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_finance_fx_revaluation"
+          entityId={period}
+          size="icon"
+          payload={{
+            entity: { title: `إعادة تقييم العملات الأجنبية — ${period}`, total: data.lineCount },
+            items: data.details.map((d) => ({
+              "النوع": d.kind,
+              "المرجع": d.refNumber || "—",
+              "العملة": d.currency,
+              "الرصيد (FC)": Number(d.outstandingFc || 0),
+              "سعر القيد": Number(d.bookedRate || 0).toFixed(4),
+              "سعر الإقفال": Number(d.closingRate || 0).toFixed(4),
+              "القيد (SAR)": Number(d.bookedSar || 0),
+              "بعد التقييم": Number(d.revaluedSar || 0),
+              "الفرق": Number(d.diff || 0),
+            })),
+          }}
+        />
+      }
     >
       <FinanceTabsNav />
 

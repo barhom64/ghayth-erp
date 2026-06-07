@@ -26,6 +26,8 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { EXIT_TYPES, EXIT_REQUEST_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS = Object.entries(EXIT_REQUEST_STATUS).map(([value, { label }]) => ({ value, label }));
 
 export default function ExitRequestsPage() {
@@ -49,9 +51,6 @@ export default function ExitRequestsPage() {
     { successMessage: "تم اعتماد الطلب" },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const handleApprove = async (id: number) => {
     await approveMut.mutateAsync({ id });
     queryClient.invalidateQueries({ queryKey: ["hr-exit"] });
@@ -62,6 +61,12 @@ export default function ExitRequestsPage() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const kpis = [
     {
@@ -218,12 +223,30 @@ export default function ExitRequestsPage() {
       subtitle="سير عمل الاستقالة والفصل — إخلاء طرف وتصفية مستحقات"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Link href="/hr/exit/create">
-          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            طلب نهاية خدمة
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_exit_requests"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "طلبات نهاية الخدمة", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "الموظف": r.employeeName || "—",
+                "نوع الإنهاء": r.exitType || r.type || "—",
+                "تاريخ الطلب": r.requestDate || r.createdAt || "—",
+                "آخر يوم": r.lastWorkingDay || "—",
+                "السبب": r.reason || "—",
+                "الحالة": r.status || "—",
+              })),
+            })}
+          />
+          <Link href="/hr/exit/create">
+            <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              طلب نهاية خدمة
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />
@@ -262,6 +285,7 @@ export default function ExitRequestsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد طلبات نهاية خدمة"

@@ -17,6 +17,8 @@ import { Plus, Percent, Trash2, Pencil, Layers, Receipt } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 /**
@@ -80,6 +82,7 @@ export default function TaxCodesPage() {
   const filtered = applyFilters(items, filters, {
     searchFields: ["code", "name", "nameEn", "zatcaCategoryCode"],
   }) as TaxCode[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<TaxCode>[] = [
     {
@@ -186,6 +189,22 @@ export default function TaxCodesPage() {
               إضافة رمز ضريبة
             </Link>
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_tax_codes"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "رموز الضرائب", total: printRows.length },
+              items: printRows.map((c: any) => ({
+                "الرمز": c.code || "—",
+                "الاسم": c.name || "—",
+                "النسبة (%)": c.ratePercent ?? c.rate ?? "—",
+                "النوع": c.type || "—",
+                "الحساب المرتبط": c.accountCode || "—",
+                "الحالة": c.isActive ? "نشط" : "غير نشط",
+              })),
+            })}
+          />
         </>
       }
     >
@@ -219,6 +238,7 @@ export default function TaxCodesPage() {
       >
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={filtered}
           onRowClick={(t) => navigate(`/finance/tax-codes/${t.id}/edit`)}
           pageSize={pageSize}

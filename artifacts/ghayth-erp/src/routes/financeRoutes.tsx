@@ -18,7 +18,14 @@ const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
 const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
+const CostCentersTree = lazy(() => import("@/pages/finance/cost-centers-tree"));
 const CostCenterPnl = lazy(() => import("@/pages/finance/cost-center-pnl"));
+const CostCenterDrillPnl = lazy(() => import("@/pages/finance/cost-center-drill-pnl"));
+const CostCenterRanking = lazy(() => import("@/pages/finance/cost-center-ranking"));
+const DimensionalRouting = lazy(() => import("@/pages/finance/dimensional-routing"));
+const DormantEntities = lazy(() => import("@/pages/finance/dormant-entities"));
+const EntityPnl = lazy(() => import("@/pages/finance/entity-pnl"));
+const EntityRanking = lazy(() => import("@/pages/finance/entity-ranking"));
 const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const PricingRules = lazy(() => import("@/pages/finance/pricing-rules"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
@@ -55,7 +62,10 @@ const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
 const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
-const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
+// Duplicate multi-line form removed — the unified expenses-create
+// page now handles multi-line via "حفظ وإضافة آخر" button.
+// The /finance/expenses/multi-line route below redirects there.
+
 const CostSplitter = lazy(() => import("@/pages/create/finance/cost-splitter"));
 const AccountTransfer = lazy(() => import("@/pages/create/finance/account-transfer"));
 // Phase D — pages from the enterprise-hardening branch that don't
@@ -166,6 +176,7 @@ const ProfitabilityUmrahAgent = lazy(() => import("@/pages/finance/profitability
 const CustomerAdvances = lazy(() => import("@/pages/finance/customer-advances"));
 const CustomerAdvancesCreate = lazy(() => import("@/pages/create/finance/customer-advances-create"));
 const CustomerAdvancesApply = lazy(() => import("@/pages/create/finance/customer-advances-apply"));
+const CustomerReceiptWizard = lazy(() => import("@/pages/create/finance/customer-receipt")); // originally PR #1178
 const Dunning = lazy(() => import("@/pages/finance/dunning"));
 const CollectionStages = lazy(() => import("@/pages/finance/collection-stages"));
 const BadDebt = lazy(() => import("@/pages/finance/bad-debt"));
@@ -181,8 +192,21 @@ const FxRates = lazy(() => import("@/pages/finance/fx-rates"));
 const FxRevaluationHistory = lazy(() => import("@/pages/finance/fx-revaluation-history"));
 const SettingsHub = lazy(() => import("@/pages/finance/settings-hub"));
 const FxRevaluation = lazy(() => import("@/pages/finance/fx-revaluation"));
+// Consolidated finance dashboards (originally PRs #1216/#1218/#1222/#1211/#1210/#1182).
+const ProjectPortfolioDashboard = lazy(() => import("@/pages/finance/project-portfolio-dashboard"));
+const PropertyPortfolioDashboard = lazy(() => import("@/pages/finance/property-portfolio-dashboard"));
+const UmrahAgentPortfolio = lazy(() => import("@/pages/finance/umrah-agent-portfolio"));
+const ExpenseMixAnalyzer = lazy(() => import("@/pages/finance/expense-mix-analyzer"));
+const RevenueMixAnalyzer = lazy(() => import("@/pages/finance/revenue-mix-analyzer"));
+const DsoTrend = lazy(() => import("@/pages/finance/dso-trend"));
 
 export const financeRoutes = [
+  { path: "/finance/project-portfolio", component: ProjectPortfolioDashboard },
+  { path: "/finance/property-portfolio", component: PropertyPortfolioDashboard },
+  { path: "/finance/umrah-agent-portfolio", component: UmrahAgentPortfolio },
+  { path: "/finance/expense-mix", component: ExpenseMixAnalyzer },
+  { path: "/finance/revenue-mix", component: RevenueMixAnalyzer },
+  { path: "/finance/reports/dso-trend", component: DsoTrend },
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
   // to its own explicit path so the two pages don't share a URL.
   { path: "/finance", component: Dashboard },
@@ -242,7 +266,9 @@ export const financeRoutes = [
   { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
   { path: "/finance/expenses/create", component: ExpensesCreate },
-  { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },
+  // Legacy multi-line route now redirects to the unified expenses-create
+  // form, which supports multi-line via the "حفظ وإضافة آخر" button.
+  { path: "/finance/expenses/multi-line", component: ExpensesCreate },
   { path: "/finance/expenses/split", component: CostSplitter },
   { path: "/finance/expenses/:id", component: ExpenseDetail },
   { path: "/finance/budget", component: Budget },
@@ -288,7 +314,14 @@ export const financeRoutes = [
   { path: "/finance/allocation-coverage", component: AllocationCoverage },
   { path: "/finance/allocation-override-log", component: AllocationOverrideLog },
   { path: "/finance/cost-centers", component: CostCenters },
+  { path: "/finance/cost-centers/tree", component: CostCentersTree },
   { path: "/finance/cost-center-pnl", component: CostCenterPnl },
+  { path: "/finance/cost-centers/:id/pnl", component: CostCenterDrillPnl },
+  { path: "/finance/cost-centers/ranking", component: CostCenterRanking },
+  { path: "/finance/dimensional-routing", component: DimensionalRouting },
+  { path: "/finance/dormant-entities", component: DormantEntities },
+  { path: "/finance/entity-pnl/:entityType/:entityId", component: EntityPnl },
+  { path: "/finance/entity-ranking", component: EntityRanking },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
   { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },
@@ -301,6 +334,7 @@ export const financeRoutes = [
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/tax-filing-calendar", component: TaxFilingCalendar },
   { path: "/finance/receivables", component: Receivables },
+  { path: "/finance/receivables/receipt", component: CustomerReceiptWizard },
   { path: "/finance/customer-statement-print", component: CustomerStatementPrint },
   { path: "/finance/customer-360-sheet", component: Customer360Sheet },
   { path: "/finance/customer-risk", component: CustomerRisk },

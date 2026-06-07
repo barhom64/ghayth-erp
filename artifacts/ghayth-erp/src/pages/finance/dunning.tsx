@@ -14,6 +14,8 @@ import { Send, Mail, MessageSquare, Clock, AlertTriangle, Gavel } from "lucide-r
 import { useToast } from "@/hooks/use-toast";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 interface OverdueInvoice {
   invoiceId: number;
   invoiceNumber: string;
@@ -77,10 +79,13 @@ export default function DunningPage() {
     ["dunning-preview"], ["dunning-history"],
   ]);
 
+  const invoices = preview?.invoices ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<OverdueInvoice>(invoices);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError || !preview) return <ErrorState />;
 
-  const invoices = preview.invoices;
   const allSelected = invoices.length > 0 && selected.size === invoices.length;
 
   const toggleAll = () => {
@@ -230,6 +235,23 @@ export default function DunningPage() {
               مراحل التصعيد
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_dunning"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "متابعة تحصيل الذمم", total: printRows.length },
+              items: printRows.map((r) => ({
+                "الفاتورة": r.invoiceNumber || "—",
+                "العميل": r.clientName || "—",
+                "تاريخ الاستحقاق": r.dueDate || "—",
+                "أيام التأخر": r.daysPastDue ?? 0,
+                "المتبقي": r.outstanding ?? 0,
+                "المرحلة المقترحة": STAGE_INFO[r.proposedStage]?.label ?? "—",
+                "آخر إرسال": r.lastSentStage > 0 ? `مرحلة ${r.lastSentStage}` : "—",
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -315,6 +337,7 @@ export default function DunningPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={invoices}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا توجد فواتير مؤهلة لإرسال تذكير في هذه الفترة"
           />

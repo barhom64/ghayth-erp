@@ -21,6 +21,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { z } from "zod";
 import {
@@ -125,9 +126,27 @@ export default function InspectionsPage() {
       subtitle="جدولة وتتبع عمليات فحص الوحدات"
       breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "فحص الوحدات العقارية" }]}
       actions={
-        <GuardedButton perm="properties:create" onClick={() => setShowForm(!showForm)} size="sm">
-          <Plus className="w-4 h-4 me-1" /> جدولة فحص
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_property_inspections"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "سجل فحوصات الوحدات العقارية", total: inspections.length },
+              items: inspections.map((i: any) => ({
+                "الوحدة": i.unitNumber || i.unitId || "—",
+                "النوع": i.inspectionType || i.type || "—",
+                "تاريخ الفحص": i.inspectionDate || "—",
+                "الفاحص": i.inspectorName || "—",
+                "النتيجة": i.result || "—",
+                "الحالة": i.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton perm="properties:create" onClick={() => setShowForm(!showForm)} size="sm">
+            <Plus className="w-4 h-4 me-1" /> جدولة فحص
+          </GuardedButton>
+        </div>
       }
     >
       <PropertyTabsNav />

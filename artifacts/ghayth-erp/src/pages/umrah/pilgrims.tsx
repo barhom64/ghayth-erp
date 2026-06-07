@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { formatDateAr, todayLocal } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,6 +20,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { BulkCheckbox } from "@/components/shared/bulk-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 // PILGRIM_STATUSES is mirrored from the backend enum in routes/umrah.ts;
 // the bulk-status dropdown should match the same option set so an
@@ -43,6 +45,27 @@ export default function UmrahPilgrims() {
   const [filters, setFilters] = useFilters();
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  // Deep-link filter pre-application — compliance dashboard tiles + the
+  // visa-expiring banner navigate here with ?status=… / ?seasonId=… /
+  // ?visaExpiringWithin=7 / ?agentId=…. Without this hook, the URL was
+  // a no-op and the operator landed on an unfiltered list.
+  //
+  // Runs once on mount: the URL is the entry signal, subsequent
+  // navigation within the page rewrites `filters` directly.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const known = ["status", "seasonId", "agentId", "groupId", "flight", "arrivalDate", "departureDate", "visaExpiringWithin", "search"];
+    const next: Record<string, string> = {};
+    let touched = false;
+    for (const k of known) {
+      const v = sp.get(k);
+      if (v) { next[k] = v; touched = true; }
+    }
+    if (touched) setFilters({ ...filters, ...next } as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const seasonId = (filters as Record<string, string>).seasonId || "";
   const groupId = (filters as Record<string, string>).groupId || "";
   // Flight number rides on the same dynamic-keys pattern (no shared-
@@ -83,6 +106,7 @@ export default function UmrahPilgrims() {
   const { data: groupsResp } = useApiQuery<{ data: any[] }>(["umrah-groups"], "/umrah/groups");
   const groups = asList(groupsResp?.data || groupsResp);
   const items = resp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const total = resp?.total || 0;
 
   // GET /umrah/unassigned — pilgrims without an agent. Shows up as an
@@ -236,9 +260,32 @@ export default function UmrahPilgrims() {
       subtitle="متابعة ملفات المعتمرين وحالاتهم"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المعتمرين" }]}
       actions={
-        <Link href="/umrah/pilgrims/create">
-          <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_pilgrims"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: "قائمة المعتمرين",
+                total: printRows.length,
+                unassigned: unassignedCount,
+              },
+              items: printRows.map((p: any) => ({
+                "الاسم": p.fullName || p.name || "—",
+                "رقم نسك": p.nuskNumber || "—",
+                "الجواز": p.passportNumber || "—",
+                "الجنسية": p.nationality || "—",
+                "المجموعة": p.groupName || "—",
+                "الوكيل الفرعي": p.subAgentName || "—",
+                "الحالة": p.status || "—",
+              })),
+            })}
+          />
+          <Link href="/umrah/pilgrims/create">
+            <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <UmrahTabsNav />
@@ -458,6 +505,7 @@ export default function UmrahPilgrims() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={items}
         isLoading={isLoading}
         isError={isError}

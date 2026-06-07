@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
@@ -125,6 +126,77 @@ function AttendanceSummary({ attendance }: { attendance: any[] }) {
         <p className="text-xs text-muted-foreground">دقائق تأخر</p>
       </div>
     </div>
+  );
+}
+
+// FinanceLinkageCard — surfaces the subsidiary custody account,
+// outstanding custody balance, linked vehicle (driver case), and the
+// internal vs personal email split. Drives the "is this employee
+// properly wired into finance / fleet?" check at a glance instead of
+// the operator hunting across 4 modules.
+function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
+  const { data } = useApiQuery<any>(["employee-finance-summary", employeeId], `/employees/${employeeId}/finance-summary`, !!employeeId);
+  if (!data) return null;
+  const custody = data.custody ?? {};
+  const vehicle = data.vehicle ?? null;
+  const emails = data.emails ?? {};
+  const userAcct = data.userAccount ?? null;
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-muted-foreground font-medium">الربط المالي والوظيفي</p>
+          <Badge variant="outline" className="text-[10px]">batch HR</Badge>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">حساب العهدة الفرعي</p>
+            {custody.subsidiaryAccountCode ? (
+              <>
+                <p className="font-mono text-sm font-bold" data-testid="finance-link-custody-code">{custody.subsidiaryAccountCode}</p>
+                <p className="text-xs text-status-neutral-foreground">{custody.subsidiaryAccountName}</p>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">لا يوجد — أنشئ حساب فرعي للموظف من شاشة المحاسبة</p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">رصيد العهدة المفتوحة</p>
+            <p className="font-bold text-lg" data-testid="finance-link-custody-balance">
+              {Number(custody.outstandingAmount || 0).toLocaleString("ar-SA")} ر.س
+            </p>
+            <p className="text-xs text-muted-foreground">{Number(custody.openCount || 0)} عهدة مفتوحة</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">المركبة المرتبطة (سائق)</p>
+            {vehicle ? (
+              <p className="font-mono text-sm font-bold" data-testid="finance-link-vehicle">
+                {vehicle.plateNumber}{vehicle.brand ? ` — ${vehicle.brand}` : ""}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">لا توجد مركبة مرتبطة</p>
+            )}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t">
+          <div>
+            <p className="text-xs text-muted-foreground">بريد الدخول</p>
+            <p className="font-mono text-xs" dir="ltr" data-testid="finance-link-internal-email">{emails.loginEmail || "—"}</p>
+            {userAcct && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {userAcct.isActive ? "حساب نشط" : "حساب غير نشط"}
+                {userAcct.lastLoginAt ? ` · آخر دخول ${new Date(userAcct.lastLoginAt).toLocaleDateString("ar-SA")}` : " · لم يدخل بعد"}
+              </p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">البريد الشخصي</p>
+            <p className="font-mono text-xs" dir="ltr" data-testid="finance-link-personal-email">{emails.personal || "—"}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">للتواصل فقط — لا يُستخدم لتسجيل الدخول</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -388,6 +460,11 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
       {activeTab === "overview" && (
         <div className="space-y-4">
           <QuickSummaryCard employee={employee} serviceDays={serviceDays} />
+
+          {/* Integrated HR — finance/role/vehicle/email linkage at a glance.
+              Renders the "is everything wired?" check in one card so HR
+              doesn't have to bounce between custody/fleet/admin pages. */}
+          <FinanceLinkageCard employeeId={id ?? ""} />
 
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
@@ -901,6 +978,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
           <div className="flex items-center gap-2 flex-wrap">
             <OperationalStatusBar employeeId={id} />
             <EntityPrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
+            {id && <EntityPnlButton entityType="employee" entityId={Number(id)} />}
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setShowPrintMenu(!showPrintMenu)}>
                 <Printer className="h-4 w-4 me-1" />طباعة قوالب HR

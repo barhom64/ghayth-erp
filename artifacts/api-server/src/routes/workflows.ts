@@ -116,6 +116,14 @@ router.post("/submit", authorize({ feature: "admin", action: "update" }), async 
       submittedByName: scope.userName,
       data,
     });
+    if (!result) {
+      res.status(400).json({
+        error: "لا يوجد تعريف سير عمل نشط لهذا النوع من الطلبات",
+        code: "NO_WORKFLOW_DEFINITION",
+        fix: "عرّف سير عمل (workflow_definitions) لهذا النوع قبل تقديمه",
+      });
+      return;
+    }
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_instances", entityId: result.instanceId, after: { requestType, title } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.created", entity: "workflow_instances", entityId: result.instanceId, details: JSON.stringify({ requestType, title }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.status(201).json(result);
@@ -319,9 +327,21 @@ router.get("/pending", authorize({ feature: "admin", action: "list" }), async (r
 router.get("/definitions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Pre-aggregate workflow_steps once instead of running a scalar
+    // subquery per row. The original SELECT-list correlated subquery
+    // was N+1: postgres planned one execution per returned
+    // workflow_definition row, so 500 definitions == 501 lookups
+    // through workflow_steps. The CTE below scans the table once and
+    // joins per-definition counts back.
     const defs = await rawQuery<Record<string, unknown>>(
-      `SELECT wd.*, (SELECT COUNT(*) FROM workflow_steps ws WHERE ws."definitionId" = wd.id) AS "stepCount"
+      `WITH step_counts AS (
+         SELECT "definitionId", COUNT(*) AS "stepCount"
+         FROM workflow_steps
+         GROUP BY "definitionId"
+       )
+       SELECT wd.*, COALESCE(sc."stepCount", 0)::int AS "stepCount"
        FROM workflow_definitions wd
+       LEFT JOIN step_counts sc ON sc."definitionId" = wd.id
        WHERE wd."companyId" = $1
        ORDER BY wd."requestTypeLabel" LIMIT 500`,
       [scope.companyId]

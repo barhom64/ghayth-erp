@@ -6,6 +6,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
+  PageShell,
   PageStatusBadge,
   DataTable,
   type DataTableColumn,
@@ -333,7 +334,11 @@ export default function StorePage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <PageShell
+      title="المتجر"
+      subtitle="إدارة المنتجات والطلبات"
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { label: "المتجر" }]}
+    >
       <StoreTabsNav />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => (
@@ -355,6 +360,6 @@ export default function StorePage() {
         <TabsContent value="products"><ProductsTab /></TabsContent>
         <TabsContent value="orders"><OrdersTab /></TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

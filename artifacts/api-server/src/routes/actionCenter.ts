@@ -60,27 +60,47 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
         [cc, scope.role, scope.activeAssignmentId]
       ), "pendingLeaves"),
       ifRole(PAYROLL_ROLES, () => rawQuery<Record<string, unknown>>(
-        `SELECT je.id, je.description AS reason,
-                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl WHERE jl."journalId" = je.id AND jl.debit > 0), 0) AS amount,
+        // Pre-aggregate journal_lines debit sums once via CTE
+        // instead of running a scalar subquery per row. Original was
+        // N+1: 20 advance entries × COALESCE(SELECT SUM) = 21 lookups
+        // through journal_lines. CTE scans the filtered subset once.
+        `WITH adv_debit AS (
+           SELECT "journalId", SUM(debit) AS amount
+           FROM journal_lines
+           WHERE debit > 0
+           GROUP BY "journalId"
+         )
+         SELECT je.id, je.description AS reason,
+                COALESCE(ad.amount, 0) AS amount,
                 ea2.id IS NOT NULL AS "hasAssignment",
                 COALESCE(emp.name, je.description) AS "employeeName",
                 je.status, je."createdAt"
          FROM journal_entries je
          LEFT JOIN employee_assignments ea2 ON ea2.id = je."createdBy"
          LEFT JOIN employees emp ON emp.id = ea2."employeeId"
+         LEFT JOIN adv_debit ad ON ad."journalId" = je.id
          WHERE je."companyId" = ANY($1::int[]) AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
            AND je.status IN ('pending_approval','pending')
          ORDER BY je."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingAdvances"),
       ifRole(FINANCE_ROLES, () => rawQuery<Record<string, unknown>>(
-        `SELECT je.id, je.description,
-                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl WHERE jl."journalId" = je.id AND jl.debit > 0), 0) AS amount,
+        // Same N+1 fix shape as pendingAdvances above — CTE
+        // pre-aggregates debit sums for custody entries.
+        `WITH cust_debit AS (
+           SELECT "journalId", SUM(debit) AS amount
+           FROM journal_lines
+           WHERE debit > 0
+           GROUP BY "journalId"
+         )
+         SELECT je.id, je.description,
+                COALESCE(cd.amount, 0) AS amount,
                 COALESCE(emp.name, je.description) AS "employeeName",
                 je.status, je."createdAt"
          FROM journal_entries je
          LEFT JOIN employee_assignments ea2 ON ea2.id = je."createdBy"
          LEFT JOIN employees emp ON emp.id = ea2."employeeId"
+         LEFT JOIN cust_debit cd ON cd."journalId" = je.id
          WHERE je."companyId" = ANY($1::int[]) AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
            AND je.status IN ('pending_approval','pending')
          ORDER BY je."createdAt" DESC LIMIT 20`,

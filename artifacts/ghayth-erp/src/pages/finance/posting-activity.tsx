@@ -14,6 +14,9 @@ import {
   AlertCircle, Calendar,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Posting Activity Today — real-time view of GL posts.
@@ -114,25 +117,8 @@ export default function PostingActivityPage() {
     `/finance/journal?${qs.toString()}`,
   );
 
-  if (isLoading) return <LoadingSpinner />;
-
   const rows: JournalEntry[] = data?.data ?? [];
-
-  // ── Aggregates
-  const amounts = rows.map((r) => Number(r.totalDebit ?? r.total ?? 0));
-  const totalAmount = amounts.reduce((s, a) => s + a, 0);
-  const reversals = rows.filter((r) => r.type === "reversal").length;
-  const manuals = rows.filter((r) => r.type === "manual").length;
-  const reversed = rows.filter((r) => r.reversedById != null).length;
-
-  // Unusual = top 5% by amount
-  const sortedAmounts = [...amounts].sort((a, b) => b - a);
-  const top5Threshold = sortedAmounts[Math.max(0, Math.floor(sortedAmounts.length * 0.05) - 1)] ?? 0;
-  const unusualIds = new Set(
-    rows
-      .filter((r) => Number(r.totalDebit ?? r.total ?? 0) >= top5Threshold && top5Threshold > 0)
-      .map((r) => r.id)
-  );
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const byType = useMemo(() => {
     const m = new Map<string, { count: number; amount: number }>();
@@ -153,6 +139,24 @@ export default function PostingActivityPage() {
     }
     return Array.from(m.entries()).map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count);
   }, [rows]);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  // ── Aggregates
+  const amounts = rows.map((r) => Number(r.totalDebit ?? r.total ?? 0));
+  const totalAmount = amounts.reduce((s, a) => s + a, 0);
+  const reversals = rows.filter((r) => r.type === "reversal").length;
+  const manuals = rows.filter((r) => r.type === "manual").length;
+  const reversed = rows.filter((r) => r.reversedById != null).length;
+
+  // Unusual = top 5% by amount
+  const sortedAmounts = [...amounts].sort((a, b) => b - a);
+  const top5Threshold = sortedAmounts[Math.max(0, Math.floor(sortedAmounts.length * 0.05) - 1)] ?? 0;
+  const unusualIds = new Set(
+    rows
+      .filter((r) => Number(r.totalDebit ?? r.total ?? 0) >= top5Threshold && top5Threshold > 0)
+      .map((r) => r.id)
+  );
 
   const cols: DataTableColumn<JournalEntry>[] = [
     {
@@ -244,10 +248,28 @@ export default function PostingActivityPage() {
         { label: "نشاط اليوم" },
       ]}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
-          تحديث
-        </Button>
+        <>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
+            تحديث
+          </Button>
+          <PrintButton
+            entityType="report_finance_posting_activity"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "نشاط الترحيل المحاسبي", total: printRows.length },
+              items: printRows.map((r) => ({
+                "المرجع": r.ref || `#${r.id}`,
+                "الوصف": r.description || "—",
+                "النوع": TYPE_LABEL[r.type] || r.type,
+                "المبلغ": Number(r.totalDebit ?? r.total ?? 0),
+                "تاريخ الترحيل": r.postedAt || r.createdAt || "—",
+                "الحالة": r.status || "—",
+              })),
+            })}
+          />
+        </>
       }
     >
       <FinanceTabsNav />
@@ -302,7 +324,13 @@ export default function PostingActivityPage() {
       </div>
 
       <Card className="mb-3">
-        <CardContent className="p-3">
+        <CardContent className="p-3 flex flex-col gap-2">
+          <DateRangePresets
+            value={{ from: fromDate, to: toDate }}
+            onChange={(r) => { setFromDate(r.from); setToDate(r.to); }}
+            testidPrefix="posting-activity-preset"
+            hideAllTime
+          />
           <div className="flex items-end gap-3 flex-wrap">
             <div>
               <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> من</Label>
@@ -332,6 +360,7 @@ export default function PostingActivityPage() {
           <CardContent className="p-0">
             <DataTable
               columns={cols} data={rows}
+              onSortedDataChange={setPrintRows}
               pageSize={30}
               emptyMessage="ما في قيود في هذا النطاق الزمني"
             />

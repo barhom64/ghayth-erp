@@ -28,6 +28,7 @@ import {
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
 import { PrintButton } from "@/components/shared/print-button";
+import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 
 export default function VendorDetailPage() {
   const [, params] = useRoute("/finance/vendors/:id");
@@ -324,6 +325,7 @@ export default function VendorDetailPage() {
             <FileSpreadsheet className="h-4 w-4 me-1" /> كشف حساب
           </Button>
           <PrintButton entityType="vendor" entityId={(id as any) ?? 0} label="طباعة" />
+          {id != null && <EntityPnlButton entityType="vendor" entityId={Number(id)} />}
         </div>
       }
       extraTabs={extraTabs}

@@ -16,6 +16,8 @@ import { Plus, Workflow, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface AllocationRule {
   id: number;
@@ -91,10 +93,13 @@ export default function AllocationRulesPage() {
     `/finance/allocation-rules${qs ? `?${qs}` : ""}`,
   );
 
+  const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const rows = data?.data ?? [];
   const activeCount = rows.filter((r) => r.isActive).length;
   const requiresLink = rows.filter((r) => r.requiresEntityLink).length;
 
@@ -173,11 +178,31 @@ export default function AllocationRulesPage() {
         { label: "قواعد التوجيه" },
       ]}
       actions={
-        <Link href="/finance/allocation-rules/create">
-          <GuardedButton perm="finance:create">
-            <Plus className="h-4 w-4 me-1" /> قاعدة جديدة
-          </GuardedButton>
-        </Link>
+        <>
+          <Link href="/finance/allocation-rules/create">
+            <GuardedButton perm="finance:create">
+              <Plus className="h-4 w-4 me-1" /> قاعدة جديدة
+            </GuardedButton>
+          </Link>
+          <PrintButton
+            entityType="report_finance_allocation_rules"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قواعد التوجيه المحاسبي", total: printRows.length },
+              items: printRows.map((r) => ({
+                "الاسم": r.name || "—",
+                "نوع المستند": DOC_TYPE_LABEL[r.documentType] || r.documentType || "—",
+                "نوع السطر": r.lineType || "—",
+                "النشاط": r.activityType || "—",
+                "نوع الكيان": r.entityType || "—",
+                "استراتيجية مركز التكلفة": STRATEGY_LABEL[r.costCenterStrategy || ""] || r.costCenterStrategy || "—",
+                "الأولوية": r.priority,
+                "نشطة": r.isActive ? "نعم" : "لا",
+              })),
+            })}
+          />
+        </>
       }
     >
       <FinanceTabsNav />
@@ -268,6 +293,7 @@ export default function AllocationRulesPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               docTypeFilter || activeFilter

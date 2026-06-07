@@ -21,7 +21,13 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { emitEvent, createAuditLog, initiateApprovalChain, todayISO } from "../lib/businessHelpers.js";
+import {
+  emitEvent,
+  createAuditLog,
+  initiateApprovalChain,
+  todayISO,
+} from "../lib/businessHelpers.js";
+import { reclassifyRevenueForInvoices } from "../lib/umrahReclassifyEngine.js";
 import {
   generateSalesInvoice,
   registerPayment,
@@ -624,47 +630,58 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
     // at a glance — financial (NUSK cost, sales invoice, outstanding),
     // operational (mutamers inside/overstayed), and compliance (visa
     // expiring within 7 days) — without a per-row follow-up request.
+    // Pre-aggregate the FIVE per-row subqueries into 2 CTEs. Original
+    // was the WORST N+1 in the codebase: 500 groups × 5 subqueries =
+    // 2501 lookups (2 on umrah_nusk_invoices + 3 on umrah_pilgrims).
+    //
+    // nusk_stats collapses 2 subqueries (count + sum) into one scan.
+    // pilgrim_stats collapses 3 subqueries (inside / overstayed /
+    // visa-at-risk) using COUNT(*) FILTER (WHERE ...). The
+    // join keys preserve the original AND ni/p."companyId" =
+    // g."companyId" tenant boundary by including companyId in the CTE
+    // output + LEFT JOIN on (groupId, companyId).
     const rows = await rawQuery(
-      `SELECT g.*,
+      `WITH nusk_stats AS (
+         SELECT "groupId", "companyId",
+                COUNT(*) AS "nuskInvoiceCount",
+                COALESCE(SUM("totalAmount"), 0) AS "nuskCostTotal"
+         FROM umrah_nusk_invoices
+         WHERE "deletedAt" IS NULL AND "nuskStatus" != 'cancelled'
+         GROUP BY "groupId", "companyId"
+       ),
+       pilgrim_stats AS (
+         SELECT "groupId", "companyId",
+                COUNT(*) FILTER (WHERE status IN ('arrived','active','overstayed')) AS "pilgrimsInside",
+                COUNT(*) FILTER (WHERE status = 'overstayed') AS "pilgrimsOverstayed",
+                COUNT(*) FILTER (
+                  WHERE status NOT IN ('departed','cancelled','deceased','visa_rejected')
+                    AND "visaExpiry" IS NOT NULL
+                    AND "visaExpiry" < CURRENT_DATE + INTERVAL '7 days'
+                ) AS "visaAtRisk"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL
+         GROUP BY "groupId", "companyId"
+       )
+       SELECT g.*,
               a.name AS "agentName",
               sa.name AS "subAgentName",
               s.title AS "seasonTitle",
-              COALESCE((SELECT COUNT(*) FROM umrah_nusk_invoices ni
-                          WHERE ni."groupId" = g.id
-                            AND ni."companyId" = g."companyId"
-                            AND ni."deletedAt" IS NULL
-                            AND ni."nuskStatus" != 'cancelled'), 0) AS "nuskInvoiceCount",
-              COALESCE((SELECT SUM(ni."totalAmount") FROM umrah_nusk_invoices ni
-                          WHERE ni."groupId" = g.id
-                            AND ni."companyId" = g."companyId"
-                            AND ni."deletedAt" IS NULL
-                            AND ni."nuskStatus" != 'cancelled'), 0) AS "nuskCostTotal",
+              COALESCE(ns."nuskInvoiceCount", 0) AS "nuskInvoiceCount",
+              COALESCE(ns."nuskCostTotal", 0) AS "nuskCostTotal",
               si.ref AS "salesInvoiceRef",
               si.total AS "salesInvoiceTotal",
               si.status AS "salesInvoiceStatus",
               GREATEST(COALESCE(si.total, 0) - COALESCE(si."paidAmount", 0), 0) AS "salesOutstanding",
-              COALESCE((SELECT COUNT(*) FROM umrah_pilgrims p
-                          WHERE p."groupId" = g.id
-                            AND p."companyId" = g."companyId"
-                            AND p."deletedAt" IS NULL
-                            AND p.status IN ('arrived','active','overstayed')), 0) AS "pilgrimsInside",
-              COALESCE((SELECT COUNT(*) FROM umrah_pilgrims p
-                          WHERE p."groupId" = g.id
-                            AND p."companyId" = g."companyId"
-                            AND p."deletedAt" IS NULL
-                            AND p.status = 'overstayed'), 0) AS "pilgrimsOverstayed",
-              COALESCE((SELECT COUNT(*) FROM umrah_pilgrims p
-                          WHERE p."groupId" = g.id
-                            AND p."companyId" = g."companyId"
-                            AND p."deletedAt" IS NULL
-                            AND p.status NOT IN ('departed','cancelled','deceased','visa_rejected')
-                            AND p."visaExpiry" IS NOT NULL
-                            AND p."visaExpiry" < CURRENT_DATE + INTERVAL '7 days'), 0) AS "visaAtRisk"
+              COALESCE(ps."pilgrimsInside", 0) AS "pilgrimsInside",
+              COALESCE(ps."pilgrimsOverstayed", 0) AS "pilgrimsOverstayed",
+              COALESCE(ps."visaAtRisk", 0) AS "visaAtRisk"
        FROM umrah_groups g
        LEFT JOIN umrah_agents a ON g."agentId" = a.id
        LEFT JOIN umrah_sub_agents sa ON g."subAgentId" = sa.id
        LEFT JOIN umrah_seasons s ON g."seasonId" = s.id AND s."deletedAt" IS NULL
        LEFT JOIN umrah_sales_invoices si ON si.id = g."salesInvoiceId" AND si."deletedAt" IS NULL
+       LEFT JOIN nusk_stats ns ON ns."groupId" = g.id AND ns."companyId" = g."companyId"
+       LEFT JOIN pilgrim_stats ps ON ps."groupId" = g.id AND ps."companyId" = g."companyId"
        WHERE ${where}
        ORDER BY g."createdAt" DESC
        LIMIT 500`,
@@ -1278,12 +1295,21 @@ router.get("/employees/:employeeId/assignments", authorize({ feature: "umrah", a
 router.get("/commission-plans", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Pre-aggregate tier counts via CTE — same pattern as the
+    // earlier N+1 fixes. Avoids 1 lookup per commission plan
+    // through employee_commission_tiers.
     const rows = await rawQuery(
-      `SELECT cp.*,
+      `WITH tier_counts AS (
+         SELECT "planId", COUNT(*) AS "tierCount"
+         FROM employee_commission_tiers
+         GROUP BY "planId"
+       )
+       SELECT cp.*,
               s.title AS "seasonTitle",
-              (SELECT COUNT(*)::int FROM employee_commission_tiers WHERE "planId" = cp.id) AS "tierCount"
+              COALESCE(tc."tierCount", 0)::int AS "tierCount"
        FROM employee_commission_plans cp
        LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id AND s."deletedAt" IS NULL
+       LEFT JOIN tier_counts tc ON tc."planId" = cp.id
        WHERE cp."companyId" = $1 AND cp."deletedAt" IS NULL
        ORDER BY cp."createdAt" DESC`,
       [scope.companyId]
@@ -2669,10 +2695,49 @@ router.delete("/room-allocations/:id", authorize({ feature: "umrah", action: "de
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    await rawExecute(
+    // Capture the row BEFORE deleting it so the audit log carries the
+    // last-known state (pilgrimId + roomNumber + blockId + occupants
+    // + check-in/out timestamps). Without this snapshot the audit
+    // trail just records "id X deleted", which is useless for
+    // reconstructing which pilgrim was unassigned from which room
+    // when housekeeping disputes arise.
+    const [existing] = await rawQuery<{
+      pilgrimId: number;
+      roomNumber: string | null;
+      blockId: number;
+      occupants: number | null;
+      checkInAt: string | null;
+      checkOutAt: string | null;
+    }>(
+      `SELECT "pilgrimId", "roomNumber", "blockId", occupants, "checkInAt", "checkOutAt"
+         FROM umrah_room_allocations
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    const { affectedRows } = await rawExecute(
       `UPDATE umrah_room_allocations SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
+    if (affectedRows > 0 && existing) {
+      createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "umrah.room_allocation.deleted",
+        entity: "umrah_room_allocations",
+        entityId: id,
+        before: existing,
+        after: { deletedAt: "NOW()" },
+      });
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "umrah.room_allocation.deleted",
+        entity: "umrah_room_allocations",
+        entityId: id,
+        details: JSON.stringify({ pilgrimId: existing.pilgrimId, blockId: existing.blockId }),
+      }).catch((e) => logger.error(e, "umrah room-allocation delete event emit failed"));
+    }
     res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "deallocate error"); }
 });
@@ -2747,6 +2812,363 @@ router.get("/reports/compliance", authorize({ feature: "umrah", action: "list" }
       unpaidPenaltiesTotal: Number(penaltyRow[0]?.total ?? "0"),
     }));
   } catch (err) { handleRouteError(err, res, "Compliance dashboard"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// تقرير أرصدة الوكلاء المجمَّع — كل وكيل في صف واحد مع:
+//   - إجمالي المُفوتر (sum of umrah_agent_invoices.total non-cancelled)
+//   - المدفوع (allocated from umrah_payments where there's any)
+//   - الرصيد المستحق
+//   - عدد المعتمرين
+//   - آخر فاتورة + تاريخها
+//   - حالة الوكيل
+//
+// كانت معلومة الرصيد متفرقة على صفحة كل وكيل — هذا التقرير يجمعهم في
+// شاشة واحدة للمحاسب: «لمن أرسل تنبيه؟ من المتأخر أكثر؟».
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/agent-balances", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, status, hasOutstanding } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let statusClause = "";
+    let seasonClause = "";
+    if (status) { params.push(status); statusClause = ` AND a.status = $${params.length}`; }
+    if (seasonId) { params.push(Number(seasonId)); seasonClause = ` AND inv."seasonId" = $${params.length}`; }
+
+    // LATERAL على umrah_agent_invoices مع تجميع `total` و آخر فاتورة.
+    // الفلتر `seasonId` يطبَّق هنا فقط (لو موجود) عشان تقارير الموسم
+    // ما تختلط بالمواسم الثانية.
+    //
+    // pilgrimCount = العدد الحالي للمعتمرين النشطين تحت هذا الوكيل
+    // (مش من الفواتير، لأن وكيل ممكن يكون عنده معتمرين قبل ما يُفوتر).
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT a.id, a.name, a.country, a.phone, a.email, a.status, a."nuskAgentNumber",
+              COALESCE(inv_agg.invoice_count, 0)::int AS "invoiceCount",
+              COALESCE(inv_agg.total_invoiced, 0)    AS "totalInvoiced",
+              COALESCE(inv_agg.total_paid, 0)        AS "totalPaid",
+              COALESCE(inv_agg.outstanding, 0)       AS "outstanding",
+              inv_agg.last_invoice_at                AS "lastInvoiceAt",
+              inv_agg.last_invoice_ref               AS "lastInvoiceRef",
+              (SELECT COUNT(*)::int FROM umrah_pilgrims p
+                WHERE p."agentId" = a.id
+                  AND p."companyId" = a."companyId"
+                  AND p."deletedAt" IS NULL
+              ) AS "pilgrimCount"
+         FROM umrah_agents a
+    LEFT JOIN LATERAL (
+           SELECT COUNT(*)::int            AS invoice_count,
+                  SUM(inv.total)            AS total_invoiced,
+                  -- "paid" = invoice rows whose status is 'paid' — the agent
+                  -- invoice table doesn't carry a paidAmount column; we
+                  -- approximate via status.
+                  SUM(CASE WHEN inv.status = 'paid' THEN inv.total ELSE 0 END) AS total_paid,
+                  SUM(CASE WHEN inv.status NOT IN ('paid', 'cancelled') THEN inv.total ELSE 0 END) AS outstanding,
+                  MAX(inv."createdAt")      AS last_invoice_at,
+                  (ARRAY_AGG(inv.ref ORDER BY inv."createdAt" DESC))[1] AS last_invoice_ref
+             FROM umrah_agent_invoices inv
+            WHERE inv."agentId" = a.id
+              AND inv."companyId" = a."companyId"
+              AND inv."deletedAt" IS NULL${seasonClause}
+         ) inv_agg ON true
+        WHERE a."companyId" = $1
+          AND a."deletedAt" IS NULL${statusClause}
+        ORDER BY COALESCE(inv_agg.outstanding, 0) DESC, a.name
+        LIMIT 500`,
+      params,
+    );
+
+    // Optional ?hasOutstanding=true filter applied JS-side after the SQL
+    // (saves a complex HAVING clause). For audit screens the operator
+    // usually wants this filter.
+    const filtered = hasOutstanding === "true"
+      ? rows.filter((r) => Number(r.outstanding ?? 0) > 0)
+      : rows;
+
+    // Tenant totals — for the page's top-bar KPIs (no client-side fold).
+    const totals = filtered.reduce<{
+      agents: number; totalInvoiced: number; totalPaid: number; outstanding: number;
+    }>(
+      (acc, r) => ({
+        agents:        acc.agents + 1,
+        totalInvoiced: acc.totalInvoiced + Number(r.totalInvoiced ?? 0),
+        totalPaid:     acc.totalPaid + Number(r.totalPaid ?? 0),
+        outstanding:   acc.outstanding + Number(r.outstanding ?? 0),
+      }),
+      { agents: 0, totalInvoiced: 0, totalPaid: 0, outstanding: 0 },
+    );
+
+    res.json(maskFields(req, { data: filtered, total: filtered.length, totals }));
+  } catch (err) { handleRouteError(err, res, "Agent balances report"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// تقرير حركة المعتمرين — يلخّص لقطة يومية للحركات على مستوى الموسم/الكل:
+//   - وصلوا اليوم (actualArrival = اليوم أو entryDate = اليوم)
+//   - غادروا اليوم
+//   - متجاوزون حالياً (overstayed/overstay_penalized)
+//   - داخل المملكة الآن (isInsideKingdom = true)
+//   - متأخرون عن المغادرة بعدد أيام (actual vs scheduled)
+//
+// مع تفصيل اختياري للصفوف الفعلية حسب الفلتر — العامل يفتح هذا التقرير
+// ليجاوب: «من اللي اليوم؟ من المتجاوز؟ من ما رحل؟».
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/pilgrim-movements", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, date, view } = req.query as Record<string, string | undefined>;
+    // `date` is operator-supplied (Riyadh-local YYYY-MM-DD from the UI).
+    // Defaults to today so a bookmark-driven open works without args.
+    const dateExpr = date ? `'${date}'::date` : "CURRENT_DATE";
+    const params: unknown[] = [scope.companyId];
+    let seasonClause = "";
+    if (seasonId) { params.push(Number(seasonId)); seasonClause = ` AND p."seasonId" = $${params.length}`; }
+
+    // الصف الأول: KPIs مجمَّعة (دائماً)
+    const [agg] = await rawQuery<Record<string, unknown>>(
+      `SELECT
+         (SELECT COUNT(*) FROM umrah_pilgrims p
+           WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}
+             AND (p."actualArrival" = ${dateExpr} OR p."entryDate" = ${dateExpr})
+         )::int AS "arrivedToday",
+         (SELECT COUNT(*) FROM umrah_pilgrims p
+           WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}
+             AND (p."actualDeparture" = ${dateExpr} OR p."exitDate" = ${dateExpr})
+         )::int AS "departedToday",
+         (SELECT COUNT(*) FROM umrah_pilgrims p
+           WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}
+             AND p.status IN ('overstayed', 'overstay_penalized')
+         )::int AS "currentlyOverstaying",
+         (SELECT COUNT(*) FROM umrah_pilgrims p
+           WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}
+             AND p."isInsideKingdom" = true
+         )::int AS "insideKingdom",
+         (SELECT COUNT(*) FROM umrah_pilgrims p
+           WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}
+             AND p."departureDate" < CURRENT_DATE
+             AND p."actualDeparture" IS NULL
+             AND p.status NOT IN ('cancelled', 'departed')
+         )::int AS "lateDepartures",
+         (SELECT COUNT(*) FROM umrah_pilgrims p
+           WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}
+             AND p."overstayDays" IS NOT NULL
+             AND p."overstayDays" > 0
+         )::int AS "withOverstayDays"`,
+      params,
+    );
+
+    // الصف الثاني: التفاصيل (drill-down) لو طلب view=details
+    // كل قسم محدود بـ 100 صف عشان ما يثقل الـ payload.
+    let details: Record<string, unknown[]> | null = null;
+    if (view === "details") {
+      const arrivedRows = await rawQuery<Record<string, unknown>>(
+        `SELECT id, "fullName", nationality, status, "entryPort", "entryFlight"
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}
+            AND (p."actualArrival" = ${dateExpr} OR p."entryDate" = ${dateExpr})
+          ORDER BY "fullName" LIMIT 100`,
+        params,
+      );
+      const departedRows = await rawQuery<Record<string, unknown>>(
+        `SELECT id, "fullName", nationality, status, "exitPort", "exitFlight"
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}
+            AND (p."actualDeparture" = ${dateExpr} OR p."exitDate" = ${dateExpr})
+          ORDER BY "fullName" LIMIT 100`,
+        params,
+      );
+      const overstayRows = await rawQuery<Record<string, unknown>>(
+        `SELECT id, "fullName", nationality, "overstayDays", "departureDate", status
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}
+            AND p.status IN ('overstayed', 'overstay_penalized')
+          ORDER BY p."overstayDays" DESC NULLS LAST, "fullName"
+          LIMIT 100`,
+        params,
+      );
+      const lateRows = await rawQuery<Record<string, unknown>>(
+        `SELECT id, "fullName", nationality, "departureDate", status,
+                (CURRENT_DATE - "departureDate")::int AS "daysOverdue"
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}
+            AND p."departureDate" < CURRENT_DATE
+            AND p."actualDeparture" IS NULL
+            AND p.status NOT IN ('cancelled', 'departed')
+          ORDER BY (CURRENT_DATE - "departureDate") DESC
+          LIMIT 100`,
+        params,
+      );
+      details = {
+        arrived: arrivedRows,
+        departed: departedRows,
+        overstaying: overstayRows,
+        lateDepartures: lateRows,
+      };
+    }
+
+    res.json(maskFields(req, { kpis: agg ?? {}, details }));
+  } catch (err) { handleRouteError(err, res, "Pilgrim movements report"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// تقرير أرصدة الوكلاء الفرعيين — مكمِّل لتقرير الوكلاء لكنه أهم لأن
+// مدفوعات العمرة الحقيقية تدخل من الوكلاء الفرعيين (عبر umrah_payments).
+//
+// الفرق الجوهري عن agent-balances:
+//   • umrah_sales_invoices.paidAmount عمود حقيقي (مش مجرد status='paid')
+//   • umrah_payments جدول مستقل يجمع التحصيلات حسب subAgentId
+//   • outstanding = SUM(total) − SUM(paidAmount) على الفواتير + رصيد payments
+//
+// لكل وكيل فرعي:
+//   - عدد الفواتير المُصدرة
+//   - إجمالي المُفوتر
+//   - إجمالي المُحصَّل من الفواتير (paidAmount)
+//   - إجمالي المُحصَّل من الـ payments (مستقل)
+//   - الرصيد المستحق
+//   - آخر دفعة + تاريخها
+//   - عدد المعتمرين تحت هذا الوكيل الفرعي
+//   - حالة الوكيل الفرعي (isActive)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/subagent-balances", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, isActive, hasOutstanding } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let seasonClause = "";
+    if (seasonId) { params.push(Number(seasonId)); seasonClause = ` AND inv."seasonId" = $${params.length}`; }
+    let isActiveClause = "";
+    if (isActive === "true")  { isActiveClause = ` AND sa."isActive" = true`; }
+    if (isActive === "false") { isActiveClause = ` AND sa."isActive" = false`; }
+
+    // اثنين LATERAL منفصلين:
+    //   inv_agg → تجميع umrah_sales_invoices (المُفوتر + المُحصَّل)
+    //   pay_agg → تجميع umrah_payments (المدفوعات المستقلة)
+    //
+    // الفرق الحرج: paid من inv.paidAmount مش من status — عمود حقيقي يخزَّن
+    // كل ما يدخل دفعة عبر POST /umrah/payments.
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT sa.id, sa.name, sa."nuskCode", sa.phone, sa.email, sa.country,
+              sa."isActive", sa."paymentTerms", sa."agentId",
+              a.name AS "agentName",
+              COALESCE(inv_agg.invoice_count, 0)::int AS "invoiceCount",
+              COALESCE(inv_agg.total_invoiced, 0)    AS "totalInvoiced",
+              COALESCE(inv_agg.total_paid_on_inv, 0) AS "totalPaidOnInvoices",
+              COALESCE(pay_agg.payment_count, 0)::int AS "paymentCount",
+              COALESCE(pay_agg.total_received, 0)     AS "totalReceived",
+              COALESCE(inv_agg.outstanding, 0)        AS "outstanding",
+              pay_agg.last_payment_at                 AS "lastPaymentAt",
+              pay_agg.last_payment_ref                AS "lastPaymentRef",
+              (SELECT COUNT(*)::int FROM umrah_pilgrims p
+                JOIN umrah_groups g ON g.id = p."groupId"
+                  AND g."companyId" = p."companyId"
+                  AND g."deletedAt" IS NULL
+                WHERE g."subAgentId" = sa.id
+                  AND p."companyId" = sa."companyId"
+                  AND p."deletedAt" IS NULL
+              ) AS "pilgrimCount"
+         FROM umrah_sub_agents sa
+    LEFT JOIN umrah_agents a
+           ON a.id = sa."agentId"
+          AND a."companyId" = sa."companyId"
+          AND a."deletedAt" IS NULL
+    LEFT JOIN LATERAL (
+           SELECT COUNT(*)::int          AS invoice_count,
+                  SUM(inv.total)         AS total_invoiced,
+                  SUM(inv."paidAmount")  AS total_paid_on_inv,
+                  SUM(inv.total - COALESCE(inv."paidAmount", 0))
+                    FILTER (WHERE inv.status NOT IN ('cancelled')) AS outstanding
+             FROM umrah_sales_invoices inv
+            WHERE inv."subAgentId" = sa.id
+              AND inv."companyId" = sa."companyId"
+              AND inv."deletedAt" IS NULL
+              AND inv.status <> 'cancelled'${seasonClause}
+         ) inv_agg ON true
+    LEFT JOIN LATERAL (
+           SELECT COUNT(*)::int   AS payment_count,
+                  SUM(pay."sarAmount") AS total_received,
+                  MAX(pay."paymentDate") AS last_payment_at,
+                  (ARRAY_AGG(pay.ref ORDER BY pay."paymentDate" DESC, pay.id DESC))[1] AS last_payment_ref
+             FROM umrah_payments pay
+            WHERE pay."subAgentId" = sa.id
+              AND pay."companyId" = sa."companyId"
+              AND pay."deletedAt" IS NULL
+         ) pay_agg ON true
+        WHERE sa."companyId" = $1
+          AND sa."deletedAt" IS NULL${isActiveClause}
+        ORDER BY COALESCE(inv_agg.outstanding, 0) DESC, sa.name
+        LIMIT 500`,
+      params,
+    );
+
+    const filtered = hasOutstanding === "true"
+      ? rows.filter((r) => Number(r.outstanding ?? 0) > 0)
+      : rows;
+
+    const totals = filtered.reduce<{
+      subAgents: number;
+      totalInvoiced: number;
+      totalPaidOnInvoices: number;
+      totalReceived: number;
+      outstanding: number;
+    }>(
+      (acc, r) => ({
+        subAgents:           acc.subAgents + 1,
+        totalInvoiced:       acc.totalInvoiced + Number(r.totalInvoiced ?? 0),
+        totalPaidOnInvoices: acc.totalPaidOnInvoices + Number(r.totalPaidOnInvoices ?? 0),
+        totalReceived:       acc.totalReceived + Number(r.totalReceived ?? 0),
+        outstanding:         acc.outstanding + Number(r.outstanding ?? 0),
+      }),
+      { subAgents: 0, totalInvoiced: 0, totalPaidOnInvoices: 0, totalReceived: 0, outstanding: 0 },
+    );
+
+    res.json(maskFields(req, { data: filtered, total: filtered.length, totals }));
+  } catch (err) { handleRouteError(err, res, "Sub-agent balances report"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RETROACTIVE REVENUE RECLASSIFICATION — answers the operator's «على القديم
+// والجديد» half. The dimensional resolver (revenueAccountResolver.ts) handles
+// NEW invoices automatically; this endpoint walks OLD invoices and shifts
+// their revenue posting from the original product-default account to whatever
+// the current subsidiary_accounts mapping resolves to for their dimension.
+//
+// Why we don't rewrite historical journal entries: auditable accounting
+// requires that once a number is posted, it stays. The correction shape is
+// a NEW journal entry that DR's the old revenue account and CR's the new
+// one — net effect: revenue moves from old to new as of today, without
+// touching last year's books. (Same pattern as commercial ERPs' "GL
+// reclassification" feature.)
+//
+// Idempotency: we use sourceKey=`umrah_reclass_${invoiceId}_to_${target}` so
+// re-running the endpoint with the same configuration is a no-op for already-
+// aligned invoices. We also UPDATE umrah_sales_invoice_items.accountCode to
+// reflect the new revenue account so subsequent runs see "already aligned"
+// and skip the work cheaply. If the operator later changes the override AGAIN,
+// the next run posts a fresh compensating entry from the current-effective
+// account (read from items.accountCode) to the new target.
+const reclassifyRevenueSchema = z.object({
+  /** Limit to specific invoice ids; omit to reclassify every eligible one. */
+  invoiceIds: z.array(z.coerce.number().int().positive()).optional(),
+  /** Limit to invoices for a single sub-agent (dimension-narrow). */
+  subAgentId: z.coerce.number().int().positive().optional(),
+  /** Limit to invoices in a single season. */
+  seasonId: z.coerce.number().int().positive().optional(),
+  /** When true, report what WOULD change without posting anything. */
+  dryRun: z.boolean().optional(),
+});
+
+router.post("/reclassify-revenue", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(reclassifyRevenueSchema.safeParse(req.body));
+    // All business logic — invoice scan, resolver lookup, compensating
+    // JE posting, items update — lives in the umrahReclassifyEngine.
+    // The route is intentionally thin so the lint-patterns invariant
+    // (GL + account-mapping helpers must stay inside engines, not
+    // routes) holds at the seam.
+    const result = await reclassifyRevenueForInvoices(scope, body);
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "Reclassify revenue error:"); }
 });
 
 export default router;

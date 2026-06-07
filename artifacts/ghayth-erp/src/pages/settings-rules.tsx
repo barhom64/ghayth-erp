@@ -9,6 +9,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  PageShell,
   FormShell,
   FormTextField,
   FormSelectField,
@@ -422,24 +423,19 @@ export default function SettingsRulesPage() {
   if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
   return (
-    <div className="p-4 md:p-6 space-y-6" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Settings2 className="h-5 w-5" /> محرك قواعد الأعمال
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            إعداد القواعد التلقائية: إذا حدث شيء... فعندها يتم تنفيذ إجراء
-          </p>
-        </div>
+    <PageShell
+      title="محرك قواعد الأعمال"
+      subtitle="إعداد القواعد التلقائية: إذا حدث شيء... فعندها يتم تنفيذ إجراء"
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/settings", label: "الإعدادات" }, { label: "محرك القواعد" }]}
+      actions={
         <div className="flex items-center gap-3 text-sm">
           <Badge variant="default" className="gap-1">
             <Zap className="h-3 w-3" /> {activeRules.length} مفعّلة
           </Badge>
           <Badge variant="secondary">{rules.length} إجمالي</Badge>
         </div>
-      </div>
-
+      }
+    >
       <Tabs defaultValue="rules" dir="rtl">
         <TabsList>
           <TabsTrigger value="rules" className="gap-1">
@@ -491,6 +487,6 @@ export default function SettingsRulesPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

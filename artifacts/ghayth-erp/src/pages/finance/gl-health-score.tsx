@@ -12,6 +12,7 @@ import {
   Activity, Shield,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * GL Health Score — single 0-100 score summarizing finance module health
@@ -76,7 +77,6 @@ export default function GlHealthScorePage() {
   const qPeriods     = useApiQuery<{ data: Array<{ id: number; name: string; status: string; endDate: string }> }>(["health-periods"], `/finance/fiscal-periods-v2`);
 
   const loading = qAlloc.isLoading || qIntegrity.isLoading || qUnmapped.isLoading || qDraftJrnl.isLoading;
-  if (loading) return <LoadingSpinner />;
 
   const dimensions = useMemo<Dimension[]>(() => {
     const dims: Dimension[] = [];
@@ -198,6 +198,8 @@ export default function GlHealthScorePage() {
     return dims;
   }, [qAlloc.data, qIntegrity.data, qUnmapped.data, qDraftJrnl.data, qPendingJrnl.data, qFailures.data, qPeriods.data]);
 
+  if (loading) return <LoadingSpinner />;
+
   const overallScore = dimensions.reduce((s, d) => s + d.weightedScore, 0);
   const overallStatus = scoreToStatus(overallScore);
   const issuesNeedingFix = dimensions.filter((d) => d.status === "poor").length;
@@ -232,6 +234,23 @@ export default function GlHealthScorePage() {
               قائمة الترحيل
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_gl_health"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: `مؤشر صحة النظام المالي — ${Math.round(overallScore)}/100`, total: dimensions.length },
+              items: dimensions.map((d) => ({
+                "البعد": d.label,
+                "الوصف": d.description,
+                "الوزن": d.weight,
+                "النتيجة": Math.round(d.rawScore),
+                "الموزون": Math.round(d.weightedScore),
+                "الحالة": STATUS_COLORS[d.status].label,
+                "التفصيل": d.detail,
+              })),
+            }}
+          />
         </div>
       }
     >

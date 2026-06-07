@@ -1834,10 +1834,21 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/revalue", authorize({ feature: "
 financeAlgorithmsRouter.get("/cip", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Pre-aggregate cip_costs once instead of running a scalar
+    // subquery per row. Original was N+1: 500 construction projects
+    // × COUNT subquery = 501 lookups through cip_costs. CTE collapses
+    // to one scan + hash aggregate.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT cip.*,
-              COALESCE((SELECT COUNT(*) FROM cip_costs cc WHERE cc."cipId" = cip.id AND cc."deletedAt" IS NULL), 0) AS "costEntryCount"
+      `WITH cost_counts AS (
+         SELECT "cipId", COUNT(*) AS "costEntryCount"
+         FROM cip_costs
+         WHERE "deletedAt" IS NULL
+         GROUP BY "cipId"
+       )
+       SELECT cip.*,
+              COALESCE(cc."costEntryCount", 0) AS "costEntryCount"
          FROM construction_in_progress cip
+         LEFT JOIN cost_counts cc ON cc."cipId" = cip.id
         WHERE cip."companyId" = $1 AND cip."deletedAt" IS NULL
         ORDER BY cip.id DESC
         LIMIT 500`,

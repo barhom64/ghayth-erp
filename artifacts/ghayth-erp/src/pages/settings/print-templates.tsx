@@ -30,6 +30,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Save, Eye, Trash2, Pencil, FileText, Receipt, Tag, Layers } from "lucide-react";
 import { PageHeader, PageShell } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
+import { cn } from "@/lib/utils";
 
 // Fallback list used while /api/print/entity-types loads. The full catalogue
 // (100+ types — every BESPOKE_PRESETS key + every ARABIC_TITLES key) is
@@ -109,6 +111,7 @@ interface TemplateRow {
   mode: "preset" | "html" | "visual";
   presetKey: string | null;
   htmlContent: string | null;
+  cssOverrides: string | null;
   layoutJson: unknown;
   headerOverride: Record<string, string> | null;
   footerOverride: Record<string, string> | null;
@@ -167,8 +170,93 @@ function newBlock(type: VisualBlock["type"]): VisualBlock {
   }
 }
 
+// Built-in branded preset themes — mirrors lib/print/brandedThemes.ts.
+// Each carries a tiny visual swatch so the operator picks by sight, not
+// by reading a dropdown. Brand palette: teal #3FBFD9 / navy #0F3D5C.
+const PRESET_THEMES: Array<{
+  key: string;
+  label: string;
+  description: string;
+  swatch: React.ReactNode;
+}> = [
+  {
+    key: "classic",
+    label: "كلاسيكي",
+    description: "ترويسة كحلية، جداول محدّدة، رسمي. الخيار الآمن.",
+    swatch: (
+      <div className="p-1.5 flex flex-col gap-1">
+        <div style={{ height: 6, background: "#0F3D5C", borderRadius: 2 }} />
+        <div style={{ height: 3, background: "#cbd5e1", width: "60%", borderRadius: 2 }} />
+        <div style={{ flex: 1, border: "1px solid #cbd5e1", borderRadius: 2, marginTop: 2 }} />
+      </div>
+    ),
+  },
+  {
+    key: "modern",
+    label: "عصري",
+    description: "شريط فيروزي متدرّج، صفوف بدون حدود، مساحات واسعة.",
+    swatch: (
+      <div className="p-1.5 flex flex-col gap-1">
+        <div style={{ height: 8, background: "linear-gradient(90deg,#3FBFD9,#0F3D5C)", borderRadius: 3 }} />
+        <div style={{ height: 3, background: "#eaf7fb", borderRadius: 2 }} />
+        <div style={{ height: 3, background: "#f1f5f9", borderRadius: 2 }} />
+        <div style={{ height: 3, background: "#eaf7fb", borderRadius: 2 }} />
+      </div>
+    ),
+  },
+  {
+    key: "compact",
+    label: "مدمج",
+    description: "خط صغير، خطوط رفيعة — يسع بنوداً أكثر في الصفحة.",
+    swatch: (
+      <div className="p-1.5 flex flex-col gap-[3px]">
+        <div style={{ height: 4, background: "#3FBFD9", width: "50%", borderRadius: 1 }} />
+        <div style={{ height: 2, background: "#cbd5e1", borderRadius: 1 }} />
+        <div style={{ height: 2, background: "#cbd5e1", borderRadius: 1 }} />
+        <div style={{ height: 2, background: "#cbd5e1", borderRadius: 1 }} />
+        <div style={{ height: 2, background: "#cbd5e1", borderRadius: 1 }} />
+      </div>
+    ),
+  },
+];
+
+// Default margins follow the A4 adapter's seed (a4Adapter.ts:25):
+// 18mm top / 14mm sides / 22mm bottom.
+const DEFAULT_MARGINS = { top: 18, right: 14, bottom: 22, left: 14 };
+
+function parseMarginsFromCss(css: string | null) {
+  if (!css) return { ...DEFAULT_MARGINS };
+  // Match `margin: Tmm Rmm Bmm Lmm` inside `@page { ... }` block.
+  const pageRule = css.match(/@page\s*\{([^}]+)\}/);
+  if (!pageRule) return { ...DEFAULT_MARGINS };
+  const marginDecl = pageRule[1].match(/margin\s*:\s*([\d.]+)mm\s+([\d.]+)mm\s+([\d.]+)mm\s+([\d.]+)mm/);
+  if (!marginDecl) return { ...DEFAULT_MARGINS };
+  return {
+    top: Number(marginDecl[1]) || DEFAULT_MARGINS.top,
+    right: Number(marginDecl[2]) || DEFAULT_MARGINS.right,
+    bottom: Number(marginDecl[3]) || DEFAULT_MARGINS.bottom,
+    left: Number(marginDecl[4]) || DEFAULT_MARGINS.left,
+  };
+}
+
+function buildMarginsCss(m: { top: number; right: number; bottom: number; left: number }): string {
+  // Empty string when the user hasn't touched the defaults — keeps the
+  // saved row clean and lets the adapter's own seed CSS rule kick in.
+  if (
+    m.top === DEFAULT_MARGINS.top &&
+    m.right === DEFAULT_MARGINS.right &&
+    m.bottom === DEFAULT_MARGINS.bottom &&
+    m.left === DEFAULT_MARGINS.left
+  ) {
+    return "";
+  }
+  return `@page { margin: ${m.top}mm ${m.right}mm ${m.bottom}mm ${m.left}mm; }`;
+}
+
 export default function PrintTemplatesPage() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const { data, isLoading } = useApiQuery<{ items: TemplateRow[] }>(
     ["print-templates"],
     "/print/templates"
@@ -191,6 +279,57 @@ export default function PrintTemplatesPage() {
   const items = data?.items ?? [];
   const [filterEntity, setFilterEntity] = useState<string>("all");
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadingTemplate, setUploadingTemplate] = useState(false);
+
+  async function handleUploadTemplate(file: File) {
+    setUploadingTemplate(true);
+    try {
+      // Default entity type comes from the current filter — operator usually
+      // browses to "invoice" templates and uploads a cliché for that entity.
+      const defaultEntity = filterEntity === "all" ? "invoice" : filterEntity;
+      const form = new FormData();
+      form.append("template", file);
+      form.append("name", file.name.replace(/\.html?$/i, ""));
+      form.append("entityType", defaultEntity);
+      form.append("paperSize", "A4");
+      const res = await apiFetch<{ templateId?: number }>("/print/uploads/template", {
+        method: "POST",
+        body: form,
+        // apiFetch sets Content-Type: application/json by default — strip it
+        // so the browser supplies the multipart boundary.
+        headers: {},
+      } as RequestInit);
+      toast({ title: "تم رفع الكليشة", description: `${file.name} (${defaultEntity})` });
+      void qc.invalidateQueries({ queryKey: ["print-templates"] });
+      if (res?.templateId) setEditingId(res.templateId);
+    } catch (err) {
+      const e = err as ApiError;
+      toast({
+        variant: "destructive",
+        title: "فشل رفع الكليشة",
+        description: e.message,
+      });
+    } finally {
+      setUploadingTemplate(false);
+    }
+  }
+
+  async function handleResetTemplate(id: number, name: string) {
+    if (!confirm(`إعادة قالب "${name}" إلى الإصدار الافتراضي؟ ستفقد التعديلات.`)) return;
+    try {
+      await apiFetch(`/print/templates/${id}/reset`, { method: "POST" });
+      toast({ title: "تم استعادة القالب الافتراضي" });
+      void qc.invalidateQueries({ queryKey: ["print-templates"] });
+    } catch (err) {
+      const e = err as ApiError;
+      toast({
+        variant: "destructive",
+        title: "فشل الاستعادة",
+        description: e.message,
+      });
+    }
+  }
 
   const filtered = useMemo(
     () => items.filter((t) => (filterEntity === "all" ? true : t.entityType === filterEntity)),
@@ -215,9 +354,48 @@ export default function PrintTemplatesPage() {
       subtitle="بناء وتخصيص قوالب الطباعة لكل فرع بشكل مستقل"
       breadcrumbs={[{ label: "الإعدادات" }, { label: "قوالب الطباعة" }]}
       actions={
-        <Button onClick={() => setEditingId("new")} className="gap-1">
-          <Plus className="h-4 w-4" /> قالب جديد
-        </Button>
+        <>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept=".html,.htm,text/html"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleUploadTemplate(file);
+              e.target.value = "";
+            }}
+          />
+          <Button
+            variant="outline"
+            onClick={() => uploadInputRef.current?.click()}
+            className="gap-1"
+            title="رفع ملف HTML لقالب جاهز"
+            disabled={uploadingTemplate}
+          >
+            <Plus className="h-4 w-4" />
+            {uploadingTemplate ? "جاري الرفع..." : "رفع كليشة جاهزة"}
+          </Button>
+          <Button onClick={() => setEditingId("new")} className="gap-1">
+            <Plus className="h-4 w-4" /> قالب جديد
+          </Button>
+          <PrintButton
+            entityType="report_settings_print_templates"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "قوالب الطباعة", total: filtered.length },
+              items: filtered.map((t: any) => ({
+                "الاسم": t.name || "—",
+                "نوع الكيان": t.entityType || "—",
+                "الفرع": branches.find((b) => b.id === t.branchId)?.name || (t.branchId ? `#${t.branchId}` : "الشركة"),
+                "الوضع": t.mode || "—",
+                "افتراضي": t.isDefault ? "نعم" : "لا",
+                "نشط": t.isActive ? "نعم" : "لا",
+              })),
+            }}
+          />
+        </>
       }
     >
       <Card>
@@ -327,6 +505,14 @@ export default function PrintTemplatesPage() {
                           >
                             ⎘
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="إعادة إلى القالب الافتراضي"
+                            onClick={() => void handleResetTemplate(t.id, t.name)}
+                          >
+                            ↺
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -395,6 +581,15 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
   const initialHeaderOv = (existing?.headerOverride as Record<string, string> | undefined) ?? {};
   const initialFooterOv = (existing?.footerOverride as Record<string, string> | undefined) ?? {};
   const [overrideLogoUrl, setOverrideLogoUrl] = useState(initialHeaderOv.logoUrl ?? "");
+  const logoFileRef = useRef<HTMLInputElement | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  // Page margins (mm) — seeded from the template's cssOverrides if present.
+  // Parses lines like `@page { margin: 18mm 14mm 22mm 14mm; }`.
+  const parsedMargins = parseMarginsFromCss(existing?.cssOverrides ?? null);
+  const [marginTop, setMarginTop] = useState<number>(parsedMargins.top);
+  const [marginRight, setMarginRight] = useState<number>(parsedMargins.right);
+  const [marginBottom, setMarginBottom] = useState<number>(parsedMargins.bottom);
+  const [marginLeft, setMarginLeft] = useState<number>(parsedMargins.left);
   const [overrideCompanyName, setOverrideCompanyName] = useState(initialHeaderOv.companyName ?? "");
   const [overrideTaxNumber, setOverrideTaxNumber] = useState(initialHeaderOv.taxNumber ?? "");
   const [overrideFooterText, setOverrideFooterText] = useState(initialFooterOv.text ?? "");
@@ -511,6 +706,15 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
             }
           : null,
         footerOverride: overrideFooterText ? { text: overrideFooterText } : null,
+        // Page margins → @page block in cssOverrides. The A4 adapter
+        // already wraps the document body in CSS that respects these
+        // when the browser-print path uses Paged Media.
+        cssOverrides: buildMarginsCss({
+          top: marginTop,
+          right: marginRight,
+          bottom: marginBottom,
+          left: marginLeft,
+        }),
         isDefault,
         isThermal: paperSize.startsWith("THERMAL"),
       };
@@ -628,6 +832,53 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
                 </Select>
               </div>
             </div>
+            {/* Page margins — CSS Paged Media @page rule. Each side in mm. */}
+            <div className="grid grid-cols-4 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">هامش علوي (مم)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step={1}
+                  value={marginTop}
+                  onChange={(e) => setMarginTop(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">هامش سفلي (مم)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step={1}
+                  value={marginBottom}
+                  onChange={(e) => setMarginBottom(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">هامش يمين (مم)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step={1}
+                  value={marginRight}
+                  onChange={(e) => setMarginRight(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">هامش يسار (مم)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step={1}
+                  value={marginLeft}
+                  onChange={(e) => setMarginLeft(Number(e.target.value) || 0)}
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -644,17 +895,36 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
                 <TabsTrigger value="visual" className="gap-1"><Layers className="h-3 w-3" /> مرئي</TabsTrigger>
               </TabsList>
               <TabsContent value="preset" className="space-y-3">
-                <Label>اختر النمط</Label>
-                <Select value={presetKey} onValueChange={setPresetKey}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="classic">كلاسيكي</SelectItem>
-                    <SelectItem value="modern">عصري</SelectItem>
-                    <SelectItem value="compact">مدمج</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>اختر النمط الجاهز</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  {PRESET_THEMES.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setPresetKey(t.key)}
+                      className={cn(
+                        "text-right rounded-lg border-2 p-3 transition-all hover:shadow-md",
+                        presetKey === t.key
+                          ? "border-primary ring-2 ring-primary/20 bg-primary/5"
+                          : "border-border bg-white",
+                      )}
+                    >
+                      {/* Mini visual preview of each theme */}
+                      <div
+                        className="h-20 rounded mb-2 overflow-hidden flex flex-col"
+                        style={{ background: "#f8fafc", border: "1px solid #e2e8f0" }}
+                      >
+                        {t.swatch}
+                      </div>
+                      <div className="font-semibold text-sm">{t.label}</div>
+                      <div className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                        {t.description}
+                      </div>
+                    </button>
+                  ))}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  ترويسة الفرع وتذييله يأتيان تلقائياً من إعدادات الفرع. تخصيص الرأس/التذييل المتقدم متاح بعد الحفظ.
+                  ترويسة الفرع وتذييله (مع شعار غيث الافتراضي حتى ترفع شعارك) يأتيان تلقائياً. بعد الحفظ يمكنك تخصيص الرأس/التذييل والهوامش.
                 </p>
               </TabsContent>
               <TabsContent value="html" className="space-y-2">
@@ -713,15 +983,68 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">رابط الشعار (Logo URL)</Label>
-              <Input
-                value={overrideLogoUrl}
-                onChange={(e) => setOverrideLogoUrl(e.target.value)}
-                placeholder="https://example.com/logo.png أو /uploads/logo.png"
-                dir="ltr"
-                className="text-xs"
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={overrideLogoUrl}
+                  onChange={(e) => setOverrideLogoUrl(e.target.value)}
+                  placeholder="https://example.com/logo.png أو data:image/..."
+                  dir="ltr"
+                  className="text-xs flex-1"
+                />
+                <input
+                  ref={logoFileRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingLogo(true);
+                    try {
+                      const form = new FormData();
+                      form.append("logo", file);
+                      const res = await apiFetch<{ dataUrl: string }>(
+                        "/print/uploads/logo",
+                        { method: "POST", body: form, headers: {} } as RequestInit,
+                      );
+                      setOverrideLogoUrl(res.dataUrl);
+                      toast({ title: "تم رفع الشعار" });
+                    } catch (err) {
+                      const ex = err as ApiError;
+                      toast({
+                        variant: "destructive",
+                        title: "فشل رفع الشعار",
+                        description: ex.message,
+                      });
+                    } finally {
+                      setUploadingLogo(false);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => logoFileRef.current?.click()}
+                  disabled={uploadingLogo}
+                  className="shrink-0"
+                  title="رفع ملف صورة (PNG/JPEG/WebP/SVG، حد أقصى 2MB)"
+                >
+                  {uploadingLogo ? "..." : "📷 رفع"}
+                </Button>
+              </div>
+              {overrideLogoUrl && (
+                <div className="mt-2 inline-block border rounded p-1 bg-white">
+                  <img
+                    src={overrideLogoUrl}
+                    alt="معاينة الشعار"
+                    style={{ maxHeight: 48, maxWidth: 160 }}
+                  />
+                </div>
+              )}
               <p className="text-[10px] text-muted-foreground">
-                ارفع الشعار من إعدادات → ملف الفروع → الشعار. أو الصق رابط مباشر.
+                ارفع ملف الشعار مباشرة، أو الصق رابط، أو data URL.
               </p>
             </div>
             <div className="space-y-1">

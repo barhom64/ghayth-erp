@@ -22,6 +22,8 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -110,9 +112,6 @@ export default function PreventivePlansPage() {
     });
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={refetch} />;
-
   const overdueCount = plans.filter((p: any) => getDueStatus(p.nextServiceDate) === "overdue").length;
   const dueSoonCount = plans.filter((p: any) => getDueStatus(p.nextServiceDate) === "due_soon").length;
 
@@ -120,6 +119,12 @@ export default function PreventivePlansPage() {
     searchFields: ["plateNumber", "serviceType"],
     statusField: "serviceType",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState onRetry={refetch} />;
+
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -243,6 +248,24 @@ export default function PreventivePlansPage() {
           <GuardedButton perm="fleet:create" onClick={() => setShowForm(!showForm)} size="sm">
             <Plus className="w-4 h-4 me-1" /> إضافة خطة
           </GuardedButton>
+          <PrintButton
+            entityType="report_fleet_preventive_plans"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "خطط الصيانة الوقائية", total: printRows.length },
+              items: printRows.map((p: any) => ({
+                "المركبة": p.plateNumber || `#${p.vehicleId}`,
+                "نوع الخدمة": SERVICE_TYPES[p.serviceType] || p.serviceType || "—",
+                "الفاصل (كم)": p.intervalKm ?? "—",
+                "الفاصل (أيام)": p.intervalDays ?? "—",
+                "آخر خدمة": p.lastServiceDate || "—",
+                "موعد الخدمة القادمة": p.nextServiceDate || "—",
+                "التكلفة المتوقعة": Number(p.estimatedCost || 0),
+                "الحالة": p.status || "—",
+              })),
+            })}
+          />
         </>
       }
     >
@@ -325,6 +348,7 @@ export default function PreventivePlansPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد خطط صيانة وقائية"

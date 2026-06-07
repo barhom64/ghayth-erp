@@ -38,6 +38,8 @@ import {
 import { todayLocal } from "@/lib/formatters";
 
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // New count session — schema enforces countDate required (was no
 // validation at all on the create form). `Input` per-item edits inside
 // the table are NOT migrated here (different UX, different form).
@@ -123,6 +125,7 @@ export default function InventoryCountPage() {
     statusField: "status",
     dateField: "countDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   // --- KPI stats ---
   const stats = useMemo(() => {
@@ -367,9 +370,31 @@ export default function InventoryCountPage() {
       subtitle="إجراء جلسات الجرد الدوري ومطابقة المخزون الفعلي"
       breadcrumbs={[{ href: "/warehouse", label: "إدارة المخازن" }]}
       actions={
-        <GuardedButton perm="warehouse:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
-          <Plus className="w-4 h-4" /> جلسة جرد جديدة
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_inventory_counts"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: "جلسات جرد المخزن",
+                total: printRows.length,
+              },
+              items: printRows.map((c: any) => ({
+                "رقم الجلسة": c.id,
+                "المستودع": c.warehouseName || c.warehouseLocation || "—",
+                "تاريخ الجرد": c.countDate || "—",
+                "المسؤول": c.assigneeName || c.conductedByName || "—",
+                "عدد الأصناف": c.itemsCount ?? c.totalItems ?? 0,
+                "الفروقات": c.varianceCount ?? 0,
+                "الحالة": c.status || "—",
+              })),
+            })}
+          />
+          <GuardedButton perm="warehouse:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
+            <Plus className="w-4 h-4" /> جلسة جرد جديدة
+          </GuardedButton>
+        </div>
       }
     >
       <WarehouseTabsNav />
@@ -429,6 +454,7 @@ export default function InventoryCountPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد جلسات جرد — أنشئ جلسة جرد جديدة للبدء"

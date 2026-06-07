@@ -49,6 +49,9 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "admin-vendor-settings.ts",
   "admin.ts",
   "approvalActions.ts",
+  // assistant.ts: curated owner Q&A — vetted aggregate queries keyed by
+  // (companyId), not list endpoints; manual companyId scoping is correct here.
+  "assistant.ts",
   "auth.ts",
   "automation.ts",
   "bi.ts",
@@ -87,6 +90,10 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "obligations.ts",
   "pdpl.ts",
   "permissions.ts",
+  // parties.ts: master-data registry — point lookups by (companyId, entityTable,
+  // entityId) / (companyId, id), not list endpoints. Manual companyId scoping is
+  // correct here; buildScopedWhere targets company/branch list cascades. (slice 1)
+  "parties.ts",
   "print.ts",
   "properties.ts",
   "publicData.ts",
@@ -183,9 +190,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 104,
+      total: 106,
       helperUsers: 36,
-      manualOnly: 65,
+      manualOnly: 67,
     });
   });
 });

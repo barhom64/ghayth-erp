@@ -118,9 +118,13 @@ describe("UmrahGroupPortfolio page — registration + UX", () => {
     expect(PORTFOLIO_PAGE).toMatch(/margin < 0 \? "text-status-error-foreground" : "text-status-success-foreground"/);
   });
 
-  it("CSV export builds client-side + uses the same filtered rows (no extra roundtrip)", () => {
+  it("CSV export uses the unified export helper + same filtered rows (no extra roundtrip)", () => {
+    // GAP_MATRIX item #7 — the page now routes through `exportRowsToCsv`
+    // instead of a local Blob+createObjectURL builder so the download
+    // lands in /reports/print-log with audit + letterhead.
     expect(PORTFOLIO_PAGE).toContain('data-testid="group-portfolio-export-csv"');
-    expect(PORTFOLIO_PAGE).toMatch(/\.\.\.rows\.map\(\(r\) =>/);
+    expect(PORTFOLIO_PAGE).toContain('exportRowsToCsv');
+    expect(PORTFOLIO_PAGE).toMatch(/rows:\s*rows\s+as\s+unknown/);
     expect(PORTFOLIO_PAGE).toMatch(/disabled=\{rows\.length === 0\}/);
   });
 });

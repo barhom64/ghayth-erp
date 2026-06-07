@@ -23,6 +23,8 @@ const AdminEventMonitor = lazy(() => import("@/pages/admin-event-monitor"));
 const AdminPostingFailures = lazy(() => import("@/pages/admin-posting-failures"));
 const AdminLifecycleMonitor = lazy(() => import("@/pages/admin-lifecycle-monitor"));
 const AdminRbacMatrix = lazy(() => import("@/pages/admin-rbac-matrix"));
+const RbacSimpleEditor = lazy(() => import("@/pages/admin/rbac-simple-editor"));
+const AssistantAsk = lazy(() => import("@/pages/assistant-ask"));
 const AdminGlReconciliation = lazy(() => import("@/pages/admin-gl-reconciliation"));
 const AdminSystemRegistry = lazy(() => import("@/pages/admin-system-registry"));
 const AdminPrintTemplates = lazy(() => import("@/pages/admin/print-templates"));
@@ -34,8 +36,10 @@ const AdminIntelligencePlayground = lazy(() => import("@/pages/admin-intelligenc
 const AdminDigitalSignature = lazy(() => import("@/pages/admin-digital-signature"));
 const AdminZatcaAudits = lazy(() => import("@/pages/admin-zatca-audits"));
 const AdminIntegrationsDiagnostics = lazy(() => import("@/pages/admin-integrations-diagnostics"));
+const AdminExpiringDocs = lazy(() => import("@/pages/admin/expiring-docs")); // originally PR #1128
 
 export const adminRoutes = [
+  { path: "/admin/expiring-docs", component: AdminExpiringDocs },
   { path: "/admin", component: Admin },
   { path: "/admin/users", component: AdminUsers },
   { path: "/admin/user-onboarding", component: AdminUserOnboarding },
@@ -59,6 +63,8 @@ export const adminRoutes = [
   { path: "/admin/posting-failures", component: AdminPostingFailures },
   { path: "/admin/lifecycle-monitor", component: AdminLifecycleMonitor },
   { path: "/admin/rbac-matrix", component: AdminRbacMatrix },
+  { path: "/admin/roles-simple", component: RbacSimpleEditor },
+  { path: "/assistant", component: AssistantAsk },
   { path: "/admin/gl-reconciliation", component: AdminGlReconciliation },
   { path: "/admin/system-registry", component: AdminSystemRegistry },
   { path: "/admin/print-templates", component: AdminPrintTemplates },

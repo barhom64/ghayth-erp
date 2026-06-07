@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Users, Split, Merge, ChevronRight } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -75,6 +77,7 @@ export default function UmrahGroups() {
   const { toast } = useToast();
   const { data: resp, isLoading, isError } = useApiQuery<{ data: Group[] }>(["umrah-groups"], "/umrah/groups");
   const items = resp?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
@@ -321,6 +324,22 @@ export default function UmrahGroups() {
             <Users className="h-4 w-4" />
             مجموعة جديدة
           </GuardedButton>
+          <PrintButton
+            entityType="report_umrah_groups"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "مجموعات العمرة", total: printRows.length },
+              items: printRows.map((g: any) => ({
+                "الاسم": g.name || "—",
+                "رقم نسك": g.nuskGroupNumber || "—",
+                "الوكيل": g.agentName || "—",
+                "الموسم": g.seasonName || "—",
+                "العدد": g.pilgrimCount ?? 0,
+                "الحالة": g.status || "—",
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -341,6 +360,7 @@ export default function UmrahGroups() {
       <DataTable
         data={items}
         columns={columns}
+        onSortedDataChange={setPrintRows}
         emptyMessage="لا توجد مجموعات"
         selectable
         onSelectionChange={setSelectedIds}

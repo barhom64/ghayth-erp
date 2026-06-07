@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +44,7 @@ import {
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
 import { CreditMemoDialog } from "@/components/shared/credit-memo-dialog";
+import { InvoiceAmendDialog } from "@/components/shared/invoice-amend-dialog";
 import { DebitMemoDialog } from "@/components/shared/debit-memo-dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -138,6 +139,7 @@ export default function InvoiceDetailPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [showCreditMemo, setShowCreditMemo] = useState(false);
   const [showDebitMemo, setShowDebitMemo] = useState(false);
+  const [showAmend, setShowAmend] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const [confirmPost, setConfirmPost] = useState(false);
 
@@ -257,6 +259,16 @@ export default function InvoiceDetailPage() {
           إصدار إشعار مدين
         </GuardedButton>
       )}
+      {/* ZATCA-compliant edit. Per Saudi tax authority rules, an issued
+          invoice can't be edited in place — the system orchestrates a
+          credit memo + new invoice atomically. Only shown on issued
+          (non-draft, non-cancelled, non-amended) invoices. */}
+      {invoice && invoice.status !== "draft" && invoice.status !== "cancelled" && invoice.status !== "amended" && !invoice.amendedToInvoiceId && (
+        <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowAmend(true)}>
+          <FilePlus className="h-4 w-4 me-1" />
+          تعديل ZATCA
+        </GuardedButton>
+      )}
       {invoice?.status === "pending" && (
         <GuardedButton
           perm="finance:approve"
@@ -309,6 +321,47 @@ export default function InvoiceDetailPage() {
         lines={(invoice as any).lines}
         documentType="invoice"
       />
+
+      {/* ZATCA amendment chain banner — surfaces both directions of the
+          link so the operator knows whether they're looking at an
+          original that was later replaced or the replacement itself. */}
+      {(invoice.amendedToInvoiceId || invoice.amendedFromInvoiceId) && (
+        <Card className="border-status-warning-surface bg-status-warning-surface/40">
+          <CardContent className="p-3 text-sm">
+            {invoice.amendedToInvoiceId && (
+              <div className="flex items-center gap-2 text-status-warning-foreground">
+                <FilePlus className="h-4 w-4" />
+                <span>
+                  تم تعديل هذه الفاتورة وفقاً لأنظمة ZATCA — استُبدلت بالفاتورة الجديدة{" "}
+                  <Link
+                    href={`/finance/invoices/${invoice.amendedToInvoiceId}`}
+                    className="font-semibold underline"
+                  >
+                    #{invoice.amendedToInvoiceId}
+                  </Link>
+                  {invoice.amendmentReason ? ` — السبب: ${invoice.amendmentReason}` : ""}
+                </span>
+              </div>
+            )}
+            {invoice.amendedFromInvoiceId && (
+              <div className="flex items-center gap-2 text-status-info-foreground">
+                <FilePlus className="h-4 w-4" />
+                <span>
+                  هذه الفاتورة صادرة كتعديل ZATCA للفاتورة السابقة{" "}
+                  <Link
+                    href={`/finance/invoices/${invoice.amendedFromInvoiceId}`}
+                    className="font-semibold underline"
+                  >
+                    #{invoice.amendedFromInvoiceId}
+                  </Link>
+                  {" "}— صدر إشعار دائن للأصلية تلقائياً.
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Visible payment lifecycle strip */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">
@@ -676,6 +729,13 @@ export default function InvoiceDetailPage() {
             onOpenChange={setShowDebitMemo}
             onIssued={() => { refetch(); refetchMemos(); }}
           />
+          <InvoiceAmendDialog
+            invoiceId={Number(id)}
+            invoiceRef={invoice.ref}
+            invoiceTotal={Number(invoice.total ?? 0)}
+            open={showAmend}
+            onOpenChange={setShowAmend}
+          />
         </>
       )}
       <AlertDialog open={confirmPost} onOpenChange={(o) => !o && setConfirmPost(false)}>
@@ -752,11 +812,13 @@ function CogsPreviewCard({ invoiceId }: { invoiceId: number }) {
     }
   };
 
-  // Auto-run the first time the card mounts so the operator sees the
-  // status before scrolling.
-  if (!data && !previewMut.isPending && previewMut.isIdle) {
+  // Auto-run once on mount so the operator sees the status before scrolling.
+  // Must run in an effect — calling run() (which triggers a mutation +
+  // setState) during render is a hooks/render-phase anti-pattern.
+  useEffect(() => {
     run();
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (previewMut.isPending && !data) {
     return (

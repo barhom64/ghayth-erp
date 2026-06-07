@@ -1,6 +1,8 @@
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
@@ -58,6 +60,7 @@ export default function LegalJudgments() {
     searchFields: ["caseTitle", "verdict", "caseNumber"],
     statusField: "riskLevel",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   return (
     <PageShell
@@ -65,6 +68,30 @@ export default function LegalJudgments() {
       subtitle="سجل الأحكام الصادرة والتقارير المالية"
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الأحكام القضائية" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_legal_judgments"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: {
+              title: "سجل الأحكام القضائية",
+              total: printRows.length,
+              totalAmount,
+              totalPaid,
+            },
+            items: printRows.map((j: any) => ({
+              "القضية": j.caseTitle || j.caseId || "—",
+              "نوع الحكم": j.judgmentType || j.type || "—",
+              "تاريخ الحكم": j.judgmentDate || "—",
+              "المبلغ": j.amount ?? 0,
+              "المدفوع": j.amountPaid ?? 0,
+              "المتبقي": (j.amount ?? 0) - (j.amountPaid ?? 0),
+              "الحالة": j.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <LegalTabsNav />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

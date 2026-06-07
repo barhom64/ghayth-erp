@@ -24,6 +24,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   FormShell,
   FormTextField,
   FormTextareaField,
@@ -35,6 +36,8 @@ import {
 import { IDP_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const idpSchema = z.object({
   employeeId: z.string().min(1, "الموظف مطلوب"),
   title: z.string().trim(),
@@ -77,9 +80,6 @@ export default function IDPPage() {
     onSuccess: () => refetch(),
   });
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const handleSave = async (values: IdpForm) => {
     const payload = {
       ...values,
@@ -103,6 +103,12 @@ export default function IDPPage() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const stats = {
     total: plans.length,
@@ -229,10 +235,29 @@ export default function IDPPage() {
       subtitle="تخطيط مسارات التطوير والنمو الوظيفي للموظفين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <GuardedButton perm="hr:create" size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-          <Plus className="h-4 w-4" />
-          خطة جديدة
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_idp"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "خطط التطوير الفردي", total: printRows.length },
+              items: printRows.map((p: any) => ({
+                "الموظف": p.employeeName || "—",
+                "الفترة": p.period || "—",
+                "الهدف": p.developmentGoal || p.title || "—",
+                "تاريخ البدء": p.startDate || "—",
+                "تاريخ النهاية": p.endDate || "—",
+                "التقدم (%)": p.progressPercentage ?? "—",
+                "الحالة": p.status || "—",
+              })),
+            })}
+          />
+          <GuardedButton perm="hr:create" size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4" />
+            خطة جديدة
+          </GuardedButton>
+        </div>
       }
     >
       <HrTabsNav />
@@ -249,11 +274,25 @@ export default function IDPPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filtered.length}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "title", label: "عنوان الخطة" },
+              { key: "targetDate", label: "التاريخ المستهدف" },
+              { key: "status", label: "الحالة" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "خطط-التطوير-الفردي",
+          )
+        }
       />
 
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد خطط تطوير — أنشئ خطة جديدة للبدء"

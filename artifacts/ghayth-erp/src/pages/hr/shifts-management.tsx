@@ -19,6 +19,8 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 // All three IDs required — the original form tracked `assignmentId`
 // in state but had NO UI input for it, so every submit sent
@@ -51,10 +53,13 @@ export default function ShiftsManagementPage() {
   const isLoading = shiftsLoading || assignmentsLoading || empLoading;
   const isError = shiftsError || assignmentsError || empError;
 
+  const shifts = shiftsData?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(shifts);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const shifts = shiftsData?.data || [];
   const assignments = assignmentsData?.data || [];
   const employees = empData?.data || [];
 
@@ -72,6 +77,24 @@ export default function ShiftsManagementPage() {
       title="إدارة الورديات المتقدمة"
       subtitle="تعيين الموظفين للورديات وإدارة الجداول"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الورديات المتقدمة" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_shifts_management"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "الورديات", total: printRows.length },
+            items: printRows.map((s: any) => ({
+              "الاسم": s.name || "—",
+              "البداية": s.startTime || "—",
+              "النهاية": s.endTime || "—",
+              "افتراضية": s.isDefault ? "نعم" : "لا",
+              "عدد الموظفين": assignments.filter((a: any) => a.shiftId === s.id).length,
+              "الحالة": s.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={[
@@ -178,6 +201,7 @@ export default function ShiftsManagementPage() {
               { key: "startDate", header: "من", sortable: true, render: (v) => <span className="text-muted-foreground">{v.startDate || "-"}</span> },
               { key: "endDate", header: "إلى", sortable: true, render: (v) => <span className="text-muted-foreground">{v.endDate || "مستمر"}</span> },
             ] as DataTableColumn<any>[]}
+            onSortedDataChange={setPrintRows}
             data={assignments}
             noToolbar
             emptyMessage="لا توجد تعيينات"

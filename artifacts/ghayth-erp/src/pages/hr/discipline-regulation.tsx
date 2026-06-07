@@ -7,16 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, Pencil, RefreshCw, AlertTriangle, Trash2, Plus, Eye } from "lucide-react";
@@ -27,6 +18,7 @@ import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const SECTION_LABELS: Record<string, string> = {
   work_time: "مخالفات تتعلق بمواعيد العمل",
   work_organization: "مخالفات تتعلق بتنظيم العمل",
@@ -292,6 +284,25 @@ export default function DisciplineRegulationPage() {
             <RefreshCw className={`w-4 h-4 me-2 ${reseeding ? "animate-spin" : ""}`} />
             استنساخ اللائحة الافتراضية
           </GuardedButton>
+          <PrintButton
+            entityType="report_hr_discipline_regulation"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "لائحة الانضباط الوظيفي", total },
+              items: (data?.data ?? []).map((a) => ({
+                "القسم": SECTION_LABELS[a.section] || a.section,
+                "رقم المادة": a.articleNumber,
+                "العنوان": a.title || "—",
+                "الشدة": a.severity || "—",
+                "العقوبة الأولى": a.penalty1 || "—",
+                "العقوبة الثانية": a.penalty2 || "—",
+                "العقوبة الثالثة": a.penalty3 || "—",
+                "العقوبة الرابعة": a.penalty4 || "—",
+                "تصل للفصل": a.isTermination ? "نعم" : "لا",
+              })),
+            }}
+          />
         </div>
       }
     >
@@ -398,27 +409,18 @@ export default function DisciplineRegulationPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={reseedAsk} onOpenChange={(v) => { if (!v) setReseedAsk(false); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>استنساخ اللائحة الافتراضية</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم استنساخ اللائحة الافتراضية (49 مادة) للشركة. هل تريد المتابعة؟
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setReseedAsk(false)}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setReseedAsk(false);
-                reseedMut.mutate({});
-              }}
-            >
-              استنساخ
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={reseedAsk}
+        onOpenChange={(v) => { if (!v) setReseedAsk(false); }}
+        variant="caution"
+        title="استنساخ اللائحة الافتراضية"
+        description="سيتم استنساخ اللائحة الافتراضية (49 مادة) للشركة. هل تريد المتابعة؟"
+        confirmLabel="استنساخ"
+        onConfirm={() => {
+          setReseedAsk(false);
+          reseedMut.mutate({});
+        }}
+      />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

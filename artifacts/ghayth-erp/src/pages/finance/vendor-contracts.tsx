@@ -30,6 +30,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Handshake, Plus, AlertTriangle, CalendarCheck, CalendarX, FileText, Users, Pencil, Trash2 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface VendorContract {
   id: number;
@@ -137,10 +139,13 @@ export default function VendorContractsPage() {
     notes: "",
   });
 
+  const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const rows = data?.data ?? [];
 
   const activeCount      = rows.filter((r) => r.status === "active").length;
   const expiringSoonCount = rows.filter((r) => {
@@ -290,6 +295,24 @@ export default function VendorContractsPage() {
               <Users className="h-4 w-4 me-2" />الموردون
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_vendor_contracts"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "عقود الموردين", total: printRows.length },
+              items: printRows.map((c) => ({
+                "المورد": c.vendorName || "—",
+                "العنوان": c.title || "—",
+                "تاريخ البدء": c.startDate || "—",
+                "تاريخ النهاية": c.endDate || "—",
+                "أيام للانتهاء": daysUntil(c.endDate),
+                "قيمة العقد": Number(c.contractValue || 0),
+                "العملة": c.currency || "—",
+                "الحالة": STATUS_LABEL[c.status as keyof typeof STATUS_LABEL] || c.status,
+              })),
+            })}
+          />
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <GuardedButton perm="finance:create">
@@ -429,6 +452,7 @@ export default function VendorContractsPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               statusFilter

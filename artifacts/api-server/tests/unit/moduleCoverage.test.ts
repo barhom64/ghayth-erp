@@ -379,7 +379,11 @@ describe("Module coverage: Legal", () => {
   });
 
   it("is gated by requireModule('legal') in index", () => {
-    expect(indexTs).toContain('requireModule("legal"), legalRouter');
+    // Pattern allows extra middleware (e.g. requireMinLevel) between
+    // the module gate and the router argument — the contract is that
+    // the gate exists immediately after the path, not that it's the
+    // ONLY middleware on the mount.
+    expect(indexTs).toMatch(/requireModule\("legal"\)(?:,\s*\w+\([^)]*\))*,\s*legalRouter/);
   });
 
   // Audit
@@ -648,7 +652,9 @@ describe("Module coverage: Governance", () => {
   });
 
   it("is gated by requireModule('governance') in index", () => {
-    expect(indexTs).toContain('requireModule("governance"), governanceRouter');
+    // See legal test above — pattern allows extra middleware between
+    // the module gate and the router argument.
+    expect(indexTs).toMatch(/requireModule\("governance"\)(?:,\s*\w+\([^)]*\))*,\s*governanceRouter/);
   });
 
   // Audit
@@ -700,7 +706,9 @@ describe("Module coverage: Communications", () => {
   });
 
   it("is gated by requireModule('comms') in index", () => {
-    expect(indexTs).toContain('requireModule("comms"), communicationsRouter');
+    // See legal test above — pattern allows extra middleware between
+    // the module gate and the router argument.
+    expect(indexTs).toMatch(/requireModule\("comms"\)(?:,\s*\w+\([^)]*\))*,\s*communicationsRouter/);
   });
 
   // Audit

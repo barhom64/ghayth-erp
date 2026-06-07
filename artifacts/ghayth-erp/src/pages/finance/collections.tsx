@@ -14,19 +14,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { Loader2, Mail, AlertTriangle, History, FileWarning, Calculator, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { currentPeriodRiyadh } from "@/lib/formatters";
 
 /**
@@ -153,6 +145,15 @@ export default function CollectionsPage() {
               الديون المشكوك بها
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_collections"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "التحصيل والمتابعة", total: 0 },
+              items: [],
+            }}
+          />
         </div>
       }
     >
@@ -575,22 +576,21 @@ function BadDebtTab() {
         </div>
       </PageStateWrapper>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>تسجيل مخصص ديون لفترة {period}</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم إنشاء قيد محاسبي بقيمة{" "}
-              <strong>{(data?.totalProvision ?? 0).toLocaleString("ar-SA")} ر.س</strong>{" "}
-              (مدين 6700 / دائن 1290). لا يمكن تكرار التسجيل لنفس الفترة بعد الحفظ.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handlePost}>تأكيد التسجيل</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        variant="caution"
+        title={`تسجيل مخصص ديون لفترة ${period}`}
+        description={
+          <>
+            سيتم إنشاء قيد محاسبي بقيمة{" "}
+            <strong>{(data?.totalProvision ?? 0).toLocaleString("ar-SA")} ر.س</strong>{" "}
+            (مدين 6700 / دائن 1290). لا يمكن تكرار التسجيل لنفس الفترة بعد الحفظ.
+          </>
+        }
+        confirmLabel="تأكيد التسجيل"
+        onConfirm={handlePost}
+      />
     </>
   );
 }

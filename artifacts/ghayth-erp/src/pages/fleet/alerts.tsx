@@ -15,6 +15,8 @@ import {
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
@@ -72,6 +74,7 @@ export default function FleetAlerts() {
 
   const uniqueTypes = Array.from(new Set(filteredByStatus.map((a: any) => a.type))) as string[];
   const filtered = applyFilters(filteredByStatus, filters, { searchFields: ["message", "vehicle", "driver"], statusField: "type" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -122,14 +125,33 @@ export default function FleetAlerts() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "تنبيهات الأسطول" }]}
       loading={isLoading}
       actions={
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">نشطة</SelectItem>
-            <SelectItem value="acknowledged">معتمَدة</SelectItem>
-            <SelectItem value="all">الكل</SelectItem>
-          </SelectContent>
-        </Select>
+        <>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">نشطة</SelectItem>
+              <SelectItem value="acknowledged">معتمَدة</SelectItem>
+              <SelectItem value="all">الكل</SelectItem>
+            </SelectContent>
+          </Select>
+          <PrintButton
+            entityType="report_fleet_alerts"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "تنبيهات الأسطول", total: printRows.length },
+              items: printRows.map((a: any) => ({
+                "النوع": TYPE_LABELS[a.type] || a.type || "—",
+                "المركبة": a.vehicle || a.plateNumber || "—",
+                "السائق": a.driver || a.driverName || "—",
+                "الرسالة": a.message || "—",
+                "الشدة": a.severity || "—",
+                "التاريخ": a.createdAt || a.alertDate || "—",
+                "الحالة": STATUS_LABELS[a.status]?.label || a.status || "—",
+              })),
+            })}
+          />
+        </>
       }
     >
       <FleetTabsNav />
@@ -155,6 +177,7 @@ export default function FleetAlerts() {
         <CardContent>
           <DataTable
             columns={columns}
+            onSortedDataChange={setPrintRows}
             data={filtered}
             isLoading={isLoading}
             isError={isError}

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -316,6 +317,9 @@ export default function LegalContractDetail() {
               entityType="legal_contract"
               entityId={contract.id ?? id}
              />
+          )}
+          {contract?.id != null && (
+            <EntityPnlButton entityType="contract" entityId={Number(contract.id)} />
           )}
           <GuardedButton
             perm="legal:update"

@@ -18,6 +18,9 @@ import {
   emitEvent,
   createAuditLog,
   initiateApprovalChain,
+  checkFinancialPeriodOpen,
+  todayISO,
+  reverseAccountBalances,
 } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -416,7 +419,7 @@ custodiesRouter.get("/custodies/summary", authorize({ feature: "finance.custodie
   }
 });
 
-custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", action: "view", resource: { table: "custodies", idParam: "id" } }), async (req, res) => {
+custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", action: "view", resource: { table: "journal_entries", idParam: "id", columns: ['"companyId"', '"branchId"', '"departmentId"'] } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -528,6 +531,18 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
         field: "amount",
         fix: "أدخل مبلغ العهدة",
       });
+    }
+
+    // F5 (audit follow-up): typed period gate up front. The JE engine
+    // guards internally so no GL leaks into a closed period, but the
+    // operator-facing error becomes a clean ConflictError with the
+    // period name instead of an opaque engine throw.
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن إصدار عهدة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { meta: { periodName: periodCheck.periodName } },
+      );
     }
 
     let resolvedAssignmentId = assignmentId ? Number(assignmentId) : null;
@@ -679,6 +694,15 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
         field: !custodyRef ? "custodyRef" : "amount",
         fix: "أدخل مرجع العهدة (CUSTODY-...) ومبلغ التسوية الموجب",
       });
+    }
+
+    // F5 (audit follow-up): typed period gate up front.
+    const settlePeriodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!settlePeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسوية عهدة في فترة مُقفلة: ${settlePeriodCheck.periodName ?? ""}`,
+        { meta: { periodName: settlePeriodCheck.periodName } },
+      );
     }
 
     const settleAmount = Number(amount);
@@ -839,6 +863,15 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
     const custodyId = parseId(req.params.id, "id");
     const { amount, description, sourceAccountCode } = zodParse(settleCustodyByIdSchema.safeParse(req.body ?? {}));
 
+    // F5 (audit follow-up): typed period gate up front.
+    const settleByIdPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!settleByIdPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسوية عهدة في فترة مُقفلة: ${settleByIdPeriodCheck.periodName ?? ""}`,
+        { meta: { periodName: settleByIdPeriodCheck.periodName } },
+      );
+    }
+
     const [custody] = await rawQuery<CustodyRefStatusRow>(
       `SELECT je.ref, je.status AS "approvalStatus" FROM journal_entries je
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'`,
@@ -990,7 +1023,7 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
   }
 });
 
-custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.custodies", action: "approve", resource: { table: "custodies", idParam: "id" } }), async (req, res) => {
+custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.custodies", action: "approve", resource: { table: "journal_entries", idParam: "id", columns: ['"companyId"', '"branchId"', '"departmentId"'] } }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1036,12 +1069,28 @@ custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.cu
       toState: newStatus,
       reason: notes ?? undefined,
       extraWhere: `"deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
-      onApply: async (_row, client) => {
+      onApply: async (row, client) => {
         await client.query(
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
            VALUES ('custody',$1,$2,$3,$4,$5)`,
           [custodyId, newStatus, notes || null, scope.userId, scope.companyId]
         );
+
+        // F10 (audit follow-up): when a custody auto-posted directly to
+        // 'posted' (sub-threshold amount) and is later rejected or
+        // returned, the GL balances that the original POST applied to
+        // chart_of_accounts.currentBalance must be reversed. Symmetric
+        // to the invoice reject/return path in finance-invoices.ts. The
+        // engine flips status='cancelled' after the reversal so the
+        // entry won't double-reverse on retry.
+        if ((newStatus === "rejected" || newStatus === "returned") && (row as any).balancesApplied) {
+          await reverseAccountBalances(scope.companyId, custodyId);
+          await client.query(
+            `UPDATE journal_entries SET status = 'cancelled'
+              WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved') AND "deletedAt" IS NULL`,
+            [custodyId, scope.companyId]
+          );
+        }
       },
       after: { ref: cust.ref, notes: notes ?? null, decision: newStatus },
     });

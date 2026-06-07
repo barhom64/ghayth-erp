@@ -19,6 +19,8 @@ import {
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS = Object.entries(RECRUITMENT_STAGES).map(([value, { label }]) => ({ value, label }));
 
 export default function ApplicationListPage() {
@@ -32,6 +34,7 @@ export default function ApplicationListPage() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -162,12 +165,31 @@ export default function ApplicationListPage() {
         { href: "/hr/recruitment", label: "التوظيف" },
       ]}
       actions={
-        <Link href="/hr/recruitment/applicants/create">
-          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            إضافة متقدم
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_applications"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قائمة المتقدمين للوظائف", total: printRows.length },
+              items: printRows.map((a: any) => ({
+                "الاسم": a.applicantName || a.name || "—",
+                "الوظيفة": a.postingTitle || a.position || "—",
+                "الهاتف": a.phone || "—",
+                "البريد": a.email || "—",
+                "المصدر": a.source || "—",
+                "الحالة": a.status || "—",
+                "تاريخ التقديم": a.createdAt || a.appliedAt || "—",
+              })),
+            })}
+          />
+          <Link href="/hr/recruitment/applicants/create">
+            <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              إضافة متقدم
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />
@@ -189,6 +211,7 @@ export default function ApplicationListPage() {
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا يوجد متقدمين — أضف متقدم جديد للبدء"

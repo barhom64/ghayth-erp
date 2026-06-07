@@ -2,6 +2,8 @@ import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +53,7 @@ export default function FixedAssetsPage() {
 
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fixed-assets"], "/finance/fixed-assets");
   const assets = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(assets);
 
   const createMutation = useApiMutation<unknown, AssetForm>(
     "/finance/fixed-assets",
@@ -119,6 +122,29 @@ export default function FixedAssetsPage() {
           <GuardedButton perm="finance:create" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 me-1" />أصل جديد
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_fixed_assets"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: "الأصول الثابتة",
+                total: printRows.length,
+                totalCost,
+                totalBookValue,
+              },
+              items: printRows.map((a: any) => ({
+                "الكود": a.assetCode || a.code || "—",
+                "الاسم": a.name || "—",
+                "الفئة": a.category || "—",
+                "تاريخ الشراء": a.purchaseDate || "—",
+                "تكلفة الشراء": a.purchaseCost ?? 0,
+                "القيمة الدفترية": a.currentBookValue ?? 0,
+                "الإهلاك المتراكم": a.accumulatedDepreciation ?? 0,
+                "الحالة": a.status || "—",
+              })),
+            })}
+          />
         </>
       }
     >
@@ -157,6 +183,7 @@ export default function FixedAssetsPage() {
             </GuardedButton>
           ) },
         ] as DataTableColumn<any>[]}
+        onSortedDataChange={setPrintRows}
         data={assets}
         isLoading={isLoading}
         isError={isError}

@@ -189,7 +189,7 @@ export default function UmrahSettings() {
     penaltyTierAmount !== (settings?.umrahOverstayTierAmount != null ? String(settings.umrahOverstayTierAmount) : "");
 
   return (
-    <PageShell title="إعدادات العمرة" subtitle="ضبط ربط وحدة العمرة بالنظام المالي">
+    <PageShell title="إعدادات العمرة" subtitle="ضبط ربط وحدة العمرة بالنظام المالي" breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/umrah", label: "العمرة" }, { label: "الإعدادات" }]}>
       <UmrahTabsNav />
       <div className="space-y-6 max-w-3xl">
         <Card>

@@ -83,7 +83,11 @@ export default function Tasks() {
     { label: "العنوان", key: "title" },
     { label: "النوع", key: "type" },
     { label: "الأولوية", key: "priority", type: "badge" },
-    { label: "المكلّف", key: "assigneeName" },
+    // assigneeName = the primary; the +N badge comes from assigneeCount
+    // (migration 250) so users can see at-a-glance that a task has a
+    // team rather than a single owner.
+    { label: "المكلّف الرئيسي", key: "assigneeName" },
+    { label: "المنشئ", key: "creatorName" },
     { label: "الموعد", key: "scheduledDate", type: "date" },
     { label: "الحالة", key: "status", type: "status" },
   ];

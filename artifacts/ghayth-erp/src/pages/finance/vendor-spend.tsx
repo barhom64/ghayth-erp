@@ -14,6 +14,8 @@ import {
   Calendar, ShieldAlert,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Vendor Spend Analysis — concentration + payment-pattern analysis
@@ -226,8 +228,6 @@ export default function VendorSpendPage() {
       .sort((a, b) => b.outstandingAmount - a.outstandingAmount);
   }, [vendorsResp, payablesResp, contractsResp]);
 
-  if (vLoading || payLoading || cLoading) return <LoadingSpinner />;
-
   const totalAp = vendorAggregates.reduce((s, v) => s + v.outstandingAmount, 0);
   const top1Share = vendorAggregates[0]?.shareOfTotal ?? 0;
   const top5Share = vendorAggregates.slice(0, 5).reduce((s, v) => s + v.shareOfTotal, 0);
@@ -237,6 +237,10 @@ export default function VendorSpendPage() {
   const noContract = vendorAggregates.filter((v) => v.outstandingAmount > 0 && !v.hasActiveContract).length;
 
   const filtered = bandFilter ? vendorAggregates.filter((v) => v.riskBand === bandFilter) : vendorAggregates;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (vLoading || payLoading || cLoading) return <LoadingSpinner />;
+
 
   const cols: DataTableColumn<VendorAggregate>[] = [
     {
@@ -349,6 +353,27 @@ export default function VendorSpendPage() {
         { href: "/finance/vendors", label: "الموردون" },
         { label: "تحليل المخاطر" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_finance_vendor_spend"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تحليل الإنفاق على الموردين", total: printRows.length },
+            items: printRows.map((v) => ({
+              "المورد": v.name || "—",
+              "الرصيد المفتوح": Number(v.outstandingAmount || 0),
+              "عدد الفواتير": v.openInvoiceCount,
+              "% من الإنفاق": (Number(v.shareOfTotal || 0) * 100).toFixed(1),
+              "أقدم تأخر (أيام)": v.oldestInvoiceDays,
+              "عقد ساري": v.hasActiveContract ? "نعم" : "لا",
+              "ينتهي قريباً": v.contractEndingSoon ? "نعم" : "لا",
+              "Score": v.riskScore,
+              "التصنيف": v.riskBand,
+            })),
+          })}
+        />
+      }
     >
       <FinanceTabsNav />
 
@@ -459,6 +484,7 @@ export default function VendorSpendPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={filtered}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا توجد ذمم مفتوحة لأي مورد"
           />

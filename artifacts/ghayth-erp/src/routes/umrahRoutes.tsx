@@ -9,7 +9,6 @@ const UmrahAccommodations = lazy(() => import("@/pages/umrah/accommodations"));
 const UmrahPenalties = lazy(() => import("@/pages/umrah/penalties"));
 const UmrahPayments = lazy(() => import("@/pages/umrah/payments"));
 const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
-const UmrahImport = lazy(() => import("@/pages/umrah/import"));
 const UmrahImportWizard = lazy(() => import("@/pages/umrah/import-wizard"));
 const PilgrimCreate = lazy(() => import("@/pages/umrah/pilgrim-create"));
 const PilgrimDetail = lazy(() => import("@/pages/umrah/pilgrim-detail"));
@@ -61,6 +60,11 @@ const UmrahExemptPilgrims = lazy(() => import("@/pages/umrah/exempt-pilgrims"));
 // Compliance dashboard — folds exempt + visa-expiring + overstay +
 // unpaid penalties into 4 KPI tiles + drill-down links.
 const UmrahCompliance = lazy(() => import("@/pages/umrah/compliance"));
+// Reports hub + new operational reports.
+const UmrahReportsHub = lazy(() => import("@/pages/umrah/reports/index"));
+const UmrahAgentBalancesReport = lazy(() => import("@/pages/umrah/reports/agent-balances"));
+const UmrahSubAgentBalancesReport = lazy(() => import("@/pages/umrah/reports/subagent-balances"));
+const UmrahPilgrimMovementsReport = lazy(() => import("@/pages/umrah/reports/pilgrim-movements"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -85,8 +89,6 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/packages/:id", component: UmrahPackageDetail, module: "operations" },
   { path: "/umrah/transport", component: UmrahTransport, module: "operations" },
   { path: "/umrah/transport/:id", component: UmrahTransportDetail, module: "operations" },
-  // Legacy import page kept for backward compat; new wizard registered below
-  { path: "/umrah/import/legacy", component: UmrahImport, module: "operations" },
   // Wave 5 routes
   { path: "/umrah/sub-agents", component: UmrahSubAgents, module: "operations" },
   { path: "/umrah/sub-agents/:id", component: UmrahSubAgentDetail, module: "operations" },
@@ -103,6 +105,10 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
   { path: "/umrah/exempt-pilgrims", component: UmrahExemptPilgrims, module: "operations" },
   { path: "/umrah/compliance", component: UmrahCompliance, module: "operations" },
+  { path: "/umrah/reports", component: UmrahReportsHub, module: "operations" },
+  { path: "/umrah/reports/agent-balances", component: UmrahAgentBalancesReport, module: "operations" },
+  { path: "/umrah/reports/subagent-balances", component: UmrahSubAgentBalancesReport, module: "operations" },
+  { path: "/umrah/reports/pilgrim-movements", component: UmrahPilgrimMovementsReport, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },

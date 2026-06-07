@@ -12,6 +12,7 @@ import {
   applyFilters,
   PageShell,
   PageStatusBadge,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { ApprovalActions } from "@workspace/workflow-kit";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
@@ -22,6 +23,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useQueryClient } from "@tanstack/react-query";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const EXCUSE_TYPES: Record<string, string> = {
   early_leave: "خروج مبكر",
   late_arrival: "تأخر",
@@ -43,6 +46,7 @@ export default function ExcuseRequestsPage() {
     statusField: "status",
     dateField: "excuseDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const handleDone = () => {
     qc.invalidateQueries({ queryKey: ["excuse-requests"] });
@@ -143,6 +147,23 @@ export default function ExcuseRequestsPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_excuse_requests"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "طلبات الاستئذان", total: printRows.length },
+              items: printRows.map((e: any) => ({
+                "الموظف": e.employeeName || "—",
+                "النوع": e.excuseType || e.type || "—",
+                "التاريخ": e.requestDate || e.date || "—",
+                "من": e.fromTime || "—",
+                "إلى": e.toTime || "—",
+                "السبب": e.reason || "—",
+                "الحالة": e.status || "—",
+              })),
+            })}
+          />
           <Link href="/hr/excuse-requests/create">
             <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
               <Plus className="h-4 w-4" />
@@ -164,6 +185,22 @@ export default function ExcuseRequestsPage() {
           }}
           values={filters}
           onChange={setFilters}
+          onExportCSV={() =>
+            exportToCSV(
+              filtered || [],
+              [
+                { key: "employeeName", label: "الموظف" },
+                { key: "excuseDate", label: "تاريخ الاستئذان" },
+                { key: "excuseType", label: "نوع الاستئذان" },
+                { key: "startTime", label: "من" },
+                { key: "endTime", label: "إلى" },
+                { key: "estimatedMinutes", label: "المدة (دقائق)" },
+                { key: "status", label: "الحالة" },
+                { key: "reason", label: "السبب" },
+              ],
+              "طلبات-الاستئذان",
+            )
+          }
           resultCount={filtered.length}
         />
       }
@@ -192,6 +229,7 @@ export default function ExcuseRequestsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد طلبات استئذان"

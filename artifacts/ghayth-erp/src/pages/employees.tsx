@@ -259,7 +259,7 @@ export default function Employees() {
     <PageShell
       title="إدارة الموظفين"
       subtitle="قائمة الموظفين والمسميات الوظيفية والحسابات"
-      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الموظفين" }]}
       actions={
         (canWrite || canManage) ? (
           <Link href="/employees/create">

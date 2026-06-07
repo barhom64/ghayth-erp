@@ -24,6 +24,8 @@ import {
 import { cn } from "@/lib/utils";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // ─────────────────────────────────────────────────────────────────────────────
 // الأنواع
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,12 +125,15 @@ export default function AutoDetectionPage() {
     { successMessage: "تم حفظ الإعدادات" },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const settings = settingsQuery.data;
   const summary = summaryQuery.data;
   const logs = logQuery.data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(logs);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   // ── مؤشرات الأداء ──
   const kpis = [
@@ -263,6 +268,22 @@ export default function AutoDetectionPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_auto_detection"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "سجل الرصد التلقائي للمخالفات", total: printRows.length },
+              items: printRows.map((l: any) => ({
+                "التاريخ": l.runDate || l.createdAt || "—",
+                "نوع التشغيل": l.runType || l.type || "—",
+                "موظفون مفحوصون": l.employeesScanned ?? 0,
+                "مخالفات تم إنشاؤها": l.violationsCreated ?? 0,
+                "أخطاء": l.errors ?? 0,
+                "المدة (ث)": l.durationSeconds ?? "—",
+              })),
+            })}
+          />
           <Button
             variant="outline"
             size="sm"
@@ -510,6 +531,7 @@ export default function AutoDetectionPage() {
       {/* جدول السجل */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={logs}
         noToolbar
         emptyMessage="لا توجد عمليات رصد سابقة — شغّل المحرك لبدء المراقبة التلقائية"

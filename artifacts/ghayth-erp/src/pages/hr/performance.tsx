@@ -13,8 +13,11 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Plus, Star, Target, TrendingUp, Users, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -27,6 +30,7 @@ export default function PerformancePage() {
   const items = data?.data || [];
 
   const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const avgScore = items.length > 0
     ? (items.reduce((s: number, p: any) => s + Number(p.overallScore || 0), 0) / items.length).toFixed(1)
@@ -105,9 +109,27 @@ export default function PerformancePage() {
       subtitle="متابعة تقييمات أداء الموظفين ونتائجهم"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Link href="/hr/performance/create">
-          <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />تقييم جديد</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_performance"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "تقييمات الأداء", total: printRows.length },
+              items: printRows.map((p: any) => ({
+                "الموظف": p.employeeName || "—",
+                "الفترة": p.evaluationPeriod || p.period || "—",
+                "التقييم": p.score ?? p.rating ?? "—",
+                "الوزن": p.weight ?? "—",
+                "المُقيِّم": p.evaluatorName || "—",
+                "الحالة": p.status || "—",
+              })),
+            })}
+          />
+          <Link href="/hr/performance/create">
+            <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />تقييم جديد</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />
@@ -126,11 +148,27 @@ export default function PerformancePage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "period", label: "الفترة" },
+              { key: "overallScore", label: "التقييم الإجمالي" },
+              { key: "status", label: "الحالة" },
+              { key: "reviewedBy", label: "المراجِع" },
+              { key: "comments", label: "ملاحظات" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "تقييمات-الأداء",
+          )
+        }
         resultCount={filtered.length}
       />
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد تقييمات"

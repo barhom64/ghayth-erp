@@ -19,6 +19,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
@@ -26,6 +27,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "in_review",  label: "قيد المراجعة" },
   { value: "probation",  label: "فترة التجربة" },
@@ -80,9 +83,6 @@ export default function OnboardingReviewPage() {
     );
   };
 
-  if (empLoading || stepsLoading) return <LoadingSpinner />;
-  if (empError || stepsError) return <ErrorState />;
-
   const employees = data?.data || [];
   const steps: string[] = stepsData?.data || ["تسليم أجهزة تقنية المعلومات", "توقيع عقد العمل", "تعريف المدير", "دورة التعريف"];
 
@@ -122,6 +122,12 @@ export default function OnboardingReviewPage() {
     statusField: "_onboardingStatus",
     dateField: "hireDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (empLoading || stepsLoading) return <LoadingSpinner />;
+
+  if (empError || stepsError) return <ErrorState />;
+
 
   const pendingTasks = onboardingTasks.filter((t: any) => t.status !== "completed" && t.status !== "skipped");
 
@@ -191,6 +197,23 @@ export default function OnboardingReviewPage() {
       title="مراجعة التعيين والتأهيل"
       subtitle="متابعة إجراءات التعيين وتأهيل الموظفين الجدد"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_onboarding_review"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "مراجعة التعيين والتأهيل", total: printRows.length },
+            items: printRows.map((e: any) => ({
+              "الموظف": e.name || "—",
+              "المنصب": e.jobTitle || "—",
+              "تاريخ التعيين": e.startDate || "—",
+              "نسبة الإنجاز %": e.onboardingProgress ?? "—",
+              "الحالة": STATUS_OPTIONS.find((s) => s.value === e.onboardingStatus)?.label || e.onboardingStatus || "—",
+            })),
+          })}
+        />
+      }
     >
       <HrTabsNav />
       {/* KPI cards */}
@@ -268,12 +291,29 @@ export default function OnboardingReviewPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "name", label: "الاسم" },
+              { key: "empNumber", label: "الرقم الوظيفي" },
+              { key: "jobTitle", label: "المسمى الوظيفي" },
+              { key: "branchName", label: "الفرع" },
+              { key: "hireDate", label: "تاريخ التعيين" },
+              { key: "completedSteps", label: "خطوات مكتملة" },
+              { key: "totalSteps", label: "إجمالي الخطوات" },
+              { key: "status", label: "الحالة" },
+            ],
+            "مراجعة-الإعداد-الوظيفي",
+          )
+        }
         resultCount={filtered.length}
       />
 
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا يوجد موظفين في مرحلة التأهيل"
