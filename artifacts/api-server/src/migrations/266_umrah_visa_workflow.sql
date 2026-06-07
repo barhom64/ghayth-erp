@@ -1,5 +1,13 @@
 -- Migration 266 — Umrah visa application workflow
 --
+-- @rollback:
+--   DROP INDEX IF EXISTS idx_umrah_pilgrims_visa_active;
+--   ALTER TABLE umrah_pilgrims DROP COLUMN IF EXISTS "visaStatus";
+--   ALTER TABLE umrah_pilgrims DROP COLUMN IF EXISTS "visaRequestedAt";
+--   ALTER TABLE umrah_pilgrims DROP COLUMN IF EXISTS "visaIssuedAt";
+--   ALTER TABLE umrah_pilgrims DROP COLUMN IF EXISTS "visaRejectedAt";
+--   ALTER TABLE umrah_pilgrims DROP COLUMN IF EXISTS "visaRejectionReason";
+--
 -- Existing schema captures the visa AFTER it exists: `visaNumber`,
 -- `visaExpiry`. Nothing tracks the application LEADING UP TO that.
 -- Agencies pre-book visas weeks before the season; ops need to know:
