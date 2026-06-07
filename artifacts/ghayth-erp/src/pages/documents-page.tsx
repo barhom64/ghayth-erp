@@ -47,6 +47,8 @@ import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
@@ -246,6 +248,26 @@ function DocumentsList() {
             <SelectItem value="cancelled">ملغي</SelectItem>
           </SelectContent>
         </Select>
+        <PrintButton
+          entityType="report_documents_registry"
+          entityId="list"
+          size="icon"
+          label="طباعة سجل المستندات"
+          payload={() => ({
+            entity: {
+              title: "سجل المستندات",
+              total: filtered.length,
+            },
+            items: filtered.map((d: any) => ({
+              "العنوان": d.title || "—",
+              "الملف": d.fileName || "—",
+              "التصنيف": CATEGORIES.find((c) => c.value === d.category)?.label || d.category || "—",
+              "الحالة": d.status || "draft",
+              "الإصدار": d.currentVersion ? `v${d.currentVersion}` : "v1",
+              "التاريخ": d.createdAt ? formatDateAr(d.createdAt) : "—",
+            })),
+          })}
+        />
       </div>
 
       {isLoading ? (
@@ -559,6 +581,7 @@ function TemplatesTab() {
   const [showForm, setShowForm] = useState(false);
   const [previewId, setPreviewId] = useState<number | null>(null);
   const items = asList(templatesResp);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const createMut = useApiMutation<any, TemplateForm>(
     "/documents/templates",
@@ -585,7 +608,24 @@ function TemplatesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4 justify-end">
+      <div className="flex items-center gap-2 justify-end">
+        <PrintButton
+          entityType="report_document_templates"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة القوالب"
+          payload={() => ({
+            entity: {
+              title: "قائمة قوالب المستندات",
+              total: printRows.length,
+            },
+            items: printRows.map((t: any) => ({
+              "القالب": t.name || "—",
+              "التصنيف": t.category || "—",
+              "التاريخ": t.createdAt ? formatDateAr(t.createdAt) : "—",
+            })),
+          })}
+        />
         <GuardedButton perm="documents:create" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة قالب</>}
         </GuardedButton>
@@ -618,6 +658,7 @@ function TemplatesTab() {
       <DataTable
         columns={templateColumns}
         data={items}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         searchPlaceholder="بحث بالاسم أو التصنيف..."
         emptyMessage="لا توجد قوالب"

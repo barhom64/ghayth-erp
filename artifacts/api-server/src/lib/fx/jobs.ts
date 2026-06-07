@@ -95,7 +95,7 @@ export async function dailyFxRateFetch(
   // Active companies. The same batch is upserted per-company; rate
   // values are identical, only the FK differs.
   const companies = await rawQuery<{ id: number }>(
-    `SELECT id FROM companies WHERE status = 'active' AND "deletedAt" IS NULL`,
+    `SELECT id FROM companies WHERE status = 'active'`,
   );
   out.companies = companies.length;
 

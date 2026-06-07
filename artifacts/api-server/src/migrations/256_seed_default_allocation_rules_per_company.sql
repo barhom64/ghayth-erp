@@ -34,7 +34,9 @@ DECLARE
   c_id INTEGER;
 BEGIN
   FOR c_id IN
-    SELECT id FROM public.companies WHERE "deletedAt" IS NULL
+    -- `companies` is not soft-deletable (no deletedAt column; lifecycle is
+    -- tracked via `status`). Seed allocation rules for every company.
+    SELECT id FROM public.companies
   LOOP
     -- Vehicle fuel → expense 5350, CC from vehicle
     INSERT INTO public.accounting_allocation_rules
