@@ -253,12 +253,21 @@ const ivrOptionSchema = z.object({
 router.get("/ivr-menus", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const cid = req.scope!.companyId;
+    // Was N+1: scalar COUNT subquery per IVR menu over ivr_menu_options.
+    // IVR menu counts are typically small (<20) but the shape is the
+    // same as every other list endpoint — keep it uniform.
     const rows = await rawQuery(
-      `SELECT m.id, m.slug, m.name, m."greetingText", m."greetingAudioUrl", m.language,
+      `WITH option_counts AS (
+         SELECT "menuId", COUNT(*)::int AS c
+           FROM ivr_menu_options
+          GROUP BY "menuId"
+       )
+       SELECT m.id, m.slug, m.name, m."greetingText", m."greetingAudioUrl", m.language,
               m."timeoutSeconds", m."fallbackAction", m."fallbackTargetExtension",
               m."fallbackTargetMenuId", m.status, m.notes, m."createdAt", m."updatedAt",
-              (SELECT COUNT(*)::int FROM ivr_menu_options o WHERE o."menuId" = m.id) AS "optionCount"
+              COALESCE(oc.c, 0) AS "optionCount"
          FROM ivr_menus m
+         LEFT JOIN option_counts oc ON oc."menuId" = m.id
         WHERE m."companyId" = $1
         ORDER BY m.status DESC, m.name ASC`,
       [cid],

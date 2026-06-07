@@ -6,6 +6,7 @@ import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { Star, Plus, X, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
@@ -280,16 +281,27 @@ function ParticipantPicker({
   onChange: (v: string) => void;
 }) {
   const targetEmployeeId = useWatch<EvaluationForm, "employeeId">({ name: "employeeId" });
+  // Use the unified Autocomplete instead of the bare Radix Select.
+  // The bare Select had no search input, so once the company had >50
+  // employees the dropdown became unusable — names rendered as a flat
+  // list with no visual container, exactly the "غبية" experience the
+  // user flagged. Autocomplete brings the same look as every other
+  // employee picker in the app (tasks, leaves, contracts, etc).
+  const options: AutocompleteOption[] = employees
+    .filter((e: any) => String(e.id) !== targetEmployeeId)
+    .map((e: any) => ({
+      value: String(e.id),
+      label: e.name,
+      subtitle: e.jobTitle ?? e.email ?? undefined,
+    }));
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="flex-1 text-sm"><SelectValue placeholder="اختر موظفاً" /></SelectTrigger>
-      <SelectContent>
-        {employees
-          .filter((e: any) => String(e.id) !== targetEmployeeId)
-          .map((e: any) => (
-            <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
-          ))}
-      </SelectContent>
-    </Select>
+    <Autocomplete
+      options={options}
+      value={value}
+      onChange={(v) => onChange(String(v))}
+      placeholder="ابحث عن موظف..."
+      emptyMessage="لا يوجد موظفون مطابقون"
+      className="flex-1"
+    />
   );
 }

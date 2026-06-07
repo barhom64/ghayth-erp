@@ -8,6 +8,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,6 +30,8 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface CampaignRoas {
   campaignId: number;
@@ -300,6 +303,7 @@ function CampaignsTab() {
   ];
 
   const filtered = applyFilters(items, filters, { searchFields: ["name", "channel"], statusField: "status", dateField: "createdAt" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/marketing/campaigns",
@@ -401,6 +405,23 @@ function CampaignsTab() {
               {templates.length} قالب متاح
             </Badge>
           )}
+          <PrintButton
+            entityType="report_marketing_campaigns"
+            entityId="list"
+            size="icon"
+            label="طباعة قائمة الحملات"
+            payload={() => ({
+              entity: { title: "قائمة الحملات التسويقية", total: printRows.length },
+              items: printRows.map((c: any) => ({
+                "الحملة": c.name || "—",
+                "القناة": c.channel || "—",
+                "الميزانية": Number(c.budget || 0),
+                "المصروف": Number(c.spent || 0),
+                "التاريخ": c.createdAt ? formatDateAr(c.createdAt) : "—",
+                "الحالة": c.status || "—",
+              })),
+            })}
+          />
           <Link href="/marketing/create">
             <GuardedButton perm="marketing:create" size="sm"><Plus className="h-4 w-4 me-1" />حملة جديدة</GuardedButton>
           </Link>
@@ -415,6 +436,24 @@ function CampaignsTab() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "name", label: "اسم الحملة" },
+              { key: "channel", label: "القناة" },
+              { key: "startDate", label: "تاريخ البدء" },
+              { key: "endDate", label: "تاريخ الانتهاء" },
+              { key: "budget", label: "الميزانية" },
+              { key: "spent", label: "المصروف" },
+              { key: "leads", label: "العملاء المحتملين" },
+              { key: "conversions", label: "التحويلات" },
+              { key: "roi", label: "العائد على الاستثمار" },
+              { key: "status", label: "الحالة" },
+            ],
+            "حملات-التسويق",
+          )
+        }
         resultCount={filtered.length}
       />
 
@@ -424,6 +463,7 @@ function CampaignsTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

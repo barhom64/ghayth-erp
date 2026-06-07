@@ -5,6 +5,7 @@ import { handleRouteError, NotFoundError } from "../lib/errorHandler.js";
 import { maskFields, authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { drainProcessedOutboxEntries, getOutboxStats } from "../lib/eventBus.js";
+import { listJourneys, JOURNEY_DEFINITIONS } from "../lib/journeyEngine.js";
 import {
   EVENT_CATALOG,
   countEventsByDomain,
@@ -225,6 +226,32 @@ eventsRouter.get("/log/stats", authorize({ feature: "admin", action: "view" }), 
   }
 });
 
+// ── Outbox stats (read-only gauge) — admin monitoring ─────────────────────
+// Read-only counterpart to the drain endpoint so the operator can watch the
+// outbox (pending vs processed + oldest-pending age) WITHOUT triggering a
+// drain. Powers the /admin/outbox monitoring page (#1603).
+eventsRouter.get("/outbox/stats", authorize({ feature: "admin", action: "view" }), async (_req, res) => {
+  try {
+    const rows = await rawQuery<{ status: string; count: number }>(
+      `SELECT status, COUNT(*)::int AS count FROM event_outbox GROUP BY status`,
+    );
+    const byStatus: Record<string, number> = {};
+    for (const r of rows) byStatus[r.status] = Number(r.count);
+    const [oldest] = await rawQuery<{ sec: string | null }>(
+      `SELECT extract(epoch FROM (now() - min("createdAt")))::text AS sec
+         FROM event_outbox WHERE status = 'pending'`,
+    );
+    res.json({
+      pending: byStatus.pending ?? 0,
+      processed: byStatus.processed ?? 0,
+      total: Object.values(byStatus).reduce((a, b) => a + b, 0),
+      oldestPendingAgeSec: oldest?.sec != null ? Math.round(Number(oldest.sec)) : null,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Outbox stats error:");
+  }
+});
+
 // ── Outbox drain (phase-2 relay) — admin maintenance trigger ──────────────
 // Marks captured-and-dispatched event_outbox rows 'processed' and reports the
 // pending gauge. Runs automatically on the maintenance interval; this endpoint
@@ -237,6 +264,42 @@ eventsRouter.post("/outbox/drain", authorize({ feature: "admin", action: "update
     res.json({ drained, pending: stats.pending, oldestAgeSec: stats.oldestAgeSec });
   } catch (err) {
     handleRouteError(err, res, "Outbox drain error:");
+  }
+});
+
+// ── Journey instances (live tracking) — admin monitoring (#1604) ──────────
+// Lists the running/completed journey_instances for the company, enriched with
+// each journey's step labels so the UI can render a real progress bar (which
+// steps are done vs pending). Powers /admin/journeys.
+eventsRouter.get("/journeys", authorize({ feature: "admin", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const status = typeof req.query.status === "string" && req.query.status ? req.query.status : undefined;
+    const rows = await listJourneys(scope.companyId, status);
+    const defByType = new Map(JOURNEY_DEFINITIONS.map((d) => [d.type, d]));
+    const data = rows.map((r) => {
+      const def = defByType.get(r.journeyType as string);
+      const completed: string[] = Array.isArray(r.completedSteps) ? (r.completedSteps as string[]) : [];
+      return {
+        id: r.id,
+        journeyType: r.journeyType,
+        journeyLabel: def?.label ?? r.journeyType,
+        domain: def?.domain ?? "unknown",
+        entityType: r.entityType,
+        entityId: r.entityId,
+        label: r.label,
+        status: r.status,
+        completedCount: completed.length,
+        totalSteps: r.totalSteps,
+        progress: r.progress != null ? Number(r.progress) : 0,
+        steps: (def?.steps ?? []).map((s) => ({ key: s.key, label: s.label, done: completed.includes(s.key) })),
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      };
+    });
+    res.json(maskFields(req, { data, total: data.length }));
+  } catch (err) {
+    handleRouteError(err, res, "Journeys list error:");
   }
 });
 

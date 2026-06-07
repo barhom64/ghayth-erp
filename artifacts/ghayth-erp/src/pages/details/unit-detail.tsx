@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useRoute, Link, useLocation } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, useApiMutation } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,12 @@ import { Button } from "@/components/ui/button";
 import {
   PageStatusBadge,
   DataTable,
+  FormGrid,
+  FormTextField,
+  FormSelectField,
 } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   Building, FileText, Banknote, Wrench, Users, DollarSign,
   AlertTriangle, XCircle, Info, Pencil,
@@ -50,6 +56,24 @@ const STATUS_OPTIONS = [
   { value: "under_maintenance", label: "تحت الصيانة" },
   { value: "out_of_service", label: "خارج الخدمة" },
 ];
+
+// Edit schema — the unit metadata an operator legitimately needs to
+// correct after creation (number, area, layout, monthly rent, etc).
+// Status changes go through the dedicated /status flow because they
+// trigger contract lifecycle side-effects.
+const unitEditSchema = z.object({
+  unitNumber: z.string().min(1, "رقم الوحدة مطلوب"),
+  area: z.coerce.number().nonnegative().optional(),
+  floor: z.coerce.number().int().optional(),
+  bedrooms: z.coerce.number().int().nonnegative().optional(),
+  bathrooms: z.coerce.number().int().nonnegative().optional(),
+  monthlyRent: z.coerce.number().nonnegative().optional(),
+  direction: z.string().optional(),
+  finishing: z.string().optional(),
+  usageType: z.string().optional(),
+  notes: z.string().optional(),
+});
+type UnitEditForm = z.infer<typeof unitEditSchema>;
 
 const STATUS_COLORS: Record<string, string> = {
   available: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -106,6 +130,7 @@ export default function UnitDetail() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [editOpen, setEditOpen] = useState(false);
   const { hideTabs: registryHideTabs } = useRegistryTabs("property_unit", id ?? 0);
 
   const { data: unit, isLoading, isError, error } = useApiQuery<any>(
@@ -127,9 +152,18 @@ export default function UnitDetail() {
       <Badge className={cn("border", STATUS_COLORS[unit.status] || "bg-surface-subtle text-status-neutral-foreground")}>
         {STATUS_LABELS[unit.status] || unit.status}
       </Badge>
+      <GuardedButton
+        perm="properties:update"
+        variant="outline"
+        size="sm"
+        className="gap-1"
+        onClick={() => setEditOpen(true)}
+      >
+        <Pencil className="h-3.5 w-3.5" /> تعديل البيانات
+      </GuardedButton>
       <Link href={`/properties/${id}/status`}>
         <Button variant="outline" size="sm" className="gap-1">
-          <Pencil className="h-3.5 w-3.5" /> تغيير الحالة
+          تغيير الحالة
         </Button>
       </Link>
     </div>
@@ -653,6 +687,7 @@ export default function UnitDetail() {
   ) : <div />;
 
   return (
+    <>
     <DetailPageLayout
       title={`وحدة ${unit?.unitNumber || ""}`}
       subtitle={`${unit?.buildingName || "-"}${unit?.address ? ` — ${unit.address}` : ""}`}
@@ -675,6 +710,56 @@ export default function UnitDetail() {
         </div>
       }
     />
+    {/* Edit dialog — unit metadata (number/area/layout/rent). Status
+        transitions stay in the dedicated /status flow because they
+        trigger contract lifecycle side-effects. */}
+    {unit && (
+      <EntityEditDialog
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        schema={unitEditSchema}
+        defaultValues={{
+          unitNumber: String(unit.unitNumber ?? ""),
+          area: unit.area ?? undefined,
+          floor: unit.floor ?? undefined,
+          bedrooms: unit.bedrooms ?? undefined,
+          bathrooms: unit.bathrooms ?? undefined,
+          monthlyRent: unit.monthlyRent ?? undefined,
+          direction: unit.direction ?? "",
+          finishing: unit.finishing ?? "",
+          usageType: unit.usageType ?? "",
+          notes: unit.notes ?? "",
+        }}
+        title="تعديل بيانات الوحدة"
+        endpoint={`/properties/units/${id}`}
+        method="PATCH"
+        invalidateKeys={[["unit-detail", id || ""], ["property-units"]]}
+        successMessage="تم تحديث بيانات الوحدة"
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="unitNumber" label="رقم الوحدة" required />
+          <FormTextField name="area" label="المساحة (م²)" type="number" />
+          <FormTextField name="floor" label="الدور" type="number" />
+          <FormTextField name="bedrooms" label="غرف النوم" type="number" />
+          <FormTextField name="bathrooms" label="دورات المياه" type="number" />
+          <FormTextField name="monthlyRent" label="الإيجار الشهري" type="number" />
+          <FormTextField name="direction" label="الاتجاه" />
+          <FormTextField name="finishing" label="التشطيب" />
+          <FormSelectField
+            name="usageType"
+            label="نوع الاستخدام"
+            options={[
+              { value: "", label: "—" },
+              { value: "residential", label: "سكني" },
+              { value: "commercial", label: "تجاري" },
+              { value: "mixed", label: "مختلط" },
+            ]}
+          />
+          <FormTextField name="notes" label="ملاحظات" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }
 

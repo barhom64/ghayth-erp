@@ -10,6 +10,7 @@ import {
 import { Archive, FileText, Calendar, FolderArchive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
+import { PrintButton } from "@/components/shared/print-button";
 
 const columns: DataTableColumn<any>[] = [
   {
@@ -61,6 +62,28 @@ export default function DocumentsArchive() {
     <PageShell
       title="الأرشيف"
       breadcrumbs={[{ href: "/documents", label: "المستندات" }, { label: "الأرشيف" }]}
+      actions={
+        <PrintButton
+          entityType="report_documents_archive"
+          entityId="list"
+          size="icon"
+          label="طباعة الأرشيف"
+          payload={() => ({
+            entity: {
+              title: "أرشيف المستندات",
+              total: docs.length,
+              contractsCount: docs.filter((d: any) => d.type === "contract").length,
+              reportsCount: docs.filter((d: any) => d.type === "report").length,
+            },
+            items: docs.map((d: any) => ({
+              "المستند": d.title || d.name || "—",
+              "النوع": d.type || "—",
+              "التاريخ": d.createdAt ? formatDateAr(d.createdAt) : "—",
+              "الحالة": d.status || "archived",
+            })),
+          })}
+        />
+      }
     >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => (

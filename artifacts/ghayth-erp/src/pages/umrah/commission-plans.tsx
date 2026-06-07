@@ -14,6 +14,7 @@ import {
 } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
@@ -196,6 +197,31 @@ export default function UmrahCommissionPlans() {
       breadcrumbs={[{ label: "العمرة" }, { label: "خطط العمولة" }]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_commission_plans"
+            entityId="list"
+            size="icon"
+            label="طباعة قائمة خطط العمولة"
+            payload={() => ({
+              entity: {
+                title: "خطط العمولة لموظفي العمرة",
+                total: counts.total,
+                active: counts.active,
+                suspended: counts.suspended,
+                pending: counts.pending,
+              },
+              items: filtered.map((p: any) => ({
+                "الموظف": p.employeeName ?? `#${p.employeeId}`,
+                "اسم الخطة": p.planName || "—",
+                "الموسم": p.seasonTitle ?? "—",
+                "الراتب الأساسي": Number(p.baseSalary || 0),
+                "نوع العمولة": (TYPE_LABEL as any)[p.commissionType] ?? p.commissionType ?? "—",
+                "عدد الشرائح": p.tierCount ?? "—",
+                "تاريخ الاعتماد": p.approvedAt ? formatDateAr(p.approvedAt) : "—",
+                "الحالة": (STATUS_LABEL as any)[p.status]?.label ?? p.status ?? "—",
+              })),
+            })}
+          />
           <Button asChild variant="outline" className="gap-2">
             <Link href="/umrah/commission-calculations">
               <Calculator className="h-4 w-4" />

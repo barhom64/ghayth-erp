@@ -10,6 +10,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Mail } from "lucide-react";
 import { useLocation } from "wouter";
@@ -68,7 +69,25 @@ export default function LegalCorrespondence() {
       }
     >
       <LegalTabsNav />
-      <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
+      <AdvancedFilters
+        config={{ searchPlaceholder: "بحث...", showDateRange: false }}
+        values={filters}
+        onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "caseNumber", label: "رقم القضية" },
+              { key: "title", label: "عنوان القضية" },
+              { key: "caseType", label: "نوع القضية" },
+              { key: "lawyerName", label: "المحامي" },
+              { key: "status", label: "الحالة" },
+            ],
+            "مراسلات-قانونية",
+          )
+        }
+        resultCount={filtered.length}
+      />
       <DataTable
         columns={columns}
         onSortedDataChange={setPrintRows}

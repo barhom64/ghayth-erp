@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "wouter";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   pending: { label: "معلق", color: "text-status-warning-foreground bg-status-warning-surface" },
@@ -67,6 +69,7 @@ export default function MyLoans() {
   if (isError) return <ErrorState />;
 
   const loans: any[] = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(loans);
 
   const totalAmount = loans.reduce((s: number, l: any) => s + Number(l.amount || 0), 0);
   const remainingAmount = loans
@@ -84,12 +87,32 @@ export default function MyLoans() {
       ]}
       subtitle="متابعة السلف والقروض الخاصة بك"
       actions={
-        <Link href="/hr/loans/create">
-          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
-            <Wallet size={14} />
-            طلب سلفة جديدة
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_my_loans"
+            entityId="list"
+            size="icon"
+            label="طباعة كشف سلفي"
+            payload={() => ({
+              entity: { title: "كشف السلف الخاصة بي", total: printRows.length, totalAmount, remainingAmount },
+              items: printRows.map((l: any) => ({
+                "الرقم": `#${l.loanNumber || l.id}`,
+                "النوع": loanTypeLabels[l.loanType] || l.loanType,
+                "المبلغ": Number(l.amount || 0),
+                "الأقساط": `${l.paidInstallments ?? 0}/${l.installmentCount ?? 0}`,
+                "المتبقي": l.status === "active" ? Number(l.remainingAmount ?? l.amount ?? 0) : "—",
+                "تاريخ الطلب": formatDateAr(l.createdAt),
+                "الحالة": statusConfig[l.status]?.label || l.status,
+              })),
+            })}
+          />
+          <Link href="/hr/loans/create">
+            <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
+              <Wallet size={14} />
+              طلب سلفة جديدة
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
@@ -117,6 +140,7 @@ export default function MyLoans() {
       <DataTable
         columns={loanColumns}
         data={loans}
+        onSortedDataChange={setPrintRows}
         onRowClick={(l) => navigate(`/hr/loans/${l.id}`)}
         emptyMessage="لا توجد سلف مسجّلة"
         emptyIcon={<Wallet size={36} className="opacity-40" />}

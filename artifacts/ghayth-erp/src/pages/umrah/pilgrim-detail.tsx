@@ -29,16 +29,9 @@ import {
   useDetailEditDelete,
   DetailActionButtons,
 } from "@/components/shared/detail-edit-delete-actions";
+import { UMRAH_PILGRIM_STATUS_OPTIONS } from "@/lib/umrah-pilgrim-status";
 
-const STATUS_OPTIONS = [
-  { value: "pending", label: "لم يصل" },
-  { value: "arrived", label: "وصل" },
-  { value: "active", label: "نشط" },
-  { value: "overstayed", label: "متأخر" },
-  { value: "departed", label: "غادر" },
-  { value: "violated", label: "مخالف" },
-  { value: "cancelled", label: "ملغي" },
-];
+const STATUS_OPTIONS = UMRAH_PILGRIM_STATUS_OPTIONS;
 
 const STATUS_TONES: Record<string, "success" | "warning" | "info" | "muted" | "destructive" | "default"> = {
   pending: "muted",

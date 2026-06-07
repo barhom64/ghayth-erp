@@ -79,7 +79,7 @@ collectionRouter.get("/collection", authorize({ feature: "finance.collection", a
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const overdueInvoices = await rawQuery<OverdueInvoiceRow>(
       `SELECT i.id, i.ref, i.total, i."paidAmount", i."dueDate",
               i.status, c.name AS "clientName", c.phone AS "clientPhone",
