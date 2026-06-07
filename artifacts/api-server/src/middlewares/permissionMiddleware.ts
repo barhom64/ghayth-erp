@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
+import { projectGrantsToFlat } from "../lib/rbac/flatProjection.js";
 
 interface UserPermissionOverrides {
   granted: Set<string>;
@@ -8,6 +9,9 @@ interface UserPermissionOverrides {
 }
 
 const permissionCache = new Map<string, { perms: Set<string>; expiresAt: number }>();
+// RBAC v2 grants projected to the flat vocabulary, per user — the unification
+// source so legacy-enforced routes honor RBAC too (#1413, الخطة الجذرية §3 م5).
+const rbacFlatCache = new Map<string, { perms: Set<string>; expiresAt: number }>();
 const CACHE_TTL_MS = 60_000;
 const PERMISSION_CACHE_MAX_SIZE = 10_000;
 
@@ -48,6 +52,40 @@ async function loadRolePermissions(role: string, companyId: number, branchId: nu
   const perms = new Set(rows.map((r) => r.permission));
   evictPermissionCacheIfNeeded();
   permissionCache.set(cacheKey, { perms, expiresAt: Date.now() + CACHE_TTL_MS });
+  return perms;
+}
+
+// Load the user's RBAC v2 grants projected to the flat vocabulary so legacy
+// `requirePermission` checks resolve against RBAC too — RBAC becomes a co-equal
+// authority, additively (never removes an existing legacy grant). Failures
+// degrade to the legacy set. Cached like role permissions.
+async function loadRbacFlatPermissions(userId: number, companyId: number): Promise<Set<string>> {
+  const cacheKey = `${userId}:${companyId}`;
+  const cached = rbacFlatCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.perms;
+
+  let perms = new Set<string>();
+  try {
+    const rows = await rawQuery<{ feature_key: string; actions: string[] }>(
+      `SELECT g.feature_key, g.actions
+         FROM rbac_user_roles ur
+         JOIN rbac_roles r ON r.id = ur.role_id
+         JOIN rbac_role_grants g ON g.role_id = r.id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+      [userId, companyId]
+    );
+    perms = new Set(projectGrantsToFlat(rows));
+  } catch (e) {
+    logger.warn(e, "[permissionMiddleware] RBAC flat projection failed — legacy set only");
+  }
+
+  if (rbacFlatCache.size > PERMISSION_CACHE_MAX_SIZE) {
+    const toDelete = Math.floor(rbacFlatCache.size / 2);
+    let deleted = 0;
+    for (const key of rbacFlatCache.keys()) { if (deleted >= toDelete) break; rbacFlatCache.delete(key); deleted++; }
+  }
+  rbacFlatCache.set(cacheKey, { perms, expiresAt: Date.now() + CACHE_TTL_MS });
   return perms;
 }
 
@@ -130,10 +168,13 @@ export function requirePermission(...requiredPerms: string[]) {
     }
 
     try {
-      const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null);
-      const userOverrides = await loadUserPermissions(scope.userId, scope.companyId);
+      const [rolePerms, rbacPerms, userOverrides] = await Promise.all([
+        loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null),
+        loadRbacFlatPermissions(scope.userId, scope.companyId),
+        loadUserPermissions(scope.userId, scope.companyId),
+      ]);
 
-      const effectivePerms = new Set(rolePerms);
+      const effectivePerms = new Set([...rolePerms, ...rbacPerms]);
       for (const p of userOverrides.granted) effectivePerms.add(p);
       for (const p of userOverrides.revoked) effectivePerms.delete(p);
 
@@ -203,10 +244,13 @@ export function requireAnyPermission(...candidatePerms: string[]) {
     }
 
     try {
-      const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null);
-      const userOverrides = await loadUserPermissions(scope.userId, scope.companyId);
+      const [rolePerms, rbacPerms, userOverrides] = await Promise.all([
+        loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null),
+        loadRbacFlatPermissions(scope.userId, scope.companyId),
+        loadUserPermissions(scope.userId, scope.companyId),
+      ]);
 
-      const effectivePerms = new Set(rolePerms);
+      const effectivePerms = new Set([...rolePerms, ...rbacPerms]);
       for (const p of userOverrides.granted) effectivePerms.add(p);
       for (const p of userOverrides.revoked) effectivePerms.delete(p);
 
@@ -261,9 +305,12 @@ export async function userHasPermission(
   permission: string
 ): Promise<boolean> {
   if (scope.isOwner || scope.role === "owner") return true;
-  const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null);
-  const userOverrides = await loadUserPermissions(scope.userId, scope.companyId);
-  const effective = new Set(rolePerms);
+  const [rolePerms, rbacPerms, userOverrides] = await Promise.all([
+    loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null),
+    loadRbacFlatPermissions(scope.userId, scope.companyId),
+    loadUserPermissions(scope.userId, scope.companyId),
+  ]);
+  const effective = new Set([...rolePerms, ...rbacPerms]);
   for (const p of userOverrides.granted) effective.add(p);
   for (const p of userOverrides.revoked) effective.delete(p);
   if (effective.has("*")) return true;
@@ -274,6 +321,15 @@ export async function userHasPermission(
 }
 
 export function invalidatePermissionCache(role?: string, companyId?: number, branchId?: number | null): void {
+  // RBAC grants are keyed per user:company, not per role — drop the whole
+  // company's RBAC projections (or all of them) so a grant edit takes effect.
+  if (companyId) {
+    for (const key of Array.from(rbacFlatCache.keys())) {
+      if (key.endsWith(`:${companyId}`)) rbacFlatCache.delete(key);
+    }
+  } else {
+    rbacFlatCache.clear();
+  }
   if (role && companyId) {
     // Migration 173 widened the cache key with branchId. Selective
     // invalidation needs the full triplet; callers that omit branchId

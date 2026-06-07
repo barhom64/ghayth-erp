@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { z } from "zod";
 import { useFormContext } from "react-hook-form";
 import { useApiQuery, apiFetch } from "@/lib/api";
@@ -304,6 +305,14 @@ export default function AdminRolesPage() {
         </>
       }
     >
+      {/* تنبيه إهمال: هذا المحرّر الكلاسيكي يكتب الصلاحيات القديمة (role_permissions)
+          مباشرة. الإدارة الموحّدة الآن في «مُركّب الأدوار» المبني على RBAC v2. */}
+      <div className="mb-3 rounded-md border border-status-warning-surface bg-status-warning-surface/40 px-3 py-2 text-sm flex flex-wrap items-center gap-2">
+        <Shield className="h-4 w-4 text-status-warning-foreground" />
+        <span>هذا المحرّر الكلاسيكي قيد الإهمال. للتحكّم الموحّد والدقيق في الأدوار استخدم</span>
+        <Link href="/admin/roles-simple" className="font-medium text-status-info-foreground hover:underline">مُركّب الأدوار ←</Link>
+      </div>
+
       <div className="flex gap-2 border-b">
         <button onClick={() => setActiveTab("modules")} className={cn("px-4 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "modules" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-status-neutral-foreground")}>
           الوحدات المسموحة لكل دور
