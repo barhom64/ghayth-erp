@@ -312,7 +312,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description, je."createdAt", je.status,
               je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
@@ -973,7 +973,7 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS type,
@@ -1684,7 +1684,7 @@ journalRouter.get("/journal", authorize({ feature: "finance.journal", action: "l
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description, je.status, je."createdAt",
               je."reversalOfId", je."reversedById", je."operationType",
@@ -1870,7 +1870,7 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
     // company + branch scope the /journal list endpoints already enforce.
     const { where: scopeWhere, params: scopeParams } = buildScopedWhere(
       scope, parseScopeFilters(req),
-      { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true },
+      { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true },
       2,
     );
     const [je] = await rawQuery<Record<string, unknown>>(
@@ -2496,6 +2496,7 @@ journalRouter.get("/opening-balances", authorize({ feature: "finance.accounts", 
       companyColumn: 'je."companyId"',
       branchColumn: 'je."branchId"',
       enforceBranchScope: true,
+      includeNullBranch: true,
     });
 
     let extraWhere = " AND je.ref LIKE 'OB-%' AND je.\"deletedAt\" IS NULL";
