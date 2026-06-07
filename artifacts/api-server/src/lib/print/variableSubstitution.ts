@@ -294,10 +294,22 @@ function formatValue(v: unknown): string {
   return String(v);
 }
 
+// Embedded Ghayth brand mark — used as the default letterhead logo when the
+// branch hasn't configured one. Stays inline so the print engine doesn't
+// depend on the SPA's public folder being reachable from the server (PDFs
+// often render before the user has uploaded their own logo).
+const GHAYTH_MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="64" height="64">
+<defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3FBFD9"/><stop offset="100%" stop-color="#0F3D5C"/></linearGradient></defs>
+<path d="M58 80a18 18 0 0 1 36 -10a22 22 0 0 1 32 5a16 16 0 0 1 14 32h-82a18 18 0 0 1 0 -27 z" stroke="url(#gg)" stroke-width="6" fill="none" stroke-linejoin="round"/>
+<g fill="#0F3D5C"><rect x="74" y="72" width="6" height="32" rx="3"/><rect x="86" y="60" width="6" height="44" rx="3"/><rect x="98" y="50" width="6" height="54" rx="3"/><rect x="110" y="60" width="6" height="44" rx="3"/><rect x="122" y="72" width="6" height="32" rx="3"/></g>
+<text x="100" y="148" text-anchor="middle" font-family="'Noto Naskh Arabic','Tahoma',sans-serif" font-size="34" font-weight="700" fill="#0F3D5C" direction="rtl">غيث</text>
+<text x="100" y="178" text-anchor="middle" font-family="'Inter','Segoe UI',sans-serif" font-size="14" font-weight="600" letter-spacing="3" fill="#3FBFD9">GHAITH</text>
+</svg>`;
+
 function buildLetterheadA4(branch: BranchLetterhead): string {
   const logo = branch.logoUrl
     ? `<img src="${escapeHtml(branch.logoUrl)}" alt="شعار الشركة" style="max-height:64px"/>`
-    : "";
+    : GHAYTH_MARK_SVG;
   return `<header class="branch-letterhead" style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #334155;padding-bottom:8px;margin-bottom:12px">
   <div>${logo}</div>
   <div style="text-align:center;flex:1">
@@ -313,9 +325,16 @@ function buildLetterheadA4(branch: BranchLetterhead): string {
 </header>`;
 }
 
+// Thermal-receipt mark — single-color so it prints cleanly on monochrome
+// 80mm/58mm thermal printers. Same geometry as the A4 mark.
+const GHAYTH_MARK_SVG_MONO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 130" width="40" height="40">
+<path d="M58 80a18 18 0 0 1 36 -10a22 22 0 0 1 32 5a16 16 0 0 1 14 32h-82a18 18 0 0 1 0 -27 z" stroke="#000" stroke-width="6" fill="none" stroke-linejoin="round"/>
+<g fill="#000"><rect x="74" y="72" width="6" height="32" rx="3"/><rect x="86" y="60" width="6" height="44" rx="3"/><rect x="98" y="50" width="6" height="54" rx="3"/><rect x="110" y="60" width="6" height="44" rx="3"/><rect x="122" y="72" width="6" height="32" rx="3"/></g>
+</svg>`;
+
 function buildLetterheadThermal(branch: BranchLetterhead): string {
   return `<div class="t-header" style="text-align:center;border-bottom:1px dashed #000;padding-bottom:4px;margin-bottom:4px">
-  ${branch.logoUrl ? `<img src="${escapeHtml(branch.logoUrl)}" style="max-height:40px"/>` : ""}
+  ${branch.logoUrl ? `<img src="${escapeHtml(branch.logoUrl)}" style="max-height:40px"/>` : GHAYTH_MARK_SVG_MONO}
   <div style="font-weight:bold;font-size:11pt">${escapeHtml(branch.companyName)}</div>
   <div style="font-size:9pt">${escapeHtml(branch.branchName)}</div>
   ${branch.phone ? `<div style="font-size:8pt" dir="ltr">${escapeHtml(branch.phone)}</div>` : ""}

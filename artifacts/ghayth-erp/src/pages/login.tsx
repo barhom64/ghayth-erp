@@ -3,6 +3,7 @@ import { useFormContext, Controller } from "react-hook-form";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import "@/styles/login.css";
+import { GhaythLogo } from "@/components/shared/ghayth-logo";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import { notifyRateLimited } from "@/lib/rate-limit-toast";
@@ -13,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FormShell } from "@workspace/ui-core";
 import {
-  Loader2, CloudRain, User, Lock, AlertCircle, Eye, EyeOff,
+  Loader2, User, Lock, AlertCircle, Eye, EyeOff,
   KeyRound, ArrowRight, ShieldCheck, Layers, BarChart3,
   Trophy, Newspaper, Mail, CheckCircle2, Clock
 } from "lucide-react";
@@ -352,7 +353,7 @@ export default function Login() {
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-2xl"
               style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.25)" }}
             >
-              <CloudRain className="h-7 w-7 text-white" />
+              <GhaythLogo size={32} className="brightness-0 invert" />
             </div>
             <div>
               <h1 className="text-2xl font-extrabold text-white tracking-wide">منصة غيث</h1>
@@ -453,7 +454,7 @@ export default function Login() {
       <div className="flex-1 flex flex-col min-h-screen bg-surface-subtle">
         <div className="lg:hidden flex items-center gap-3 px-6 py-5 bg-white border-b border-border shadow-sm">
           <div className="p-2 rounded-xl shadow" style={{ background: "linear-gradient(135deg,#1565c0,#0d47a1)" }}>
-            <CloudRain className="h-5 w-5 text-white" />
+            <GhaythLogo size={22} className="brightness-0 invert" />
           </div>
           <div>
             <p className="font-bold text-gray-900 text-base leading-none">منصة غيث</p>
