@@ -544,6 +544,35 @@ class HREngineImpl implements DomainEngine {
       [params.companyId, params.employeeId, params.type, params.amount, params.reason]
     );
   }
+
+  /**
+   * Upgrade an employee's PRIMARY active assignment to a target role —
+   * but only when the current role is at the lowest tier ('employee'
+   * or empty). Used by cross-domain hooks (e.g. fleet linking a driver
+   * to an employee, #1354) so they can grant the right access without
+   * silently demoting managers / owners.
+   *
+   * Returns the number of rows updated (0 means the role wasn't
+   * eligible — caller should leave HR a manual note).
+   */
+  async upgradePrimaryAssignmentRoleIfLowTier(params: {
+    companyId: number;
+    employeeId: number;
+    toRole: string;
+  }): Promise<number> {
+    const { affectedRows } = await rawExecute(
+      `UPDATE employee_assignments
+          SET role = $3, "updatedAt" = NOW()
+        WHERE "employeeId" = $1
+          AND "companyId" = $2
+          AND status = 'active'
+          AND "isPrimary" = TRUE
+          AND role IN ('employee', '')
+          AND role IS NOT NULL`,
+      [params.employeeId, params.companyId, params.toRole]
+    );
+    return affectedRows ?? 0;
+  }
 }
 
 export const hrEngine = new HREngineImpl();
