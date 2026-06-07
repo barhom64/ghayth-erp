@@ -12,6 +12,7 @@ import {
   FormTextField,
   FormTextareaField,
   FormSelectField,
+  FormDateField,
   FormGrid,
 } from "@workspace/ui-core";
 import {
@@ -91,6 +92,17 @@ const violationSchema = z.object({
   severity: z.enum(["low", "medium", "high"]),
   deduction: z.string(),
   period: z.string(),
+  // Temporal context — when did the incident actually happen? Required
+  // by the discipline engine to compute the within-month / within-year
+  // counters that drive penalty escalation (lateness levels 1→5 reset
+  // monthly, behavioral violations roll up annually).
+  incidentDate: z.string(),
+  // Link to the codified regulation in hr_discipline_regulation. The
+  // backend uses regulationId to look up the applicable penalty
+  // schedule from the workplace regulations (لائحة الجزاءات). Without
+  // it the engine falls back to the severity field which is less
+  // precise.
+  regulationId: z.string(),
   witness: z.string(),
   location: z.string(),
   actionTaken: z.string(),
@@ -105,6 +117,8 @@ const DEFAULTS: ViolationForm = {
   severity: "medium",
   deduction: "",
   period: "",
+  incidentDate: "",
+  regulationId: "",
   witness: "",
   location: "",
   actionTaken: "",
@@ -343,6 +357,16 @@ export default function ViolationsCreate() {
   );
   const employees = empData?.data || [];
 
+  // Load the discipline regulation table so the form can offer the
+  // applicable articles as a dropdown — the operator picks one and
+  // the backend's discipline engine uses the regulation's penalty
+  // schedule instead of guessing from `severity`.
+  const { data: regData } = useApiQuery<{ data: any[] }>(
+    ["discipline-regulation"],
+    "/hr/discipline/regulation",
+  );
+  const regulations = regData?.data || [];
+
   const draftDefaults = loadDraftDefaults();
 
   const clearDraft = useCallback(() => {
@@ -381,6 +405,8 @@ export default function ViolationsCreate() {
             severity: values.severity,
             deduction: values.deduction ? Number(values.deduction) : 0,
             period: values.period || undefined,
+            incidentDate: values.incidentDate || undefined,
+            regulationId: values.regulationId ? Number(values.regulationId) : undefined,
             witness: values.witness || undefined,
             location: values.location || undefined,
             actionTaken: values.actionTaken || undefined,
@@ -426,6 +452,29 @@ export default function ViolationsCreate() {
               placeholder="0"
             />
             <FormTextField name="period" label="الفترة" type="month" />
+            {/* incidentDate is the actual date of the violation (NOT
+                the date of the memo). The discipline engine uses it
+                to compute monthly/yearly escalation counters. */}
+            <FormDateField
+              name="incidentDate"
+              label="تاريخ الحادثة"
+            />
+            {/* regulationId links the memo to a codified article in
+                لائحة الجزاءات (hr_discipline_regulation). When set, the
+                backend uses the article's penalty schedule instead of
+                falling back to the generic severity field. */}
+            <FormSelectField
+              name="regulationId"
+              label="مادة اللائحة المُطبَّقة"
+              placeholder="اختر المادة (اختياري)"
+              options={[
+                { value: "", label: "— لم تُحدَّد —" },
+                ...regulations.map((r: any) => ({
+                  value: String(r.id),
+                  label: `${r.articleCode ?? "م"} — ${r.description ?? r.title ?? "بدون عنوان"}`,
+                })),
+              ]}
+            />
             <FormTextField
               name="location"
               label="مكان المخالفة"
