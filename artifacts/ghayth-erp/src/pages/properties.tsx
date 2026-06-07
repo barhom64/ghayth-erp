@@ -21,6 +21,8 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function Properties() {
   const [, navigate] = useLocation();
@@ -39,6 +41,9 @@ export default function Properties() {
   const units = asList(unitsResp);
   const total = unitsResp?.total || units.length;
   const filtered = units;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  const typeLabel = (t: string) => t === 'apartment' ? 'شقة' : t === 'villa' ? 'فيلا' : t === 'office' ? 'مكتب' : t === 'shop' ? 'محل' : t === 'warehouse' ? 'مستودع' : t === 'land' ? 'أرض' : t;
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/properties/units",
@@ -104,11 +109,36 @@ export default function Properties() {
       subtitle="إدارة وتتبع الوحدات العقارية"
       breadcrumbs={[{ label: "العقارات" }]}
       actions={
-        canManage ? (
-          <Link href="/properties/create">
-            <GuardedButton perm="properties:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة وحدة</GuardedButton>
-          </Link>
-        ) : null
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_property_units"
+            entityId="list"
+            size="icon"
+            label="طباعة قائمة الوحدات العقارية"
+            payload={() => ({
+              entity: {
+                title: "قائمة الوحدات العقارية",
+                total: printRows.length,
+                totalUnits: stats?.totalUnits ?? 0,
+                rented: stats?.rented ?? 0,
+                available: stats?.available ?? 0,
+              },
+              items: printRows.map((u: any) => ({
+                "رقم الوحدة": u.unitNumber || "—",
+                "المبنى": u.buildingName || "—",
+                "النوع": typeLabel(u.type),
+                "المساحة": u.area ? `${u.area} م²` : "—",
+                "الإيجار": Number(u.monthlyRent || 0),
+                "الحالة": u.status || "—",
+              })),
+            })}
+          />
+          {canManage ? (
+            <Link href="/properties/create">
+              <GuardedButton perm="properties:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة وحدة</GuardedButton>
+            </Link>
+          ) : null}
+        </div>
       }
     >
       <PropertyTabsNav />
@@ -148,6 +178,7 @@ export default function Properties() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
