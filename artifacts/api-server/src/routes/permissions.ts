@@ -5,6 +5,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { projectGrantsToFine } from "../lib/rbac/flatProjection.js";
+import { getActiveDelegationsFor, delegationCoversFeature } from "../lib/rbac/delegationService.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -213,7 +214,35 @@ router.get("/my", async (req, res) => {
       logger.warn(e, "[permissions/my] RBAC v2 projection skipped — using legacy set only");
     }
 
-    const grantedPerms = Array.from(new Set([...rolePerms, ...grants, ...rbacProjected])).filter((p) => !revokes.has(p));
+    // Delegation visibility: a delegate inherits the delegator's grants on the
+    // COVERED features for the active window. The backend (authzEngine) already
+    // ENFORCES this; here we surface it so the UI shows the delegated actions
+    // too — otherwise the delegate's buttons would stay hidden while the action
+    // is actually permitted ("الإظهار/الإخفاء حسب نظام التفويض", #1413). Additive
+    // + best-effort: no active delegation ⇒ no-op; any failure degrades silently.
+    const delegatedProjected: string[] = [];
+    try {
+      const delegations = await getActiveDelegationsFor(scope.companyId, scope.employeeId ?? null);
+      for (const d of delegations) {
+        if (!d.delegatorUserId) continue;
+        const dGrants = await rawQuery<{ feature_key: string; actions: string[] }>(
+          `SELECT g.feature_key, g.actions
+             FROM rbac_user_roles ur
+             JOIN rbac_roles r ON r.id = ur.role_id
+             JOIN rbac_role_grants g ON g.role_id = r.id
+            WHERE ur."userId" = $1 AND ur."companyId" = $2
+              AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+          [d.delegatorUserId, scope.companyId]
+        );
+        const covered = dGrants.filter((g) =>
+          delegationCoversFeature(d.features, g.feature_key, (g.feature_key || "").split(".")[0]));
+        delegatedProjected.push(...projectGrantsToFine(covered));
+      }
+    } catch (e) {
+      logger.warn(e, "[permissions/my] delegation projection skipped");
+    }
+
+    const grantedPerms = Array.from(new Set([...rolePerms, ...grants, ...rbacProjected, ...delegatedProjected])).filter((p) => !revokes.has(p));
 
     // VIS-002 (Ghaith Operating Foundation): partial activation. Return the
     // company's explicitly DISABLED feature keys so the frontend can hide
