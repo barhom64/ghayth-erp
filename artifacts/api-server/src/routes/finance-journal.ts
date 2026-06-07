@@ -1202,6 +1202,49 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     if (departmentId) voucherDims.departmentId = Number(departmentId);
     if (b.costCenter) voucherDims.costCenter = b.costCenter;
 
+    // Centralised resolver — fills cost-centre from rule when operator
+    // left it empty + records the rule reference for the Manual
+    // Overrides report. Voucher accountCode is operator-pinned (it's
+    // the revenue/expense account they explicitly chose), so the
+    // resolver runs in manual_override mode and only the costCenterId
+    // slot benefits — but that's the whole point for vouchers: pick
+    // employee/supplier/vehicle/property and the per-entity CC drops
+    // in without the operator having to know which CC to pick. Same
+    // pattern as the expenses route fix in #1662.
+    if (relatedEntityType) {
+      const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+      const voucherDocType = isReceipt ? "voucher_receipt" : "voucher_payment";
+      const resolved = await resolveLineAllocation({
+        companyId: scope.companyId,
+        documentType: voucherDocType,
+        lineType: operationType || type || undefined,
+        entityType: relatedEntityType || undefined,
+        accountCode: (subAccountCode || accountCode) || undefined,
+        costCenterId: voucherDims.costCenterId != null ? Number(voucherDims.costCenterId) : null,
+        dimensions: {
+          vehicleId: voucherDims.vehicleId ?? null,
+          propertyId: voucherDims.propertyId ?? null,
+          unitId: null,
+          assetId: null,
+          projectId: voucherDims.projectId ?? null,
+          employeeId: voucherDims.employeeId ?? null,
+          driverId: null,
+          contractId: voucherDims.contractId ?? null,
+          umrahSeasonId: null,
+          umrahAgentId: null,
+          productId: null,
+          clientId: voucherDims.clientId ?? null,
+          vendorId: voucherDims.vendorId ?? null,
+        },
+        sourceTable: "journal_lines",
+        sourceLineId: 0,
+      });
+      if ((resolved.status === "resolved" || resolved.status === "manual_override") &&
+          voucherDims.costCenterId == null && resolved.costCenterId != null) {
+        voucherDims.costCenterId = resolved.costCenterId;
+      }
+    }
+
     const whtCreditLines = Array.from(whtCreditByAccount.entries()).map(
       ([accountCode, amount]) => ({ accountCode, debit: 0, credit: amount, ...voucherDims })
     );
