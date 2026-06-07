@@ -140,6 +140,7 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
   const custody = data.custody ?? {};
   const vehicle = data.vehicle ?? null;
   const emails = data.emails ?? {};
+  const pbxExtension = data.pbxExtension ?? null;
   const userAcct = data.userAccount ?? null;
   return (
     <Card>
@@ -178,7 +179,7 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
             )}
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t">
           <div>
             <p className="text-xs text-muted-foreground">بريد الدخول</p>
             <p className="font-mono text-xs" dir="ltr" data-testid="finance-link-internal-email">{emails.loginEmail || "—"}</p>
@@ -193,6 +194,14 @@ function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
             <p className="text-xs text-muted-foreground">البريد الشخصي</p>
             <p className="font-mono text-xs" dir="ltr" data-testid="finance-link-personal-email">{emails.personal || "—"}</p>
             <p className="text-[10px] text-muted-foreground mt-1">للتواصل فقط — لا يُستخدم لتسجيل الدخول</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">تحويلة السنترال</p>
+            {pbxExtension ? (
+              <p className="font-mono text-sm font-bold" dir="ltr" data-testid="finance-link-pbx-extension">{pbxExtension.extension}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">لا توجد تحويلة مرتبطة</p>
+            )}
           </div>
         </div>
       </CardContent>
