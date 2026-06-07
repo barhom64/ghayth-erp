@@ -15,6 +15,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
@@ -205,6 +206,22 @@ export default function ApplicationListPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "applicantName", label: "اسم المتقدم" },
+              { key: "email", label: "البريد" },
+              { key: "phone", label: "الهاتف" },
+              { key: "jobTitle", label: "المنصب" },
+              { key: "stage", label: "المرحلة" },
+              { key: "source", label: "مصدر التوظيف" },
+              { key: "appliedAt", label: "تاريخ التقديم" },
+              { key: "status", label: "الحالة" },
+            ],
+            "قائمة-المتقدمين",
+          )
+        }
         resultCount={filtered.length}
       />
 

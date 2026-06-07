@@ -211,15 +211,24 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
 
     const [overloadedEmployees, expiringContracts, overdueClients, slowDepartments, costlyVehicles, prodDrops, revTrendRows, churnClients] = await Promise.all([
       rawQuery<Record<string, unknown>>(
-        `SELECT e.name,
-                (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-                 AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int AS "activeTasks"
-         FROM employee_assignments ea
-         JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
-         WHERE ea."companyId" = $1 AND ea.status = 'active'
-           AND (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-                AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int > 6
-         LIMIT 5`,
+        // Was 2× correlated COUNT subquery per active assignment — same
+        // expression in SELECT and WHERE. Single CTE aggregates once
+        // and the outer query filters with HAVING-like semantics.
+        `WITH active_task_counts AS (
+           SELECT t."assignedTo" AS "assignmentId", COUNT(*)::int AS c
+             FROM tasks t
+            WHERE t."companyId" = $1
+              AND t.status NOT IN ('completed','cancelled')
+              AND t."deletedAt" IS NULL
+            GROUP BY t."assignedTo"
+         )
+         SELECT e.name, atc.c AS "activeTasks"
+           FROM employee_assignments ea
+           JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+           JOIN active_task_counts atc ON atc."assignmentId" = ea.id
+          WHERE ea."companyId" = $1 AND ea.status = 'active'
+            AND atc.c > 6
+          LIMIT 5`,
         [cid]
       ).catch((e) => { logger.error(e, "intelligence query failed"); return []; }),
       rawQuery<Record<string, unknown>>(
