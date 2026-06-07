@@ -19638,6 +19638,179 @@ ALTER SEQUENCE public.transport_billing_candidates_id_seq OWNED BY public.transp
 
 
 --
+-- Name: transport_locations; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Booking + Dispatch layer (Issue Comment 9).
+
+CREATE TABLE public.transport_locations (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    code text,
+    name text NOT NULL,
+    "locationType" text,
+    city text,
+    address text,
+    latitude numeric(10,7),
+    longitude numeric(10,7),
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+CREATE SEQUENCE public.transport_locations_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_locations_id_seq OWNED BY public.transport_locations.id;
+
+
+--
+-- Name: transport_bookings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_bookings (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "bookingNumber" text NOT NULL,
+    "bookingSource" text DEFAULT 'manual_entry'::text NOT NULL,
+    "transportServiceType" text NOT NULL,
+    "customerId" integer,
+    "customerName" text,
+    "customerPhone" text,
+    "contractId" integer,
+    "fromLocationId" integer,
+    "toLocationId" integer,
+    "fromLocationText" text,
+    "toLocationText" text,
+    "routeType" text,
+    "requestedPickupDate" date,
+    "requestedPickupTime" time without time zone,
+    "requestedDeliveryDate" date,
+    "requestedDeliveryTime" time without time zone,
+    "cargoDescription" text,
+    "cargoQuantity" numeric(18,3),
+    "cargoUnit" text,
+    "cargoWeight" numeric(12,2),
+    "passengerCount" integer,
+    "umrahGroupId" integer,
+    "flightNumber" text,
+    "supervisorName" text,
+    "supervisorPhone" text,
+    "hotelName" text,
+    "hotelLocation" text,
+    "beneficiaryType" text,
+    "beneficiaryId" integer,
+    "projectId" integer,
+    "waqfId" integer,
+    "costCenterId" integer,
+    status text DEFAULT 'draft'::text NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_bookings_source_check CHECK (("bookingSource" = ANY (ARRAY['manual_entry'::text, 'customer_request'::text, 'umrah_group'::text, 'contract_schedule'::text, 'import_excel'::text, 'api_integration'::text, 'recurring_schedule'::text]))),
+    CONSTRAINT transport_bookings_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text]))),
+    CONSTRAINT transport_bookings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'submitted'::text, 'pending_approval'::text, 'approved'::text, 'scheduled'::text, 'dispatched'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text, 'rejected'::text]))),
+    CONSTRAINT transport_bookings_route_type_check CHECK (("routeType" IS NULL OR "routeType" = ANY (ARRAY['airport_to_makkah'::text, 'makkah_to_madinah'::text, 'madinah_to_airport'::text, 'makkah_local'::text, 'madinah_local'::text, 'ziyarah'::text, 'custom'::text])))
+);
+
+CREATE SEQUENCE public.transport_bookings_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_bookings_id_seq OWNED BY public.transport_bookings.id;
+
+
+--
+-- Name: transport_booking_lines; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_booking_lines (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "bookingId" integer NOT NULL,
+    "lineNumber" integer NOT NULL,
+    "requiredVehicleType" text,
+    "requiredCapacityKg" numeric(10,2),
+    "requiredSeatCount" integer,
+    "requiredLicenseClass" text,
+    "fromLocationId" integer,
+    "toLocationId" integer,
+    "scheduledPickupAt" timestamp with time zone,
+    "scheduledDeliveryAt" timestamp with time zone,
+    "lineDescription" text,
+    quantity numeric(18,3),
+    "unitOfMeasure" text,
+    "passengerCount" integer,
+    status text DEFAULT 'open'::text NOT NULL,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_booking_lines_status_check CHECK ((status = ANY (ARRAY['open'::text, 'dispatched'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text])))
+);
+
+CREATE SEQUENCE public.transport_booking_lines_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_booking_lines_id_seq OWNED BY public.transport_booking_lines.id;
+
+
+--
+-- Name: transport_dispatch_orders; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_dispatch_orders (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "bookingId" integer NOT NULL,
+    "bookingLineId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "driverId" integer NOT NULL,
+    "scheduledStartAt" timestamp with time zone NOT NULL,
+    "scheduledEndAt" timestamp with time zone NOT NULL,
+    "linkedManifestId" integer,
+    "linkedTripId" integer,
+    "linkedUmrahTransportId" integer,
+    status text DEFAULT 'pending'::text NOT NULL,
+    "declinedReason" text,
+    "dispatchedBy" integer,
+    "dispatchedAt" timestamp with time zone,
+    "acceptedAt" timestamp with time zone,
+    "startedAt" timestamp with time zone,
+    "completedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT transport_dispatch_orders_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'notified'::text, 'accepted'::text, 'declined'::text, 'executing'::text, 'completed'::text, 'closed'::text, 'cancelled'::text])))
+);
+
+CREATE SEQUENCE public.transport_dispatch_orders_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_dispatch_orders_id_seq OWNED BY public.transport_dispatch_orders.id;
+
+
+--
+-- Name: vehicle_location_snapshots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_location_snapshots (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "driverId" integer,
+    "dispatchOrderId" integer,
+    latitude numeric(10,7) NOT NULL,
+    longitude numeric(10,7) NOT NULL,
+    "speedKmh" numeric(6,2),
+    heading numeric(5,2),
+    "capturedAt" timestamp with time zone NOT NULL,
+    source text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.vehicle_location_snapshots_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.vehicle_location_snapshots_id_seq OWNED BY public.vehicle_location_snapshots.id;
+
+
+--
 -- Name: cargo_items; Type: TABLE; Schema: public; Owner: -
 --
 
