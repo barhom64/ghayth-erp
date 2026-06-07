@@ -65,17 +65,15 @@ function formatSamplePreview(
 async function downloadRejectedRowsCsv(
   errors: NonNullable<PreviewSummary["errors"]>,
   fileType: FileType,
+  labels: Record<string, string>,
 ): Promise<void> {
   const sampleKeys = Array.from(
     new Set(errors.flatMap((e) => (e.sample ? Object.keys(e.sample) : []))),
   );
-  // Flatten each error row into a plain record matching the projection
-  // columns below. csvAdapter handles BOM / RFC 4180 quoting / Arabic
-  // headers on the server side.
   const rows = errors.map((e) => {
     const flat: Record<string, unknown> = {
       row: e.row,
-      field: e.fieldName ?? "",
+      field: e.fieldName ? (labels[e.fieldName] ?? e.fieldName) : "",
       reason: e.message,
     };
     for (const k of sampleKeys) {
@@ -84,10 +82,10 @@ async function downloadRejectedRowsCsv(
     return flat;
   });
   const columns = [
-    { key: "row", label: "row" },
-    { key: "field", label: "field" },
-    { key: "reason", label: "reason" },
-    ...sampleKeys.map((k) => ({ key: `sample_${k}`, label: k })),
+    { key: "row", label: "الصف" },
+    { key: "field", label: "الحقل" },
+    { key: "reason", label: "سبب الرفض" },
+    ...sampleKeys.map((k) => ({ key: `sample_${k}`, label: labels[k] ?? k })),
   ];
   await exportRowsToCsv({
     entityType: `report_umrah_rejected_${fileType}`,
@@ -855,7 +853,7 @@ export default function UmrahImportWizard() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => downloadRejectedRowsCsv(preview.errors ?? [], fileType)}
+                    onClick={() => downloadRejectedRowsCsv(preview.errors ?? [], fileType, errorLabels)}
                     data-testid="download-rejected-rows-csv"
                   >
                     تنزيل الصفوف المرفوضة (CSV)
