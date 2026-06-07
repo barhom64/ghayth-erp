@@ -593,6 +593,34 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
       }
     }
 
+    // Centralised resolver — auto-derives the cost-centre from the
+    // employee's department (migration 257 seeds the 'custody' rule).
+    // Account stays as the engine-resolved 1400 (or per-employee
+    // sub-account when one exists); only the costCenterId slot is
+    // filled here.
+    let resolvedCostCenterId: number | null = null;
+    if (custodyEmployeeId) {
+      const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+      const resolved = await resolveLineAllocation({
+        companyId: scope.companyId,
+        documentType: "custody",
+        entityType: "employee",
+        accountCode: custodyAccountCode,
+        costCenterId: null,
+        dimensions: {
+          vehicleId: null, propertyId: null, unitId: null, assetId: null,
+          projectId: null, employeeId: custodyEmployeeId, driverId: null,
+          contractId: null, umrahSeasonId: null, umrahAgentId: null,
+          productId: null, clientId: null, vendorId: null,
+        },
+        sourceTable: "journal_lines",
+        sourceLineId: 0,
+      });
+      if (resolved.status === "resolved" || resolved.status === "manual_override") {
+        resolvedCostCenterId = resolved.costCenterId;
+      }
+    }
+
     // Atomicity guarantee: custody JE, metadata UPDATE, approval-chain
     // initiation, and the pending_approval status flip all commit or
     // roll back together. The earlier shape ran them sequentially with
@@ -617,7 +645,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
         sourceId: 0,
         sourceKey: `finance:custody:${ref}`,
         lines: [
-          { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId ?? undefined },
+          { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId ?? undefined, costCenterId: resolvedCostCenterId ?? undefined },
           // Cash CR carries employeeId too so per-employee cashflow drilldowns
           // (and custody-outstanding-by-employee aging) tie out from the GL.
           // Without this the DR tied to the employee but the matching cash
