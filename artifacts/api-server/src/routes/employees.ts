@@ -1164,6 +1164,15 @@ router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: 
         ).catch(() => [])
       : [];
 
+    // PBX extension bound to this employee (real comms integration —
+    // surfaced so the detail page can show reachability + click-to-call).
+    const [extension] = await rawQuery<{ id: number; extension: string; status: string }>(
+      `SELECT id, extension, status FROM pbx_extensions
+        WHERE "companyId" = $1 AND "employeeId" = $2 AND status = 'active'
+        ORDER BY id ASC LIMIT 1`,
+      [scope.companyId, id]
+    ).catch(() => []);
+
     res.json({
       employeeId: id,
       emails: {
@@ -1180,6 +1189,7 @@ router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: 
         openCount: Number(custodyBal?.openCount ?? 0),
       },
       vehicle: vehicle ? { id: vehicle.id, plateNumber: vehicle.plateNumber, brand: vehicle.brand } : null,
+      pbxExtension: extension ? { id: extension.id, extension: extension.extension, status: extension.status } : null,
     });
   } catch (err) { handleRouteError(err, res, "employee finance summary"); }
 });
