@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatDateAr } from "@/lib/formatters";
+import { formatUmrahDate } from "@/lib/formatters";
 import { Paperclip, ExternalLink, Search } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 // Standalone /umrah/attachments page — surfaces every row from
 // `umrah_attachments` (PR #312) in a single browsable table. The
@@ -124,7 +125,7 @@ export default function UmrahAttachmentsPage() {
         ),
     },
     { key: "notes", header: "ملاحظات", render: (a) => a.notes || "—" },
-    { key: "createdAt", header: "تاريخ الإضافة", render: (a) => formatDateAr(a.createdAt) },
+    { key: "createdAt", header: "تاريخ الإضافة", render: (a) => formatUmrahDate(a.createdAt) },
   ];
 
   return (
@@ -132,6 +133,31 @@ export default function UmrahAttachmentsPage() {
       title="مرفقات العمرة"
       subtitle="فهرس موحّد لكل وثيقة عمرة. التحرير (إضافة/حذف) يتم من صفحة الكيان نفسه (معتمر / وكيل فرعي / مجموعة / ...)."
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المرفقات" }]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_attachments"
+          entityId="list"
+          size="icon"
+          label="طباعة فهرس المرفقات"
+          payload={() => ({
+            entity: {
+              title: "فهرس مرفقات العمرة",
+              total: items.length,
+              filterEntityType: entityType ? ENTITY_LABEL[entityType] : "الكل",
+              filterAttachmentType: type ? TYPE_LABEL[type] : "الكل",
+              searchTerm: search.trim() || "—",
+            },
+            items: items.map((a: any) => ({
+              "نوع الكيان": ENTITY_LABEL[a.entityType] || a.entityType,
+              "رقم الكيان": a.entityId ?? "—",
+              "العنوان": a.title || "—",
+              "نوع الوثيقة": TYPE_LABEL[a.type] || a.type || "—",
+              "ملاحظات": a.notes || "—",
+              "تاريخ الإضافة": a.createdAt ? formatUmrahDate(a.createdAt) : "—",
+            })),
+          })}
+        />
+      }
     >
       <UmrahTabsNav />
 

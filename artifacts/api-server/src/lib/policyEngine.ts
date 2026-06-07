@@ -29,6 +29,36 @@ export function findSeparationOfDutiesConflict(
   return null;
 }
 
+/**
+ * Returns every role key the user currently effectively holds in the given
+ * company, across all three assignment tables (legacy `user_roles`, RBAC-v2
+ * `rbac_user_roles`, and active `employee_assignments`). Used by SoD gates at
+ * the two role-grant endpoints (`admin POST /user-roles` and
+ * `rbac/v2 POST /users/:userId/roles`) so a v1-granted role can still block a
+ * conflicting v2 grant — and vice versa.
+ */
+export async function getActiveRoleKeysForUser(
+  userId: number,
+  companyId: number,
+): Promise<string[]> {
+  const rows = await rawQuery<{ role: string | null }>(
+    `SELECT "roleKey" AS role FROM user_roles
+       WHERE "userId" = $1 AND "companyId" = $2
+     UNION
+     SELECT r.role_key AS role FROM rbac_user_roles ur
+       JOIN rbac_roles r ON r.id = ur.role_id
+       WHERE ur."userId" = $1 AND ur."companyId" = $2
+         AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+     UNION
+     SELECT ea.role FROM employee_assignments ea
+       JOIN users u ON u."employeeId" = ea."employeeId"
+       WHERE u.id = $1 AND ea."companyId" = $2
+         AND ea.status = 'active' AND ea.role IS NOT NULL`,
+    [userId, companyId],
+  );
+  return rows.map((r) => r.role).filter((x): x is string => !!x);
+}
+
 
 // ─── Maximum Privilege Rules ──────────────────────────────────────────────
 // Prevents over-privileged accounts.

@@ -31,7 +31,7 @@ import { usePrintRows } from "@/hooks/use-print-rows";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Download, RefreshCw } from "lucide-react";
-import { formatDateAr, todayLocal } from "@/lib/formatters";
+import { formatUmrahDate, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
 // Compliance rollup for the per-pilgrim exemption flag (PRs #1482-1484).
@@ -286,7 +286,7 @@ export default function UmrahExemptPilgrims() {
     {
       key: "exemptedAt",
       header: "تاريخ الاستثناء",
-      render: (p) => p.exemptedAt ? <span className="text-xs">{formatDateAr(p.exemptedAt)}</span> : "—",
+      render: (p) => p.exemptedAt ? <span className="text-xs">{formatUmrahDate(p.exemptedAt)}</span> : "—",
     },
     {
       key: "actions" as any,

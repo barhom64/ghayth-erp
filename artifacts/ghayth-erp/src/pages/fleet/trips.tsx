@@ -12,6 +12,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   PageShell,
 } from "@workspace/ui-core";
 import { Plus, Route, Navigation, CheckCircle, MapPin, List, CalendarDays } from "lucide-react";
@@ -154,6 +155,21 @@ export default function TripsPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "driverName", label: "السائق" },
+              { key: "vehiclePlate", label: "المركبة" },
+              { key: "origin", label: "من" },
+              { key: "destination", label: "إلى" },
+              { key: "distance", label: "المسافة (كم)" },
+              { key: "tripDate", label: "تاريخ الرحلة" },
+              { key: "status", label: "الحالة" },
+            ],
+            "رحلات-الأسطول",
+          )
+        }
         resultCount={filtered?.length}
       />
 

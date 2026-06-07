@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +11,7 @@ import {
   AdvancedFilters,
   useFilters,
   PageShell,
+  resolveStatus,
 } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Button } from "@/components/ui/button";
@@ -181,7 +182,7 @@ function AgentInvoicesTab() {
               "الخدمات": Number(inv.servicesTotal || 0),
               "الغرامات": Number(inv.penaltiesTotal || 0),
               "الإجمالي": Number(inv.total || 0),
-              "الحالة": inv.status || "—",
+              "الحالة": (inv.status && resolveStatus(inv.status)?.label) ?? inv.status ?? "—",
             })),
           })}
         />
@@ -289,7 +290,7 @@ function SalesInvoicesTab() {
       },
     },
     { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
-    { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => (r.createdAt ? formatDateAr(r.createdAt) : "—") },
+    { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => (r.createdAt ? formatUmrahDate(r.createdAt) : "—") },
     {
       key: "_quickStatus",
       header: "",
@@ -380,8 +381,8 @@ function SalesInvoicesTab() {
               "الوكيل الفرعي": r.subAgentName || "—",
               "الإجمالي": Number(r.total || r.totalAmount || 0),
               "الهامش": r.marginBase == null ? "—" : Number(r.marginBase),
-              "الحالة": r.status || "—",
-              "تاريخ الإنشاء": r.createdAt ? formatDateAr(r.createdAt) : "—",
+              "الحالة": (r.status && resolveStatus(r.status)?.label) ?? r.status ?? "—",
+              "تاريخ الإنشاء": r.createdAt ? formatUmrahDate(r.createdAt) : "—",
             })),
           })}
         />
@@ -532,7 +533,7 @@ function NuskInvoicesTab() {
         </SelectContent>
       </Select>
     )},
-    { key: "expiryDate", header: "تنتهي في", render: (r) => (r.expiryDate ? formatDateAr(r.expiryDate) : "—") },
+    { key: "expiryDate", header: "تنتهي في", render: (r) => (r.expiryDate ? formatUmrahDate(r.expiryDate) : "—") },
     {
       key: "actions",
       header: "إجراء",
@@ -596,8 +597,8 @@ function NuskInvoicesTab() {
                 "الوكيل الفرعي": r.subAgentName || "—",
                 "المعتمرون": r.mutamerCount ?? "—",
                 "الإجمالي": Number(r.totalAmount || 0),
-                "الحالة": r.nuskStatus || "—",
-                "تنتهي في": r.expiryDate ? formatDateAr(r.expiryDate) : "—",
+                "الحالة": (r.nuskStatus && resolveStatus(r.nuskStatus)?.label) ?? r.nuskStatus ?? "—",
+                "تنتهي في": r.expiryDate ? formatUmrahDate(r.expiryDate) : "—",
               })),
             })}
           />
