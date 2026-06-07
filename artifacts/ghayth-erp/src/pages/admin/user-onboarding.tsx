@@ -28,6 +28,12 @@ interface RoleRow {
   roleKey: string;
   label?: string;
 }
+interface JobTitleRow {
+  id: number;
+  name: string;
+  defaultRoleKey?: string | null;
+  opensCustody?: boolean;
+}
 interface OnboardRole {
   roleKey: string;
   branchId?: string;
@@ -46,6 +52,13 @@ export default function UserOnboarding() {
   const roles: RoleRow[] = Array.isArray(rolesData?.roles) ? rolesData!.roles : [];
   const roleLabel = (key: string) => roles.find((r) => r.roleKey === key)?.label || key;
 
+  // ── المسميات الوظيفية (لتفعيل الدور الافتراضي تلقائيًا — migration 249) ──
+  const { data: jobTitlesData } = useQuery<{ data: JobTitleRow[] }>({
+    queryKey: ["admin-job-titles"],
+    queryFn: () => apiFetch("/employees/job-titles"),
+  });
+  const jobTitles: JobTitleRow[] = Array.isArray(jobTitlesData?.data) ? jobTitlesData!.data : [];
+
   // ───────────────────────────────────────────────────────────────────────
   // 1) الإنشاء السريع: موظف + حساب + أدوار متعددة (RBAC-002)
   // ───────────────────────────────────────────────────────────────────────
@@ -57,11 +70,20 @@ export default function UserOnboarding() {
     email: "",
     password: "",
     jobTitle: "",
+    jobTitleId: "",
     branchId: "",
     departmentId: "",
   });
   const [onboardRoles, setOnboardRoles] = useState<OnboardRole[]>([{ roleKey: "" }]);
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  // الدور الافتراضي للمسمى المختار — يُفعَّل تلقائيًا عند الإنشاء دون اختيار يدوي.
+  const selectedJobTitle = jobTitles.find((j) => String(j.id) === form.jobTitleId);
+  const autoRoleKey = selectedJobTitle?.defaultRoleKey || "";
+  const pickJobTitle = (id: string) => {
+    const jt = jobTitles.find((j) => String(j.id) === id);
+    setForm((f) => ({ ...f, jobTitleId: id, jobTitle: jt?.name || f.jobTitle }));
+  };
 
   const addRole = () => setOnboardRoles((rs) => [...rs, { roleKey: "" }]);
   const removeRole = (i: number) => setOnboardRoles((rs) => rs.filter((_, idx) => idx !== i));
@@ -74,7 +96,7 @@ export default function UserOnboarding() {
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast({ title: "تم الإنشاء بنجاح", description: `الموظف #${res?.employeeId} والحساب #${res?.userId} والأدوار: ${(res?.roles || []).join("، ")}` });
-      setForm({ name: "", phone: "", nationalId: "", nationality: "سعودي", email: "", password: "", jobTitle: "", branchId: "", departmentId: "" });
+      setForm({ name: "", phone: "", nationalId: "", nationality: "سعودي", email: "", password: "", jobTitle: "", jobTitleId: "", branchId: "", departmentId: "" });
       setOnboardRoles([{ roleKey: "" }]);
     },
     onError: (e: any) => toast({ title: "فشل الإنشاء", description: e?.message, variant: "destructive" }),
@@ -86,8 +108,9 @@ export default function UserOnboarding() {
       toast({ title: "بيانات ناقصة", description: "الاسم والجوال والهوية والجنسية والبريد مطلوبة", variant: "destructive" });
       return;
     }
-    if (chosen.length === 0) {
-      toast({ title: "اختر دورًا واحدًا على الأقل", variant: "destructive" });
+    // دور يدوي واحد على الأقل، أو مسمى وظيفي له دور افتراضي يكفي.
+    if (chosen.length === 0 && !autoRoleKey) {
+      toast({ title: "اختر دورًا واحدًا على الأقل أو مسمى وظيفيًا له دور افتراضي", variant: "destructive" });
       return;
     }
     const num = (v?: string) => (v && /^\d+$/.test(v) ? Number(v) : undefined);
@@ -99,6 +122,7 @@ export default function UserOnboarding() {
       email: form.email,
       password: form.password || undefined,
       jobTitle: form.jobTitle || undefined,
+      jobTitleId: num(form.jobTitleId),
       branchId: num(form.branchId),
       departmentId: num(form.departmentId),
       roles: chosen.map((r) => ({
@@ -110,9 +134,10 @@ export default function UserOnboarding() {
   };
 
   // ── ملخص عربي مباشر لما سيستطيعه المستخدم (#1413 §6) ──
-  const summary = onboardRoles
-    .filter((r) => r.roleKey)
-    .map((r) => `${roleLabel(r.roleKey)}${r.branchId ? ` (فرع ${r.branchId})` : ""}`);
+  const summary = [
+    ...(autoRoleKey && !onboardRoles.some((r) => r.roleKey === autoRoleKey) ? [roleLabel(autoRoleKey)] : []),
+    ...onboardRoles.filter((r) => r.roleKey).map((r) => `${roleLabel(r.roleKey)}${r.branchId ? ` (فرع ${r.branchId})` : ""}`),
+  ];
 
   // ───────────────────────────────────────────────────────────────────────
   // 2) الصلاحيات النهائية + المصدر (RBAC-004)
@@ -157,7 +182,23 @@ export default function UserOnboarding() {
             <div><Label>الجنسية *</Label><Input value={form.nationality} onChange={(e) => set("nationality", e.target.value)} /></div>
             <div><Label>البريد الإلكتروني *</Label><Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="user@example.com" /></div>
             <div><Label>كلمة المرور (اختياري)</Label><Input type="text" value={form.password} onChange={(e) => set("password", e.target.value)} placeholder="تُولَّد تلقائيًا إن تُركت فارغة" /></div>
-            <div><Label>المسمى الوظيفي</Label><Input value={form.jobTitle} onChange={(e) => set("jobTitle", e.target.value)} placeholder="موظف" /></div>
+            <div>
+              <Label>المسمى الوظيفي</Label>
+              {jobTitles.length > 0 ? (
+                <Select value={form.jobTitleId} onValueChange={pickJobTitle}>
+                  <SelectTrigger><SelectValue placeholder="اختر المسمى الوظيفي" /></SelectTrigger>
+                  <SelectContent>
+                    {jobTitles.map((j) => (
+                      <SelectItem key={j.id} value={String(j.id)}>
+                        {j.name}{j.defaultRoleKey ? ` — ${roleLabel(j.defaultRoleKey)}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={form.jobTitle} onChange={(e) => set("jobTitle", e.target.value)} placeholder="موظف" />
+              )}
+            </div>
             <div><Label>الفرع (رقم، اختياري)</Label><Input value={form.branchId} onChange={(e) => set("branchId", e.target.value)} placeholder="فرع المنشئ افتراضيًا" /></div>
             <div><Label>الإدارة (رقم، اختياري)</Label><Input value={form.departmentId} onChange={(e) => set("departmentId", e.target.value)} /></div>
           </div>
@@ -167,6 +208,16 @@ export default function UserOnboarding() {
               <Label className="flex items-center gap-2"><Shield className="h-4 w-4" /> الأدوار (مستخدم واحد، أدوار متعددة)</Label>
               <Button type="button" variant="outline" size="sm" onClick={addRole}><Plus className="h-4 w-4 ml-1" /> أضف دورًا</Button>
             </div>
+            {autoRoleKey && (
+              <div className="flex items-center gap-2 rounded-md bg-muted p-2 text-sm">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <span>
+                  سيُفعَّل الدور تلقائيًا من المسمى الوظيفي: <Badge variant="secondary">{roleLabel(autoRoleKey)}</Badge>
+                  {selectedJobTitle?.opensCustody ? <Badge variant="outline" className="mr-1">+ حساب عهدة</Badge> : null}
+                  <span className="text-muted-foreground"> — يمكنك إضافة أدوار أخرى أدناه.</span>
+                </span>
+              </div>
+            )}
             {onboardRoles.map((r, i) => (
               <div key={i} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto] gap-2 items-end border rounded-md p-2">
                 <div>

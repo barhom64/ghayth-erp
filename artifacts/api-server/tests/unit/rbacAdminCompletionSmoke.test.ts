@@ -38,17 +38,20 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
 
   it("accepts one user with MULTIPLE roles, each with its own scope", () => {
     const idx = ADMIN.indexOf("const onboardSchema");
-    const schema = ADMIN.slice(idx, idx + 1100);
+    const schema = ADMIN.slice(idx, idx + 1700);
     expect(schema).toContain("roles:");
     expect(schema).toMatch(/roleKey:\s*z\.string\(\)/);
     expect(schema).toMatch(/branchId:/);
     expect(schema).toMatch(/departmentId:/);
-    expect(schema).toMatch(/\.min\(1/); // at least one role required
+    // Roles are optional in the schema because a picked job title can supply
+    // the default role (migration 249). The "at least one" invariant is now
+    // enforced at runtime — see the atomic test below.
+    expect(schema).toMatch(/jobTitleId:/);
   });
 
   it("is atomic — employee + assignment + user + roles inside withTransaction", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 4500);
+    const section = ADMIN.slice(idx, idx + 6800);
     expect(section).toContain("withTransaction");
     expect(section).toMatch(/INSERT INTO employees/);
     expect(section).toMatch(/INSERT INTO employee_assignments/);
@@ -56,9 +59,23 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
     expect(section).toMatch(/INSERT INTO rbac_user_roles/);
   });
 
+  // A picked job title auto-provisions its default RBAC role + custody policy
+  // (job_titles.defaultRoleKey / opensCustody, migration 249) so activating a
+  // new employee is one choice — not a manual role hunt. Explicit roles still
+  // win, and at least one role (manual or job-title-derived) is enforced.
+  it("auto-provisions the job title's default role + custody, and still requires a role at runtime", () => {
+    const idx = ADMIN.indexOf('router.post("/onboard"');
+    const section = ADMIN.slice(idx, idx + 6800);
+    expect(section).toMatch(/FROM job_titles/);
+    expect(section).toMatch(/"defaultRoleKey"/);
+    expect(section).toMatch(/"opensCustody"/);
+    expect(section).toMatch(/اختر دوراً واحداً على الأقل/); // runtime "at least one role" guard
+    expect(section).toMatch(/subsidiary_accounts/); // custody account when opensCustody
+  });
+
   it("resolves every role key up front and rejects an unknown role (no half-onboard)", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 4500);
+    const section = ADMIN.slice(idx, idx + 6800);
     expect(section).toMatch(/SELECT id FROM rbac_roles WHERE role_key/);
     expect(section).toMatch(/الدور غير موجود/);
   });
@@ -68,7 +85,7 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
   // orphan employee/user (the whole onboard is atomic).
   it("rolls the whole onboard back when any role key is invalid (atomic ordering)", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 4500);
+    const section = ADMIN.slice(idx, idx + 6800);
     const roleCheckIdx = section.indexOf("SELECT id FROM rbac_roles WHERE role_key");
     const txIdx = section.indexOf("withTransaction");
     expect(roleCheckIdx).toBeGreaterThan(-1);
@@ -78,14 +95,14 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
 
   it("records the active role in the audit log (RBAC-001) + emits an event", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 4500);
+    const section = ADMIN.slice(idx, idx + 6800);
     expect(section).toMatch(/activeRoleKey:/);
     expect(section).toMatch(/emitEvent\(/);
   });
 
   it("uniqueness guard on email (login key) before the transaction", () => {
     const idx = ADMIN.indexOf('router.post("/onboard"');
-    const section = ADMIN.slice(idx, idx + 4500);
+    const section = ADMIN.slice(idx, idx + 6800);
     expect(section).toMatch(/SELECT id FROM users WHERE email = \$1/);
     expect(section).toMatch(/مستخدم مسبقا/);
   });
