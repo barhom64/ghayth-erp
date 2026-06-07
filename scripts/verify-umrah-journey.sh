@@ -36,8 +36,10 @@ IID="$(echo "$INV" | gid)"; TOT="$(echo "$INV" | py 'import sys,json;print(json.
 
 BAL="$(psql "$DSN" -tA -c "select count(*) from (select je.id from journal_entries je join journal_lines jl on jl.\"journalId\"=je.id where je.\"sourceType\"='umrah_sales_invoices' and je.\"sourceId\"=$IID group by je.id having sum(jl.debit)=sum(jl.credit) and sum(jl.debit)>0) t;")"
 [ "${BAL:-0}" -ge 1 ] && ok "umrah invoice GL entry exists and balanced" || no "umrah invoice GL not balanced ($BAL)"
-REV="$(psql "$DSN" -tA -c "select count(*) from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" where je.\"sourceType\"='umrah_sales_invoices' and je.\"sourceId\"=$IID and jl.credit>0 and jl.\"accountCode\"='4130';")"
-[ "${REV:-0}" -ge 1 ] && ok "revenue routed to umrah revenue account (4130 via accounting_mappings)" || no "revenue not routed (4130) ($REV)"
+# Per-agent routing (#1594): revenue posts to THIS agent's own subsidiary
+# revenue account (a 4130-child), via resolveRevenueAccount.
+REV="$(psql "$DSN" -tA -c "select count(*) from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" join subsidiary_accounts sa on sa.\"accountId\"=(select id from chart_of_accounts where code=jl.\"accountCode\" and \"companyId\"=2) where je.\"sourceType\"='umrah_sales_invoices' and je.\"sourceId\"=$IID and jl.credit>0 and sa.\"entityType\"='umrah_agent' and sa.\"entityId\"=$AID and sa.\"accountType\"='revenue';")"
+[ "${REV:-0}" -ge 1 ] && ok "revenue routed to the AGENT's own subsidiary revenue account (per-agent)" || no "revenue not routed to agent account ($REV)"
 
 PAY="$(post /umrah/payments "{\"subAgentId\":$SAID,\"sarAmount\":${TOT:-5000},\"method\":\"bank_transfer\",\"invoiceIds\":[$IID]}")"
 PYID="$(echo "$PAY" | gid)"

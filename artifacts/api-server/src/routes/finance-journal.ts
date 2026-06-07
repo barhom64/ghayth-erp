@@ -606,6 +606,52 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       if (lineAllocation.manualOverrideReason) entityLink.manualOverrideReason = lineAllocation.manualOverrideReason;
     }
 
+    // Activate the centralised resolver (migration 256 seeds the
+    // default Saudi rules). When the operator left accountCode empty
+    // but picked an operationType + relatedEntity, the resolver looks
+    // up the matching rule and fills in:
+    //   • the expense account (e.g. fuel → 5350)
+    //   • the cost-centre (e.g. from_vehicle → CC linked to the vehicle)
+    // When the operator pinned an accountCode manually, the resolver
+    // returns status='manual_override' and proposedAccountCode for
+    // audit — operator's pick still wins on the JE itself.
+    if (operationType || relatedEntityType) {
+      const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+      const resolved = await resolveLineAllocation({
+        companyId: effectiveCompanyId,
+        documentType: "expense",
+        lineType: operationType || expenseType || undefined,
+        entityType: relatedEntityType || undefined,
+        accountCode: overrideAccountCode || undefined,
+        costCenterId: entityLink.costCenterId != null ? Number(entityLink.costCenterId) : null,
+        dimensions: {
+          vehicleId: entityLink.vehicleId ?? null,
+          propertyId: entityLink.propertyId ?? null,
+          unitId: entityLink.unitId ?? null,
+          assetId: entityLink.assetId ?? null,
+          projectId: entityLink.projectId ?? null,
+          employeeId: entityLink.employeeId ?? null,
+          driverId: entityLink.driverId ?? null,
+          contractId: entityLink.contractId ?? null,
+          umrahSeasonId: entityLink.umrahSeasonId ?? null,
+          umrahAgentId: entityLink.umrahAgentId ?? null,
+          productId: entityLink.productId ?? null,
+          clientId: entityLink.clientId ?? null,
+          vendorId: entityLink.vendorId ?? null,
+        },
+        sourceTable: "journal_lines",
+        sourceLineId: 0, // populated post-insert
+      });
+      if (resolved.status === "resolved" || resolved.status === "manual_override") {
+        if (!overrideAccountCode && resolved.resolvedAccountCode) {
+          overrideAccountCode = resolved.resolvedAccountCode;
+        }
+        if (entityLink.costCenterId == null && resolved.costCenterId != null) {
+          entityLink.costCenterId = resolved.costCenterId;
+        }
+      }
+    }
+
     const { financialEngine } = await import("../lib/engines/index.js");
     // Carry the full entityLink on EVERY leg of the expense JE — expense DR,
     // VAT input DR, and cash CR. Without this the VAT obligation + cash
