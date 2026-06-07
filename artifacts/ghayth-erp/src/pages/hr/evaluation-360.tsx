@@ -14,11 +14,14 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Plus, Target, TrendingUp, Award, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "in_progress", label: "جارٍ التقييم" },
   { value: "completed",   label: "مكتمل"        },
@@ -43,14 +46,17 @@ export default function Evaluation360Page() {
   const { data: cyclesData, isLoading, isError } = useApiQuery<any>(["evaluation-cycles"], "/hr/evaluation-cycles");
   const cycles = cyclesData?.data || [];
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(cycles, filters, {
     searchFields: ["employeeName", "period"],
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const stats = {
     total: cycles.length,
@@ -167,12 +173,30 @@ export default function Evaluation360Page() {
       subtitle="تقييم شامل يجمع بيانات النظام وتقييم المدير والزملاء والتقييم العكسي السري"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Link href="/hr/evaluation-360/create">
-          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            بدء دورة تقييم
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_evaluation_360"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "دورات التقييم 360°", total: printRows.length },
+              items: printRows.map((c: any) => ({
+                "العنوان": c.title || c.name || "—",
+                "بداية الدورة": c.startDate || "—",
+                "نهاية الدورة": c.endDate || "—",
+                "عدد المُقَيِّمين": c.evaluatorCount ?? "—",
+                "عدد المُقَيَّمين": c.subjectCount ?? "—",
+                "الحالة": c.status || "—",
+              })),
+            })}
+          />
+          <Link href="/hr/evaluation-360/create">
+            <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              بدء دورة تقييم
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />
@@ -188,12 +212,29 @@ export default function Evaluation360Page() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "period", label: "فترة التقييم" },
+              { key: "managerScore", label: "تقييم المدير" },
+              { key: "peerScore", label: "تقييم الزملاء" },
+              { key: "selfScore", label: "التقييم الذاتي" },
+              { key: "upwardScore", label: "التقييم الصاعد" },
+              { key: "overallScore", label: "المعدل الإجمالي" },
+              { key: "status", label: "الحالة" },
+            ],
+            "تقييم-360-درجة",
+          )
+        }
         resultCount={filtered.length}
       />
 
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد دورات تقييم — ابدأ بإنشاء دورة تقييم للموظفين"

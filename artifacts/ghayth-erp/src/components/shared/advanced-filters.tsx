@@ -7,6 +7,7 @@ import { UnifiedDateRange } from "@/components/ui/unified-date-range";
 import { Badge } from "@/components/ui/badge";
 import { Filter, X, Search, Download, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { exportRowsToCsv } from "@/lib/unified-export";
 
 export interface FilterConfig {
   statuses?: { value: string; label: string }[];
@@ -374,28 +375,44 @@ function SimpleFilters({
   );
 }
 
-export function exportToCSV(data: Record<string, any>[], columns: { key: string; label: string }[], filename: string) {
+/**
+ * Shared CSV export helper used by ListPage-style pages and bulk-actions.
+ *
+ * Migrated to delegate to `exportRowsToCsv` (the unified-export wrapper
+ * around the print engine's csvAdapter) so every list export goes
+ * through `/api/print/render`, produces a `print_jobs` row, and shows
+ * up in `/reports/print-log`. This kills the legacy Blob+createObjectURL
+ * path that bypassed the audit story.
+ *
+ * The signature is preserved for back-compat; callers that don't await
+ * still work (errors will surface as an uncaught rejection in the
+ * console, which is the same UX they had before \u2014 the legacy version
+ * had no error handling either).
+ *
+ * `filename` is reused as the `entityType` slug (with non-id-safe chars
+ * replaced) and as the human-readable `title` \u2014 the unified-template
+ * fallback handles arbitrary entityType strings.
+ */
+export async function exportToCSV(
+  data: Record<string, any>[],
+  columns: { key: string; label: string }[],
+  filename: string,
+): Promise<void> {
   if (data.length === 0) return;
-
-  const BOM = "\uFEFF";
-  const header = columns.map(c => c.label).join(",");
-  const rows = data.map(row =>
-    columns.map(c => {
-      const val = String(row[c.key] ?? "").replace(/"/g, '""');
-      return `"${val}"`;
-    }).join(",")
-  );
-
-  const csv = BOM + header + "\n" + rows.join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`; // utc-ok: download filename timestamp, UTC date is fine
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  // Slug the filename into a stable entityType (latin-only id for the
+  // print_jobs row). Arabic/space chars collapse to "list" \u2014 the title
+  // still carries the original label for display purposes.
+  const slug = filename
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const entityType = `report_${slug || "list"}`;
+  await exportRowsToCsv({
+    entityType,
+    title: filename,
+    rows: data,
+    columns: columns.map((c) => ({ key: c.key, label: c.label })),
+  });
 }
 
 export function useAdvancedFilters() {

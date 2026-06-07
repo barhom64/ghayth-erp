@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { useLocation, useSearch } from "wouter";
-import { useApiMutation, useApiQuery } from "@/lib/api";
+import { useApiMutation, useApiQuery, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { DELEGATABLE_FEATURES } from "@/lib/delegation-features";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -65,6 +66,17 @@ export default function LeavesCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate } = useFieldErrors();
 
+  // Optional: delegate selected permissions to the relief officer for the leave
+  // window so approvals/work don't stall while the employee is away. Creates a
+  // real, engine-honored delegation (source='leave_request') on submit.
+  const [enableDelegation, setEnableDelegation] = useState(false);
+  const [delegFeatures, setDelegFeatures] = useState<string[]>([]);
+  const toggleDelegFeature = (key: string) => setDelegFeatures((prev) => {
+    if (key === "*") return prev.includes("*") ? [] : ["*"];
+    const without = prev.filter((k) => k !== "*");
+    return without.includes(key) ? without.filter((k) => k !== key) : [...without, key];
+  });
+
   const daysCount = useMemo(() => {
     if (!form.startDate || !form.endDate) return 0;
     const start = new Date(form.startDate);
@@ -108,7 +120,31 @@ export default function LeavesCreate() {
         documentUrl: attachments.length > 0 ? attachments[0].dataUrl : undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: async (data: any) => {
+          // If the employee chose to delegate during their leave, create a real
+          // delegation to the relief officer for the leave window. Best-effort:
+          // a delegation failure must not fail the (already-created) leave.
+          const leaveId = data?.id ?? data?.insertId ?? data?.data?.id;
+          if (enableDelegation && form.reliefOfficer) {
+            try {
+              await apiFetch("/hr/delegations", {
+                method: "POST",
+                body: JSON.stringify({
+                  delegateId: Number(form.reliefOfficer),
+                  reason: "تفويض أثناء الإجازة",
+                  startDate: form.startDate,
+                  endDate: form.endDate,
+                  features: delegFeatures.length > 0 ? delegFeatures : ["*"],
+                  source: "leave_request",
+                  refType: "leave_request",
+                  refId: leaveId,
+                }),
+              });
+              toast({ title: "تم تفعيل التفويض أثناء الإجازة" });
+            } catch (err: any) {
+              toast({ variant: "destructive", title: `تم إرسال الإجازة، لكن تعذّر إنشاء التفويض: ${err?.message || ""}` });
+            }
+          }
           clearDraft();
           setLocation("/hr/leaves");
         },
@@ -223,6 +259,36 @@ export default function LeavesCreate() {
             <TextField label="رقم التواصل أثناء الإجازة" dir="ltr" value={form.contactDuringLeave} onChange={(v) => setForm((f) => ({ ...f, contactDuringLeave: v }))} placeholder="05xxxxxxxx" hint="للتواصل في حالات الطوارئ" />
           </div>
         </div>
+
+        {/* تفويض الصلاحيات أثناء الإجازة — يُنشئ تفويضًا فعليًا للمكلّف للفترة. */}
+        {form.reliefOfficer && (
+          <div className="rounded-lg border border-status-info-surface bg-status-info-surface/30 p-4">
+            <label className="flex items-center gap-2 text-sm font-semibold text-status-info-foreground cursor-pointer">
+              <input type="checkbox" checked={enableDelegation} onChange={(e) => setEnableDelegation(e.target.checked)} className="accent-status-info" />
+              تفويض صلاحياتي للمكلّف أثناء فترة الإجازة
+            </label>
+            {enableDelegation && (
+              <div className="mt-3">
+                <p className="text-xs text-muted-foreground mb-2">اختر الأقسام التي يحقّ للمكلّف التصرّف فيها نيابةً عنك من {form.startDate || "بداية الإجازة"} إلى {form.endDate || "نهايتها"}. يسري التفويض تلقائيًا خلال الفترة فقط.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {DELEGATABLE_FEATURES.map((feat) => {
+                    const checked = delegFeatures.includes(feat.key);
+                    const disabled = feat.key !== "*" && delegFeatures.includes("*");
+                    return (
+                      <label key={feat.key} className={`flex items-center gap-2 text-sm rounded-md border px-3 py-2 cursor-pointer ${checked ? "bg-status-info-surface border-status-info" : "bg-surface hover:bg-surface-subtle"} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}>
+                        <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleDelegFeature(feat.key)} className="accent-status-info" />
+                        {feat.label}
+                      </label>
+                    );
+                  })}
+                </div>
+                {delegFeatures.length === 0 && (
+                  <p className="text-xs text-status-warning-foreground mt-1">لم تُحدِّد أقسامًا — سيُفوَّض كامل صلاحياتك افتراضيًا.</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات (تقرير طبي، إلخ)" />

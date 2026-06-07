@@ -7,6 +7,7 @@ import { ExportButton, MultiExportButton } from "@/components/shared/export-butt
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function FleetReports() {
   const { data: stats, isLoading, isError } = useApiQuery<any>(["fleet-stats"], "/fleet/stats");
@@ -27,12 +28,32 @@ export default function FleetReports() {
       title="تقارير الأسطول"
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "تقارير الأسطول" }]}
       actions={
-        <MultiExportButton
-          exports={[
-            { endpoint: "/export/excel/fleet", filename: "fleet-report.xlsx", type: "excel", label: "تصدير إكسل" },
-            { endpoint: "/export/pdf/fleet-trips", filename: "fleet-trips.pdf", type: "pdf", label: "تصدير ملف طباعي للرحلات" },
-          ]}
-        />
+        <>
+          <MultiExportButton
+            exports={[
+              { endpoint: "/export/excel/fleet", filename: "fleet-report.xlsx", type: "excel", label: "تصدير إكسل" },
+              { endpoint: "/export/pdf/fleet-trips", filename: "fleet-trips.pdf", type: "pdf", label: "تصدير ملف طباعي للرحلات" },
+            ]}
+          />
+          <PrintButton
+            entityType="report_fleet_reports"
+            entityId="summary"
+            size="icon"
+            payload={{
+              entity: { title: "تقارير الأسطول — ملخص", total: statCards.length },
+              items: [
+                { "البند": "إجمالي المركبات", "القيمة": s.totalVehicles ?? 0 },
+                { "البند": "المركبات النشطة", "القيمة": s.activeVehicles ?? 0 },
+                { "البند": "سجلات الوقود", "القيمة": s.totalFuelLogs ?? 0 },
+                { "البند": "طلبات الصيانة", "القيمة": s.totalMaintenance ?? 0 },
+                { "البند": "إجمالي الرحلات", "القيمة": s.totalTrips ?? 0 },
+                { "البند": "السائقين", "القيمة": s.totalDrivers ?? 0 },
+                { "البند": "تنبيهات نشطة", "القيمة": s.activeAlerts ?? 0 },
+                { "البند": "وثائق التأمين", "القيمة": s.totalInsurance ?? 0 },
+              ],
+            }}
+          />
+        </>
       }
     >
       <FleetTabsNav />

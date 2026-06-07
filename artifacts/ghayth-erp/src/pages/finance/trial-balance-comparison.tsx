@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -19,6 +20,7 @@ import {
   RefreshCw, Search,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
 
 /**
  * Trial Balance Comparison — side-by-side TB for two periods with
@@ -138,6 +140,7 @@ export default function TbComparisonPage() {
     if (varianceOnly) rows = rows.filter((r) => Math.abs(r.variance) > 0.01);
     return rows;
   }, [compareRows, typeFilter, search, varianceOnly]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const significantChanges = compareRows.filter((r) => Math.abs(r.variancePct) >= 25 && Math.abs(r.variance) > 100).length;
   const totalCurrent = compareRows.reduce((s, r) => s + Math.abs(r.currentBalance), 0);
@@ -278,14 +281,14 @@ export default function TbComparisonPage() {
           <PrintButton
             entityType="report_trial_balance_comparison"
             entityId={`${curStart}..${curEnd}_vs_${priorStart}..${priorEnd}`}
-            payload={{
+            payload={() => ({
               entity: {
                 title: "ميزان مراجعة — مقارنة فترتين",
                 currentPeriod: `${curStart} → ${curEnd}`,
                 priorPeriod: `${priorStart} → ${priorEnd}`,
                 accountCount: filtered.length,
               },
-              items: filtered.map((r) => ({
+              items: printRows.map((r) => ({
                 "الكود": r.code,
                 "اسم الحساب": r.name,
                 "النوع": r.type,
@@ -294,7 +297,7 @@ export default function TbComparisonPage() {
                 "الفارق": Number(r.variance ?? 0),
                 "%": Number(r.variancePct ?? 0).toFixed(2),
               })),
-            }}
+            })}
           />
           <Button variant="outline" size="sm" onClick={() => { qCurrent.refetch(); qPrior.refetch(); }}>
             <RefreshCw className="h-4 w-4 me-1" /> تحديث
@@ -326,7 +329,13 @@ export default function TbComparisonPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3">
-            <div className="grid grid-cols-2 gap-2">
+            <DateRangePresets
+              value={{ from: curStart, to: curEnd }}
+              onChange={(r) => { setCurStart(r.from); setCurEnd(r.to); }}
+              testidPrefix="tb-comparison-cur-preset"
+              hideAllTime
+            />
+            <div className="grid grid-cols-2 gap-2 mt-2">
               <div>
                 <Label className="text-xs">من</Label>
                 <Input type="date" value={curStart} onChange={(e) => setCurStart(e.target.value)} className="h-8" />
@@ -433,6 +442,7 @@ export default function TbComparisonPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={filtered}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا توجد حسابات بهذي الفلاتر"
           />

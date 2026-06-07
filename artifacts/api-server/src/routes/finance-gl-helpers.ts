@@ -185,14 +185,22 @@ glHelpersRouter.get(
         approvedAt: string | null;
         lineCount: string;
       }>(
-        `SELECT cc.id,
+        // Pre-aggregate cycle-count line counts once via CTE instead
+        // of running a scalar subquery per row. The NOT EXISTS
+        // sibling check is fine as-is — postgres optimizes it to a
+        // single semi-join. CTE handles the COUNT.
+        `WITH line_counts AS (
+           SELECT "cycleCountId", COUNT(*) AS lines
+           FROM warehouse_cycle_count_lines
+           GROUP BY "cycleCountId"
+         )
+         SELECT cc.id,
                 cc."warehouseId",
                 cc."scheduledDate"::text AS "scheduledDate",
                 cc."approvedAt"::text    AS "approvedAt",
-                (SELECT COUNT(*)::text
-                   FROM warehouse_cycle_count_lines l
-                   WHERE l."cycleCountId" = cc.id) AS "lineCount"
+                COALESCE(lc.lines, 0)::text AS "lineCount"
          FROM warehouse_cycle_counts cc
+         LEFT JOIN line_counts lc ON lc."cycleCountId" = cc.id
          WHERE cc."companyId" = $1
            AND cc.status = 'approved'
            AND NOT EXISTS (

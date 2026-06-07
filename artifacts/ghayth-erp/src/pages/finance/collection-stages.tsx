@@ -20,6 +20,8 @@ import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { Megaphone, ArrowRight, AlertTriangle, Phone, Mail } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface OverdueInvoice {
   id: number;
@@ -62,10 +64,13 @@ export default function CollectionStagesPage() {
     [["collection-overdue"]],
   );
 
+  const rows = data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const rows = data ?? [];
 
   const totalOverdueAmount = rows.reduce((s, r) => {
     const out = Number(r.total ?? 0) - Number(r.paidAmount ?? 0);
@@ -200,11 +205,33 @@ export default function CollectionStagesPage() {
         { label: "التحصيل" },
       ]}
       actions={
-        <Link href="/finance/dunning">
-          <Button variant="outline" size="sm">
-            <Mail className="h-4 w-4 me-1" /> Dunning (إيميلات جماعية)
-          </Button>
-        </Link>
+        <>
+          <Link href="/finance/dunning">
+            <Button variant="outline" size="sm">
+              <Mail className="h-4 w-4 me-1" /> Dunning (إيميلات جماعية)
+            </Button>
+          </Link>
+          <PrintButton
+            entityType="report_finance_collection_stages"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "مراحل التصعيد للتحصيل", total: printRows.length },
+              items: printRows.map((r) => ({
+                "الفاتورة": r.ref,
+                "العميل": r.clientName || "—",
+                "الإجمالي": Number(r.total || 0),
+                "المدفوع": Number(r.paidAmount || 0),
+                "المتبقي": Number(r.total || 0) - Number(r.paidAmount || 0),
+                "الاستحقاق": r.dueDate || "—",
+                "أيام التأخر": r.daysOverdue,
+                "المرحلة الحالية": r.currentStage,
+                "المرحلة الموصى": r.recommendedStage,
+                "الإجراء": r.recommendedAction || "—",
+              })),
+            })}
+          />
+        </>
       }
     >
       <FinanceTabsNav />
@@ -271,6 +298,7 @@ export default function CollectionStagesPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={30}
             emptyMessage="ما في فواتير متأخرة 🎉 — كل الذمم سارية"
           />

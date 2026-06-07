@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
 import {
+  PageShell,
   DataTable,
   type DataTableColumn,
   FormShell,
@@ -22,6 +23,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { MODULE_LABELS } from "@/lib/module-labels";
+import { PrintButton } from "@/components/shared/print-button";
 
 // The `modules` field is a string[] of MODULE_LABELS keys. Schema
 // enforces the closed-set; the picker lives below as a small
@@ -275,25 +277,33 @@ export default function AdminRolesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <KeyRound className="w-8 h-8 text-purple-600" />
-            إدارة الأدوار والصلاحيات
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات
-            {allRolesCount > 0 && (
-              <span className="ms-2 text-xs">· إجمالي الأدوار في النظام: {allRolesCount}</span>
-            )}
-          </p>
-        </div>
-        <GuardedButton perm="admin:create" size="sm" onClick={() => setActiveTab(activeTab === "create" ? "modules" : "create")}>
-          {activeTab === "create" ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إنشاء دور جديد</>}
-        </GuardedButton>
-      </div>
-
+    <PageShell
+      title="إدارة الأدوار والصلاحيات"
+      subtitle={`تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات${allRolesCount > 0 ? ` · إجمالي الأدوار في النظام: ${allRolesCount}` : ""}`}
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/admin", label: "الإدارة" }, { label: "الأدوار والصلاحيات" }]}
+      actions={
+        <>
+          <GuardedButton perm="admin:create" size="sm" onClick={() => setActiveTab(activeTab === "create" ? "modules" : "create")}>
+            {activeTab === "create" ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إنشاء دور جديد</>}
+          </GuardedButton>
+          <PrintButton
+            entityType="report_admin_roles"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "الأدوار والصلاحيات", total: predefinedRoles.length },
+              items: predefinedRoles.map((r: any) => ({
+                "مفتاح الدور": r.roleKey || "—",
+                "الاسم": r.label || r.name || "—",
+                "المستوى": r.level ?? "—",
+                "الوحدات المسموحة": Array.isArray(r.modules) ? r.modules.length : (r.allowedModules?.length ?? 0),
+                "الوصف": r.description || "—",
+              })),
+            }}
+          />
+        </>
+      }
+    >
       <div className="flex gap-2 border-b">
         <button onClick={() => setActiveTab("modules")} className={cn("px-4 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "modules" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-status-neutral-foreground")}>
           الوحدات المسموحة لكل دور
@@ -567,7 +577,7 @@ export default function AdminRolesPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
 

@@ -13,6 +13,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -255,7 +256,25 @@ function CompanyDocsTab() {
       )}
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <AdvancedFilters values={filters} onChange={setFilters} />
+        <AdvancedFilters
+          values={filters}
+          onChange={setFilters}
+          onExportCSV={() =>
+            exportToCSV(
+              filtered || [],
+              [
+                { key: "employeeName", label: "الموظف" },
+                { key: "documentType", label: "نوع الوثيقة" },
+                { key: "documentNumber", label: "الرقم" },
+                { key: "issueDate", label: "تاريخ الإصدار" },
+                { key: "expiryDate", label: "تاريخ الانتهاء" },
+                { key: "issuingAuthority", label: "جهة الإصدار" },
+                { key: "notes", label: "ملاحظات" },
+              ],
+              "وثائق-الموظفين",
+            )
+          }
+        />
         <GuardedButton
           perm="hr.organization:create"
           onClick={() => setCreating(true)}

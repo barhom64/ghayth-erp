@@ -3859,6 +3859,31 @@ ALTER TABLE ONLY public.fleet_trips
 
 
 --
+-- Name: fleet_rental_contracts fleet_rental_contracts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.fleet_rental_contracts
+    ADD CONSTRAINT fleet_rental_contracts_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.fleet_rental_contracts ALTER COLUMN id SET DEFAULT nextval('public.fleet_rental_contracts_id_seq'::regclass);
+
+CREATE INDEX idx_fleet_rental_contracts_vehicle ON public.fleet_rental_contracts USING btree ("companyId", "vehicleId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX idx_fleet_rental_contracts_client ON public.fleet_rental_contracts USING btree ("companyId", "clientId") WHERE ("deletedAt" IS NULL);
+CREATE INDEX idx_fleet_rental_contracts_active ON public.fleet_rental_contracts USING btree ("companyId", "endDate") WHERE (("deletedAt" IS NULL) AND ((status)::text = 'active'::text));
+
+
+--
+-- Name: fleet_rental_payments fleet_rental_payments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.fleet_rental_payments
+    ADD CONSTRAINT fleet_rental_payments_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.fleet_rental_payments ALTER COLUMN id SET DEFAULT nextval('public.fleet_rental_payments_id_seq'::regclass);
+
+CREATE INDEX idx_fleet_rental_payments_contract ON public.fleet_rental_payments USING btree ("companyId", "contractId", "dueDate");
+CREATE INDEX idx_fleet_rental_payments_overdue ON public.fleet_rental_payments USING btree ("companyId", "dueDate") WHERE ((status)::text = ANY (ARRAY['pending'::text, 'partial'::text]));
+
+
+--
 -- Name: fleet_tires fleet_tires_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15367,6 +15392,89 @@ ALTER TABLE ONLY public.zatca_settings
 
 ALTER TABLE ONLY public.zatca_submission_log
     ADD CONSTRAINT "zatca_submission_log_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
+
+
+--
+-- Cargo / freight module (#1354) — primary keys + sequence defaults
+--
+
+ALTER TABLE ONLY public.cargo_manifests ALTER COLUMN id SET DEFAULT nextval('public.cargo_manifests_id_seq'::regclass);
+ALTER TABLE ONLY public.cargo_items ALTER COLUMN id SET DEFAULT nextval('public.cargo_items_id_seq'::regclass);
+
+ALTER TABLE ONLY public.cargo_manifests
+    ADD CONSTRAINT cargo_manifests_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.cargo_items
+    ADD CONSTRAINT cargo_items_pkey PRIMARY KEY (id);
+
+--
+-- Cargo / freight module (#1354) — FKs
+--
+
+ALTER TABLE ONLY public.cargo_manifests
+    ADD CONSTRAINT "cargo_manifests_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES public.clients(id);
+ALTER TABLE ONLY public.cargo_manifests
+    ADD CONSTRAINT "cargo_manifests_fleetTripId_fkey" FOREIGN KEY ("fleetTripId") REFERENCES public.fleet_trips(id);
+ALTER TABLE ONLY public.cargo_manifests
+    ADD CONSTRAINT "cargo_manifests_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES public.fleet_vehicles(id);
+ALTER TABLE ONLY public.cargo_manifests
+    ADD CONSTRAINT "cargo_manifests_driverId_fkey" FOREIGN KEY ("driverId") REFERENCES public.fleet_drivers(id);
+ALTER TABLE ONLY public.cargo_items
+    ADD CONSTRAINT "cargo_items_manifestId_fkey" FOREIGN KEY ("manifestId") REFERENCES public.cargo_manifests(id) ON DELETE CASCADE;
+
+--
+-- Cargo / freight module (#1354) — indexes
+--
+
+CREATE INDEX idx_cargo_manifests_company
+    ON public.cargo_manifests ("companyId") WHERE "deletedAt" IS NULL;
+CREATE INDEX idx_cargo_manifests_status
+    ON public.cargo_manifests (status, "companyId") WHERE "deletedAt" IS NULL;
+CREATE INDEX idx_cargo_manifests_customer
+    ON public.cargo_manifests ("customerId", "companyId") WHERE "deletedAt" IS NULL;
+CREATE INDEX idx_cargo_manifests_trip
+    ON public.cargo_manifests ("fleetTripId") WHERE "deletedAt" IS NULL AND "fleetTripId" IS NOT NULL;
+CREATE INDEX idx_cargo_manifests_vehicle
+    ON public.cargo_manifests ("vehicleId", "pickupDate" DESC) WHERE "deletedAt" IS NULL AND "vehicleId" IS NOT NULL;
+CREATE INDEX idx_cargo_manifests_driver
+    ON public.cargo_manifests ("driverId", "pickupDate" DESC) WHERE "deletedAt" IS NULL AND "driverId" IS NOT NULL;
+CREATE INDEX idx_cargo_items_manifest
+    ON public.cargo_items ("manifestId") WHERE "deletedAt" IS NULL;
+CREATE INDEX idx_cargo_items_hazmat
+    ON public.cargo_items ("isHazmat", "companyId") WHERE "deletedAt" IS NULL AND "isHazmat" = true;
+
+
+--
+-- Multi-assignee tasks (migration 250) — task_assignees junction + tasks.createdBy
+--
+
+ALTER TABLE public.tasks
+    ADD COLUMN "createdBy" INTEGER,
+    ADD COLUMN "updatedAt" TIMESTAMPTZ DEFAULT NOW();
+
+CREATE INDEX idx_tasks_createdBy
+    ON public.tasks ("companyId", "createdBy") WHERE "deletedAt" IS NULL;
+
+CREATE TABLE public.task_assignees (
+    id SERIAL PRIMARY KEY,
+    "companyId" INTEGER NOT NULL,
+    "taskId" INTEGER NOT NULL,
+    "assignmentId" INTEGER NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'member',
+    "assignedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "assignedBy" INTEGER,
+    "removedAt" TIMESTAMPTZ,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT task_assignees_role_check CHECK (role IN ('primary', 'member')),
+    CONSTRAINT task_assignees_task_fk FOREIGN KEY ("taskId") REFERENCES public.tasks(id) ON DELETE CASCADE,
+    CONSTRAINT task_assignees_assignment_fk FOREIGN KEY ("assignmentId") REFERENCES public.employee_assignments(id) ON DELETE RESTRICT
+);
+
+CREATE UNIQUE INDEX uq_task_assignees_active
+    ON public.task_assignees ("taskId", "assignmentId") WHERE "removedAt" IS NULL;
+CREATE INDEX idx_task_assignees_assignment
+    ON public.task_assignees ("companyId", "assignmentId") WHERE "removedAt" IS NULL;
+CREATE INDEX idx_task_assignees_task
+    ON public.task_assignees ("taskId") WHERE "removedAt" IS NULL;
 
 
 --

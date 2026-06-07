@@ -4,6 +4,7 @@ import { useFormContext } from "react-hook-form";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -17,10 +18,44 @@ import { FormShell } from "@workspace/ui-core";
 
 export type ApprovalActionType = "approve" | "reject" | "return" | "refer" | "escalate";
 
+// Which flat `module:action` permission represents "may decide this kind of
+// request". The frontend permission vocabulary (role_permissions, surfaced via
+// can()) is CRUD-style: only HR carries a distinct `approve` action; for the
+// finance/support tracks the decision authority is the module's `update` perm
+// (mirrors the backend approve routes, which authorize action:"update"). Owners
+// and `*`/`module:*` holders pass automatically inside can(). Entity types not
+// listed here (e.g. governance/requests, which have no flat perm) are left
+// ungated — the server still enforces on click.
+const ENTITY_APPROVE_PERM: Record<string, string> = {
+  leave: "hr:approve",
+  loan: "hr:approve",
+  overtime: "hr:approve",
+  exit: "hr:approve",
+  violation: "hr:approve",
+  excuse: "hr:approve",
+  transfer: "hr:approve",
+  expense: "finance:update",
+  custody: "finance:update",
+  budget: "finance:update",
+  invoice: "finance:update",
+  voucher: "finance:update",
+  receivable: "finance:update",
+  commitment: "finance:update",
+  ticket: "support:update",
+};
+
 export interface ApprovalActionsProps {
   entityType: string;
   entityId: number;
   currentStatus?: string;
+  /**
+   * Permission(s) required to see the decision controls. Defaults to a
+   * sensible per-entityType mapping (ENTITY_APPROVE_PERM). The user sees the
+   * approve/reject/return buttons only when can(perm) is true — so a viewer
+   * without approval authority gets no actionable buttons (the server enforces
+   * the same on submit). Pass explicitly to override the default.
+   */
+  perm?: string | string[];
   approveEndpoint?: string;
   rejectEndpoint?: string;
   returnEndpoint?: string;
@@ -62,6 +97,7 @@ export function ApprovalActions({
   returnBody,
   referBody,
   escalateBody,
+  perm,
   pendingStatuses = defaultPendingStatuses,
   onDone,
   invalidateKeys,
@@ -69,8 +105,18 @@ export function ApprovalActions({
   const [action, setAction] = useState<ApprovalActionType | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { can } = useAppContext();
 
   if (!pendingStatuses.includes(currentStatus)) return null;
+
+  // Permission gate: hide the decision controls entirely when the viewer lacks
+  // approval authority for this entity type. Unmapped types (no default + no
+  // explicit perm) stay visible — the server is the source of truth on submit.
+  const gatePerm = perm ?? ENTITY_APPROVE_PERM[entityType];
+  if (gatePerm) {
+    const list = Array.isArray(gatePerm) ? gatePerm : [gatePerm];
+    if (!list.some(can)) return null;
+  }
 
   const handleAction = async (actionType: ApprovalActionType, notes: string, referredTo: string) => {
     try {

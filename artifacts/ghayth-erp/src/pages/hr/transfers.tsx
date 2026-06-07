@@ -23,6 +23,7 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { ApprovalActions } from "@workspace/workflow-kit";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -31,6 +32,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { TRANSFER_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // employeeId + toBranchId required (was `if (!form.employeeId || !form.toBranchId)`
 // toast guard — now caught at schema validation before any network call).
 const transferSchema = z.object({
@@ -54,6 +57,7 @@ export default function TransfersPage() {
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["transfers"], "/hr/transfers");
   const transfers = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(transfers);
 
   const { data: employees } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
   const { data: branches } = useApiQuery<any>(["branches"], "/settings/branches");
@@ -212,10 +216,30 @@ export default function TransfersPage() {
       subtitle="إدارة طلبات نقل الموظفين بين الفروع والأقسام"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <GuardedButton perm="hr:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
-          <Plus className="h-4 w-4" />
-          طلب نقل جديد
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_transfers"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "طلبات نقل الموظفين", total: printRows.length },
+              items: printRows.map((t: any) => ({
+                "الموظف": t.employeeName || "—",
+                "من فرع": t.fromBranchName || "—",
+                "إلى فرع": t.toBranchName || "—",
+                "من قسم": t.fromDepartmentName || "—",
+                "إلى قسم": t.toDepartmentName || "—",
+                "تاريخ النقل": t.transferDate || "—",
+                "السبب": t.reason || "—",
+                "الحالة": t.status || "—",
+              })),
+            })}
+          />
+          <GuardedButton perm="hr:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            طلب نقل جديد
+          </GuardedButton>
+        </div>
       }
     >
       <HrTabsNav />
@@ -290,12 +314,30 @@ export default function TransfersPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "fromBranchName", label: "الفرع الحالي" },
+              { key: "toBranchName", label: "الفرع المنقول إليه" },
+              { key: "toDeptName", label: "القسم الجديد" },
+              { key: "toJobTitle", label: "المسمى الجديد" },
+              { key: "effectiveDate", label: "تاريخ السريان" },
+              { key: "status", label: "الحالة" },
+              { key: "reason", label: "السبب" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "طلبات-النقل",
+          )
+        }
         resultCount={filtered.length}
       />
 
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد طلبات نقل — قدّم طلب نقل جديد للبدء"

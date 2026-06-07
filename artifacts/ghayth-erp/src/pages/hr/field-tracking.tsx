@@ -16,6 +16,8 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const defaultCenter: [number, number] = [24.7136, 46.6753];
 
 function AttendanceMap({ items }: { items: any[] }) {
@@ -82,6 +84,7 @@ function AttendanceMap({ items }: { items: any[] }) {
 export default function FieldTrackingPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["attendance"], "/hr/attendance");
   const items = asList(data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -98,6 +101,24 @@ export default function FieldTrackingPage() {
       title="التتبع الميداني"
       subtitle="متابعة مواقع الموظفين الميدانيين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "التتبع الميداني" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_field_tracking"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تقرير التتبع الميداني", total: printRows.length },
+            items: printRows.map((v: any) => ({
+              "الموظف": v.employeeName || "—",
+              "التاريخ": v.date || "—",
+              "وقت التسجيل": v.checkIn || "—",
+              "خط العرض": v.latitude ?? "—",
+              "خط الطول": v.longitude ?? "—",
+              "الحالة": v.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />
@@ -119,6 +140,7 @@ export default function FieldTrackingPage() {
           { key: "checkIn", header: "وقت التسجيل", sortable: true, render: (v) => <span className="font-mono">{formatTimeAr(v.checkIn)}</span> },
           { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} /> },
         ] as DataTableColumn<any>[]}
+        onSortedDataChange={setPrintRows}
         data={items}
         noToolbar
         emptyMessage="لا توجد سجلات"

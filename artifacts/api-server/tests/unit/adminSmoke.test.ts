@@ -34,7 +34,10 @@ describe("admin — user management endpoints", () => {
 
   it("GET /users queries scoped by companyId", () => {
     const idx = SRC.indexOf('"/users"');
-    const section = SRC.slice(idx, idx + 1000);
+    // Widened from 1000 → 2500 after the failed_login_counts CTE was
+    // inserted ahead of the main SELECT (N+1 fix); the
+    // [scope.companyId] binding now sits further down the handler.
+    const section = SRC.slice(idx, idx + 2500);
     expect(section).toContain("scope.companyId");
   });
 

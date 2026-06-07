@@ -18,6 +18,8 @@ import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 export default function TreasuryPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
@@ -27,11 +29,14 @@ export default function TreasuryPage() {
   );
   const [activeTab, setActiveTab] = useState<"accounts" | "movements" | "daily">("accounts");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const summary = data?.summary || {};
   const accounts = data?.accounts || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(accounts);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
   const movements = data?.recentMovements || [];
   const dailySummary = data?.dailySummary || [];
 
@@ -189,6 +194,20 @@ export default function TreasuryPage() {
               <TrendingUp className="h-4 w-4 me-1" />التدفق النقدي
             </Link>
           </Button>
+          <PrintButton
+            entityType="report_finance_treasury"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "الخزينة — الأرصدة النقدية", total: printRows.length },
+              items: printRows.map((a: any) => ({
+                "الكود": a.code,
+                "اسم الحساب": a.name,
+                "النوع": a.code?.startsWith("110") ? "صندوق نقدي" : a.code?.startsWith("11") ? "حساب بنكي" : "أخرى",
+                "الرصيد الحالي": Number(a.currentBalance ?? 0),
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -290,6 +309,7 @@ export default function TreasuryPage() {
       {activeTab === "accounts" && (
         <DataTable
           columns={accountColumns}
+          onSortedDataChange={setPrintRows}
           data={accounts}
           isLoading={isLoading}
           isError={isError}

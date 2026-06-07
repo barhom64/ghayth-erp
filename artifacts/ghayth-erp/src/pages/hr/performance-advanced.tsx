@@ -11,14 +11,19 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function PerformanceAdvancedPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["performance"], "/hr/performance");
 
+  const items = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const items = data?.data || [];
 
   const avgScore = items.length > 0
     ? (items.reduce((s: number, p: any) => s + Number(p.overallScore || 0), 0) / items.length).toFixed(1)
@@ -44,6 +49,23 @@ export default function PerformanceAdvancedPage() {
       title="تحليلات الأداء المتقدمة"
       subtitle="تحليل مؤشرات الأداء والمقارنات المعيارية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تحليلات الأداء المتقدمة" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_performance_advanced"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تحليلات الأداء المتقدمة", total: printRows.length },
+            items: printRows.map((e: any) => ({
+              "الموظف": e.employeeName || e.name || "—",
+              "المنصب": e.position || e.jobTitle || "—",
+              "النتيجة": e.score ?? e.rating ?? "—",
+              "التصنيف": e.rank || e.grade || "—",
+              "آخر تقييم": e.lastEvaluatedAt || e.lastReviewDate || "—",
+            })),
+          })}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />
@@ -84,6 +106,7 @@ export default function PerformanceAdvancedPage() {
               ) },
               { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="text-muted-foreground">{v.period || "-"}</span> },
             ] as DataTableColumn<any>[]}
+            onSortedDataChange={setPrintRows}
             data={[...items].sort((a: any, b: any) => Number(b.overallScore || 0) - Number(a.overallScore || 0)).slice(0, 10)}
             noToolbar
             emptyMessage="لا توجد تقييمات"

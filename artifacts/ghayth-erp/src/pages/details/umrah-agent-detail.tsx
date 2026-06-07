@@ -20,6 +20,7 @@ import { Edit, Phone, Mail, MapPin, Users, Wallet, TrendingUp } from "lucide-rea
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
+import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -373,6 +374,7 @@ export default function UmrahAgentDetail() {
                 entityType="umrah_agent"
                 entityId={id ?? 0}
                />
+              {id && <EntityPnlButton entityType="umrah_agent" entityId={id} />}
             </>
           }
         />

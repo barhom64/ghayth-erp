@@ -49,8 +49,14 @@
 
 -- 1. Composite uniqueness on clients (id, companyId) — required so other
 --    tables can compose-FK against (clientId, companyId).
-ALTER TABLE public.clients
-  ADD CONSTRAINT clients_id_company_uq UNIQUE (id, "companyId");
+-- Idempotent: skip if the composite unique already exists (baseline dump may
+-- already carry it, in which case a bare ADD CONSTRAINT aborts the boot).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'clients_id_company_uq' AND conrelid = 'public.clients'::regclass) THEN
+    ALTER TABLE public.clients ADD CONSTRAINT clients_id_company_uq UNIQUE (id, "companyId");
+  END IF;
+END $$;
 
 -- 2. Drop the simple FKs added by migration 230.
 ALTER TABLE public.tenants
@@ -60,14 +66,21 @@ ALTER TABLE public.legal_cases
   DROP CONSTRAINT IF EXISTS "legal_cases_clientId_fkey";
 
 -- 3. Add the composite FKs with ON DELETE SET NULL.
-ALTER TABLE public.tenants
-  ADD CONSTRAINT tenants_client_company_fk
-  FOREIGN KEY ("clientId", "companyId")
-  REFERENCES public.clients (id, "companyId")
-  ON DELETE SET NULL;
-
-ALTER TABLE public.legal_cases
-  ADD CONSTRAINT legal_cases_client_company_fk
-  FOREIGN KEY ("clientId", "companyId")
-  REFERENCES public.clients (id, "companyId")
-  ON DELETE SET NULL;
+-- Idempotent: skip each FK if it already exists (baseline dump may carry it).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tenants_client_company_fk' AND conrelid = 'public.tenants'::regclass) THEN
+    ALTER TABLE public.tenants
+      ADD CONSTRAINT tenants_client_company_fk
+      FOREIGN KEY ("clientId", "companyId")
+      REFERENCES public.clients (id, "companyId")
+      ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'legal_cases_client_company_fk' AND conrelid = 'public.legal_cases'::regclass) THEN
+    ALTER TABLE public.legal_cases
+      ADD CONSTRAINT legal_cases_client_company_fk
+      FOREIGN KEY ("clientId", "companyId")
+      REFERENCES public.clients (id, "companyId")
+      ON DELETE SET NULL;
+  END IF;
+END $$;

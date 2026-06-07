@@ -19,6 +19,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface AgentForm {
   name: string;
@@ -41,6 +43,7 @@ export default function UmrahAgents() {
   const [, navigate] = useLocation();
   const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
   const items = resp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const { toast } = useToast();
 
   const [editing, setEditing] = useState<any>(null);
@@ -130,7 +133,28 @@ export default function UmrahAgents() {
   ];
 
   return (
-    <PageShell title="وكلاء العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "الوكلاء" }]}>
+    <PageShell
+      title="وكلاء العمرة"
+      breadcrumbs={[{ label: "العمرة" }, { label: "الوكلاء" }]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_agents"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "وكلاء العمرة", total: printRows.length },
+            items: printRows.map((a: any) => ({
+              "الاسم": a.name || "—",
+              "رقم نسك": a.nuskAgentNumber || "—",
+              "البلد": a.country || "—",
+              "الموسم": a.seasonName || "—",
+              "هامش الربح": a.profitMargin ?? "—",
+              "الحالة": a.status || "—",
+            })),
+          })}
+        />
+      }
+    >
       <UmrahTabsNav />
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground">إدارة وكلاء العمرة</p>
@@ -155,6 +179,7 @@ export default function UmrahAgents() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={items}
         isLoading={isLoading}
         isError={isError}

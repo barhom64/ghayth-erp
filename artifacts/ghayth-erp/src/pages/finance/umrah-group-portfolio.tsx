@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { exportRowsToCsv } from "@/lib/unified-export";
 import { Layers, TrendingUp, TrendingDown, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -86,35 +88,31 @@ export default function UmrahGroupPortfolioDashboard() {
     return { best: sorted[0], worst: sorted[sorted.length - 1], winCount: wins, lossCount: losses };
   }, [rows]);
 
+  // GAP_MATRIX item #7 — uses the unified export helper so the
+  // download appears in /reports/print-log with audit + letterhead.
   const exportCsv = () => {
-    const header = [
-      "id", "name", "nuskGroupNumber", "status",
-      "seasonTitle", "agentName",
-      "expectedPilgrims", "actualPilgrims",
-      "revenue", "paid", "cost", "margin", "marginPct",
-    ];
-    const escape = (v: unknown) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
     const pct = (m: number, r: number) => r > 0 ? ((m / r) * 100).toFixed(1) : "0";
-    const lines = [
-      header.join(","),
-      ...rows.map((r) => [
-        r.id, r.name, r.nuskGroupNumber, r.status,
-        r.seasonTitle, r.agentName,
-        r.expectedPilgrims, r.actualPilgrims,
-        r.revenue, r.paid, r.cost, r.margin,
-        pct(Number(r.margin), Number(r.revenue)),
-      ].map(escape).join(",")),
-    ];
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `umrah-group-portfolio.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    void exportRowsToCsv({
+      entityType: "report_umrah_group_portfolio",
+      title: "محفظة مجموعات العمرة",
+      rows: rows as unknown as Record<string, unknown>[],
+      columns: [
+        { key: "id",                label: "id" },
+        { key: "name",              label: "name" },
+        { key: "nuskGroupNumber",   label: "nuskGroupNumber" },
+        { key: "status",            label: "status" },
+        { key: "seasonTitle",       label: "seasonTitle" },
+        { key: "agentName",         label: "agentName" },
+        { key: "expectedPilgrims",  label: "expectedPilgrims" },
+        { key: "actualPilgrims",    label: "actualPilgrims" },
+        { key: "revenue",           label: "revenue" },
+        { key: "paid",              label: "paid" },
+        { key: "cost",              label: "cost" },
+        { key: "margin",            label: "margin" },
+        { key: "marginPct",         label: "marginPct",
+          format: (_, row: any) => pct(Number(row.margin), Number(row.revenue)) },
+      ],
+    }).catch((err) => console.error("[export] failed", err));
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -169,6 +167,27 @@ export default function UmrahGroupPortfolioDashboard() {
           >
             <Download className="h-3 w-3" /> تصدير CSV
           </Button>
+          <PrintButton
+            entityType="report_umrah_group_portfolio"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "محفظة مجموعات العمرة", total: rows.length },
+              items: rows.map((r) => ({
+                "المجموعة": r.name || r.nuskGroupNumber,
+                "نسك": r.nuskGroupNumber,
+                "الموسم": r.seasonTitle || "—",
+                "المرشد": r.agentName || "—",
+                "متوقع": r.expectedPilgrims ?? 0,
+                "فعلي": r.actualPilgrims,
+                "الإيراد": Number(r.revenue || 0),
+                "المدفوع": Number(r.paid || 0),
+                "التكلفة": Number(r.cost || 0),
+                "الهامش": Number(r.margin || 0),
+                "الحالة": STATUS_LABELS[r.status] || r.status,
+              })),
+            }}
+          />
         </div>
       }
     >

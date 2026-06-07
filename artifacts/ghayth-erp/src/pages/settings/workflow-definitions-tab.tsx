@@ -108,6 +108,12 @@ export function WorkflowDefinitionsTab() {
     { key: "autoApproveOnTimeout", header: "تلقائي", render: (r: any) => r.autoApproveOnTimeout ? "نعم" : "لا" },
   ];
 
+  // Replaces window.confirm(). The dialog owns the DELETE and
+  // surfaces 409 blockers inline (e.g. workflow has active instances).
+  const [deletingDef, setDeletingDef] = useState<{ id: number; label: string } | null>(null);
+  const [testTarget, setTestTarget] = useState<any | null>(null);
+  const [testRefId, setTestRefId] = useState("");
+
   if (isLoading) return <DataTable columns={slaColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
   if (isError) return <DataTable columns={slaColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
@@ -164,10 +170,6 @@ export function WorkflowDefinitionsTab() {
     }
   };
 
-  // Replaces window.confirm(). The dialog owns the DELETE and
-  // surfaces 409 blockers inline (e.g. workflow has active instances).
-  const [deletingDef, setDeletingDef] = useState<{ id: number; label: string } | null>(null);
-
   const handleSaveSla = async (values: SlaDefForm) => {
     try {
       await apiFetch("/workflows/sla-definitions", {
@@ -195,8 +197,6 @@ export function WorkflowDefinitionsTab() {
       toast({ variant: "destructive", title: "فشل الإرسال", description: e?.message });
     }
   };
-  const [testTarget, setTestTarget] = useState<any | null>(null);
-  const [testRefId, setTestRefId] = useState("");
   const handleTestSubmit = (definition: any) => {
     setTestRefId("");
     setTestTarget(definition);

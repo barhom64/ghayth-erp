@@ -77,7 +77,16 @@ export default function PurchaseOrdersCreate() {
         expectedDelivery: copySource.expectedDelivery || "",
       }));
       if (copySource.lines?.length) {
-        setItems(copySource.lines.map((l: any) => ({ productId: String(l.productId || ""), quantity: String(l.quantity || 1), unitPrice: String(l.unitPrice || "") })));
+        // Carry every line field — lineTreatment and allocation
+        // silently default back to "inventory" + {} otherwise, which
+        // re-routes the GL on copied expense-treated POs.
+        setItems(copySource.lines.map((l: any) => ({
+          productId: String(l.productId || ""),
+          quantity: String(l.quantity || 1),
+          unitPrice: String(l.unitPrice || ""),
+          lineTreatment: l.lineTreatment || "inventory",
+          allocation: (l.allocation ?? {}) as LineAllocation,
+        })));
       }
     }
   }, [copySource, copied, setForm]);

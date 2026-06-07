@@ -12,6 +12,7 @@ import {
 } from "@workspace/ui-core";
 import { Download, Boxes, Warehouse, Tags } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
@@ -110,10 +111,15 @@ export default function InventoryValuationPage() {
     `/finance/reports/inventory-valuation${qs}`,
   );
 
+  const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<typeof rows[number]>(rows);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError || !data) return <ErrorState />;
 
-  const { summary, byWarehouse, byCategory, data: rows } = data;
+  const { summary, byWarehouse, byCategory } = data;
+
 
   const productColumns: DataTableColumn<ValuationRow>[] = [
     {
@@ -210,15 +216,15 @@ export default function InventoryValuationPage() {
           <PrintButton
             entityType="report_inventory_valuation"
             entityId={todayLocal()}
-            payload={{
+            payload={() => ({
               entity: {
                 title: "تقييم المخزون",
                 asOfDate: todayLocal(),
-                totalValuation: rows.reduce((s, r) => s + Number(r.valuation ?? 0), 0),
-                productCount: rows.length,
+                totalValuation: printRows.reduce((s, r) => s + Number(r.valuation ?? 0), 0),
+                productCount: printRows.length,
                 includeZeroStock,
               },
-              items: rows.map((r) => ({
+              items: printRows.map((r) => ({
                 "المنتج": r.name,
                 "SKU": r.sku ?? "",
                 "المستودع": r.warehouseName ?? "",
@@ -226,7 +232,7 @@ export default function InventoryValuationPage() {
                 "متوسط التكلفة": Number(r.weightedAvgCost ?? 0),
                 "القيمة": Number(r.valuation ?? 0),
               })),
-            }}
+            })}
           />
         </>
       }
@@ -299,6 +305,7 @@ export default function InventoryValuationPage() {
         </h3>
         <DataTable
           columns={productColumns} data={rows}
+          onSortedDataChange={setPrintRows}
           emptyMessage="لا يوجد مخزون نشط"
           pageSize={50}
         />

@@ -15,11 +15,14 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { DOCUMENT_TYPES, DOCUMENT_COLORS } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const DOC_STATUS_OPTIONS = Object.entries(DOCUMENT_TYPES).map(([value, label]) => ({ value, label }));
 
 function getSeverityBadge(daysLeft: number) {
@@ -46,6 +49,7 @@ export default function ExpiringDocumentsPage() {
     statusField: "docType",
     dateField: "expiryDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const criticalCount = allDocs.filter((d: any) => Number(d.daysLeft) <= 14).length;
   const expiredCount = allDocs.filter((d: any) => Number(d.daysLeft) <= 0).length;
@@ -131,15 +135,33 @@ export default function ExpiringDocumentsPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       loading={isLoading}
       actions={
-        <Select value={days} onValueChange={setDays}>
-          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="14">14 يوم</SelectItem>
-            <SelectItem value="30">30 يوم</SelectItem>
-            <SelectItem value="60">60 يوم</SelectItem>
-            <SelectItem value="90">90 يوم</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_expiring_documents"
+            entityId={days}
+            size="icon"
+            payload={() => ({
+              entity: { title: `الوثائق المنتهية خلال ${days} يوم`, days, total: printRows.length },
+              items: printRows.map((d: any) => ({
+                "الموظف": d.employeeName || "—",
+                "نوع الوثيقة": d.documentType || d.type || "—",
+                "رقم الوثيقة": d.documentNumber || d.number || "—",
+                "تاريخ الانتهاء": d.expiryDate || "—",
+                "أيام متبقية": d.daysUntilExpiry ?? "—",
+                "الحالة": d.status || "—",
+              })),
+            })}
+          />
+          <Select value={days} onValueChange={setDays}>
+            <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="14">14 يوم</SelectItem>
+              <SelectItem value="30">30 يوم</SelectItem>
+              <SelectItem value="60">60 يوم</SelectItem>
+              <SelectItem value="90">90 يوم</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       }
     >
       <HrTabsNav />
@@ -163,12 +185,29 @@ export default function ExpiringDocumentsPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "entityName", label: "الكيان" },
+              { key: "entityType", label: "النوع" },
+              { key: "documentType", label: "نوع الوثيقة" },
+              { key: "documentNumber", label: "الرقم" },
+              { key: "issueDate", label: "تاريخ الإصدار" },
+              { key: "expiryDate", label: "تاريخ الانتهاء" },
+              { key: "daysUntilExpiry", label: "أيام للانتهاء" },
+              { key: "status", label: "الحالة" },
+            ],
+            "الوثائق-قاربة-الانتهاء",
+          )
+        }
         resultCount={filtered.length}
       />
 
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد وثائق منتهية في هذه الفترة"

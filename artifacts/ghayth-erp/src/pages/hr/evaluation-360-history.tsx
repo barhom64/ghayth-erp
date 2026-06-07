@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import {
   PageShell,
   DataTable,
@@ -33,11 +35,14 @@ export default function Evaluation360HistoryPage() {
     `/hr/employees/${employeeId}/evaluation-history`
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const employee = data?.employee;
   const history = data?.history || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(history);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   // Build chart data
   const chartData = history.filter((h: any) => h.finalScore != null);
@@ -50,9 +55,26 @@ export default function Evaluation360HistoryPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/evaluation-360", label: "التقييم 360°" }, { label: "تاريخ التقييمات" }]}
       loading={isLoading}
       actions={
-        <Link href="/hr/evaluation-360">
-          <Button variant="ghost" size="sm"><ArrowRight className="w-4 h-4 me-1" />عودة</Button>
-        </Link>
+        <>
+          <Link href="/hr/evaluation-360">
+            <Button variant="ghost" size="sm"><ArrowRight className="w-4 h-4 me-1" />عودة</Button>
+          </Link>
+          <PrintButton
+            entityType="report_hr_evaluation_360_history"
+            entityId={employeeId || "list"}
+            size="icon"
+            payload={() => ({
+              entity: { title: `تاريخ التقييمات — ${employee?.name || ""}`, total: printRows.length },
+              items: printRows.map((h: any) => ({
+                "الفترة": h.period || "—",
+                "النتيجة": h.finalScore ?? "—",
+                "المراجع": h.reviewerName || "—",
+                "التاريخ": h.evaluatedAt || h.createdAt || "—",
+                "الحالة": h.status || "—",
+              })),
+            })}
+          />
+        </>
       }
     >
       <HrTabsNav />
@@ -110,6 +132,7 @@ export default function Evaluation360HistoryPage() {
             </Link>
           ) },
         ] as DataTableColumn<any>[]}
+        onSortedDataChange={setPrintRows}
         data={history}
         noToolbar
         emptyMessage="لا توجد سجلات"

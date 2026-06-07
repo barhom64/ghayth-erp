@@ -15,6 +15,8 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { ACTIVITY_TYPES, ACTIVITY_STATUS } from "@/lib/crm-type-maps";
 
 import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const TYPE_OPTIONS = Object.entries(ACTIVITY_TYPES).map(([value, label]) => ({ value, label }));
 
 const STATUS_OPTIONS = [
@@ -42,6 +44,7 @@ export default function CrmActivities() {
     dateField: "scheduledAt",
     extraFields: { type: "type" },
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const kpis = [
     { label: "إجمالي الأنشطة", value: allActivities.length, icon: Calendar, color: "text-status-info-foreground bg-status-info-surface" },
@@ -108,6 +111,27 @@ export default function CrmActivities() {
     <PageShell
       title="أنشطة إدارة العملاء"
       breadcrumbs={[{ href: "/crm", label: "إدارة العلاقات" }]}
+      actions={
+        <PrintButton
+          entityType="report_crm_activities"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: {
+              title: "أنشطة CRM",
+              total: printRows.length,
+            },
+            items: printRows.map((a: any) => ({
+              "النوع": a.type || a.activityType || "—",
+              "الموضوع": a.subject || a.title || "—",
+              "العميل": a.clientName || "—",
+              "المسؤول": a.userName || a.assigneeName || "—",
+              "التاريخ": a.scheduledAt || a.dueDate || a.createdAt || "—",
+              "الحالة": a.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <CrmTabsNav />
       <KpiGrid items={kpis} />
@@ -128,6 +152,7 @@ export default function CrmActivities() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد أنشطة"

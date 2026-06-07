@@ -5,7 +5,7 @@
 
 **العلاقة بالقضايا**: #1418 (Ghaith Operating Foundation), #1413 (Unified users/roles/permissions/visibility)
 
-**مرجع ذو صلة**: `docs/audit/EXECUTIVE_INVENTORY_REPORT.md`, `docs/audit/SYSTEM_INVENTORY_MATRIX.md`, `docs/audit/UNVERIFIED_PATHS_ARCHITECTURE_MAP.md`
+**مرجع ذو صلة**: `docs/audit/EXECUTIVE_INVENTORY_REPORT.md`, `docs/audit/SYSTEM_INVENTORY_MATRIX.md`, `docs/audit/archive/UNVERIFIED_PATHS_ARCHITECTURE_MAP.md` (مؤرشف)
 
 ---
 ## 1. المنهجية (Methodology)
@@ -933,7 +933,7 @@
 
 - `docs/audit/EXECUTIVE_INVENTORY_REPORT.md` — جرد تنفيذي عام (موديولات).
 - `docs/audit/SYSTEM_INVENTORY_MATRIX.md` — مصفوفة inventory جزئية.
-- `docs/audit/UNVERIFIED_PATHS_ARCHITECTURE_MAP.md` — خريطة المسارات غير الموثَّقة في المعمارية.
+- `docs/audit/archive/UNVERIFIED_PATHS_ARCHITECTURE_MAP.md` — خريطة المسارات غير الموثَّقة في المعمارية (مؤرشف).
 - `artifacts/ghayth-erp/src/components/layout/sidebar-layout.tsx:73-623` — `allNavSections` السلطة الرسمية.
 - `artifacts/ghayth-erp/src/components/layout/sidebar-layout.tsx:627-656` — `getAllNavigationPages()` يولّد قائمة الـ paths المسطّحة.
 - `artifacts/ghayth-erp/src/routes/registry.ts` — `isRegisteredRoute()` المستخدم لتصفية الـ sidebar.

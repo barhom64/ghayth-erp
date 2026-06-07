@@ -18,6 +18,8 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Withholding Tax categories — Saudi Income Tax Law Art. 68.
@@ -75,6 +77,7 @@ export default function WhtCategoriesPage() {
   const filtered = applyFilters(items, filters, {
     searchFields: ["code", "name", "nameEn", "appliesTo"],
   }) as WhtCategory[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<WhtCategory>[] = [
     {
@@ -163,6 +166,22 @@ export default function WhtCategoriesPage() {
               إضافة فئة استقطاع
             </Link>
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_wht_categories"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "فئات استقطاع الضريبة", total: printRows.length },
+              items: printRows.map((c) => ({
+                "الرمز": c.code,
+                "الاسم": c.name,
+                "Name EN": c.nameEn || "—",
+                "النسبة %": Number(c.rate || 0),
+                "النوع": appliesLabels[c.appliesTo as keyof typeof appliesLabels] || c.appliesTo,
+                "نشط": c.isActive ? "نعم" : "لا",
+              })),
+            })}
+          />
         </>
       }
     >
@@ -194,6 +213,7 @@ export default function WhtCategoriesPage() {
       >
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={filtered}
           onRowClick={(c) => navigate(`/finance/wht-categories/${c.id}/edit`)}
           pageSize={20}

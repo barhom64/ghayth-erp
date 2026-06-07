@@ -249,25 +249,66 @@ function decryptConfigSecrets(config: Record<string, unknown>): Record<string, u
  * the logic was the #6 finding from the engineering review.
  */
 export function buildAdapter(integration: IntegrationRow): CMSV6Adapter | null {
-  // Defense-in-depth complement to the POST/PATCH guards (#1419):
-  // existing rows with a stub provider (e.g., wialon/teltonika
-  // migrated in from before the lockout) would otherwise return a
-  // CMSV6 adapter pointed at a non-CMSV6 endpoint — garbage in,
-  // garbage out. Reject cleanly here so the poll cron, on-demand
-  // sync, and webhook test all share the same boundary.
-  if (integration.provider && integration.provider !== "cmsv6") return null;
+  // M10 fix: wire Wialon + Teltonika adapters. Pre-fix, any provider
+  // other than 'cmsv6' returned null and the route fell through to
+  // 'manual' mode (operator inputs by hand). Now each provider routes
+  // to its real adapter, and the operator just needs credentials in
+  // integrations.config to start polling.
   const cfg = decryptConfigSecrets(integration.config ?? {});
   const account = cfg.account as string | undefined;
   const password = cfg.password as string | undefined;
-  if (!account || !password) return null;
-  return createCmsv6Adapter({
-    baseUrl: integration.baseUrl,
-    account,
-    password,
-    apiKey: cfg.apiKey as string | undefined,
-    sessionTtlSec: cfg.sessionTtlSec as number | undefined,
-    timeoutMs: cfg.timeoutMs as number | undefined,
-  });
+  const apiKey = cfg.apiKey as string | undefined;
+  const token = cfg.token as string | undefined;
+
+  switch (integration.provider) {
+    case "wialon": {
+      // Wialon needs a token (or apiKey/password fallback).
+      const tok = token || apiKey || password;
+      if (!tok) return null;
+      // Lazy-load to avoid pulling Wialon code into every CMSV6 caller.
+      const { createWialonAdapter } = require("../lib/integrations/wialonAdapter.js");
+      return createWialonAdapter({
+        baseUrl: integration.baseUrl,
+        account: account ?? "",
+        password: password ?? "",
+        apiKey,
+        token: tok,
+        host: cfg.host as string | undefined,
+        timeoutMs: cfg.timeoutMs as number | undefined,
+      });
+    }
+    case "teltonika": {
+      const tok = token || apiKey || password;
+      if (!tok) return null;
+      const { createTeltonikaAdapter } = require("../lib/integrations/teltonikaAdapter.js");
+      return createTeltonikaAdapter({
+        baseUrl: integration.baseUrl,
+        account: account ?? "",
+        password: password ?? "",
+        apiKey,
+        token: tok,
+        host: cfg.host as string | undefined,
+        timeoutMs: cfg.timeoutMs as number | undefined,
+      });
+    }
+    case "cmsv6":
+    case undefined:
+    case null: {
+      // Original path. CMSV6 needs account + password.
+      if (!account || !password) return null;
+      return createCmsv6Adapter({
+        baseUrl: integration.baseUrl,
+        account,
+        password,
+        apiKey,
+        sessionTtlSec: cfg.sessionTtlSec as number | undefined,
+        timeoutMs: cfg.timeoutMs as number | undefined,
+      });
+    }
+    default:
+      // 'manual' or any future enum value — no adapter.
+      return null;
+  }
 }
 
 export async function logSync(params: {

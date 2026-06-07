@@ -15,6 +15,8 @@ import {
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function PaymentsPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["payments"], "/finance/payments");
@@ -22,13 +24,16 @@ export default function PaymentsPage() {
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref"],
     dateField: "",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -83,6 +88,20 @@ export default function PaymentsPage() {
               تقادم الموردين
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_payments"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "المدفوعات", total: printRows.length },
+              items: printRows.map((p: any) => ({
+                "المرجع": p.ref || "—",
+                "الوصف": p.description || "—",
+                "المبلغ": Number(p.amount || 0),
+                "التاريخ": p.date || "—",
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -120,6 +139,7 @@ export default function PaymentsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  PageShell,
   FormShell,
   FormEmailField,
   FormTextField,
@@ -50,6 +51,8 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "مالك النظام" },
@@ -95,6 +98,7 @@ export default function AdminUsersPage() {
     if (filterStatus === "inactive" && u.isActive) return false;
     return true;
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const userColumns: DataTableColumn<any>[] = [
     {
@@ -271,20 +275,34 @@ export default function AdminUsersPage() {
   const suspiciousCount = items.filter(u => Number(u.failedAttempts7d) > 3).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Users className="w-8 h-8 text-status-info-foreground" />
-            إدارة المستخدمين
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">إنشاء وإدارة وحذف حسابات المستخدمين في النظام</p>
-        </div>
-        <Button size="sm" onClick={() => { setShowForm(!showForm); setCreatedUser(null); setEditUser(null); setDeleteConfirmId(null); }}>
-          {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة مستخدم</>}
-        </Button>
-      </div>
-
+    <PageShell
+      title="إدارة المستخدمين"
+      subtitle="إنشاء وإدارة وحذف حسابات المستخدمين في النظام"
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/admin", label: "الإدارة" }, { label: "المستخدمون" }]}
+      actions={
+        <>
+          <Button size="sm" onClick={() => { setShowForm(!showForm); setCreatedUser(null); setEditUser(null); setDeleteConfirmId(null); }}>
+            {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة مستخدم</>}
+          </Button>
+          <PrintButton
+            entityType="report_admin_users"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "المستخدمون", total: printRows.length },
+              items: printRows.map((u: any) => ({
+                "البريد": u.email || "—",
+                "الموظف": u.employeeName || "—",
+                "الدور": roleLabel(u.role),
+                "الحالة": u.isActive ? "نشط" : "معلق",
+                "آخر دخول": u.lastLoginAt || "—",
+                "محاولات فاشلة (7 أيام)": u.failedAttempts7d ?? 0,
+              })),
+            })}
+          />
+        </>
+      }
+    >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "إجمالي المستخدمين", value: items.length, color: "bg-status-info-surface text-status-info-foreground" },
@@ -435,6 +453,7 @@ export default function AdminUsersPage() {
 
       <DataTable
         columns={userColumns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}
@@ -469,7 +488,7 @@ export default function AdminUsersPage() {
           <RoleAssignmentSection users={filtered} />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }
 

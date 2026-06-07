@@ -9,10 +9,13 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export function BranchPerformanceTab() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-branch-perf"], "/bi/reports/branch-performance");
   const rows = (data?.data || []) as any[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const columns: DataTableColumn<any>[] = [
     { key: "rank", header: "الترتيب", sortable: true, render: (r) => <Badge variant={r.rank === 1 ? "default" : "outline"}>{r.rank}</Badge> },
@@ -41,9 +44,27 @@ export function BranchPerformanceTab() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">مقارنة أداء الفروع</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold">مقارنة أداء الفروع</h2>
+        <PrintButton
+          entityType="report_bi_branch_performance"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "مقارنة أداء الفروع", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "الفرع": r.branchName || "—",
+              "الإيرادات": r.revenue ?? 0,
+              "المصاريف": r.expenses ?? 0,
+              "صافي الربح": r.netProfit ?? r.profit ?? 0,
+              "الموظفون": r.employeeCount ?? "—",
+            })),
+          })}
+        />
+      </div>
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={rows}
         isLoading={isLoading}
         isError={isError}

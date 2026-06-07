@@ -5631,7 +5631,12 @@ CREATE TABLE public.delegations (
     status character varying(20) DEFAULT 'active'::character varying,
     "startDate" date,
     "endDate" date,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    features jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "createdBy" integer,
+    source character varying(32) DEFAULT 'manual'::character varying NOT NULL,
+    "refType" character varying(64),
+    "refId" integer
 );
 
 
@@ -7058,6 +7063,8 @@ CREATE TABLE public.employees (
     "companyId" integer,
     "branchId" integer,
     attachments jsonb DEFAULT '[]'::jsonb,
+    "personalEmail" character varying(200),
+    "internalEmail" character varying(200),
     CONSTRAINT chk_employees_status CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('terminated'::character varying)::text, ('on_leave'::character varying)::text, ('suspended'::character varying)::text])))
 );
 
@@ -8434,6 +8441,68 @@ ALTER SEQUENCE public.fleet_trips_id_seq OWNED BY public.fleet_trips.id;
 -- Name: fleet_tires; Type: TABLE; Schema: public; Owner: -
 -- Source: migration 245_fleet_tires.sql (per-vehicle tire inventory).
 --
+
+--
+-- Name: fleet_rental_contracts; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 247_fleet_rental_contracts.sql.
+--
+
+CREATE TABLE public.fleet_rental_contracts (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    ref character varying(80),
+    "vehicleId" integer NOT NULL,
+    "clientId" integer NOT NULL,
+    "startDate" date NOT NULL,
+    "endDate" date,
+    "dailyRate" numeric(12,2),
+    "totalAmount" numeric(15,2),
+    "securityDeposit" numeric(12,2) DEFAULT 0,
+    "paymentTerms" character varying(40) DEFAULT 'monthly',
+    status character varying(20) DEFAULT 'draft' NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT fleet_rental_contracts_status_check
+      CHECK ((status::text = ANY (ARRAY['draft'::text, 'active'::text, 'completed'::text, 'cancelled'::text]))),
+    CONSTRAINT fleet_rental_contracts_payment_terms_check
+      CHECK (("paymentTerms"::text = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text, 'quarterly'::text, 'one_time'::text])))
+);
+
+CREATE SEQUENCE public.fleet_rental_contracts_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.fleet_rental_contracts_id_seq OWNED BY public.fleet_rental_contracts.id;
+
+
+--
+-- Name: fleet_rental_payments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_rental_payments (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "contractId" integer NOT NULL,
+    "dueDate" date NOT NULL,
+    amount numeric(12,2) NOT NULL,
+    "paidAmount" numeric(12,2) DEFAULT 0,
+    "paidDate" date,
+    method character varying(30),
+    status character varying(20) DEFAULT 'pending' NOT NULL,
+    "journalEntryId" integer,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fleet_rental_payments_status_check
+      CHECK ((status::text = ANY (ARRAY['pending'::text, 'partial'::text, 'paid'::text, 'overdue'::text])))
+);
+
+CREATE SEQUENCE public.fleet_rental_payments_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.fleet_rental_payments_id_seq OWNED BY public.fleet_rental_payments.id;
+
 
 CREATE TABLE public.fleet_tires (
     id integer NOT NULL,
@@ -10654,7 +10723,9 @@ CREATE TABLE public.job_titles (
     "companyId" integer,
     "isActive" boolean DEFAULT true,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "defaultRoleKey" character varying(60),
+    "opensCustody" boolean DEFAULT false NOT NULL
 );
 
 
@@ -15909,7 +15980,7 @@ CREATE TABLE public.subsidiary_accounts (
     "isActive" boolean DEFAULT true NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT "subsidiary_accounts_entityType_check" CHECK ((("entityType")::text = ANY (ARRAY[('employee'::character varying)::text, ('client'::character varying)::text, ('vendor'::character varying)::text, ('project'::character varying)::text, ('property'::character varying)::text])))
+    CONSTRAINT "subsidiary_accounts_entityType_check" CHECK ((("entityType")::text = ANY (ARRAY[('employee'::character varying)::text, ('client'::character varying)::text, ('vendor'::character varying)::text, ('project'::character varying)::text, ('property'::character varying)::text, ('umrah_agent'::character varying)::text, ('umrah_sub_agent'::character varying)::text, ('umrah_season'::character varying)::text, ('property_unit'::character varying)::text])))
 );
 
 
@@ -19201,3 +19272,99 @@ CREATE TABLE public.zatca_submission_log (
     CONSTRAINT "zatca_submission_log_entityType_check" CHECK ((("entityType")::text = ANY (ARRAY[('invoice'::character varying)::text, ('expense'::character varying)::text]))),
     CONSTRAINT zatca_submission_log_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('submitted'::character varying)::text, ('accepted'::character varying)::text, ('rejected'::character varying)::text, ('error'::character varying)::text])))
 );
+
+
+--
+-- Name: cargo_manifests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cargo_manifests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "manifestNumber" character varying(64) NOT NULL,
+    status character varying(24) DEFAULT 'draft'::character varying NOT NULL,
+    "customerId" integer,
+    "customerName" character varying(255),
+    "customerPhone" character varying(64),
+    "fleetTripId" integer,
+    "fromLocation" character varying(255),
+    "toLocation" character varying(255),
+    "pickupDate" date,
+    "deliveryDate" date,
+    "vehicleId" integer,
+    "driverId" integer,
+    "totalWeight" numeric(12,2) DEFAULT 0,
+    "totalDeclaredValue" numeric(14,2) DEFAULT 0,
+    "freightRevenue" numeric(14,2) DEFAULT 0,
+    "freightCost" numeric(14,2) DEFAULT 0,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'confirmed'::character varying, 'loading'::character varying, 'in_transit'::character varying, 'delivered'::character varying, 'closed'::character varying, 'cancelled'::character varying])::text[])))
+);
+
+
+--
+-- Name: cargo_manifests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.cargo_manifests_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: cargo_manifests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.cargo_manifests_id_seq OWNED BY public.cargo_manifests.id;
+
+
+--
+-- Name: cargo_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cargo_items (
+    id integer NOT NULL,
+    "manifestId" integer NOT NULL,
+    "companyId" integer NOT NULL,
+    description character varying(255) NOT NULL,
+    quantity integer DEFAULT 1 NOT NULL,
+    "unitOfMeasure" character varying(32) DEFAULT 'piece'::character varying,
+    weight numeric(12,2) DEFAULT 0,
+    "declaredValue" numeric(14,2) DEFAULT 0,
+    dimensions jsonb,
+    "isHazmat" boolean DEFAULT false NOT NULL,
+    "hazmatClass" character varying(32),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+--
+-- Name: cargo_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.cargo_items_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: cargo_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.cargo_items_id_seq OWNED BY public.cargo_items.id;

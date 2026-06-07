@@ -55,3 +55,8 @@ attached_assets/
 .env.*
 !.env.example
 artifacts/api-server/.env
+
+# Database backups (scripts/backup.sh) — never commit dumps; they contain
+# personal data (PDPL) and live business data.
+backups/
+*.sql.gz

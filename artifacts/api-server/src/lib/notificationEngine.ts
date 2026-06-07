@@ -50,9 +50,11 @@ export interface EnginePayload {
   recipientName?: string;
   recipientPhone?: string;
   recipientWhatsApp?: string;
+  recipientUserId?: number;
   clientId?: number;
   templateKey?: string;
   templateVars?: Record<string, string>;
+  language?: "ar" | "en";
   fallbackChainId?: number;
   metadata?: Record<string, unknown>;
 }
@@ -184,7 +186,23 @@ function applyUserPreferences(channels: EngineChannel[], prefs: UserPreference |
   });
 }
 
-async function getTemplate(companyId: number, templateKey: string, channel: string): Promise<TemplateRow | null> {
+async function resolveLanguage(companyId: number, payload: EnginePayload): Promise<"ar" | "en"> {
+  if (payload.language) return payload.language;
+  if (payload.recipientUserId) {
+    const rows = await rawQuery<{ preferredLocale: string }>(
+      `SELECT "preferredLocale" FROM users WHERE id = $1 LIMIT 1`,
+      [payload.recipientUserId],
+    );
+    const loc = rows[0]?.preferredLocale;
+    if (loc === "ar" || loc === "en") return loc;
+  }
+  return "ar";
+}
+
+async function getTemplate(companyId: number, templateKey: string, channel: string, language: "ar" | "en" = "ar"): Promise<TemplateRow | null> {
+  // Order by language match first (preferred wins), then company specificity.
+  // Falls back to the other language if the preferred one is missing for
+  // this (companyId, templateKey, channel) tuple.
   const rows = await rawQuery<TemplateRow>(
     `SELECT id, "templateKey", channel, "titleTemplate", "bodyTemplate"
      FROM notification_templates
@@ -192,9 +210,9 @@ async function getTemplate(companyId: number, templateKey: string, channel: stri
        AND "templateKey" = $2
        AND channel = $3
        AND "isActive" = true
-     ORDER BY "companyId" DESC NULLS LAST
+     ORDER BY (language = $4) DESC, "companyId" DESC NULLS LAST
      LIMIT 1`,
-    [companyId, templateKey, channel]
+    [companyId, templateKey, channel, language]
   );
   return rows[0] ?? null;
 }
@@ -408,10 +426,12 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
     channels = ["in_app"];
   }
 
+  const language = await resolveLanguage(companyId, payload);
+
   for (const channel of channels) {
     try {
       const template = payload.templateKey
-        ? await getTemplate(companyId, payload.templateKey, channel === "in_app" ? "in_app" : channel)
+        ? await getTemplate(companyId, payload.templateKey, channel === "in_app" ? "in_app" : channel, language)
         : null;
 
       const title = resolveTitle(payload, template);

@@ -27,6 +27,7 @@ import {
   computeVat,
   getCompanyVatRate,
 } from "../lib/businessHelpers.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -489,6 +490,22 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
       entityId: insertId,
       after: { name: b.name, clientId: b.clientId, budget: b.budget, status: b.status || 'planning' },
     }).catch((e) => logger.error(e, "projects background task failed"));
+
+    // Auto-mint a project-level cost centre, NESTED under the current
+    // branch's cost centre when one exists. The shape:
+    //   BR-0007       branch #7 (created by POST /branches)
+    //   └── BR-0007-P0042   project #42 (this)
+    // → all journal lines carrying costCenterId = THIS row roll up into
+    //   the branch's per-branch P&L automatically. Fire-and-forget so
+    //   a CC hiccup never fails the project create.
+    createCostCenterForEntity(
+      scope.companyId, "project", insertId, b.name.trim(),
+      {
+        parentEntityType: scope.branchId ? "branch" : null,
+        parentEntityId: scope.branchId ?? null,
+        actorUserId: scope.userId,
+      },
+    ).catch((e) => logger.error(e, "project cost-centre auto-create failed"));
 
     // Register delivery obligation for the project's endDate
     if (b.endDate) {

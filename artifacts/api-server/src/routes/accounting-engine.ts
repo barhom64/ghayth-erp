@@ -603,6 +603,32 @@ export async function createSubsidiaryAccountsForEntity(
       accountsToCreate.push(
         { accountType: "payable", parentCode: "2102", suffix: "ذمة" }
       );
+    } else if (entityType === "driver") {
+      // Drivers receive cash advances for fuel + on-the-road
+      // repairs (custody). The driver-level custody account
+      // splits these from generic employee custody so fleet
+      // managers can report per-driver outstanding cash without
+      // pulling employee_assignments joins.
+      accountsToCreate.push(
+        { accountType: "custody", parentCode: "1131", suffix: "عهدة سائق" }
+      );
+    } else if (entityType === "vehicle") {
+      // Per-vehicle subsidiary accounts (#1594 — "نظام قوي قابل للتحكم"):
+      // each vehicle gets its OWN postable leaf under the standard fleet
+      // parents so fuel/maintenance/depreciation post per-plate and roll up
+      // to the parent for consolidated reporting. Editable later from the
+      // vehicle page via /finance/subsidiary-accounts. Parents that don't
+      // exist in a minimal COA are skipped gracefully (the loop `continue`s).
+      //   custody  → 1131 (fuel cards / tolls / deposits held on the plate)
+      //   fuel     → 5510 (الوقود)
+      //   maintenance → 5520 (صيانة وإصلاح المركبات)
+      //   depreciation → 5710 (إهلاك المركبات)
+      accountsToCreate.push(
+        { accountType: "custody", parentCode: "1113", suffix: "عهدة مركبة" },
+        { accountType: "fuel", parentCode: "5510", suffix: "وقود" },
+        { accountType: "maintenance", parentCode: "5520", suffix: "صيانة" },
+        { accountType: "depreciation", parentCode: "5710", suffix: "إهلاك" }
+      );
     }
 
     await withTransaction(async (client) => {

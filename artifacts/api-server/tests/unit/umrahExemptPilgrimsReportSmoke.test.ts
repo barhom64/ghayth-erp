@@ -134,11 +134,14 @@ describe("exempt-pilgrims page — UI behaviour", () => {
   });
 
   it("CSV export builds rows client-side from the same filtered set (no extra roundtrip)", () => {
-    // Two requirements: (a) the export button has a stable testid,
-    // (b) the export builds from `rows` not a refetched payload —
-    // operator gets exactly what they're looking at.
+    // Three requirements: (a) the export button has a stable testid,
+    // (b) the export uses the unified `exportRowsToCsv` helper so the
+    // download lands in /reports/print-log with audit + letterhead
+    // (GAP_MATRIX item #7), (c) the export builds from `rows` not a
+    // refetched payload — operator gets exactly what they're looking at.
     expect(PAGE).toContain('data-testid="exempt-export-csv"');
-    expect(PAGE).toMatch(/\.\.\.\s*rows\.map\(\(r\) =>/);
+    expect(PAGE).toContain('exportRowsToCsv');
+    expect(PAGE).toMatch(/rows:\s*rows\s+as\s+unknown/);
     expect(PAGE).toMatch(/disabled=\{rows\.length === 0\}/);
   });
 });

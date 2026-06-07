@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { z } from "zod";
 import { apiFetch, useApiQuery } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
+  CreatePageLayout,
   FormShell,
   FormGrid,
   FormTextField,
@@ -14,7 +14,6 @@ import {
   FormDateField,
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowRight } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 
 const pilgrimSchema = z.object({
@@ -68,15 +67,13 @@ export default function PilgrimCreate() {
   const { data: packages } = useApiQuery<any>(["umrah-packages"], "/umrah/packages");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Link href="/umrah/pilgrims"><Button variant="ghost" size="sm" title="الانتقال"><ArrowRight className="h-4 w-4" /></Button></Link>
-        <h1 className="text-3xl font-bold">إضافة معتمر جديد</h1>
-      </div>
-      <Card>
-        <CardHeader><CardTitle>بيانات المعتمر</CardTitle></CardHeader>
-        <CardContent>
-          <FormShell
+    <CreatePageLayout
+      title="إضافة معتمر جديد"
+      backPath="/umrah/pilgrims"
+      backLabel="المعتمرون"
+      breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/umrah", label: "العمرة" }, { href: "/umrah/pilgrims", label: "المعتمرون" }]}
+    >
+      <FormShell
             schema={pilgrimSchema}
             defaultValues={EMPTY}
             submitLabel="حفظ"
@@ -136,8 +133,6 @@ export default function PilgrimCreate() {
             <FormTextareaField name="notes" label="ملاحظات" rows={3} />
             <FileDropZone files={attachments} onFilesChange={setAttachments} />
           </FormShell>
-        </CardContent>
-      </Card>
-    </div>
+    </CreatePageLayout>
   );
 }

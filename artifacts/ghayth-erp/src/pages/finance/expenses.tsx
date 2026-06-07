@@ -47,6 +47,8 @@ const OPERATION_LABELS: Record<string, string> = {
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 
 export default function ExpensesPage() {
@@ -64,15 +66,18 @@ export default function ExpensesPage() {
   const [, navigate] = useLocation();
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("expense");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const preFiltered = applyFilters(items as Record<string, any>[], filters, {
     searchFields: ["description", "accountName", "ref", "operationType", "costCenter"],
     statusField: "status",
     dateField: "",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((i: any) => tagFilteredIds.has(i.id)) : preFiltered;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const totalExpenses = items.reduce((s: number, e: any) => {
     if (e.amount) return s + Number(e.amount);
@@ -198,6 +203,23 @@ export default function ExpensesPage() {
           <Link href="/finance/expenses/create">
             <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة مصروف</GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_finance_expenses"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "المصروفات", total: printRows.length },
+              items: printRows.map((e: any) => ({
+                "المرجع": e.ref || e.id,
+                "التاريخ": e.expenseDate || e.date || "—",
+                "الفئة": e.category || "—",
+                "البيان": e.description || "—",
+                "المبلغ": e.amount ?? 0,
+                "مركز التكلفة": e.costCenterName || e.costCenter || "—",
+                "الحالة": e.status || "—",
+              })),
+            })}
+          />
         </>
       }
     >
@@ -264,6 +286,7 @@ export default function ExpensesPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

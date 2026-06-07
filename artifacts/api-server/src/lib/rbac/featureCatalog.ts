@@ -268,6 +268,14 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], displayOrder: 330 },
 
+  // Cargo / freight (#1354 — road-freight manifests). Separate from
+  // fleet.trips because cargo dispatch is typically a different role
+  // (logistics coordinator) and the data surface — manifest, items,
+  // hazmat — has no overlap with passenger-trip CRUD.
+  { key: "fleet.cargo", parentKey: "fleet", moduleKey: "fleet", labelAr: "نقل البضائع",
+    icon: "Package",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 335 },
+
   // Telematics surface (#1354 — CMSV6 / AI MDVR / Sensors). Separate feature
   // keys per concern so the operator can grant "see live map" without
   // unlocking "open live video" or "edit CMSV6 credentials".

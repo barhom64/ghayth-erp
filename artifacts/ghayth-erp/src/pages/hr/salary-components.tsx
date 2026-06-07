@@ -15,6 +15,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   PageShell,
   PageStatusBadge,
   FormShell,
@@ -27,6 +28,8 @@ import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // Zod schema enforces what the old `disabled={!form.name || ...}` guard
 // only half-checked. value is coerced from the <input type="number">
 // string back to a number (same pattern as inspections/deposits #287).
@@ -78,6 +81,7 @@ export default function SalaryComponentsPage() {
 
   const [filters, setFilters] = useFilters();
   const filtered = applyFilters(items, filters, { searchFields: ["name", "type", "calculationType"], statusField: "status" });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
   const allowances = items.filter((c: any) => c.type === "earning" || !c.type);
   const deductions = items.filter((c: any) => c.type === "deduction");
 
@@ -151,9 +155,26 @@ export default function SalaryComponentsPage() {
       subtitle="إدارة البدلات والخصومات والمكونات الراتبية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "مكونات الرواتب" }]}
       actions={
-        <GuardedButton perm="hr:create" size="sm" onClick={() => { if (showForm) { closeForm(); } else { setEditing(null); setShowForm(true); } }}>
-          <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "إضافة مكون"}
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_salary_components"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "مكونات الرواتب", total: printRows.length },
+              items: printRows.map((c: any) => ({
+                "الاسم": c.name || "—",
+                "النوع": c.type || "—",
+                "طريقة الحساب": c.calculationType || "—",
+                "القيمة": c.value ?? "—",
+                "الحالة": c.status || "—",
+              })),
+            })}
+          />
+          <GuardedButton perm="hr:create" size="sm" onClick={() => { if (showForm) { closeForm(); } else { setEditing(null); setShowForm(true); } }}>
+            <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "إضافة مكون"}
+          </GuardedButton>
+        </div>
       }
     >
       <HrTabsNav />
@@ -175,6 +196,20 @@ export default function SalaryComponentsPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filtered.length}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "name", label: "المكون" },
+              { key: "calculationType", label: "طريقة الحساب" },
+              { key: "type", label: "التصنيف" },
+              { key: "value", label: "القيمة" },
+              { key: "taxable", label: "خاضع للضريبة" },
+              { key: "status", label: "الحالة" },
+            ],
+            "مكونات-الرواتب",
+          )
+        }
       />
 
       {showForm && (
@@ -235,6 +270,7 @@ export default function SalaryComponentsPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد مكونات رواتب"
