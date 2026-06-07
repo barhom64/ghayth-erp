@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatDateAr } from "@/lib/formatters";
+import { formatUmrahDate } from "@/lib/formatters";
 import { Paperclip, ExternalLink, Search } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
 
@@ -125,7 +125,7 @@ export default function UmrahAttachmentsPage() {
         ),
     },
     { key: "notes", header: "ملاحظات", render: (a) => a.notes || "—" },
-    { key: "createdAt", header: "تاريخ الإضافة", render: (a) => formatDateAr(a.createdAt) },
+    { key: "createdAt", header: "تاريخ الإضافة", render: (a) => formatUmrahDate(a.createdAt) },
   ];
 
   return (
@@ -153,7 +153,7 @@ export default function UmrahAttachmentsPage() {
               "العنوان": a.title || "—",
               "نوع الوثيقة": TYPE_LABEL[a.type] || a.type || "—",
               "ملاحظات": a.notes || "—",
-              "تاريخ الإضافة": a.createdAt ? formatDateAr(a.createdAt) : "—",
+              "تاريخ الإضافة": a.createdAt ? formatUmrahDate(a.createdAt) : "—",
             })),
           })}
         />

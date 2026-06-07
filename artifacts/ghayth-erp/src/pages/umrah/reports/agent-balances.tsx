@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Wallet, TrendingUp, AlertTriangle, Users, Download } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 
 // تقرير أرصدة الوكلاء المجمَّع — كل الوكلاء في صف واحد. المحاسب
 // يجاوب: «لمن أرسل تنبيه؟ المتأخر بكم؟ آخر فاتورة متى؟» بدون فتح
@@ -267,7 +267,7 @@ export default function UmrahAgentBalancesReport() {
                         <td className="p-2 text-[11px]">
                           {r.lastInvoiceAt ? (
                             <>
-                              {formatDateAr(r.lastInvoiceAt)}
+                              {formatUmrahDate(r.lastInvoiceAt)}
                               {r.lastInvoiceRef && (
                                 <p className="text-[10px] font-mono text-muted-foreground">{r.lastInvoiceRef}</p>
                               )}
