@@ -16,6 +16,33 @@ interface FleetGLContext {
   createdBy: number;
 }
 
+// Look up the auto-created cost-centre for a vehicle (mirrors what
+// costCenterAutoCreate.ts mints on vehicle insert). Returns null when
+// the CC row was never created (legacy vehicles or autoCreate disabled).
+// Used by the fuel/maintenance/insurance JE posters so every fleet GL
+// line carries costCenterId directly — per-vehicle P&L can drill on
+// the CC without joining through journal_lines.vehicleId.
+async function resolveVehicleCostCenter(
+  companyId: number,
+  vehicleId: number,
+  _activity: string,
+): Promise<number | null> {
+  try {
+    const [row] = await rawQuery<{ id: number }>(
+      `SELECT id FROM cost_centers
+        WHERE "companyId" = $1
+          AND ("linkedEntityType" = 'vehicle' AND "linkedEntityId" = $2
+            OR  "relatedEntityType" = 'vehicle' AND "relatedEntityId" = $2)
+          AND "deletedAt" IS NULL
+        ORDER BY id ASC LIMIT 1`,
+      [companyId, vehicleId]
+    );
+    return row?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 class FleetEngineImpl implements DomainEngine {
   readonly domainId = "fleet";
   readonly label = "إدارة الأسطول";
@@ -28,6 +55,13 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5200"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
     ]);
+
+    // Resolver auto-derives the cost-centre from the vehicle so
+    // per-vehicle P&L can drill on costCenterId directly (without
+    // joining through journal_lines.vehicleId → cost_centers.linkedEntityId).
+    const costCenterId = await resolveVehicleCostCenter(
+      ctx.companyId, fuelLog.vehicleId, "fuel"
+    );
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -42,8 +76,8 @@ class FleetEngineImpl implements DomainEngine {
       guardTable: "fleet_fuel_logs",
       guardId: fuelLog.id,
       lines: [
-        { accountCode: debitCode, debit: fuelLog.amount, credit: 0, description: "مصروف وقود", vehicleId: fuelLog.vehicleId, driverId: fuelLog.driverId },
-        { accountCode: creditCode, debit: 0, credit: fuelLog.amount, vehicleId: fuelLog.vehicleId, driverId: fuelLog.driverId },
+        { accountCode: debitCode, debit: fuelLog.amount, credit: 0, description: "مصروف وقود", vehicleId: fuelLog.vehicleId, driverId: fuelLog.driverId, costCenterId: costCenterId ?? undefined },
+        { accountCode: creditCode, debit: 0, credit: fuelLog.amount, vehicleId: fuelLog.vehicleId, driverId: fuelLog.driverId, costCenterId: costCenterId ?? undefined },
       ],
     });
   }
@@ -56,6 +90,10 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5300"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
     ]);
+
+    const costCenterId = await resolveVehicleCostCenter(
+      ctx.companyId, maintenance.vehicleId, "maintenance"
+    );
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -70,8 +108,8 @@ class FleetEngineImpl implements DomainEngine {
       guardTable: "fleet_maintenance",
       guardId: maintenance.id,
       lines: [
-        { accountCode: debitCode, debit: maintenance.totalCost, credit: 0, description: `صيانة — ${maintenance.type ?? "عامة"}`, vehicleId: maintenance.vehicleId },
-        { accountCode: creditCode, debit: 0, credit: maintenance.totalCost, vehicleId: maintenance.vehicleId },
+        { accountCode: debitCode, debit: maintenance.totalCost, credit: 0, description: `صيانة — ${maintenance.type ?? "عامة"}`, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: creditCode, debit: 0, credit: maintenance.totalCost, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
       ],
     });
   }
@@ -84,6 +122,10 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_prepaid_insurance", "debit", "1350"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
     ]);
+
+    const costCenterId = await resolveVehicleCostCenter(
+      ctx.companyId, insurance.vehicleId, "insurance"
+    );
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -98,8 +140,8 @@ class FleetEngineImpl implements DomainEngine {
       guardTable: "fleet_insurance",
       guardId: insurance.id,
       lines: [
-        { accountCode: debitCode, debit: insurance.premium, credit: 0, description: "قسط تأمين", vehicleId: insurance.vehicleId },
-        { accountCode: creditCode, debit: 0, credit: insurance.premium, vehicleId: insurance.vehicleId },
+        { accountCode: debitCode, debit: insurance.premium, credit: 0, description: "قسط تأمين", vehicleId: insurance.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: creditCode, debit: 0, credit: insurance.premium, vehicleId: insurance.vehicleId, costCenterId: costCenterId ?? undefined },
       ],
     });
   }
@@ -112,6 +154,10 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_expense", "debit", "5290"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2100"),
     ]);
+
+    const costCenterId = await resolveVehicleCostCenter(
+      ctx.companyId, violation.vehicleId, "violation"
+    );
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -126,8 +172,8 @@ class FleetEngineImpl implements DomainEngine {
       guardTable: "fleet_traffic_violations",
       guardId: violation.id,
       lines: [
-        { accountCode: debitCode, debit: violation.amount, credit: 0, description: "مخالفة مرورية", vehicleId: violation.vehicleId, driverId: violation.driverId },
-        { accountCode: creditCode, debit: 0, credit: violation.amount, vehicleId: violation.vehicleId },
+        { accountCode: debitCode, debit: violation.amount, credit: 0, description: "مخالفة مرورية", vehicleId: violation.vehicleId, driverId: violation.driverId, costCenterId: costCenterId ?? undefined },
+        { accountCode: creditCode, debit: 0, credit: violation.amount, vehicleId: violation.vehicleId, costCenterId: costCenterId ?? undefined },
       ],
     });
   }
