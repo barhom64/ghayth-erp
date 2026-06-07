@@ -44,6 +44,8 @@ export const CREATED_BY_IDENTITY: Record<string, CreatedByIdentity> = {
   umrah_packages: "user",
   umrah_penalties: "user",
   umrah_transport: "user",
+  // PR-C (#1707) inbox triage rules.
+  inbox_classifier_rules: "user",
   // FK → employee_assignments (must hold an assignment id)
   bank_guarantees: "assignment",
   intercompany_transactions: "assignment",
