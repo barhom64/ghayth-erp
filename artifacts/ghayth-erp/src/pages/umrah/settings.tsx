@@ -527,30 +527,27 @@ export default function UmrahSettings() {
   );
 }
 
-// ─── Notifications card — opt-in SMS triggers + Twilio config link ────
+// ─── Notifications card — in-app alerts via the platform seam ─────
 //
-// The SMS infrastructure is already wired: the queue worker
-// (`processSmsQueue` in cronScheduler.ts) reads Twilio credentials
-// from `system_settings` and delivers. This card adds the umrah-side
-// switches that tell the cron handlers WHICH notifications to send +
-// links the operator to the Twilio settings page if they haven't
-// configured the channel yet.
+// Cron handlers call `createNotification` which writes to the
+// `notifications` table — the same one the bell icon reads. No
+// external provider, no per-message cost, audit trail by default.
 
 const NOTIFY_KEYS = [
   {
     key: "umrah.notify.visa_expiry",
     label: "تنبيه انتهاء التأشيرة",
-    description: "SMS للمعتمر قبل ٧ أيام من انتهاء تأشيرته. يحترم استبعاد دول الخليج تلقائيًا.",
+    description: "إشعار للمدير قبل ٧ أيام من انتهاء تأشيرة معتمر. يحترم استبعاد دول الخليج تلقائيًا.",
   },
   {
     key: "umrah.notify.departure_reminder",
-    label: "تذكير الرحيل غدًا",
-    description: "SMS مساء كل يوم للمعتمرين الذين رحلتهم غدًا (يحتاج رقم هاتف في السجل).",
+    label: "تذكير وصول معتمر غدًا",
+    description: "إشعار للمدير مساء كل يوم للمعتمرين الذين رحلتهم غدًا — لتأمين النقل ونقطة الاستلام.",
   },
   {
     key: "umrah.notify.overstay_warning",
     label: "تنبيه تجاوز مدة الإقامة",
-    description: "SMS يومي للمعتمر بعد تجاوز موعد المغادرة، حتى يتواصل مع وكيله.",
+    description: "إشعار يومي للمدير عن كل معتمر تجاوز موعد المغادرة (لا تُرسَل للمعفيين).",
   },
   {
     key: "umrah.auto_penalty.enabled",
@@ -564,7 +561,6 @@ function UmrahNotificationsCard() {
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
-  const [testPhone, setTestPhone] = useState("");
   const [testSending, setTestSending] = useState(false);
 
   // Initial load — one resolve call per key. Settings layer is fast +
@@ -612,26 +608,18 @@ function UmrahNotificationsCard() {
   };
 
   const sendTest = async () => {
-    const phone = testPhone.trim();
-    if (!phone) {
-      toast({ variant: "destructive", title: "أدخل رقم الهاتف للاختبار" });
-      return;
-    }
     setTestSending(true);
     try {
-      await apiFetch("/umrah/notifications/test-sms", {
-        method: "POST",
-        body: JSON.stringify({ phone }),
-      });
+      await apiFetch("/umrah/notifications/test", { method: "POST" });
       toast({
-        title: "أُرسل الطلب إلى قائمة الانتظار",
-        description: "إذا كان provider مضبوطًا، ستصل الرسالة خلال دقيقة.",
+        title: "أُرسل إشعار تجريبي",
+        description: "افتح رمز الجرس أعلى الصفحة — يجب أن ترى الإشعار خلال ثوانٍ.",
       });
     } catch (e: any) {
       toast({
         variant: "destructive",
         title: "فشل الاختبار",
-        description: e?.message ?? "تعذّر إرسال الرسالة",
+        description: e?.message ?? "تعذّر إرسال الإشعار",
       });
     } finally {
       setTestSending(false);
@@ -643,19 +631,13 @@ function UmrahNotificationsCard() {
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
           <Clock className="h-4 w-4" />
-          تنبيهات تلقائية للمعتمرين (SMS) + المحركات
+          إشعارات تلقائية للمدير + المحركات
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          الـSMS يمرّ عبر قناة الإرسال المضبوطة في{" "}
-          <a
-            href="/settings/communication-channels"
-            className="underline text-status-info-foreground"
-          >
-            إعدادات قنوات الاتصال
-          </a>
-          . لا حاجة لتفعيل أي خيار هنا حتى تضبط الـprovider هناك أولًا.
+          الإشعارات تظهر في رمز الجرس أعلى الصفحة (نفس النظام الذي يستخدمه باقي الـERP). لا تحتاج
+          ضبط أي مزوّد خارجي.
         </p>
 
         {loading ? (
@@ -692,27 +674,20 @@ function UmrahNotificationsCard() {
           </div>
         )}
 
-        <div className="pt-3 border-t space-y-2">
-          <Label className="text-sm">اختبار SMS — أدخل رقمك للتجربة</Label>
-          <div className="flex gap-2">
-            <Input
-              value={testPhone}
-              onChange={(e) => setTestPhone(e.target.value)}
-              placeholder="+9665xxxxxxxx"
-              dir="ltr"
-              className="text-sm"
-              data-testid="notify-test-phone"
-            />
-            <GuardedButton
-              perm="umrah:create"
-              onClick={sendTest}
-              disabled={testSending || !testPhone.trim()}
-              size="sm"
-              data-testid="notify-test-send"
-            >
-              {testSending ? "جارٍ..." : "إرسال اختبار"}
-            </GuardedButton>
+        <div className="pt-3 border-t flex items-center justify-between gap-3">
+          <div className="text-xs text-muted-foreground">
+            اضغط الزر لإرسال إشعار تجريبي لحسابك — يتأكد من ضبط الـemployee_assignment
+            وأن الجرس يستقبل.
           </div>
+          <GuardedButton
+            perm="umrah:create"
+            onClick={sendTest}
+            disabled={testSending}
+            size="sm"
+            data-testid="notify-test-send"
+          >
+            {testSending ? "جارٍ..." : "إرسال إشعار تجريبي"}
+          </GuardedButton>
         </div>
       </CardContent>
     </Card>

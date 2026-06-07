@@ -3564,37 +3564,48 @@ router.get("/nusk-wallet", authorize({ feature: "umrah", action: "view" }), asyn
   } catch (err) { handleRouteError(err, res, "Get NUSK wallet error"); }
 });
 
-// Test SMS — the operator enters their phone in the umrah settings
-// page and we drop a one-off message into the queue. Confirms the
-// Twilio config + the umrahNotifications seam without forcing a real
-// pilgrim row through the pipeline.
-const testSmsSchema = z.object({
-  phone: z.string().min(5, "رقم الهاتف غير صحيح"),
-});
-
-router.post("/notifications/test-sms", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+// Test internal notification — the operator clicks "اختبار" in
+// settings and we send a one-off in-app notification to their own
+// assignment. Confirms the notification seam is wired without
+// forcing a real pilgrim row through the pipeline.
+router.post("/notifications/test", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { phone } = zodParse(testSmsSchema.safeParse(req.body));
-    const { sendMessage } = await import("../lib/messageSender.js");
-    const result = await sendMessage({
-      channel: "sms",
-      recipient: phone.trim(),
-      body: `رسالة اختبار من نظام عمرة غيث — التاريخ: ${todayISO()}`,
+    // Find this operator's assignment id — that's where the test
+    // notification lands. NULL means the user has no active
+    // employee assignment; we surface a clear error instead of
+    // silently dropping.
+    const [me] = await rawQuery<{ id: number }>(
+      `SELECT ea.id FROM employee_assignments ea
+        WHERE ea."userId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+        ORDER BY ea.id DESC LIMIT 1`,
+      [scope.userId, scope.companyId],
+    );
+    if (!me) {
+      throw new ValidationError("ليس لديك تكليف موظف نشط — لا يمكن استلام إشعار تجريبي", {
+        field: "userId",
+        fix: "تأكد من ربط حسابك بـemployee_assignment نشط في إعدادات الموارد البشرية",
+      });
+    }
+    const { createNotification } = await import("../lib/businessHelpers.js");
+    await createNotification({
       companyId: scope.companyId,
-      userId: scope.userId,
-      relatedType: "umrah_notifications",
-      relatedId: null,
-      templateKey: "umrah.test_sms",
-      eventAction: "umrah.notifications.test_sms.sent",
+      assignmentId: me.id,
+      type: "umrah",
+      title: "🔔 إشعار تجريبي من نظام العمرة",
+      body: `اختبار نظام الإشعارات الداخلية — التاريخ: ${todayISO()}. إذا وصلتك هذه الرسالة فالنظام جاهز.`,
+      priority: "normal",
+      refType: "umrah_notifications",
+      refId: undefined,
+      actionUrl: "/umrah/settings",
     });
-    res.json({
-      ok: !result.blocked,
-      blocked: result.blocked,
-      reason: result.reason,
-      logId: result.logId,
-    });
-  } catch (err) { handleRouteError(err, res, "Test SMS error"); }
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.notifications.test.sent", entity: "notifications", entityId: me.id,
+      details: JSON.stringify({ recipientAssignmentId: me.id }),
+    }).catch((e) => logger.error(e, "umrah test notify event failed"));
+    res.json({ ok: true, recipientAssignmentId: me.id });
+  } catch (err) { handleRouteError(err, res, "Test notification error"); }
 });
 
 export default router;
