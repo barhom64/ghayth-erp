@@ -144,7 +144,7 @@ export async function runAbcAnalysis(asOfDate?: string): Promise<AbcRunOutcome> 
   const out: AbcRunOutcome = { scanned: 0, written: 0, errors: [] };
 
   const companies = await rawQuery<{ id: number }>(
-    `SELECT id FROM companies WHERE status = 'active' AND "deletedAt" IS NULL`,
+    `SELECT id FROM companies WHERE status = 'active'`,
   );
   out.scanned = companies.length;
 
