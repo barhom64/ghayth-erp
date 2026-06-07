@@ -5,9 +5,11 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Shield, Search, Users } from "lucide-react";
+import { Save, Shield, Search, Users, Copy } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,7 +55,7 @@ export default function RbacSimpleEditor() {
   const { toast } = useToast();
   const { data: catalog } = useApiQuery<Catalog>(["rbac-levels"], "/rbac/v2/levels");
   const { data: featuresData, isLoading: fLoad, error: fErr, refetch } = useApiQuery<{ features: Feature[] }>(["rbac-features"], "/rbac/v2/features");
-  const { data: rolesData } = useApiQuery<{ data: Role[] }>(["rbac-roles"], "/rbac/v2/roles");
+  const { data: rolesData, refetch: refetchRoles } = useApiQuery<{ data: Role[] }>(["rbac-roles"], "/rbac/v2/roles");
 
   const [roleId, setRoleId] = useState<number | null>(null);
   const { data: grantsData } = useApiQuery<{ grants: Grant[] }>(
@@ -67,6 +69,10 @@ export default function RbacSimpleEditor() {
   const [initialPicks, setInitialPicks] = useState<Record<string, { level: string; scopeTier: string }>>({});
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  // نسخ وعدّل: نسخ دور قائم بكل منحه كنقطة انطلاق لدور جديد.
+  const [cloning, setCloning] = useState(false);
+  const [cloneKey, setCloneKey] = useState("");
+  const [cloneLabel, setCloneLabel] = useState("");
 
   const features = featuresData?.features ?? [];
   const levels = catalog?.levels ?? [];
@@ -165,6 +171,24 @@ export default function RbacSimpleEditor() {
     }
   };
 
+  // نسخ الدور المحدّد بكل منحه إلى دور جديد ثم الانتقال إليه لتعديله.
+  const doClone = async () => {
+    if (!roleId) return;
+    const newRoleKey = cloneKey.trim();
+    const labelAr = cloneLabel.trim();
+    if (!newRoleKey || !labelAr) { toast({ title: "أدخل مفتاح الدور واسمه العربي", variant: "destructive" }); return; }
+    if (!/^[a-z0-9_]+$/.test(newRoleKey)) { toast({ title: "مفتاح الدور: أحرف إنجليزية صغيرة وأرقام و_ فقط", variant: "destructive" }); return; }
+    try {
+      const res = await apiFetch<{ id: number }>(`/rbac/v2/roles/${roleId}/clone`, { method: "POST", body: JSON.stringify({ newRoleKey, labelAr }) });
+      toast({ title: "تم النسخ", description: `أُنشئ الدور «${labelAr}» بنسخة من كل صلاحيات المصدر.` });
+      setCloning(false); setCloneKey(""); setCloneLabel("");
+      await refetchRoles();
+      if (res?.id) setRoleId(res.id); // انتقل للدور الجديد لتعديله
+    } catch (err: any) {
+      toast({ title: err?.message || "تعذّر النسخ", variant: "destructive" });
+    }
+  };
+
   const roles = rolesData?.data ?? [];
   const selectedRole = roles.find((r) => r.id === roleId);
   const memberCount = Number(selectedRole?.member_count ?? 0);
@@ -179,6 +203,9 @@ export default function RbacSimpleEditor() {
           <Button size="sm" onClick={save} disabled={!roleId || saving || !isDirty}>
             <Save className="h-4 w-4 me-1" /> {isDirty ? `حفظ (${dirtyKeys.length})` : "حفظ"}
           </Button>
+          <GuardedButton perm="admin.roles:create" variant="outline" size="sm" disabled={!roleId} onClick={() => { setCloning((v) => !v); setCloneKey(""); setCloneLabel(""); }}>
+            <Copy className="h-4 w-4 me-1" /> نسخ وعدّل
+          </GuardedButton>
           <PrintButton
             entityType="report_admin_rbac_simple"
             entityId={roleId ? String(roleId) : "list"}
@@ -228,6 +255,24 @@ export default function RbacSimpleEditor() {
               )}
             </CardContent>
           </Card>
+
+          {roleId && cloning && (
+            <Card className="border-status-info-surface">
+              <CardHeader className="py-3"><CardTitle className="text-sm flex items-center gap-2"><Copy className="w-4 h-4" /> نسخ «{selectedRole?.label_ar}» إلى دور جديد</CardTitle></CardHeader>
+              <CardContent className="flex flex-wrap items-end gap-3">
+                <div className="flex-1 min-w-[180px]">
+                  <Label className="text-xs">مفتاح الدور الجديد</Label>
+                  <Input value={cloneKey} onChange={(e) => setCloneKey(e.target.value)} placeholder="مثال: branch_accountant" className="mt-1" dir="ltr" />
+                </div>
+                <div className="flex-1 min-w-[180px]">
+                  <Label className="text-xs">الاسم العربي</Label>
+                  <Input value={cloneLabel} onChange={(e) => setCloneLabel(e.target.value)} placeholder="مثال: محاسب فرع" className="mt-1" />
+                </div>
+                <Button size="sm" onClick={doClone}><Copy className="h-4 w-4 me-1" /> نسخ</Button>
+                <p className="w-full text-xs text-muted-foreground">يُنشأ دور جديد بنسخة كاملة من صلاحيات «{selectedRole?.label_ar}» (المنح والسياسات وحدود الاعتماد)، ثم تُنقَل إليه لتعديله.</p>
+              </CardContent>
+            </Card>
+          )}
 
           {roleId && visibleModules.map(([mod, feats]) => (
             <Card key={mod}>
