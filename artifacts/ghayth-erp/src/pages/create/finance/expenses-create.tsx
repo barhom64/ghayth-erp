@@ -15,7 +15,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { amountTaxSplit } from "@/lib/tax-math";
-import { filterAccountsForPaymentMethod } from "@/lib/finance-account-usage";
+import { filterAccountsForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
@@ -212,12 +212,7 @@ export default function ExpensesCreate() {
   // heuristic so the picker is never empty during the classification
   // window. The per-payment-method narrowing happens below, once `form`
   // is available.
-  const moneyAccounts = accounts.filter(
-    (a: any) =>
-      a.accountUsage
-        ? ["cash_box", "bank", "custody", "card", "cheque"].includes(a.accountUsage)
-        : a.code?.startsWith("11") || a.code?.startsWith("12"),
-  );
+  const moneyAccounts = accounts.filter((a: any) => isMoneyAccount(a));
 
   const expenseOptions: AutocompleteOption[] = expenseAccounts.map((a: any) => ({
     value: a.code || String(a.id),

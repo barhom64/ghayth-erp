@@ -65,6 +65,23 @@ export interface UsageAccountLike {
   accountUsage?: string | null;
 }
 
+// Money-source usages: a cash / bank / custody / card / cheque account that
+// can be the source or destination of a payment. Mirrors the inline set the
+// expense + voucher pickers used before centralisation (#1715 guardrail #2).
+const MONEY_ACCOUNT_USAGES: AccountUsage[] = ["cash_box", "bank", "custody", "card", "cheque"];
+
+/**
+ * Is this a money (cash/bank/custody/card/cheque) account? Usage-driven when
+ * the account is classified, with the legacy 11xx/12xx code-prefix fallback
+ * for unclassified accounts — the exact logic the expense/voucher money-account
+ * pickers used inline. Centralised here so no finance page re-implements the
+ * `code.startsWith("11")` heuristic (guardrail #2).
+ */
+export function isMoneyAccount(account: UsageAccountLike): boolean {
+  if (account.accountUsage) return MONEY_ACCOUNT_USAGES.includes(account.accountUsage as AccountUsage);
+  return legacyIsMoneyAccount(account.code);
+}
+
 /**
  * Filter money-source/destination accounts to those legal for the chosen
  * payment method. Classified accounts are matched by accountUsage;

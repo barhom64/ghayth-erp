@@ -64,6 +64,14 @@ const vehicleTechnicalProfileSchema = z.object({
   equipmentAttachments: z.array(z.string()).optional(),
 });
 
+// #1733 Pricing tier (Issue Comment 3) — driverServiceProfile extends
+// the #1761 licence-class guard with a service-type specialisation.
+// A driver might hold the right class for a bus but only be trained
+// for cargo runs; the dispatch board filters accordingly.
+const DRIVER_SERVICE_PROFILES = [
+  "cargo_driver", "umrah_driver", "passenger_driver", "rental_driver", "mixed",
+] as const;
+
 const createVehicleSchema = z.object({
   plateNumber: z.string().min(1),
   make: z.string().min(1),
@@ -101,6 +109,10 @@ const createDriverSchema = z.object({
   licenseExpiry: z.string().optional(),
   licenseType: z.string().optional(),
   licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
+  // #1733 Pricing tier — service-type specialisation. Used by the
+  // dispatch board to surface only drivers whose profile matches the
+  // booking's transportServiceType.
+  driverServiceProfile: z.enum(DRIVER_SERVICE_PROFILES).optional(),
   employeeId: z.coerce.number().optional(),
   status: z.string().optional(),
 });
@@ -178,6 +190,7 @@ const updateDriverSchema = z.object({
   status: z.string().optional(),
   licenseType: z.string().optional(),
   licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
+  driverServiceProfile: z.enum(DRIVER_SERVICE_PROFILES).optional(),
 });
 
 const createTripSchema = z.object({
@@ -785,29 +798,11 @@ router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", acti
       action: "fleet.cargo.manifest.status_changed", entity: "cargo_manifests", entityId: id,
       details: JSON.stringify({ from: current, to: status, source: "driver_self" }) });
 
-    if (status === "delivered") {
-      // #1733 — Driver's "تم التسليم" never posts a JE. We hand off a
-      // billing candidate; the accountant materializes it from the
-      // finance side. Idempotent via uq_billing_candidate_source.
-      try {
-        await fleetEngine.createCargoBillingCandidate(
-          { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
-          { id, manifestNumber: String(manifest.manifestNumber ?? id),
-            freightRevenue: Number(manifest.freightRevenue) || 0,
-            freightCost: Number(manifest.freightCost) || 0,
-            customerId: (manifest.customerId as number | null) ?? null,
-            vehicleId: (manifest.vehicleId as number | null) ?? null,
-            driverId: (manifest.driverId as number | null) ?? null,
-            fromLocation: (manifest.fromLocation as string | null) ?? null,
-            toLocation: (manifest.toLocation as string | null) ?? null,
-            totalWeight: Number(manifest.totalWeight) || 0,
-            deliveryDate: (manifest.deliveryDate as string | null) ?? null,
-            notes: (manifest.notes as string | null) ?? null }
-        );
-      } catch (handoffErr) {
-        logger.error({ err: handoffErr, manifestId: id }, "[fleet/me] cargo billing candidate handoff failed");
-      }
-    }
+    // #1733 Foundation — the driver's `delivered` tap never triggers
+    // any financial artefact. The dispatcher carries the manifest from
+    // `delivered → completed → ready_for_invoice`, and that last
+    // transition is where the candidate + service line are created
+    // (see cargo.ts PATCH /manifests/:id).
     res.json({ data: { id, status } });
   } catch (err) { handleRouteError(err, res, "Driver cargo-advance error:"); }
 });
@@ -875,8 +870,8 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","licenseClass","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.licenseClass || null, b.employeeId || null, b.status || 'available']
+      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","licenseClass","driverServiceProfile","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.licenseClass || null, b.driverServiceProfile || null, b.employeeId || null, b.status || 'available']
     );
     assertInsert(insertId, "fleet_drivers");
 
@@ -1248,7 +1243,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       }
     }
 
-    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType","licenseClass"] as const;
+    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType","licenseClass","driverServiceProfile"] as const;
     const colMap: Record<string, string> = {
       name: "name",
       phone: "phone",
@@ -1258,6 +1253,8 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       licenseType: '"licenseType"',
       // #1733 Phase 2 — KSA driving-licence stack used by the eligibility guard.
       licenseClass: '"licenseClass"',
+      // #1733 Pricing tier — service-type specialisation.
+      driverServiceProfile: '"driverServiceProfile"',
     };
     const sets: string[] = [];
     const params: unknown[] = [];

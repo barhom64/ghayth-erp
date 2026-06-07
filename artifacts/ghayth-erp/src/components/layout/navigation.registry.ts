@@ -219,6 +219,7 @@ export const allNavSections: NavSection[] = [
       // (2) الحسابات والقيود
       { label: "الحسابات والقيود", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
+        { label: "فجوات تصنيف الحسابات", path: "/finance/usage-gaps", icon: ShieldAlert },
         { label: "حسابات فرعية", path: "/finance/subsidiary-accounts", icon: Layers },
         { label: "مراكز التكلفة", path: "/finance/cost-centers", icon: Network },
         { label: "شجرة مراكز التكلفة", path: "/finance/cost-centers/tree", icon: Network },
