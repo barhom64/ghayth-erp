@@ -60,3 +60,6 @@ artifacts/api-server/.env
 # personal data (PDPL) and live business data.
 backups/
 *.sql.gz
+
+# Claude Code local worktrees (ephemeral, per-session)
+.claude/worktrees/
