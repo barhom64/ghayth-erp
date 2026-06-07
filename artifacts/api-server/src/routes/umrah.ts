@@ -37,6 +37,7 @@ import {
   normalizeImportRows,
   MUTAMER_HEADER_MAP,
   VOUCHER_HEADER_MAP,
+  UMRAH_FIELD_LABELS_AR,
 } from "../lib/umrahImportEngine.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2611,14 +2612,19 @@ router.get("/import/header-maps", authorize({ feature: "umrah", action: "create"
       }
       return out;
     };
+    // labels: { dbField → canonical Arabic label } so the wizard's
+    // column-mapping dropdown shows comprehensible Arabic instead of raw
+    // English identifiers (nuskInvoiceNumber, mutamerCount, ...).
     res.json({
       mutamers: {
         forward: MUTAMER_HEADER_MAP,
         targets: invertMap(MUTAMER_HEADER_MAP),
+        labels: UMRAH_FIELD_LABELS_AR,
       },
       vouchers: {
         forward: VOUCHER_HEADER_MAP,
         targets: invertMap(VOUCHER_HEADER_MAP),
+        labels: UMRAH_FIELD_LABELS_AR,
       },
     });
   } catch (err) { handleRouteError(err, res, "Import header maps error"); }

@@ -137,8 +137,8 @@ export default function UmrahImportWizard() {
   // operator's choices from these so the column-mapping step is empty
   // typing only for unknown layouts.
   const headerMapsQ = useApiQuery<{
-    mutamers: { forward: Record<string, string>; targets: Record<string, string[]> };
-    vouchers: { forward: Record<string, string>; targets: Record<string, string[]> };
+    mutamers: { forward: Record<string, string>; targets: Record<string, string[]>; labels?: Record<string, string> };
+    vouchers: { forward: Record<string, string>; targets: Record<string, string[]>; labels?: Record<string, string> };
   }>(["umrah-import-header-maps"], "/umrah/import/header-maps");
   // Saved column-mapping presets for THIS operator + fileType. The
   // dropdown lists them so a one-click pick replaces re-mapping every
@@ -621,7 +621,14 @@ export default function UmrahImportWizard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {detectedHeaders.map((h) => {
                     const targets = headerMapsQ.data?.[fileType]?.targets ?? {};
-                    const dbFields = Object.keys(targets).sort();
+                    const labels = headerMapsQ.data?.[fileType]?.labels ?? {};
+                    // Sort by the ARABIC label the operator actually reads,
+                    // not the English identifier — so the dropdown is in
+                    // Arabic alphabetical order. Falls back to the raw
+                    // field name only if a label is somehow missing.
+                    const dbFields = Object.keys(targets).sort((a, b) =>
+                      (labels[a] ?? a).localeCompare(labels[b] ?? b, "ar"),
+                    );
                     const value = columnMapping[h] ?? "";
                     // Smart-mapping suggestion for this header (PR
                     // #1474). Only shown when the value MATCHES the
@@ -642,7 +649,7 @@ export default function UmrahImportWizard() {
                             <SelectContent>
                               <SelectItem value="_none">— تجاهل العمود —</SelectItem>
                               {dbFields.map((field) => (
-                                <SelectItem key={field} value={field}>{field}</SelectItem>
+                                <SelectItem key={field} value={field}>{labels[field] ?? field}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
