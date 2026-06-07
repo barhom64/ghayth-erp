@@ -23,6 +23,10 @@ const PAGE = readFileSync(
   join(import.meta.dirname!, "../../../ghayth-erp/src/pages/umrah/violations.tsx"),
   "utf8",
 );
+const TRANSPORT = readFileSync(
+  join(import.meta.dirname!, "../../../ghayth-erp/src/pages/umrah/transport.tsx"),
+  "utf8",
+);
 
 describe("violations page — print payload uses the on-screen status labels", () => {
   it("STATUS_LABEL dictionary is still the canonical (regression guard)", () => {
@@ -42,5 +46,21 @@ describe("violations page — print payload uses the on-screen status labels", (
     expect(PAGE).toMatch(/"الحالة":\s*STATUS_LABEL\[v\.status as ViolationStatus\]\?\.label \?\? v\.status \?\? "—"/);
     // And the legacy raw fallback is gone.
     expect(PAGE).not.toMatch(/"الحالة":\s*v\.status\s*\|\|\s*"—"/);
+  });
+});
+
+describe("transport page — print payload uses the on-screen status labels", () => {
+  it("STATUS_MAP carries the canonical Arabic labels (regression guard)", () => {
+    expect(TRANSPORT).toMatch(/scheduled:\s*\{\s*label:\s*"مجدولة"/);
+    expect(TRANSPORT).toMatch(/in_progress:\s*\{\s*label:\s*"في الطريق"/);
+    expect(TRANSPORT).toMatch(/completed:\s*\{\s*label:\s*"مكتملة"/);
+    expect(TRANSPORT).toMatch(/cancelled:\s*\{\s*label:\s*"ملغاة"/);
+  });
+
+  it("print payload resolves the status through the same STATUS_MAP", () => {
+    // Same pattern as violations — the on-screen Arabic label flows
+    // into the print cell, falling back to raw enum if absent.
+    expect(TRANSPORT).toMatch(/"الحالة":\s*\(t\.status && STATUS_MAP\[t\.status\]\?\.label\) \?\? t\.status \?\? "—"/);
+    expect(TRANSPORT).not.toMatch(/"الحالة":\s*t\.status\s*\|\|\s*"—"/);
   });
 });
