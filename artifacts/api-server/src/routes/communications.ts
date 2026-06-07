@@ -1174,4 +1174,119 @@ router.get("/log/:id/referral-chain", authorize({ feature: "communications", act
   } catch (err) { handleRouteError(err, res, "Get referral chain error:"); }
 });
 
+/* ── Employee provisioning helpers ─────────────────────────────────
+ * These power the "real" integration on the employee-create form: when
+ * a mailbox / domain is connected, the form offers a domain dropdown +
+ * auto-suggested local part instead of free text; when a PBX is
+ * connected, it offers an extension picker instead of nothing.
+ *
+ * Both endpoints are tenant-scoped and read-only — the actual binding
+ * happens inside the employee-create transaction (routes/employees.ts).
+ */
+
+// GET /communications/provisioning/email-domains?name=أحمد علي
+// Returns the email domains the company can issue internal addresses on
+// (derived from connected mailbox_accounts + active email integrations)
+// plus a suggested local-part transliterated/slugified from the name.
+router.get("/provisioning/email-domains", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    // Domains from connected mailboxes (the real, authenticated inboxes).
+    const mailboxRows = await rawQuery<{ emailAddress: string }>(
+      `SELECT DISTINCT "emailAddress" FROM mailbox_accounts
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "emailAddress" LIKE '%@%'`,
+      [scope.companyId]
+    ).catch(() => [] as { emailAddress: string }[]);
+
+    // Domains from active email integrations (smtp/email `from` address).
+    const integrationRows = await rawQuery<{ config: unknown }>(
+      `SELECT config FROM integrations
+        WHERE "companyId" = $1 AND type IN ('email','smtp') AND status = 'active'`,
+      [scope.companyId]
+    ).catch(() => [] as { config: unknown }[]);
+
+    const domains = new Set<string>();
+    for (const m of mailboxRows) {
+      const at = m.emailAddress.lastIndexOf("@");
+      if (at > 0) domains.add(m.emailAddress.slice(at + 1).toLowerCase());
+    }
+    for (const row of integrationRows) {
+      const cfg = (row.config ?? {}) as { from?: string; fromEmail?: string; domain?: string };
+      const from = cfg.from ?? cfg.fromEmail ?? null;
+      if (from && from.includes("@")) domains.add(from.slice(from.lastIndexOf("@") + 1).toLowerCase());
+      else if (cfg.domain) domains.add(cfg.domain.toLowerCase());
+    }
+
+    // Slugify the name into a candidate local part. Arabic names get a
+    // best-effort transliteration; anything non-ascii falls back to the
+    // employee number being appended later by the form.
+    const name = String(req.query.name ?? "").trim();
+    const suggestion = slugifyLocalPart(name);
+
+    res.json({
+      data: {
+        domains: Array.from(domains).sort(),
+        suggestedLocalPart: suggestion,
+        // When no domains are connected the form keeps the free-text input.
+        hasConnectedDomains: domains.size > 0,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Email-domains provisioning error:"); }
+});
+
+// GET /communications/provisioning/extensions
+// Returns the PBX extensions available to assign to a new employee
+// (unassigned + active) plus the next free extension number to mint.
+router.get("/provisioning/extensions", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const hasPbx = await rawQuery<{ id: number }>(
+      `SELECT id FROM integrations WHERE "companyId" = $1 AND type = 'pbx' AND status = 'active' LIMIT 1`,
+      [scope.companyId]
+    ).catch(() => [] as { id: number }[]);
+
+    const available = await rawQuery<{ id: number; extension: string; name: string }>(
+      `SELECT id, extension, name FROM pbx_extensions
+        WHERE "companyId" = $1 AND status = 'active' AND "employeeId" IS NULL
+        ORDER BY extension ASC`,
+      [scope.companyId]
+    ).catch(() => [] as { id: number; extension: string; name: string }[]);
+
+    // Suggest the next numeric extension above the current max (3-digit
+    // floor of 100 to match common PBX dial plans).
+    const [maxRow] = await rawQuery<{ maxExt: string | null }>(
+      `SELECT MAX(extension) AS "maxExt" FROM pbx_extensions WHERE "companyId" = $1`,
+      [scope.companyId]
+    ).catch(() => [{ maxExt: null }]);
+    const maxNum = maxRow?.maxExt && /^\d+$/.test(maxRow.maxExt) ? parseInt(maxRow.maxExt, 10) : 99;
+    const nextExtension = String(Math.max(maxNum + 1, 100));
+
+    res.json({
+      data: {
+        pbxConnected: hasPbx.length > 0,
+        available,
+        nextExtension,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Extensions provisioning error:"); }
+});
+
+// Best-effort Arabic→latin local-part slug. Keeps ascii letters/digits,
+// maps common Arabic letters, collapses the rest to dots. Returns "" when
+// nothing usable remains (the form then falls back to the employee number).
+export function slugifyLocalPart(name: string): string {
+  if (!name) return "";
+  const map: Record<string, string> = {
+    "ا": "a", "أ": "a", "إ": "a", "آ": "a", "ب": "b", "ت": "t", "ث": "th",
+    "ج": "j", "ح": "h", "خ": "kh", "د": "d", "ذ": "th", "ر": "r", "ز": "z",
+    "س": "s", "ش": "sh", "ص": "s", "ض": "d", "ط": "t", "ظ": "z", "ع": "a",
+    "غ": "gh", "ف": "f", "ق": "q", "ك": "k", "ل": "l", "م": "m", "ن": "n",
+    "ه": "h", "و": "w", "ي": "y", "ى": "a", "ة": "h", "ء": "",
+  };
+  const latin = Array.from(name.toLowerCase())
+    .map((ch) => (/[a-z0-9]/.test(ch) ? ch : map[ch] ?? (ch === " " ? "." : "")))
+    .join("");
+  return latin.replace(/\.+/g, ".").replace(/^\.|\.$/g, "");
+}
+
 export default router;

@@ -133,6 +133,12 @@ const createEmployeeSchema = z.object({
   // company; the binding becomes a fleet_driver_vehicle row. Skipped
   // silently if the table doesn't exist or role!=driver.
   vehicleId: z.coerce.number().int().positive().optional().nullable(),
+  // When a PBX is connected, the create form offers an extension picker.
+  // `pbxExtensionId` binds an existing unassigned extension to this
+  // employee; `pbxExtensionNew` mints a brand-new extension number.
+  // Both are optional and silently skipped if no PBX / table is present.
+  pbxExtensionId: z.coerce.number().int().positive().optional().nullable(),
+  pbxExtensionNew: z.string().trim().max(20).optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -815,6 +821,27 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         } catch (e) {
           logger.warn(e, "[employees] driver-vehicle binding failed");
         }
+      }
+
+      // ── Step 8b: Bind PBX extension (real comms integration) ──
+      // Either link a chosen unassigned extension or mint a new one, so
+      // the employee is reachable on the connected PBX from day one.
+      const wantsExtensionId = ((body as any).pbxExtensionId as number | null | undefined) ?? null;
+      const wantsExtensionNew = ((body as any).pbxExtensionNew as string | null | undefined)?.trim() || null;
+      if (wantsExtensionId) {
+        await client.query(
+          `UPDATE pbx_extensions
+              SET "employeeId" = $1, "updatedAt" = NOW()
+            WHERE id = $2 AND "companyId" = $3 AND "employeeId" IS NULL`,
+          [empId, Number(wantsExtensionId), effectiveCompanyId]
+        ).catch((e) => logger.warn(e, "[employees] pbx extension bind failed"));
+      } else if (wantsExtensionNew) {
+        await client.query(
+          `INSERT INTO pbx_extensions ("companyId", extension, name, "employeeId", type, status)
+           VALUES ($1, $2, $3, $4, 'employee', 'active')
+           ON CONFLICT DO NOTHING`,
+          [effectiveCompanyId, wantsExtensionNew, name, empId]
+        ).catch((e) => logger.warn(e, "[employees] pbx extension create failed"));
       }
 
       // ── Step 9: Copy active company salary components to the new employee ──
