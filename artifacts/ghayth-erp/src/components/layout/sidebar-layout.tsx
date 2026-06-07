@@ -304,26 +304,37 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     const crumbs: { label: string; path: string }[] = [{ label: "الرئيسية", path: "/dashboard" }];
     if (location === "/" || location === "/dashboard") return null;
 
-    const findCrumbs = (items: NavItem[], ancestors: { label: string; path: string }[]): boolean => {
+    // Find the DEEPEST nav node whose path is a prefix of the current
+    // location, capturing its full ancestor trail. Using longest-prefix
+    // match (instead of first-match + early return) means a sub-page under a
+    // parent that *has children* — but isn't itself a listed child — still
+    // resolves to its module trail instead of rendering no breadcrumb at all.
+    let best: { trail: { label: string; path: string }[]; matchLen: number; exact: boolean } | null = null;
+    const walk = (items: NavItem[], ancestors: { label: string; path: string }[]) => {
       for (const item of items) {
         if (item.path === "/dashboard") continue;
         const trail = [...ancestors, { label: item.label, path: item.path }];
-        if (item.path === location) {
-          crumbs.push(...trail);
-          return true;
+        const onPath = location === item.path || location.startsWith(item.path + "/");
+        if (onPath && (!best || item.path.length > best.matchLen)) {
+          best = { trail, matchLen: item.path.length, exact: location === item.path };
         }
-        if (item.children) {
-          if (findCrumbs(item.children, trail)) return true;
-        }
-        if (!item.children && location.startsWith(item.path + "/")) {
-          crumbs.push(...trail, { label: "تفاصيل", path: location });
-          return true;
-        }
+        if (item.children) walk(item.children, trail);
       }
-      return false;
     };
+    walk(allNavItems, []);
 
-    findCrumbs(allNavItems, []);
+    if (best) {
+      const match = best as { trail: { label: string; path: string }[]; matchLen: number; exact: boolean };
+      crumbs.push(...match.trail);
+      if (!match.exact) {
+        // Location is deeper than the matched nav node (a detail / sub-page).
+        // Prefer the resolved page label; fall back to a generic "تفاصيل".
+        const leaf = findInTree(allNavItems, location);
+        const last = match.trail[match.trail.length - 1];
+        const leafLabel = leaf && leaf.label !== last.label ? leaf.label : "تفاصيل";
+        crumbs.push({ label: leafLabel, path: location });
+      }
+    }
 
     if (crumbs.length <= 1) return null;
 
