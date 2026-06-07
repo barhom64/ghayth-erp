@@ -41,23 +41,53 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { sendMessage } from "../lib/messageSender.js";
 import { fleetEngine } from "../lib/engines/index.js";
 import { logger } from "../lib/logger.js";
+import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
+import { assertVehicleCapacity } from "../lib/fleet/vehicleCapacity.js";
 
 const router = Router();
 
-const CARGO_STATUSES = ["draft", "confirmed", "loading", "in_transit", "delivered", "closed", "cancelled"] as const;
+// #1733 Blocker #3 — full 13-state operational lifecycle.
+//
+//   draft → requested → approved → assigned_to_driver → driver_accepted →
+//   trip_started → arrived_pickup → loaded → in_transit → arrived_delivery →
+//   delivered → completed
+//
+// Each step is a distinct audit moment #1733 needs so operations can answer
+// "where exactly is the bottleneck?" — driver hasn't accepted? truck
+// hasn't arrived at pickup? loaded but not departed? Cancellation is
+// reachable from every pre-`delivered` state; once delivered, the row
+// only moves forward to `completed` (the operational close that fires
+// the billing-candidate handoff in #1750).
+const CARGO_STATUSES = [
+  "draft",
+  "requested",
+  "approved",
+  "assigned_to_driver",
+  "driver_accepted",
+  "trip_started",
+  "arrived_pickup",
+  "loaded",
+  "in_transit",
+  "arrived_delivery",
+  "delivered",
+  "completed",
+  "cancelled",
+] as const;
 
-// Lifecycle: who can transition from where. Mirrors the fleet/umrah
-// state machines for consistency (see fleet.ts:330 for the driver
-// example). The dispatcher can cancel from any non-terminal state;
-// otherwise transitions are strictly forward.
 const CARGO_TRANSITIONS: Record<typeof CARGO_STATUSES[number], string[]> = {
-  draft:      ["confirmed", "cancelled"],
-  confirmed:  ["loading", "cancelled"],
-  loading:    ["in_transit", "cancelled"],
-  in_transit: ["delivered", "cancelled"],
-  delivered:  ["closed"],
-  closed:     [],
-  cancelled:  [],
+  draft:              ["requested", "cancelled"],
+  requested:          ["approved", "cancelled"],
+  approved:           ["assigned_to_driver", "cancelled"],
+  assigned_to_driver: ["driver_accepted", "cancelled"],
+  driver_accepted:    ["trip_started", "cancelled"],
+  trip_started:       ["arrived_pickup", "cancelled"],
+  arrived_pickup:     ["loaded", "cancelled"],
+  loaded:             ["in_transit", "cancelled"],
+  in_transit:         ["arrived_delivery", "cancelled"],
+  arrived_delivery:   ["delivered"],
+  delivered:          ["completed"],
+  completed:          [],
+  cancelled:          [],
 };
 
 const createManifestSchema = z.object({
@@ -79,6 +109,12 @@ const createManifestSchema = z.object({
 
 const updateManifestSchema = createManifestSchema.partial().extend({
   status: z.enum(CARGO_STATUSES).optional(),
+  // #1733 — operator's documented reason for an assignment that fails
+  // either Blocker #2's payload guard OR Phase 2's eligibility guard.
+  // Without this, an over-capacity / unqualified-driver confirm is
+  // rejected; with it, the row + reason are recorded in
+  // vehicle_capacity_overrides / driver_eligibility_overrides.
+  overrideReason: z.string().min(1).max(500).optional(),
 });
 
 const createItemSchema = z.object({
@@ -312,8 +348,13 @@ router.patch(
       const id = parseId(req.params.id, "id");
       const b = zodParse(updateManifestSchema.safeParse(req.body ?? {}));
 
-      const [existing] = await rawQuery<{ status: typeof CARGO_STATUSES[number] }>(
-        `SELECT status FROM cargo_manifests
+      const [existing] = await rawQuery<{
+        status: typeof CARGO_STATUSES[number];
+        vehicleId: number | null;
+        driverId: number | null;
+        totalWeight: string | number | null;
+      }>(
+        `SELECT status, "vehicleId", "driverId", "totalWeight" FROM cargo_manifests
           WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [id, scope.companyId],
       );
@@ -328,6 +369,46 @@ router.patch(
         }
       }
 
+      // #1733 — both guards fire on the dispatcher-approval moment or
+      // on any driver / vehicle swap. The eligibility guard (Phase 2)
+      // refuses an unqualified driver; the capacity guard (Blocker #2)
+      // refuses an over-payload assignment. Both share `overrideReason`
+      // — the operator's one documented reason covers whichever check
+      // would have rejected the assignment.
+      const movingToApproved = b.status === "approved" && existing.status !== "approved";
+      const switchingDriver = b.driverId !== undefined && b.driverId !== existing.driverId;
+      const switchingVehicle = b.vehicleId !== undefined && b.vehicleId !== existing.vehicleId;
+      if (movingToApproved || switchingDriver || switchingVehicle) {
+        const targetDriverId = b.driverId ?? existing.driverId;
+        const targetVehicleId = b.vehicleId ?? existing.vehicleId;
+        if (targetDriverId && targetVehicleId) {
+          await assertDriverEligibility({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            userId: scope.userId,
+            driverId: targetDriverId,
+            vehicleId: targetVehicleId,
+            sourceType: "cargo_manifest",
+            sourceId: id,
+            overrideReason: b.overrideReason ?? null,
+          });
+        }
+        const totalWeight = Number(existing.totalWeight) || 0;
+        if (targetVehicleId && totalWeight > 0) {
+          await assertVehicleCapacity({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            userId: scope.userId,
+            vehicleId: targetVehicleId,
+            kind: "payload_kg",
+            amount: totalWeight,
+            sourceType: "cargo_manifest",
+            sourceId: id,
+            overrideReason: b.overrideReason ?? null,
+          });
+        }
+      }
+
       const sets: string[] = [];
       const params: unknown[] = [];
       let p = 1;
@@ -336,6 +417,9 @@ router.patch(
         params.push(val);
       };
       for (const [col, val] of Object.entries(b)) {
+        // `overrideReason` is a body-only signal for the eligibility +
+        // capacity guards above — it doesn't map to a cargo_manifests column.
+        if (col === "overrideReason") continue;
         if (val !== undefined) setField(col, val);
       }
       if (sets.length === 0) {

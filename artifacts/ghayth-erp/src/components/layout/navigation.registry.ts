@@ -415,30 +415,41 @@ export const allNavSections: NavSection[] = [
     title: "الأسطول والنقل",
     items: [
       { label: "إدارة الأسطول", path: "/fleet", icon: Truck, module: "fleet", children: [
+        // Driver self-service home. Gated by the fleet MODULE (not a fine perm):
+        // the backend grants `fleet.driver.me` to the driver role, but that grant
+        // is NOT surfaced in /permissions/my (which feeds can()), so a perm gate
+        // would wrongly hide this from the very role that needs it. Module-gating
+        // shows it to anyone with fleet access; non-driver managers who click it
+        // hit a graceful "لا يوجد سجل سائق" empty state, never an error.
+        { label: "لوحة السائق", path: "/me/driver", icon: User, module: "fleet" },
         // Agent-5: explicit module="bi" matches backend gate.
         { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard, module: "bi" },
-        { label: "السائقين", path: "/fleet/drivers", icon: User },
-        { label: "الرحلات", path: "/fleet/trips", icon: Navigation },
-        { label: "الصيانة", path: "/fleet/maintenance", icon: Wrench },
-        { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel },
-        { label: "التأمين", path: "/fleet/insurance", icon: Shield },
-        { label: "التنبيهات", path: "/fleet/alerts", icon: Bell },
-        { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock },
-        { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle },
-        { label: "التتبع المباشر", path: "/fleet/telematics/live-map", icon: Satellite },
-        { label: "تنبيهات السلامة الذكية", path: "/fleet/telematics/ai-alerts", icon: Bot },
-        { label: "بطاقة أداء السائقين", path: "/fleet/telematics/scorecard", icon: Award },
-        { label: "قراءات الحساسات", path: "/fleet/telematics/sensors", icon: Activity },
-        { label: "أرشيف الأدلة", path: "/fleet/telematics/evidence", icon: Archive },
-        { label: "أدلة الفيديو", path: "/fleet/telematics/video-evidence", icon: VideoIcon },
-        { label: "أجهزة MDVR", path: "/fleet/telematics/devices", icon: HardDrive },
-        { label: "إعدادات CMSV6", path: "/fleet/telematics/settings", icon: Settings },
-        { label: "لوحة التشغيل", path: "/fleet/telematics/operations", icon: ShieldAlert },
-        { label: "تكلفة الملكية (TCO)", path: "/fleet/tco", icon: DollarSign },
-        { label: "التقارير", path: "/fleet/reports", icon: FileBarChart },
-        { label: "الشحن والبضائع", path: "/fleet/cargo", icon: Package },
-        { label: "نظام التتبع (Telematics)", path: "/fleet/telematics", icon: Satellite },
-        { label: "الإطارات", path: "/fleet/tires", icon: Settings },
+        // Management children are gated by the exact backend feature:action each
+        // page requires, so a role lacking the grant (e.g. driver) never sees a
+        // link that would 403 into "حدث خطأ في تحميل البيانات". Owner bypasses
+        // via can() (isOwnerRole), so the owner still sees every link.
+        { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
+        { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
+        { label: "الصيانة", path: "/fleet/maintenance", icon: Wrench, perm: "fleet.maintenance:list" },
+        { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
+        { label: "التأمين", path: "/fleet/insurance", icon: Shield, perm: "fleet.vehicles:list" },
+        { label: "التنبيهات", path: "/fleet/alerts", icon: Bell, perm: "fleet.vehicles:list" },
+        { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock, perm: "fleet.maintenance:list" },
+        { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle, perm: "fleet.vehicles:list" },
+        { label: "التتبع المباشر", path: "/fleet/telematics/live-map", icon: Satellite, perm: "fleet.telematics.live:list" },
+        { label: "تنبيهات السلامة الذكية", path: "/fleet/telematics/ai-alerts", icon: Bot, perm: "fleet.telematics.ai_alerts:list" },
+        { label: "بطاقة أداء السائقين", path: "/fleet/telematics/scorecard", icon: Award, perm: "fleet.telematics.ai_alerts:list" },
+        { label: "قراءات الحساسات", path: "/fleet/telematics/sensors", icon: Activity, perm: "fleet.telematics.sensors:list" },
+        { label: "أرشيف الأدلة", path: "/fleet/telematics/evidence", icon: Archive, perm: "fleet.telematics.ai_alerts:list" },
+        { label: "أدلة الفيديو", path: "/fleet/telematics/video-evidence", icon: VideoIcon, perm: "fleet.telematics.video:list" },
+        { label: "أجهزة MDVR", path: "/fleet/telematics/devices", icon: HardDrive, perm: "fleet.telematics.devices:list" },
+        { label: "إعدادات CMSV6", path: "/fleet/telematics/settings", icon: Settings, perm: "fleet.telematics.configure:list" },
+        { label: "لوحة التشغيل", path: "/fleet/telematics/operations", icon: ShieldAlert, perm: "fleet.telematics.sync:list" },
+        { label: "تكلفة الملكية (TCO)", path: "/fleet/tco", icon: DollarSign, perm: "fleet.vehicles:list" },
+        { label: "التقارير", path: "/fleet/reports", icon: FileBarChart, perm: "fleet.vehicles:list" },
+        { label: "الشحن والبضائع", path: "/fleet/cargo", icon: Package, perm: "fleet.cargo:list" },
+        { label: "نظام التتبع (Telematics)", path: "/fleet/telematics", icon: Satellite, perm: "fleet.telematics.live:list" },
+        { label: "الإطارات", path: "/fleet/tires", icon: Settings, perm: "fleet.maintenance:list" },
       ]},
     ],
   },
@@ -635,6 +646,7 @@ export const allNavSections: NavSection[] = [
           { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
           { label: "مُركّب الأدوار", path: "/admin/roles-simple", icon: Shield, perm: "admin.roles:update" },
           { label: "قوالب المسميات الوظيفية", path: "/admin/job-titles", icon: Shield, perm: "hr.employees:update" },
+          { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
         ]},
         { label: "المراقبة والمتابعة", path: "/admin/monitoring", icon: Activity, children: [
           { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
@@ -644,6 +656,7 @@ export const allNavSections: NavSection[] = [
           { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
           { label: "مراقبة الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "صندوق الأحداث الصادرة", path: "/admin/outbox", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "تتبّع الرحلات الحيّة", path: "/admin/journeys", icon: GitBranch, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "مراقبة دورة الحياة", path: "/admin/lifecycle-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "حاكم النظام", path: "/admin/system-governor", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "سجل الكيانات", path: "/admin/system-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },

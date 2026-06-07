@@ -3,7 +3,7 @@ import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { formatUmrahDate, formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
   type DataTableColumn,
@@ -53,7 +53,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 };
 
 const columns: DataTableColumn<TransportEntry>[] = [
-  { key: "tripDate", header: "تاريخ الرحلة", sortable: true, render: (r) => formatDateAr(r.tripDate) },
+  { key: "tripDate", header: "تاريخ الرحلة", sortable: true, render: (r) => formatUmrahDate(r.tripDate) },
   { key: "fromLocation", header: "من", searchable: true },
   { key: "toLocation", header: "إلى", searchable: true },
   { key: "vehiclePlate", header: "المركبة", render: (r) => r.vehiclePlate || "-" },

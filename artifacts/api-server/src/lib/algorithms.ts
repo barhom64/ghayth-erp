@@ -102,17 +102,27 @@ export async function loadBalanceAssign(
   requiredSpecialty?: string
 ): Promise<{ employeeId: number; assignmentId: number; score: number } | null> {
   try {
+    // Was N+1: scalar COUNT subquery per active assignment over tasks.
+    // For a company with 200 active assignments that's 200 lookups
+    // against tasks per smart-assign call. Single CTE collapses to one
+    // GROUP BY scan.
     const employees = await rawQuery<Record<string, unknown>>(
-      `SELECT ea.id AS "assignmentId", ea."employeeId", ea.role,
+      `WITH workload_counts AS (
+         SELECT t."assignedTo" AS "assignmentId", COUNT(*)::int AS workload
+           FROM tasks t
+          WHERE t."companyId" = $1
+            AND t.status NOT IN ('completed','cancelled')
+          GROUP BY t."assignedTo"
+       )
+       SELECT ea.id AS "assignmentId", ea."employeeId", ea.role,
               e.name, e.lat, e.lon,
               3 AS rating,
-              (SELECT COUNT(*) FROM tasks t
-               WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-               AND t.status NOT IN ('completed','cancelled'))::int AS workload
-       FROM employee_assignments ea
-       JOIN employees e ON e.id = ea."employeeId"
-       WHERE ea."companyId" = $1 AND ea.status = 'active'
-       ORDER BY workload ASC`,
+              COALESCE(wc.workload, 0) AS workload
+         FROM employee_assignments ea
+         JOIN employees e ON e.id = ea."employeeId"
+         LEFT JOIN workload_counts wc ON wc."assignmentId" = ea.id
+        WHERE ea."companyId" = $1 AND ea.status = 'active'
+        ORDER BY workload ASC`,
       [companyId]
     );
 
