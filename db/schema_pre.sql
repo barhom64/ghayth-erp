@@ -17445,6 +17445,75 @@ ALTER SEQUENCE public.umrah_hotels_id_seq OWNED BY public.umrah_hotels.id;
 
 
 --
+-- Name: umrah_families; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 265_umrah_families.sql.
+--
+
+CREATE TABLE public.umrah_families (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "familyName" character varying(200) NOT NULL,
+    "headPilgrimId" integer,
+    "contactPhone" character varying(40),
+    "contactName" character varying(200),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+CREATE SEQUENCE public.umrah_families_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.umrah_families_id_seq OWNED BY public.umrah_families.id;
+
+
+--
+-- Name: umrah_refund_requests; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 268_umrah_refund_workflow.sql.
+--
+
+CREATE TABLE public.umrah_refund_requests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "pilgrimId" integer,
+    "agentId" integer,
+    "salesInvoiceId" integer,
+    "nuskInvoiceId" integer,
+    "grossAmount" numeric(12,2) NOT NULL,
+    "mofaRetention" numeric(12,2) DEFAULT 0,
+    "netAmount" numeric(12,2) GENERATED ALWAYS AS (("grossAmount" - COALESCE("mofaRetention", (0)::numeric))) STORED,
+    currency character(3) DEFAULT 'SAR' NOT NULL,
+    status character varying(20) DEFAULT 'requested' NOT NULL,
+    reason text NOT NULL,
+    "rejectionReason" text,
+    "requestedBy" integer NOT NULL,
+    "requestedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "rejectedBy" integer,
+    "rejectedAt" timestamp with time zone,
+    "paidBy" integer,
+    "paidAt" timestamp with time zone,
+    "paymentReference" character varying(60),
+    "treasuryId" integer,
+    "creditMemoId" integer,
+    "settledAmount" numeric(12,2),
+    notes text,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_refund_amount_positive CHECK (("grossAmount" > (0)::numeric)),
+    CONSTRAINT umrah_refund_either_party_required CHECK ((("pilgrimId" IS NOT NULL) OR ("agentId" IS NOT NULL))),
+    CONSTRAINT umrah_refund_requests_status_check CHECK (((status)::text = ANY (ARRAY[('requested'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('paid'::character varying)::text, ('closed'::character varying)::text, ('cancelled'::character varying)::text])))
+);
+
+
+CREATE SEQUENCE public.umrah_refund_requests_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.umrah_refund_requests_id_seq OWNED BY public.umrah_refund_requests.id;
+
+
+--
 -- Name: umrah_room_blocks; Type: TABLE; Schema: public; Owner: -
 -- Source: migration 246_umrah_accommodations.sql.
 --
@@ -17559,6 +17628,12 @@ CREATE TABLE public.umrah_pilgrims (
     "overstayExemptReason" text,
     "overstayExemptBy" integer,
     "overstayExemptAt" timestamp with time zone,
+    "familyId" integer,
+    "visaStatus" character varying(20) DEFAULT 'not_requested' NOT NULL,
+    "visaRequestedAt" timestamp with time zone,
+    "visaIssuedAt" timestamp with time zone,
+    "visaRejectedAt" timestamp with time zone,
+    "visaRejectionReason" text,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('overstay_penalized'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('absconded'::character varying)::text, ('deceased'::character varying)::text, ('visa_rejected'::character varying)::text, ('visa_printed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -17895,7 +17970,12 @@ CREATE TABLE public.umrah_transport_pilgrims (
     "companyId" integer NOT NULL,
     "transportId" integer NOT NULL,
     "pilgrimId" integer NOT NULL,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "seatNumber" character varying(10),
+    "checkedInAt" timestamp with time zone,
+    "checkedInBy" integer,
+    "noShow" boolean DEFAULT false NOT NULL,
+    notes text
 );
 
 
@@ -19431,6 +19511,66 @@ CREATE SEQUENCE public.cargo_manifests_id_seq
 --
 
 ALTER SEQUENCE public.cargo_manifests_id_seq OWNED BY public.cargo_manifests.id;
+
+
+--
+-- Name: transport_billing_candidates; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 — Operational-to-finance handoff. Transport never posts JEs;
+-- it inserts a pending candidate row that the accountant materializes.
+
+CREATE TABLE public.transport_billing_candidates (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "sourceRef" text,
+    "customerId" integer,
+    "serviceType" text NOT NULL,
+    "serviceDate" date NOT NULL,
+    "routeFrom" text,
+    "routeTo" text,
+    "vehicleId" integer,
+    "driverId" integer,
+    quantity numeric(18,3) DEFAULT 0 NOT NULL,
+    "unitOfMeasure" text,
+    "operationalStatus" text NOT NULL,
+    "suggestedRevenue" numeric(18,2),
+    "suggestedCost" numeric(18,2),
+    attachments jsonb DEFAULT '[]'::jsonb NOT NULL,
+    notes text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    "materializedJournalEntryId" integer,
+    "materializedBy" integer,
+    "materializedAt" timestamp with time zone,
+    "rejectedBy" integer,
+    "rejectedAt" timestamp with time zone,
+    "rejectionReason" text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: transport_billing_candidates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_billing_candidates_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_billing_candidates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_billing_candidates_id_seq OWNED BY public.transport_billing_candidates.id;
 
 
 --

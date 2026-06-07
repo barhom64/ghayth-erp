@@ -156,6 +156,54 @@ const RULES = [
       "(e.g. fleetEngine, propertiesEngine) via financialEngine.resolveAccountCode().",
   },
   {
+    // ─── #1715 finance consolidation — guardrail #6 ──────────────────────
+    // Every finance operation must be described by a FinanceOperationContext
+    // and validated through `assertOperationValid(ctx)`. The posting policy
+    // (`assertPaymentSourceAllowed`) is reached ONLY through that wrapper, so
+    // the money-source ↔ payment-method check can never be bypassed or drift
+    // per-route. The policy definition lives in lib/financePostingPolicy.ts
+    // and the sanctioned wrapper in lib/financeOperationContext.ts — both in
+    // lib/, outside this routes-only scan, so they are naturally exempt.
+    // Hard rule (baseline 0): the expense + voucher create flows in
+    // finance-journal.ts were migrated to the context in the wave-1 slice, so
+    // no route calls the policy directly anymore.
+    id: "direct-posting-policy-in-route",
+    scan: [ROUTES_DIR],
+    regex: /\bassertPaymentSourceAllowed\b/,
+    message:
+      "Direct `assertPaymentSourceAllowed(...)` inside a route is forbidden " +
+      "(#1715 finance consolidation, guardrail #6). Build a " +
+      "`FinanceOperationContext` with the matching adapter " +
+      "(fromLegacyExpenseForm / fromLegacyVoucherForm / …) and validate via " +
+      "`assertOperationValid(ctx)` from `lib/financeOperationContext.js`. The " +
+      "posting policy must be reached only through that wrapper so the " +
+      "money-source ↔ payment-method check stays unified and cannot be " +
+      "bypassed by a route that forgets to call it.",
+  },
+  {
+    // ─── #1715 guardrail #2 (frontend) — account-code prefix logic ────────
+    // `code.startsWith("11"/"12"/"23"…)` as CORE account logic inside a
+    // finance page/component is the scattered pattern #1715 PR-2 centralised
+    // into `lib/finance-account-usage.ts` (accountUsage-driven). This ratchet
+    // locks the current count (18 across 12 files at #1715 wave time) so no
+    // NEW in-page prefix logic is added; each migration of a page to
+    // finance-account-usage should drop the baseline by the same number.
+    id: "account-code-startswith-in-finance-page",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx"],
+    regex: /\bcode\??\)?\.startsWith\(\s*["'`][0-9]/,
+    countBaseline: 18,
+    message:
+      "Account-code prefix logic (`code.startsWith(\"11\"/\"12\"/\"23\"…)`) " +
+      "inside a finance page/component is forbidden as CORE logic (#1715 " +
+      "guardrail #2). Use the centralised helpers in " +
+      "`@/lib/finance-account-usage` (accountUsage-driven) so cash / bank / " +
+      "receivable / payable classification has ONE source of truth instead of " +
+      "a code-prefix guess duplicated per page. Ratchet: the baseline never " +
+      "goes up — when you migrate a page off prefix logic, drop the " +
+      "countBaseline in scripts/src/lint-patterns.mjs by the same number.",
+  },
+  {
     id: "unlocalized-toLocaleString",
     scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
     extensions: [".tsx", ".ts"],

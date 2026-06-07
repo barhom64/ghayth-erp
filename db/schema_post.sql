@@ -2295,6 +2295,18 @@ ALTER TABLE ONLY public.umrah_hotels ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
+-- Name: umrah_families id; Type: DEFAULT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_families ALTER COLUMN id SET DEFAULT nextval('public.umrah_families_id_seq'::regclass);
+
+
+--
+-- Name: umrah_refund_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_refund_requests ALTER COLUMN id SET DEFAULT nextval('public.umrah_refund_requests_id_seq'::regclass);
+
+
+--
 -- Name: umrah_room_blocks id; Type: DEFAULT; Schema: public; Owner: -
 --
 ALTER TABLE ONLY public.umrah_room_blocks ALTER COLUMN id SET DEFAULT nextval('public.umrah_room_blocks_id_seq'::regclass);
@@ -5828,6 +5840,20 @@ ALTER TABLE ONLY public.umrah_pilgrims
 --
 ALTER TABLE ONLY public.umrah_hotels
     ADD CONSTRAINT umrah_hotels_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: umrah_families umrah_families_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_families
+    ADD CONSTRAINT umrah_families_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: umrah_refund_requests umrah_refund_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+ALTER TABLE ONLY public.umrah_refund_requests
+    ADD CONSTRAINT umrah_refund_requests_pkey PRIMARY KEY (id);
 
 CREATE INDEX idx_umrah_hotels_city ON public.umrah_hotels USING btree ("companyId", city) WHERE ("deletedAt" IS NULL);
 
@@ -15489,6 +15515,25 @@ CREATE INDEX idx_cargo_items_manifest
     ON public.cargo_items ("manifestId") WHERE "deletedAt" IS NULL;
 CREATE INDEX idx_cargo_items_hazmat
     ON public.cargo_items ("isHazmat", "companyId") WHERE "deletedAt" IS NULL AND "isHazmat" = true;
+
+--
+-- Transport billing candidates (#1733) — operational-to-finance handoff
+--
+
+ALTER TABLE ONLY public.transport_billing_candidates ALTER COLUMN id SET DEFAULT nextval('public.transport_billing_candidates_id_seq'::regclass);
+
+ALTER TABLE ONLY public.transport_billing_candidates
+    ADD CONSTRAINT transport_billing_candidates_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.transport_billing_candidates
+    ADD CONSTRAINT uq_billing_candidate_source UNIQUE ("companyId", "sourceType", "sourceId");
+
+CREATE INDEX idx_billing_candidates_company_status
+    ON public.transport_billing_candidates ("companyId", status, "createdAt" DESC);
+CREATE INDEX idx_billing_candidates_customer
+    ON public.transport_billing_candidates ("companyId", "customerId") WHERE "customerId" IS NOT NULL;
+CREATE INDEX idx_billing_candidates_vehicle
+    ON public.transport_billing_candidates ("companyId", "vehicleId") WHERE "vehicleId" IS NOT NULL;
 
 
 --
