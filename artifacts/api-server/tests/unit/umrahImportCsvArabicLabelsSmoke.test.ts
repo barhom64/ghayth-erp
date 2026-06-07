@@ -59,4 +59,12 @@ describe("import-wizard CSV export — Arabic column labels", () => {
       /downloadRejectedRowsCsv\(preview\.errors \?\? \[\], fileType, errorLabels\)/,
     );
   });
+
+  it("row numbers are emitted through formatNumber so the CSV inherits Arabic-Indic digits", () => {
+    // The on-screen wizard already passes `e.row` through `formatNumber`
+    // when rendering the row badge. Pinning the CSV's `row` cell to the
+    // same helper makes the export inherit the global format setting
+    // (Arabic-Indic vs Western) instead of always shipping ASCII digits.
+    expect(WIZARD).toMatch(/row:\s*formatNumber\(e\.row\)/);
+  });
 });

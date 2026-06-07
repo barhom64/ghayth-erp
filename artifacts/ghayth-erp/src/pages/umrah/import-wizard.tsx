@@ -88,7 +88,10 @@ async function downloadRejectedRowsCsv(
   );
   const rows = errors.map((e) => {
     const flat: Record<string, unknown> = {
-      row: e.row,
+      // formatNumber emits Arabic-Indic digits when the global format
+      // setting is "ar", so the CSV's row numbers match the wizard's
+      // on-screen labels and the rest of the Arabic-first export pipeline.
+      row: formatNumber(e.row),
       field: e.fieldName ? (labels[e.fieldName] ?? e.fieldName) : "",
       reason: e.message,
     };
