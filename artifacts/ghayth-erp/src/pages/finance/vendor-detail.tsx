@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { useRoute, useLocation } from "wouter";
+import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   PageStatusBadge,
@@ -21,6 +22,9 @@ import {
   DollarSign,
   Clock,
   FileSpreadsheet,
+  Phone,
+  Mail,
+  MessageCircle,
 } from "lucide-react";
 import {
   useDetailEditDelete,
@@ -172,8 +176,50 @@ export default function VendorDetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InfoRow label="الاسم" value={vendor?.name} />
             <InfoRow label="جهة الاتصال" value={vendor?.contactPerson} />
-            <InfoRow label="الهاتف" value={vendor?.phone} />
-            <InfoRow label="البريد الإلكتروني" value={vendor?.email} />
+            <div>
+              <p className="text-xs text-muted-foreground">الهاتف</p>
+              {vendor?.phone ? (
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`tel:${String(vendor.phone).replace(/[^0-9+]/g, "")}`}
+                    className="text-sm font-medium text-status-info-foreground hover:underline inline-flex items-center gap-1"
+                    dir="ltr"
+                    data-testid="vendor-phone-tel"
+                  >
+                    <Phone className="h-3 w-3" />
+                    {vendor.phone}
+                  </a>
+                  <a
+                    href={`https://wa.me/${String(vendor.phone).replace(/[^0-9]/g, "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="واتساب"
+                    className="text-xs text-emerald-600 hover:underline"
+                    data-testid="vendor-phone-wa"
+                  >
+                    واتساب
+                  </a>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">-</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">البريد الإلكتروني</p>
+              {vendor?.email ? (
+                <a
+                  href={`mailto:${vendor.email}`}
+                  className="text-sm font-medium text-status-info-foreground hover:underline inline-flex items-center gap-1"
+                  dir="ltr"
+                  data-testid="vendor-email-mailto"
+                >
+                  <Mail className="h-3 w-3" />
+                  {vendor.email}
+                </a>
+              ) : (
+                <p className="text-sm text-muted-foreground">-</p>
+              )}
+            </div>
             <InfoRow label="الرقم الضريبي" value={vendor?.taxNumber} />
             <InfoRow label="التصنيف" value={vendor?.category} />
             <InfoRow label="شروط الدفع" value={vendor?.paymentTerms} />
@@ -187,6 +233,8 @@ export default function VendorDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {id && <VendorContactSummaryCard vendorId={id} />}
 
       {/* WHT settings — surfaces the fields from #999 (residencyStatus,
          defaultWhtRate, whtCategoryDefault, taxResidenceCountry). Only
@@ -356,5 +404,82 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="text-sm font-medium text-status-neutral-foreground mt-0.5">{value || "—"}</p>
     </div>
+  );
+}
+
+// ─── VendorContactSummaryCard ─────────────────────────────────────
+// Mirror of ContactSummaryCard on client-detail. Pulls
+// /finance/vendors/:id/contact-summary which returns the last
+// message_log row matching the vendor's phone/email + per-channel
+// breakdown. Same UX: tells the operator "when did we last talk to
+// this supplier?" without opening the inbox.
+function VendorContactSummaryCard({ vendorId }: { vendorId: string }) {
+  const { data } = useApiQuery<{
+    data: {
+      lastContact: {
+        id: number; channel: string; direction: string;
+        fromAddress: string | null; toAddress: string | null;
+        subject: string | null; createdAt: string;
+      } | null;
+      channelCounts: Array<{ channel: string; count: number }>;
+      totalCount: number;
+    };
+  }>(["vendor-contact-summary", vendorId], `/finance/vendors/${vendorId}/contact-summary`, !!vendorId);
+
+  const summary = data?.data;
+  if (!summary) return null;
+
+  const channelLabel: Record<string, string> = {
+    email: "البريد", sms: "SMS", whatsapp: "واتساب", pbx: "السنترال",
+    internal: "داخلي", push: "تنبيه", in_app: "داخل النظام",
+  };
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <MessageCircle className="w-4 h-4 text-indigo-500" /> آخر تواصل
+          {summary.totalCount > 0 && (
+            <Badge variant="outline" className="text-[10px] ms-auto">{summary.totalCount} رسالة</Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {summary.lastContact ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Badge variant="outline" className="text-[10px]">
+                {channelLabel[summary.lastContact.channel] || summary.lastContact.channel}
+                {" · "}
+                {summary.lastContact.direction === "inbound" ? "وارد" : "صادر"}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {formatDateAr(summary.lastContact.createdAt)}
+              </span>
+            </div>
+            {summary.lastContact.subject && (
+              <p className="text-sm font-medium line-clamp-1">{summary.lastContact.subject}</p>
+            )}
+            <Link href={`/inbox?supplierId=${vendorId}`}>
+              <a className="text-xs text-status-info-foreground hover:underline inline-flex items-center gap-1">
+                <MessageCircle className="h-3 w-3" />
+                عرض كل المراسلات
+              </a>
+            </Link>
+            {summary.channelCounts.length > 1 && (
+              <div className="flex flex-wrap gap-2 pt-2 border-t">
+                {summary.channelCounts.map((c) => (
+                  <span key={c.channel} className="text-[11px] text-muted-foreground">
+                    {channelLabel[c.channel] || c.channel}: <span className="font-mono font-semibold">{c.count}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">لا توجد مراسلات سابقة مع هذا المورد</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
