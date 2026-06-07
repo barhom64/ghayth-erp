@@ -64,6 +64,14 @@ const vehicleTechnicalProfileSchema = z.object({
   equipmentAttachments: z.array(z.string()).optional(),
 });
 
+// #1733 Pricing tier (Issue Comment 3) — driverServiceProfile extends
+// the #1761 licence-class guard with a service-type specialisation.
+// A driver might hold the right class for a bus but only be trained
+// for cargo runs; the dispatch board filters accordingly.
+const DRIVER_SERVICE_PROFILES = [
+  "cargo_driver", "umrah_driver", "passenger_driver", "rental_driver", "mixed",
+] as const;
+
 const createVehicleSchema = z.object({
   plateNumber: z.string().min(1),
   make: z.string().min(1),
@@ -101,6 +109,10 @@ const createDriverSchema = z.object({
   licenseExpiry: z.string().optional(),
   licenseType: z.string().optional(),
   licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
+  // #1733 Pricing tier — service-type specialisation. Used by the
+  // dispatch board to surface only drivers whose profile matches the
+  // booking's transportServiceType.
+  driverServiceProfile: z.enum(DRIVER_SERVICE_PROFILES).optional(),
   employeeId: z.coerce.number().optional(),
   status: z.string().optional(),
 });
@@ -178,6 +190,7 @@ const updateDriverSchema = z.object({
   status: z.string().optional(),
   licenseType: z.string().optional(),
   licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
+  driverServiceProfile: z.enum(DRIVER_SERVICE_PROFILES).optional(),
 });
 
 const createTripSchema = z.object({
@@ -857,8 +870,8 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","licenseClass","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.licenseClass || null, b.employeeId || null, b.status || 'available']
+      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","licenseClass","driverServiceProfile","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.licenseClass || null, b.driverServiceProfile || null, b.employeeId || null, b.status || 'available']
     );
     assertInsert(insertId, "fleet_drivers");
 
@@ -1230,7 +1243,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       }
     }
 
-    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType","licenseClass"] as const;
+    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType","licenseClass","driverServiceProfile"] as const;
     const colMap: Record<string, string> = {
       name: "name",
       phone: "phone",
@@ -1240,6 +1253,8 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       licenseType: '"licenseType"',
       // #1733 Phase 2 — KSA driving-licence stack used by the eligibility guard.
       licenseClass: '"licenseClass"',
+      // #1733 Pricing tier — service-type specialisation.
+      driverServiceProfile: '"driverServiceProfile"',
     };
     const sets: string[] = [];
     const params: unknown[] = [];
