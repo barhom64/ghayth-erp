@@ -1,5 +1,9 @@
 -- Migration 265 — Umrah families entity
 --
+-- @rollback:
+--   ALTER TABLE umrah_pilgrims DROP COLUMN IF EXISTS "familyId";
+--   DROP TABLE IF EXISTS umrah_families;
+--
 -- Real umrah ops run on family groups, not solo pilgrims. A husband,
 -- wife, and 3 kids share a room, a bus seat block, and one set of
 -- emergency contacts. The system was missing this grouping entirely:
