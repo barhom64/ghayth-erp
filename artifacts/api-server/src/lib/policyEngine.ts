@@ -59,6 +59,7 @@ export const ROLE_STRATEGIES: RoleStrategy[] = [
   { role: "support_manager", label: "مدير الدعم", tier: "manager", canDelegate: false, maxBranches: null, description: "إدارة تذاكر الدعم الفني" },
   { role: "crm_manager", label: "مدير العلاقات", tier: "manager", canDelegate: false, maxBranches: null, description: "إدارة العملاء والفرص" },
   { role: "bi_manager", label: "محلل الأعمال", tier: "operational", canDelegate: false, maxBranches: null, description: "قراءة التقارير والتحليلات" },
+  { role: "driver", label: "سائق", tier: "self-service", canDelegate: false, maxBranches: 1, description: "السائق: يرى رحلاته وبضائعه فقط، يحدّث حالته، يبدأ/يكمل/يسلّم من نفس واجهة الـERP بصلاحيات self-service" },
   { role: "employee", label: "موظف", tier: "self-service", canDelegate: false, maxBranches: 1, description: "خدمة ذاتية محدودة" },
 ];
 
