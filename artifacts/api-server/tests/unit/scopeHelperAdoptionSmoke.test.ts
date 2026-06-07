@@ -42,6 +42,7 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "activityIngest.ts",
   "activityLog.ts",
   "admin-ai-governance.ts",
+  "admin-classifier-rules.ts",
   "admin-communication-control.ts",
   "admin-notification-routing.ts",
   "admin-observability.ts",
@@ -189,9 +190,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 105,
+      total: 106,
       helperUsers: 36,
-      manualOnly: 66,
+      manualOnly: 67,
     });
   });
 });

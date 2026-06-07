@@ -55,6 +55,7 @@ import adminCommControlRouter from "./admin-communication-control.js";
 import adminPbxControlRouter from "./admin-pbx-control.js";
 import adminMasterPlanRouter from "./admin-master-plan.js";
 import adminNotificationRoutingRouter from "./admin-notification-routing.js";
+import adminClassifierRulesRouter from "./admin-classifier-rules.js";
 import adminVendorSettingsRouter from "./admin-vendor-settings.js";
 import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
@@ -443,6 +444,11 @@ router.use("/admin/master-plan", requireModule("admin"), requireMinLevel(90), ad
 // Notification Routing rules + fallback chains UI (existing tables;
 // new admin surface to fulfil #1139 §6 "كل شيء قابل للتحكم من الواجهة").
 router.use("/admin/notification-routing", requireModule("admin"), requireMinLevel(90), adminNotificationRoutingRouter);
+// Inbox classifier rules — operator-configurable triage rules (PR-C of
+// the comms plan). Mirrors the notification-routing tenant-safety
+// pattern: editing a global default forks a company override instead
+// of mutating the shared row.
+router.use("/admin/classifier-rules", requireModule("admin"), requireMinLevel(90), adminClassifierRulesRouter);
 // Vendor Settings hub — every external integration (PBX webhook, WhatsApp,
 // SMTP, VAPID, SIEM, ZATCA) editable from the UI, secrets encrypted at rest.
 router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90), adminVendorSettingsRouter);
