@@ -155,6 +155,11 @@ const createCustodySchema = z.object({
   amount: z.coerce.number(),
   description: z.string().optional(),
   sourceAccountCode: z.string().optional(),
+  // #1715 guardrail #6: optional payment method so the custody disbursement
+  // can be validated against its money source through the unified context
+  // (cash→cash_box, bank_transfer→bank, …). Absent → policy is a no-op, so
+  // existing callers are unaffected.
+  paymentMethod: z.string().optional(),
   purpose: z.string().optional(),
   expectedReturnDate: z.string().optional(),
 });
@@ -557,7 +562,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
   try {
     const scope = req.scope!;
 
-    const { assignmentId, employeeName, amount, description, sourceAccountCode, purpose, expectedReturnDate } = zodParse(createCustodySchema.safeParse(req.body ?? {}));
+    const { assignmentId, employeeName, amount, description, sourceAccountCode, paymentMethod, purpose, expectedReturnDate } = zodParse(createCustodySchema.safeParse(req.body ?? {}));
 
     if (!amount) {
       throw new ValidationError("المبلغ مطلوب", {
@@ -598,6 +603,25 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
     }
 
     const sourceAcct = sourceAccountCode || "1100";
+
+    // #1715 guardrail #6 — the custody disbursement is a finance operation,
+    // so it flows through the unified FinanceOperationContext. When the caller
+    // supplies a paymentMethod, assertOperationValid enforces the same
+    // money-source ↔ method policy as expenses/vouchers (a cash custody can't
+    // be drawn from a bank account, etc.). Absent paymentMethod → no-op, so
+    // existing callers keep working unchanged.
+    {
+      const { assertOperationValid, fromLegacyCustodyForm } = await import("../lib/financeOperationContext.js");
+      await assertOperationValid(fromLegacyCustodyForm({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        sourceAccountCode: sourceAcct,
+        paymentMethod,
+        assignmentId: resolvedAssignmentId,
+        employeeName: resolvedEmployeeName,
+      }));
+    }
+
     const idempotencyToken = requestIdempotencyToken(req);
     const ref = `CUSTODY-${idempotencyToken}`;
     const custodyAssignmentId = resolvedAssignmentId || scope.activeAssignmentId;
