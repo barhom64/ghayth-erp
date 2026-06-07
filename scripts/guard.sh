@@ -70,9 +70,16 @@ run_step "audit:schema"       node scripts/src/audit-schema-drift.mjs
 # Pure-logic fixtures for the ghost-row predicates — no DB needed, so
 # this runs in every environment to guard the guard itself.
 run_step "check:ghost-rows:tests" node scripts/src/check-ghost-rows.test.mjs
+# Pure-logic fixtures for the ambiguous-column scanner — no DB needed, so
+# this runs in every environment to guard the guard itself.
+run_step "check:sql-ambiguity:tests" node scripts/src/check-sql-ambiguity.test.mjs
 if [ -n "${DATABASE_URL:-}" ]; then
   run_step "check:schema-drift" node scripts/src/check-schema-drift.mjs
   run_step "check:ghost-rows"   node scripts/src/check-ghost-rows.mjs
+  # Bare column shared across 2+ joined relations → Postgres
+  # "column reference … is ambiguous" 500. Needs the live schema to know
+  # which columns collide. See scripts/src/check-sql-ambiguity.mjs.
+  run_step "check:sql-ambiguity" node scripts/src/check-sql-ambiguity.mjs
 elif [ -n "${CI:-}" ]; then
   # GitHub Actions doesn't provision a Postgres by default. The local
   # pre-commit hook still enforces these checks against the real DB
@@ -80,9 +87,11 @@ elif [ -n "${CI:-}" ]; then
   # block CI on the absence of DATABASE_URL.
   echo -e "${INFO} [check:schema-drift] WARN: skipped in CI (no DATABASE_URL secret configured)"
   echo -e "${INFO} [check:ghost-rows]   WARN: skipped in CI (no DATABASE_URL secret configured)"
+  echo -e "${INFO} [check:sql-ambiguity] WARN: skipped in CI (no DATABASE_URL secret configured)"
 else
   echo -e "${INFO} [check:schema-drift] skipped (DATABASE_URL not set; allowed outside CI)"
   echo -e "${INFO} [check:ghost-rows] skipped (DATABASE_URL not set; allowed outside CI)"
+  echo -e "${INFO} [check:sql-ambiguity] skipped (DATABASE_URL not set; allowed outside CI)"
 fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs

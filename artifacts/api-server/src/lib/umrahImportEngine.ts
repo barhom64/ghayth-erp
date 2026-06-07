@@ -73,6 +73,70 @@ export const VOUCHER_HEADER_MAP: Record<string, string> = {
   "اسم المكتب": "subAgentName",
 };
 
+// ---------------------------------------------------------------------------
+// Canonical Arabic labels per engine field — the SINGLE SOURCE OF TRUTH
+// for how each umrah import field is named to the (Arabic-first) operator.
+//
+// The forward maps above accept MANY Arabic spellings per field (vendor
+// files vary). This map is the reverse, curated direction: ONE clean
+// Arabic label per field, used to render the column-mapping dropdown and
+// any other "pick a field" UI. Without it the dropdown showed raw English
+// identifiers (nuskInvoiceNumber, mutamerCount, ...) — meaningless to an
+// Arabic operator. Reported from a live screenshot of the import wizard.
+//
+// Keep this exhaustive over every distinct value in the two forward maps;
+// the header-maps endpoint asserts coverage so a new field can't ship
+// without its Arabic label.
+// ---------------------------------------------------------------------------
+export const UMRAH_FIELD_LABELS_AR: Record<string, string> = {
+  // mutamers
+  nuskNumber: "رقم المعتمر (نسك)",
+  fullName: "اسم المعتمر",
+  nationality: "الجنسية",
+  gender: "الجنس",
+  passportNumber: "رقم الجواز",
+  passportExpiry: "صلاحية الجواز",
+  visaNumber: "رقم التأشيرة",
+  nuskGroupNumber: "رقم المجموعة",
+  groupName: "اسم المجموعة",
+  nuskAgentNumber: "رقم الوكيل",
+  agentName: "اسم الوكيل",
+  nuskCode: "رمز المكتب (الوكيل الفرعي)",
+  subAgentName: "اسم المكتب (الوكيل الفرعي)",
+  status: "الحالة",
+  entryDate: "تاريخ الدخول",
+  exitDate: "تاريخ الخروج",
+  entryPort: "ميناء الدخول",
+  entryFlight: "رحلة الدخول",
+  exitPort: "ميناء الخروج",
+  exitFlight: "رحلة الخروج",
+  borderNumber: "رقم الحدود",
+  mofaNumber: "رقم وزارة الخارجية (الموفا)",
+  programDuration: "مدة البرنامج",
+  actualStayDays: "أيام الإقامة الفعلية",
+  overstayDays: "أيام التجاوز",
+  isInsideKingdom: "داخل المملكة",
+  hasUmrahPermit: "لديه تصريح عمرة",
+  country: "الدولة",
+  // vouchers
+  nuskInvoiceNumber: "رقم فاتورة نسك",
+  mutamerCount: "عدد المعتمرين",
+  groundServices: "الخدمات الأرضية",
+  electronicFees: "الرسوم الإلكترونية",
+  visaFees: "رسوم التأشيرة",
+  insuranceFees: "رسوم التأمين",
+  enrichmentServices: "خدمات الإثراء",
+  additionalServices: "خدمات إضافية",
+  transportTotal: "إجمالي النقل",
+  hotelTotal: "إجمالي الفنادق",
+  refundAmount: "المبالغ المستردة",
+  netCost: "صافي التكلفة",
+  totalAmount: "المبلغ الإجمالي",
+  nuskStatus: "حالة الفاتورة",
+  issueDate: "تاريخ الإصدار",
+  expiryDate: "تاريخ الانتهاء",
+};
+
 const STATUS_MAP: Record<string, string> = {
   "داخل المملكة": "arrived",
   "خرج": "departed",

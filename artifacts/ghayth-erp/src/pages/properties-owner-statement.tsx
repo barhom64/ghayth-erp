@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 interface OwnerOption {
@@ -245,6 +246,77 @@ export default function PropertiesOwnerStatement() {
         { label: "العقارات", href: "/properties/dashboard" },
         { label: "كشف حساب المالك" },
       ]}
+      actions={
+        ownerId && data && summary ? (
+          <PrintButton
+            entityType="report_owner_statement"
+            entityId="list"
+            size="icon"
+            label="طباعة كشف حساب المالك"
+            payload={() => ({
+              entity: {
+                title: `كشف حساب المالك — ${data.owner.name}`,
+                ownerName: data.owner.name,
+                iban: data.owner.iban || "—",
+                bankName: data.owner.bankName || "—",
+                periodFrom: formatDateAr(data.period.from),
+                periodTo: formatDateAr(data.period.to),
+                totalRent: summary.totalRentDue,
+                totalCollected: summary.totalRentCollected,
+                totalOutstanding: summary.totalRentOutstanding,
+                totalMaintenance: summary.totalMaintenance,
+                commissionAmount: summary.commissionAmount,
+                netDueToOwner: summary.netDueToOwner,
+                totalUnits: data.rentByUnit?.length ?? 0,
+              },
+              sections: [
+                {
+                  title: "الإيرادات حسب الوحدة",
+                  rows: (data.rentByUnit ?? []).map((u: any) => ({
+                    "رقم الوحدة": u.unitNumber || "—",
+                    "المستأجر": u.tenantName || "—",
+                    "رقم العقد": u.contractNumber || "—",
+                    "المستحق": Number(u.totalDue || 0),
+                    "المحصل": Number(u.totalCollected || 0),
+                    "المتأخر": Number(u.outstanding || 0),
+                  })),
+                },
+                {
+                  title: "المدفوعات المتأخرة",
+                  rows: (data.outstandingPayments ?? []).map((p: any) => ({
+                    "رقم الوحدة": p.unitNumber || "—",
+                    "المستأجر": p.tenantName || "—",
+                    "تاريخ الاستحقاق": p.dueDate ? formatDateAr(p.dueDate) : "—",
+                    "أيام التأخير": p.daysPastDue ?? 0,
+                    "المتأخر": Number(p.outstanding || 0),
+                  })),
+                },
+                {
+                  title: "مصاريف الصيانة",
+                  rows: (data.maintenance ?? []).map((m: any) => ({
+                    "رقم الوحدة": m.unitNumber || "—",
+                    "التصنيف": m.category || "—",
+                    "الوصف": m.description || "—",
+                    "تاريخ الإنجاز": m.completedAt ? formatDateAr(m.completedAt) : "—",
+                    "التكلفة": Number(m.actualCost || 0),
+                  })),
+                },
+                {
+                  title: "سجل المدفوعات السابقة للمالك",
+                  rows: payouts.map((p: any) => ({
+                    "الفترة": p.period || "—",
+                    "تاريخ الدفع": p.paidAt ? formatDateAr(p.paidAt) : "—",
+                    "الصافي": Number(p.netAmount || 0),
+                    "العمولة": Number(p.commissionAmount || 0),
+                    "طريقة الدفع": p.paymentMethod || "—",
+                    "المرجع": p.reference || "—",
+                  })),
+                },
+              ],
+            })}
+          />
+        ) : undefined
+      }
     >
       <PropertyTabsNav />
       <Card className="mb-6">
