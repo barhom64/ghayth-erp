@@ -8,6 +8,7 @@ import {
   SLA_HOURS_BY_PRIORITY,
   classifyInboxMessage,
   liftPriorityForClassification,
+  rolePriorityCase,
   type Priority,
 } from "./inboxClassifier.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
@@ -1614,11 +1615,39 @@ export function registerEventListeners() {
     const slaHours = SLA_HOURS_BY_PRIORITY[priority];
     const dueAt = new Date(Date.now() + slaHours * 3600 * 1000);
 
+    // Auto-assign: resolve the role list for this task type and pick
+    // the most specific active assignment. Null result means the org
+    // chart has no eligible role — the task lands unassigned (status
+    // 'pending' still drives the inbox UX so a human can grab it).
+    let assigneeAssignmentId: number | null = null;
+    let assigneeUserId: number | null = null;
+    try {
+      const { roles, orderCase } = rolePriorityCase(matched.type, "ea.role");
+      const [assignee] = await rawQuery<{ assignmentId: number; userId: number | null }>(
+        `SELECT ea.id AS "assignmentId", u.id AS "userId"
+           FROM employee_assignments ea
+           LEFT JOIN users u ON u."employeeId" = ea."employeeId"
+          WHERE ea."companyId" = $1
+            AND ea.role = ANY($2::text[])
+            AND ea.status = 'active'
+          ORDER BY ${orderCase}, ea.id ASC
+          LIMIT 1`,
+        [payload.companyId, roles],
+      );
+      if (assignee) {
+        assigneeAssignmentId = assignee.assignmentId;
+        assigneeUserId = assignee.userId;
+      }
+    } catch (e) {
+      logger.warn(e, "[EventListener] inbox auto-classifier assignee resolution failed");
+    }
+
     try {
       await rawExecute(
         `INSERT INTO tasks ("companyId", title, description, type, status, priority,
-                            "linkedEntityType", "linkedEntityId", "slaDeadline", "slaHours", "createdAt")
-         VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, NOW())`,
+                            "linkedEntityType", "linkedEntityId", "slaDeadline", "slaHours",
+                            "assignedTo", "assignmentId", "createdAt")
+         VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11, NOW())`,
         [
           payload.companyId,
           `${matched.titlePrefix} ${senderName}: ${(msg.subject ?? "").slice(0, 120)}`,
@@ -1629,6 +1658,8 @@ export function registerEventListeners() {
           linkedEntityId,
           dueAt,
           slaHours,
+          assigneeUserId,
+          assigneeAssignmentId,
         ],
       );
     } catch (e) { logger.error(e, "[EventListener] inbox auto-classifier task insert failed"); }
