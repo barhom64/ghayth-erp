@@ -105,6 +105,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "storage.ts",
   "store.ts",
   "training.ts",
+  // transport-billing-candidates.ts: accountant queue for the #1733 handoff.
+  // Three small endpoints, each a single-row lookup by id keyed on
+  // (companyId, id) — no list cascade where buildScopedWhere would add
+  // branch/department filtering. Manual companyId scoping is correct here.
+  "transport-billing-candidates.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -189,9 +194,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 105,
+      total: 106,
       helperUsers: 36,
-      manualOnly: 66,
+      manualOnly: 67,
     });
   });
 });

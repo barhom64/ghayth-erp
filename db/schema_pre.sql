@@ -19464,6 +19464,66 @@ ALTER SEQUENCE public.cargo_manifests_id_seq OWNED BY public.cargo_manifests.id;
 
 
 --
+-- Name: transport_billing_candidates; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 — Operational-to-finance handoff. Transport never posts JEs;
+-- it inserts a pending candidate row that the accountant materializes.
+
+CREATE TABLE public.transport_billing_candidates (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "sourceRef" text,
+    "customerId" integer,
+    "serviceType" text NOT NULL,
+    "serviceDate" date NOT NULL,
+    "routeFrom" text,
+    "routeTo" text,
+    "vehicleId" integer,
+    "driverId" integer,
+    quantity numeric(18,3) DEFAULT 0 NOT NULL,
+    "unitOfMeasure" text,
+    "operationalStatus" text NOT NULL,
+    "suggestedRevenue" numeric(18,2),
+    "suggestedCost" numeric(18,2),
+    attachments jsonb DEFAULT '[]'::jsonb NOT NULL,
+    notes text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    "materializedJournalEntryId" integer,
+    "materializedBy" integer,
+    "materializedAt" timestamp with time zone,
+    "rejectedBy" integer,
+    "rejectedAt" timestamp with time zone,
+    "rejectionReason" text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: transport_billing_candidates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_billing_candidates_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_billing_candidates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_billing_candidates_id_seq OWNED BY public.transport_billing_candidates.id;
+
+
+--
 -- Name: cargo_items; Type: TABLE; Schema: public; Owner: -
 --
 
