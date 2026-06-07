@@ -1259,7 +1259,7 @@ router.get("/:id/acls", authorize({ feature: "documents", action: "list" }), asy
          FROM document_acls a
          LEFT JOIN users u ON u.id = a."userId"
          LEFT JOIN employees e ON e.id = u."employeeId" AND e."deletedAt" IS NULL
-         LEFT JOIN departments d ON d.id = a."departmentId" AND d."deletedAt" IS NULL
+         LEFT JOIN departments d ON d.id = a."departmentId"
         WHERE a."companyId" = $1 AND a."documentId" = $2
           AND (a."expiresAt" IS NULL OR a."expiresAt" > NOW())
         ORDER BY a."grantedAt" DESC`,
