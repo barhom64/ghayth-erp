@@ -533,7 +533,7 @@ router.get("/me", authorize({ feature: "fleet.driver.me", action: "view" }), asy
     const [row] = await rawQuery(
       `SELECT id, name, phone, "licenseNumber", "licenseExpiry", "licenseType",
               status, rating, "totalTrips"
-         FROM fleet_drivers WHERE id = $1 AND "companyId" = $2`,
+         FROM fleet_drivers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [driver.id, driver.companyId]
     );
     res.json({ data: row });
