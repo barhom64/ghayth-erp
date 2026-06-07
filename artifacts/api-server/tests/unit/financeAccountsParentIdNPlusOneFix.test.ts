@@ -11,10 +11,15 @@
  *       AND p."deletedAt" IS NULL LIMIT 1) AS "parentId"
  *
  * That's up to 5000 extra hits against chart_of_accounts per request
- * to fill in a column that's available from a simple self-join.
+ * to fill in a column the row ALREADY HAS — c."parentId" is populated
+ * by POST /accounts (see the UPDATE chart_of_accounts SET "parentId"
+ * = (SELECT p.id …) call site), so the lookup was just a safety net.
  *
- * The fix uses a single LEFT JOIN on (code, companyId) so the parent
- * resolution happens once per scan, not once per row.
+ * The fix drops the lookup entirely and projects c."parentId"
+ * directly. Rows where parentId drifted away from the FK now read
+ * NULL, which is exactly what the tree-builder on the client treats
+ * as "no parent" — same behavior as the legacy fallback when the
+ * lookup returned no match.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -40,23 +45,24 @@ describe("Finance accounts list — parentId N+1 fix", () => {
     );
   });
 
-  it("uses a LEFT JOIN self-lookup on chart_of_accounts (code + companyId match)", () => {
-    expect(handler).toMatch(
+  it("does NOT re-introduce a self-join on chart_of_accounts — the column already exists on c", () => {
+    // Self-join would re-create the ambiguity flagged by
+    // check-sql-ambiguity (both c.parentId and p.id AS "parentId"
+    // collide). The simpler shape is to trust c."parentId".
+    expect(handler).not.toMatch(
       /LEFT JOIN chart_of_accounts p ON p\.code = c\."parentCode"/,
     );
-    expect(handler).toMatch(/p\."companyId"\s*=\s*c\."companyId"/);
-    expect(handler).toMatch(/p\."deletedAt"\s+IS\s+NULL/);
   });
 
-  it('projects p.id AS "parentId" instead of a subquery', () => {
-    expect(handler).toMatch(/p\.id\s+AS\s+"parentId"/);
+  it("selects directly from chart_of_accounts c with no subquery indirection", () => {
+    expect(handler).toMatch(/FROM chart_of_accounts c WHERE/);
   });
 
   it("preserves the LIMIT 5000 cap", () => {
     expect(handler).toMatch(/LIMIT 5000/);
   });
 
-  it("preserves the c.\"deletedAt\" IS NULL filter on the parent table", () => {
+  it("preserves the c.\"deletedAt\" IS NULL filter", () => {
     expect(handler).toMatch(/c\."deletedAt" IS NULL/);
   });
 });

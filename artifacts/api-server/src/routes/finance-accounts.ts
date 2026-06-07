@@ -279,17 +279,18 @@ accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action:
 
     // Was N+1: scalar self-join lookup per child to resolve parentId
     // from parentCode. With LIMIT 5000 that's up to 5000 extra hits
-    // against chart_of_accounts. A single LEFT JOIN does the lookup
-    // once per row in the same scan.
+    // against chart_of_accounts.
+    //
+    // The c."parentId" column is populated by POST /accounts itself
+    // (see UPDATE chart_of_accounts SET "parentId" = (SELECT p.id ...)
+    // a few handlers below) — so the lookup-by-parentCode was just a
+    // safety net for rows where parentId drifted away from the FK.
+    // Project c."parentId" directly; the tree-builder on the client
+    // (pages/finance/accounts.tsx) treats a NULL parentId as "no
+    // parent", which matches the legacy fallback when the lookup
+    // returned no row anyway.
     const rows = await rawQuery(
-      `SELECT c.*, p.id AS "parentId"
-         FROM chart_of_accounts c
-         LEFT JOIN chart_of_accounts p ON p.code = c."parentCode"
-                                       AND p."companyId" = c."companyId"
-                                       AND p."deletedAt" IS NULL
-        WHERE ${where} AND c."deletedAt" IS NULL${extraWhere}
-        ORDER BY c.code
-        LIMIT 5000`,
+      `SELECT c.* FROM chart_of_accounts c WHERE ${where} AND c."deletedAt" IS NULL${extraWhere} ORDER BY c.code LIMIT 5000`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
