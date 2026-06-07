@@ -265,6 +265,7 @@ export default function AdminCommunicationControl() {
 
           {/* ── Overview ──────────────────────────────────────────── */}
           <TabsContent value="overview" className="space-y-4">
+            <ReadinessPanel />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {Object.entries(inboundByChannel).map(([ch, v]) => {
                 const Icon = CHANNEL_ICON[ch] ?? Radio;
@@ -637,5 +638,92 @@ function DlpTesterDialog({ open, onClose }: { open: boolean; onClose: () => void
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── ReadinessPanel ─────────────────────────────────────────────
+// "Can I trust an email actually arrives if I trigger an event right
+// now?" — Pulls /admin/communication-control/readiness and renders a
+// status tile per channel showing the three things that have to line
+// up: an active integration with credentials, a routing rule sending
+// to this channel, and no failed queue rows in the last 24h.
+type ChannelReadiness = {
+  channel: "email" | "sms" | "whatsapp" | "pbx";
+  status: "ready" | "partial" | "inactive" | "blocked";
+  hasIntegration: boolean;
+  hasRoutingRule: boolean;
+  pendingQueue: number;
+  failedQueue: number;
+  connectedMailboxes?: number;
+  activeExtensions?: number;
+};
+
+const STATUS_LABEL: Record<ChannelReadiness["status"], string> = {
+  ready: "جاهز",
+  partial: "غير مكتمل",
+  inactive: "غير مفعّل",
+  blocked: "إرسال معطّل",
+};
+const STATUS_TONE: Record<ChannelReadiness["status"], string> = {
+  ready: "bg-status-success-surface text-status-success-foreground",
+  partial: "bg-status-warning-surface text-status-warning-foreground",
+  inactive: "bg-muted text-muted-foreground",
+  blocked: "bg-status-error-surface text-status-error-foreground",
+};
+const CHANNEL_LABEL_AR: Record<ChannelReadiness["channel"], string> = {
+  email: "البريد",
+  sms: "الرسائل النصية",
+  whatsapp: "واتساب",
+  pbx: "السنترال",
+};
+
+function ReadinessPanel() {
+  const { data, isLoading } = useApiQuery<{ data: { channels: ChannelReadiness[]; rulesActive: number } }>(
+    ["comm-control-readiness"],
+    "/admin/communication-control/readiness",
+  );
+  if (isLoading || !data?.data) return null;
+  const { channels, rulesActive } = data.data;
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center justify-between">
+          <span>جاهزية القنوات</span>
+          <span className="text-xs text-muted-foreground font-normal">{rulesActive} قاعدة توجيه نشطة</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          {channels.map((c) => {
+            const reasons: string[] = [];
+            if (!c.hasIntegration) reasons.push("لا يوجد مزوّد مفعّل بمفاتيح اعتماد");
+            if (!c.hasRoutingRule) reasons.push("لا توجد قاعدة توجيه تُرسل لهذه القناة");
+            if (c.failedQueue > 0) reasons.push(`${c.failedQueue} رسالة فاشلة خلال 24س`);
+            return (
+              <div key={c.channel} className={`rounded-lg p-3 ${STATUS_TONE[c.status]}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-semibold">{CHANNEL_LABEL_AR[c.channel]}</p>
+                  <Badge className="text-[10px] bg-white/40">{STATUS_LABEL[c.status]}</Badge>
+                </div>
+                <div className="text-xs space-y-0.5">
+                  <p>{c.hasIntegration ? "✓ مزوّد مفعّل" : "✗ لا مزوّد"}</p>
+                  <p>{c.hasRoutingRule ? "✓ مفعّل في التوجيه" : "✗ خارج التوجيه"}</p>
+                  {c.channel === "email" && (
+                    <p>{(c.connectedMailboxes ?? 0)} صندوق مربوط</p>
+                  )}
+                  {c.channel === "pbx" && (
+                    <p>{(c.activeExtensions ?? 0)} تحويلة نشطة</p>
+                  )}
+                  <p>{c.pendingQueue} معلّقة · {c.failedQueue} فاشلة (24س)</p>
+                </div>
+                {reasons.length > 0 && (
+                  <p className="text-[11px] mt-2 opacity-90">{reasons.join(" · ")}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
