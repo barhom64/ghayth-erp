@@ -1806,11 +1806,23 @@ async function weeklyClientClassification(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let classified = 0;
   for (const company of companies) {
+    // Was N+1: correlated MAX("createdAt") per client over invoices.
+    // For 500 clients per company that's 500 lookups against invoices
+    // — per company, per weekly run. Single GROUP BY CTE collapses to
+    // one scan per company.
     const clients = await rawQuery<Record<string, unknown>>(
-      `SELECT c.id, c.name, c.classification,
+      `WITH last_invoice_per_client AS (
+         SELECT "clientId", MAX("createdAt") AS "lastInvoice"
+           FROM invoices
+          WHERE "companyId" = $1
+          GROUP BY "clientId"
+       )
+       SELECT c.id, c.name, c.classification,
               COALESCE(c."totalRevenue", 0) AS revenue,
-              (SELECT MAX(i."createdAt") FROM invoices i WHERE i."clientId" = c.id) AS "lastInvoice"
-       FROM clients c WHERE c."companyId" = $1`,
+              li."lastInvoice"
+         FROM clients c
+         LEFT JOIN last_invoice_per_client li ON li."clientId" = c.id
+        WHERE c."companyId" = $1`,
       [company.id]
     );
     for (const client of clients) {

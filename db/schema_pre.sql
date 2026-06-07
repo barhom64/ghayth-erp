@@ -17445,6 +17445,30 @@ ALTER SEQUENCE public.umrah_hotels_id_seq OWNED BY public.umrah_hotels.id;
 
 
 --
+-- Name: umrah_families; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 265_umrah_families.sql.
+--
+
+CREATE TABLE public.umrah_families (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "familyName" character varying(200) NOT NULL,
+    "headPilgrimId" integer,
+    "contactPhone" character varying(40),
+    "contactName" character varying(200),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+CREATE SEQUENCE public.umrah_families_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.umrah_families_id_seq OWNED BY public.umrah_families.id;
+
+
+--
 -- Name: umrah_room_blocks; Type: TABLE; Schema: public; Owner: -
 -- Source: migration 246_umrah_accommodations.sql.
 --
@@ -17559,6 +17583,7 @@ CREATE TABLE public.umrah_pilgrims (
     "overstayExemptReason" text,
     "overstayExemptBy" integer,
     "overstayExemptAt" timestamp with time zone,
+    "familyId" integer,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('overstay_penalized'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('absconded'::character varying)::text, ('deceased'::character varying)::text, ('visa_rejected'::character varying)::text, ('visa_printed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
