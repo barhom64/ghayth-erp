@@ -27,6 +27,14 @@ const PILGRIM_DETAIL = readFileSync(
   join(import.meta.dirname!, "../../../ghayth-erp/src/pages/umrah/pilgrim-detail.tsx"),
   "utf8",
 );
+const PILGRIMS_LIST = readFileSync(
+  join(import.meta.dirname!, "../../../ghayth-erp/src/pages/umrah/pilgrims.tsx"),
+  "utf8",
+);
+const STATUS_MODULE = readFileSync(
+  join(import.meta.dirname!, "../../../ghayth-erp/src/lib/umrah-pilgrim-status.ts"),
+  "utf8",
+);
 
 describe("pilgrim-detail status options align with canonical STATUS_MAP", () => {
   it("PageStatusBadge umrah block labels overstayed as 'متجاوز' (overstayed, not late)", () => {
@@ -37,27 +45,44 @@ describe("pilgrim-detail status options align with canonical STATUS_MAP", () => 
     expect(BADGE).toMatch(/umrah:\s*\{[\s\S]{0,200}overstayed:\s*\{\s*label:\s*"متجاوز"/);
   });
 
-  it("pilgrim-detail STATUS_OPTIONS labels overstayed as 'متجاوز' too — same word both places", () => {
-    expect(PILGRIM_DETAIL).toMatch(/\{\s*value:\s*"overstayed",\s*label:\s*"متجاوز"\s*\}/);
-    // And the legacy "متأخر" label is gone for this value.
-    expect(PILGRIM_DETAIL).not.toMatch(/\{\s*value:\s*"overstayed",\s*label:\s*"متأخر"\s*\}/);
+  it("the canonical status module is the SOLE source — list duplicates are gone", () => {
+    // Three different files used to carry their own copy of this dict
+    // (pilgrim-detail STATUS_OPTIONS, pilgrims.tsx PILGRIM_STATUS_OPTIONS,
+    // pilgrims.tsx AdvancedFilters statuses). After the extraction, only
+    // the module carries the literal pairs — every consumer imports it.
+    expect(STATUS_MODULE).toMatch(/UMRAH_PILGRIM_STATUS_OPTIONS[\s\S]{0,400}value:\s*"overstayed",\s*label:\s*"متجاوز"/);
+    expect(STATUS_MODULE).toMatch(/UMRAH_PILGRIM_STATUS_OPTIONS[\s\S]{0,400}value:\s*"cancelled",\s*label:\s*"ملغى"/);
+
+    // No raw status-option array literal survives in either page file.
+    // (The "متأخر" / "ملغي" mis-spellings can't reappear because the
+    // dictionary doesn't live here anymore.)
+    expect(PILGRIM_DETAIL).not.toMatch(/value:\s*"overstayed",\s*label:\s*"/);
+    expect(PILGRIMS_LIST).not.toMatch(/value:\s*"overstayed",\s*label:\s*"/);
+    expect(PILGRIM_DETAIL).not.toMatch(/value:\s*"cancelled",\s*label:\s*"/);
+    expect(PILGRIMS_LIST).not.toMatch(/value:\s*"cancelled",\s*label:\s*"/);
   });
 
-  it("cancelled uses the canonical 'ملغى' spelling, not the local 'ملغي'", () => {
-    // Canonical STATUS_MAP uses "ملغى" everywhere (passive participle of
-    // ألغى). The local map had "ملغي" (active participle) which reads as
-    // "cancelling" not "cancelled" — minor but pinned.
+  it("both consumer files import from the canonical module", () => {
+    expect(PILGRIM_DETAIL).toMatch(/UMRAH_PILGRIM_STATUS_OPTIONS[\s\S]{0,80}from\s*"@\/lib\/umrah-pilgrim-status"/);
+    expect(PILGRIMS_LIST).toMatch(/UMRAH_PILGRIM_STATUS_OPTIONS[\s\S]{0,80}from\s*"@\/lib\/umrah-pilgrim-status"/);
+  });
+
+  it("AdvancedFilters list reads from the same constant, not a re-typed copy", () => {
+    // The filter strip in pilgrims.tsx used to inline its own array. Now
+    // it spreads the shared constant, so the dropdown's labels and the
+    // chip's labels can never drift apart.
+    expect(PILGRIMS_LIST).toMatch(/statuses:\s*\[\.\.\.PILGRIM_STATUS_OPTIONS\]/);
+  });
+
+  it("cancelled uses the canonical 'ملغى' spelling, not the legacy 'ملغي'", () => {
     expect(BADGE).toMatch(/cancelled:\s*\{\s*label:\s*"ملغى"/);
-    expect(PILGRIM_DETAIL).toMatch(/\{\s*value:\s*"cancelled",\s*label:\s*"ملغى"\s*\}/);
-    expect(PILGRIM_DETAIL).not.toMatch(/\{\s*value:\s*"cancelled",\s*label:\s*"ملغي"\s*\}/);
+    expect(STATUS_MODULE).toMatch(/value:\s*"cancelled",\s*label:\s*"ملغى"/);
   });
 
-  it("arrived / departed / violated already aligned (regression guard)", () => {
-    // These were already aligned but pin them so a future edit to either
-    // file can't silently drift one term away from the other.
-    expect(PILGRIM_DETAIL).toMatch(/\{\s*value:\s*"arrived",\s*label:\s*"وصل"\s*\}/);
-    expect(PILGRIM_DETAIL).toMatch(/\{\s*value:\s*"departed",\s*label:\s*"غادر"\s*\}/);
-    expect(PILGRIM_DETAIL).toMatch(/\{\s*value:\s*"violated",\s*label:\s*"مخالف"\s*\}/);
+  it("arrived / departed / violated stay aligned (regression guard)", () => {
+    expect(STATUS_MODULE).toMatch(/value:\s*"arrived",\s*label:\s*"وصل"/);
+    expect(STATUS_MODULE).toMatch(/value:\s*"departed",\s*label:\s*"غادر"/);
+    expect(STATUS_MODULE).toMatch(/value:\s*"violated",\s*label:\s*"مخالف"/);
     expect(BADGE).toMatch(/arrived:\s*\{\s*label:\s*"وصل"/);
     expect(BADGE).toMatch(/departed:\s*\{\s*label:\s*"غادر"/);
     expect(BADGE).toMatch(/violated:\s*\{\s*label:\s*"مخالف"/);
