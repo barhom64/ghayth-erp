@@ -20,6 +20,7 @@ import { PageShell } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -203,6 +204,29 @@ export default function Inbox() {
     ["inbox-folder-counts"],
     "/inbox/folder-counts",
   );
+
+  // Free-text search across subject + body + addresses. Only enabled
+  // when the user has typed a 2+ char query; otherwise the regular
+  // threads listing renders.
+  const [searchTerm, setSearchTerm] = useState("");
+  const trimmedSearch = searchTerm.trim();
+  const isSearching = trimmedSearch.length >= 2;
+  const { data: searchHitsResp, isLoading: searchLoading } = useApiQuery<{
+    data: Array<{
+      id: number; channel: string; direction: "inbound" | "outbound";
+      fromNumber: string | null; toNumber: string | null;
+      subject: string | null; body_preview: string;
+      status: string; folder: string; isStarred: boolean;
+      relatedType: string | null; relatedId: number | null;
+      createdAt: string;
+    }>;
+  }>(
+    ["inbox-search", trimmedSearch, tab],
+    `/inbox/search?q=${encodeURIComponent(trimmedSearch)}${tab !== "all" && tab !== "calls" ? `&channel=${tab}` : ""}`,
+    { enabled: isSearching },
+  );
+  const searchHits = searchHitsResp?.data ?? [];
+
   const threads = threadsResp?.data ?? [];
   const drafts = draftsResp?.data ?? [];
   const calls = callsResp?.data ?? [];
@@ -292,6 +316,13 @@ export default function Inbox() {
               </button>
             </div>
           )}
+          <Input
+            placeholder="ابحث في الرسائل (الموضوع، النص، العنوان...)"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="text-sm"
+            data-testid="inbox-search-input"
+          />
           <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setActiveThread(null); }} className="space-y-4">
             <TabsList>
               <TabsTrigger value="all">الكل</TabsTrigger>
@@ -303,9 +334,11 @@ export default function Inbox() {
           </Tabs>
         </div>
 
-        {/* Left content: thread list / draft list / call list */}
+        {/* Left content: search hits / thread list / draft list / call list */}
         <div className={cn(activeThread && "hidden lg:block")}>
-          {isCallsTab ? (
+          {isSearching ? (
+            <SearchHitsList hits={searchHits} isLoading={searchLoading} query={trimmedSearch} />
+          ) : isCallsTab ? (
             <CallList calls={calls} />
           ) : isDraftsFolder ? (
             <DraftsList drafts={drafts} onOpen={openDraft} onChange={refreshAll} />
@@ -1224,5 +1257,80 @@ function SignaturesDialog({ open, onClose }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── SearchHitsList ─────────────────────────────────────────────
+// Renders /inbox/search hits as a flat list (no thread grouping —
+// the user typed a query, they want to see every match). Each row
+// shows channel + direction + subject + body preview + date, and
+// the user can click to open the original thread.
+function SearchHitsList({ hits, isLoading, query }: {
+  hits: Array<{
+    id: number; channel: string; direction: "inbound" | "outbound";
+    fromNumber: string | null; toNumber: string | null;
+    subject: string | null; body_preview: string;
+    folder: string; isStarred: boolean; createdAt: string;
+  }>;
+  isLoading: boolean;
+  query: string;
+}) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-4 space-y-2">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+  if (hits.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-12 text-center text-sm text-muted-foreground">
+          لا توجد نتائج لـ <span className="font-mono">{query}</span>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs flex items-center justify-between">
+          <span>{hits.length} نتيجة لـ <span className="font-mono">{query}</span></span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0 divide-y">
+        {hits.map((h) => {
+          const meta = CHANNEL_META[h.channel] ?? CHANNEL_META.sms;
+          const Icon = meta.icon;
+          return (
+            <div key={h.id} className="p-3 hover:bg-muted/30 cursor-pointer">
+              <div className="flex items-start gap-3">
+                <div className={cn("rounded-md p-1.5", meta.color)}>
+                  <Icon className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium" dir="ltr">
+                      {h.direction === "inbound" ? (h.fromNumber ?? "—") : (h.toNumber ?? "—")}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {formatDateAr(h.createdAt)}
+                    </span>
+                  </div>
+                  {h.subject && (
+                    <p className="text-sm font-medium line-clamp-1 mt-1">{h.subject}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{h.body_preview}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
