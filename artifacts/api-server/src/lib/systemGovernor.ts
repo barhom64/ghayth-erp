@@ -70,7 +70,14 @@ const trialLimitsGuard: GuardFn = async (companyId, context) => {
 
 // ─── Guard: Posting Failures Threshold ────────────────────────────────────
 
-const postingFailuresGuard: GuardFn = async (companyId) => {
+const postingFailuresGuard: GuardFn = async (companyId, context) => {
+  // Escape hatch: the posting-failure resolution endpoints (retry / resolve /
+  // bulk-resolve / retry-all) are the ONLY way to drain the backlog once this
+  // breaker trips. Blocking them with this same guard makes the lockout
+  // unrecoverable, so they bypass this one guard (all other guards still apply).
+  if (context?.bypassPostingFailures) {
+    return { allowed: true, guardName: "posting_failures_threshold" };
+  }
   const [result] = await rawQuery<{ cnt: number }>(
     `SELECT COUNT(*)::int AS cnt FROM financial_posting_failures
      WHERE "companyId" = $1 AND resolved = false`,
@@ -202,10 +209,15 @@ export function requireGuards(scope: GuardScope = "financial") {
       (body?.date as string | undefined) ??
       todayISO();
 
+    // The posting-failure resolution endpoints are the escape hatch for the
+    // posting-failures breaker — they must not be blocked by that same guard.
+    const isFailureResolution = req.originalUrl.includes("/posting-failures");
+
     const result = await checkSystemGuards(companyId, scope, {
       date: postingDate,
       entity: req.path.split("/")[1],
       role: s?.role,
+      bypassPostingFailures: isFailureResolution,
     });
     if (!result.allowed) {
       const reasons = result.violations.map(v => v.reason).join(" | ");
