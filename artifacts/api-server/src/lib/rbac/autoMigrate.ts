@@ -50,6 +50,7 @@ const ROLE_DEFAULT_SCOPE: Record<string, Scope> = {
   crm_manager: "company",
   bi_manager: "company",
   branch_manager: "branch",
+  driver: "self",
   employee: "self",
 };
 
@@ -67,6 +68,7 @@ const ROLE_LABELS: Record<string, string> = {
   crm_manager: "مدير علاقات العملاء",
   bi_manager: "مدير التحليلات",
   branch_manager: "مدير الفرع",
+  driver: "سائق",
   employee: "موظف",
 };
 
@@ -75,7 +77,7 @@ const ROLE_LEVELS: Record<string, number> = {
   hr_manager: 70, finance_manager: 70, fleet_manager: 70, warehouse_manager: 70,
   property_manager: 70, projects_manager: 70, legal_manager: 70, support_manager: 70,
   crm_manager: 70, bi_manager: 70,
-  branch_manager: 60, employee: 10,
+  branch_manager: 60, driver: 10, employee: 10,
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -92,6 +94,7 @@ const ROLE_COLORS: Record<string, string> = {
   crm_manager: "#9333ea",
   bi_manager: "#0d9488",
   branch_manager: "#475569",
+  driver: "#0d9488",
   employee: "#64748b",
 };
 
