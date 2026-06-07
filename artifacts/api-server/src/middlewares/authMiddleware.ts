@@ -196,18 +196,20 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
     }
   }
 
-  // Validate the picked role against the user's actually-assigned roles
-  // in `user_roles` (the legacy table the header dropdown lists from).
-  // Owner is always included because `employee_assignments.role='owner'`
-  // is the implicit top-level role even when no `user_roles` row exists.
-  // Unknown keys are dropped silently so a tampered header can never
-  // grant a role the user doesn't have.
+  // Validate the picked role against the user's actually-assigned RBAC v2 roles
+  // (rbac_user_roles → rbac_roles) — the single roles system. Owner is always
+  // included because `employee_assignments.role='owner'` is the implicit
+  // top-level role even with no rbac_user_roles row. Unknown keys are dropped
+  // silently so a tampered header can never grant a role the user doesn't have.
   let selectedRoleKey: string | null = null;
   let effectiveRole = assignment.role;
   let effectiveIsOwner = assignment.role === "owner";
   if (requestedRoleKey) {
     const ownedRoleRows = await rawQuery<{ roleKey: string }>(
-      `SELECT "roleKey" FROM user_roles WHERE "userId" = $1 AND ("companyId" = $2 OR "companyId" IS NULL)`,
+      `SELECT r.role_key AS "roleKey"
+         FROM rbac_user_roles ur JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
       [payload.userId, assignment.companyId]
     ).catch(() => [] as { roleKey: string }[]);
     const ownedKeys = new Set<string>(ownedRoleRows.map((r) => r.roleKey));

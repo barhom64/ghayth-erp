@@ -222,19 +222,55 @@ router.get("/cost-centers", authorize({ feature: "finance.cost_centers", action:
     const extraConditions = [`cc.status != 'deleted'`];
     const where = `${baseWhere} AND ${extraConditions.join(" AND ")}`;
     void nextParamIndex; // reserved if a future filter needs more params
+    // Was N+1: polymorphic CASE expression with a correlated subquery per
+    // entity-type branch. For LIMIT 1000 cost centers that's up to 1000
+    // single-row lookups across 5 different tables.
+    //
+    // Replaces each correlated subquery with a typed LEFT JOIN keyed on
+    // (relatedEntityType, relatedEntityId, companyId). Postgres can pick
+    // each name once per matching cost-center row in a single scan.
+    // Employees join an EXISTS sub-clause for the company-assignment
+    // check so multiple assignments per employee don't multiply rows.
     const rows = await rawQuery<CostCenterListRow>(
       `SELECT cc.*,
-              CASE WHEN cc."relatedEntityType" = 'project' THEN (SELECT p.name FROM projects p WHERE p.id = cc."relatedEntityId" AND p."companyId" = cc."companyId" AND p."deletedAt" IS NULL LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'vehicle' THEN (SELECT v."plateNumber" FROM fleet_vehicles v WHERE v.id = cc."relatedEntityId" AND v."companyId" = cc."companyId" AND v."deletedAt" IS NULL LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'employee' THEN (SELECT e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = cc."relatedEntityId" AND ea."companyId" = cc."companyId" AND e."deletedAt" IS NULL LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'department' THEN (SELECT d.name FROM departments d WHERE d.id = cc."relatedEntityId" AND d."companyId" = cc."companyId" LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'branch' THEN (SELECT b.name FROM branches b WHERE b.id = cc."relatedEntityId" AND b."companyId" = cc."companyId" LIMIT 1)
-                   ELSE NULL
+              CASE cc."relatedEntityType"
+                WHEN 'project'    THEN p.name
+                WHEN 'vehicle'    THEN v."plateNumber"
+                WHEN 'employee'   THEN e.name
+                WHEN 'department' THEN d.name
+                WHEN 'branch'     THEN b.name
+                ELSE NULL
               END AS "relatedEntityName"
-       FROM cost_centers cc
-       WHERE ${where}
-       ORDER BY cc.code, cc.name
-       LIMIT 1000`,
+         FROM cost_centers cc
+         LEFT JOIN projects p
+                ON cc."relatedEntityType" = 'project'
+               AND p.id = cc."relatedEntityId"
+               AND p."companyId" = cc."companyId"
+               AND p."deletedAt" IS NULL
+         LEFT JOIN fleet_vehicles v
+                ON cc."relatedEntityType" = 'vehicle'
+               AND v.id = cc."relatedEntityId"
+               AND v."companyId" = cc."companyId"
+               AND v."deletedAt" IS NULL
+         LEFT JOIN employees e
+                ON cc."relatedEntityType" = 'employee'
+               AND e.id = cc."relatedEntityId"
+               AND e."deletedAt" IS NULL
+               AND EXISTS (
+                 SELECT 1 FROM employee_assignments ea
+                  WHERE ea."employeeId" = e.id AND ea."companyId" = cc."companyId"
+               )
+         LEFT JOIN departments d
+                ON cc."relatedEntityType" = 'department'
+               AND d.id = cc."relatedEntityId"
+               AND d."companyId" = cc."companyId"
+         LEFT JOIN branches b
+                ON cc."relatedEntityType" = 'branch'
+               AND b.id = cc."relatedEntityId"
+               AND b."companyId" = cc."companyId"
+        WHERE ${where}
+        ORDER BY cc.code, cc.name
+        LIMIT 1000`,
       params,
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));

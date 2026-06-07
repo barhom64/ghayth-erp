@@ -61,6 +61,7 @@ const ADOPTED_PAGES: ReadonlyArray<{ path: string; sampleHeader: string }> = [
   { path: "hr/salary-components.tsx", sampleHeader: "مكونات-الرواتب" },
   { path: "hr/idp.tsx", sampleHeader: "خطط-التطوير-الفردي" },
   { path: "hr/approval-chains.tsx", sampleHeader: "مراحل-الاعتماد" },
+  { path: "hr/application-list.tsx", sampleHeader: "قائمة-المتقدمين" },
 ];
 
 function readPage(rel: string): string {
@@ -100,8 +101,8 @@ describe("HR CSV export — every listed page wires exportToCSV", () => {
     });
   }
 
-  it("ratchet never shrinks — minimum 27 HR pages with CSV export", () => {
-    expect(ADOPTED_PAGES.length).toBeGreaterThanOrEqual(27);
+  it("ratchet never shrinks — minimum 28 HR pages with CSV export", () => {
+    expect(ADOPTED_PAGES.length).toBeGreaterThanOrEqual(28);
   });
 });
 

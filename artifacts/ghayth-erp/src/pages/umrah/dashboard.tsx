@@ -16,14 +16,21 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Users, Plane, AlertTriangle, UserPlus, Play, Zap, TrendingUp, TrendingDown, Wallet, ShieldAlert, Upload, Sparkles, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function UmrahDashboard() {
   const { data: seasons, isLoading: seasonsLoading, isError: seasonsError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const activeSeason = (seasons?.data || []).find((s: any) => s.status === "open");
   const seasonId = activeSeason?.id;
+  // Don't fire the dashboard query when no active season is found —
+  // sending `seasonId=0` makes the backend respond with a 400 or a
+  // bogus empty-shape that the rest of the page reads as "loading
+  // forever" or "missing data". Passing path=null short-circuits the
+  // fetch entirely; the no-active-season branch below renders the
+  // empty-state CTA instead.
   const { data: dash, refetch, isLoading: dashLoading, isError: dashError } = useApiQuery<any>(
     ["umrah-dashboard", String(seasonId || "")],
-    `/umrah/dashboard?seasonId=${seasonId ?? 0}`
+    seasonId ? `/umrah/dashboard?seasonId=${seasonId}` : null,
   );
   const { toast } = useToast();
   const p = dash?.pilgrims || {};
@@ -71,6 +78,32 @@ export default function UmrahDashboard() {
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "لوحة التشغيل" }]}
       actions={
         <div className="flex gap-2">
+          <PrintButton
+            entityType="report_umrah_dashboard"
+            entityId="list"
+            size="icon"
+            label="طباعة لوحة تشغيل العمرة"
+            payload={() => ({
+              entity: {
+                title: activeSeason ? `لوحة تشغيل العمرة — ${activeSeason.title}` : "لوحة تشغيل العمرة",
+                activeSeason: activeSeason?.title ?? "—",
+                totalPilgrims: p.total ?? 0,
+                inSaudi: p.inSaudi ?? 0,
+                returned: p.returned ?? 0,
+                overstayed: p.overstayed ?? 0,
+                penaltiesOpen: pen.open ?? 0,
+                penaltiesTotalAmount: pen.totalAmount ?? 0,
+                salesInvoiced: salesFin.totalInvoiced ?? 0,
+                salesPaid: salesFin.totalPaid ?? 0,
+                nuskTotal: nuskFin.total ?? 0,
+                netPosition,
+                visaExpired,
+                visaCritical,
+                visaWarning,
+              },
+              items: [],
+            })}
+          />
           <GuardedButton perm="umrah:create" variant="outline" onClick={runDaily} className="gap-2"><Play className="h-4 w-4" />تحديث الحالات</GuardedButton>
           <GuardedButton perm="umrah:create" variant="outline" onClick={runPenalties} className="gap-2"><Zap className="h-4 w-4" />تشغيل الغرامات</GuardedButton>
         </div>
