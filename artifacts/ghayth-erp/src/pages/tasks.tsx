@@ -13,6 +13,8 @@ import {
 import { EntityComments } from "@workspace/entity-kit";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,6 +143,7 @@ export default function Tasks() {
     dateField: "scheduledDate",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((t: any) => tagFilteredIds.has(t.id)) : preFiltered;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const startEdit = (task: any) => {
     setEditingId(task.id);
@@ -287,9 +290,26 @@ export default function Tasks() {
         { label: "إدارة المهام" },
       ]}
       actions={
-        <Link href="/tasks/create">
-          <GuardedButton perm="tasks:create" className="gap-2"><Plus className="h-4 w-4" /> مهمة جديدة</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_tasks"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قائمة المهام", total: printRows.length },
+              items: printRows.map((t: any) => ({
+                "العنوان": t.title || t.name || "—",
+                "المسؤول": t.assigneeName || t.assignedToName || "—",
+                "الأولوية": t.priority || "—",
+                "تاريخ الاستحقاق": t.dueDate || "—",
+                "الحالة": t.status || "—",
+              })),
+            })}
+          />
+          <Link href="/tasks/create">
+            <GuardedButton perm="tasks:create" className="gap-2"><Plus className="h-4 w-4" /> مهمة جديدة</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <ProjectsTabsNav />
@@ -349,6 +369,7 @@ export default function Tasks() {
 
       <DataTable
         columns={taskColumns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}
