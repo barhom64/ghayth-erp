@@ -26,6 +26,7 @@ const PAGES = {
   invoices: readPage("invoices.tsx"),
   payments: readPage("payments.tsx"),
   packages: readPage("packages.tsx"),
+  reconciliation: readPage("reconciliation.tsx"),
 };
 
 describe("umrah print-status sweep — resolveStatus import", () => {
@@ -68,5 +69,10 @@ describe("umrah print-status sweep — print payload uses resolveStatus", () => 
     // grow a status column, the print cell already speaks Arabic.
     expect(PAGES.packages).toMatch(/"الحالة":\s*\(p\.status && resolveStatus\(p\.status\)\?\.label\) \?\? p\.status \?\? "—"/);
     expect(PAGES.packages).not.toMatch(/"الحالة":\s*p\.status\s*\|\|\s*"—"/);
+  });
+
+  it("reconciliation.tsx wires resolveStatus through nuskStatus", () => {
+    expect(PAGES.reconciliation).toMatch(/"الحالة":\s*\(r\.nuskStatus && resolveStatus\(r\.nuskStatus\)\?\.label\) \?\? r\.nuskStatus \?\? "—"/);
+    expect(PAGES.reconciliation).not.toMatch(/"الحالة":\s*r\.nuskStatus\s*\|\|\s*"—"/);
   });
 });
