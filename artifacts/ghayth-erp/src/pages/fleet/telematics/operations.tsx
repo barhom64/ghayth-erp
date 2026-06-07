@@ -306,7 +306,7 @@ export default function FleetTelematicsOperations() {
               لا قواطع مفتوحة — كل التكاملات تعمل بشكل طبيعي.
             </div>
           ) : (
-            <DataTable<BreakerRow>
+            <DataTable
               columns={breakerColumns}
               data={breakerRows}
               searchPlaceholder={null}
@@ -325,7 +325,7 @@ export default function FleetTelematicsOperations() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <DataTable<SyncLogRow>
+          <DataTable
             columns={syncColumns}
             data={syncRows}
             searchPlaceholder="ابحث في العمليات…"
