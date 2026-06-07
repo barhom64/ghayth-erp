@@ -136,7 +136,7 @@ export default function UmrahTransport() {
                 "السعة": t.capacity ?? "—",
                 "عدد المعتمرين": t.pilgrimCount ?? 0,
                 "التكلفة": t.cost ?? 0,
-                "الحالة": t.status || "—",
+                "الحالة": (t.status && STATUS_MAP[t.status]?.label) ?? t.status ?? "—",
               })),
             })}
           />
