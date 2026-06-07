@@ -1975,7 +1975,7 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
       // Lock the payment row to prevent concurrent pay requests.
       const lockRes = await client.query(
         `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId",
-                c."branchId" AS "contractBranchId",
+                NULL::int AS "contractBranchId",
                 u."unitNumber", u."buildingName", u.id AS "unitId", u."branchId" AS "unitBranchId"
            FROM rent_payments rp
            JOIN rental_contracts c ON c.id = rp."contractId"

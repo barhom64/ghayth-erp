@@ -21,6 +21,8 @@ import {
 } from "@workspace/ui-core";
 import { Banknote, Plus, Wallet, TrendingUp, Users } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   bank_transfer: "تحويل بنكي",
@@ -113,6 +115,7 @@ export default function UmrahPayments() {
     statusField: "method",
     dateField: "paymentDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const totalSar = filtered.reduce((s, p) => s + Number(p.sarAmount || 0), 0);
   const uniqueSubAgents = new Set(filtered.map((p) => p.subAgentId)).size;
@@ -156,15 +159,33 @@ export default function UmrahPayments() {
         { label: "المدفوعات" },
       ]}
       actions={
-        <GuardedButton
-          perm="umrah:create"
-          onClick={() => setCreateOpen(true)}
-        >
-      <UmrahTabsNav />
-          <Plus className="h-4 w-4 ml-1" /> تسجيل دفعة
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_payments"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "دفعات العمرة", total: printRows.length },
+              items: printRows.map((p: any) => ({
+                "المرجع": p.ref || p.id,
+                "المعتمر/الوكيل": p.pilgrimName || p.agentName || "—",
+                "المبلغ": Number(p.amount || 0),
+                "الطريقة": p.method || p.paymentMethod || "—",
+                "التاريخ": p.paymentDate || p.createdAt || "—",
+                "الحالة": p.status || "—",
+              })),
+            })}
+          />
+          <GuardedButton
+            perm="umrah:create"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="h-4 w-4 ml-1" /> تسجيل دفعة
+          </GuardedButton>
+        </div>
       }
     >
+      <UmrahTabsNav />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         <Card>
           <CardContent className="py-4">
@@ -204,6 +225,7 @@ export default function UmrahPayments() {
       />
 
       <DataTable
+        onSortedDataChange={setPrintRows}
         data={filtered}
         columns={columns}
         emptyMessage="لا توجد مدفوعات بعد — ابدأ بتسجيل دفعة من الوكيل الفرعي"

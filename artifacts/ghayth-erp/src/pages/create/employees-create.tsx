@@ -68,12 +68,61 @@ export default function EmployeesCreate() {
     internalEmail: "", personalEmail: "",
     createCustodyAccount: false,
     vehicleId: "",
+    // Real comms integration: chosen email domain + local part (the
+    // composed address feeds internalEmail), and the PBX extension to
+    // bind (existing id or a freshly minted number).
+    emailDomain: "", emailLocalPart: "",
+    pbxExtensionId: "", pbxExtensionNew: "",
   });
 
   // Fleet vehicles — only fetched when role implies driver, but the
   // hook needs a stable dependency so we always fetch (light query).
   const { data: vehiclesData } = useApiQuery<{ data: any[] }>(["fleet-vehicles-employee-create"], "/fleet/vehicles?limit=500");
   const vehicles = vehiclesData?.data || [];
+
+  // Real comms integration — connected email domains + PBX extensions.
+  // The `name` query param lets the backend suggest a transliterated
+  // local part; we refetch suggestions as the name changes (debounced
+  // implicitly by react-query key).
+  const { data: emailProvData } = useApiQuery<{ data: { domains: string[]; suggestedLocalPart: string; hasConnectedDomains: boolean } }>(
+    ["comms-email-domains", form.name],
+    `/communications/provisioning/email-domains?name=${encodeURIComponent(form.name || "")}`,
+  );
+  const { data: extProvData } = useApiQuery<{ data: { pbxConnected: boolean; available: { id: number; extension: string; name: string }[]; nextExtension: string } }>(
+    ["comms-pbx-extensions"],
+    "/communications/provisioning/extensions",
+  );
+  const emailDomains = emailProvData?.data?.domains || [];
+  const hasConnectedDomains = emailProvData?.data?.hasConnectedDomains || false;
+  const suggestedLocalPart = emailProvData?.data?.suggestedLocalPart || "";
+  const pbxConnected = extProvData?.data?.pbxConnected || false;
+  const availableExtensions = extProvData?.data?.available || [];
+  const nextExtension = extProvData?.data?.nextExtension || "";
+
+  // Auto-fill the local part from the suggested transliteration once the
+  // name is entered and the user hasn't typed their own local part yet.
+  useEffect(() => {
+    if (suggestedLocalPart && !form.emailLocalPart) {
+      setForm((f) => ({ ...f, emailLocalPart: suggestedLocalPart }));
+    }
+  }, [suggestedLocalPart]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Default the email domain to the first connected one.
+  useEffect(() => {
+    if (emailDomains.length > 0 && !form.emailDomain) {
+      setForm((f) => ({ ...f, emailDomain: emailDomains[0] }));
+    }
+  }, [emailDomains.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Compose internalEmail from the picker whenever domain/local change.
+  useEffect(() => {
+    if (hasConnectedDomains && form.emailLocalPart && form.emailDomain) {
+      const composed = `${form.emailLocalPart}@${form.emailDomain}`;
+      if (composed !== form.internalEmail) {
+        setForm((f) => ({ ...f, internalEmail: composed }));
+      }
+    }
+  }, [form.emailLocalPart, form.emailDomain, hasConnectedDomains]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // HR-005 — when the page is opened from a recruitment application, the
   // application id rides along so the POST links the application, emits
@@ -149,6 +198,8 @@ export default function EmployeesCreate() {
         personalEmail: form.personalEmail || undefined,
         createCustodyAccount: Boolean(form.createCustodyAccount),
         vehicleId: form.vehicleId ? Number(form.vehicleId) : undefined,
+        pbxExtensionId: form.pbxExtensionId ? Number(form.pbxExtensionId) : undefined,
+        pbxExtensionNew: form.pbxExtensionNew || undefined,
         ...(attachments.length > 0 ? { attachments } : {}),
         ...(sourceApplicationId ? { sourceApplicationId: Number(sourceApplicationId) } : {}),
       });
@@ -248,6 +299,8 @@ export default function EmployeesCreate() {
               internalEmail: "", personalEmail: "",
               createCustodyAccount: false,
               vehicleId: "",
+              emailDomain: "", emailLocalPart: "",
+              pbxExtensionId: "", pbxExtensionNew: "",
             });
           }}>
             إضافة موظف آخر
@@ -474,13 +527,47 @@ export default function EmployeesCreate() {
             ستُفتح عهدة تلقائياً عند تفعيل الخيار أو عند اختيار مسمى وظيفي يفتح عهدة (مثل سائق أو مندوب مبيعات).
           </p>
         </div>
-        <TextField
-          label="البريد الإلكتروني للمستخدم الداخلي (للدخول)"
-          type="email" dir="ltr"
-          value={form.internalEmail}
-          onChange={(v) => setForm((f) => ({ ...f, internalEmail: v }))}
-          error={fieldErrors.internalEmail}
-        />
+        {/* Internal email — real integration: when mailbox domains are
+            connected, offer a local-part input + domain dropdown that
+            composes the address. Falls back to free text otherwise. */}
+        {hasConnectedDomains ? (
+          <FormFieldWrapper label="البريد الإلكتروني للمستخدم الداخلي (للدخول)">
+            <div className="flex items-center gap-1" dir="ltr">
+              <Input
+                className={`flex-1 ${fieldErrorClass(fieldErrors.internalEmail)}`}
+                placeholder="ahmed.ali"
+                value={form.emailLocalPart}
+                onChange={(e) => setForm((f) => ({ ...f, emailLocalPart: e.target.value.trim() }))}
+              />
+              <span className="text-muted-foreground">@</span>
+              <Select
+                value={form.emailDomain || (emailDomains[0] ?? "")}
+                onValueChange={(v) => setForm((f) => ({ ...f, emailDomain: v }))}
+              >
+                <SelectTrigger className="w-44"><SelectValue placeholder="اختر النطاق" /></SelectTrigger>
+                <SelectContent>
+                  {emailDomains.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {form.internalEmail && (
+              <p className="text-xs text-muted-foreground mt-1" dir="ltr">{form.internalEmail}</p>
+            )}
+            {fieldErrors.internalEmail && (
+              <p className="text-xs text-status-error-foreground mt-1">{fieldErrors.internalEmail}</p>
+            )}
+          </FormFieldWrapper>
+        ) : (
+          <TextField
+            label="البريد الإلكتروني للمستخدم الداخلي (للدخول)"
+            type="email" dir="ltr"
+            value={form.internalEmail}
+            onChange={(v) => setForm((f) => ({ ...f, internalEmail: v }))}
+            error={fieldErrors.internalEmail}
+          />
+        )}
         <TextField
           label="البريد الإلكتروني الشخصي (تواصل)"
           type="email" dir="ltr"
@@ -488,6 +575,36 @@ export default function EmployeesCreate() {
           onChange={(v) => setForm((f) => ({ ...f, personalEmail: v }))}
           error={fieldErrors.personalEmail}
         />
+        {/* PBX extension — only shown when a PBX integration is connected
+            or extensions exist. Pick an unassigned one or mint the next. */}
+        {(pbxConnected || availableExtensions.length > 0) && (
+          <FormFieldWrapper label="تحويلة السنترال (PBX)">
+            <Select
+              value={form.pbxExtensionId ? String(form.pbxExtensionId) : (form.pbxExtensionNew ? "_new" : "_none")}
+              onValueChange={(v) => {
+                if (v === "_none") setForm((f) => ({ ...f, pbxExtensionId: "", pbxExtensionNew: "" }));
+                else if (v === "_new") setForm((f) => ({ ...f, pbxExtensionId: "", pbxExtensionNew: nextExtension }));
+                else setForm((f) => ({ ...f, pbxExtensionId: v, pbxExtensionNew: "" }));
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="اختر تحويلة" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— بدون تحويلة —</SelectItem>
+                {availableExtensions.map((ext) => (
+                  <SelectItem key={ext.id} value={String(ext.id)}>
+                    {ext.extension}{ext.name ? ` — ${ext.name}` : ""}
+                  </SelectItem>
+                ))}
+                {nextExtension && (
+                  <SelectItem value="_new">+ إنشاء تحويلة جديدة ({nextExtension})</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            {form.pbxExtensionNew && (
+              <p className="text-xs text-muted-foreground mt-1">سيتم إنشاء التحويلة {form.pbxExtensionNew} وربطها بالموظف</p>
+            )}
+          </FormFieldWrapper>
+        )}
         <FormFieldWrapper label="فتح حساب عهدة تلقائياً (حساب فرعي تحت 1400 - العهد)">
           <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
             <input
