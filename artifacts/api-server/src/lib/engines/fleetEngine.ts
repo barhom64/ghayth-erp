@@ -354,6 +354,106 @@ class FleetEngineImpl implements DomainEngine {
   }
 
   /**
+   * #1733 — transport never posts to GL. After the operational close
+   * (`delivered` transition), we insert a pending row into
+   * `transport_billing_candidates` that the accountant reviews and
+   * materializes from the finance side. Idempotent on
+   * (companyId, sourceType, sourceId): re-firing the transition is
+   * a no-op once the candidate exists.
+   *
+   * Returns the candidate id (existing or newly inserted) or null when
+   * the source carries no commercial dimension (zero revenue + cost).
+   */
+  async createCargoBillingCandidate(
+    ctx: FleetGLContext,
+    manifest: {
+      id: number;
+      manifestNumber: string;
+      freightRevenue: number;
+      freightCost: number;
+      customerId?: number | null;
+      vehicleId?: number | null;
+      driverId?: number | null;
+      fromLocation?: string | null;
+      toLocation?: string | null;
+      totalWeight?: number | null;
+      deliveryDate?: string | null;
+      notes?: string | null;
+    }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const revenue = Number(manifest.freightRevenue) || 0;
+    const cost = Number(manifest.freightCost) || 0;
+    // A zero-revenue + zero-cost manifest is a pure operational record
+    // (internal transfer, sample run) — no handoff needed.
+    if (revenue <= 0 && cost <= 0) return null;
+
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId",
+           "sourceType", "sourceId", "sourceRef",
+           "customerId", "serviceType", "serviceDate",
+           "routeFrom", "routeTo",
+           "vehicleId", "driverId",
+           quantity, "unitOfMeasure",
+           "operationalStatus",
+           "suggestedRevenue", "suggestedCost",
+           notes,
+           "createdBy"
+         )
+         VALUES (
+           $1, $2,
+           'cargo_manifest', $3, $4,
+           $5, 'freight', COALESCE($6::date, CURRENT_DATE),
+           $7, $8,
+           $9, $10,
+           $11, 'kg',
+           'delivered',
+           $12, $13,
+           $14,
+           $15
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'cargo_manifest' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [
+        ctx.companyId,
+        ctx.branchId || null,
+        manifest.id,
+        manifest.manifestNumber,
+        manifest.customerId ?? null,
+        manifest.deliveryDate ?? null,
+        manifest.fromLocation ?? null,
+        manifest.toLocation ?? null,
+        manifest.vehicleId ?? null,
+        manifest.driverId ?? null,
+        Number(manifest.totalWeight) || 0,
+        revenue > 0 ? revenue : null,
+        cost > 0 ? cost : null,
+        manifest.notes ?? null,
+        ctx.createdBy,
+      ]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    if (!row.existed) {
+      eventBus.emit("fleet.cargo.billing_candidate.created", {
+        companyId: ctx.companyId,
+        manifestId: manifest.id,
+        candidateId: row.id,
+      });
+    }
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
    * Post the financial impact of a delivered cargo manifest in ONE
    * balanced journal entry. A road-freight shipment has two money
    * flows that net to a single balanced JE:
@@ -363,10 +463,12 @@ class FleetEngineImpl implements DomainEngine {
    * so the entry balances even when only one side is non-zero (the
    * zero-amount lines are dropped before posting).
    *
-   * Posted on the `delivered` transition — revenue is earned when the
-   * goods reach the consignee, not when the manifest is drafted. The
-   * financialEngine guard (cargo_manifests / id) makes this idempotent
-   * so re-running the transition never double-posts.
+   * #1733 — Transport routes MUST NOT call this directly. It is invoked
+   * from the accountant-side materialize endpoint
+   * (`/api/finance/transport-billing-candidates/:id/materialize`) which
+   * resolves a candidate row and only then asks fleetEngine to post.
+   * The financialEngine guard (cargo_manifests / id) keeps the JE
+   * idempotent even when the accountant clicks materialize twice.
    */
   async postCargoDeliveryGL(
     ctx: FleetGLContext,

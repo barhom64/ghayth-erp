@@ -785,21 +785,11 @@ router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", acti
       action: "fleet.cargo.manifest.status_changed", entity: "cargo_manifests", entityId: id,
       details: JSON.stringify({ from: current, to: status, source: "driver_self" }) });
 
-    if (status === "delivered") {
-      try {
-        await fleetEngine.postCargoDeliveryGL(
-          { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
-          { id, manifestNumber: String(manifest.manifestNumber ?? id),
-            freightRevenue: Number(manifest.freightRevenue) || 0,
-            freightCost: Number(manifest.freightCost) || 0,
-            customerId: (manifest.customerId as number | null) ?? null,
-            vehicleId: (manifest.vehicleId as number | null) ?? null,
-            driverId: (manifest.driverId as number | null) ?? null }
-        );
-      } catch (glErr) {
-        logger.error({ err: glErr, manifestId: id }, "[fleet/me] cargo delivery GL failed");
-      }
-    }
+    // #1733 Foundation — the driver's `delivered` tap never triggers
+    // any financial artefact. The dispatcher carries the manifest from
+    // `delivered → completed → ready_for_invoice`, and that last
+    // transition is where the candidate + service line are created
+    // (see cargo.ts PATCH /manifests/:id).
     res.json({ data: { id, status } });
   } catch (err) { handleRouteError(err, res, "Driver cargo-advance error:"); }
 });

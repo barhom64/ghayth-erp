@@ -195,6 +195,17 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], systemCritical: true, displayOrder: 230 },
 
+  // #1733 — Operational-to-finance handoff queue. Lives in finance because
+  // only the accountant materialises a JE from it; transport routes can
+  // ONLY insert (via fleetEngine.createCargoBillingCandidate) and never
+  // see this feature. `approve` = materialise into JE; `reject` = decline
+  // with reason.
+  { key: "finance.transport_billing", parentKey: "finance", moduleKey: "finance",
+    labelAr: "ترشيحات فوترة النقل",
+    availableActions: ["view", "list", "approve", "reject"],
+    availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 231 },
+
   { key: "finance.accounts", parentKey: "finance", moduleKey: "finance", labelAr: "دليل الحسابات والأستاذ",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     systemCritical: true, displayOrder: 240 },
@@ -276,6 +287,18 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "fleet.cargo", parentKey: "fleet", moduleKey: "fleet", labelAr: "نقل البضائع",
     icon: "Package",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 335 },
+
+  // #1733 Booking + Dispatch layer (Issue Comment 9). Upstream of cargo
+  // and umrah trips — operators take customer requests, create bookings,
+  // dispatch driver/vehicle pairs. Two features so dispatchers can be
+  // gated separately from the broader fleet-coordinator role.
+  { key: "fleet.bookings", parentKey: "fleet", moduleKey: "fleet", labelAr: "حجوزات النقل",
+    icon: "ClipboardList",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 332 },
+  { key: "fleet.dispatch", parentKey: "fleet", moduleKey: "fleet", labelAr: "توزيع وجدولة الرحلات",
+    icon: "Calendar",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 333 },
   // Self-service driver surface (#1354). Granted to the "driver" role
   // and only the "driver" role — replaces the standalone driver portal
   // that lived under a separate JWT type. The driver logs in with the

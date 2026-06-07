@@ -3411,9 +3411,8 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   const { gccExclusionSqlFragment } = await import("./umrahNationalityRules.js");
   const { resolveSettings } = await import("./settings.js");
-  const { notifyVisaExpiringSoon } = await import("./umrahNotifications.js");
   let alerted = 0;
-  let smsSent = 0;
+  let notifSent = 0;
   for (const c of companies) {
     // GCC nationals enter KSA visa-free — their `visaExpiry` row (if
     // any) is operator data entry from another jurisdiction; alerting
@@ -3442,91 +3441,88 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
       });
     }
     alerted += expiring.length;
-    // Pilgrim-direct SMS — OPT-IN per company via
-    // `umrah.notify.visa_expiry` setting. The wrapper queues into
-    // `outbound_queue`; the existing sms_queue_worker reads Twilio
-    // credentials from `system_settings` and delivers.
+    // In-app pilgrim-specific notifications — OPT-IN per company via
+    // `umrah.notify.visa_expiry`. Goes to every branch manager + GM
+    // assignment via the platform's notification seam (bell icon),
+    // with a deep-link to the pilgrim's detail page.
     const enabledRaw = await resolveSettings("umrah.notify.visa_expiry", c.id);
     const enabled = enabledRaw === true || enabledRaw === "true" || enabledRaw === 1;
     if (!enabled) continue;
+    const { notifyInternalVisaExpiring } = await import("./umrahInternalNotifications.js");
     for (const row of expiring) {
-      const phone = row.phone ? String(row.phone).trim() : "";
-      if (!phone) continue;
       try {
-        await notifyVisaExpiringSoon(
+        const recipients = await notifyInternalVisaExpiring(
           {
-            pilgrimId: row.id as number,
-            phone,
-            fullName: (row.fullName as string) ?? null,
             companyId: c.id,
+            branchId: null,
+            pilgrimId: row.id as number,
+            pilgrimName: (row.fullName as string) ?? null,
+            agentId: null,
           },
-          {
-            daysRemaining: Number(row.daysRemaining ?? 0),
-            visaNumber: (row.visaNumber as string) ?? null,
-          },
+          Number(row.daysRemaining ?? 0),
         );
-        smsSent++;
+        notifSent += recipients;
       } catch (e) {
-        logger.error(e, "[cronScheduler] umrah visa SMS failed");
+        logger.error(e, "[cronScheduler] umrah visa internal notify failed");
       }
     }
   }
-  return `تنبيهات انتهاء التأشيرات: ${alerted} تأشيرة عبر ${companies.length} شركة، أُرسل SMS لـ${smsSent} معتمر`;
+  return `تنبيهات انتهاء التأشيرات: ${alerted} تأشيرة عبر ${companies.length} شركة، أُرسل ${notifSent} إشعار داخلي`;
 }
 
-// Departure-reminder SMS — runs daily at 18:00 and finds pilgrims
-// whose `arrivalDate` is tomorrow (the standard "depart today, fly
-// tomorrow" cadence). Opt-in via `umrah.notify.departure_reminder`.
+// Departure-reminder in-app notification — runs daily at 18:00 and
+// finds pilgrims whose `arrivalDate` is tomorrow. Notifies the
+// branch manager + GM so they confirm transport. Opt-in via
+// `umrah.notify.departure_reminder`.
 async function umrahDepartureReminderSms(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   const { resolveSettings } = await import("./settings.js");
-  const { notifyDepartureReminder } = await import("./umrahNotifications.js");
+  const { notifyInternalDepartureTomorrow } = await import("./umrahInternalNotifications.js");
   let enabled = 0, sent = 0;
   for (const c of companies) {
     const flagRaw = await resolveSettings("umrah.notify.departure_reminder", c.id);
     const flag = flagRaw === true || flagRaw === "true" || flagRaw === 1;
     if (!flag) continue;
     enabled++;
-    // Tomorrow's arrivals — the operator's flight-day reminder window.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT p.id, p."fullName", p.phone, p."arrivalDate", p."entryFlight"
+      `SELECT p.id, p."fullName", p."arrivalDate", p."entryFlight"
          FROM umrah_pilgrims p
         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
           AND p.status = 'pending'
-          AND p.phone IS NOT NULL AND p.phone <> ''
           AND p."arrivalDate" = CURRENT_DATE + INTERVAL '1 day'`,
       [c.id],
     );
     for (const row of rows) {
       try {
-        await notifyDepartureReminder(
+        const r = await notifyInternalDepartureTomorrow(
           {
-            pilgrimId: row.id as number,
-            phone: String(row.phone).trim(),
-            fullName: (row.fullName as string) ?? null,
             companyId: c.id,
+            branchId: null,
+            pilgrimId: row.id as number,
+            pilgrimName: (row.fullName as string) ?? null,
+            agentId: null,
           },
           {
             tripDate: String(row.arrivalDate),
             flightNumber: (row.entryFlight as string) ?? null,
           },
         );
-        sent++;
+        sent += r;
       } catch (e) {
-        logger.error(e, "[cronScheduler] umrah departure SMS failed");
+        logger.error(e, "[cronScheduler] umrah departure notify failed");
       }
     }
   }
-  return `تذكير الرحيل: ${enabled}/${companies.length} شركة مفعّلة، أُرسل ${sent} رسالة`;
+  return `تذكير الرحيل: ${enabled}/${companies.length} شركة مفعّلة، أُرسل ${sent} إشعار`;
 }
 
-// Overstay-warning SMS — companies with `umrah.notify.overstay_warning`
-// enabled. Sends each overstay pilgrim a daily nudge so they coordinate
-// with their agent. Skips exempt pilgrims (mirrors the penalty engine).
+// Overstay-warning in-app notification — companies with
+// `umrah.notify.overstay_warning` enabled get a daily alert per
+// overstaying pilgrim. Skips exempt pilgrims (mirrors penalty engine).
 async function umrahOverstayWarningSms(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   const { resolveSettings } = await import("./settings.js");
-  const { notifyOverstayWarning } = await import("./umrahNotifications.js");
+  const { notifyInternalOverstayWarning } = await import("./umrahInternalNotifications.js");
   let enabled = 0, sent = 0;
   for (const c of companies) {
     const flagRaw = await resolveSettings("umrah.notify.overstay_warning", c.id);
@@ -3534,36 +3530,34 @@ async function umrahOverstayWarningSms(): Promise<string> {
     if (!flag) continue;
     enabled++;
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT p.id, p."fullName", p.phone,
+      `SELECT p.id, p."fullName",
               (CURRENT_DATE - p."departureDate"::date) AS "daysOverstayed"
          FROM umrah_pilgrims p
         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
           AND p.status = 'overstayed'
-          AND p.phone IS NOT NULL AND p.phone <> ''
           AND NOT COALESCE(p."overstayExempt", false)
           AND p."departureDate" < CURRENT_DATE`,
       [c.id],
     );
     for (const row of rows) {
       try {
-        await notifyOverstayWarning(
+        const r = await notifyInternalOverstayWarning(
           {
-            pilgrimId: row.id as number,
-            phone: String(row.phone).trim(),
-            fullName: (row.fullName as string) ?? null,
             companyId: c.id,
+            branchId: null,
+            pilgrimId: row.id as number,
+            pilgrimName: (row.fullName as string) ?? null,
+            agentId: null,
           },
-          {
-            daysOverstayed: Number(row.daysOverstayed ?? 0),
-          },
+          Number(row.daysOverstayed ?? 0),
         );
-        sent++;
+        sent += r;
       } catch (e) {
-        logger.error(e, "[cronScheduler] umrah overstay SMS failed");
+        logger.error(e, "[cronScheduler] umrah overstay notify failed");
       }
     }
   }
-  return `تنبيه التجاوز: ${enabled}/${companies.length} شركة مفعّلة، أُرسل ${sent} رسالة`;
+  return `تنبيه التجاوز: ${enabled}/${companies.length} شركة مفعّلة، أُرسل ${sent} إشعار`;
 }
 
 async function umrahMonthlyFinancialSummary(): Promise<string> {
@@ -4122,8 +4116,8 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "umrah_monthly_financial_summary", description: "ملخص العمرة المالي الشهري", schedule: "0 9 1 * *", handler: umrahMonthlyFinancialSummary },
   { name: "umrah_daily_status_advance", description: "C5 — تقديم حالة المعتمرين اليومية (وصول/تجاوز/مغادرة) — حالة فقط دون غرامات", schedule: "0 5 * * *", handler: umrahDailyStatusAdvance },
   { name: "umrah_daily_auto_penalty_generation", description: "توليد تلقائي لغرامات التأخر للشركات المفعّلة (umrah.auto_penalty.enabled)", schedule: "0 7 * * *", handler: umrahDailyAutoPenaltyGeneration },
-  { name: "umrah_departure_reminder_sms", description: "SMS تذكير غدًا الرحلة للمعتمرين (umrah.notify.departure_reminder)", schedule: "0 18 * * *", handler: umrahDepartureReminderSms },
-  { name: "umrah_overstay_warning_sms", description: "SMS تنبيه تجاوز مدة الإقامة (umrah.notify.overstay_warning)", schedule: "0 10 * * *", handler: umrahOverstayWarningSms },
+  { name: "umrah_departure_reminder_notify", description: "إشعار داخلي للمدير: معتمر يصل غدًا (umrah.notify.departure_reminder)", schedule: "0 18 * * *", handler: umrahDepartureReminderSms },
+  { name: "umrah_overstay_warning_notify", description: "إشعار داخلي للمدير: معتمر تجاوز مدة الإقامة (umrah.notify.overstay_warning)", schedule: "0 10 * * *", handler: umrahOverstayWarningSms },
   { name: "daily_invoice_overdue", description: "تصعيد الفواتير المتأخرة 6 مراحل", schedule: "0 8 * * *", handler: dailyInvoiceOverdueEscalation },
   { name: "daily_fuel_monitor", description: "مراقبة استهلاك الوقود", schedule: "0 9 * * *", handler: dailyFuelMonitor },
   { name: "daily_inventory_check", description: "فحص المخزون + طلب شراء تلقائي", schedule: "0 10 * * *", handler: dailyInventoryCheck },
