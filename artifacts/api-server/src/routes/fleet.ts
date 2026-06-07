@@ -685,8 +685,24 @@ router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", acti
     if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
     const id = parseId(req.params.id, "id");
     const status = String(req.body?.status ?? "");
-    if (status !== "in_transit" && status !== "delivered") {
-      throw new ValidationError("الانتقال المسموح: in_transit أو delivered");
+    // #1733 Blocker #3 — driver-controlled forward path. The dispatcher
+    // owns draft / requested / approved / assigned_to_driver; the moment
+    // the assignment lands the driver carries it through the operational
+    // states up to `delivered`. Operational close (`completed`) and the
+    // billing-candidate handoff are dispatcher / accountant moves.
+    const DRIVER_ALLOWED_TRANSITIONS = [
+      "driver_accepted",
+      "trip_started",
+      "arrived_pickup",
+      "loaded",
+      "in_transit",
+      "arrived_delivery",
+      "delivered",
+    ];
+    if (!DRIVER_ALLOWED_TRANSITIONS.includes(status)) {
+      throw new ValidationError(
+        `الانتقال المسموح للسائق: ${DRIVER_ALLOWED_TRANSITIONS.join(" / ")}`,
+      );
     }
     const [manifest] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM cargo_manifests
@@ -695,10 +711,17 @@ router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", acti
     );
     if (!manifest) throw new NotFoundError("بوليصة الشحن غير موجودة");
     const current = String(manifest.status);
+    // Strict forward-only walk. The dispatcher's machine in cargo.ts
+    // owns cancellation; this map only allows the driver to advance one
+    // step at a time so an operator can audit the timeline cleanly.
     const allowed: Record<string, string[]> = {
-      confirmed: ["in_transit"],
-      loading: ["in_transit"],
-      in_transit: ["delivered"],
+      assigned_to_driver: ["driver_accepted"],
+      driver_accepted:    ["trip_started"],
+      trip_started:       ["arrived_pickup"],
+      arrived_pickup:     ["loaded"],
+      loaded:             ["in_transit"],
+      in_transit:         ["arrived_delivery"],
+      arrived_delivery:   ["delivered"],
     };
     if (!(allowed[current] ?? []).includes(status)) {
       throw new ConflictError(`الانتقال من ${current} إلى ${status} غير مسموح للسائق`);
