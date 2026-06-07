@@ -59,7 +59,6 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "cargo.ts",
   "careersPortal.ts",
   "clientPortal.ts",
-  "driverPortal.ts",
   "communications.ts",
   "correspondence.ts",
   "digital-signature.ts",
@@ -190,9 +189,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 106,
+      total: 105,
       helperUsers: 36,
-      manualOnly: 67,
+      manualOnly: 66,
     });
   });
 });
