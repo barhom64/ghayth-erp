@@ -2450,18 +2450,34 @@ router.get("/reports/season-portfolio", authorize({ feature: "umrah", action: "l
     params.push(limit);
 
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT s.id, s.title, s.status, s."hijriYear", s."startDate", s."endDate",
-              (SELECT COUNT(*)::int FROM umrah_pilgrims p
-                WHERE p."seasonId" = s.id AND p."companyId" = s."companyId" AND p."deletedAt" IS NULL
-              ) AS "pilgrimsCount",
-              (SELECT COUNT(*)::int FROM umrah_groups g
-                WHERE g."seasonId" = s.id AND g."companyId" = s."companyId" AND g."deletedAt" IS NULL
-              ) AS "groupsCount",
+      // Pre-aggregate pilgrim + group counts per season via CTEs —
+      // the original carried TWO scalar COUNT subqueries per row.
+      // At LIMIT 200 that's ~400 redundant lookups. Two CTEs scan
+      // each child table once.
+      `WITH season_pilgrim_counts AS (
+         SELECT "seasonId", "companyId", COUNT(*) AS "pilgrimsCount"
+         FROM umrah_pilgrims
+         WHERE "deletedAt" IS NULL
+         GROUP BY "seasonId", "companyId"
+       ),
+       season_group_counts AS (
+         SELECT "seasonId", "companyId", COUNT(*) AS "groupsCount"
+         FROM umrah_groups
+         WHERE "deletedAt" IS NULL
+         GROUP BY "seasonId", "companyId"
+       )
+       SELECT s.id, s.title, s.status, s."hijriYear", s."startDate", s."endDate",
+              COALESCE(spc."pilgrimsCount", 0)::int AS "pilgrimsCount",
+              COALESCE(sgc."groupsCount", 0)::int AS "groupsCount",
               COALESCE(sales.revenue, 0) AS revenue,
               COALESCE(sales.paid, 0)    AS paid,
               COALESCE(nusk.cost, 0)     AS cost,
               (COALESCE(sales.revenue, 0) - COALESCE(nusk.cost, 0))::numeric(12,2) AS margin
          FROM umrah_seasons s
+    LEFT JOIN season_pilgrim_counts spc
+           ON spc."seasonId" = s.id AND spc."companyId" = s."companyId"
+    LEFT JOIN season_group_counts sgc
+           ON sgc."seasonId" = s.id AND sgc."companyId" = s."companyId"
     LEFT JOIN LATERAL (
            SELECT COALESCE(SUM(total), 0) AS revenue,
                   COALESCE(SUM("paidAmount"), 0) AS paid
