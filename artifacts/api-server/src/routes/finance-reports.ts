@@ -1181,7 +1181,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
         if (endDate) { qParams.push(endDate); dateFilter += ` AND pr."createdAt" < ($${qParams.length}::date + 1)`; }
         rows = await rawQuery<Record<string, unknown>>(
           `SELECT pr.period AS ref, CONCAT('راتب ', pr.period) AS description,
-                  pr."grossSalary" AS debit, pr.deductions AS credit,
+                  pr."grossSalary" AS debit, pr."totalDeductions" AS credit,
                   pr."netSalary" AS net, pr."createdAt" AS date, 'payroll' AS type
            FROM payroll_records pr
            WHERE pr."employeeAssignmentId" = $1 AND pr."companyId" = $2 ${dateFilter}
@@ -1764,7 +1764,8 @@ reportsRouter.get("/reports/unmapped-lines", authorize({ feature: "finance.repor
 
     if (tableFilter("goods_receipt_items")) {
       const rows = await rawQuery<Record<string, unknown>>(
-        `SELECT gri.id, gri."grnId", gri."itemName", gri."lineTotal", grn.ref AS "grnRef", grn.status,
+        `SELECT gri.id, gri."grnId", gri."itemName", gri."lineTotal", grn.ref AS "grnRef",
+                CASE WHEN grn."journalId" IS NOT NULL THEN 'posted' ELSE 'received' END AS status,
                 gri."allocationStatus", grn."createdAt"
            FROM goods_receipt_items gri
            JOIN goods_receipts grn ON grn.id = gri."grnId"
