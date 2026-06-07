@@ -8564,11 +8564,115 @@ CREATE TABLE public.fleet_tires (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
+    "axleNumber" integer,
+    side text,
+    "serialNumber" text,
+    "currentMileageKm" integer,
+    "expectedLifeKm" integer,
+    "removalReason" text,
     CONSTRAINT fleet_tires_position_check
       CHECK (("position"::text = ANY (ARRAY['front_left'::text, 'front_right'::text, 'rear_left'::text, 'rear_right'::text, 'spare'::text, 'extra'::text]))),
     CONSTRAINT fleet_tires_status_check
       CHECK ((status::text = ANY (ARRAY['active'::text, 'rotated'::text, 'replaced'::text, 'discarded'::text])))
 );
+
+
+--
+-- Name: vehicle_components; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Vehicle profile deep extension (Issue Comment 7).
+
+CREATE TABLE public.vehicle_components (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "componentType" text NOT NULL,
+    "componentSubtype" text,
+    "serialNumber" text,
+    manufacturer text,
+    model text,
+    "installationDate" date,
+    "installationMileageKm" integer,
+    "installationHours" numeric(10,1),
+    "expectedLifeKm" integer,
+    "expectedLifeHours" numeric(10,1),
+    "expectedLifeDays" integer,
+    "lastServiceDate" date,
+    "lastServiceMileageKm" integer,
+    "nextServiceDate" date,
+    "nextServiceMileageKm" integer,
+    status text DEFAULT 'active'::text NOT NULL,
+    "removalDate" date,
+    "removalReason" text,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT vehicle_components_type_check CHECK (("componentType" = ANY (ARRAY['engine'::text, 'transmission'::text, 'axle'::text, 'battery'::text, 'ac_unit'::text, 'cooling_unit'::text, 'hydraulic_system'::text, 'lift_gate'::text, 'crane'::text, 'box_or_bed'::text, 'trailer'::text, 'doors'::text, 'seats'::text, 'upholstery'::text, 'screens'::text, 'brakes'::text, 'suspension'::text, 'steering'::text, 'safety_system'::text, 'fuel_system'::text, 'electrical_system'::text, 'other'::text]))),
+    CONSTRAINT vehicle_components_status_check CHECK ((status = ANY (ARRAY['active'::text, 'serviceable'::text, 'needs_service'::text, 'replaced'::text, 'removed'::text, 'damaged'::text])))
+);
+
+CREATE SEQUENCE public.vehicle_components_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.vehicle_components_id_seq OWNED BY public.vehicle_components.id;
+
+
+--
+-- Name: vehicle_driver_assignments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_driver_assignments (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "vehicleId" integer NOT NULL,
+    "driverId" integer NOT NULL,
+    "assignmentType" text NOT NULL,
+    "startDate" date NOT NULL,
+    "endDate" date,
+    status text DEFAULT 'active'::text NOT NULL,
+    reason text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT vehicle_driver_assignments_type_check CHECK (("assignmentType" = ANY (ARRAY['primary'::text, 'backup'::text, 'temporary'::text]))),
+    CONSTRAINT vehicle_driver_assignments_status_check CHECK ((status = ANY (ARRAY['active'::text, 'ended'::text, 'cancelled'::text])))
+);
+
+CREATE SEQUENCE public.vehicle_driver_assignments_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.vehicle_driver_assignments_id_seq OWNED BY public.vehicle_driver_assignments.id;
+
+
+--
+-- Name: vehicle_maintenance_schedules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_maintenance_schedules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "vehicleId" integer,
+    "vehicleType" text,
+    "componentId" integer,
+    "scheduleName" text NOT NULL,
+    "intervalType" text NOT NULL,
+    "intervalValue" integer NOT NULL,
+    "lastTriggeredAt" timestamp with time zone,
+    "lastTriggeredKm" integer,
+    "lastTriggeredHours" numeric(10,1),
+    "nextDueDate" date,
+    "nextDueKm" integer,
+    "nextDueHours" numeric(10,1),
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT vehicle_maintenance_schedules_interval_check CHECK (("intervalType" = ANY (ARRAY['mileage'::text, 'hours'::text, 'days'::text])))
+);
+
+CREATE SEQUENCE public.vehicle_maintenance_schedules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.vehicle_maintenance_schedules_id_seq OWNED BY public.vehicle_maintenance_schedules.id;
 
 
 --

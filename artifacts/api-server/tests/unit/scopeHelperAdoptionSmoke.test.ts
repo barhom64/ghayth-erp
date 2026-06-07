@@ -115,6 +115,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // would unnecessarily branch-cascade. The booking lookup is by id keyed on
   // (companyId, id) like the other transport surfaces.
   "transport-bookings.ts",
+  // vehicle-profile.ts: #1733 vehicle sub-resources (components, driver
+  // assignments, maintenance schedules). All endpoints are scoped by
+  // (companyId, vehicleId) and the vehicle ownership is checked up front
+  // by assertVehicleBelongsToTenant — buildScopedWhere has nothing to add.
+  "vehicle-profile.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -199,9 +204,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 107,
+      total: 108,
       helperUsers: 36,
-      manualOnly: 68,
+      manualOnly: 69,
     });
   });
 });
