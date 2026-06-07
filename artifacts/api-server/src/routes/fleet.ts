@@ -580,13 +580,13 @@ router.get("/me/trips", authorize({ feature: "fleet.trips.my", action: "list" })
     let where = `t."driverId" = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL`;
     if (status) { params.push(status); where += ` AND t.status = $${params.length}`; }
     const rows = await rawQuery(
-      `SELECT t.id, t.status, t."tripDate", t."startTime", t."endTime",
+      `SELECT t.id, t.status, t."startTime" AS "tripDate", t."startTime", t."endTime",
               t."fromLocation", t."toLocation", t.distance, t.cost, t.notes,
               v."plateNumber" AS "vehiclePlate"
          FROM fleet_trips t
          LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId" AND v."companyId" = t."companyId" AND v."deletedAt" IS NULL
         WHERE ${where}
-        ORDER BY COALESCE(t."startTime", t."tripDate", t."createdAt") DESC LIMIT 200`,
+        ORDER BY COALESCE(t."startTime", t."createdAt") DESC LIMIT 200`,
       params
     );
     res.json({ data: rows });
