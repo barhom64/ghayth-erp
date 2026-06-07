@@ -10,6 +10,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ACTIVITY_TYPES, ACTIVITY_STATUS } from "@/lib/crm-type-maps";
@@ -147,6 +148,22 @@ export default function CrmActivities() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "subject", label: "الموضوع" },
+              { key: "type", label: "النوع" },
+              { key: "clientName", label: "العميل" },
+              { key: "assigneeName", label: "المسؤول" },
+              { key: "dueDate", label: "تاريخ الاستحقاق" },
+              { key: "status", label: "الحالة" },
+              { key: "outcome", label: "النتيجة" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "أنشطة-العملاء",
+          )
+        }
         resultCount={filtered.length}
       />
 
