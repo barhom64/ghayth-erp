@@ -33,32 +33,22 @@ describe("permissionMiddleware — exports", () => {
   });
 });
 
-describe("permissionMiddleware — permission loading", () => {
-  it("loads role permissions from DB", () => {
-    expect(PERMISSION).toContain("loadRolePermissions");
+describe("permissionMiddleware — enforces via RBAC v2", () => {
+  it("resolves through authzEngine.checkAccess (single security authority)", () => {
+    expect(PERMISSION).toContain("checkAccess");
+    expect(PERMISSION).toContain('from "../lib/rbac/authzEngine.js"');
   });
 
-  it("loads user-specific permission overrides", () => {
-    expect(PERMISSION).toContain("loadUserPermissions");
+  it("maps legacy flat perms to RBAC feature.action (FLAT_TO_RBAC)", () => {
+    expect(PERMISSION).toContain("FLAT_TO_RBAC");
   });
 
-  it("supports grant and revoke types", () => {
-    expect(PERMISSION).toContain('"grant"');
-    expect(PERMISSION).toContain('"revoke"');
+  it("no longer reads the legacy role_permissions table for enforcement", () => {
+    expect(PERMISSION).not.toContain("FROM role_permissions");
   });
 
-  it("loads all user role permissions (multi-role)", () => {
-    expect(PERMISSION).toContain("loadAllUserRolePermissions");
-  });
-});
-
-describe("permissionMiddleware — caching", () => {
-  it("uses permission cache", () => {
-    expect(PERMISSION).toContain("permissionCache");
-  });
-
-  it("has cache TTL", () => {
-    expect(PERMISSION).toContain("CACHE_TTL_MS");
+  it("keeps the owner bypass", () => {
+    expect(PERMISSION).toContain('scope.role === "owner"');
   });
 });
 
