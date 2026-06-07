@@ -24,7 +24,48 @@ import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
-import { Database, FileText, Eye, CheckCircle, History } from "lucide-react";
+import { Database, FileText, Eye, CheckCircle, History, Upload } from "lucide-react";
+
+// Minimal RFC-4180-ish CSV parser (no new dependency): handles quoted fields
+// with embedded commas / quotes / newlines, CRLF, and a leading BOM. The first
+// non-empty row is the header; each subsequent row becomes an object keyed by
+// header. Output flows into the SAME preview/confirm pipeline as pasted JSON,
+// so the import engine, validation, rollback and audit are unchanged.
+function parseCsv(text: string): Record<string, string>[] {
+  const s = text.replace(/^﻿/, "");
+  const rows: string[][] = [];
+  let field = "";
+  let row: string[] = [];
+  let inQuotes = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ",") {
+      row.push(field); field = "";
+    } else if (c === "\n") {
+      row.push(field); rows.push(row); row = []; field = "";
+    } else if (c !== "\r") {
+      field += c;
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  if (rows.length === 0) return [];
+  const headers = rows[0].map((h) => h.trim());
+  return rows
+    .slice(1)
+    .filter((r) => r.some((cell) => cell.trim() !== ""))
+    .map((r) => {
+      const obj: Record<string, string> = {};
+      headers.forEach((h, idx) => { if (h) obj[h] = (r[idx] ?? "").trim(); });
+      return obj;
+    });
+}
 
 interface EntityMeta {
   entity: string;
@@ -51,6 +92,31 @@ export default function AdminDataImportPage() {
   const [preview, setPreview] = useState<any>(null);
   const [previewing, setPreviewing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [fileName, setFileName] = useState("");
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      if (rows.length === 0) {
+        toast({ variant: "destructive", title: "الملف فارغ أو بلا صفوف بيانات" });
+        return;
+      }
+      setRowsJson(JSON.stringify(rows, null, 2));
+      setFileName(file.name);
+      setPreview(null);
+      toast({
+        title: `تم تحميل ${rows.length.toLocaleString("ar-SA")} صفاً من ${file.name}`,
+        description: "راجع الصفوف ثم اضغط «فحص (Preview)»",
+      });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذّر قراءة الملف", description: err?.message || "" });
+    } finally {
+      e.target.value = "";
+    }
+  };
 
   const parseRows = (): any[] | null => {
     try {
@@ -184,12 +250,20 @@ export default function AdminDataImportPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">صفوف JSON</CardTitle>
+            <CardTitle className="text-sm">صفوف البيانات (CSV أو JSON)</CardTitle>
             <p className="text-xs text-muted-foreground">
-              مصفوفة من كائنات تستخدم أسماء الحقول الإنجليزية أو الأسماء العربية من القالب.
+              ارفع ملف CSV (الصف الأول رؤوس الأعمدة بأسماء الحقول الإنجليزية أو العربية من القالب)، أو الصق مصفوفة JSON مباشرة.
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="inline-flex items-center gap-1.5 text-sm cursor-pointer rounded-md border px-3 py-1.5 hover:bg-surface-subtle">
+                <Upload className="h-4 w-4" /> رفع ملف CSV
+                <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
+              </label>
+              {fileName && <span className="text-xs text-muted-foreground">{fileName}</span>}
+              <span className="text-xs text-muted-foreground">— الصفوف المُحمّلة تظهر أدناه للمراجعة والتعديل قبل الفحص.</span>
+            </div>
             <textarea
               value={rowsJson}
               onChange={(e) => setRowsJson(e.target.value)}

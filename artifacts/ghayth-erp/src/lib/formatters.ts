@@ -31,6 +31,25 @@ export function formatDateBoth(dateStr: string | Date | null | undefined): strin
   return `${fmtGregorian(d, "long")} / ${fmtHijri(d, "long")}`;
 }
 
+/**
+ * Umrah-specific date formatter. Operators in this module think in
+ * Hijri ("حج ١٤٤٦") more than Gregorian, but the system stores dates
+ * as Gregorian. Rendering both side-by-side everywhere in the umrah
+ * pages keeps the operator's mental model intact without forcing them
+ * to flip the global calendar setting (which would affect every other
+ * module too).
+ *
+ * Identity-equal to `formatDateBoth` today — the alias exists so:
+ *   1. The intent is documented at the callsite ("this is an umrah
+ *      date display") for future readers.
+ *   2. If a per-module calendar preference lands later (an operator
+ *      wants umrah dates in Hijri-only, finance in Gregorian-only),
+ *      only this wrapper changes, not every umrah callsite.
+ */
+export function formatUmrahDate(dateStr: string | Date | null | undefined): string {
+  return formatDateBoth(dateStr);
+}
+
 export function formatTimeAr(dateStr: string | Date | null | undefined): string {
   if (!dateStr) return "-";
   const d = dateStr instanceof Date ? dateStr : new Date(dateStr);
@@ -39,7 +58,9 @@ export function formatTimeAr(dateStr: string | Date | null | undefined): string 
 }
 
 export function formatNumber(num: number | null | undefined): string {
-  if (num == null) return "-";
+  // Same NaN guard as formatCurrency — Number("") / parseFloat("")
+  // are NaN, and rendering "NaN" verbatim in a cell is worse than "-".
+  if (num == null || !Number.isFinite(num)) return "-";
   return toArabicNumerals(num.toLocaleString("en-US"));
 }
 
@@ -55,7 +76,12 @@ export function roundMoney(n: number | string | null | undefined, decimals = 2):
 }
 
 export function formatCurrency(num: number | null | undefined): string {
-  if (num == null) return "-";
+  // Guard NaN alongside null/undefined — Number("") / Number("abc") /
+  // parseFloat("") all return NaN, and `(NaN).toLocaleString()` then
+  // returns the literal "NaN" string. Operators see "NaN ر.س" in
+  // every cell that bound to a malformed value. Falling back to "-"
+  // keeps the table readable and signals "data missing".
+  if (num == null || !Number.isFinite(num)) return "-";
   const label = getGlobalCurrencyLabel();
   return `${toArabicNumerals(num.toLocaleString("en-US"))} ${label}`;
 }
