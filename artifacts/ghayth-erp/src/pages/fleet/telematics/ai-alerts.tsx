@@ -301,7 +301,7 @@ export default function FleetTelematicsAiAlerts() {
               </SelectContent>
             </Select>
           </div>
-          <DataTable<AiAlertRow>
+          <DataTable
             columns={columns}
             data={rows}
             isLoading={isLoading}

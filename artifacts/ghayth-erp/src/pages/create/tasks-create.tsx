@@ -62,7 +62,7 @@ export default function TasksCreate() {
     if (copy) {
       try {
         const data = JSON.parse(copy);
-        return { title: data.title || "", description: data.description || "", type: data.type || "task", priority: data.priority || "medium", scheduledStart: "", clientName: data.clientName || "", linkedEntityType: "", linkedEntityId: "" };
+        return { title: data.title || "", description: data.description || "", type: data.type || "task", priority: data.priority || "medium", scheduledStart: "", scheduledEnd: "", clientName: data.clientName || "", notes: data.notes || "", linkedEntityType: "", linkedEntityId: "" };
       } catch { /* ignore */ }
     }
     return {
@@ -71,7 +71,9 @@ export default function TasksCreate() {
       type: searchParams.get("type") || "task",
       priority: searchParams.get("priority") || "medium",
       scheduledStart: "",
+      scheduledEnd: "",
       clientName: "",
+      notes: "",
       linkedEntityType: searchParams.get("linkedEntityType") || "",
       linkedEntityId: searchParams.get("linkedEntityId") || "",
     };
@@ -245,10 +247,19 @@ export default function TasksCreate() {
               <SelectItem value="low">منخفضة</SelectItem>
               <SelectItem value="medium">متوسطة</SelectItem>
               <SelectItem value="high">عالية</SelectItem>
+              {/* "critical" mirrors the backend createTaskSchema enum
+                  (low|medium|high|critical). Without this option the
+                  UI couldn't ever raise a task to the highest urgency
+                  the engine understands. */}
+              <SelectItem value="critical">حرجة</SelectItem>
             </SelectContent>
           </Select>
         </FormFieldWrapper>
-        <DateField label="الموعد" mode="datetime" value={form.scheduledStart} onChange={(v) => setForm((f) => ({ ...f, scheduledStart: v }))} />
+        <DateField label="موعد البداية" mode="datetime" value={form.scheduledStart} onChange={(v) => setForm((f) => ({ ...f, scheduledStart: v }))} />
+        {/* scheduledEnd lets the operator define a window (e.g. SLA
+            deadline) instead of just a start point. The backend
+            already accepts the field; the form just exposes it. */}
+        <DateField label="موعد النهاية" mode="datetime" value={form.scheduledEnd} onChange={(v) => setForm((f) => ({ ...f, scheduledEnd: v }))} />
         <FormFieldWrapper label="العميل">
           <Select value={form.clientName || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientName: v === "_none" ? "" : v }))}>
             <SelectTrigger><SelectValue placeholder="— بدون عميل —" /></SelectTrigger>
@@ -259,6 +270,11 @@ export default function TasksCreate() {
           </Select>
         </FormFieldWrapper>
         <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} rows={3} className="md:col-span-2" />
+        {/* notes is the operator's private follow-up scratchpad —
+            distinct from the description (which is shared with the
+            assignee). The backend already persists it; the form just
+            surfaces it so operators don't lose context after creation. */}
+        <TextAreaField label="ملاحظات داخلية" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} rows={2} className="md:col-span-2" />
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
           <div className="flex items-center gap-2 mb-3">
