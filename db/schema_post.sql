@@ -3934,6 +3934,32 @@ CREATE INDEX idx_fleet_tires_status ON public.fleet_tires USING btree ("companyI
 ALTER TABLE ONLY public.fleet_vehicles
     ADD CONSTRAINT fleet_vehicles_pkey PRIMARY KEY (id);
 
+--
+-- #1733 Blocker #2 — vehicle technical profile indexes + capacity-override table.
+--
+CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_payload
+  ON public.fleet_vehicles ("companyId", "payloadKg")
+  WHERE "payloadKg" IS NOT NULL AND "deletedAt" IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_seats
+  ON public.fleet_vehicles ("companyId", "seatCount")
+  WHERE "seatCount" IS NOT NULL AND "deletedAt" IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_type
+  ON public.fleet_vehicles ("companyId", "vehicleType")
+  WHERE "vehicleType" IS NOT NULL AND "deletedAt" IS NULL;
+
+ALTER TABLE ONLY public.vehicle_capacity_overrides ALTER COLUMN id SET DEFAULT nextval('public.vehicle_capacity_overrides_id_seq'::regclass);
+
+ALTER TABLE ONLY public.vehicle_capacity_overrides
+    ADD CONSTRAINT vehicle_capacity_overrides_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.vehicle_capacity_overrides
+    ADD CONSTRAINT uq_capacity_override_source UNIQUE ("companyId", "sourceType", "sourceId");
+
+CREATE INDEX idx_capacity_overrides_vehicle
+  ON public.vehicle_capacity_overrides ("companyId", "vehicleId", "approvedAt" DESC);
+
 
 --
 -- Name: fleet_video_access_logs fleet_video_access_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
