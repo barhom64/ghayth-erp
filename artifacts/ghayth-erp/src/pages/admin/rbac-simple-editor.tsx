@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 import { PageShell } from "@workspace/ui-core";
 import { apiFetch, useApiQuery } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -247,6 +248,9 @@ export default function RbacSimpleEditor() {
                 </Badge>
               )}
               {isDirty && <Badge variant="destructive">تغييرات غير محفوظة: {dirtyKeys.length}</Badge>}
+              <Link href="/admin" className="text-xs text-status-info-foreground hover:underline">
+                للتحكّم المتقدّم (حدود الاعتماد، فصل المهام، الشروط) ← المحرّر الطبقي
+              </Link>
               {roleId && (
                 <div className="relative ms-auto w-full sm:w-64">
                   <Search className="absolute start-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
