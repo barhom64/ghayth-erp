@@ -25,6 +25,11 @@ import {
   type AccountUsage,
   type ChildrenUsagePolicy,
 } from "../lib/financeAccountClassifier.js";
+import {
+  inferCodeWidth,
+  suggestNextChildCode,
+  suggestNextRootCode,
+} from "../lib/financeAccountNumbering.js";
 
 const ACCOUNT_TYPES = ["asset", "liability", "equity", "revenue", "expense"] as const;
 const ACCOUNT_NATURES = ["debit", "credit"] as const;
@@ -268,6 +273,41 @@ accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts"
     res.json(maskFields(req, accounts));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+// GET /finance/accounts/next-code — suggest the next free account code
+// (#1715, Comment #6). With ?parentCode= returns the next child slot under
+// that parent (level/step aware: 1000→1100, 1100→1110, 1110→1111); without it
+// returns the next root, optionally seeded by ?type=. Authoritative server-
+// side numbering so every caller (UI, import, API) agrees. Read-only.
+accountsRouter.get("/accounts/next-code", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { parentCode, type } = req.query as Record<string, string | undefined>;
+    const all = await rawQuery<{ code: string; level: number; parentCode: string | null }>(
+      `SELECT code, level, "parentCode" FROM chart_of_accounts
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+      [scope.companyId],
+    );
+    const allCodes = new Set(all.map((a) => a.code));
+    const codeWidth = inferCodeWidth(all.map((a) => a.code));
+    if (parentCode) {
+      const parent = all.find((a) => a.code === parentCode);
+      if (!parent) {
+        res.status(404).json({ error: "الحساب الأب غير موجود" });
+        return;
+      }
+      const childCodes = all.filter((a) => a.parentCode === parentCode).map((a) => a.code);
+      const r = suggestNextChildCode({ parentCode, parentLevel: parent.level, codeWidth, childCodes, allCodes });
+      res.json({ code: r.code, reason: r.reason ?? null, parentCode, level: parent.level + 1 });
+      return;
+    }
+    const rootCodes = all.filter((a) => !a.parentCode || a.level === 1).map((a) => a.code);
+    const r = suggestNextRootCode({ codeWidth, rootCodes, allCodes, type: type ?? null });
+    res.json({ code: r.code, reason: r.reason ?? null, parentCode: null, level: 1 });
+  } catch (err) {
+    handleRouteError(err, res, "Next account code error:");
   }
 });
 
