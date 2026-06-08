@@ -176,6 +176,11 @@ vehicleProfileRouter.post(
         ],
       );
       assertInsert(insertId, "vehicle_components");
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "create", entity: "vehicle_components", entityId: insertId,
+        after: { vehicleId, componentType: b.componentType },
+      }).catch((e) => logger.error(e, "vehicle component audit failed"));
       res.status(201).json({ data: { id: insertId } });
     } catch (err) {
       handleRouteError(err, res, "Create vehicle component error:");
@@ -230,6 +235,11 @@ vehicleProfileRouter.patch(
         params,
       );
       if (affectedRows === 0) throw new NotFoundError("المكوّن غير موجود");
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "update", entity: "vehicle_components", entityId: id,
+        after: { vehicleId, fields: Object.keys(b) },
+      }).catch((e) => logger.error(e, "vehicle component audit failed"));
       res.json({ data: { id } });
     } catch (err) {
       handleRouteError(err, res, "Update vehicle component error:");
@@ -310,6 +320,11 @@ vehicleProfileRouter.post(
           vehicleId, driverId: b.driverId, assignmentType: b.assignmentType,
         }),
       }).catch((e) => logger.error(e, "assignment event failed"));
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "create", entity: "vehicle_driver_assignments", entityId: insertId,
+        after: { vehicleId, driverId: b.driverId, assignmentType: b.assignmentType },
+      }).catch((e) => logger.error(e, "assignment audit failed"));
       res.status(201).json({ data: { id: insertId } });
     } catch (err) {
       handleRouteError(err, res, "Create vehicle driver assignment error:");
@@ -349,6 +364,11 @@ vehicleProfileRouter.patch(
         params,
       );
       if (affectedRows === 0) throw new NotFoundError("الإسناد غير موجود");
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "update", entity: "vehicle_driver_assignments", entityId: id,
+        after: { vehicleId, fields: Object.keys(b) },
+      }).catch((e) => logger.error(e, "assignment audit failed"));
       res.json({ data: { id } });
     } catch (err) {
       handleRouteError(err, res, "Update vehicle driver assignment error:");
@@ -404,6 +424,11 @@ vehicleProfileRouter.post(
         ],
       );
       assertInsert(insertId, "vehicle_maintenance_schedules");
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "create", entity: "vehicle_maintenance_schedules", entityId: insertId,
+        after: { vehicleId, scheduleName: b.scheduleName, intervalType: b.intervalType },
+      }).catch((e) => logger.error(e, "maintenance schedule audit failed"));
       res.status(201).json({ data: { id: insertId } });
     } catch (err) {
       handleRouteError(err, res, "Create maintenance schedule error:");
@@ -452,6 +477,11 @@ vehicleProfileRouter.patch(
         params,
       );
       if (affectedRows === 0) throw new NotFoundError("الجدولة غير موجودة");
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "update", entity: "vehicle_maintenance_schedules", entityId: id,
+        after: { fields: Object.keys(b) },
+      }).catch((e) => logger.error(e, "maintenance schedule audit failed"));
       res.json({ data: { id } });
     } catch (err) {
       handleRouteError(err, res, "Update maintenance schedule error:");
