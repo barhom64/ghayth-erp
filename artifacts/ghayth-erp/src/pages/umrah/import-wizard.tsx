@@ -39,6 +39,10 @@ interface PreviewSummary {
   newAgentsToCreate?: { nuskAgentNumber: string | null; agentName: string; rowCount: number }[];
   /** Rows that name no agent at all (agentId saved as NULL). */
   rowsWithoutAgent?: number;
+  /** Rows that name no group (groupId saved as NULL). Recoverable via /umrah/import/:id/unlinked. */
+  rowsWithoutGroup?: number;
+  /** Rows that name no sub-agent (subAgentId saved as NULL). Same recovery path. */
+  rowsWithoutSubAgent?: number;
   violationsDetected?: number;
   rows?: any[];
 }
@@ -884,12 +888,40 @@ export default function UmrahImportWizard() {
 
           {/* Rows with no agent — silent data loss prevention */}
           {preview.rowsWithoutAgent && preview.rowsWithoutAgent > 0 && (
-            <Card className="border-status-warning-surface">
+            <Card className="border-status-warning-surface" data-testid="banner-rows-without-agent">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-status-warning-foreground" />
                   <p className="text-sm text-status-warning-foreground">
-                    <strong>{formatNumber(preview.rowsWithoutAgent)}</strong> صفًا لا يحوي رقم وكيل ولا اسم وكيل — ستُحفظ بدون ربط بأي وكيل (لن تظهر في كشوف الوكلاء).
+                    <strong>{formatNumber(preview.rowsWithoutAgent)}</strong> صفًا لا يحوي رقم وكيل ولا اسم وكيل — ستُحفظ بدون ربط بأي وكيل (لن تظهر في كشوف الوكلاء). يمكن استرداد الربط لاحقًا من صفحة الصفوف غير المربوطة في الدفعة.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Rows with no group — same silent-loss shape */}
+          {preview.rowsWithoutGroup && preview.rowsWithoutGroup > 0 && (
+            <Card className="border-status-warning-surface" data-testid="banner-rows-without-group">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-status-warning-foreground" />
+                  <p className="text-sm text-status-warning-foreground">
+                    <strong>{formatNumber(preview.rowsWithoutGroup)}</strong> صفًا لا يحوي رقم مجموعة — ستُحفظ بدون ربط بأي مجموعة (لن تظهر في تجميعات المجموعات أو ربحيتها). قابلة للاسترداد بعد التأكيد.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Rows with no sub-agent */}
+          {preview.rowsWithoutSubAgent && preview.rowsWithoutSubAgent > 0 && (
+            <Card className="border-status-warning-surface" data-testid="banner-rows-without-subagent">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-status-warning-foreground" />
+                  <p className="text-sm text-status-warning-foreground">
+                    <strong>{formatNumber(preview.rowsWithoutSubAgent)}</strong> صفًا لا يحوي رمز مكتب (وكيل فرعي) — ستُحفظ بدون ربط بأي مكتب (لن تظهر في كشوف المكاتب). قابلة للاسترداد بعد التأكيد.
                   </p>
                 </div>
               </CardContent>
@@ -1045,27 +1077,52 @@ export default function UmrahImportWizard() {
         <div className="mt-6 border rounded-lg p-4 bg-white">
           <p className="text-sm font-semibold mb-2">دفعات الاستيراد السابقة ({importBatches.length})</p>
           <div className="divide-y text-xs">
-            {importBatches.slice(0, 10).map((b: any) => (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => setBatchChangesId(b.id === batchChangesId ? null : b.id)}
-                className="w-full flex items-center justify-between py-2 text-right hover:bg-surface-subtle"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] text-muted-foreground">#{b.id}</span>
-                  <span>{b.fileName ?? "—"}</span>
-                  <span className="text-muted-foreground">
-                    {b.fileType === "mutamers" ? "معتمرين" : b.fileType === "vouchers" ? "سندات" : b.fileType}
-                  </span>
+            {importBatches.slice(0, 10).map((b: any) => {
+              const unlinkedTotal = (b.unlinkedAgentCount ?? 0)
+                + (b.unlinkedGroupCount ?? 0)
+                + (b.unlinkedSubAgentCount ?? 0);
+              return (
+                <div key={b.id} className="py-2">
+                  <button
+                    type="button"
+                    onClick={() => setBatchChangesId(b.id === batchChangesId ? null : b.id)}
+                    className="w-full flex items-center justify-between text-right hover:bg-surface-subtle"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[10px] text-muted-foreground">#{b.id}</span>
+                      <span>{b.fileName ?? "—"}</span>
+                      <span className="text-muted-foreground">
+                        {b.fileType === "mutamers" ? "معتمرين" : b.fileType === "vouchers" ? "سندات" : b.fileType}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      {b.insertedCount != null && <span>+{b.insertedCount}</span>}
+                      {b.updatedCount != null && <span>~{b.updatedCount}</span>}
+                      {b.createdAt && <span>{new Date(b.createdAt).toLocaleDateString("ar-SA")}</span>}
+                    </div>
+                  </button>
+                  {/* Recovery drill-down: appears only when at least one
+                      dimension has unlinked rows. Pulls the operator to
+                      the /umrah/import/:id/unlinked screen to bulk-link
+                      without re-importing the file. */}
+                  {unlinkedTotal > 0 && (
+                    <a
+                      href={`/umrah/import/${b.id}/unlinked`}
+                      className="mt-1 inline-flex items-center gap-1 text-xs text-status-warning-foreground hover:underline"
+                      data-testid={`link-unlinked-${b.id}`}
+                    >
+                      <span>⚠</span>
+                      <span>
+                        {unlinkedTotal} صف بحاجة لاسترداد الربط
+                        {b.unlinkedAgentCount ? ` (وكيل: ${b.unlinkedAgentCount})` : ""}
+                        {b.unlinkedGroupCount ? ` (مجموعة: ${b.unlinkedGroupCount})` : ""}
+                        {b.unlinkedSubAgentCount ? ` (مكتب: ${b.unlinkedSubAgentCount})` : ""}
+                      </span>
+                    </a>
+                  )}
                 </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  {b.insertedCount != null && <span>+{b.insertedCount}</span>}
-                  {b.updatedCount != null && <span>~{b.updatedCount}</span>}
-                  {b.createdAt && <span>{new Date(b.createdAt).toLocaleDateString("ar-SA")}</span>}
-                </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
           {batchChangesId !== null && (
             <div className="mt-3 border-t pt-3">

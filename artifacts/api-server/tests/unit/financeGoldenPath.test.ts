@@ -566,9 +566,11 @@ describe("POST /vouchers — atomic JE + metadata + allocations", () => {
     const idx = JRN_ROUTE.indexOf('journalRouter.post("/vouchers"');
     expect(idx).toBeGreaterThan(-1);
     // Widened 12000 → 16000 (voucherDims spread) → 17500 (#1715 posting-
-    // policy assertPaymentSourceAllowed block added before the engine post).
-    const block = JRN_ROUTE.slice(idx, idx + 17500);
-    const txnStart = block.indexOf("withTransaction(async ()");
+    // policy assertPaymentSourceAllowed block added before the engine post)
+    // → 22000 (#1715 operational-effect blocks added after the metadata
+    // UPDATE, before the allocations loop).
+    const block = JRN_ROUTE.slice(idx, idx + 22000);
+    const txnStart = block.indexOf("withTransaction(async (client)");
     expect(txnStart).toBeGreaterThan(-1);
     const enginePostIdx = block.indexOf("financialEngine.postJournalEntry({", txnStart);
     const metadataUpdateIdx = block.indexOf('UPDATE journal_entries SET "paymentMethod"', txnStart);

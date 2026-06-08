@@ -60,9 +60,15 @@ export default function TransportIntegration() {
   const qc = useQueryClient();
   const [fromDate, setFromDate] = useState<string>(todayLocal());
   const [toDate, setToDate] = useState<string>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 30);
-    return d.toISOString().slice(0, 10);
+    // Local-calendar "today + 30d" — uses Intl.DateTimeFormat with the
+    // en-CA locale to render an ISO-like yyyy-mm-dd string in the
+    // browser's local timezone. Avoids both the UTC-slice trap and
+    // the bound-getFullYear period-drift lint.
+    const d = new Date(Date.now() + 30 * 86_400_000);
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+    });
+    return fmt.format(d);
   });
   const [materializingId, setMaterializingId] = useState<number | null>(null);
 
