@@ -433,6 +433,7 @@ export const allNavSections: NavSection[] = [
         { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
         { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
         { label: "الصيانة", path: "/fleet/maintenance", icon: Wrench, perm: "fleet.maintenance:list" },
+        { label: "أثر الصيانة → التذاكر", path: "/fleet/maintenance-impact", icon: AlertTriangle, perm: "fleet.maintenance:list" },
         { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
         { label: "التأمين", path: "/fleet/insurance", icon: Shield, perm: "fleet.vehicles:list" },
         { label: "التنبيهات", path: "/fleet/alerts", icon: Bell, perm: "fleet.vehicles:list" },
