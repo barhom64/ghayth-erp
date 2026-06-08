@@ -46,9 +46,12 @@ export const DEPRECIATION_METHODS: Record<string, string> = {
 };
 
 // ── أنواع الحسابات ──────────────────────────────────────────────────
+// #1715 (module review) — single source of truth for account-type labels.
+// Standardised on «خصوم» (the term used by every screen) so the 7 inline
+// copies that re-declared this map can all import it instead of drifting.
 export const ACCOUNT_TYPES: Record<string, string> = {
   asset: "أصول",
-  liability: "التزامات",
+  liability: "خصوم",
   equity: "حقوق ملكية",
   revenue: "إيرادات",
   expense: "مصروفات",
