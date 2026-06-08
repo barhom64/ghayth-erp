@@ -101,6 +101,28 @@ interface BookingRow {
   priority: number;
 }
 
+/** #1812 — internal criteria shared between booking-based and
+ *  leg-based suggest entry points. Lets `suggestForCriteria` stay
+ *  source-of-truth while public wrappers (`suggestAssignments`,
+ *  `suggestForLeg`) load the row from either domain. */
+export interface SuggestionCriteria {
+  companyId: number;
+  branchId: number | null;
+  scheduledStartAt: string;
+  scheduledEndAt: string;
+  transportServiceType: string;          // routes capacity scorer
+  passengerCount: number | null;
+  cargoWeight: number | null;
+  requestedVehicleClass: string | null;
+  vehicleSubstitutionPolicy: string;
+  allowUpgrade: boolean;
+  requiredExactVehicleId: number | null;
+  requiredExactDriverId: number | null;
+  fromLat: number | null;
+  fromLng: number | null;
+  limit?: number;
+}
+
 interface VehicleRow {
   id: number;
   plateNumber: string | null;
@@ -197,6 +219,111 @@ export async function suggestAssignments(
   const start = req.scheduledStartAt ?? booking.pickupWindowStart ?? booking.fixedAppointmentTime;
   const end   = req.scheduledEndAt   ?? booking.pickupWindowEnd   ?? booking.fixedAppointmentTime;
   if (!start || !end) return [];
+
+  return suggestForCriteria({
+    companyId: req.companyId,
+    branchId: req.branchId,
+    scheduledStartAt: start,
+    scheduledEndAt: end,
+    transportServiceType: booking.transportServiceType,
+    passengerCount: booking.passengerCount,
+    cargoWeight: booking.cargoWeight ? Number(booking.cargoWeight) : null,
+    requestedVehicleClass: booking.requestedVehicleClass,
+    vehicleSubstitutionPolicy: booking.vehicleSubstitutionPolicy,
+    allowUpgrade: booking.allowUpgrade,
+    requiredExactVehicleId: booking.requiredExactVehicleId,
+    requiredExactDriverId: booking.requiredExactDriverId,
+    fromLat: booking.fromLat,
+    fromLng: booking.fromLng,
+    limit: req.limit,
+  });
+}
+
+/**
+ * #1812 — Same engine, leg-based entry. The user-facing "اقترح المركبة
+ * والسائق" button on each itinerary leg routes here so the operator
+ * can sequence a chained trip (مكة → المدينة → ...) without leaving
+ * the itinerary detail. Updates only the leg's assignedVehicleId/
+ * DriverId — does NOT create a dispatch order (that happens when the
+ * leg gets materialized into bookings, which is a separate flow).
+ */
+export async function suggestForLeg(
+  companyId: number,
+  legId: number,
+  options?: { limit?: number },
+): Promise<SuggestionResult[]> {
+  const [leg] = await rawQuery<{
+    id: number;
+    transportServiceType: string;
+    requiredVehicleClass: string | null;
+    scheduledStart: string | null;
+    scheduledEnd: string | null;
+    pickupWindowStart: string | null;
+    pickupWindowEnd: string | null;
+    fromLat: number | null;
+    fromLng: number | null;
+  }>(
+    `SELECT l.id,
+            i."transportServiceType",
+            l."requiredVehicleClass",
+            l."scheduledStart",
+            l."scheduledEnd",
+            l."pickupWindowStart",
+            l."pickupWindowEnd",
+            fl."latitude"  AS "fromLat",
+            fl."longitude" AS "fromLng"
+       FROM transport_itinerary_legs l
+            JOIN transport_itineraries i ON i.id = l."itineraryId" AND i."companyId" = l."companyId"
+            LEFT JOIN transport_locations fl ON fl.id = l."originLocationId" AND fl."companyId" = l."companyId"
+      WHERE l.id = $1 AND l."companyId" = $2`,
+    [legId, companyId],
+  );
+  if (!leg) return [];
+
+  const start = leg.scheduledStart ?? leg.pickupWindowStart;
+  const end   = leg.scheduledEnd   ?? leg.pickupWindowEnd;
+  if (!start || !end) return [];
+
+  return suggestForCriteria({
+    companyId,
+    branchId: null,
+    scheduledStartAt: start,
+    scheduledEndAt: end,
+    transportServiceType: leg.transportServiceType,
+    passengerCount: null,
+    cargoWeight: null,
+    requestedVehicleClass: leg.requiredVehicleClass,
+    // Itinerary legs default to "equivalent_allowed" — the customer's
+    // substitution policy lives on the source booking, not the leg.
+    vehicleSubstitutionPolicy: "equivalent_allowed",
+    allowUpgrade: false,
+    requiredExactVehicleId: null,
+    requiredExactDriverId: null,
+    fromLat: leg.fromLat,
+    fromLng: leg.fromLng,
+    limit: options?.limit,
+  });
+}
+
+/** The actual engine: load candidates + score against criteria. */
+async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResult[]> {
+  const start = c.scheduledStartAt;
+  const end = c.scheduledEndAt;
+  // Synthetic "booking-like" record so the existing scoring loop is
+  // 100% unchanged below — just consumed via this binding.
+  const booking = {
+    transportServiceType: c.transportServiceType,
+    passengerCount: c.passengerCount,
+    cargoWeight: c.cargoWeight,
+    requestedVehicleClass: c.requestedVehicleClass,
+    vehicleSubstitutionPolicy: c.vehicleSubstitutionPolicy,
+    allowUpgrade: c.allowUpgrade,
+    requiredExactVehicleId: c.requiredExactVehicleId,
+    requiredExactDriverId: c.requiredExactDriverId,
+    fromLat: c.fromLat,
+    fromLng: c.fromLng,
+  };
+  const req = { companyId: c.companyId, branchId: c.branchId, limit: c.limit };
 
   // 2) Load candidate vehicles. Pull `vehicle_location_snapshots`
   //    latest ping per vehicle as the proxy for "current location".
