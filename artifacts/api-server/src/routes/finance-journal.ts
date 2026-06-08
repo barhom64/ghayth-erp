@@ -140,6 +140,8 @@ const createExpenseSchema = z.object({
     odometer: z.coerce.number().optional(),
     costBearer: z.string().optional(),
     performedBy: z.string().optional(),
+    // #1715 §5 — link to an existing ticket instead of creating a new one.
+    existingTicketId: z.coerce.number().int().positive().optional(),
   }).optional(),
 });
 
@@ -366,6 +368,43 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
   } catch (err) {
     logger.error(err, "Get expenses error:");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
+  }
+});
+
+// #1715 §5 — finance-owned helper for «ربط بتذكرة قائمة». Returns the OPEN
+// (unlinked) maintenance tickets the operator can link an expense to. Scoped
+// to finance.journal so a finance user needn't hold the fleet/properties
+// maintenance permission, and only ever exposes id + a short label.
+journalRouter.get("/maintenance-ticket-options", authorize({ feature: "finance.journal", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const target = String(req.query.target ?? "");
+    const vehicleId = req.query.vehicleId != null ? Number(req.query.vehicleId) : null;
+    const unitId = req.query.unitId != null ? Number(req.query.unitId) : null;
+    let options: { id: number; label: string }[] = [];
+    if (target === "vehicle" && vehicleId) {
+      const rows = await rawQuery<{ id: number; type: string | null; serviceDate: string | null }>(
+        `SELECT id, type, "serviceDate"::text AS "serviceDate"
+           FROM fleet_maintenance
+          WHERE "companyId" = $1 AND "vehicleId" = $2 AND "deletedAt" IS NULL AND "linkedExpenseId" IS NULL
+          ORDER BY id DESC LIMIT 50`,
+        [scope.companyId, vehicleId],
+      );
+      options = rows.map((r) => ({ id: r.id, label: `#${r.id} · ${r.type ?? "صيانة"}${r.serviceDate ? ` · ${r.serviceDate}` : ""}` }));
+    } else if (target === "property" && unitId) {
+      const rows = await rawQuery<{ id: number; category: string | null; status: string | null }>(
+        `SELECT id, category, status
+           FROM maintenance_requests
+          WHERE "companyId" = $1 AND "unitId" = $2 AND "deletedAt" IS NULL AND "linkedExpenseId" IS NULL
+          ORDER BY id DESC LIMIT 50`,
+        [scope.companyId, unitId],
+      );
+      options = rows.map((r) => ({ id: r.id, label: `#${r.id} · ${r.category ?? "صيانة"}${r.status ? ` · ${r.status}` : ""}` }));
+    }
+    res.json({ data: options });
+  } catch (err) {
+    logger.error(err, "Get maintenance ticket options error:");
+    res.json({ data: [] });
   }
 });
 
@@ -864,7 +903,16 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
             costBearer: maintenanceTicket.costBearer ?? null,
             performedBy: maintenanceTicket.performedBy ?? null,
             description: finalDescription ?? null,
+            existingTicketId: maintenanceTicket.existingTicketId ?? null,
           });
+          // Linking to a non-existent ticket must abort the whole expense —
+          // never post an expense that claims a link it didn't make.
+          if (maintenanceTicket.existingTicketId != null && eff.action === "none") {
+            throw new ValidationError("تذكرة الصيانة المحددة غير موجودة", {
+              field: "maintenanceTicket.existingTicketId",
+              fix: "اختر تذكرة صيانة قائمة صحيحة أو أنشئ تذكرة جديدة",
+            });
+          }
           logger.info({ journalId: posted.journalId, effect: eff }, "[finance] maintenance ticket effect applied");
         }
       }
