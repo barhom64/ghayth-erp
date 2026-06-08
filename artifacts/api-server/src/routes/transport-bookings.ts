@@ -596,8 +596,10 @@ transportBookingsRouter.patch(
       const result = await withTransaction(async (tx) => {
         const lockRes = await tx.query<{
           id: number; status: typeof DISPATCH_STATUSES[number]; companyId: number;
+          driverId: number; vehicleId: number; bookingLineId: number;
         }>(
-          `SELECT id, status, "companyId" FROM transport_dispatch_orders
+          `SELECT id, status, "companyId", "driverId", "vehicleId", "bookingLineId"
+             FROM transport_dispatch_orders
             WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
           [id, scope.companyId],
         );
@@ -616,15 +618,67 @@ transportBookingsRouter.patch(
         if (target === "accepted") stamps.push(`"acceptedAt" = NOW()`);
         if (target === "executing") stamps.push(`"startedAt" = NOW()`);
         if (target === "completed") stamps.push(`"completedAt" = NOW()`);
-        const declinedSet = target === "declined" ? `, "declinedReason" = $3` : "";
-        const params: unknown[] = [target, id];
+        const declinedSet = target === "declined" ? `, "declinedReason" = $4` : "";
+        const params: unknown[] = [target, id, scope.companyId];
         if (target === "declined") params.push(b.declinedReason);
         await tx.query(
           `UPDATE transport_dispatch_orders
               SET status = $1, "updatedAt" = NOW()${stamps.length ? "," + stamps.join(",") : ""}${declinedSet}
-            WHERE id = $2 AND "companyId" = ${scope.companyId}`,
+            WHERE id = $2 AND "companyId" = $3`,
           params,
         );
+
+        // #1812 integration — auto-manage driver_navigation_sessions
+        // alongside the dispatch lifecycle. The earlier #1819 design
+        // required the operator to explicitly POST .../navigation/start;
+        // this hooks it onto the natural action flow so the driver app
+        // sees the session the moment they tap "accepted".
+        if (target === "accepted") {
+          // Lazy-create a session. Skip if one already exists for this
+          // order (e.g. operator clicked "accept" twice).
+          await tx.query(
+            `INSERT INTO driver_navigation_sessions
+               ("companyId", "dispatchOrderId", "driverId", "vehicleId",
+                "originLat", "originLng", "destinationLat", "destinationLng",
+                provider)
+             SELECT $1, $2, $3, $4,
+                    fl.latitude, fl.longitude, tl.latitude, tl.longitude,
+                    COALESCE(s."mapProvider", 'manual_only')
+               FROM transport_booking_lines bl
+                    JOIN transport_bookings b ON b.id = bl."bookingId"
+                    LEFT JOIN transport_locations fl ON fl.id = b."fromLocationId"
+                    LEFT JOIN transport_locations tl ON tl.id = b."toLocationId"
+                    LEFT JOIN transport_planning_settings s ON s."companyId" = $1
+              WHERE bl.id = $5
+                AND NOT EXISTS (
+                  SELECT 1 FROM driver_navigation_sessions ns
+                   WHERE ns."dispatchOrderId" = $2
+                     AND ns.status NOT IN ('ended', 'cancelled')
+                )
+              LIMIT 1`,
+            [scope.companyId, id, order.driverId, order.vehicleId, order.bookingLineId],
+          );
+        }
+        if (target === "completed" || target === "closed" || target === "cancelled") {
+          // End the active session + stamp the driver's lastDutyEndedAt
+          // so the rest constraint engine sees a fresh checkpoint.
+          await tx.query(
+            `UPDATE driver_navigation_sessions
+                SET status = $1, "endedAt" = NOW(), "updatedAt" = NOW()
+              WHERE "dispatchOrderId" = $2 AND "companyId" = $3
+                AND status NOT IN ('ended', 'cancelled')`,
+            [target === "cancelled" ? "cancelled" : "ended", id, scope.companyId],
+          );
+          if (target === "completed" || target === "closed") {
+            await tx.query(
+              `UPDATE fleet_drivers
+                  SET "lastDutyEndedAt" = NOW(), "updatedAt" = NOW()
+                WHERE id = $1 AND "companyId" = $2`,
+              [order.driverId, scope.companyId],
+            );
+          }
+        }
+
         return { previous: order.status, next: target };
       });
 
