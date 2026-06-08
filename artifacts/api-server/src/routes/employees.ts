@@ -1336,7 +1336,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
       throw new NotFoundError("الموظف غير موجود");
     }
 
-    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime] = await Promise.all([
+    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles] = await Promise.all([
       rawQuery<Record<string, unknown>>(
         `SELECT pt.id, pt.title, pt.status, pt.priority, pt."dueDate", p.name AS "projectName"
          FROM project_tasks pt
@@ -1401,9 +1401,53 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
          ORDER BY o."overtimeDate" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
       ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
+      // HR-001 / #1799 priority #1 — Employee 360 tab "الحساب والدخول".
+      // We surface the linked user account row so the profile can render
+      // "هل للموظف حساب دخول؟ آخر دخول؟ مقفول؟". Sensitive fields
+      // (passwordHash, twoFactorSecret, resetToken) are NEVER selected.
+      // Limit 1 because the dual model is one-user-per-employee (see
+      // docs/rbac/UNIFIED_USER_ROLE_MODEL.md). NULL → no account yet.
+      rawQuery<Record<string, unknown>>(
+        `SELECT u.id, u.email, u.role, u."isActive", u."lastLoginAt",
+                u."failedLoginAttempts", u."lockedUntil", u."createdAt"
+           FROM users u
+          WHERE u."employeeId" = $1
+          LIMIT 1`,
+        [id]
+      ).catch((e) => { logger.error(e, "employees user-account query failed"); return []; }),
+      // HR-001 / #1799 priority #2 — Employee 360 tab "الأدوار والصلاحيات".
+      // Multi-role list from rbac_user_roles joined back to rbac_roles
+      // so the profile can show every active role the employee holds,
+      // ordered with primary first, then by level descending.
+      // Scoped to the employee's company (assignment.companyId) so
+      // cross-company role grants don't bleed into the current view.
+      // Empty array when the employee has no user account or no rbac role.
+      rawQuery<Record<string, unknown>>(
+        `SELECT ur.id AS "userRoleId",
+                r.id AS "roleId", r.role_key AS "roleKey",
+                r.label_ar AS "labelAr", r.label_en AS "labelEn",
+                r.color, r.level, r.is_template AS "isTemplate",
+                ur.is_primary AS "isPrimary", ur.expires_at AS "expiresAt",
+                ur."createdAt" AS "assignedAt",
+                ur."branchId", ur."departmentId"
+           FROM rbac_user_roles ur
+           JOIN rbac_roles r ON r.id = ur.role_id
+          WHERE ur."companyId" = $2
+            AND ur."userId" = (SELECT id FROM users WHERE "employeeId" = $1 LIMIT 1)
+          ORDER BY ur.is_primary DESC NULLS LAST, r.level DESC NULLS LAST, r.role_key`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "employees roles query failed"); return []; }),
     ]);
 
-    res.json(maskFields(req, { ...employee, tasks, attendance, leaves, trainings, payroll, violations, loans, overtime }));
+    res.json(maskFields(req, {
+      ...employee,
+      tasks, attendance, leaves, trainings, payroll, violations, loans, overtime,
+      // HR-001 — Employee 360 expansion (#1799 priority #1):
+      // `userAccount` is a single object (or null when employee has no
+      // login). `roles` is always an array (empty when no rbac grants).
+      userAccount: Array.isArray(userAccount) && userAccount.length > 0 ? userAccount[0] : null,
+      roles: roles ?? [],
+    }));
   } catch (err) {
     handleRouteError(err, res, "Get employee error:");
   }
