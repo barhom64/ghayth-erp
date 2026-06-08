@@ -62,6 +62,7 @@ import { loadDrizzleSchema } from "./lib/drizzle-schema.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const ROUTES_DIR = join(REPO_ROOT, "artifacts/api-server/src/routes");
+const MIGRATIONS_DIR = join(REPO_ROOT, "artifacts/api-server/src/migrations");
 const DRIZZLE_SCHEMA_FILE = join(REPO_ROOT, "lib/db/src/schema/index.ts");
 
 // Object keys that legitimately appear inside `.values({…})` /
@@ -680,8 +681,54 @@ function collectLocallyDefinedIdentifiers(bodies) {
   return local;
 }
 
+// Migrations that landed after the last `pnpm db:dump-schema` run
+// define new tables/columns the dump doesn't know about. The CI workflow
+// pre-loads db/schema_pre.sql and then marks every migration as already
+// applied (so they won't auto-run inside the api-server), which means
+// the live DB is "schema dump + nothing else". Walk every migration
+// file and harvest CREATE TABLE definitions + ALTER TABLE ADD COLUMN
+// additions so check:schema-drift accepts those identifiers even before
+// the next dump regen — matching the behaviour of audit:schema-drift.
+async function harvestMigrationDefs(tables, columns) {
+  try {
+    for (const f of await readdir(MIGRATIONS_DIR)) {
+      if (!f.endsWith(".sql")) continue;
+      const mig = await readFile(join(MIGRATIONS_DIR, f), "utf8");
+      const createRe =
+        /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?"?([\w]+)"?\s*\(([\s\S]+?)\)\s*(?:;|$)/gi;
+      let cm;
+      while ((cm = createRe.exec(mig)) !== null) {
+        tables.add(cm[1]);
+        for (const line of cm[2].split("\n")) {
+          const trimmed = line.trim().replace(/,\s*$/, "");
+          if (!trimmed) continue;
+          if (/^(CONSTRAINT|PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK)\b/i.test(trimmed)) continue;
+          const quoted = trimmed.match(/^"([^"]+)"/);
+          if (quoted) { columns.add(quoted[1]); continue; }
+          const bare = trimmed.match(/^([a-z_][a-z0-9_]*)\s/i);
+          if (bare) columns.add(bare[1]);
+        }
+      }
+      const alterRe =
+        /ALTER\s+TABLE\s+(?:ONLY\s+)?(?:public\.)?"?[\w]+"?\s+([\s\S]+?);/gi;
+      let am;
+      while ((am = alterRe.exec(mig)) !== null) {
+        const body = am[1];
+        const addColRe = /ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/gi;
+        let ac;
+        while ((ac = addColRe.exec(body)) !== null) {
+          columns.add(ac[1]);
+        }
+      }
+    }
+  } catch {
+    // No migrations dir — skip.
+  }
+}
+
 async function main() {
   const { columns, tables, tableColumns } = loadLiveSchema();
+  await harvestMigrationDefs(tables, columns);
   const drizzleSchema = await loadDrizzleSchema(DRIZZLE_SCHEMA_FILE);
   if (columns.size === 0) {
     console.error(

@@ -169,6 +169,11 @@ export default function TransportBookingsList() {
               <Users className="h-4 w-4 me-1" />التكامل
             </Button>
           </Link>
+          <Link href="/fleet/transport/itineraries">
+            <Button variant="outline" size="sm">
+              <Calendar className="h-4 w-4 me-1" />البرامج
+            </Button>
+          </Link>
           <Link href="/fleet/transport/dispatch">
             <Button variant="outline" size="sm">
               <Calendar className="h-4 w-4 me-1" />لوحة التوزيع
