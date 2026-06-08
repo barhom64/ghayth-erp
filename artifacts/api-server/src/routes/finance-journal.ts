@@ -140,6 +140,8 @@ const createExpenseSchema = z.object({
     odometer: z.coerce.number().optional(),
     costBearer: z.string().optional(),
     performedBy: z.string().optional(),
+    // #1715 §5 — link to an existing ticket instead of creating a new one.
+    existingTicketId: z.coerce.number().int().positive().optional(),
   }).optional(),
 });
 
@@ -864,7 +866,16 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
             costBearer: maintenanceTicket.costBearer ?? null,
             performedBy: maintenanceTicket.performedBy ?? null,
             description: finalDescription ?? null,
+            existingTicketId: maintenanceTicket.existingTicketId ?? null,
           });
+          // Linking to a non-existent ticket must abort the whole expense —
+          // never post an expense that claims a link it didn't make.
+          if (maintenanceTicket.existingTicketId != null && eff.action === "none") {
+            throw new ValidationError("تذكرة الصيانة المحددة غير موجودة", {
+              field: "maintenanceTicket.existingTicketId",
+              fix: "اختر تذكرة صيانة قائمة صحيحة أو أنشئ تذكرة جديدة",
+            });
+          }
           logger.info({ journalId: posted.journalId, effect: eff }, "[finance] maintenance ticket effect applied");
         }
       }

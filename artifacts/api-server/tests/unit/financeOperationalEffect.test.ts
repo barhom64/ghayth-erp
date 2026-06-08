@@ -4,13 +4,15 @@ import { applyMaintenanceTicketEffect } from "../../src/lib/financeOperationalEf
 // Pure unit test (no DB) — captures the SQL the helper issues against a fake
 // transaction client, locking in the #1715 §5 maintenance-ticket behaviour so
 // CI protects it (DB integration tests skip in CI; these don't).
-function makeClient() {
+function makeClient(opts: { notFound?: boolean } = {}) {
   const calls: { text: string; params: unknown[] }[] = [];
   let seq = 1000;
   const client = {
     query: async (text: string, params?: unknown[]) => {
       calls.push({ text, params: params ?? [] });
-      return { rows: [{ id: ++seq }] };
+      // UPDATE ... RETURNING returns no row when the id/company didn't match.
+      if (opts.notFound && /^UPDATE/.test(text.trim())) return { rows: [] };
+      return { rows: [{ id: ++seq, vehicleId: 7 }] };
     },
   };
   return { client, calls };
@@ -65,6 +67,43 @@ describe("applyMaintenanceTicketEffect (#1715 §5)", () => {
     expect(calls[0].params).toContain(991002); // linkedExpenseId
     expect(calls[0].params).toContain("plumbing");
     expect(calls[0].params).toContain("tenant"); // costResponsibility is free-text
+  });
+
+  it("vehicle link: updates an existing ticket's linkedExpenseId (action=linked)", async () => {
+    const { client, calls } = makeClient();
+    const res = await applyMaintenanceTicketEffect(client, {
+      companyId: 2, journalId: 991003, target: "vehicle", existingTicketId: 55,
+      cost: 400, odometer: 32000, costBearer: "company",
+    });
+    expect(res.kind).toBe("vehicle_maintenance");
+    expect(res.action).toBe("linked");
+    expect(res.ticketId).toBeTypeOf("number");
+    expect(calls[0].text).toMatch(/UPDATE fleet_maintenance[\s\S]*linkedExpenseId/);
+    expect(calls[0].params).toContain(55);     // existingTicketId
+    expect(calls[0].params).toContain(991003); // linkedExpenseId
+    // odometer still bumps the vehicle (vehicleId resolved from the linked row)
+    expect(calls[1].text).toMatch(/UPDATE fleet_vehicles/);
+  });
+
+  it("property link: updates an existing maintenance_request (action=linked)", async () => {
+    const { client, calls } = makeClient();
+    const res = await applyMaintenanceTicketEffect(client, {
+      companyId: 2, journalId: 991004, target: "property", existingTicketId: 77, cost: 900,
+    });
+    expect(res.action).toBe("linked");
+    expect(calls[0].text).toMatch(/UPDATE maintenance_requests[\s\S]*linkedExpenseId/);
+    expect(calls[0].params).toContain(77);
+    expect(calls[0].params).toContain(991004);
+  });
+
+  it("link to a non-existent ticket → action=none (caller rejects)", async () => {
+    const { client } = makeClient({ notFound: true });
+    const veh = await applyMaintenanceTicketEffect(client, {
+      companyId: 2, journalId: 1, target: "vehicle", existingTicketId: 999999, cost: 10,
+    });
+    expect(veh.action).toBe("none");
+    expect(veh.kind).toBe("none");
+    expect(veh.ticketId).toBeNull();
   });
 
   it("no-op when the target's key dimension is missing", async () => {
