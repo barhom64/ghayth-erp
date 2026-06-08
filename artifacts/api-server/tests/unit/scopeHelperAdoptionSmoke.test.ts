@@ -130,6 +130,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // are scoped on (companyId, id/dispatchOrderId/…) — buildScopedWhere
   // has no branch cascade to add.
   "transport-planning.ts",
+  // transport-integration.ts: #1812 governing comment — pulls bookings
+  // from umrah groups + iCalendar feed. Pure cross-domain reads scoped
+  // on (companyId, sourceTable.id) — buildScopedWhere has no branch
+  // cascade to add for a cross-domain bridge.
+  "transport-integration.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -214,9 +219,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 110,
+      total: 111,
       helperUsers: 36,
-      manualOnly: 71,
+      manualOnly: 72,
     });
   });
 });
