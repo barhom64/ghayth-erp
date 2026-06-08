@@ -406,7 +406,13 @@ export default function TransportBookingDetail() {
           bookingId={Number(id)}
           open={suggestOpen}
           onOpenChange={setSuggestOpen}
-          onSelect={() => navigate("/fleet/transport/dispatch")}
+          onSelect={(_c, dispatchOrderId) => {
+            // After auto-create the dispatch list on this booking
+            // is stale — refetch instead of navigating away so the
+            // operator stays in context.
+            if (dispatchOrderId) refetch();
+            else navigate("/fleet/transport/dispatch");
+          }}
         />
       )}
     </PageShell>

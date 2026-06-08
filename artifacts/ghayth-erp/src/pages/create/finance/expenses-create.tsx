@@ -561,6 +561,37 @@ export default function ExpensesCreate() {
           </div>
         </div>
 
+        {/* #1715 (owner reorder #6) — السيناريو التشغيلي comes right after
+            operation info, BEFORE the accounts, so the scenario drives the
+            smart accounting direction instead of the operator picking accounts
+            blind. */}
+        <FinanceOperationContextPanel
+          value={allocTarget}
+          onChange={(v) => { setAllocTarget(v); setAllocation((prev) => ({ ...prev, ...v.allocation })); }}
+          title="ربط المصروف بـ (السيناريو التشغيلي)"
+          description="اختر ما يُربط به المصروف، وستظهر الحقول المناسبة فقط. الربط يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً."
+        />
+
+        {/* «التوجيه المحاسبي المتوقّع» live: suggested debit/credit account,
+            cost-center budget, linked entity, operational effect, future task. */}
+        {form.amount && Number(form.amount) > 0 && (
+          <div className="mb-4">
+            <LiveImpactPreview
+              endpoint="/finance/expenses/impact-preview"
+              enabled={Boolean(form.amount && Number(form.amount) > 0)}
+              payload={{
+                amount: Number(form.amount),
+                expenseType: form.expenseType,
+                paymentMethod: form.paymentMethod,
+                costCenter: form.costCenter,
+                supplierId: form.relatedEntityType === "supplier" && form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
+                targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
+                itemType: form.expenseType || undefined,
+              }}
+            />
+          </div>
+        )}
+
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">الحسابات المحاسبية</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -776,34 +807,6 @@ export default function ExpensesCreate() {
             placeholder={form.autoDescription ? "سيتم توليده تلقائياً..." : "أدخل وصفاً للمصروف"}
             disabled={form.autoDescription} />
         </div>
-
-        <FinanceOperationContextPanel
-          value={allocTarget}
-          onChange={(v) => { setAllocTarget(v); setAllocation((prev) => ({ ...prev, ...v.allocation })); }}
-          title="ربط المصروف بـ"
-          description="اختر ما يُربط به المصروف، وستظهر الحقول المناسبة فقط. الربط يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً."
-        />
-
-        {/* #1715 (owner feedback) — «التوجيه المحاسبي المتوقّع» live under the
-            operation: suggested debit/credit account, cost-center budget,
-            linked entity, operational effect, and future task — auto-updates. */}
-        {form.amount && Number(form.amount) > 0 && (
-          <div className="mb-4">
-            <LiveImpactPreview
-              endpoint="/finance/expenses/impact-preview"
-              enabled={Boolean(form.amount && Number(form.amount) > 0)}
-              payload={{
-                amount: Number(form.amount),
-                expenseType: form.expenseType,
-                paymentMethod: form.paymentMethod,
-                costCenter: form.costCenter,
-                supplierId: form.relatedEntityType === "supplier" && form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
-                targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
-                itemType: form.expenseType || undefined,
-              }}
-            />
-          </div>
-        )}
 
         {/* #1715 (owner feedback) — ADVANCED manual override. Hidden entirely
             for non-approvers (smart routing is their only path); collapsed by
