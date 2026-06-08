@@ -676,11 +676,11 @@ export async function loadWhtSummary(companyId: number, entityId: string) {
   const { startDate, endDate } = parseEntityId(entityId);
   const params: unknown[] = [companyId];
   let dateFilter = "";
-  if (startDate) { params.push(startDate); dateFilter += ` AND je.date >= $${params.length}`; }
-  if (endDate)   { params.push(endDate);   dateFilter += ` AND je.date < ($${params.length}::date + 1)`; }
+  if (startDate) { params.push(startDate); dateFilter += ` AND je."postingDate" >= $${params.length}`; }
+  if (endDate)   { params.push(endDate);   dateFilter += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
 
   const rows = await rawQuery<Record<string, unknown>>(
-    `SELECT je.ref AS "journalRef", je.date AS "postingDate",
+    `SELECT je.ref AS "journalRef", je."postingDate",
             spa."whtCategory", cat.name AS "categoryName",
             sup.name AS "supplierName", sup."taxNumber",
             spa.amount::float8 AS amount, spa."whtAmount"::float8 AS "whtAmount",
@@ -699,7 +699,7 @@ export async function loadWhtSummary(companyId: number, entityId: string) {
      WHERE spa."companyId" = $1 AND spa."deletedAt" IS NULL
        AND COALESCE(spa."whtAmount", 0) > 0
        ${dateFilter}
-     ORDER BY je.date DESC
+     ORDER BY je."postingDate" DESC
      LIMIT 5000`,
     params,
   ).catch(() => []);
