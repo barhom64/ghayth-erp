@@ -47,7 +47,7 @@ import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
-import { suggestAssignments } from "../lib/fleet/assignmentSuggestionEngine.js";
+import { suggestAssignments, suggestForLeg } from "../lib/fleet/assignmentSuggestionEngine.js";
 
 export const transportPlanningRouter = Router();
 transportPlanningRouter.use(authMiddleware);
@@ -135,10 +135,10 @@ transportPlanningRouter.post(
 );
 
 const estimateRouteSchema = z.object({
-  originLat: z.coerce.number(),
-  originLng: z.coerce.number(),
-  destinationLat: z.coerce.number(),
-  destinationLng: z.coerce.number(),
+  originLat: z.coerce.number().min(-90).max(90),
+  originLng: z.coerce.number().min(-180).max(180),
+  destinationLat: z.coerce.number().min(-90).max(90),
+  destinationLng: z.coerce.number().min(-180).max(180),
 });
 
 transportPlanningRouter.post(
@@ -680,6 +680,40 @@ transportPlanningRouter.delete(
   },
 );
 
+// ─── Per-leg suggest-assignment ──────────────────────────────────────
+// Routes the AssignmentSuggestionEngine through a leg's criteria
+// (requiredVehicleClass + scheduledStart/End + originLocationId). The
+// SPA itinerary detail uses this for the "اقترح المركبة والسائق"
+// button on each leg in a chained trip.
+
+const legSuggestSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+transportPlanningRouter.post(
+  "/transport/itineraries/:id/legs/:legId/suggest-assignment",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const itineraryId = parseId(req.params.id, "id");
+      const legId = parseId(req.params.legId, "legId");
+      const b = zodParse(legSuggestSchema.safeParse(req.body ?? {}));
+      // Verify the leg belongs to scope + the named itinerary.
+      const [leg] = await rawQuery<{ id: number }>(
+        `SELECT id FROM transport_itinerary_legs
+          WHERE id = $1 AND "itineraryId" = $2 AND "companyId" = $3`,
+        [legId, itineraryId, scope.companyId],
+      );
+      if (!leg) throw new NotFoundError("مرحلة البرنامج غير موجودة");
+      const candidates = await suggestForLeg(scope.companyId, legId, { limit: b.limit });
+      res.json({ data: candidates });
+    } catch (err) {
+      handleRouteError(err, res, "Suggest assignment for leg error:");
+    }
+  },
+);
+
 // ─── Navigation sessions ─────────────────────────────────────────────
 
 async function loadDispatchOrderForDriver(
@@ -758,10 +792,10 @@ transportPlanningRouter.post(
 );
 
 const pingSchema = z.object({
-  lat: z.coerce.number(),
-  lng: z.coerce.number(),
-  speedKmh: z.coerce.number().optional(),
-  heading: z.coerce.number().optional(),
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
+  speedKmh: z.coerce.number().min(0).max(400).optional(),
+  heading: z.coerce.number().min(0).max(360).optional(),
   etaSeconds: z.coerce.number().int().nonnegative().optional(),
   remainingMeters: z.coerce.number().int().nonnegative().optional(),
 });

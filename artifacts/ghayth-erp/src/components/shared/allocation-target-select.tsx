@@ -364,3 +364,42 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
 }
 
 export const EMPTY_ALLOCATION_TARGET: AllocationTargetValue = { target: "none", allocation: {} };
+
+/**
+ * #1715 — build the operational-effect payload (maintenance ticket / fixed-asset
+ * creation / fuel log) from the chosen allocation target. Shared by the expense
+ * AND voucher forms so the mapping can never drift between them. All effects are
+ * gated on their toggle; an unrelated target yields all-undefined (omitted).
+ */
+export function buildOperationalEffectsPayload(t: AllocationTargetValue) {
+  return {
+    maintenanceTicket:
+      t.target === "vehicle_maintenance" || t.target === "property_maintenance"
+        ? {
+            create: true,
+            maintenanceType: t.maintenanceType || undefined,
+            odometer: t.odometer ? Number(t.odometer) : undefined,
+            costBearer: t.costBearer || undefined,
+            existingTicketId: t.existingTicketId ? Number(t.existingTicketId) : undefined,
+          }
+        : undefined,
+    assetCreation:
+      t.target === "fixed_asset" && t.createAsset && t.assetName
+        ? {
+            create: true,
+            name: t.assetName,
+            usefulLifeYears: t.assetUsefulLifeYears ? Number(t.assetUsefulLifeYears) : undefined,
+          }
+        : undefined,
+    fuelLog:
+      t.target === "vehicle" && t.createFuelLog
+        ? {
+            create: true,
+            liters: t.fuelLiters ? Number(t.fuelLiters) : undefined,
+            costPerLiter: t.fuelCostPerLiter ? Number(t.fuelCostPerLiter) : undefined,
+            odometer: t.fuelOdometer ? Number(t.fuelOdometer) : undefined,
+            stationName: t.fuelStation || undefined,
+          }
+        : undefined,
+  };
+}
