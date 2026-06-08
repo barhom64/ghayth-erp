@@ -80,6 +80,7 @@ import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
 import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
 import { transportPlanningRouter } from "./transport-planning.js";
+import { transportIntegrationRouter } from "./transport-integration.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -400,6 +401,11 @@ router.use(requireModule("fleet"), requireGuards("financial"), transportPricingR
 router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRouter);
 // #1812 Planning engine.
 router.use(requireModule("fleet"), requireGuards("financial"), transportPlanningRouter);
+// #1812 integration bridges — pulls bookings FROM umrah groups + lists
+// linked sources that don't yet have transport materialized + iCalendar
+// feed for the central calendar. The user's governing comment: "النقل
+// ليس جزيرة" — this router is the proof.
+router.use(requireModule("fleet"), requireGuards("financial"), transportIntegrationRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);

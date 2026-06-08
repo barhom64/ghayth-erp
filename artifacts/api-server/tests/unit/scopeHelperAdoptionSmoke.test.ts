@@ -127,6 +127,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "transport-pricing.ts",
   "fleet-rules-admin.ts",
   "transport-planning.ts",
+  // transport-integration.ts: #1812 governing comment — pulls bookings
+  // from umrah groups + iCalendar feed. Pure cross-domain reads scoped
+  // on (companyId, sourceTable.id) — buildScopedWhere has no branch
+  // cascade to add for a cross-domain bridge.
+  "transport-integration.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -211,9 +216,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 111,
+      total: 112,
       helperUsers: 36,
-      manualOnly: 72,
+      manualOnly: 73,
     });
   });
 });
