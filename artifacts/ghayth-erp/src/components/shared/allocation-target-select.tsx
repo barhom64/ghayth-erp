@@ -50,6 +50,10 @@ export interface AllocationTargetValue {
   reason?: string;
   // #1715 §5 — link to an existing maintenance ticket instead of creating one.
   existingTicketId?: string;
+  // #1715 — capital purchase: create a NEW fixed asset (depreciated by the engine).
+  createAsset?: boolean;
+  assetName?: string;
+  assetUsefulLifeYears?: string;
 }
 
 const TARGET_OPTIONS: { value: AllocationTarget; label: string }[] = [
@@ -285,14 +289,35 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
       )}
 
       {value.target === "fixed_asset" && (
-        <FormFieldWrapper label="الأصل الثابت">
-          <Select value={value.allocation.assetId ?? ""} onValueChange={(v) => setAlloc({ assetId: v })}>
-            <SelectTrigger><SelectValue placeholder="اختر الأصل" /></SelectTrigger>
-            <SelectContent>
-              {(assetsData?.data ?? []).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name ?? `أصل #${a.id}`}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={value.createAsset ?? false}
+              onChange={(e) => set({ createAsset: e.target.checked })}
+            />
+            شراء أصل جديد (يفتح أصلاً ثابتاً ويبدأ إهلاكه تلقائياً)
+          </label>
+          {value.createAsset ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <FormFieldWrapper label="اسم الأصل *">
+                <Input value={value.assetName ?? ""} onChange={(e) => set({ assetName: e.target.value })} placeholder="مثال: سيارة تويوتا 2026" />
+              </FormFieldWrapper>
+              <FormFieldWrapper label="العمر الإنتاجي (سنوات)">
+                <Input type="number" min={1} value={value.assetUsefulLifeYears ?? ""} onChange={(e) => set({ assetUsefulLifeYears: e.target.value })} placeholder="5" />
+              </FormFieldWrapper>
+            </div>
+          ) : (
+            <FormFieldWrapper label="الأصل الثابت القائم">
+              <Select value={value.allocation.assetId ?? ""} onValueChange={(v) => setAlloc({ assetId: v })}>
+                <SelectTrigger><SelectValue placeholder="اختر الأصل" /></SelectTrigger>
+                <SelectContent>
+                  {(assetsData?.data ?? []).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name ?? `أصل #${a.id}`}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+          )}
+        </div>
       )}
 
       {value.target !== "none" && (

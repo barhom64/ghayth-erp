@@ -116,3 +116,20 @@ describe("applyMaintenanceTicketEffect (#1715 §5)", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("applyAssetCreationEffect (#1715 capital purchase)", () => {
+  it("inserts a fixed asset with cost as both purchaseCost and currentBookValue", async () => {
+    const calls: { text: string; params: unknown[] }[] = [];
+    const client = { query: async (text: string, params?: unknown[]) => { calls.push({ text, params: params ?? [] }); return { rows: [{ id: 5001 }] }; } };
+    const { applyAssetCreationEffect } = await import("../../src/lib/financeOperationalEffect.js");
+    const res = await applyAssetCreationEffect(client, {
+      companyId: 2, journalId: 991010, name: "سيارة تويوتا", cost: 80000, usefulLifeYears: 5, category: "vehicles",
+    });
+    expect(res.assetId).toBe(5001);
+    expect(calls[0].text).toMatch(/INSERT INTO fixed_assets/);
+    // cost ($6) is reused for purchaseCost AND currentBookValue (VALUES $6,$6)
+    expect(calls[0].text).toMatch(/"purchaseCost", "currentBookValue"[\s\S]*\$6, \$6/);
+    expect(calls[0].params).toContain(80000);
+    expect(calls[0].params).toContain("سيارة تويوتا");
+  });
+});

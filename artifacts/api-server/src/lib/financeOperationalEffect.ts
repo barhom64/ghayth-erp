@@ -160,3 +160,48 @@ export async function applyMaintenanceTicketEffect(
 
   return { kind: "none", ticketId: null, action: "none" };
 }
+
+// #1715 (owner acceptance: «شراء مركبة يفتح أصل ومركبة وإهلاك») — a capital
+// purchase expense CREATES a fixed asset, which the depreciation engine then
+// depreciates automatically (no schedule corruption risk: it's a brand-new
+// asset, never a mutation of an existing one). Runs in the JE transaction.
+export interface AssetCreationInput {
+  companyId: number;
+  branchId?: number | null;
+  journalId: number;
+  name: string;
+  cost: number;
+  usefulLifeYears?: number | null;
+  category?: string | null;
+  depreciationMethod?: string | null;
+  salvageValue?: number | null;
+  purchaseDate?: string | null;
+}
+
+export async function applyAssetCreationEffect(
+  client: TxnClient,
+  input: AssetCreationInput,
+): Promise<{ assetId: number }> {
+  const r = await client.query(
+    `INSERT INTO fixed_assets
+       ("companyId", "branchId", name, category, "purchaseDate",
+        "purchaseCost", "currentBookValue", "salvageValue", "usefulLifeYears",
+        "depreciationMethod", status, notes, "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4, COALESCE($5::date, CURRENT_DATE),
+             $6, $6, $7, $8, COALESCE($9, 'straight_line'), 'active', $10, now(), now())
+     RETURNING id`,
+    [
+      input.companyId,
+      input.branchId ?? null,
+      input.name,
+      input.category ?? null,
+      input.purchaseDate ?? null,
+      input.cost,
+      input.salvageValue ?? 0,
+      input.usefulLifeYears ?? null,
+      input.depreciationMethod ?? null,
+      `أُنشئ تلقائياً من مصروف رأسمالي (قيد #${input.journalId})`,
+    ],
+  );
+  return { assetId: r.rows[0].id as number };
+}
