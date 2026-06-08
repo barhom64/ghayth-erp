@@ -46,8 +46,14 @@ const TransportBookingDetail = lazy(() => import("@/pages/fleet/transport-bookin
 const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
 const TransportPriceRules = lazy(() => import("@/pages/fleet/transport-price-rules"));
 const TransportRulesAdmin = lazy(() => import("@/pages/fleet/transport-rules-admin"));
+// #1812 Planning engine — ops dashboard + driver in-app navigation.
 const TransportOpsDashboard = lazy(() => import("@/pages/fleet/transport-ops-dashboard"));
 const MeDriverNavigation = lazy(() => import("@/pages/fleet/me-driver-navigation"));
+// #1812 integration bridges — linked sources view.
+const TransportIntegration = lazy(() => import("@/pages/fleet/transport-integration"));
+// #1812 itineraries — chained-trip programs.
+const TransportItineraries = lazy(() => import("@/pages/fleet/transport-itineraries"));
+const TransportItineraryDetail = lazy(() => import("@/pages/fleet/transport-itinerary-detail"));
 // Unified driver self-service surface (#1354). Replaces /driver-portal/*
 // — drivers log in to the regular ERP, get the `driver` role, and land
 // here as their dashboard (see dashboard.tsx role-based redirect).
@@ -109,7 +115,11 @@ export const fleetRoutes = [
   { path: "/fleet/transport/dispatch", component: TransportDispatch },
   { path: "/fleet/transport/price-rules", component: TransportPriceRules },
   { path: "/fleet/transport/rules", component: TransportRulesAdmin },
+  // #1812 ops dashboard + driver navigation surfaces.
   { path: "/fleet/transport/ops-dashboard", component: TransportOpsDashboard },
+  { path: "/fleet/transport/integration", component: TransportIntegration },
+  { path: "/fleet/transport/itineraries", component: TransportItineraries },
+  { path: "/fleet/transport/itineraries/:id", component: TransportItineraryDetail },
   { path: "/me/driver/navigation", component: MeDriverNavigation },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },

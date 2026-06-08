@@ -87,6 +87,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "notification-engine.ts",
   "numbering.ts",
   "obligations.ts",
+  // org.ts: admin CRUD for the operational enterprise model (#1799 §B —
+  // legal_entities, positions, teams, committees, supervision_lines,
+  // approval_authorities). Tight (companyId = $1) scoping is correct here:
+  // every list/write is per-company by design and templates (companyId
+  // IS NULL for positions) are read-only system rows.
+  "org.ts",
   "pdpl.ts",
   "permissions.ts",
   // parties.ts: master-data registry — point lookups by (companyId, entityTable,
@@ -125,8 +131,18 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // / serviceType / status / date window) — buildScopedWhere has no
   // branch cascade to add.
   "transport-pricing.ts",
-  "fleet-rules-admin.ts",
+  // transport-planning.ts: #1812 planning engine — assignment suggestion,
+  // ops dashboard, itineraries, driver navigation sessions. All queries
+  // are scoped on (companyId, id/dispatchOrderId/…) — buildScopedWhere
+  // has no branch cascade to add.
   "transport-planning.ts",
+  // transport-integration.ts: #1812 governing comment — pulls bookings
+  // from umrah groups + iCalendar feed. Pure cross-domain reads scoped
+  // on (companyId, sourceTable.id) — buildScopedWhere has no branch
+  // cascade to add for a cross-domain bridge.
+  "transport-integration.ts",
+  // fleet-rules-admin.ts: admin CRUD for fleet_expense_rules + transport_intake_rules.
+  "fleet-rules-admin.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -211,9 +227,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 111,
+      total: 113,
       helperUsers: 36,
-      manualOnly: 72,
+      manualOnly: 74,
     });
   });
 });

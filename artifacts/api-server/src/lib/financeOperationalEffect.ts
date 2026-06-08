@@ -38,48 +38,81 @@ export interface MaintenanceTicketInput {
   costBearer?: string | null;
   performedBy?: string | null;
   description?: string | null;
+  /**
+   * #1715 §5 — "إنشاء تذكرة أو ربط بتذكرة قائمة". When set, link the expense to
+   * this EXISTING ticket (fleet_maintenance.id for vehicle / maintenance_requests.id
+   * for property) instead of creating a new one. action === "none" signals the
+   * id did not match a ticket for this company, so the caller must reject.
+   */
+  existingTicketId?: number | null;
 }
 
 export interface MaintenanceTicketResult {
   kind: "vehicle_maintenance" | "property_maintenance" | "none";
   ticketId: number | null;
+  action: "created" | "linked" | "none";
 }
 
 /**
- * Create the maintenance ticket for a maintenance-tagged expense and link it
- * back to the posted JE. Vehicle → fleet_maintenance (+ odometer bump on the
- * vehicle). Property → maintenance_requests. Returns {kind:"none"} when the
- * target's key dimension is missing (caller already validated, but we stay
- * defensive). Must run inside the JE transaction.
+ * Create OR link the maintenance ticket for a maintenance-tagged expense and
+ * point it at the posted JE. Vehicle → fleet_maintenance (+ odometer bump on
+ * the vehicle). Property → maintenance_requests. With existingTicketId set, it
+ * links the existing ticket; action === "none" + ticketId null means either the
+ * key dimension was missing or the existing id was not found (caller rejects on
+ * the latter). Must run inside the JE transaction.
  */
 export async function applyMaintenanceTicketEffect(
   client: TxnClient,
   input: MaintenanceTicketInput,
 ): Promise<MaintenanceTicketResult> {
-  if (input.target === "vehicle" && input.vehicleId) {
+  if (input.target === "vehicle" && (input.vehicleId || input.existingTicketId)) {
     const liability = input.costBearer && VEHICLE_LIABILITY.includes(input.costBearer)
       ? input.costBearer
       : null;
-    const r = await client.query(
-      `INSERT INTO fleet_maintenance
-         ("companyId", "vehicleId", type, description, cost, "mileageAtService",
-          "serviceDate", status, "linkedExpenseId", "liabilityParty", "performedBy", "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, 'completed', $7, $8, $9, now())
-       RETURNING id`,
-      [
-        input.companyId,
-        input.vehicleId,
-        input.maintenanceType || "general",
-        input.description ?? null,
-        input.cost,
-        input.odometer ?? null,
-        input.journalId,
-        liability,
-        input.performedBy ?? null,
-      ],
-    );
+    let ticketId: number | null = null;
+    let action: "created" | "linked" | "none" = "none";
+
+    if (input.existingTicketId) {
+      // Link mode — attach this expense to an operator-chosen existing ticket.
+      const u = await client.query(
+        `UPDATE fleet_maintenance
+            SET "linkedExpenseId" = $2,
+                cost = $3,
+                "mileageAtService" = COALESCE($4, "mileageAtService"),
+                "liabilityParty" = COALESCE($5, "liabilityParty")
+          WHERE id = $1 AND "companyId" = $6 AND "deletedAt" IS NULL
+          RETURNING id, "vehicleId"`,
+        [input.existingTicketId, input.journalId, input.cost, input.odometer ?? null, liability, input.companyId],
+      );
+      if (u.rows.length === 0) return { kind: "none", ticketId: null, action: "none" };
+      ticketId = u.rows[0].id as number;
+      action = "linked";
+      input = { ...input, vehicleId: input.vehicleId ?? (u.rows[0].vehicleId as number | null) };
+    } else {
+      const r = await client.query(
+        `INSERT INTO fleet_maintenance
+           ("companyId", "vehicleId", type, description, cost, "mileageAtService",
+            "serviceDate", status, "linkedExpenseId", "liabilityParty", "performedBy", "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, 'completed', $7, $8, $9, now())
+         RETURNING id`,
+        [
+          input.companyId,
+          input.vehicleId,
+          input.maintenanceType || "general",
+          input.description ?? null,
+          input.cost,
+          input.odometer ?? null,
+          input.journalId,
+          liability,
+          input.performedBy ?? null,
+        ],
+      );
+      ticketId = r.rows[0].id as number;
+      action = "created";
+    }
+
     // Reflect the latest odometer reading on the vehicle record.
-    if (input.odometer != null) {
+    if (input.odometer != null && input.vehicleId) {
       await client.query(
         `UPDATE fleet_vehicles
             SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $2)
@@ -87,10 +120,24 @@ export async function applyMaintenanceTicketEffect(
         [input.vehicleId, input.odometer, input.companyId],
       );
     }
-    return { kind: "vehicle_maintenance", ticketId: r.rows[0].id as number };
+    return { kind: "vehicle_maintenance", ticketId, action };
   }
 
-  if (input.target === "property" && (input.unitId || input.propertyId)) {
+  if (input.target === "property" && (input.unitId || input.propertyId || input.existingTicketId)) {
+    if (input.existingTicketId) {
+      const u = await client.query(
+        `UPDATE maintenance_requests
+            SET "linkedExpenseId" = $2,
+                "actualCost" = $3,
+                category = COALESCE($4, category),
+                "costResponsibility" = COALESCE($5, "costResponsibility")
+          WHERE id = $1 AND "companyId" = $6 AND "deletedAt" IS NULL
+          RETURNING id`,
+        [input.existingTicketId, input.journalId, input.cost, input.maintenanceType || null, input.costBearer || null, input.companyId],
+      );
+      if (u.rows.length === 0) return { kind: "none", ticketId: null, action: "none" };
+      return { kind: "property_maintenance", ticketId: u.rows[0].id as number, action: "linked" };
+    }
     const r = await client.query(
       `INSERT INTO maintenance_requests
          ("companyId", "unitId", "contractId", category, description,
@@ -108,8 +155,103 @@ export async function applyMaintenanceTicketEffect(
         input.journalId,
       ],
     );
-    return { kind: "property_maintenance", ticketId: r.rows[0].id as number };
+    return { kind: "property_maintenance", ticketId: r.rows[0].id as number, action: "created" };
   }
 
-  return { kind: "none", ticketId: null };
+  return { kind: "none", ticketId: null, action: "none" };
+}
+
+// #1715 (owner acceptance: «شراء مركبة يفتح أصل ومركبة وإهلاك») — a capital
+// purchase expense CREATES a fixed asset, which the depreciation engine then
+// depreciates automatically (no schedule corruption risk: it's a brand-new
+// asset, never a mutation of an existing one). Runs in the JE transaction.
+export interface AssetCreationInput {
+  companyId: number;
+  branchId?: number | null;
+  journalId: number;
+  name: string;
+  cost: number;
+  usefulLifeYears?: number | null;
+  category?: string | null;
+  depreciationMethod?: string | null;
+  salvageValue?: number | null;
+  purchaseDate?: string | null;
+}
+
+export async function applyAssetCreationEffect(
+  client: TxnClient,
+  input: AssetCreationInput,
+): Promise<{ assetId: number }> {
+  const r = await client.query(
+    `INSERT INTO fixed_assets
+       ("companyId", "branchId", name, category, "purchaseDate",
+        "purchaseCost", "currentBookValue", "salvageValue", "usefulLifeYears",
+        "depreciationMethod", status, notes, "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4, COALESCE($5::date, CURRENT_DATE),
+             $6, $6, $7, $8, COALESCE($9, 'straight_line'), 'active', $10, now(), now())
+     RETURNING id`,
+    [
+      input.companyId,
+      input.branchId ?? null,
+      input.name,
+      input.category ?? null,
+      input.purchaseDate ?? null,
+      input.cost,
+      input.salvageValue ?? 0,
+      input.usefulLifeYears ?? null,
+      input.depreciationMethod ?? null,
+      `أُنشئ تلقائياً من مصروف رأسمالي (قيد #${input.journalId})`,
+    ],
+  );
+  return { assetId: r.rows[0].id as number };
+}
+
+// #1715 (owner acceptance: «وقود مركبة يظهر الممشى واللترات وسعر اللتر») — a
+// vehicle fuel expense CREATES a fuel log linked to the JE and updates the
+// vehicle odometer. fleet_fuel_logs already carries linkedExpenseId (same
+// design as fleet_maintenance). Runs in the JE transaction.
+export interface FuelLogInput {
+  companyId: number;
+  branchId?: number | null;
+  journalId: number;
+  vehicleId: number;
+  totalCost: number;
+  liters?: number | null;
+  costPerLiter?: number | null;
+  mileageAtFuel?: number | null;
+  stationName?: string | null;
+  fuelDate?: string | null;
+}
+
+export async function applyFuelLogEffect(
+  client: TxnClient,
+  input: FuelLogInput,
+): Promise<{ fuelLogId: number }> {
+  const r = await client.query(
+    `INSERT INTO fleet_fuel_logs
+       ("companyId", "vehicleId", "fuelDate", liters, "costPerLiter", "totalCost",
+        "mileageAtFuel", "stationName", "linkedExpenseId", "createdAt")
+     VALUES ($1, $2, COALESCE($3::date, CURRENT_DATE), $4, $5, $6, $7, $8, $9, now())
+     RETURNING id`,
+    [
+      input.companyId,
+      input.vehicleId,
+      input.fuelDate ?? null,
+      input.liters ?? null,
+      input.costPerLiter ?? null,
+      input.totalCost,
+      input.mileageAtFuel ?? null,
+      input.stationName ?? null,
+      input.journalId,
+    ],
+  );
+  if (input.mileageAtFuel != null) {
+    await client.query(
+      `UPDATE fleet_vehicles
+          SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $2)
+        WHERE id = $1 AND "companyId" = $3`,
+      [input.vehicleId, input.mileageAtFuel, input.companyId],
+    );
+  }
+  return { fuelLogId: r.rows[0].id as number };
 }

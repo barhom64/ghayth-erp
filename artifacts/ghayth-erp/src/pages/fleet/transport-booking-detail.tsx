@@ -49,6 +49,9 @@ interface BookingDetail {
   hotelName: string | null;
   hotelLocation: string | null;
   beneficiaryType: string | null;
+  contractId: number | null;
+  projectId: number | null;
+  waqfId: number | null;
   status: string;
   notes: string | null;
   createdAt: string;
@@ -246,6 +249,48 @@ export default function TransportBookingDetail() {
         </div>
       }
     >
+      {/* #1812 linked-source banner — proves the booking isn't an
+          island. Surfaces the source entity (umrah group, contract,
+          project, waqf) and lets the operator jump back to it. */}
+      {(b.umrahGroupId || b.contractId || b.projectId || b.waqfId || b.customerId || b.bookingSource !== "manual_entry") && (
+        <Card className="mb-4 border-status-info-foreground/30 bg-status-info-surface/40">
+          <CardContent className="p-3 flex items-center gap-3 flex-wrap text-xs">
+            <Badge variant="outline" className="bg-status-info-surface">
+              مصدر: {SOURCE_LABEL[b.bookingSource] ?? b.bookingSource}
+            </Badge>
+            {b.umrahGroupId && (
+              <Link href={`/umrah/groups/${b.umrahGroupId}`}>
+                <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
+                  <Users className="h-3 w-3" />مجموعة عمرة #{b.umrahGroupId}
+                </a>
+              </Link>
+            )}
+            {b.contractId && (
+              <span className="inline-flex items-center gap-1 text-status-info-foreground">
+                <Calendar className="h-3 w-3" />عقد #{b.contractId}
+              </span>
+            )}
+            {b.projectId && (
+              <span className="inline-flex items-center gap-1 text-status-info-foreground">
+                مشروع #{b.projectId}
+              </span>
+            )}
+            {b.waqfId && (
+              <span className="inline-flex items-center gap-1 text-status-info-foreground">
+                وقف #{b.waqfId}
+              </span>
+            )}
+            {b.customerId && (
+              <Link href={`/clients/${b.customerId}`}>
+                <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
+                  <User className="h-3 w-3" />عميل #{b.customerId}
+                </a>
+              </Link>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">

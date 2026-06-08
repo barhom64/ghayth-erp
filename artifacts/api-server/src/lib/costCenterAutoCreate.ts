@@ -45,7 +45,9 @@ export type CostCenterEntityType =
   | "project"
   | "contract"
   | "vehicle"
-  | "department";
+  | "department"
+  | "property"
+  | "unit";
 
 interface AutoCreateOptions {
   /**
@@ -89,6 +91,8 @@ const PREFIX_BY_TYPE: Record<CostCenterEntityType, string> = {
   contract:   "CT",
   vehicle:    "V",
   department: "D",
+  property:   "PR",
+  unit:       "UN",
 };
 
 const REASON_BY_TYPE: Record<CostCenterEntityType, string> = {
@@ -97,6 +101,8 @@ const REASON_BY_TYPE: Record<CostCenterEntityType, string> = {
   contract:   "auto-created on contract insert",
   vehicle:    "auto-created on vehicle insert",
   department: "auto-created on department insert",
+  property:   "auto-created on property insert",
+  unit:       "auto-created on unit insert",
 };
 
 /**
