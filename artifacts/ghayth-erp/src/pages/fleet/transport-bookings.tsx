@@ -169,6 +169,16 @@ export default function TransportBookingsList() {
               <Calendar className="h-4 w-4 me-1" />لوحة التوزيع
             </Button>
           </Link>
+          <Link href="/fleet/transport/price-rules">
+            <Button variant="outline" size="sm">
+              <Clipboard className="h-4 w-4 me-1" />قواعد التسعير
+            </Button>
+          </Link>
+          <Link href="/fleet/transport/rules">
+            <Button variant="outline" size="sm">
+              <Clipboard className="h-4 w-4 me-1" />قواعد العمليات
+            </Button>
+          </Link>
           <Link href="/fleet/transport/bookings/create">
             <GuardedButton perm="fleet.bookings:create" size="sm">
               <Plus className="h-4 w-4 me-1" />حجز جديد
