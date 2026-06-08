@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PrintButton } from "@/components/shared/print-button";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { CargoTimeline } from "@/components/shared/cargo-timeline";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 
 interface ManifestDetail {
@@ -297,6 +298,14 @@ export default function CargoDetail() {
           />
         </CardContent>
       </Card>
+
+      {/* #1733 Comment 6 — operational timeline.
+          Consumes /cargo/manifests/:id/timeline (audit_logs + event_logs
+          + billing-candidate events). Renders chronological per-event
+          strip with Arabic labels + status-change badges. */}
+      <div className="mt-4">
+        <CargoTimeline manifestId={m.id} />
+      </div>
 
       {m.notes && (
         <Card className="mt-4">
