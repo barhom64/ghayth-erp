@@ -10,6 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
+import { resolveAttendancePolicy } from "../lib/attendancePolicyEngine.js";
 import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { resolveRequester } from "../lib/rbac/selfApprovalCreators.js";
@@ -670,8 +671,37 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
        FROM attendance_policies WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    const gpsRadius = Number(policy?.gpsRadiusMeters ?? 500);
-    const lateThreshold = Number(policy?.lateThresholdMinutes ?? 15);
+    // HR-003 / #1799 priority #6 wiring — overlay the company-default
+    // policy with the per-category resolution. The engine returns
+    // `autoDeductionEnabled = false` for managers/executives so the
+    // late-deduction + violation INSERTs below are SKIPPED for them,
+    // even though we still RECORD the attendance row (we just don't
+    // turn lateness into money). NULL categoryKey ⇒ engine returns
+    // the legacy company-default values unchanged, so this is fully
+    // backward-compatible for any assignment that hasn't been
+    // categorized yet.
+    const resolvedPolicy = scope.activeAssignmentId
+      ? await resolveAttendancePolicy({
+          companyId: scope.companyId,
+          assignmentId: scope.activeAssignmentId,
+        }).catch((e) => { logger.error(e, "attendance policy resolution failed — falling back to company default"); return null; })
+      : null;
+    // HR-003 — apply resolved per-category overrides on top of the
+    // company default. The engine returns numbers for both fields (it
+    // falls back to company default ⇒ 500/15 internally), so we use
+    // them verbatim when present.
+    const gpsRadius = resolvedPolicy
+      ? resolvedPolicy.gpsRadiusMeters
+      : Number(policy?.gpsRadiusMeters ?? 500);
+    const lateThreshold = resolvedPolicy
+      ? resolvedPolicy.lateThresholdMinutes
+      : Number(policy?.lateThresholdMinutes ?? 15);
+    // The exempt flag — manager/executive categories have this set to
+    // FALSE in the engine (autoDeductionEnabled = false). Workers and
+    // drivers stay TRUE. NULL category ⇒ TRUE (legacy behavior).
+    const autoDeductionEnabled = resolvedPolicy
+      ? resolvedPolicy.autoDeductionEnabled
+      : true;
 
     if (!isRemoteShift && lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
       distanceMeters = Math.round(
@@ -722,7 +752,15 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     }
 
     // ── Step 9: Check policy threshold — after holiday/status resolution ──
-    const exceedsThreshold = isLate && lateMinutes > lateThreshold && !publicHoliday && isWorkDay;
+    // HR-003 / #1799 priority #6 — the exempt flag on the resolved
+    // policy (managers/executives) collapses `exceedsThreshold` to
+    // false BEFORE any deduction or violation INSERTs fire. The
+    // attendance row itself is still recorded (with lateMinutes!),
+    // so managers still show up in late-arrival reports — we just
+    // don't turn lateness into automatic money. This implements the
+    // #1799 §C rule «المدراء لا يعاملون مثل السائق أو العامل».
+    const exceedsThreshold =
+      isLate && lateMinutes > lateThreshold && !publicHoliday && isWorkDay && autoDeductionEnabled;
 
     // ── Step 10: Calculate deduction ──
     let deductionAmount = 0;
