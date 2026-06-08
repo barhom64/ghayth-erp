@@ -209,6 +209,32 @@ const createVoucherSchema = z.object({
   allocations: z.array(voucherAllocationSchema).optional(),
   // #1715: master «ربط السند بـ» allocation dims (AllocationTargetSelect).
   lineAllocation: lineAllocationSchema,
+  // #1715 (owner gap-closure) — a سند صرف can pay for the same operations as an
+  // expense (maintenance / fuel / asset purchase), so it must fire the SAME
+  // operational effects. Shapes mirror the expense schema; all gated on create.
+  maintenanceTicket: z.object({
+    create: z.boolean().optional(),
+    maintenanceType: z.string().optional(),
+    odometer: z.coerce.number().optional(),
+    costBearer: z.string().optional(),
+    performedBy: z.string().optional(),
+    existingTicketId: z.coerce.number().int().positive().optional(),
+  }).optional(),
+  assetCreation: z.object({
+    create: z.boolean().optional(),
+    name: z.string().optional(),
+    usefulLifeYears: z.coerce.number().int().positive().optional(),
+    category: z.string().optional(),
+    depreciationMethod: z.string().optional(),
+    salvageValue: z.coerce.number().optional(),
+  }).optional(),
+  fuelLog: z.object({
+    create: z.boolean().optional(),
+    liters: z.coerce.number().optional(),
+    costPerLiter: z.coerce.number().optional(),
+    odometer: z.coerce.number().optional(),
+    stationName: z.string().optional(),
+  }).optional(),
 });
 
 const createSalaryAdvanceSchema = z.object({
@@ -1274,6 +1300,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       vatRate: rawVatRate, vatAmount: rawVatAmount,
       beneficiaryType, entitlementType, branchId, departmentId,
       autoDescription, operationType, allocations, lineAllocation,
+      maintenanceTicket, assetCreation, fuelLog, date: voucherDate,
     } = b;
 
     // C4 + C5 — allocations tie this voucher to specific AP obligations
@@ -1581,13 +1608,79 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // forever. financialEngine.postJournalEntry's internal
     // withTransaction joins this outer one reentrantly via SAVEPOINT
     // (rawdb.ts:108).
-    const { journalId, alreadyExists } = await withTransaction(async () => {
+    const { journalId, alreadyExists } = await withTransaction(async (client) => {
       const posted = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines, deferBalances: true });
 
       await rawExecute(
         `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
         [method ?? "cash", reference ?? null, attachmentUrl ?? null, attachmentType ?? null, relatedEntityType ?? null, relatedEntityId ?? null, operationType ?? type, departmentId ?? null, posted.journalId, scope.companyId]
       );
+
+      // #1715 (owner gap-closure) — fire the SAME operational effects an expense
+      // would, so a سند صرف for maintenance/fuel/asset is not «ربط بلا أثر».
+      // Entity ids come from voucherDims (relatedEntity + lineAllocation). All
+      // gated on create + !alreadyExists (idempotent replay never double-fires).
+      if (!posted.alreadyExists) {
+        const vehId = voucherDims.vehicleId != null ? Number(voucherDims.vehicleId) : null;
+        const unitId = voucherDims.unitId != null ? Number(voucherDims.unitId) : null;
+        const propId = voucherDims.propertyId != null ? Number(voucherDims.propertyId) : null;
+        if (maintenanceTicket?.create && (vehId != null || unitId != null || propId != null)) {
+          const { applyMaintenanceTicketEffect } = await import("../lib/financeOperationalEffect.js");
+          const eff = await applyMaintenanceTicketEffect(client, {
+            companyId: scope.companyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            journalId: posted.journalId,
+            target: vehId != null ? "vehicle" : "property",
+            vehicleId: vehId,
+            propertyId: propId,
+            unitId: unitId,
+            contractId: voucherDims.contractId != null ? Number(voucherDims.contractId) : null,
+            cost: baseAmount,
+            maintenanceType: maintenanceTicket.maintenanceType ?? null,
+            odometer: maintenanceTicket.odometer ?? null,
+            costBearer: maintenanceTicket.costBearer ?? null,
+            performedBy: maintenanceTicket.performedBy ?? null,
+            description: finalDescription ?? null,
+            existingTicketId: maintenanceTicket.existingTicketId ?? null,
+          });
+          if (maintenanceTicket.existingTicketId != null && eff.action === "none") {
+            throw new ValidationError("تذكرة الصيانة المحددة غير موجودة", {
+              field: "maintenanceTicket.existingTicketId",
+              fix: "اختر تذكرة صيانة قائمة صحيحة أو أنشئ تذكرة جديدة",
+            });
+          }
+        }
+        if (assetCreation?.create && assetCreation.name) {
+          const { applyAssetCreationEffect } = await import("../lib/financeOperationalEffect.js");
+          await applyAssetCreationEffect(client, {
+            companyId: scope.companyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            journalId: posted.journalId,
+            name: assetCreation.name,
+            cost: baseAmount,
+            usefulLifeYears: assetCreation.usefulLifeYears ?? null,
+            category: assetCreation.category ?? null,
+            depreciationMethod: assetCreation.depreciationMethod ?? null,
+            salvageValue: assetCreation.salvageValue ?? null,
+            purchaseDate: voucherDate ?? null,
+          });
+        }
+        if (fuelLog?.create && vehId != null) {
+          const { applyFuelLogEffect } = await import("../lib/financeOperationalEffect.js");
+          await applyFuelLogEffect(client, {
+            companyId: scope.companyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            journalId: posted.journalId,
+            vehicleId: vehId,
+            totalCost: baseAmount,
+            liters: fuelLog.liters ?? null,
+            costPerLiter: fuelLog.costPerLiter ?? null,
+            mileageAtFuel: fuelLog.odometer ?? null,
+            stationName: fuelLog.stationName ?? null,
+            fuelDate: voucherDate ?? null,
+          });
+        }
+      }
 
       // C4 + C5 — link the voucher to the AP obligation(s) it pays. Skip
       // on idempotent replay (rows already exist from the original insert).
