@@ -435,6 +435,15 @@ export default function ExpensesCreate() {
                 existingTicketId: allocTarget.existingTicketId ? Number(allocTarget.existingTicketId) : undefined,
               }
             : undefined,
+        // #1715 — capital purchase: open a new fixed asset (+ depreciation).
+        assetCreation:
+          allocTarget.target === "fixed_asset" && allocTarget.createAsset && allocTarget.assetName
+            ? {
+                create: true,
+                name: allocTarget.assetName,
+                usefulLifeYears: allocTarget.assetUsefulLifeYears ? Number(allocTarget.assetUsefulLifeYears) : undefined,
+              }
+            : undefined,
       });
       toast({ title: "تم إضافة المصروف بنجاح" });
       clearDraft();
