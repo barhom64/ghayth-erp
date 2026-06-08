@@ -717,6 +717,87 @@ transportBookingsRouter.patch(
           }
         }
 
+        // #1812 operational review — "الحالة لا تتحدث تلقائيًا من
+        // أفعال السائق". When a dispatch lifecycle event fires, cascade
+        // the new state up the chain: booking_line → booking. Without
+        // this cascade the operator has to manually flip both states
+        // from the booking-detail dropdown, defeating the integration.
+        //
+        // Mapping (driver action → derived line + booking statuses):
+        //   accepted   → line: dispatched   , booking: dispatched   (no-op if already past)
+        //   executing  → line: in_progress  , booking: in_progress
+        //   completed  → line: completed    , booking: completed if ALL lines completed
+        //   cancelled  → line: cancelled    , booking: cancelled if ALL lines cancelled
+        //   declined   → line: pending      , booking unchanged (operator picks new driver)
+        const lineStatusMap: Record<string, string | null> = {
+          accepted:   "dispatched",
+          executing:  "in_progress",
+          completed:  "completed",
+          cancelled:  "cancelled",
+          declined:   "pending",
+          notified:   null,   // intermediate driver-side state — no line change
+          closed:     null,   // operational close is a finance handoff; line stays completed
+        };
+        const newLineStatus = lineStatusMap[target];
+        if (newLineStatus) {
+          await tx.query(
+            `UPDATE transport_booking_lines
+                SET status = $1, "updatedAt" = NOW()
+              WHERE id = $2 AND "companyId" = $3`,
+            [newLineStatus, order.bookingLineId, scope.companyId],
+          );
+        }
+
+        // Booking-level cascade: only flip when the change is meaningful.
+        if (target === "executing" || target === "completed" || target === "cancelled") {
+          // Need the booking_id; load it via the line.
+          const lineLookup = await tx.query<{ bookingId: number; bookingStatus: string }>(
+            `SELECT l."bookingId", b.status AS "bookingStatus"
+               FROM transport_booking_lines l
+                    JOIN transport_bookings b ON b.id = l."bookingId"
+              WHERE l.id = $1 AND l."companyId" = $2
+              LIMIT 1`,
+            [order.bookingLineId, scope.companyId],
+          );
+          const lineRow = lineLookup.rows[0];
+          if (lineRow) {
+            let nextBookingStatus: string | null = null;
+            if (target === "executing" && lineRow.bookingStatus !== "in_progress") {
+              nextBookingStatus = "in_progress";
+            }
+            if (target === "completed" || target === "cancelled") {
+              // Aggregate state across all lines — only flip the booking
+              // when ALL lines are in the terminal state (avoids
+              // prematurely marking a 3-leg umrah trip "completed" after
+              // leg 1).
+              const linesAgg = await tx.query<{
+                total: string; matching: string;
+              }>(
+                `SELECT COUNT(*)::text AS total,
+                        COUNT(*) FILTER (WHERE status = $1)::text AS matching
+                   FROM transport_booking_lines
+                  WHERE "bookingId" = $2 AND "companyId" = $3
+                    AND "deletedAt" IS NULL`,
+                [target === "completed" ? "completed" : "cancelled",
+                 lineRow.bookingId, scope.companyId],
+              );
+              const total = Number(linesAgg.rows[0]?.total ?? 0);
+              const matching = Number(linesAgg.rows[0]?.matching ?? 0);
+              if (total > 0 && total === matching) {
+                nextBookingStatus = target === "completed" ? "completed" : "cancelled";
+              }
+            }
+            if (nextBookingStatus && nextBookingStatus !== lineRow.bookingStatus) {
+              await tx.query(
+                `UPDATE transport_bookings
+                    SET status = $1, "updatedAt" = NOW()
+                  WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+                [nextBookingStatus, lineRow.bookingId, scope.companyId],
+              );
+            }
+          }
+        }
+
         return { previous: order.status, next: target };
       });
 
