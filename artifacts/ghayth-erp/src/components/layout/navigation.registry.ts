@@ -240,6 +240,8 @@ export const allNavSections: NavSection[] = [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
         { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
+        { label: "عضويات المؤسسة (فرق/لجان/مشاريع)", path: "/admin/org-memberships", icon: Users2, subKey: "settings" },
+        { label: "أوزان التقييم وترتيب الأداء", path: "/admin/scoring-weights", icon: TrendingUp, subKey: "settings" },
         { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
         { label: "فئات الموظفين وسياسات الحضور", path: "/admin/attendance-categories", icon: Users, subKey: "settings" },
       ]},

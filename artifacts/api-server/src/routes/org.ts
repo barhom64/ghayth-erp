@@ -683,4 +683,382 @@ router.delete("/attendance-policies-per-category/:id", authorize(ADMIN_WRITE), a
   } catch (e) { handleRouteError(e, res, "تعذّر حذف override"); }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// 8. ORG MEMBERSHIP BRIDGES (HR-019) — team / committee / project assignments.
+//    The 3 bridge tables were created in migration 274/276 but had no
+//    way to add/remove memberships from the system. That made §B "look
+//    complete" while being operationally empty — you could create a
+//    committee but not name members.
+//    All endpoints: assignmentId is implicitly per-company (FK chain
+//    through employee_assignments which is companyId-scoped). The bridge
+//    target (team / committee / project) is checked too.
+// ════════════════════════════════════════════════════════════════════════════
+
+async function assertAssignmentInCompany(assignmentId: number, companyId: number): Promise<void> {
+  const [row] = await rawQuery<{ id: number }>(
+    `SELECT id FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
+    [assignmentId, companyId],
+  );
+  if (!row) throw new NotFoundError("تعيين الموظف غير موجود أو لا يخص شركتك");
+}
+
+async function assertEntityInCompany(table: "teams" | "committees" | "projects", id: number, companyId: number): Promise<void> {
+  const [row] = await rawQuery<{ id: number }>(
+    `SELECT id FROM ${table} WHERE id = $1 AND "companyId" = $2`,
+    [id, companyId],
+  );
+  if (!row) throw new NotFoundError(`السجل ${id} غير موجود في ${table} بهذه الشركة`);
+}
+
+// ─── team memberships ──────────────────────────────────────────────────────
+const teamMembershipSchema = z.object({
+  assignmentId: z.number().int().positive(),
+  teamId: z.number().int().positive(),
+  role: z.enum(["member", "lead", "observer"]).optional(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+});
+
+router.get("/teams/:teamId/members", authorize(ADMIN), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const teamId = parseId(req.params.teamId);
+    await assertEntityInCompany("teams", teamId, companyId);
+    const rows = await rawQuery(
+      `SELECT m.id, m."assignmentId", m.role, m."startDate", m."endDate", m."createdAt",
+              e.id AS "employeeId", e.name AS "employeeName",
+              ea."jobTitle"
+         FROM employee_team_memberships m
+         JOIN employee_assignments ea ON ea.id = m."assignmentId"
+         JOIN employees e ON e.id = ea."employeeId"
+        WHERE m."teamId" = $1
+          AND (m."endDate" IS NULL OR m."endDate" >= CURRENT_DATE)
+        ORDER BY m.role DESC, e.name`,
+      [teamId],
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (e) { handleRouteError(e, res, "تعذّر جلب أعضاء الفريق"); }
+});
+
+router.post("/team-memberships", authorize(ADMIN_WRITE), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const body = zodParse(teamMembershipSchema.safeParse(req.body));
+    await assertAssignmentInCompany(body.assignmentId, companyId);
+    await assertEntityInCompany("teams", body.teamId, companyId);
+    const [row] = await rawQuery<any>(
+      `INSERT INTO employee_team_memberships
+        ("assignmentId", "teamId", role, "startDate", "endDate")
+       VALUES ($1, $2, COALESCE($3, 'member'),
+               COALESCE($4::date, CURRENT_DATE), $5)
+       ON CONFLICT ("assignmentId", "teamId") DO UPDATE
+          SET role = EXCLUDED.role,
+              "endDate" = EXCLUDED."endDate"
+       RETURNING *`,
+      [body.assignmentId, body.teamId, body.role ?? null,
+       body.startDate ?? null, body.endDate ?? null],
+    );
+    await audit(req, "upsert", "team_membership", row.id, {
+      teamId: body.teamId, assignmentId: body.assignmentId, role: body.role,
+    });
+    res.status(201).json({ data: row });
+  } catch (e) { handleRouteError(e, res, "تعذّر إضافة عضو الفريق"); }
+});
+
+router.delete("/team-memberships/:id", authorize(ADMIN_WRITE), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const id = parseId(req.params.id);
+    // The bridge is companyId-scoped via the assignment FK chain.
+    const result = await rawExecute(
+      `UPDATE employee_team_memberships m
+          SET "endDate" = CURRENT_DATE
+         FROM employee_assignments ea
+        WHERE m.id = $1 AND m."assignmentId" = ea.id AND ea."companyId" = $2
+          AND (m."endDate" IS NULL OR m."endDate" > CURRENT_DATE)`,
+      [id, companyId],
+    );
+    if (result.affectedRows === 0) throw new NotFoundError("العضوية غير موجودة أو منتهية");
+    await audit(req, "end-date", "team_membership", id, {});
+    res.json({ data: { id, endedAt: todayISO() } });
+  } catch (e) { handleRouteError(e, res, "تعذّر إنهاء عضوية الفريق"); }
+});
+
+// ─── committee memberships ─────────────────────────────────────────────────
+const committeeMembershipSchema = z.object({
+  assignmentId: z.number().int().positive(),
+  committeeId: z.number().int().positive(),
+  role: z.enum(["member", "chair", "secretary"]).optional(),
+  isVoting: z.boolean().optional(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+});
+
+router.get("/committees/:committeeId/members", authorize(ADMIN), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const committeeId = parseId(req.params.committeeId);
+    await assertEntityInCompany("committees", committeeId, companyId);
+    const rows = await rawQuery(
+      `SELECT m.id, m."assignmentId", m.role, m."isVoting",
+              m."startDate", m."endDate", m."createdAt",
+              e.id AS "employeeId", e.name AS "employeeName",
+              ea."jobTitle"
+         FROM employee_committee_memberships m
+         JOIN employee_assignments ea ON ea.id = m."assignmentId"
+         JOIN employees e ON e.id = ea."employeeId"
+        WHERE m."committeeId" = $1
+          AND (m."endDate" IS NULL OR m."endDate" >= CURRENT_DATE)
+        ORDER BY
+          CASE m.role WHEN 'chair' THEN 0 WHEN 'secretary' THEN 1 ELSE 2 END,
+          e.name`,
+      [committeeId],
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (e) { handleRouteError(e, res, "تعذّر جلب أعضاء اللجنة"); }
+});
+
+router.post("/committee-memberships", authorize(ADMIN_WRITE), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const body = zodParse(committeeMembershipSchema.safeParse(req.body));
+    await assertAssignmentInCompany(body.assignmentId, companyId);
+    await assertEntityInCompany("committees", body.committeeId, companyId);
+    const [row] = await rawQuery<any>(
+      `INSERT INTO employee_committee_memberships
+        ("assignmentId", "committeeId", role, "isVoting", "startDate", "endDate")
+       VALUES ($1, $2, COALESCE($3, 'member'), COALESCE($4, TRUE),
+               COALESCE($5::date, CURRENT_DATE), $6)
+       ON CONFLICT ("assignmentId", "committeeId") DO UPDATE
+          SET role = EXCLUDED.role,
+              "isVoting" = EXCLUDED."isVoting",
+              "endDate" = EXCLUDED."endDate"
+       RETURNING *`,
+      [body.assignmentId, body.committeeId, body.role ?? null,
+       body.isVoting ?? null, body.startDate ?? null, body.endDate ?? null],
+    );
+    await audit(req, "upsert", "committee_membership", row.id, {
+      committeeId: body.committeeId, assignmentId: body.assignmentId,
+      role: body.role, isVoting: body.isVoting,
+    });
+    res.status(201).json({ data: row });
+  } catch (e) { handleRouteError(e, res, "تعذّر إضافة عضو اللجنة"); }
+});
+
+router.delete("/committee-memberships/:id", authorize(ADMIN_WRITE), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const id = parseId(req.params.id);
+    const result = await rawExecute(
+      `UPDATE employee_committee_memberships m
+          SET "endDate" = CURRENT_DATE
+         FROM employee_assignments ea
+        WHERE m.id = $1 AND m."assignmentId" = ea.id AND ea."companyId" = $2
+          AND (m."endDate" IS NULL OR m."endDate" > CURRENT_DATE)`,
+      [id, companyId],
+    );
+    if (result.affectedRows === 0) throw new NotFoundError("العضوية غير موجودة أو منتهية");
+    await audit(req, "end-date", "committee_membership", id, {});
+    res.json({ data: { id, endedAt: todayISO() } });
+  } catch (e) { handleRouteError(e, res, "تعذّر إنهاء عضوية اللجنة"); }
+});
+
+// ─── project assignments (with allocation%) ────────────────────────────────
+const projectAssignmentSchema = z.object({
+  assignmentId: z.number().int().positive(),
+  projectId: z.number().int().positive(),
+  role: z.string().max(80).optional(),
+  allocationPercent: z.number().positive().max(100).optional(),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+  costCenterId: z.number().int().positive().optional().nullable(),
+});
+
+router.get("/projects/:projectId/contributors", authorize(ADMIN), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const projectId = parseId(req.params.projectId);
+    await assertEntityInCompany("projects", projectId, companyId);
+    const rows = await rawQuery(
+      `SELECT m.id, m."assignmentId", m.role, m."allocationPercent",
+              m."startDate", m."endDate", m."costCenterId", m."createdAt",
+              e.id AS "employeeId", e.name AS "employeeName",
+              ea."jobTitle"
+         FROM employee_project_assignments m
+         JOIN employee_assignments ea ON ea.id = m."assignmentId"
+         JOIN employees e ON e.id = ea."employeeId"
+        WHERE m."projectId" = $1
+          AND (m."endDate" IS NULL OR m."endDate" >= CURRENT_DATE)
+        ORDER BY m."allocationPercent" DESC, e.name`,
+      [projectId],
+    );
+    // Compute allocation utilisation (sum should typically = 100).
+    const totalAlloc = rows.reduce((acc, r: any) => acc + Number(r.allocationPercent || 0), 0);
+    res.json({ data: rows, total: rows.length, totalAllocationPercent: totalAlloc });
+  } catch (e) { handleRouteError(e, res, "تعذّر جلب فريق المشروع"); }
+});
+
+router.post("/project-assignments", authorize(ADMIN_WRITE), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const body = zodParse(projectAssignmentSchema.safeParse(req.body));
+    await assertAssignmentInCompany(body.assignmentId, companyId);
+    await assertEntityInCompany("projects", body.projectId, companyId);
+    const [row] = await rawQuery<any>(
+      `INSERT INTO employee_project_assignments
+        ("assignmentId", "projectId", role, "allocationPercent",
+         "startDate", "endDate", "costCenterId")
+       VALUES ($1, $2, COALESCE($3, 'contributor'), COALESCE($4, 100),
+               COALESCE($5::date, CURRENT_DATE), $6, $7)
+       RETURNING *`,
+      [body.assignmentId, body.projectId, body.role ?? null,
+       body.allocationPercent ?? null, body.startDate ?? null,
+       body.endDate ?? null, body.costCenterId ?? null],
+    );
+    await audit(req, "create", "project_assignment", row.id, {
+      projectId: body.projectId, assignmentId: body.assignmentId,
+      role: body.role, allocationPercent: body.allocationPercent,
+    });
+    res.status(201).json({ data: row });
+  } catch (e) { handleRouteError(e, res, "تعذّر إضافة عضو فريق المشروع"); }
+});
+
+router.delete("/project-assignments/:id", authorize(ADMIN_WRITE), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const id = parseId(req.params.id);
+    const result = await rawExecute(
+      `UPDATE employee_project_assignments m
+          SET "endDate" = CURRENT_DATE
+         FROM employee_assignments ea
+        WHERE m.id = $1 AND m."assignmentId" = ea.id AND ea."companyId" = $2
+          AND (m."endDate" IS NULL OR m."endDate" > CURRENT_DATE)`,
+      [id, companyId],
+    );
+    if (result.affectedRows === 0) throw new NotFoundError("التعيين غير موجود أو منتهٍ");
+    await audit(req, "end-date", "project_assignment", id, {});
+    res.json({ data: { id, endedAt: todayISO() } });
+  } catch (e) { handleRouteError(e, res, "تعذّر إنهاء تعيين المشروع"); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// 9. SCORING WEIGHTS PER COMPANY (HR-020) + COMPANY-WIDE RANKING.
+//    Closes audit risk R4: weights were hardcoded in the engine.
+// ════════════════════════════════════════════════════════════════════════════
+const scoringWeightsSchema = z.object({
+  categoryKey: z.string().max(40).optional().nullable(),
+  disciplineWeight: z.number().min(0).max(1),
+  activityWeight: z.number().min(0).max(1),
+  productivityWeight: z.number().min(0).max(1),
+  qualityWeight: z.number().min(0).max(1),
+  managerWeight: z.number().min(0).max(1),
+  developmentWeight: z.number().min(0).max(1),
+});
+
+router.get("/scoring-weights", authorize(ADMIN), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const rows = await rawQuery(
+      `SELECT * FROM scoring_weights_per_company
+        WHERE "companyId" = $1
+        ORDER BY "categoryKey" NULLS FIRST`,
+      [companyId],
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (e) { handleRouteError(e, res, "تعذّر جلب أوزان التقييم"); }
+});
+
+router.post("/scoring-weights", authorize(ADMIN_WRITE), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const body = zodParse(scoringWeightsSchema.safeParse(req.body));
+    // Pre-validate the sum so we return a friendlier Arabic error
+    // than what Postgres would emit from the CHECK constraint.
+    const sum = body.disciplineWeight + body.activityWeight + body.productivityWeight
+              + body.qualityWeight + body.managerWeight + body.developmentWeight;
+    if (Math.abs(sum - 1) > 0.001) {
+      throw new ValidationError(`مجموع الأوزان الستة يجب أن يساوي 1.0 (الحالي: ${sum.toFixed(3)})`);
+    }
+    const [row] = await rawQuery<any>(
+      `INSERT INTO scoring_weights_per_company
+        ("companyId", "categoryKey",
+         "disciplineWeight", "activityWeight", "productivityWeight",
+         "qualityWeight", "managerWeight", "developmentWeight",
+         "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+       ON CONFLICT ("companyId", "categoryKey") DO UPDATE
+          SET "disciplineWeight" = EXCLUDED."disciplineWeight",
+              "activityWeight" = EXCLUDED."activityWeight",
+              "productivityWeight" = EXCLUDED."productivityWeight",
+              "qualityWeight" = EXCLUDED."qualityWeight",
+              "managerWeight" = EXCLUDED."managerWeight",
+              "developmentWeight" = EXCLUDED."developmentWeight",
+              "updatedAt" = now()
+       RETURNING *`,
+      [companyId, body.categoryKey ?? null,
+       body.disciplineWeight, body.activityWeight, body.productivityWeight,
+       body.qualityWeight, body.managerWeight, body.developmentWeight],
+    );
+    await audit(req, "upsert", "scoring_weights", row.id, {
+      categoryKey: body.categoryKey ?? null,
+    });
+    res.status(201).json({ data: row });
+  } catch (e) { handleRouteError(e, res, "تعذّر حفظ أوزان التقييم"); }
+});
+
+router.delete("/scoring-weights/:id", authorize(ADMIN_WRITE), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const id = parseId(req.params.id);
+    const result = await rawExecute(
+      `DELETE FROM scoring_weights_per_company WHERE id = $1 AND "companyId" = $2`,
+      [id, companyId],
+    );
+    if (result.affectedRows === 0) throw new NotFoundError("override الأوزان غير موجود");
+    await audit(req, "delete", "scoring_weights", id, {});
+    res.json({ data: { id, deleted: true } });
+  } catch (e) { handleRouteError(e, res, "تعذّر حذف override الأوزان"); }
+});
+
+// Company-wide ranking — top N employees by composite for a given period.
+router.get("/scoring-ranking", authorize(ADMIN), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const scope = (String(req.query.scope || "monthly")) as "weekly" | "monthly" | "quarterly";
+    if (!["weekly", "monthly", "quarterly"].includes(scope)) {
+      throw new ValidationError("scope must be weekly | monthly | quarterly");
+    }
+    const periodKey = req.query.periodKey ? String(req.query.periodKey) : null;
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    // If no periodKey provided, use the most recent one in the company.
+    const [latest] = periodKey ? [{ periodKey }] : await rawQuery<{ periodKey: string }>(
+      `SELECT "periodKey" FROM employee_scores
+        WHERE "companyId" = $1 AND scope = $2
+        ORDER BY "periodKey" DESC LIMIT 1`,
+      [companyId, scope],
+    );
+    if (!latest) {
+      res.json({ data: [], total: 0, scope, periodKey: null,
+                 message: "لا توجد بيانات تقييم بعد — انتظر تشغيل cron التقييم" });
+      return;
+    }
+    const rows = await rawQuery(
+      `SELECT s.id, s."assignmentId", s."employeeId", s."compositeScore", s.trend,
+              s."disciplineScore", s."activityScore", s."productivityScore",
+              s."qualityScore", s."managerScore", s."developmentScore",
+              e.name AS "employeeName",
+              ea."jobTitle",
+              ROW_NUMBER() OVER (ORDER BY s."compositeScore" DESC) AS rank
+         FROM employee_scores s
+         JOIN employees e ON e.id = s."employeeId"
+         JOIN employee_assignments ea ON ea.id = s."assignmentId"
+        WHERE s."companyId" = $1 AND s.scope = $2 AND s."periodKey" = $3
+        ORDER BY s."compositeScore" DESC
+        LIMIT $4`,
+      [companyId, scope, latest.periodKey, limit],
+    );
+    res.json({ data: rows, total: rows.length, scope, periodKey: latest.periodKey });
+  } catch (e) { handleRouteError(e, res, "تعذّر جلب ترتيب التقييم"); }
+});
+
 export default router;

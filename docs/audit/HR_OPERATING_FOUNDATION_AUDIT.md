@@ -347,16 +347,16 @@
 
 | # | المهمة | الحالة | يُغلق |
 |---|---|---|---|
-| HR-015 | Field tracking UI (breadcrumb map + KPIs) + admin UI لفئات الحضور | 🟢 **مُنفّذ في هذا الـ batch** | #7 + R3 + admin gap في #6 |
-| HR-016 | Unified `/my/work-queue` يجمع approvals + tasks + notifications + inbox | 🟢 **مُنفّذ في هذا الـ batch** | #11 + توحيد التكرار |
-| HR-017 | توثيق حدود نماذج العهد الثلاثة (warehouse + employee_assets + subsidiary) | 🟢 **مُنفّذ في هذا الـ batch** | حسم "تكرار العهد" المرصود في §5 |
-| HR-018 | Legacy `custom_roles` → `rbac_roles` migration | 🔴 لاحقًا | R1 + cleanup كبير (7-10 أيام) |
-| HR-019 | Org bridges CRUD (team/committee/project members) | 🔴 لاحقًا | §B 3 bridges + R2 (3-4 أيام) |
-| HR-020 | Scoring weights configurable + company-wide ranking dashboard | 🔴 لاحقًا | R4 (3 أيام) |
-| HR-021 | باقي §K integration tests (GPS pipeline، manual correction، scoring composition) | 🔴 لاحقًا | R5 (4 أيام) |
-| HR-022 | `pnpm db:dump-schema` regen + commit | 🔴 لاحقًا | R6 (1 يوم) |
+| HR-015 | Field tracking UI (breadcrumb map + KPIs) + admin UI لفئات الحضور | 🟢 مُنفّذ | #7 + R3 + admin gap في #6 |
+| HR-016 | Unified `/my/work-queue` يجمع approvals + tasks + notifications + inbox | 🟢 مُنفّذ | #11 + توحيد التكرار |
+| HR-017 | توثيق حدود نماذج العهد الثلاثة (warehouse + employee_assets + subsidiary) | 🟢 مُنفّذ | حسم "تكرار العهد" المرصود في §5 |
+| HR-018 | Legacy `custom_roles` → `rbac_roles` migration + ratchet test | 🟢 **مُنفّذ** — migration 269 موجودة + ratchet test يمنع regression | R1 |
+| HR-019 | Org bridges CRUD (team/committee/project members) | 🟢 **مُنفّذ** — 9 endpoints + `/admin/org-memberships` بـ 3 tabs | §B 3 bridges + R2 |
+| HR-020 | Scoring weights configurable + company-wide ranking dashboard | 🟢 **مُنفّذ** — migration 279 + helper engine + `/admin/scoring-weights` بـ 2 tabs | R4 |
+| HR-021 | باقي §K integration tests (GPS pipeline، manual correction، scoring composition) | 🟡 جزئي — `hrAttendancePolicyByCategory.dynamic.test.ts` يغطي السيناريو الـ core، الباقي مفتوح | R5 |
+| HR-022 | `pnpm db:dump-schema` regen + commit | 🔴 يحتاج DB local | R6 (1 يوم) |
 
-**ما تبقى بعد HR-015/016/017:** 18-22 يوم عمل (HR-018→HR-022).
+**ما تبقى:** HR-021 (جزء من السيناريوهات) + HR-022 (يحتاج db local).
 
 ---
 
