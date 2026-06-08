@@ -316,7 +316,16 @@ transportIntegrationRouter.get(
       const scope = req.scope!;
       const { fromDate, toDate } = req.query as Record<string, string | undefined>;
       const from = fromDate || todayISO();
-      const to = toDate || new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10);
+      // 30 days from todayISO() — string arithmetic keeps the result
+      // in the same calendar timezone as the rest of the system.
+      let to: string;
+      if (toDate) {
+        to = toDate;
+      } else {
+        const [y, m, d] = from.split("-").map(Number);
+        const dt = new Date(Date.UTC(y!, (m! - 1), d! + 30));
+        to = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+      }
 
       const rows = await rawQuery<{
         id: number; bookingNumber: string;
