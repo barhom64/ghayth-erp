@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, getErrorMessage } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -11,21 +12,66 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Switch } from "@/components/ui/switch";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { useAppContext } from "@/contexts/app-context";
+import { ACCOUNT_USAGE_LABELS_AR } from "@/lib/finance-account-usage";
 
 const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 const natureMap: Record<string, string> = { debit: "مدين", credit: "دائن" };
 
+// #1715: account-usage classification + how children inherit it. Mirrors the
+// backend financeAccountClassifier (ChildrenUsagePolicy + accountUsage).
+const USAGE_UNSET = "_unset";
+const CHILDREN_USAGE_POLICY_LABELS: Record<string, string> = {
+  inherit_locked: "إلزام تصنيف الأب (الأبناء يرثون ولا يُغيَّر)",
+  inherit_default: "وراثة افتراضية (قابلة للتغيير)",
+  mixed_allowed: "السماح بتصنيفات مختلطة للأبناء",
+  manual_required: "إلزام اختيار تصنيف يدوي لكل ابن",
+};
+
 const DRAFT_KEY = "finance_accounts_create";
-const INITIAL = { code: "", name: "", nameEn: "", type: "asset", parentCode: "", nature: "debit", allowPosting: true, isAnalytical: false };
+const SHARED = "__shared__";
+const INITIAL = { code: "", name: "", nameEn: "", type: "asset", parentCode: "", nature: "debit", allowPosting: true, isAnalytical: false, branchScope: SHARED, accountUsage: USAGE_UNSET, childrenUsagePolicy: "inherit_default" };
 
 export default function AccountsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { filteredBranches } = useAppContext();
   const createMut = useApiMutation("/finance/accounts", "POST", [["accounts"], ["accounts-list"], ["accounts-posting"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
   const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  // #1715 (Comment #6): the next free code is derived server-side by the
+  // level/step-aware /finance/accounts/next-code endpoint — the single source
+  // of truth so the UI, imports and API all agree (the old client-side
+  // startsWith+max guesser produced wrong codes like "110001" on the 4-digit
+  // SOCPA tree). Re-runs whenever the chosen parent changes.
+  const { data: nextCodeData } = useApiQuery<{ code: string | null }>(
+    ["account-next-code", form.parentCode],
+    `/finance/accounts/next-code?parentCode=${encodeURIComponent(form.parentCode)}`,
+    { enabled: !!form.parentCode },
+  );
+
+  // #1715: when launched from a tree node's «إضافة حساب فرعي» (?parent=CODE),
+  // pre-fill the parent once accounts have loaded. The code is then filled by
+  // the suggestion effect below. Guarded so it runs once.
+  const prefilledRef = useRef(false);
+  useEffect(() => {
+    if (prefilledRef.current) return;
+    const parentParam = new URLSearchParams(window.location.search).get("parent");
+    if (!parentParam || accounts.length === 0) return;
+    prefilledRef.current = true;
+    if (form.parentCode) return; // a restored draft already has a parent — respect it
+    setForm((f) => ({ ...f, parentCode: parentParam }));
+  }, [accounts.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-fill the suggested code only while the field is empty, so it never
+  // clobbers a code the operator typed or a restored draft.
+  useEffect(() => {
+    const suggested = nextCodeData?.code;
+    if (suggested && !form.code) setForm((f) => (f.code ? f : { ...f, code: suggested }));
+  }, [nextCodeData?.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -40,7 +86,15 @@ export default function AccountsCreate() {
       return;
     }
     try {
-      await createMut.mutateAsync(form);
+      const { branchScope, ...rest } = form;
+      const payload = {
+        ...rest,
+        branchId: branchScope && branchScope !== SHARED ? Number(branchScope) : null,
+        // Sentinel → null so the backend treats "unset" as "inherit from
+        // parent / leave unclassified" (it runs the #1715 inheritance logic).
+        accountUsage: rest.accountUsage && rest.accountUsage !== USAGE_UNSET ? rest.accountUsage : null,
+      };
+      await createMut.mutateAsync(payload);
       clearDraft();
       toast({ title: "تم إضافة الحساب" });
       setLocation("/finance/accounts");
@@ -87,6 +141,34 @@ export default function AccountsCreate() {
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {Object.entries(natureMap).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="نطاق الحساب" hint="حساب مشترك يظهر لكل الفروع، أو حساب فرعي خاص بفرع واحد">
+          <Select value={form.branchScope} onValueChange={(v) => setForm((f) => ({ ...f, branchScope: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SHARED}>مشترك على مستوى الشركة</SelectItem>
+              {filteredBranches.map((b) => (
+                <SelectItem key={b.id} value={String(b.id)}>خاص بفرع: {b.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="تصنيف الاستخدام (accountUsage)" hint="يحدّد كيف يُعامَل الحساب في طرق الدفع والترحيل (صندوق/بنك/عهدة/ذمم…). اتركه «يُورَّث من الأب» ليأخذ تصنيف الحساب الأب تلقائياً.">
+          <Select value={form.accountUsage} onValueChange={(v) => setForm((f) => ({ ...f, accountUsage: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={USAGE_UNSET}>— يُورَّث من الأب / غير مصنّف —</SelectItem>
+              {Object.entries(ACCOUNT_USAGE_LABELS_AR).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="سياسة استخدام الأبناء (childrenUsagePolicy)" hint="تحكم في تصنيف الحسابات الفرعية التي تُنشأ تحت هذا الحساب.">
+          <Select value={form.childrenUsagePolicy} onValueChange={(v) => setForm((f) => ({ ...f, childrenUsagePolicy: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(CHILDREN_USAGE_POLICY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
         </FormFieldWrapper>

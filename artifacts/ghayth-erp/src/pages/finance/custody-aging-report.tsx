@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowRight, AlertTriangle, DollarSign, Users, KeyRound, ChevronDown, ChevronRight } from "lucide-react";
 import { formatCurrency, formatNumber , formatDateAr } from "@/lib/formatters";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import {
   PageShell,
   DataTable,
@@ -16,6 +18,7 @@ import {
 export default function CustodyAgingReportPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["custody-aging-report"], "/finance/custodies/report");
   const employees = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(employees);
   const summary = data?.summary || {};
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
 
@@ -32,9 +35,26 @@ export default function CustodyAgingReportPage() {
       ]}
       loading={isLoading}
       actions={
-        <Link href="/finance/custodies">
-          <Button variant="ghost" size="sm"><ArrowRight className="h-4 w-4 me-1" />العهد</Button>
-        </Link>
+        <>
+          <Link href="/finance/custodies">
+            <Button variant="ghost" size="sm"><ArrowRight className="h-4 w-4 me-1" />العهد</Button>
+          </Link>
+          <PrintButton
+            entityType="report_finance_custody_aging"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "تقرير أعمار العهد", total: printRows.length },
+              items: printRows.map((e: any) => ({
+                "الموظف": e.employeeName || "—",
+                "عدد العهد": e.custodyCount ?? 0,
+                "العهد المتأخرة": e.overdueCount ?? 0,
+                "إجمالي المعلّق": Number(e.totalOutstanding || 0),
+                "المبلغ المتأخر": Number(e.overdueAmount || 0),
+              })),
+            })}
+          />
+        </>
       }
     >
       <FinanceTabsNav />
@@ -136,6 +156,7 @@ export default function CustodyAgingReportPage() {
                             <Badge className="bg-status-error-surface text-status-error-foreground text-xs">{c.daysOverdue} يوم</Badge>
                           ) : <span className="text-muted-foreground">-</span> },
                         ]}
+                        onSortedDataChange={setPrintRows}
                         data={emp.custodies}
                         rowClassName={(c: any) => c.isOverdue ? "bg-status-error-surface" : ""}
                         noToolbar

@@ -195,6 +195,17 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], systemCritical: true, displayOrder: 230 },
 
+  // #1733 — Operational-to-finance handoff queue. Lives in finance because
+  // only the accountant materialises a JE from it; transport routes can
+  // ONLY insert (via fleetEngine.createCargoBillingCandidate) and never
+  // see this feature. `approve` = materialise into JE; `reject` = decline
+  // with reason.
+  { key: "finance.transport_billing", parentKey: "finance", moduleKey: "finance",
+    labelAr: "ترشيحات فوترة النقل",
+    availableActions: ["view", "list", "approve", "reject"],
+    availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 231 },
+
   { key: "finance.accounts", parentKey: "finance", moduleKey: "finance", labelAr: "دليل الحسابات والأستاذ",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     systemCritical: true, displayOrder: 240 },
@@ -262,11 +273,21 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "fleet.trips", parentKey: "fleet", moduleKey: "fleet", labelAr: "الرحلات",
     availableActions: ALL_ACTIONS, availableScopes: ["self", "team", "branch", "company"], displayOrder: 320 },
   { key: "fleet.trips.my", parentKey: "fleet.trips", moduleKey: "fleet", labelAr: "رحلاتي",
-    availableActions: ["view", "list", "create"], availableScopes: ["self"],
+    // `update` covers the driver self-actions (start / complete) added in #1354.
+    availableActions: ["view", "list", "create", "update"], availableScopes: ["self"],
     selfService: true, displayOrder: 321 },
   { key: "fleet.maintenance", parentKey: "fleet", moduleKey: "fleet", labelAr: "الصيانة",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], displayOrder: 330 },
+
+  // #1733 follow-up — manager-side admin for the 3-bucket expense
+  // classification rules engine (fleet_expense_rules). Operators
+  // continue to see resolved defaults on fuel / maintenance /
+  // violation forms; this feature controls who can EDIT those rules.
+  { key: "fleet.expenses", parentKey: "fleet", moduleKey: "fleet",
+    labelAr: "قواعد تصنيف النفقات",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    displayOrder: 331 },
 
   // Cargo / freight (#1354 — road-freight manifests). Separate from
   // fleet.trips because cargo dispatch is typically a different role
@@ -275,6 +296,32 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "fleet.cargo", parentKey: "fleet", moduleKey: "fleet", labelAr: "نقل البضائع",
     icon: "Package",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 335 },
+
+  // #1733 Booking + Dispatch layer (Issue Comment 9). Upstream of cargo
+  // and umrah trips — operators take customer requests, create bookings,
+  // dispatch driver/vehicle pairs. Two features so dispatchers can be
+  // gated separately from the broader fleet-coordinator role.
+  { key: "fleet.bookings", parentKey: "fleet", moduleKey: "fleet", labelAr: "حجوزات النقل",
+    icon: "ClipboardList",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 332 },
+  { key: "fleet.dispatch", parentKey: "fleet", moduleKey: "fleet", labelAr: "توزيع وجدولة الرحلات",
+    icon: "Calendar",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 333 },
+  // Self-service driver surface (#1354). Granted to the "driver" role
+  // and only the "driver" role — replaces the standalone driver portal
+  // that lived under a separate JWT type. The driver logs in with the
+  // regular ERP creds, the role grant unlocks these features, and the
+  // operator-side fleet.cargo / fleet.trips features stay invisible
+  // because the role doesn't carry them.
+  { key: "fleet.cargo.my", parentKey: "fleet.cargo", moduleKey: "fleet", labelAr: "بضائعي",
+    // `update` covers the driver cargo-advance action (in_transit / delivered) added in #1354.
+    availableActions: ["view", "list", "update"], availableScopes: ["self"],
+    selfService: true, displayOrder: 336 },
+  { key: "fleet.driver.me", parentKey: "fleet", moduleKey: "fleet", labelAr: "حالتي وملفي (سائق)",
+    icon: "User",
+    availableActions: ["view", "update"], availableScopes: ["self"],
+    selfService: true, displayOrder: 337 },
 
   // Telematics surface (#1354 — CMSV6 / AI MDVR / Sensors). Separate feature
   // keys per concern so the operator can grant "see live map" without

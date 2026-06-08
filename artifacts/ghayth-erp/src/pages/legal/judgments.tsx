@@ -1,6 +1,8 @@
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
@@ -9,6 +11,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,6 +61,7 @@ export default function LegalJudgments() {
     searchFields: ["caseTitle", "verdict", "caseNumber"],
     statusField: "riskLevel",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   return (
     <PageShell
@@ -65,6 +69,30 @@ export default function LegalJudgments() {
       subtitle="سجل الأحكام الصادرة والتقارير المالية"
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الأحكام القضائية" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_legal_judgments"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: {
+              title: "سجل الأحكام القضائية",
+              total: printRows.length,
+              totalAmount,
+              totalPaid,
+            },
+            items: printRows.map((j: any) => ({
+              "القضية": j.caseTitle || j.caseId || "—",
+              "نوع الحكم": j.judgmentType || j.type || "—",
+              "تاريخ الحكم": j.judgmentDate || "—",
+              "المبلغ": j.amount ?? 0,
+              "المدفوع": j.amountPaid ?? 0,
+              "المتبقي": (j.amount ?? 0) - (j.amountPaid ?? 0),
+              "الحالة": j.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <LegalTabsNav />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -72,7 +100,29 @@ export default function LegalJudgments() {
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المدفوع</p><p className="text-xl font-bold text-status-success-foreground">{formatCurrency(Number(totalPaid))}</p></CardContent></Card>
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المتبقي</p><p className="text-xl font-bold text-status-error-foreground">{formatCurrency(Number(outstanding))}</p></CardContent></Card>
       </div>
-      <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
+      <AdvancedFilters
+        config={{ searchPlaceholder: "بحث...", showDateRange: false }}
+        values={filters}
+        onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "caseTitle", label: "القضية" },
+              { key: "caseNumber", label: "رقم القضية" },
+              { key: "judgmentDate", label: "تاريخ الحكم" },
+              { key: "judgmentType", label: "نوع الحكم" },
+              { key: "verdict", label: "الحكم" },
+              { key: "amount", label: "المبلغ" },
+              { key: "paidAmount", label: "المدفوع" },
+              { key: "dueDate", label: "تاريخ الاستحقاق" },
+              { key: "riskLevel", label: "مستوى المخاطرة" },
+            ],
+            "أحكام-قانونية",
+          )
+        }
+        resultCount={filtered.length}
+      />
       <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} onRowClick={(j) => navigate(`/legal/judgments/${j.id}`)} />
     </PageShell>
   );

@@ -18,6 +18,7 @@ import {
   dateColumn,
   statusColumn,
   actionsColumn,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflow-kit";
 import { ProcessStages, EntityTimeline } from "@workspace/entity-kit";
@@ -31,6 +32,8 @@ import { LEAVE_TYPES, APPROVAL_ROLES } from "@/lib/hr-type-maps";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 function LeaveApprovalStages({ leaveId, leaveStatus }: { leaveId: number; leaveStatus: string }) {
   const { data } = useApiQuery<any>(
@@ -112,6 +115,7 @@ export default function LeavesPage() {
     statusField: "status",
     dateField: "startDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const handleApprovalDone = () => {
     refetch();
@@ -228,6 +232,23 @@ export default function LeavesPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "طلبات الإجازات" }]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_leaves"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "طلبات الإجازات", total: printRows.length },
+              items: printRows.map((l: any) => ({
+                "الموظف": l.employeeName || "—",
+                "النوع": l.leaveType || l.type || "—",
+                "من": l.startDate || "—",
+                "إلى": l.endDate || "—",
+                "الأيام": l.days ?? 0,
+                "السبب": l.reason || "—",
+                "الحالة": l.status || "—",
+              })),
+            })}
+          />
           <Link href="/hr/leaves/create">
             <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />طلب إجازة</GuardedButton>
           </Link>
@@ -250,6 +271,22 @@ export default function LeavesPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "employeeName", label: "الموظف" },
+              { key: "leaveTypeName", label: "نوع الإجازة" },
+              { key: "startDate", label: "تاريخ البداية" },
+              { key: "endDate", label: "تاريخ النهاية" },
+              { key: "days", label: "عدد الأيام" },
+              { key: "status", label: "الحالة" },
+              { key: "reason", label: "السبب" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "طلبات-الإجازات",
+          )
+        }
         resultCount={filtered?.length}
       />
 
@@ -275,6 +312,7 @@ export default function LeavesPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         emptyMessage="لا توجد طلبات إجازة"
         noToolbar

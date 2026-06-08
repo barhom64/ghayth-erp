@@ -1,0 +1,293 @@
+import { useMemo, useState } from "react";
+import { Link } from "wouter";
+import { useApiQuery } from "@/lib/api";
+import { exportRowsToCsv } from "@/lib/unified-export";
+import { PageShell } from "@workspace/ui-core";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { Wallet, TrendingUp, AlertTriangle, Users, Download } from "lucide-react";
+import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
+
+// تقرير أرصدة الوكلاء المجمَّع — كل الوكلاء في صف واحد. المحاسب
+// يجاوب: «لمن أرسل تنبيه؟ المتأخر بكم؟ آخر فاتورة متى؟» بدون فتح
+// صفحة كل وكيل.
+
+interface AgentBalanceRow {
+  id: number;
+  name: string;
+  country: string | null;
+  phone: string | null;
+  email: string | null;
+  status: string;
+  nuskAgentNumber: string | null;
+  invoiceCount: number;
+  totalInvoiced: string | number;
+  totalPaid: string | number;
+  outstanding: string | number;
+  lastInvoiceAt: string | null;
+  lastInvoiceRef: string | null;
+  pilgrimCount: number;
+}
+
+interface BalancesResp {
+  data: AgentBalanceRow[];
+  total: number;
+  totals: { agents: number; totalInvoiced: number; totalPaid: number; outstanding: number };
+}
+
+interface SeasonOpt { id: number; title: string }
+
+const STATUS_LABELS: Record<string, string> = {
+  active: "نشط",
+  inactive: "غير نشط",
+  suspended: "موقوف",
+  blocked: "محظور",
+};
+
+export default function UmrahAgentBalancesReport() {
+  const [seasonFilter, setSeasonFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("active");
+  const [onlyOutstanding, setOnlyOutstanding] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const qs = useMemo(() => {
+    const parts: string[] = [];
+    if (seasonFilter !== "all") parts.push(`seasonId=${seasonFilter}`);
+    if (statusFilter !== "all") parts.push(`status=${statusFilter}`);
+    if (onlyOutstanding) parts.push("hasOutstanding=true");
+    return parts.length ? `?${parts.join("&")}` : "";
+  }, [seasonFilter, statusFilter, onlyOutstanding]);
+
+  const { data, isLoading, isError, refetch } = useApiQuery<BalancesResp>(
+    ["umrah-agent-balances", seasonFilter, statusFilter, String(onlyOutstanding)],
+    `/umrah/reports/agent-balances${qs}`,
+  );
+  const { data: seasonsResp } = useApiQuery<{ data: SeasonOpt[] }>(
+    ["umrah-seasons-select"],
+    "/umrah/seasons",
+  );
+
+  const rows = data?.data ?? [];
+  const totals = data?.totals ?? { agents: 0, totalInvoiced: 0, totalPaid: 0, outstanding: 0 };
+  const seasons = seasonsResp?.data ?? [];
+
+  // Client-side search filter — يطبَّق على الصفوف اللي رجعت من الـ server
+  // (الـ server يقدر يعمل filter لكن الـ search box يتكلم بنص حر؛ أبسط
+  // و أسرع نخليه local على الـ payload المحدود مسبقاً).
+  const visibleRows = useMemo(() => {
+    if (!search.trim()) return rows;
+    const q = search.trim().toLowerCase();
+    return rows.filter((r) =>
+      r.name?.toLowerCase().includes(q) ||
+      r.nuskAgentNumber?.toLowerCase().includes(q) ||
+      r.country?.toLowerCase().includes(q),
+    );
+  }, [rows, search]);
+
+  const exportCsv = () => {
+    void exportRowsToCsv({
+      entityType: "report_umrah_agent_balances",
+      title: "أرصدة الوكلاء",
+      rows: visibleRows as unknown as Record<string, unknown>[],
+      columns: [
+        { key: "id",                label: "id" },
+        { key: "name",              label: "name" },
+        { key: "nuskAgentNumber",   label: "nuskAgentNumber" },
+        { key: "country",           label: "country" },
+        { key: "phone",             label: "phone" },
+        { key: "status",            label: "status" },
+        { key: "pilgrimCount",      label: "pilgrimCount" },
+        { key: "invoiceCount",      label: "invoiceCount" },
+        { key: "totalInvoiced",     label: "totalInvoiced" },
+        { key: "totalPaid",         label: "totalPaid" },
+        { key: "outstanding",       label: "outstanding" },
+        { key: "lastInvoiceAt",     label: "lastInvoiceAt" },
+        { key: "lastInvoiceRef",    label: "lastInvoiceRef" },
+      ],
+    }).catch((err) => console.error("[export] failed", err));
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={refetch} />;
+
+  const kpis = [
+    { label: "عدد الوكلاء", value: String(totals.agents), icon: Users, tone: "text-status-info-foreground bg-status-info-surface" },
+    { label: "إجمالي المُفوتر", value: formatCurrency(totals.totalInvoiced), icon: TrendingUp, tone: "text-status-success-foreground bg-status-success-surface" },
+    { label: "إجمالي المُحصَّل", value: formatCurrency(totals.totalPaid), icon: Wallet, tone: "text-status-info-foreground bg-status-info-surface" },
+    { label: "إجمالي المستحق", value: formatCurrency(totals.outstanding), icon: AlertTriangle, tone: totals.outstanding > 0 ? "text-status-error-foreground bg-status-error-surface" : "text-status-neutral-foreground bg-status-neutral-surface" },
+  ];
+
+  return (
+    <PageShell
+      title="أرصدة الوكلاء — تقرير مجمَّع"
+      subtitle="كل وكلاء العمرة في شاشة واحدة مع المستحق والمحصَّل وآخر فاتورة"
+      breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "أرصدة الوكلاء" }]}
+      actions={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={exportCsv}
+          disabled={visibleRows.length === 0}
+          className="gap-1"
+          data-testid="agent-balances-export-csv"
+        >
+          <Download className="h-3 w-3" /> تصدير CSV
+        </Button>
+      }
+    >
+      <UmrahTabsNav />
+
+      <Card>
+        <CardContent className="p-4 flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">الموسم</label>
+            <Select value={seasonFilter} onValueChange={setSeasonFilter}>
+              <SelectTrigger className="w-[200px]" data-testid="agent-balances-filter-season">
+                <SelectValue placeholder="كل المواسم" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل المواسم</SelectItem>
+                {seasons.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">الحالة</label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[160px]" data-testid="agent-balances-filter-status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">الكل</SelectItem>
+                <SelectItem value="active">نشط</SelectItem>
+                <SelectItem value="inactive">غير نشط</SelectItem>
+                <SelectItem value="suspended">موقوف</SelectItem>
+                <SelectItem value="blocked">محظور</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">بحث</label>
+            <Input
+              type="text"
+              placeholder="اسم / رقم نسك / دولة..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-[220px]"
+              data-testid="agent-balances-search"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-xs cursor-pointer">
+            <Checkbox
+              checked={onlyOutstanding}
+              onCheckedChange={(v) => setOnlyOutstanding(!!v)}
+              data-testid="agent-balances-filter-outstanding"
+            />
+            الذين عليهم رصيد فقط
+          </label>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {kpis.map((k) => (
+          <Card key={k.label}>
+            <CardContent className="p-4">
+              <div className={`inline-flex h-8 w-8 items-center justify-center rounded ${k.tone}`}>
+                <k.icon className="h-4 w-4" />
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">{k.label}</p>
+              <p className="text-xl font-bold mt-1" data-testid={`agent-balances-kpi-${k.label}`}>
+                {k.value}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          {visibleRows.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground text-sm" data-testid="agent-balances-empty">
+              لا يوجد وكلاء ضمن الفلتر الحالي.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs" data-testid="agent-balances-table">
+                <thead>
+                  <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
+                    <th className="p-2 font-medium">الوكيل</th>
+                    <th className="p-2 font-medium">رقم نسك</th>
+                    <th className="p-2 font-medium">الدولة</th>
+                    <th className="p-2 font-medium">معتمرون</th>
+                    <th className="p-2 font-medium">فواتير</th>
+                    <th className="p-2 font-medium">المُفوتر</th>
+                    <th className="p-2 font-medium">المُحصَّل</th>
+                    <th className="p-2 font-medium">المستحق</th>
+                    <th className="p-2 font-medium">آخر فاتورة</th>
+                    <th className="p-2 font-medium">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleRows.map((r) => {
+                    const outstanding = Number(r.outstanding ?? 0);
+                    return (
+                      <tr
+                        key={r.id}
+                        className="border-b last:border-b-0 hover:bg-muted/30"
+                        data-testid={`agent-balances-row-${r.id}`}
+                      >
+                        <td className="p-2">
+                          <Link href={`/umrah/agents/${r.id}`} className="text-blue-600 hover:underline font-medium">
+                            {r.name}
+                          </Link>
+                          {r.phone && <p className="text-[10px] text-muted-foreground" dir="ltr">{r.phone}</p>}
+                        </td>
+                        <td className="p-2 font-mono text-[10px]">{r.nuskAgentNumber || "—"}</td>
+                        <td className="p-2">{r.country || "—"}</td>
+                        <td className="p-2">{r.pilgrimCount}</td>
+                        <td className="p-2">{r.invoiceCount}</td>
+                        <td className="p-2 font-semibold">{formatCurrency(Number(r.totalInvoiced))}</td>
+                        <td className="p-2 text-status-success-foreground">{formatCurrency(Number(r.totalPaid))}</td>
+                        <td
+                          className={`p-2 font-bold ${outstanding > 0 ? "text-status-error-foreground" : ""}`}
+                          data-testid={`agent-balances-outstanding-${r.id}`}
+                        >
+                          {formatCurrency(outstanding)}
+                        </td>
+                        <td className="p-2 text-[11px]">
+                          {r.lastInvoiceAt ? (
+                            <>
+                              {formatUmrahDate(r.lastInvoiceAt)}
+                              {r.lastInvoiceRef && (
+                                <p className="text-[10px] font-mono text-muted-foreground">{r.lastInvoiceRef}</p>
+                              )}
+                            </>
+                          ) : "—"}
+                        </td>
+                        <td className="p-2">
+                          <Badge variant="outline" className="text-[10px]">
+                            {STATUS_LABELS[r.status] || r.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </PageShell>
+  );
+}

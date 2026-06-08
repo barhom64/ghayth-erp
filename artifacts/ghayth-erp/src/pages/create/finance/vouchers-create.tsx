@@ -12,6 +12,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
+import { amountTaxSplit } from "@/lib/tax-math";
+import { allowedUsagesForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
+import { EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
+import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
+import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
@@ -32,19 +37,7 @@ interface TaxCodeOption {
   isActive: boolean;
 }
 
-function roundMoney(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function voucherTaxSplit(amount: number, rate: number, inclusive: boolean) {
-  if (!amount || !rate) return { net: amount || 0, vat: 0, gross: amount || 0 };
-  if (inclusive) {
-    const net = roundMoney(amount / (1 + rate / 100));
-    return { net, vat: roundMoney(amount - net), gross: amount };
-  }
-  const vat = roundMoney(amount * (rate / 100));
-  return { net: amount, vat, gross: roundMoney(amount + vat) };
-}
+const voucherTaxSplit = amountTaxSplit;
 
 const OPERATION_TYPES_RECEIPT = [
   { value: "receipt", label: "قبض إيراد عام" },
@@ -102,6 +95,9 @@ export default function VouchersCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/finance/vouchers", "POST", [["vouchers"], ["vouchers-list"]]);
+  // Dedicated dry-run mutation (no cache invalidation — it never commits).
+  const previewMut = useApiMutation<{ lines: Array<{ accountCode: string; debit: number; credit: number }>; totals?: { totalDebit: number; totalCredit: number } }, any>("/finance/vouchers", "POST", []);
+  const [preview, setPreview] = useState<{ lines: Array<{ accountCode: string; debit: number; credit: number }>; totals?: { totalDebit: number; totalCredit: number } } | null>(null);
   const { data: taxCodesData } = useApiQuery<{ data: TaxCodeOption[] }>(
     ["tax-codes", "active"],
     "/finance/tax-codes?active=true",
@@ -143,6 +139,8 @@ export default function VouchersCreate() {
   };
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_vouchers_create", INITIAL_FORM);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  // #1715 PR-4: master «ربط السند بـ» field shared with expenses.
+  const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const operationTypes = form.type === "receipt" ? OPERATION_TYPES_RECEIPT : OPERATION_TYPES_PAYMENT;
@@ -197,14 +195,96 @@ export default function VouchersCreate() {
     }));
   };
 
+  // Single source of truth for the request payload — shared by the real
+  // submit and the dry-run preview so the previewed JE is exactly what posts.
+  const buildVoucherPayload = (extra?: Record<string, unknown>) => ({
+    type: form.type,
+    operationType: form.operationType,
+    amount: Number(form.amount),
+    date: form.date || undefined,
+    description: form.description || undefined,
+    accountCode: form.accountCode || undefined,
+    sourceAccountCode: form.sourceAccountCode || undefined,
+    method: form.method,
+    payee: form.payee || undefined,
+    reference: form.reference || undefined,
+    contractId: form.contractId ? Number(form.contractId) : undefined,
+    invoiceId: form.invoiceId ? Number(form.invoiceId) : undefined,
+    vatRate: form.vatRate ? Number(form.vatRate) : undefined,
+    taxCodeId: form.taxCodeId ? Number(form.taxCodeId) : undefined,
+    taxInclusive: form.taxCodeId ? form.taxInclusive : undefined,
+    attachmentUrl: form.attachmentUrl || undefined,
+    attachmentType: form.attachmentType || undefined,
+    branchId: form.branchId ? Number(form.branchId) : undefined,
+    departmentId: form.departmentId ? Number(form.departmentId) : undefined,
+    costCenter: form.costCenter || undefined,
+    relatedEntityType: form.relatedEntityType || undefined,
+    relatedEntityId: form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
+    relatedEntityName: form.relatedEntityName || undefined,
+    autoDescription: form.autoDescription,
+    beneficiaryType: form.beneficiaryType || undefined,
+    lineAllocation: allocTarget.target !== "none"
+      ? buildAllocationPayload(allocTarget.allocation)
+      : undefined,
+    // #1715 (owner gap-closure) — a سند can pay for maintenance / fuel / asset
+    // just like an expense, so it fires the SAME operational effects.
+    maintenanceTicket:
+      allocTarget.target === "vehicle_maintenance" || allocTarget.target === "property_maintenance"
+        ? {
+            create: true,
+            maintenanceType: allocTarget.maintenanceType || undefined,
+            odometer: allocTarget.odometer ? Number(allocTarget.odometer) : undefined,
+            costBearer: allocTarget.costBearer || undefined,
+            existingTicketId: allocTarget.existingTicketId ? Number(allocTarget.existingTicketId) : undefined,
+          }
+        : undefined,
+    assetCreation:
+      allocTarget.target === "fixed_asset" && allocTarget.createAsset && allocTarget.assetName
+        ? {
+            create: true,
+            name: allocTarget.assetName,
+            usefulLifeYears: allocTarget.assetUsefulLifeYears ? Number(allocTarget.assetUsefulLifeYears) : undefined,
+          }
+        : undefined,
+    fuelLog:
+      allocTarget.target === "vehicle" && allocTarget.createFuelLog
+        ? {
+            create: true,
+            liters: allocTarget.fuelLiters ? Number(allocTarget.fuelLiters) : undefined,
+            costPerLiter: allocTarget.fuelCostPerLiter ? Number(allocTarget.fuelCostPerLiter) : undefined,
+            odometer: allocTarget.fuelOdometer ? Number(allocTarget.fuelOdometer) : undefined,
+            stationName: allocTarget.fuelStation || undefined,
+          }
+        : undefined,
+    ...extra,
+  });
+
+  const validateVoucher = () => validate({
+    type: form.type ? null : "يرجى اختيار نوع السند",
+    amount: !form.amount ? "المبلغ مطلوب" : Number(form.amount) <= 0 ? "المبلغ يجب أن يكون أكبر من صفر" : null,
+    accountCode: form.accountCode ? null : "الحساب المحاسبي مطلوب",
+    sourceAccountCode: !form.sourceAccountCode && !form.accountCode ? "يجب تحديد حساب مدين وحساب دائن" : null,
+    branchId: form.branchId ? null : "الفرع مطلوب",
+  });
+
+  // #1715 §11 — «معاينة القيد قبل الحفظ». Calls the SAME endpoint with
+  // dryRun:true; the backend runs the full posting logic (VAT, WHT, dims)
+  // and returns the JE without committing, so the preview can never diverge
+  // from what actually posts.
+  const handlePreview = async () => {
+    const firstError = validateVoucher();
+    if (firstError) { toast({ variant: "destructive", title: firstError }); return; }
+    try {
+      const res = await previewMut.mutateAsync(buildVoucherPayload({ dryRun: true }));
+      setPreview(res);
+    } catch (err: any) {
+      setPreview(null);
+      toast({ variant: "destructive", title: "تعذّرت المعاينة", description: err?.fix ?? err?.message ?? "" });
+    }
+  };
+
   const handleSubmit = async () => {
-    const firstError = validate({
-      type: form.type ? null : "يرجى اختيار نوع السند",
-      amount: !form.amount ? "المبلغ مطلوب" : Number(form.amount) <= 0 ? "المبلغ يجب أن يكون أكبر من صفر" : null,
-      accountCode: form.accountCode ? null : "الحساب المحاسبي مطلوب",
-      sourceAccountCode: !form.sourceAccountCode && !form.accountCode ? "يجب تحديد حساب مدين وحساب دائن" : null,
-      branchId: form.branchId ? null : "الفرع مطلوب",
-    });
+    const firstError = validateVoucher();
     if (firstError) {
       toast({ variant: "destructive", title: firstError });
       return;
@@ -214,33 +294,7 @@ export default function VouchersCreate() {
       return;
     }
     try {
-      await createMut.mutateAsync({
-        type: form.type,
-        operationType: form.operationType,
-        amount: Number(form.amount),
-        date: form.date || undefined,
-        description: form.description || undefined,
-        accountCode: form.accountCode || undefined,
-        sourceAccountCode: form.sourceAccountCode || undefined,
-        method: form.method,
-        payee: form.payee || undefined,
-        reference: form.reference || undefined,
-        contractId: form.contractId ? Number(form.contractId) : undefined,
-        invoiceId: form.invoiceId ? Number(form.invoiceId) : undefined,
-        vatRate: form.vatRate ? Number(form.vatRate) : undefined,
-        taxCodeId: form.taxCodeId ? Number(form.taxCodeId) : undefined,
-        taxInclusive: form.taxCodeId ? form.taxInclusive : undefined,
-        attachmentUrl: form.attachmentUrl || undefined,
-        attachmentType: form.attachmentType || undefined,
-        branchId: form.branchId ? Number(form.branchId) : undefined,
-        departmentId: form.departmentId ? Number(form.departmentId) : undefined,
-        costCenter: form.costCenter || undefined,
-        relatedEntityType: form.relatedEntityType || undefined,
-        relatedEntityId: form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
-        relatedEntityName: form.relatedEntityName || undefined,
-        autoDescription: form.autoDescription,
-        beneficiaryType: form.beneficiaryType || undefined,
-      });
+      await createMut.mutateAsync(buildVoucherPayload());
       clearDraft();
       toast({ title: "تم إنشاء السند بنجاح" });
       setLocation("/finance/vouchers");
@@ -364,10 +418,27 @@ export default function VouchersCreate() {
             onChange={(v) => setField("sourceAccountCode", v)}
             label="الخزنة / البنك"
             placeholder="اختر الخزنة أو البنك..."
-            filter={(a: any) => a.code?.startsWith("11") || a.code?.startsWith("12")}
+            // #1715: narrow by accountUsage matching the chosen method
+            // (نقدي→صندوق، تحويل→بنك، شيك→بنك/شيكات). Unclassified accounts
+            // fall back to the legacy 11xx/12xx money heuristic. Backend
+            // enforces the same rule.
+            filter={(a: any) => {
+              const allowed = allowedUsagesForPaymentMethod(form.method);
+              if (!allowed) return isMoneyAccount(a);
+              return a.accountUsage
+                ? allowed.includes(a.accountUsage)
+                : isMoneyAccount(a);
+            }}
           />
         </div>
       </div>
+
+      <FinanceOperationContextPanel
+        value={allocTarget}
+        onChange={setAllocTarget}
+        title="ربط السند بـ"
+        description="اختر ما يُربط به السند، وستظهر الحقول المناسبة فقط. الربط يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً."
+      />
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">الطرف الآخر والمرجع</h3>
@@ -544,8 +615,37 @@ export default function VouchersCreate() {
 
       
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
+
+      {/* #1715 §11 — backend dry-run preview of the exact JE that will post. */}
+      {preview && preview.lines?.length > 0 && (
+        <div className="mt-4 border rounded-lg p-3 bg-muted/30">
+          <p className="text-xs font-semibold mb-2">معاينة القيد المُولّد (قبل الحفظ)</p>
+          <table className="w-full text-xs font-mono">
+            <thead>
+              <tr className="text-muted-foreground">
+                <th className="text-start p-1">الحساب</th>
+                <th className="text-end p-1">مدين</th>
+                <th className="text-end p-1">دائن</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.lines.map((jl, i) => (
+                <tr key={i} className="border-t">
+                  <td className="p-1">{jl.accountCode}</td>
+                  <td className="text-end p-1 text-orange-700">{jl.debit ? formatCurrency(jl.debit) : ""}</td>
+                  <td className="text-end p-1 text-emerald-700">{jl.credit ? formatCurrency(jl.credit) : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="flex justify-end gap-3 pt-4">
         <Button variant="outline" onClick={() => setLocation("/finance/vouchers")}>إلغاء</Button>
+        <Button variant="outline" onClick={handlePreview} disabled={!form.amount || previewMut.isPending} rateLimitAware>
+          {previewMut.isPending ? "جارٍ المعاينة..." : "معاينة القيد"}
+        </Button>
         <Button onClick={handleSubmit} disabled={!form.amount || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : `حفظ سند ${form.type === "receipt" ? "القبض" : "الصرف"}`}
         </Button>

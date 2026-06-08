@@ -17,6 +17,7 @@ import {
 import { formatCurrency, formatDateAr, currentYearRiyadh } from "@/lib/formatters";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
 const REASON_LABELS: Record<string, string> = {
@@ -59,14 +60,36 @@ export default function TurnoverReportPage() {
       subtitle="تحليل معدل الدوران الوظيفي والتكاليف المرتبطة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تقرير دوران الموظفين" }]}
       actions={
-        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {[currentYear - 2, currentYear - 1, currentYear].map((y) => (
-              <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_turnover"
+            entityId={String(year)}
+            size="icon"
+            payload={{
+              entity: {
+                title: `تقرير دوران الموظفين — ${year}`,
+                year,
+                totalTerminated: data?.totalTerminated ?? 0,
+                totalActive: data?.totalActive ?? 0,
+                turnoverRate: data?.turnoverRate ?? 0,
+              },
+              items: (data?.byDepartment ?? []).map((d: any) => ({
+                "القسم": d.department || "—",
+                "المغادرون": d.count ?? 0,
+                "الإجمالي": d.total ?? 0,
+                "%": d.rate ? `${Number(d.rate).toFixed(1)}%` : "—",
+              })),
+            }}
+          />
+          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+            <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {[currentYear - 2, currentYear - 1, currentYear].map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       }
     >
       <HrTabsNav />

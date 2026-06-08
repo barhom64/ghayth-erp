@@ -14,6 +14,7 @@ import {
   useFilters,
   applyFilters,
   PageShell,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -30,6 +31,8 @@ import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useAppContext } from "@/contexts/app-context";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 type LifecycleAction = "activate" | "suspend" | "terminate";
 
 const ACTION_CONFIG: Record<LifecycleAction, {
@@ -102,15 +105,18 @@ export default function EmployeeActivationPage() {
 
   const lifecyclePending = patchMutation.isPending || terminateMutation.isPending;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const employees = data?.data || [];
 
   const filtered = applyFilters(employees, filters, {
     searchFields: ["name", "empNumber"],
     statusField: "status",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const active = employees.filter((e: any) => e.status === "active").length;
   const inactive = employees.filter((e: any) => e.status !== "active").length;
@@ -270,6 +276,24 @@ export default function EmployeeActivationPage() {
       title="تفعيل / تعليق الموظفين"
       subtitle="إدارة دورة حياة الموظفين: تفعيل، تعليق، وإنهاء الخدمة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تفعيل / تعليق الموظفين" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_employee_activation"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تفعيل / تعليق الموظفين", total: printRows.length },
+            items: printRows.map((e: any) => ({
+              "الاسم": e.name || "—",
+              "الرقم الوظيفي": e.empNumber || "—",
+              "المسمى": e.position || "—",
+              "الفرع": e.branchName || "—",
+              "تاريخ التعيين": e.hireDate || "—",
+              "الحالة": e.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />
@@ -285,11 +309,28 @@ export default function EmployeeActivationPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "name", label: "الاسم" },
+              { key: "empNumber", label: "الرقم الوظيفي" },
+              { key: "jobTitle", label: "المسمى الوظيفي" },
+              { key: "branchName", label: "الفرع" },
+              { key: "hireDate", label: "تاريخ التعيين" },
+              { key: "phone", label: "الجوال" },
+              { key: "email", label: "البريد" },
+              { key: "status", label: "الحالة" },
+            ],
+            "تنشيط-حسابات-الموظفين",
+          )
+        }
         resultCount={filtered.length}
       />
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا يوجد موظفين"

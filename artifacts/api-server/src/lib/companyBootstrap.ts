@@ -1,6 +1,7 @@
 import { pool } from "./rawdb.js";
 import { logger } from "./logger.js";
 import type pg from "pg";
+import { seedRolesAndGrantsV2, bindUsersFromAssignments, DEFAULT_ROLE_DEFS } from "./rbac/autoMigrate.js";
 
 async function exec(client: pg.PoolClient, sql: string, params: unknown[] = []) {
   return client.query(sql, params);
@@ -139,22 +140,49 @@ async function createDefaultShifts(client: pg.PoolClient, companyId: number, bra
   }
 }
 
+// Canonical approval-chain definitions — the chain types the application
+// passes to initiateApprovalChain() (see ApprovalChainType in businessHelpers).
+// Kept in sync with migration 250 (which backfills existing companies) and
+// guarded by approvalChainCoverage.test.ts so a caller can never pass a
+// chainType that isn't seeded here.
+export const DEFAULT_APPROVAL_CHAINS: Array<{ type: string; name: string; roles: string[] }> = [
+  { type: "leaves",                name: "سلسلة موافقة الإجازات",         roles: ["hr_manager", "general_manager"] },
+  { type: "expenses",              name: "سلسلة موافقة المصروفات",        roles: ["branch_manager", "finance_manager"] },
+  { type: "advances",              name: "سلسلة موافقة السلف والعهد",     roles: ["finance_manager", "general_manager"] },
+  { type: "purchases",             name: "سلسلة موافقة أوامر الشراء",     roles: ["finance_manager", "general_manager"] },
+  { type: "procurement",           name: "سلسلة موافقة طلبات الشراء",     roles: ["finance_manager", "general_manager"] },
+  { type: "letters",               name: "سلسلة موافقة الخطابات الرسمية", roles: ["hr_manager", "general_manager"] },
+  { type: "loans",                 name: "سلسلة موافقة القروض",           roles: ["hr_manager", "finance_manager"] },
+  { type: "overtime",              name: "سلسلة موافقة العمل الإضافي",    roles: ["branch_manager", "hr_manager"] },
+  { type: "exit",                  name: "سلسلة موافقة إنهاء الخدمة",     roles: ["hr_manager", "general_manager"] },
+  { type: "umrah_commission_plan", name: "سلسلة موافقة خطط العمولات",     roles: ["finance_manager", "general_manager"] },
+];
+
 async function createDefaultApprovalChains(client: pg.PoolClient, companyId: number) {
-  const chains = [
-    { name: "سلسلة موافقة الإجازات", type: "leave", steps: ["manager", "hr"] },
-    { name: "سلسلة موافقة المشتريات", type: "purchase", steps: ["manager", "finance_manager", "general_manager"] },
-    { name: "سلسلة موافقة المصروفات", type: "expense", steps: ["manager", "finance_manager"] },
-    { name: "سلسلة موافقة التوظيف", type: "recruitment", steps: ["hr", "general_manager"] },
-    { name: "سلسلة موافقة العقود", type: "contract", steps: ["legal_manager", "general_manager"] },
-  ];
-  for (const chain of chains) {
-    await exec(
-      client,
-      `INSERT INTO system_settings (key, value, "companyId")
-       VALUES ($1, $2, $3)
-       ON CONFLICT DO NOTHING`,
-      [`approval_chain_${chain.type}`, JSON.stringify(chain), companyId]
+  // Seed the REAL tables the engine reads (approval_chains + steps). A prior
+  // version wrote system_settings JSON, which initiateApprovalChain() never
+  // reads — so freshly-bootstrapped companies had no chains and every flow
+  // auto-approved. Idempotent per (company, chainType).
+  for (const chain of DEFAULT_APPROVAL_CHAINS) {
+    const existing = await client.query(
+      `SELECT id FROM approval_chains WHERE "companyId" = $1 AND "chainType" = $2 LIMIT 1`,
+      [companyId, chain.type],
     );
+    if ((existing.rowCount ?? 0) > 0) continue;
+    const inserted = await client.query(
+      `INSERT INTO approval_chains ("companyId", name, "chainType", "minAmount", "maxAmount", "isActive")
+       VALUES ($1, $2, $3, 0, 999999999, true) RETURNING id`,
+      [companyId, chain.name, chain.type],
+    );
+    const chainId = inserted.rows[0].id as number;
+    for (let i = 0; i < chain.roles.length; i++) {
+      await exec(
+        client,
+        `INSERT INTO approval_chain_steps ("chainId", "stepOrder", "requiredRole", "timeoutHours", "autoApproveOnTimeout")
+         VALUES ($1, $2, $3, 48, false)`,
+        [chainId, i + 1, chain.roles[i]],
+      );
+    }
   }
 }
 
@@ -198,9 +226,6 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "1113", name: "العهد النقدية", nameEn: "Cash Custody", type: "asset", level: 4, parentCode: "1110" },
 
   { code: "1120", name: "البنوك", nameEn: "Banks", type: "asset", level: 3, parentCode: "1100", allowPosting: false },
-  { code: "1121", name: "بنك الراجحي", nameEn: "Al-Rajhi Bank", type: "asset", level: 4, parentCode: "1120" },
-  { code: "1122", name: "البنك الأهلي السعودي", nameEn: "SNB", type: "asset", level: 4, parentCode: "1120" },
-  { code: "1123", name: "بنك الرياض", nameEn: "Riyad Bank", type: "asset", level: 4, parentCode: "1120" },
   { code: "1124", name: "بنوك أخرى", nameEn: "Other Banks", type: "asset", level: 4, parentCode: "1120" },
 
   { code: "1130", name: "العملاء (الذمم المدينة)", nameEn: "Accounts Receivable", type: "asset", level: 3, parentCode: "1100", allowPosting: false },
@@ -406,33 +431,13 @@ async function createDefaultChartOfAccounts(client: pg.PoolClient, companyId: nu
 }
 
 async function createDefaultRoles(client: pg.PoolClient, companyId: number) {
-  const roles = [
-    { role: "owner", permissions: ["*"] },
-    { role: "general_manager", permissions: ["dashboard:read", "employees:*", "finance:*", "hr:*", "fleet:*", "property:*", "warehouse:*", "store:*", "operations:*", "bi:*", "reports:*", "governance:*", "legal:*", "crm:*", "marketing:*", "support:*", "documents:*", "requests:*", "comms:*", "settings:read"] },
-    { role: "hr_manager", permissions: ["dashboard:read", "employees:*", "hr:*", "attendance:*", "leaves:*", "payroll:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "finance_manager", permissions: ["dashboard:read", "finance:*", "invoices:*", "expenses:*", "reports:read", "documents:read", "requests:*", "comms:read"] },
-    { role: "fleet_manager", permissions: ["dashboard:read", "fleet:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "property_manager", permissions: ["dashboard:read", "property:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "projects_manager", permissions: ["dashboard:read", "operations:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "warehouse_manager", permissions: ["dashboard:read", "warehouse:*", "store:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "legal_manager", permissions: ["dashboard:read", "legal:*", "governance:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "support_manager", permissions: ["dashboard:read", "support:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "crm_manager", permissions: ["dashboard:read", "crm:*", "marketing:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "bi_manager", permissions: ["dashboard:read", "bi:*", "reports:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "branch_manager", permissions: ["dashboard:read", "employees:read", "attendance:*", "leaves:approve", "reports:read", "documents:read", "requests:*", "comms:read", "support:read"] },
-    { role: "employee", permissions: ["dashboard:read", "attendance:self", "leaves:self", "profile:self", "requests:self", "documents:read", "comms:read"] },
-  ];
-  for (const r of roles) {
-    for (const perm of r.permissions) {
-      await exec(
-        client,
-        `INSERT INTO role_permissions (role, permission, "companyId")
-         VALUES ($1, $2, $3)
-         ON CONFLICT DO NOTHING`,
-        [r.role, perm, companyId]
-      );
-    }
-  }
+  // #1791 — seed RBAC v2 directly (rbac_roles + rbac_role_grants) from the
+  // shared default role definitions, then bind the company's active
+  // employee_assignments (including the creator's owner assignment minted just
+  // above) to their v2 role so login's role-switcher is populated immediately.
+  // No more legacy role_permissions writes.
+  const { roleIdByKey } = await seedRolesAndGrantsV2(client, companyId, DEFAULT_ROLE_DEFS);
+  await bindUsersFromAssignments(client, companyId, roleIdByKey);
 }
 
 async function createDefaultNumberingPrefixes(client: pg.PoolClient, companyId: number) {

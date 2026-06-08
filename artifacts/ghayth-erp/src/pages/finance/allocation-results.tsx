@@ -9,6 +9,8 @@ import { formatNumber, formatDateAr } from "@/lib/formatters";
 import { Eye, AlertCircle, CheckCircle2, Pencil } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface AllocationResult {
   id: number;
@@ -68,10 +70,13 @@ export default function AllocationResultsPage() {
     `/finance/allocation-results${qs ? `?${qs}` : ""}`,
   );
 
+  const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const rows = data?.data ?? [];
 
   const counts = rows.reduce((acc, r) => {
     acc.total += 1;
@@ -167,6 +172,25 @@ export default function AllocationResultsPage() {
         { href: "/finance/accounts", label: "الحسابات" },
         { label: "سجل التوجيه" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_finance_allocation_results"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "سجل توجيه البنود", total: printRows.length },
+            items: printRows.map((r) => ({
+              "المصدر": SOURCE_LABEL[r.sourceTable] || r.sourceTable,
+              "رقم البند": r.sourceLineId,
+              "نوع الوثيقة": r.documentType || "—",
+              "الحساب": r.resolvedAccountCode || "—",
+              "القاعدة": r.ruleId ?? "—",
+              "تاريخ الحل": r.resolvedAt || "—",
+              "الحالة": STATUS_INFO[r.resolutionStatus]?.label || r.resolutionStatus,
+            })),
+          })}
+        />
+      }
     >
       <FinanceTabsNav />
       <AllocationTabsNav />
@@ -253,6 +277,7 @@ export default function AllocationResultsPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               sourceFilter || statusFilter

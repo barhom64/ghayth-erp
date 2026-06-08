@@ -13,6 +13,8 @@ import {
 import { EntityComments } from "@workspace/entity-kit";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,7 +85,11 @@ export default function Tasks() {
     { label: "العنوان", key: "title" },
     { label: "النوع", key: "type" },
     { label: "الأولوية", key: "priority", type: "badge" },
-    { label: "المكلّف", key: "assigneeName" },
+    // assigneeName = the primary; the +N badge comes from assigneeCount
+    // (migration 250) so users can see at-a-glance that a task has a
+    // team rather than a single owner.
+    { label: "المكلّف الرئيسي", key: "assigneeName" },
+    { label: "المنشئ", key: "creatorName" },
     { label: "الموعد", key: "scheduledDate", type: "date" },
     { label: "الحالة", key: "status", type: "status" },
   ];
@@ -124,9 +130,6 @@ export default function Tasks() {
 
   const saving = updateMut.isPending || deleteMut.isPending;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const tasks = asList(tasksResp);
   // Client-side filter mirrors backend so the count chip ("X نتيجة") in
   // AdvancedFilters reflects what's visible; backend already narrowed
@@ -137,6 +140,14 @@ export default function Tasks() {
     dateField: "scheduledDate",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((t: any) => tagFilteredIds.has(t.id)) : preFiltered;
+  // usePrintRows is a hook — it MUST run on every render, so it has to be
+  // called BEFORE the isLoading/isError early returns (Rules of Hooks).
+  // Previously it sat after them, so the hook count changed once data
+  // arrived and React threw "change in the order of Hooks" → blank page.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const startEdit = (task: any) => {
     setEditingId(task.id);
@@ -283,9 +294,26 @@ export default function Tasks() {
         { label: "إدارة المهام" },
       ]}
       actions={
-        <Link href="/tasks/create">
-          <GuardedButton perm="tasks:create" className="gap-2"><Plus className="h-4 w-4" /> مهمة جديدة</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_tasks"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قائمة المهام", total: printRows.length },
+              items: printRows.map((t: any) => ({
+                "العنوان": t.title || t.name || "—",
+                "المسؤول": t.assigneeName || t.assignedToName || "—",
+                "الأولوية": t.priority || "—",
+                "تاريخ الاستحقاق": t.dueDate || "—",
+                "الحالة": t.status || "—",
+              })),
+            })}
+          />
+          <Link href="/tasks/create">
+            <GuardedButton perm="tasks:create" className="gap-2"><Plus className="h-4 w-4" /> مهمة جديدة</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <ProjectsTabsNav />
@@ -345,6 +373,7 @@ export default function Tasks() {
 
       <DataTable
         columns={taskColumns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

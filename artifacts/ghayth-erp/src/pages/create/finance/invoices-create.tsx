@@ -10,6 +10,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
+import { lineTaxSplit } from "@/lib/tax-math";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -29,22 +30,6 @@ interface TaxCode {
   taxType: string;
   isInclusiveDefault?: boolean;
   isActive: boolean;
-}
-
-/**
- * Compute net/vat/gross from a line's quantity × unitPrice + the
- * tax-code's rate, respecting the inclusive/exclusive flag. Mirrors
- * the backend math in computeTaxFromTaxCode (#989).
- */
-function lineTaxSplit(qty: number, unitPrice: number, rate: number, inclusive: boolean) {
-  const amount = roundMoney(qty * unitPrice);
-  if (inclusive) {
-    const net = roundMoney(amount / (1 + rate / 100));
-    const vat = roundMoney(amount - net);
-    return { net, vat, gross: amount };
-  }
-  const vat = roundMoney(amount * (rate / 100));
-  return { net: amount, vat, gross: roundMoney(amount + vat) };
 }
 
 const INVOICE_TYPE_CODES = [
@@ -109,10 +94,24 @@ export default function InvoicesCreate() {
   });
   const [lines, setLines] = useState([{
     description: "", quantity: "1", unitPrice: "",
+    // productId / serviceId — when picked, the line snaps description +
+    // unitPrice to the catalog values, and the backend stamps productId
+    // on invoice_lines (and on journal_lines via the dim payload) so
+    // COGS / inventory reversal works on the credit-memo path.
+    productId: "" as string,
     taxCode: "" as string,        // empty → fall back to header taxCode
     taxInclusive: undefined as boolean | undefined, // empty → fall back to header
     allocation: {} as LineAllocation,
   }]);
+
+  // Load product/service catalog so each line can snap to a real
+  // catalog item (the user's complaint: "بنود المبيعات ليست من
+  // المنتجات او الخدمات"). Falls back to free-text when no match.
+  const { data: productsData } = useApiQuery<{ data: Array<{ id: number; name: string; sku?: string; price?: number; salePrice?: number; type?: string }> }>(
+    ["store-products-active"],
+    "/warehouse/products?limit=500&isActive=true",
+  );
+  const products = productsData?.data ?? [];
 
   // Load all active tax codes (the 5 seeded Saudi defaults + any custom).
   const { data: taxCodesData } = useApiQuery<{ data: TaxCode[] }>(
@@ -145,7 +144,20 @@ export default function InvoicesCreate() {
         notes: copySource.notes || "",
       }));
       if (copySource.lines?.length) {
-        setLines(copySource.lines.map((l: any) => ({ description: l.description || "", quantity: String(l.quantity || 1), unitPrice: String(l.unitPrice || "") })));
+        // Copy-from-invoice must carry every line field the new schema
+        // accepts; dropping productId/taxCode/taxInclusive/allocation
+        // silently re-routes COGS posting, per-line tax, and dim
+        // allocation — which is exactly the behavior #1519 just wired
+        // up. Map the full shape with safe fallbacks.
+        setLines(copySource.lines.map((l: any) => ({
+          description: l.description || "",
+          quantity: String(l.quantity || 1),
+          unitPrice: String(l.unitPrice || ""),
+          productId: l.productId ? String(l.productId) : "",
+          taxCode: l.taxCode || "",
+          taxInclusive: l.taxInclusive,
+          allocation: (l.allocation ?? {}) as LineAllocation,
+        })));
       }
     }
   }, [copySource, copied]);
@@ -153,6 +165,7 @@ export default function InvoicesCreate() {
 
   const addLine = () => setLines([...lines, {
     description: "", quantity: "1", unitPrice: "",
+    productId: "",
     taxCode: "", taxInclusive: undefined,
     allocation: {} as LineAllocation,
   }]);
@@ -223,6 +236,11 @@ export default function InvoicesCreate() {
           quantity: Number(l.quantity),
           unitPrice: Number(l.unitPrice),
           total: Number(l.quantity) * Number(l.unitPrice),
+          // productId on the line → stamped on invoice_lines AND on the
+          // resulting journal_lines dim payload, so the credit-memo
+          // path can reverse inventory/COGS and per-product margin
+          // reports see the revenue.
+          productId: l.productId ? Number(l.productId) : undefined,
           taxCode: l.taxCode || undefined,
           taxInclusive: l.taxInclusive,
           ...buildAllocationPayload(l.allocation ?? {}),
@@ -291,7 +309,7 @@ export default function InvoicesCreate() {
             <SelectTrigger><SelectValue placeholder="اختر رمز الضريبة..." /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">— بدون —</SelectItem>
-              {taxCodes.map((t) => (
+              {taxCodes.filter((t: any) => t.code).map((t) => (
                 <SelectItem key={t.code} value={t.code}>
                   {t.code} ({Number(t.rate).toFixed(0)}%) — {t.name}
                 </SelectItem>
@@ -346,7 +364,42 @@ export default function InvoicesCreate() {
           return (
             <div key={idx} className="border border-border rounded-md p-3 mt-3 bg-card">
               <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-12 md:col-span-4">
+                <div className="col-span-12 md:col-span-3">
+                  <Label className="text-xs">المنتج / الخدمة</Label>
+                  <Select
+                    value={line.productId || "_free"}
+                    onValueChange={(v) => {
+                      if (v === "_free") {
+                        updateLine(idx, "productId", "");
+                        return;
+                      }
+                      const p = products.find((x) => String(x.id) === v);
+                      if (p) {
+                        // Snap description + unitPrice to the catalog
+                        // item; operator can still tweak afterwards.
+                        const updated = [...lines];
+                        updated[idx] = {
+                          ...updated[idx],
+                          productId: v,
+                          description: p.name + (p.sku ? ` (${p.sku})` : ""),
+                          unitPrice: String(p.salePrice ?? p.price ?? updated[idx].unitPrice ?? ""),
+                        };
+                        setLines(updated);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-9"><SelectValue placeholder="منتج / خدمة" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_free">— بند حر —</SelectItem>
+                      {products.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.name}{p.sku ? ` · ${p.sku}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-12 md:col-span-3">
                   <Label className="text-xs">الوصف</Label>
                   <Input value={line.description}
                     onChange={(e) => updateLine(idx, "description", e.target.value)} />
@@ -370,7 +423,7 @@ export default function InvoicesCreate() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_inherit">↓ يرث من الترويسة ({form.taxCode || "بدون"})</SelectItem>
-                      {taxCodes.map((t) => (
+                      {taxCodes.filter((t: any) => t.code).map((t) => (
                         <SelectItem key={t.code} value={t.code}>
                           {t.code} ({Number(t.rate).toFixed(0)}%)
                         </SelectItem>

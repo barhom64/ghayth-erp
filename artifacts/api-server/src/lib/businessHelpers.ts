@@ -7,6 +7,12 @@ import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
 import { logger } from "./logger.js";
 import { FINANCE_ROLES, OWNER_GM_ROLES } from "./rbacCatalog.js";
 import { config } from "./config.js";
+import {
+  enrichJournalLines,
+  inferHeaderDimensionsFromSource,
+  applyHeaderDimensionsToLines,
+  substituteSubsidiaryAccountCodes,
+} from "./journalLineDimensionalEnricher.js";
 
 // Task #428 — these "what's the current date/period/year?" helpers are now
 // timezone-aware (Asia/Riyadh by default). Pre-Task #428 they all delegated
@@ -564,6 +570,48 @@ export async function createJournalEntry(params: {
       ]
     );
     const jId = headerResult.rows[0].id as number;
+
+    // Step 1 — source-context inference. ONE round-trip per JE that
+    // pulls common entity ids (clientId, vendorId, umrahAgentId, ...)
+    // from the source row and propagates them to every line that
+    // doesn't already carry them. Skipped when sourceType is unknown
+    // — the result is `{}` and propagation is a no-op.
+    //
+    // Why this matters: an invoice JE doesn't need to remember to set
+    // clientId on every line — the enricher reads invoices.clientId
+    // once and propagates. Same for vendor bills, umrah invoices,
+    // expenses, custodies, fleet maintenance, etc.
+    const headerDims = await inferHeaderDimensionsFromSource(
+      client, params.companyId, params.sourceType ?? null, params.sourceId ?? null,
+    );
+    applyHeaderDimensionsToLines(params.lines, headerDims);
+
+    // Step 2 — per-line cost-centre resolution. After the source-side
+    // propagation, each line has whatever entity dims it can carry;
+    // now we map those dims → costCenterId via the priority chain
+    // (project > contract > vehicle > department > branch). Shared
+    // cache so an N-line invoice only does K unique CC lookups.
+    //
+    // This is what makes per-CC P&L work end-to-end: every invoice,
+    // payment, expense, and JE that touches a project/contract/etc
+    // automatically lands in that entity's cost-centre bucket, so
+    // SELECT SUM(...) WHERE costCenterId = X just works.
+    await enrichJournalLines(client, params.lines, params.companyId, params.branchId);
+
+    // Step 3 — subsidiary code substitution. OFF BY DEFAULT (gated by
+    // `system_settings.gl_subsidiary_substitution`). When ON, a line
+    // posting to a control account like 1121 (سلفة الموظفين) with
+    // employeeId=42 gets its accountCode swapped to '1121-0042' — the
+    // employee's subsidiary code. Reports that aggregate by
+    // chart_of_accounts.parentId still work because the parent
+    // currentBalance is unchanged by the swap (the rollup is via the
+    // CoA tree, not the literal accountCode).
+    //
+    // Adopting this on an existing tenant is a one-line setting flip,
+    // but it's NOT default-on because tenants whose reports were
+    // built assuming parent posting would silently shift. The dim-
+    // routing page surfaces the toggle so the operator can opt in.
+    await substituteSubsidiaryAccountCodes(client, params.lines, params.companyId);
 
     for (const line of params.lines) {
       let accountId = line.accountId ?? null;
@@ -1167,9 +1215,11 @@ export async function getCfoAssignmentId(companyId: number, branchId: number): P
   const [row] = await rawQuery<{ id: number }>(
     `SELECT ea.id FROM employee_assignments ea
      JOIN users u ON u."employeeId" = ea."employeeId"
-     JOIN user_roles ur ON ur."userId" = u.id
+     JOIN rbac_user_roles ur ON ur."userId" = u.id AND ur."companyId" = ea."companyId"
+     JOIN rbac_roles r ON r.id = ur.role_id
      WHERE ea."companyId" = $1 AND ea."branchId" = $2
-       AND ur."roleKey" = 'finance_manager' AND ea.status = 'active'
+       AND r.role_key = 'finance_manager' AND ea.status = 'active'
+       AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
      LIMIT 1`,
     [companyId, branchId]
   );

@@ -40,6 +40,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logAllocationOverride } from "../lib/accountingAllocation.js";
 import { resolveTransactionBranch } from "../lib/branchResolution.js";
+import { costCenterSplitSchema, resolveCostCenterSplits } from "../lib/costCenterSplit.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -56,7 +57,34 @@ const expenseImpactPreviewSchema = z.object({
   costCenter: z.string().optional(),
   supplierId: z.any().optional(),
   branchId: z.any().optional(),
+  // #1715 (comment 9) — the allocation target drives a specialized-account hint.
+  targetType: z.string().optional(),
+  itemType: z.string().optional(),
 });
+
+// Shared line-allocation payload (the LineAllocationPanel /
+// AllocationTargetSelect output). Accepted by expense + voucher create so
+// both flows carry the same dim parity into the JE. #1715.
+const lineAllocationSchema = z.object({
+  accountCode: z.string().optional(),
+  costCenterId: z.coerce.number().optional(),
+  activityType: z.string().optional(),
+  projectId: z.coerce.number().optional(),
+  vehicleId: z.coerce.number().optional(),
+  propertyId: z.coerce.number().optional(),
+  unitId: z.coerce.number().optional(),
+  assetId: z.coerce.number().optional(),
+  contractId: z.coerce.number().optional(),
+  umrahAgentId: z.coerce.number().optional(),
+  clientId: z.coerce.number().optional(),
+  vendorId: z.coerce.number().optional(),
+  driverId: z.coerce.number().optional(),
+  productId: z.coerce.number().optional(),
+  umrahSeasonId: z.coerce.number().optional(),
+  departmentId: z.coerce.number().optional(),
+  employeeId: z.coerce.number().optional(),
+  manualOverrideReason: z.string().optional(),
+}).optional();
 
 const createExpenseSchema = z.object({
   accountCode: z.string().optional(),
@@ -99,32 +127,39 @@ const createExpenseSchema = z.object({
   // override the auto-resolved allocation (rule-driven) on the expense
   // JE line. `manualOverrideReason` is required when overriding any
   // resolved dimension and gets logged via logAllocationOverride().
-  lineAllocation: z.object({
-    accountCode: z.string().optional(),
-    costCenterId: z.coerce.number().optional(),
-    activityType: z.string().optional(),
-    projectId: z.coerce.number().optional(),
-    vehicleId: z.coerce.number().optional(),
-    propertyId: z.coerce.number().optional(),
-    unitId: z.coerce.number().optional(),
-    assetId: z.coerce.number().optional(),
-    contractId: z.coerce.number().optional(),
-    umrahAgentId: z.coerce.number().optional(),
-    // Same gap as journalLineSchema — pre-fix expense lineAllocation
-    // schema dropped 6 fields silently. LineAllocationPanel exposes all
-    // 17 in buildAllocationPayload, but the Zod validator stripped these
-    // 6 → the expense JE line never carried them → drilldown reports
-    // for client / vendor / driver / product / umrahSeason / department
-    // came back empty. Accept all 17 now so an expense allocation
-    // matches manual-journal parity.
-    clientId: z.coerce.number().optional(),
-    vendorId: z.coerce.number().optional(),
-    driverId: z.coerce.number().optional(),
-    productId: z.coerce.number().optional(),
-    umrahSeasonId: z.coerce.number().optional(),
-    departmentId: z.coerce.number().optional(),
-    employeeId: z.coerce.number().optional(),
-    manualOverrideReason: z.string().optional(),
+  lineAllocation: lineAllocationSchema,
+  // #1715 — optional multi cost-center distribution for the expense DR.
+  costCenterDistribution: z.array(costCenterSplitSchema).optional(),
+  // #1715 §5 — when the operator picks a maintenance allocation target
+  // (vehicle_maintenance / property_maintenance) and asks to open a ticket,
+  // this carries the operational-effect details. Creating the ticket is
+  // gated on `create: true`, so ordinary expenses are unaffected.
+  maintenanceTicket: z.object({
+    create: z.boolean().optional(),
+    maintenanceType: z.string().optional(),
+    odometer: z.coerce.number().optional(),
+    costBearer: z.string().optional(),
+    performedBy: z.string().optional(),
+    // #1715 §5 — link to an existing ticket instead of creating a new one.
+    existingTicketId: z.coerce.number().int().positive().optional(),
+  }).optional(),
+  // #1715 (owner acceptance) — a capital purchase opens a fixed asset that the
+  // depreciation engine then depreciates. Gated on create + name.
+  assetCreation: z.object({
+    create: z.boolean().optional(),
+    name: z.string().optional(),
+    usefulLifeYears: z.coerce.number().int().positive().optional(),
+    category: z.string().optional(),
+    depreciationMethod: z.string().optional(),
+    salvageValue: z.coerce.number().optional(),
+  }).optional(),
+  // #1715 (owner acceptance) — a vehicle fuel expense opens a fuel log.
+  fuelLog: z.object({
+    create: z.boolean().optional(),
+    liters: z.coerce.number().optional(),
+    costPerLiter: z.coerce.number().optional(),
+    odometer: z.coerce.number().optional(),
+    stationName: z.string().optional(),
   }).optional(),
 });
 
@@ -172,6 +207,34 @@ const createVoucherSchema = z.object({
   date: z.string().optional(),
   costCenter: z.string().optional(),
   allocations: z.array(voucherAllocationSchema).optional(),
+  // #1715: master «ربط السند بـ» allocation dims (AllocationTargetSelect).
+  lineAllocation: lineAllocationSchema,
+  // #1715 (owner gap-closure) — a سند صرف can pay for the same operations as an
+  // expense (maintenance / fuel / asset purchase), so it must fire the SAME
+  // operational effects. Shapes mirror the expense schema; all gated on create.
+  maintenanceTicket: z.object({
+    create: z.boolean().optional(),
+    maintenanceType: z.string().optional(),
+    odometer: z.coerce.number().optional(),
+    costBearer: z.string().optional(),
+    performedBy: z.string().optional(),
+    existingTicketId: z.coerce.number().int().positive().optional(),
+  }).optional(),
+  assetCreation: z.object({
+    create: z.boolean().optional(),
+    name: z.string().optional(),
+    usefulLifeYears: z.coerce.number().int().positive().optional(),
+    category: z.string().optional(),
+    depreciationMethod: z.string().optional(),
+    salvageValue: z.coerce.number().optional(),
+  }).optional(),
+  fuelLog: z.object({
+    create: z.boolean().optional(),
+    liters: z.coerce.number().optional(),
+    costPerLiter: z.coerce.number().optional(),
+    odometer: z.coerce.number().optional(),
+    stationName: z.string().optional(),
+  }).optional(),
 });
 
 const createSalaryAdvanceSchema = z.object({
@@ -312,7 +375,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description, je."createdAt", je.status,
               je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
@@ -321,16 +384,27 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
               je."govSyncEnabled", je."govIntegrationId", je."govEntityType", je."govEntityId",
               json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines,
               MAX(coa.name) FILTER (WHERE jl.debit > 0) AS "accountName",
-              COALESCE(SUM(jl.debit), 0) AS amount
+              COALESCE(SUM(jl.debit), 0) AS amount,
+              e_cre.name AS "createdByName",
+              (SELECT COALESCE(e_apr.name, u_apr.email)
+                 FROM approval_actions aa
+                 LEFT JOIN users u_apr ON u_apr.id = aa."actionBy"
+                 LEFT JOIN employees e_apr ON e_apr.id = u_apr."employeeId" AND e_apr."deletedAt" IS NULL
+                WHERE aa."entityType" = 'expense' AND aa."entityId" = je.id
+                  AND aa.action = 'approved' AND aa."companyId" = je."companyId"
+                ORDER BY aa.id DESC LIMIT 1) AS "approvedByName"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id = je."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where} AND je.ref LIKE 'EXP%' AND je."deletedAt" IS NULL
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
                 je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
                 je."paymentMethod", je.reference, je."isPaid", je."attachmentUrl", je."attachmentType",
                 je."expenseType", je."operationType",
-                je."govSyncEnabled", je."govIntegrationId", je."govEntityType", je."govEntityId"
+                je."govSyncEnabled", je."govIntegrationId", je."govEntityType", je."govEntityId",
+                e_cre.name
        ORDER BY je."createdAt" DESC LIMIT 100`,
       params
     );
@@ -341,11 +415,48 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
   }
 });
 
+// #1715 §5 — finance-owned helper for «ربط بتذكرة قائمة». Returns the OPEN
+// (unlinked) maintenance tickets the operator can link an expense to. Scoped
+// to finance.journal so a finance user needn't hold the fleet/properties
+// maintenance permission, and only ever exposes id + a short label.
+journalRouter.get("/maintenance-ticket-options", authorize({ feature: "finance.journal", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const target = String(req.query.target ?? "");
+    const vehicleId = req.query.vehicleId != null ? Number(req.query.vehicleId) : null;
+    const unitId = req.query.unitId != null ? Number(req.query.unitId) : null;
+    let options: { id: number; label: string }[] = [];
+    if (target === "vehicle" && vehicleId) {
+      const rows = await rawQuery<{ id: number; type: string | null; serviceDate: string | null }>(
+        `SELECT id, type, "serviceDate"::text AS "serviceDate"
+           FROM fleet_maintenance
+          WHERE "companyId" = $1 AND "vehicleId" = $2 AND "deletedAt" IS NULL AND "linkedExpenseId" IS NULL
+          ORDER BY id DESC LIMIT 50`,
+        [scope.companyId, vehicleId],
+      );
+      options = rows.map((r) => ({ id: r.id, label: `#${r.id} · ${r.type ?? "صيانة"}${r.serviceDate ? ` · ${r.serviceDate}` : ""}` }));
+    } else if (target === "property" && unitId) {
+      const rows = await rawQuery<{ id: number; category: string | null; status: string | null }>(
+        `SELECT id, category, status
+           FROM maintenance_requests
+          WHERE "companyId" = $1 AND "unitId" = $2 AND "deletedAt" IS NULL AND "linkedExpenseId" IS NULL
+          ORDER BY id DESC LIMIT 50`,
+        [scope.companyId, unitId],
+      );
+      options = rows.map((r) => ({ id: r.id, label: `#${r.id} · ${r.category ?? "صيانة"}${r.status ? ` · ${r.status}` : ""}` }));
+    }
+    res.json({ data: options });
+  } catch (err) {
+    logger.error(err, "Get maintenance ticket options error:");
+    res.json({ data: [] });
+  }
+});
+
 // Impact preview — shows what will happen when the expense is created
 journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId } = zodParse(expenseImpactPreviewSchema.safeParse(req.body ?? {}));
+    const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId, targetType, itemType } = zodParse(expenseImpactPreviewSchema.safeParse(req.body ?? {}));
     const amt = Number(amount || 0);
 
     const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
@@ -367,6 +478,39 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
         : `مدين حساب المصروف ${amt.toLocaleString("ar-SA")} / دائن الذمم الدائنة`,
       severity: "info",
     });
+
+    // #1715 (comment 9) — when the operation is linked to an entity, suggest
+    // the specialized posting account derived from the target + item kind so
+    // the operator sees where it will land (and whether it capitalises) before
+    // saving. Read-only hint; the actual JE still uses the chosen account.
+    if (targetType && targetType !== "none") {
+      const { deriveSpecializedAccount } = await import("../lib/financeSpecializedAccount.js");
+      const spec = deriveSpecializedAccount({ targetType, itemType });
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const resolvedCode = await financialEngine.resolveAccountCode(scope.companyId, spec.purpose, "debit", spec.defaultCode);
+      items.push({
+        category: "محاسبي",
+        label: spec.capitalize ? "حساب الرسملة المقترح" : "حساب المصروف المقترح",
+        value: `${spec.label} (${resolvedCode})${spec.capitalize ? " — يُرسمَل كأصل/مخزون بدل قيده مصروفًا" : ""}`,
+        severity: spec.capitalize ? "warning" : "info",
+      });
+
+      // #1715 (owner feedback) — surface the full «التوجيه المحاسبي المتوقّع»:
+      // the linked entity, the OPERATIONAL EFFECT the link produces, and any
+      // future task it schedules — so the operator sees the consequence before
+      // saving («لا يوجد ربط بلا أثر»).
+      const { deriveOperationalEffectHint } = await import("../lib/financeSpecializedAccount.js");
+      const hint = deriveOperationalEffectHint({ targetType, spec });
+      if (hint.entityLabel) {
+        items.push({ category: "الكيان المرتبط", label: "مربوط بـ", value: hint.entityLabel, severity: "info" });
+      }
+      if (hint.effect) {
+        items.push({ category: "الأثر التشغيلي", label: "الأثر", value: hint.effect, severity: "success" });
+      }
+      if (hint.futureTask) {
+        items.push({ category: "مهمة مستقبلية", label: "لاحقًا", value: hint.futureTask, severity: "info" });
+      }
+    }
 
     if (costCenter) {
       const [budget] = await rawQuery<Record<string, unknown>>(
@@ -462,7 +606,12 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       attachmentUrl, attachmentType, operationType,
       autoDescription, projectId, taxCategory,
       govSyncEnabled, govIntegrationId, govEntityType, govEntityId,
+      costCenterDistribution,
       lineAllocation,
+      maintenanceTicket,
+      assetCreation,
+      fuelLog,
+      date: expenseDate,
     } = b;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
@@ -505,49 +654,68 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     const targetPeriod = period ?? currentPeriod();
     const sourceAcct = sourceAccountCode || "1100";
 
+    // #1715 wave-1 consolidation: the expense create flow now converges on
+    // the unified FinanceOperationContext (guardrail #6 — no finance
+    // operation without a context). The adapter maps this legacy payload
+    // into a context; assertOperationValid wraps the same posting policy
+    // (cash→cash_box, bank_transfer→bank, custody→custody, …) so a UI
+    // bypass still can't post a cash expense against a bank account.
+    // Behaviour is identical — the policy receives the same money account +
+    // method — but the operation is now described by one object the rest of
+    // the waves build on. Soft-allows unclassified accounts.
+    {
+      const { assertOperationValid, fromLegacyExpenseForm } = await import("../lib/financeOperationContext.js");
+      const opCtx = fromLegacyExpenseForm({
+        companyId: effectiveCompanyId,
+        branchId: branchId ?? scope.branchId ?? null,
+        sourceAccountCode: sourceAcct,
+        paymentMethod,
+        relatedEntityType,
+        relatedEntityId: relatedEntityId != null ? Number(relatedEntityId) : null,
+        lineAllocation,
+      });
+      await assertOperationValid(opCtx);
+    }
+
+    // F3 (audit follow-up): pre-flight ONLY validates the budget here;
+    // the actual UPDATE budgets SET used = newUsed happens inside the
+    // same withTransaction as the JE post below. The previous shape
+    // bumped used in its own (already-committed) txn, then posted the
+    // JE in a second one. A closed-period throw from the engine left
+    // budgets.used inflated forever with no GL — same family as the
+    // PR #1421 ar-payment bug.
     if (accountCode && amount) {
-      await withTransaction(async (client) => {
-        // Lock the budget row to prevent concurrent race conditions
-        const lockResult = await client.query(
-          `SELECT id, amount, used FROM budgets
-           WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL
-           FOR UPDATE`,
-          [effectiveCompanyId, accountCode, targetPeriod]
-        );
-        if (lockResult.rows.length > 0) {
-          const budget = lockResult.rows[0];
-          const budgetAmount = Number(budget.amount);
-          const currentUsed = Number(budget.used);
-          const newUsed = currentUsed + Number(amount);
-          const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
+      const [budget] = await rawQuery<Record<string, unknown>>(
+        `SELECT amount, used FROM budgets
+          WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [effectiveCompanyId, accountCode, targetPeriod]
+      );
+      if (budget) {
+        const budgetAmount = Number(budget.amount);
+        const currentUsed = Number(budget.used);
+        const newUsed = currentUsed + Number(amount);
+        const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
 
-          if (utilization > 110) {
-            throw new ConflictError(
-              "تجاوز الميزانية أكثر من 110% – رفض نهائي",
-              { field: "amount", fix: "أعد تقييم الميزانية أو قلل المبلغ المطلوب", meta: { utilization: Math.round(utilization), status: "rejected" } }
-            );
-          }
-          if (utilization > 99 && !OWNER_GM_ROLES.includes(scope.role)) {
-            throw new ForbiddenError(
-              "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
-              { fix: "اطلب موافقة المدير العام قبل المتابعة", meta: { utilization: Math.round(utilization), status: "blocked_gm" } }
-            );
-          }
-          if (utilization > 80 && !FINANCE_ROLES.includes(scope.role)) {
-            throw new ForbiddenError(
-              "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
-              { fix: "اطلب موافقة المدير المالي قبل المتابعة", meta: { utilization: Math.round(utilization), status: "warning_cfo" } }
-            );
-          }
-
-          // Only increment if all checks pass
-          await client.query(
-            `UPDATE budgets SET used = $1
-             WHERE id = $2`,
-            [newUsed, budget.id]
+        if (utilization > 110) {
+          throw new ConflictError(
+            "تجاوز الميزانية أكثر من 110% – رفض نهائي",
+            { field: "amount", fix: "أعد تقييم الميزانية أو قلل المبلغ المطلوب", meta: { utilization: Math.round(utilization), status: "rejected" } }
           );
         }
-      });
+        if (utilization > 99 && !OWNER_GM_ROLES.includes(scope.role)) {
+          throw new ForbiddenError(
+            "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
+            { fix: "اطلب موافقة المدير العام قبل المتابعة", meta: { utilization: Math.round(utilization), status: "blocked_gm" } }
+          );
+        }
+        if (utilization > 80 && !FINANCE_ROLES.includes(scope.role)) {
+          throw new ForbiddenError(
+            "استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
+            { fix: "اطلب موافقة المدير المالي قبل المتابعة", meta: { utilization: Math.round(utilization), status: "warning_cfo" } }
+          );
+        }
+      }
     }
 
     const baseAmount = roundTo2(Number(amount) || 0);
@@ -610,6 +778,52 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       if (lineAllocation.manualOverrideReason) entityLink.manualOverrideReason = lineAllocation.manualOverrideReason;
     }
 
+    // Activate the centralised resolver (migration 256 seeds the
+    // default Saudi rules). When the operator left accountCode empty
+    // but picked an operationType + relatedEntity, the resolver looks
+    // up the matching rule and fills in:
+    //   • the expense account (e.g. fuel → 5350)
+    //   • the cost-centre (e.g. from_vehicle → CC linked to the vehicle)
+    // When the operator pinned an accountCode manually, the resolver
+    // returns status='manual_override' and proposedAccountCode for
+    // audit — operator's pick still wins on the JE itself.
+    if (operationType || relatedEntityType) {
+      const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+      const resolved = await resolveLineAllocation({
+        companyId: effectiveCompanyId,
+        documentType: "expense",
+        lineType: operationType || expenseType || undefined,
+        entityType: relatedEntityType || undefined,
+        accountCode: overrideAccountCode || undefined,
+        costCenterId: entityLink.costCenterId != null ? Number(entityLink.costCenterId) : null,
+        dimensions: {
+          vehicleId: entityLink.vehicleId ?? null,
+          propertyId: entityLink.propertyId ?? null,
+          unitId: entityLink.unitId ?? null,
+          assetId: entityLink.assetId ?? null,
+          projectId: entityLink.projectId ?? null,
+          employeeId: entityLink.employeeId ?? null,
+          driverId: entityLink.driverId ?? null,
+          contractId: entityLink.contractId ?? null,
+          umrahSeasonId: entityLink.umrahSeasonId ?? null,
+          umrahAgentId: entityLink.umrahAgentId ?? null,
+          productId: entityLink.productId ?? null,
+          clientId: entityLink.clientId ?? null,
+          vendorId: entityLink.vendorId ?? null,
+        },
+        sourceTable: "journal_lines",
+        sourceLineId: 0, // populated post-insert
+      });
+      if (resolved.status === "resolved" || resolved.status === "manual_override") {
+        if (!overrideAccountCode && resolved.resolvedAccountCode) {
+          overrideAccountCode = resolved.resolvedAccountCode;
+        }
+        if (entityLink.costCenterId == null && resolved.costCenterId != null) {
+          entityLink.costCenterId = resolved.costCenterId;
+        }
+      }
+    }
+
     const { financialEngine } = await import("../lib/engines/index.js");
     // Carry the full entityLink on EVERY leg of the expense JE — expense DR,
     // VAT input DR, and cash CR. Without this the VAT obligation + cash
@@ -626,13 +840,45 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat, ...entityLink });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
 
+    // #1715 multi cost-center distribution: when supplied, replace the single
+    // expense DR (journalLines[0]) with one balanced leg per cost center —
+    // same account + full entityLink, its own costCenterId and prorated
+    // amount. The legs sum exactly to baseAmount (remainder absorbed by the
+    // last) so the entry stays balanced; the VAT DR and cash CR are untouched.
+    if (costCenterDistribution && costCenterDistribution.length > 0) {
+      const debitAccount = journalLines[0].accountCode;
+      const splitLines = resolveCostCenterSplits(costCenterDistribution, baseAmount).map((leg) => ({
+        accountCode: debitAccount, debit: leg.amount, credit: 0, ...entityLink, costCenterId: leg.costCenterId,
+      }));
+      journalLines.splice(0, 1, ...splitLines);
+    }
+
     // C3 — the journal entry, its header metadata and the approval chain are
     // created in ONE transaction. A failure anywhere (or a crash) rolls the
     // whole thing back, so there is never a posted expense entry without its
     // approval request, nor an approval chain pointing at a missing entry.
     // postJournalEntry's own withTransaction joins this one via savepoint;
     // rawExecute joins via the transaction async-context.
-    const { journalId, alreadyExists, approvalResult } = await withTransaction(async () => {
+    const { journalId, alreadyExists, approvalResult } = await withTransaction(async (client) => {
+      // Re-lock and bump the budget inside the same txn as the JE post.
+      // A closed-period throw from the engine now rolls the bump back
+      // atomically — no more inflated used counter with no GL.
+      if (accountCode && amount) {
+        const lockRes = await client.query(
+          `SELECT id, amount, used FROM budgets
+            WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL
+            FOR UPDATE`,
+          [effectiveCompanyId, accountCode, targetPeriod]
+        );
+        if (lockRes.rows.length > 0) {
+          const lockedNewUsed = Number(lockRes.rows[0].used) + Number(amount);
+          await client.query(
+            `UPDATE budgets SET used = $1 WHERE id = $2`,
+            [lockedNewUsed, lockRes.rows[0].id]
+          );
+        }
+      }
+
       const posted = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${idempotencyToken}`, lines: journalLines });
 
       await rawExecute(
@@ -690,6 +936,87 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
             overrideReason: lineAllocation.manualOverrideReason,
           });
         }
+      }
+
+      // #1715 §5 — operational effect: open + link the maintenance ticket
+      // when the operator tagged this expense as a vehicle/property
+      // maintenance op (gated on maintenanceTicket.create, so ordinary
+      // expenses are untouched). Runs in THIS txn, so a JE/approval failure
+      // rolls the ticket back too — never a ticket without its expense.
+      // `!posted.alreadyExists` guards idempotent replays: a retried expense
+      // returns the existing JE without re-posting, so we must NOT insert a
+      // second maintenance ticket for it.
+      if (maintenanceTicket?.create && !posted.alreadyExists) {
+        const isVehicle = entityLink.vehicleId != null;
+        const isProperty = entityLink.unitId != null || entityLink.propertyId != null;
+        if (isVehicle || isProperty) {
+          const { applyMaintenanceTicketEffect } = await import("../lib/financeOperationalEffect.js");
+          const eff = await applyMaintenanceTicketEffect(client, {
+            companyId: effectiveCompanyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            journalId: posted.journalId,
+            target: isVehicle ? "vehicle" : "property",
+            vehicleId: entityLink.vehicleId ?? null,
+            propertyId: entityLink.propertyId ?? null,
+            unitId: entityLink.unitId ?? null,
+            contractId: entityLink.contractId ?? null,
+            cost: baseAmount,
+            maintenanceType: maintenanceTicket.maintenanceType ?? expenseType ?? null,
+            odometer: maintenanceTicket.odometer ?? null,
+            costBearer: maintenanceTicket.costBearer ?? null,
+            performedBy: maintenanceTicket.performedBy ?? null,
+            description: finalDescription ?? null,
+            existingTicketId: maintenanceTicket.existingTicketId ?? null,
+          });
+          // Linking to a non-existent ticket must abort the whole expense —
+          // never post an expense that claims a link it didn't make.
+          if (maintenanceTicket.existingTicketId != null && eff.action === "none") {
+            throw new ValidationError("تذكرة الصيانة المحددة غير موجودة", {
+              field: "maintenanceTicket.existingTicketId",
+              fix: "اختر تذكرة صيانة قائمة صحيحة أو أنشئ تذكرة جديدة",
+            });
+          }
+          logger.info({ journalId: posted.journalId, effect: eff }, "[finance] maintenance ticket effect applied");
+        }
+      }
+
+      // #1715 (owner acceptance: «شراء مركبة يفتح أصل وإهلاك») — a capital
+      // purchase creates a fixed asset; the depreciation engine takes over.
+      // In-txn + idempotency-guarded so a retry never creates a duplicate asset.
+      if (assetCreation?.create && assetCreation.name && !posted.alreadyExists) {
+        const { applyAssetCreationEffect } = await import("../lib/financeOperationalEffect.js");
+        const a = await applyAssetCreationEffect(client, {
+          companyId: effectiveCompanyId,
+          branchId: branchId ?? scope.branchId ?? null,
+          journalId: posted.journalId,
+          name: assetCreation.name,
+          cost: baseAmount,
+          usefulLifeYears: assetCreation.usefulLifeYears ?? null,
+          category: assetCreation.category ?? null,
+          depreciationMethod: assetCreation.depreciationMethod ?? null,
+          salvageValue: assetCreation.salvageValue ?? null,
+          purchaseDate: expenseDate ?? null,
+        });
+        logger.info({ journalId: posted.journalId, assetId: a.assetId }, "[finance] capital asset created from expense");
+      }
+
+      // #1715 (owner acceptance: «وقود مركبة يظهر الممشى واللترات وسعر اللتر») —
+      // a vehicle fuel expense opens a fuel log + updates the odometer.
+      if (fuelLog?.create && entityLink.vehicleId != null && !posted.alreadyExists) {
+        const { applyFuelLogEffect } = await import("../lib/financeOperationalEffect.js");
+        const fl = await applyFuelLogEffect(client, {
+          companyId: effectiveCompanyId,
+          branchId: branchId ?? scope.branchId ?? null,
+          journalId: posted.journalId,
+          vehicleId: entityLink.vehicleId,
+          totalCost: baseAmount,
+          liters: fuelLog.liters ?? null,
+          costPerLiter: fuelLog.costPerLiter ?? null,
+          mileageAtFuel: fuelLog.odometer ?? null,
+          stationName: fuelLog.stationName ?? null,
+          fuelDate: expenseDate ?? null,
+        });
+        logger.info({ journalId: posted.journalId, fuelLogId: fl.fuelLogId }, "[finance] fuel log created from expense");
       }
 
       const approval = await initiateApprovalChain({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, chainType: "expenses", refType: "expense", refId: posted.journalId, amount: Number(amount ?? 0) });
@@ -912,19 +1239,23 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS type,
               je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
-              je."relatedEntityType", je."relatedEntityId", je."operationType",
-              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status
+              je."relatedEntityType", je."relatedEntityId", je."operationType", je."costCenter",
+              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status,
+              e_cre.name AS "createdByName"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id = je."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where} AND je."deletedAt" IS NULL AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
                 je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
-                je."relatedEntityType", je."relatedEntityId", je."operationType"
+                je."relatedEntityType", je."relatedEntityId", je."operationType", je."costCenter",
+                e_cre.name
        ORDER BY je."createdAt" DESC LIMIT 100`,
       params
     );
@@ -968,7 +1299,8 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       contractId, invoiceId, reference, attachmentUrl, attachmentType,
       vatRate: rawVatRate, vatAmount: rawVatAmount,
       beneficiaryType, entitlementType, branchId, departmentId,
-      autoDescription, operationType, allocations,
+      autoDescription, operationType, allocations, lineAllocation,
+      maintenanceTicket, assetCreation, fuelLog, date: voucherDate,
     } = b;
 
     // C4 + C5 — allocations tie this voucher to specific AP obligations
@@ -1068,6 +1400,28 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const cashAcct = sourceAccountCode || "1100";
+
+    // #1715 wave-1 consolidation: the voucher create flow converges on the
+    // unified FinanceOperationContext (guardrail #6). The adapter maps the
+    // legacy voucher fields into a context; assertOperationValid wraps the
+    // same posting policy (نقدي→صندوق, تحويل→بنك, شيك→بنك/شيكات, …) so the
+    // money account must still match the chosen method. Behaviour-identical,
+    // backend-enforced.
+    {
+      const { assertOperationValid, fromLegacyVoucherForm } = await import("../lib/financeOperationContext.js");
+      const opCtx = fromLegacyVoucherForm({
+        companyId: scope.companyId,
+        branchId: branchId ?? scope.branchId ?? null,
+        type,
+        sourceAccountCode: cashAcct,
+        method,
+        relatedEntityType,
+        relatedEntityId: relatedEntityId != null ? Number(relatedEntityId) : null,
+        lineAllocation,
+      });
+      await assertOperationValid(opCtx);
+    }
+
     const outputVatCode = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300") : "2300";
     const inputVatCode2 = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1400") : "1400";
 
@@ -1141,6 +1495,65 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     if (departmentId) voucherDims.departmentId = Number(departmentId);
     if (b.costCenter) voucherDims.costCenter = b.costCenter;
 
+    // #1715: merge the master «ربط السند بـ» allocation dims on top of the
+    // relatedEntity-derived ones. The AllocationTargetSelect ships the full
+    // dim set (vehicle / property / unit / contract / project / umrah / …)
+    // so vouchers reach the same dim parity as expenses + manual journals.
+    if (lineAllocation) {
+      const la = lineAllocation as Record<string, any>;
+      for (const k of [
+        "costCenterId", "activityType", "projectId", "vehicleId", "propertyId",
+        "unitId", "assetId", "contractId", "umrahAgentId", "umrahSeasonId",
+        "clientId", "vendorId", "driverId", "productId", "departmentId",
+        "employeeId", "manualOverrideReason",
+      ]) {
+        if (la[k] != null && la[k] !== "") voucherDims[k] = la[k];
+      }
+    }
+
+    // Centralised resolver — fills cost-centre from rule when operator
+    // left it empty + records the rule reference for the Manual
+    // Overrides report. Voucher accountCode is operator-pinned (it's
+    // the revenue/expense account they explicitly chose), so the
+    // resolver runs in manual_override mode and only the costCenterId
+    // slot benefits — but that's the whole point for vouchers: pick
+    // employee/supplier/vehicle/property and the per-entity CC drops
+    // in without the operator having to know which CC to pick. Same
+    // pattern as the expenses route fix in #1662.
+    if (relatedEntityType) {
+      const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+      const voucherDocType = isReceipt ? "voucher_receipt" : "voucher_payment";
+      const resolved = await resolveLineAllocation({
+        companyId: scope.companyId,
+        documentType: voucherDocType,
+        lineType: operationType || type || undefined,
+        entityType: relatedEntityType || undefined,
+        accountCode: (subAccountCode || accountCode) || undefined,
+        costCenterId: voucherDims.costCenterId != null ? Number(voucherDims.costCenterId) : null,
+        dimensions: {
+          vehicleId: voucherDims.vehicleId ?? null,
+          propertyId: voucherDims.propertyId ?? null,
+          unitId: null,
+          assetId: null,
+          projectId: voucherDims.projectId ?? null,
+          employeeId: voucherDims.employeeId ?? null,
+          driverId: null,
+          contractId: voucherDims.contractId ?? null,
+          umrahSeasonId: null,
+          umrahAgentId: null,
+          productId: null,
+          clientId: voucherDims.clientId ?? null,
+          vendorId: voucherDims.vendorId ?? null,
+        },
+        sourceTable: "journal_lines",
+        sourceLineId: 0,
+      });
+      if ((resolved.status === "resolved" || resolved.status === "manual_override") &&
+          voucherDims.costCenterId == null && resolved.costCenterId != null) {
+        voucherDims.costCenterId = resolved.costCenterId;
+      }
+    }
+
     const whtCreditLines = Array.from(whtCreditByAccount.entries()).map(
       ([accountCode, amount]) => ({ accountCode, debit: 0, credit: amount, ...voucherDims })
     );
@@ -1195,13 +1608,79 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // forever. financialEngine.postJournalEntry's internal
     // withTransaction joins this outer one reentrantly via SAVEPOINT
     // (rawdb.ts:108).
-    const { journalId, alreadyExists } = await withTransaction(async () => {
+    const { journalId, alreadyExists } = await withTransaction(async (client) => {
       const posted = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines, deferBalances: true });
 
       await rawExecute(
         `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
         [method ?? "cash", reference ?? null, attachmentUrl ?? null, attachmentType ?? null, relatedEntityType ?? null, relatedEntityId ?? null, operationType ?? type, departmentId ?? null, posted.journalId, scope.companyId]
       );
+
+      // #1715 (owner gap-closure) — fire the SAME operational effects an expense
+      // would, so a سند صرف for maintenance/fuel/asset is not «ربط بلا أثر».
+      // Entity ids come from voucherDims (relatedEntity + lineAllocation). All
+      // gated on create + !alreadyExists (idempotent replay never double-fires).
+      if (!posted.alreadyExists) {
+        const vehId = voucherDims.vehicleId != null ? Number(voucherDims.vehicleId) : null;
+        const unitId = voucherDims.unitId != null ? Number(voucherDims.unitId) : null;
+        const propId = voucherDims.propertyId != null ? Number(voucherDims.propertyId) : null;
+        if (maintenanceTicket?.create && (vehId != null || unitId != null || propId != null)) {
+          const { applyMaintenanceTicketEffect } = await import("../lib/financeOperationalEffect.js");
+          const eff = await applyMaintenanceTicketEffect(client, {
+            companyId: scope.companyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            journalId: posted.journalId,
+            target: vehId != null ? "vehicle" : "property",
+            vehicleId: vehId,
+            propertyId: propId,
+            unitId: unitId,
+            contractId: voucherDims.contractId != null ? Number(voucherDims.contractId) : null,
+            cost: baseAmount,
+            maintenanceType: maintenanceTicket.maintenanceType ?? null,
+            odometer: maintenanceTicket.odometer ?? null,
+            costBearer: maintenanceTicket.costBearer ?? null,
+            performedBy: maintenanceTicket.performedBy ?? null,
+            description: finalDescription ?? null,
+            existingTicketId: maintenanceTicket.existingTicketId ?? null,
+          });
+          if (maintenanceTicket.existingTicketId != null && eff.action === "none") {
+            throw new ValidationError("تذكرة الصيانة المحددة غير موجودة", {
+              field: "maintenanceTicket.existingTicketId",
+              fix: "اختر تذكرة صيانة قائمة صحيحة أو أنشئ تذكرة جديدة",
+            });
+          }
+        }
+        if (assetCreation?.create && assetCreation.name) {
+          const { applyAssetCreationEffect } = await import("../lib/financeOperationalEffect.js");
+          await applyAssetCreationEffect(client, {
+            companyId: scope.companyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            journalId: posted.journalId,
+            name: assetCreation.name,
+            cost: baseAmount,
+            usefulLifeYears: assetCreation.usefulLifeYears ?? null,
+            category: assetCreation.category ?? null,
+            depreciationMethod: assetCreation.depreciationMethod ?? null,
+            salvageValue: assetCreation.salvageValue ?? null,
+            purchaseDate: voucherDate ?? null,
+          });
+        }
+        if (fuelLog?.create && vehId != null) {
+          const { applyFuelLogEffect } = await import("../lib/financeOperationalEffect.js");
+          await applyFuelLogEffect(client, {
+            companyId: scope.companyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            journalId: posted.journalId,
+            vehicleId: vehId,
+            totalCost: baseAmount,
+            liters: fuelLog.liters ?? null,
+            costPerLiter: fuelLog.costPerLiter ?? null,
+            mileageAtFuel: fuelLog.odometer ?? null,
+            stationName: fuelLog.stationName ?? null,
+            fuelDate: voucherDate ?? null,
+          });
+        }
+      }
 
       // C4 + C5 — link the voucher to the AP obligation(s) it pays. Skip
       // on idempotent replay (rows already exist from the original insert).
@@ -1580,7 +2059,7 @@ journalRouter.get("/journal", authorize({ feature: "finance.journal", action: "l
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description, je.status, je."createdAt",
               je."reversalOfId", je."reversedById", je."operationType",
@@ -1766,7 +2245,7 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
     // company + branch scope the /journal list endpoints already enforce.
     const { where: scopeWhere, params: scopeParams } = buildScopedWhere(
       scope, parseScopeFilters(req),
-      { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true },
+      { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true },
       2,
     );
     const [je] = await rawQuery<Record<string, unknown>>(
@@ -2392,6 +2871,7 @@ journalRouter.get("/opening-balances", authorize({ feature: "finance.accounts", 
       companyColumn: 'je."companyId"',
       branchColumn: 'je."branchId"',
       enforceBranchScope: true,
+      includeNullBranch: true,
     });
 
     let extraWhere = " AND je.ref LIKE 'OB-%' AND je.\"deletedAt\" IS NULL";

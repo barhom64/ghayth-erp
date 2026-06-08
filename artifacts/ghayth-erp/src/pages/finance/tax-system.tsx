@@ -17,6 +17,8 @@ import { Receipt, TrendingUp, TrendingDown, DollarSign, Calendar, Zap, CheckCirc
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 export default function TaxSystemPage() {
   const currentPeriod = todayLocal().slice(0, 7);
   const [period, setPeriod] = useState(currentPeriod);
@@ -35,10 +37,13 @@ export default function TaxSystemPage() {
   const isLoading = summaryLoading || declLoading;
   const isError = summaryError || declError;
 
+  const declItems = declarations?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(declItems);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const declItems = declarations?.data || [];
 
   const submissions = submissionsData?.data || [];
   const submissionStats = submissionsData?.stats || {};
@@ -93,12 +98,30 @@ export default function TaxSystemPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "نظام الضرائب والفوترة الإلكترونية" }]}
       loading={summaryLoading || declLoading}
       actions={
-        activeTab === "vat" ? (
-          <>
-            <span className="text-sm text-muted-foreground">الفترة:</span>
-            <Input type="month" className="w-44" value={period} onChange={(e) => setPeriod(e.target.value)} />
-          </>
-        ) : undefined
+        <>
+          {activeTab === "vat" && (
+            <>
+              <span className="text-sm text-muted-foreground">الفترة:</span>
+              <Input type="month" className="w-44" value={period} onChange={(e) => setPeriod(e.target.value)} />
+            </>
+          )}
+          <PrintButton
+            entityType="report_finance_tax_system"
+            entityId={period}
+            size="icon"
+            payload={() => ({
+              entity: { title: `إقرارات ضريبة القيمة المضافة — ${period}`, total: printRows.length },
+              items: printRows.map((d: any) => ({
+                "الفترة": d.period,
+                "ضريبة المخرجات": Number(d.outputVat || 0),
+                "ضريبة المدخلات": Number(d.inputVat || 0),
+                "الصافي": Number(d.netVat || 0),
+                "عدد الفواتير": d.invoiceCount ?? 0,
+                "الحالة": d.status || "—",
+              })),
+            })}
+          />
+        </>
       }
     >
       <FinanceTabsNav />
@@ -169,6 +192,7 @@ export default function TaxSystemPage() {
             <CardContent className="p-0">
               <DataTable
                 columns={declarationColumns}
+                onSortedDataChange={setPrintRows}
                 data={declItems}
                 isLoading={declLoading}
                 rowKey={(d: any) => d.period}

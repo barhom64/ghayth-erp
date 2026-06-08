@@ -279,7 +279,7 @@ purchaseRouter.get("/purchase-requests", authorize({ feature: "finance.purchase"
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'pr."companyId"', branchColumn: 'pr."branchId"', enforceBranchScope: true });
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'pr."companyId"', branchColumn: 'pr."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const safeLimPR = Math.min(Number(lim) || 50, 500);
 
@@ -698,7 +698,7 @@ purchaseRouter.get("/purchase-orders", authorize({ feature: "finance.purchase", 
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"', enforceBranchScope: true, softDeleteColumn: 'po."deletedAt"' });
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"', enforceBranchScope: true, includeNullBranch: true, softDeleteColumn: 'po."deletedAt"' });
     const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const safeLim = Math.min(Number(lim) || 50, 500);
 
@@ -1858,31 +1858,15 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     });
     }
 
-    // Mark each PO as paid via the lifecycle engine (outside the
-    // payment_runs transaction so each gets its own audit/event trail).
-    for (const po of pos) {
-      await applyTransition({
-        entity: "purchase_orders",
-        id: po.id as number,
-        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-        action: "purchase_order.paid",
-        fromStates: ["invoice_matched"],
-        toState: "paid",
-        setExtras: { paidAt: payDate },
-        after: { paymentRunId: runId, runRef },
-      }).catch(async () => {
-        // paidAt column may not exist — fall back without setExtras
-        await applyTransition({
-          entity: "purchase_orders",
-          id: po.id as number,
-          scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-          action: "purchase_order.paid",
-          fromStates: ["invoice_matched"],
-          toState: "paid",
-          after: { paymentRunId: runId, runRef },
-        });
-      });
-    }
+    // F9 (audit, ZATCA-amend follow-on): post the JE BEFORE flipping
+    // POs to 'paid'. The original sequence transitioned every PO to
+    // paid first and then posted the JE — if the post threw (closed
+    // period, balance mismatch, network), POs were already paid in
+    // the lifecycle but no AP-clearing GL existed. With the order
+    // inverted, a JE failure now leaves POs in 'invoice_matched' and
+    // the operator can retry the entire run idempotently (the
+    // payment_runs.sourceKey + the engine's guardTable/guardId stop
+    // duplicates).
 
     // Post a single aggregated journal entry for the whole run, with one AP
     // debit per PO so per-vendor subledger still reconciles. The cash credit
@@ -1980,6 +1964,36 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
           ]
         );
       }
+    }
+
+    // Now that the JE is committed and the WHT allocations snapshotted,
+    // it's safe to flip each PO to 'paid'. A failure mid-loop here
+    // leaves the GL correct (run can be reconciled manually) — the
+    // critical "POs marked paid with no GL" window is closed by the
+    // ordering inversion above. Each PO transition gets its own audit
+    // trail (the lifecycle engine writes per-row).
+    for (const po of pos) {
+      await applyTransition({
+        entity: "purchase_orders",
+        id: po.id as number,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: "purchase_order.paid",
+        fromStates: ["invoice_matched"],
+        toState: "paid",
+        setExtras: { paidAt: payDate },
+        after: { paymentRunId: runId, runRef },
+      }).catch(async () => {
+        // paidAt column may not exist — fall back without setExtras
+        await applyTransition({
+          entity: "purchase_orders",
+          id: po.id as number,
+          scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+          action: "purchase_order.paid",
+          fromStates: ["invoice_matched"],
+          toState: "paid",
+          after: { paymentRunId: runId, runRef },
+        });
+      });
     }
 
     emitEvent({
@@ -2328,63 +2342,69 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
         ]
       : undefined;
 
-    // FIN-001: on a successful three-way match, clear the GRNI suspense
-    // account into Accounts Payable. The GRN booked DR Inventory(+VAT) /
-    // CR GRNI; matching the supplier invoice recognises the payable —
-    // DR GRNI / CR AP — for exactly the amount this PO's goods receipts
-    // credited to GRNI, so GRNI fully clears. Invoice-vs-receipt deltas
-    // inside the 5% tolerance are settled later via credit/debit memos
-    // (owner decision, option A). A mismatch posts nothing — the invoice
-    // is disputed and GRNI stays open. The entry posts before the status
-    // transition so a GL failure leaves the PO un-transitioned.
-    if (isMatched) {
-      const { financialEngine } = await import("../lib/engines/index.js");
-      const [matchGrniCode, matchApCode] = await Promise.all([
-        financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "debit", "2115"),
-        financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
-      ]);
-      const [grniRow] = await rawQuery<{ grni: string }>(
-        `SELECT COALESCE(SUM(jl.credit), 0) AS grni
-           FROM goods_receipts gr
-           JOIN journal_lines jl ON jl."journalId" = gr."journalId"
-           JOIN chart_of_accounts coa ON coa.id = jl."accountId"
-          WHERE gr."poId" = $1 AND gr."companyId" = $2 AND gr."deletedAt" IS NULL
-            AND coa.code = $3 AND coa."deletedAt" IS NULL AND jl.credit > 0`,
-        [id, scope.companyId, matchGrniCode]
-      );
-      const grniBalance = roundTo2(Number(grniRow?.grni ?? 0));
-      if (grniBalance > 0) {
-        const matchResult = await financialEngine.postJournalEntry({
-          companyId: scope.companyId,
-          branchId: scope.branchId,
-          createdBy: scope.activeAssignmentId,
-          ref: `MATCH-${po.ref}`,
-          description: `مطابقة فاتورة المورّد ${supplierInvoiceRef} - أمر ${po.ref}`,
-          sourceType: "purchase_invoice_match",
-          sourceId: id,
-          sourceKey: `finance:invoice_match:${id}`,
-          lines: [
-            { accountCode: matchGrniCode, debit: grniBalance, credit: 0, vendorId: po.supplierId as number | undefined },
-            { accountCode: matchApCode, debit: 0, credit: grniBalance, vendorId: po.supplierId as number | undefined },
-          ],
-        });
-        markIdempotencyReplay(req, res, matchResult.alreadyExists);
-      }
-    }
+    // FIN-001 + F7 (audit follow-up): wrap the match JE + the
+    // applyTransition in one withTransaction so a JE post that succeeds
+    // but a subsequent transition failure can't leave the GRNI cleared
+    // with the PO still in 'received' (a retry would double-post the
+    // match JE because the engine's sourceKey guard only catches exact
+    // payload replays). With guardTable/guardId on the JE post the
+    // engine anchor catches dupes deterministically.
+    const { financialEngine } = await import("../lib/engines/index.js");
 
-    await applyTransition({
-      entity: "purchase_orders",
-      id,
-      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-      action: isMatched ? "purchase_order.three_way_matched" : "purchase_order.three_way_mismatch",
-      fromStates: ["received", "partially_received"],
-      toState: matchStatus,
-      setExtras: {
-        notes: { raw: `CONCAT(COALESCE(notes,''), '${matchNote.replace(/'/g, "''")}')` },
-      },
-      after: { supplierInvoiceRef, invoicedAmount: invAmount, poTotal, prTotal, receivedTotal },
-      notifications: mismatchNotifications,
+    let matchAlreadyExists = false;
+    await withTransaction(async (client: any) => {
+      if (isMatched) {
+        const [matchGrniCode, matchApCode] = await Promise.all([
+          financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "debit", "2115"),
+          financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+        ]);
+        const grniRowRes = await client.query(
+          `SELECT COALESCE(SUM(jl.credit), 0) AS grni
+             FROM goods_receipts gr
+             JOIN journal_lines jl ON jl."journalId" = gr."journalId"
+             JOIN chart_of_accounts coa ON coa.id = jl."accountId"
+            WHERE gr."poId" = $1 AND gr."companyId" = $2 AND gr."deletedAt" IS NULL
+              AND coa.code = $3 AND coa."deletedAt" IS NULL AND jl.credit > 0`,
+          [id, scope.companyId, matchGrniCode]
+        );
+        const grniBalance = roundTo2(Number(grniRowRes.rows[0]?.grni ?? 0));
+        if (grniBalance > 0) {
+          const matchResult = await financialEngine.postJournalEntry({
+            companyId: scope.companyId,
+            branchId: scope.branchId,
+            createdBy: scope.activeAssignmentId,
+            ref: `MATCH-${po.ref}`,
+            description: `مطابقة فاتورة المورّد ${supplierInvoiceRef} - أمر ${po.ref}`,
+            sourceType: "purchase_invoice_match",
+            sourceId: id,
+            sourceKey: `finance:invoice_match:${id}`,
+            lines: [
+              { accountCode: matchGrniCode, debit: grniBalance, credit: 0, vendorId: po.supplierId as number | undefined },
+              { accountCode: matchApCode, debit: 0, credit: grniBalance, vendorId: po.supplierId as number | undefined },
+            ],
+            guardTable: "purchase_orders",
+            guardId: id,
+          });
+          matchAlreadyExists = matchResult.alreadyExists;
+        }
+      }
+
+      await applyTransition({
+        entity: "purchase_orders",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: isMatched ? "purchase_order.three_way_matched" : "purchase_order.three_way_mismatch",
+        fromStates: ["received", "partially_received"],
+        toState: matchStatus,
+        setExtras: {
+          notes: { raw: `CONCAT(COALESCE(notes,''), '${matchNote.replace(/'/g, "''")}')` },
+        },
+        after: { supplierInvoiceRef, invoicedAmount: invAmount, poTotal, prTotal, receivedTotal },
+        notifications: mismatchNotifications,
+        client,
+      });
     });
+    markIdempotencyReplay(req, res, matchAlreadyExists);
 
     res.json({
       message: isMatched ? "تمت المطابقة الثلاثية بنجاح" : "عدم تطابق في المطابقة الثلاثية",
@@ -2446,37 +2466,60 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
       );
     }
 
+    // F8 (audit follow-up): wrap the JE post + paidAmount bump +
+    // applyTransition in one withTransaction so a partial failure can't
+    // leave the GL posted with the PO still in 'invoice_matched' (the
+    // operator would re-run schedule-payment and double-post). The JE
+    // also carries guardTable/guardId now, so the engine's idempotency
+    // anchor kicks in on retry.
     const { financialEngine } = await import("../lib/engines/index.js");
     const schedApCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100");
     const schedCashCode = await financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100");
-    const schedResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: `SCHED-PAY-${po.ref}`,
-      description: `دفعة مجدولة لأمر الشراء ${po.ref} بتاريخ ${paymentDate}`,
-      sourceType: "purchase_order_payment",
-      sourceId: id,
-      sourceKey: `finance:sched_payment:${id}:${paymentDate}`,
-      lines: [
-        { accountCode: schedApCode, debit: Number(amount), credit: 0, vendorId: po.supplierId as number | undefined },
-        { accountCode: schedCashCode, debit: 0, credit: Number(amount), vendorId: po.supplierId as number | undefined },
-      ],
-    });
-    markIdempotencyReplay(req, res, schedResult.alreadyExists);
 
-    const schedNote = ` | دفعة مجدولة ${paymentDate}: ${amount} (${method})`;
-    await applyTransition({
-      entity: "purchase_orders",
-      id,
-      scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-      action: "purchase_order.payment_scheduled",
-      toState: "payment_scheduled",
-      setExtras: {
-        notes: { raw: `CONCAT(COALESCE(notes,''), '${schedNote.replace(/'/g, "''")}')` },
-      },
-      after: { paymentDate, amount, method },
+    let schedAlreadyExists = false;
+    await withTransaction(async (client: any) => {
+      const schedResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `SCHED-PAY-${po.ref}`,
+        description: `دفعة مجدولة لأمر الشراء ${po.ref} بتاريخ ${paymentDate}`,
+        sourceType: "purchase_order_payment",
+        sourceId: id,
+        sourceKey: `finance:sched_payment:${id}:${paymentDate}:${Number(amount)}`,
+        lines: [
+          { accountCode: schedApCode, debit: Number(amount), credit: 0, vendorId: po.supplierId as number | undefined },
+          { accountCode: schedCashCode, debit: 0, credit: Number(amount), vendorId: po.supplierId as number | undefined },
+        ],
+        guardTable: "purchase_orders",
+        guardId: id,
+      });
+      schedAlreadyExists = schedResult.alreadyExists;
+
+      // Bump the cumulative paidAmount on the PO so AP aging recognises
+      // the scheduled draw — the previous shape only flipped status,
+      // leaving paidAmount=0 even after a scheduled-payment run.
+      await client.query(
+        `UPDATE purchase_orders SET "paidAmount" = COALESCE("paidAmount",0) + $1
+         WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [Number(amount), id, scope.companyId],
+      );
+
+      const schedNote = ` | دفعة مجدولة ${paymentDate}: ${amount} (${method})`;
+      await applyTransition({
+        entity: "purchase_orders",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        action: "purchase_order.payment_scheduled",
+        toState: "payment_scheduled",
+        setExtras: {
+          notes: { raw: `CONCAT(COALESCE(notes,''), '${schedNote.replace(/'/g, "''")}')` },
+        },
+        after: { paymentDate, amount, method },
+        client,
+      });
     });
+    markIdempotencyReplay(req, res, schedAlreadyExists);
 
     res.json({
       message: "تم جدولة الدفعة بنجاح",
@@ -2545,7 +2588,17 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
       return;
     }
 
+    // F2 (audit follow-up): JE post + journalId stamp INSIDE the same
+    // withTransaction. Same shape as customer-advances fix.
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [advReceivableCode, cashCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "debit", "1420"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_cash", "credit", "1100"),
+    ]);
+
     let advanceId: number | null = null;
+    let journalId: number | null = null;
+    let vadvAlreadyExists = false;
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -2589,16 +2642,7 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
           throw e;
         }
       }
-    });
 
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const [advReceivableCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "debit", "1420"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_cash", "credit", "1100"),
-    ]);
-
-    let journalId: number | null = null;
-    try {
       const advResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -2616,16 +2660,16 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
         guardId: advanceId ?? 0,
       });
       journalId = advResult.journalId;
-      markIdempotencyReplay(req, res, advResult.alreadyExists);
+      vadvAlreadyExists = advResult.alreadyExists;
+
       if (journalId && advanceId) {
-        await rawExecute(`UPDATE vendor_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, advanceId, scope.companyId]);
+        await client.query(
+          `UPDATE vendor_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [journalId, advanceId, scope.companyId],
+        );
       }
-    } catch (glErr) {
-      if (advanceId) {
-        await rawExecute(`DELETE FROM vendor_advances WHERE id = $1 AND "companyId" = $2`, [advanceId, scope.companyId]);
-      }
-      throw glErr;
-    }
+    });
+    markIdempotencyReplay(req, res, vadvAlreadyExists);
 
     res.status(201).json({ advanceId, ref: advRef, supplierId, amount: amt, journalId, status: "open" });
   } catch (err) {
@@ -2642,6 +2686,16 @@ purchaseRouter.post("/vendor-advances/:id/apply", authorize({ feature: "finance.
     const advanceId = parseId(req.params.id, "id");
     const { poId, amount } = zodParse(applyVendorAdvanceSchema.safeParse(req.body ?? {}));
     const applyAmt = roundTo2(Number(amount));
+
+    // F4 (audit follow-up): typed period gate up front — mirrors the
+    // customer-advances/apply fix.
+    const vAdvPeriod = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!vAdvPeriod.open) {
+      throw new ConflictError(
+        `لا يمكن تطبيق دفعة مقدمة للمورد في فترة مُقفلة: ${vAdvPeriod.periodName ?? ""}`,
+        { meta: { periodName: vAdvPeriod.periodName } },
+      );
+    }
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apCode, advReceivableCode] = await Promise.all([
@@ -2759,7 +2813,18 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     const creditRef = internalTechRef(`VCM-${supplierId}`);
     const creditSourceKey = `finance:vendor_credit:${supplierId}:${memoDateStr}:${requestIdempotencyToken(req)}`;
 
+    // F2 (audit follow-up): JE post + journalId stamp INSIDE the same
+    // withTransaction. Same shape as customer-advances fix.
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [apCode, returnsCode, vatInputCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5550"),
+      financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1400"),
+    ]);
+
     let memoId: number | null = null;
+    let journalId: number | null = null;
+    let vcmAlreadyExists = false;
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -2805,17 +2870,7 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
           throw e;
         }
       }
-    });
 
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const [apCode, returnsCode, vatInputCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5550"),
-      financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1400"),
-    ]);
-
-    let journalId: number | null = null;
-    try {
       const memoResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -2834,16 +2889,16 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
         guardId: memoId ?? 0,
       });
       journalId = memoResult.journalId;
-      markIdempotencyReplay(req, res, memoResult.alreadyExists);
+      vcmAlreadyExists = memoResult.alreadyExists;
+
       if (journalId && memoId) {
-        await rawExecute(`UPDATE vendor_credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
+        await client.query(
+          `UPDATE vendor_credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [journalId, memoId, scope.companyId],
+        );
       }
-    } catch (glErr) {
-      if (memoId) {
-        await rawExecute(`DELETE FROM vendor_credit_memos WHERE id = $1 AND "companyId" = $2`, [memoId, scope.companyId]);
-      }
-      throw glErr;
-    }
+    });
+    markIdempotencyReplay(req, res, vcmAlreadyExists);
 
     res.status(201).json({ memoId, ref: creditRef, supplierId, amount: subtotal, vatAmount, totalAmount: fullAmount, journalId, status: "open" });
   } catch (err) {
@@ -2859,6 +2914,15 @@ purchaseRouter.post("/vendor-credits/:id/apply", authorize({ feature: "finance.p
     const memoId = parseId(req.params.id, "id");
     const { poId, amount } = zodParse(applyVendorCreditSchema.safeParse(req.body ?? {}));
     const applyAmt = roundTo2(Number(amount));
+
+    // F4 (audit follow-up): typed period gate up front.
+    const vCreditPeriod = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!vCreditPeriod.open) {
+      throw new ConflictError(
+        `لا يمكن تطبيق إشعار دائن مورد في فترة مُقفلة: ${vCreditPeriod.periodName ?? ""}`,
+        { meta: { periodName: vCreditPeriod.periodName } },
+      );
+    }
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apCode, creditClearingCode] = await Promise.all([
@@ -3049,7 +3113,22 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
       return;
     }
 
+    // F1 + F2 (audit-pass follow-up): pull the JE post + journalId stamp
+    // INSIDE the same withTransaction as the INSERT, mirror the
+    // customer-advances fix. Also bump the denormalised supplier spend
+    // counter + the expense budget bucket so AP dashboards and budget
+    // overruns stay accurate.
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const expenseCode = b.expenseAccountCode
+      ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5400");
+    const [vatInputCode, apCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1400"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+    ]);
+
     let invoiceId: number | null = null;
+    let journalId: number | null = null;
+    let vinvAlreadyExists = false;
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -3101,18 +3180,30 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
           throw e;
         }
       }
-    });
 
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const expenseCode = b.expenseAccountCode
-      ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5400");
-    const [vatInputCode, apCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1400"),
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
-    ]);
+      // Denormalised supplier-spend counter — symmetric to clients
+      // .totalRevenue. Subtotal (not total) so the bump matches the
+      // expense recognised, not the VAT input.
+      if (subtotal > 0) {
+        await client.query(
+          `UPDATE suppliers SET "totalSpend" = COALESCE("totalSpend",0) + $1
+           WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [subtotal, b.supplierId, scope.companyId],
+        ).catch(() => { /* totalSpend column may not exist yet — non-fatal */ });
+      }
 
-    let journalId: number | null = null;
-    try {
+      // Budget bucket bump on the expense code for the invoiceDate
+      // period — mirrors what the invoice-approval revenue bump does
+      // on the sales side.
+      if (subtotal > 0) {
+        const period = String(b.invoiceDate).slice(0, 7);
+        await client.query(
+          `UPDATE budgets SET used = COALESCE(used, 0) + $1
+           WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+          [subtotal, scope.companyId, expenseCode, period],
+        );
+      }
+
       const invResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -3134,16 +3225,16 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
         guardId: invoiceId ?? 0,
       });
       journalId = invResult.journalId;
-      markIdempotencyReplay(req, res, invResult.alreadyExists);
+      vinvAlreadyExists = invResult.alreadyExists;
+
       if (journalId && invoiceId) {
-        await rawExecute(`UPDATE vendor_invoices SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, invoiceId, scope.companyId]);
+        await client.query(
+          `UPDATE vendor_invoices SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [journalId, invoiceId, scope.companyId],
+        );
       }
-    } catch (glErr) {
-      if (invoiceId) {
-        await rawExecute(`DELETE FROM vendor_invoices WHERE id = $1 AND "companyId" = $2`, [invoiceId, scope.companyId]);
-      }
-      throw glErr;
-    }
+    });
+    markIdempotencyReplay(req, res, vinvAlreadyExists);
 
     res.status(201).json({ invoiceId, ref: b.ref, supplierId: b.supplierId, subtotal, vatAmount, total, journalId, status: "approved" });
   } catch (err) {

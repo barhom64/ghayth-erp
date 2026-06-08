@@ -10,12 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import {
   TrendingUp, TrendingDown, Crown, Frown, Download,
   Layers, ChevronRight,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
 
 /**
  * Cost Center P&L Comparison
@@ -90,6 +93,7 @@ export default function CostCenterPnlPage() {
       .filter((r) => r.revenue !== 0 || r.expense !== 0)
       .sort((a, b) => b.net - a.net);
   }, [data]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -97,6 +101,15 @@ export default function CostCenterPnlPage() {
   const totalExpense = rows.reduce((s, r) => s + r.expense, 0);
   const totalNet = totalRevenue - totalExpense;
   const profitCount = rows.filter((r) => r.net > 0).length;
+
+  // Pareto cumulative on |net| — `rows` is already net-DESC, so each
+  // step adds the absolute contribution to the running total. Crown
+  // marks the first row crossing 80% — "these N centres drive 80%
+  // of the profit magnitude; the rest is long tail."
+  const { cumulativePcts, thresholdIdx } = computeParetoCumulative(
+    rows.map((r) => r.net),
+    80,
+  );
   const lossCount = rows.filter((r) => r.net < 0).length;
   const breakEvenCount = rows.filter((r) => r.net === 0).length;
 
@@ -241,6 +254,20 @@ export default function CostCenterPnlPage() {
       },
     },
     {
+      key: "_pareto",
+      header: "حصة تراكمية",
+      render: (r) => {
+        const idx = rows.indexOf(r);
+        return (
+          <ParetoMarker
+            cumulativePct={cumulativePcts[idx] ?? 0}
+            isThresholdRow={idx === thresholdIdx}
+            testidPrefix={`cc-pnl-pareto-${idx}`}
+          />
+        );
+      },
+    },
+    {
       key: "entryCount",
       header: "قيود",
       render: (r) => <Badge variant="outline" className="text-[10px] font-mono">{formatNumber(r.entryCount)}</Badge>,
@@ -283,13 +310,13 @@ export default function CostCenterPnlPage() {
           <PrintButton
             entityType="report_cost_center_pnl"
             entityId={`${startDate}..${endDate}`}
-            payload={{
+            payload={() => ({
               entity: {
                 title: "ربحية مراكز التكلفة",
                 startDate, endDate,
                 centerCount: rows.length,
               },
-              items: rows.map((r) => ({
+              items: printRows.map((r) => ({
                 "مركز التكلفة": r.costCenter,
                 "الإيراد": r.revenue,
                 "المصروف": r.expense,
@@ -297,12 +324,23 @@ export default function CostCenterPnlPage() {
                 "هامش %": Number(r.margin ?? 0).toFixed(2),
                 "عدد القيود": r.entryCount,
               })),
-            }}
+            })}
           />
         </div>
       }
     >
       <FinanceTabsNav />
+
+      <Card className="mb-3">
+        <CardContent className="p-3">
+          <DateRangePresets
+            value={{ from: startDate, to: endDate }}
+            onChange={(r) => { setStartDate(r.from); setEndDate(r.to); }}
+            testidPrefix="cc-pnl-preset"
+            hideAllTime
+          />
+        </CardContent>
+      </Card>
 
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">
@@ -402,6 +440,7 @@ export default function CostCenterPnlPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا توجد بيانات لمراكز التكلفة في هذي الفترة"
           />

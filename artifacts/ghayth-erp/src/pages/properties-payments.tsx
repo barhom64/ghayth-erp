@@ -1,4 +1,6 @@
 import { Link, useLocation } from "wouter";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,7 @@ export default function PropertiesPayments() {
     statusField: "status" as any,
     dateField: "dueDate" as any,
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "tenantName", header: "المستأجر", sortable: true, className: "font-medium" },
@@ -82,21 +85,39 @@ export default function PropertiesPayments() {
       title="مدفوعات الإيجار"
       subtitle="متابعة وتسجيل مدفوعات الإيجار"
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
-      actions={canManage && (
+      actions={
         <div className="flex items-center gap-2">
-          <GuardedButton
-            perm="properties.payments:create"
-            variant="outline"
-            disabled={escalateMut.isPending}
-            onClick={() => escalateMut.mutate({})}
-            className="gap-2"
-            rateLimitAware
-          >
-            <AlertTriangle className="h-4 w-4" />
-            {escalateMut.isPending ? "جاري التصعيد..." : "تصعيد المتأخّرات"}
-          </GuardedButton>
+          <PrintButton
+            entityType="report_properties_payments"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "دفعات الإيجار", total: printRows.length },
+              items: printRows.map((p: any) => ({
+                "المستأجر": p.tenantName || "—",
+                "الوحدة": p.unitName || p.unitNumber || "—",
+                "المبلغ": Number(p.amount || 0),
+                "تاريخ الاستحقاق": p.dueDate || "—",
+                "تاريخ السداد": p.paidDate || "—",
+                "الحالة": p.status || "—",
+              })),
+            })}
+          />
+          {canManage && (
+            <GuardedButton
+              perm="properties.payments:create"
+              variant="outline"
+              disabled={escalateMut.isPending}
+              onClick={() => escalateMut.mutate({})}
+              className="gap-2"
+              rateLimitAware
+            >
+              <AlertTriangle className="h-4 w-4" />
+              {escalateMut.isPending ? "جاري التصعيد..." : "تصعيد المتأخّرات"}
+            </GuardedButton>
+          )}
         </div>
-      )}
+      }
     >
       <PropertyTabsNav />
 
@@ -130,7 +151,8 @@ export default function PropertiesPayments() {
         <CardContent>
           <DataTable
             columns={columns}
-            data={filtered}
+            onSortedDataChange={setPrintRows}
+        data={filtered}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

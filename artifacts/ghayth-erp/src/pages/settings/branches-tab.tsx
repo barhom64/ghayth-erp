@@ -17,6 +17,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { PrintButton } from "@/components/shared/print-button";
 
 const branchFormSchema = z.object({
   name: z.string().trim().min(1, "اسم الفرع مطلوب"),
@@ -187,9 +188,30 @@ export function BranchesTab() {
           <Building className="h-5 w-5" />
           إدارة الفروع
         </h3>
-        <GuardedButton perm="admin:create" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
-          {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />فرع جديد</>}
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_settings_branches"
+            entityId="list"
+            size="icon"
+            label="طباعة قائمة الفروع"
+            payload={() => ({
+              entity: {
+                title: filterCompanyId ? `فروع ${companies.find((c: any) => c.id === filterCompanyId)?.name ?? ""}` : "قائمة الفروع",
+                total: filteredItems.length,
+              },
+              items: filteredItems.map((r: any) => ({
+                "اسم الفرع": r.name || "—",
+                "بالإنجليزية": r.nameEn || "—",
+                "الشركة": companies.find((c: any) => c.id === r.companyId)?.name || "—",
+                "المدينة": r.city || "—",
+                "الهاتف": r.phone || "—",
+              })),
+            })}
+          />
+          <GuardedButton perm="admin:create" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
+            {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />فرع جديد</>}
+          </GuardedButton>
+        </div>
       </div>
 
       {showForm && (

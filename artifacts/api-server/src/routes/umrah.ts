@@ -15,6 +15,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -36,7 +37,9 @@ import {
   normalizeImportRows,
   MUTAMER_HEADER_MAP,
   VOUCHER_HEADER_MAP,
+  UMRAH_FIELD_LABELS_AR,
 } from "../lib/umrahImportEngine.js";
+import { gccExclusionSqlFragment } from "../lib/umrahNationalityRules.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEASON LOCK — rejects writes on closed/archived seasons
@@ -56,6 +59,21 @@ async function requireOpenSeason(seasonId: number, companyId: number): Promise<v
 // LIFECYCLE STATE MACHINES — Umrah domain
 // ─────────────────────────────────────────────────────────────────────────────
 const PILGRIM_STATUSES = ["pending", "arrived", "active", "overstayed", "departed", "violated", "cancelled"] as const;
+// Arabic labels for the lifecycle states above. Mirrored from the
+// client-side canonical dictionary in
+// `ghayth-erp/src/lib/umrah-pilgrim-status.ts` so the pilgrims CSV
+// export ships "متجاوز" / "ملغى" instead of raw "overstayed" /
+// "cancelled". Operators opening the file in Excel see the same word
+// they see in the list, the badge, and the bulk-status dropdown.
+const PILGRIM_STATUS_LABELS_AR: Record<string, string> = {
+  pending:    "لم يصل",
+  arrived:    "وصل",
+  active:     "نشط",
+  overstayed: "متجاوز",
+  departed:   "غادر",
+  violated:   "مخالف",
+  cancelled:  "ملغى",
+};
 const PILGRIM_TRANSITIONS: Record<string, readonly string[]> = {
   pending:    ["arrived", "cancelled"],
   arrived:    ["active", "departed", "overstayed", "cancelled"],
@@ -242,6 +260,15 @@ const patchPilgrimSchema = z.object({
   // compliance reviewer can see WHY each exemption was granted.
   overstayExempt: z.boolean().optional(),
   overstayExemptReason: z.string().optional().nullable(),
+  // Visa application workflow (migration 266). Transitions are
+  // validated against `VISA_TRANSITIONS` in the handler below so an
+  // operator can't jump from `requested` straight to `delivered` and
+  // skip the issuance milestone.
+  visaStatus: z.enum([
+    "not_requested", "requested", "under_review", "approved",
+    "issued", "delivered", "rejected", "cancelled",
+  ]).optional(),
+  visaRejectionReason: z.string().optional().nullable(),
 });
 
 // `columnMapping` lets the wizard's column-mapping step override the
@@ -452,13 +479,18 @@ router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), asyn
       ),
       // Visa-expiring within 7 days — mirrors the list-page banner +
       // the per-group card. Excludes pilgrims who already left.
+      // Also excludes GCC nationals — they don't require a visa to
+      // enter KSA, so a `visaExpiry` row for them is operator data
+      // entry from a different jurisdiction (or a typo); either way,
+      // alerting on them is a false positive.
       rawQuery<{ count: string }>(
         `SELECT COUNT(*)::text AS count
            FROM umrah_pilgrims
           WHERE "seasonId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
             AND "visaExpiry" IS NOT NULL
             AND "visaExpiry" <= CURRENT_DATE + INTERVAL '7 days'
-            AND status NOT IN ('departed', 'cancelled')`,
+            AND status NOT IN ('departed', 'cancelled')
+            AND ${gccExclusionSqlFragment(`"nationality"`)}`,
         [id, scope.companyId],
       ),
       rawQuery<{ count: string }>(
@@ -691,6 +723,9 @@ router.post("/agents", authorize({ feature: "umrah", action: "create" }), async 
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء الوكيل");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_agents", entityId: rows[0].id, after: { name: b.name } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.created", entity: "umrah_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, country: b.country }) }).catch((e) => logger.error(e, "umrah background task failed"));
+    // Per-agent revenue subsidiary account (#1594) — fire-and-forget; sales for
+    // this agent route to its own revenue leaf via resolveRevenueAccount.
+    createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
@@ -933,10 +968,13 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
     if (visaExpiringWithin) {
       const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
       params.push(days);
+      // GCC nationals don't need a KSA visa — exclude them from the
+      // expiring-alert list (same rule the season-detail KPI uses).
       where += ` AND p."visaExpiry" IS NOT NULL
                  AND p."visaExpiry" >= CURRENT_DATE
                  AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
-                 AND p.status NOT IN ('departed','cancelled')`;
+                 AND p.status NOT IN ('departed','cancelled')
+                 AND ${gccExclusionSqlFragment(`p."nationality"`)}`;
     }
     if (search) {
       // Search hits four columns:
@@ -1009,10 +1047,13 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     if (visaExpiringWithin) {
       const days = Math.max(1, Math.min(90, Number(visaExpiringWithin) || 7));
       params.push(days);
+      // GCC nationals don't need a KSA visa — exclude them from the
+      // expiring-alert list (same rule the season-detail KPI uses).
       where += ` AND p."visaExpiry" IS NOT NULL
                  AND p."visaExpiry" >= CURRENT_DATE
                  AND p."visaExpiry" <= CURRENT_DATE + ($${params.length} || ' days')::interval
-                 AND p.status NOT IN ('departed','cancelled')`;
+                 AND p.status NOT IN ('departed','cancelled')
+                 AND ${gccExclusionSqlFragment(`p."nationality"`)}`;
     }
     if (search) {
       const searchHash = blindIndex(String(search));
@@ -1082,7 +1123,20 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     ] as const;
     const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
     const decrypted = rows.map(decryptPilgrimRow) as Array<Record<string, unknown>>;
-    const dataRows = decrypted.map((r) => headers.map(([key]) => csvEscape(r[key])).join(","));
+    const dataRows = decrypted.map((r) =>
+      headers
+        .map(([key]) => {
+          // The `status` column ships as the raw lifecycle enum
+          // ("pending" / "arrived" / ...) at the DB layer; translate
+          // it to the same Arabic word the operator sees in the list.
+          const raw = r[key];
+          if (key === "status" && typeof raw === "string") {
+            return csvEscape(PILGRIM_STATUS_LABELS_AR[raw] ?? raw);
+          }
+          return csvEscape(raw);
+        })
+        .join(","),
+    );
     // BOM so Excel detects UTF-8 Arabic — without it the file opens as
     // mojibake (same lesson as PR #1420's rejected-rows CSV).
     const BOM = "﻿";
@@ -1267,6 +1321,42 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
           sets.push(`"overstayExemptBy"=NULL`);
           sets.push(`"overstayExemptAt"=NULL`);
         }
+      }
+      // Visa application workflow (migration 266). Validate the
+      // transition against VISA_TRANSITIONS so an invalid jump is
+      // rejected BEFORE the UPDATE — operators get a clear error
+      // instead of a silent unchanged state.
+      if (b.visaStatus !== undefined) {
+        const { canTransition, timestampColumnFor } = await import("../lib/umrahVisaWorkflow.js");
+        const [currentRow] = await rawQuery<{ visaStatus: string }>(
+          `SELECT "visaStatus" FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+          [pilgrimId, scope.companyId],
+        );
+        if (!currentRow) throw new NotFoundError("المعتمر غير موجود");
+        const currentStatus = currentRow.visaStatus ?? "not_requested";
+        if (currentStatus !== b.visaStatus && !canTransition(currentStatus, b.visaStatus)) {
+          throw new ValidationError(
+            `انتقال غير مسموح من حالة التأشيرة "${currentStatus}" إلى "${b.visaStatus}"`,
+            { field: "visaStatus", fix: "اختر حالة انتقال متاحة (راجع آلة الحالة للتأشيرة)" },
+          );
+        }
+        // Reject requires a written reason — compliance can audit WHY.
+        if (b.visaStatus === "rejected") {
+          const reason = (b.visaRejectionReason ?? "").trim();
+          if (!reason) {
+            throw new ValidationError("سبب الرفض مطلوب — لا يمكن رفض تأشيرة بدون مبرّر مكتوب", {
+              field: "visaRejectionReason",
+              fix: "اكتب سبباً واضحاً (مثل: نقص مستند، رفض جهة المخالصات)",
+            });
+          }
+          params.push(reason);
+          sets.push(`"visaRejectionReason"=$${params.length}`);
+        }
+        params.push(b.visaStatus);
+        sets.push(`"visaStatus"=$${params.length}`);
+        // Capture the milestone timestamp when the state has one.
+        const tsCol = timestampColumnFor(b.visaStatus as never);
+        if (tsCol) sets.push(`"${tsCol}"=NOW()`);
       }
       if (sets.length === 0) {
         const [row] = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [pilgrimId, scope.companyId]);
@@ -1783,75 +1873,27 @@ router.post("/run-penalty-engine", authorize({ feature: "umrah", action: "create
   try {
     const scope = req.scope!;
     const { overstayDays = 3, dailyRate = 500 } = zodParse(runPenaltyEngineSchema.safeParse(req.body));
-    const today = todayISO();
-    const overstayed = await rawQuery(
-      `SELECT p.id, p."passportNumber", p."fullName", p."agentId", p."seasonId", p."departureDate",
-        ($1::date - p."departureDate"::date) as "daysOver"
-       FROM umrah_pilgrims p
-       WHERE p."companyId"=$2 AND p."deletedAt" IS NULL AND p.status='overstayed' AND p."departureDate" < $1
-         AND NOT EXISTS (SELECT 1 FROM umrah_penalties pen WHERE pen."pilgrimId"=p.id AND pen."deletedAt" IS NULL AND pen.type='overstay' AND pen.status IN ('pending','invoiced'))`,
-      [today, scope.companyId]
+    const { generateOverstayPenalties } = await import("../lib/umrahPenaltyEngine.js");
+    const result = await generateOverstayPenalties(
+      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      { overstayDays, dailyRate },
     );
-    let created = 0;
-    let violationsLinked = 0;
-    for (const p of overstayed) {
-      if (Number(p.daysOver) >= overstayDays) {
-        const amount = Number(p.daysOver) * dailyRate;
-        const result = await withTransaction(async (client) => {
-          const penRes = await client.query(
-            `INSERT INTO umrah_penalties ("companyId","pilgrimId","agentId","seasonId",type,"daysOverstayed",amount,notes)
-             VALUES ($1,$2,$3,$4,'overstay',$5,$6,$7) RETURNING id`,
-            [scope.companyId, p.id, p.agentId, p.seasonId, p.daysOver, amount, `غرامة تأخر ${p.daysOver} يوم — ${p.fullName}`]
-          );
-          // DT-2 (C3): attach the operational violation to its financial
-          // penalty. The detection cron writes the umrah_violations row;
-          // this links that row to the penalty just created so the two
-          // parallel systems are no longer disjoint.
-          const penaltyId = penRes.rows[0]?.id;
-          let linked = 0;
-          if (penaltyId) {
-            const upd = await client.query(
-              `UPDATE umrah_violations SET "linkedPenaltyId" = $1, "updatedAt" = NOW()
-               WHERE "mutamerId" = $2 AND type = 'overstay' AND "companyId" = $3
-                 AND "linkedPenaltyId" IS NULL AND "deletedAt" IS NULL`,
-              [penaltyId, p.id, scope.companyId]
-            );
-            linked = upd.rowCount ?? 0;
-          }
-          return { rows: penRes.rows, linked };
-        });
-        const penRows = result.rows;
-        violationsLinked += result.linked;
-        await applyTransition({
-          entity: "umrah_pilgrims",
-          id: p.id,
-          scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
-          action: "umrah.pilgrim.violated",
-          fromStates: ["overstayed"],
-          toState: "violated",
-          extraWhere: `"deletedAt" IS NULL`,
-        });
-        if (penRows[0]?.id) {
-          try {
-            const { umrahEngine } = await import("../lib/engines/index.js");
-            await umrahEngine.postPenaltyGL(
-              { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-              {
-                id: penRows[0].id, amount,
-                pilgrimName: p.fullName, agentName: undefined,
-                type: "overstay",
-                agentId: p.agentId as number | undefined,
-                seasonId: p.seasonId as number | undefined,
-              }
-            );
-          } catch (e) { logger.error(e, "umrah penalty GL posting failed (non-blocking)"); }
-        }
-        created++;
-      }
-    }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: 0, after: { checked: overstayed.length, penaltiesCreated: created, violationsLinked } }).catch((e) => logger.error(e, "umrah background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0, details: JSON.stringify({ checked: overstayed.length, penaltiesCreated: created, violationsLinked }) }).catch((e) => logger.error(e, "umrah background task failed"));
-    res.json({ checked: overstayed.length, penaltiesCreated: created, violationsLinked });
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "umrah_penalties", entityId: 0,
+      after: {
+        checked: result.checked,
+        penaltiesCreated: result.penaltiesCreated,
+        violationsLinked: result.violationsLinked,
+        skippedExempt: result.skippedExempt,
+      },
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0,
+      details: JSON.stringify(result),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json(result);
   } catch (err) { handleRouteError(err, res, "Penalty engine error"); }
 });
 
@@ -2589,6 +2631,183 @@ router.post("/transport/:id/assign-pilgrims", authorize({ feature: "umrah", acti
   } catch (err) { handleRouteError(err, res, "Assign pilgrims to transport error"); }
 });
 
+// ─── Bus manifest: check-in + seat allocation (migration 267) ──────
+// The morning-of dispatcher flow: every pilgrim on the assigned list
+// gets checked in as they board the bus. Each row's `checkedInAt` +
+// `checkedInBy` carries the audit trail. `noShow` flags pilgrims the
+// dispatcher waited for and gave up on — used by downstream reports
+// to surface "we left behind pilgrim X".
+
+const manifestRowSchema = z.object({
+  pilgrimId: z.coerce.number().int().positive(),
+  seatNumber: z.string().max(10).nullable().optional(),
+  noShow: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+});
+
+const manifestBulkSchema = z.object({
+  rows: z.array(manifestRowSchema).min(1, "أدخل صفًا واحدًا على الأقل"),
+});
+
+router.get("/transport/:id/manifest", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const transportId = parseId(req.params.id, "id");
+    const [transport] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [transportId, scope.companyId],
+    );
+    if (!transport) throw new NotFoundError("رحلة النقل غير موجودة");
+    // Join the manifest rows back to the pilgrim record so the
+    // dispatcher sees names + phones + NUSK numbers alongside the
+    // seat / check-in status. Ordered by seat first then name so the
+    // printed sheet matches the bus layout.
+    const rows = await rawQuery(
+      `SELECT tp.id            AS "manifestRowId",
+              tp."pilgrimId",
+              p."fullName",
+              p."passportNumber",
+              p."nuskNumber",
+              p.phone,
+              tp."seatNumber",
+              tp."checkedInAt",
+              tp."checkedInBy",
+              tp."noShow",
+              tp.notes
+         FROM umrah_transport_pilgrims tp
+    LEFT JOIN umrah_pilgrims p
+           ON p.id = tp."pilgrimId"
+          AND p."companyId" = tp."companyId"
+          AND p."deletedAt" IS NULL
+        WHERE tp."transportId" = $1
+          AND tp."companyId"   = $2
+        ORDER BY tp."seatNumber" NULLS LAST, p."fullName"`,
+      [transportId, scope.companyId],
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) { handleRouteError(err, res, "Manifest fetch error"); }
+});
+
+router.post("/transport/:id/check-in", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const transportId = parseId(req.params.id, "id");
+    const b = zodParse(manifestRowSchema.safeParse(req.body));
+    // Trip must exist + be active. Completed/cancelled trips can't
+    // accept new check-ins — protect against a stale tab pressing
+    // the button after the operator already closed the trip.
+    const [trip] = await rawQuery<{ status: string }>(
+      `SELECT status FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [transportId, scope.companyId],
+    );
+    if (!trip) throw new NotFoundError("رحلة النقل غير موجودة");
+    if (trip.status === "completed" || trip.status === "cancelled") {
+      throw new ConflictError("لا يمكن تسجيل ركوب لرحلة مكتملة أو ملغاة");
+    }
+    // The pilgrim must already be assigned to this trip via the join
+    // table — manifest check-in doesn't auto-assign (assign-pilgrims
+    // is a separate authorised step).
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (b.noShow === true) {
+      sets.push(`"noShow" = TRUE`);
+      sets.push(`"checkedInAt" = NULL`);
+      sets.push(`"checkedInBy" = NULL`);
+    } else {
+      sets.push(`"noShow" = FALSE`);
+      sets.push(`"checkedInAt" = NOW()`);
+      params.push(scope.userId);
+      sets.push(`"checkedInBy" = $${params.length}`);
+    }
+    if (b.seatNumber !== undefined) {
+      params.push(b.seatNumber);
+      sets.push(`"seatNumber" = $${params.length}`);
+    }
+    if (b.notes !== undefined) {
+      params.push(b.notes);
+      sets.push(`"notes" = $${params.length}`);
+    }
+    params.push(transportId, b.pilgrimId, scope.companyId);
+    const { affectedRows } = await rawExecute(
+      `UPDATE umrah_transport_pilgrims
+          SET ${sets.join(", ")}
+        WHERE "transportId" = $${params.length - 2}
+          AND "pilgrimId"   = $${params.length - 1}
+          AND "companyId"   = $${params.length}`,
+      params,
+    );
+    if (!affectedRows) {
+      throw new NotFoundError("المعتمر غير مُسند لهذه الرحلة");
+    }
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: b.noShow ? "umrah.transport.no_show" : "umrah.transport.checked_in",
+      entity: "umrah_transport", entityId: transportId,
+      details: JSON.stringify({ pilgrimId: b.pilgrimId, seatNumber: b.seatNumber ?? null }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "Manifest check-in error"); }
+});
+
+router.post("/transport/:id/check-in-bulk", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const transportId = parseId(req.params.id, "id");
+    const { rows } = zodParse(manifestBulkSchema.safeParse(req.body));
+    const [trip] = await rawQuery<{ status: string }>(
+      `SELECT status FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [transportId, scope.companyId],
+    );
+    if (!trip) throw new NotFoundError("رحلة النقل غير موجودة");
+    if (trip.status === "completed" || trip.status === "cancelled") {
+      throw new ConflictError("لا يمكن تسجيل ركوب لرحلة مكتملة أو ملغاة");
+    }
+    let updated = 0;
+    let skipped = 0;
+    await withTransaction(async (client) => {
+      for (const row of rows) {
+        const sets: string[] = [];
+        const params: unknown[] = [];
+        if (row.noShow === true) {
+          sets.push(`"noShow" = TRUE`);
+          sets.push(`"checkedInAt" = NULL`);
+          sets.push(`"checkedInBy" = NULL`);
+        } else {
+          sets.push(`"noShow" = FALSE`);
+          sets.push(`"checkedInAt" = NOW()`);
+          params.push(scope.userId);
+          sets.push(`"checkedInBy" = $${params.length}`);
+        }
+        if (row.seatNumber !== undefined) {
+          params.push(row.seatNumber);
+          sets.push(`"seatNumber" = $${params.length}`);
+        }
+        if (row.notes !== undefined) {
+          params.push(row.notes);
+          sets.push(`"notes" = $${params.length}`);
+        }
+        params.push(transportId, row.pilgrimId, scope.companyId);
+        const r = await client.query(
+          `UPDATE umrah_transport_pilgrims
+              SET ${sets.join(", ")}
+            WHERE "transportId" = $${params.length - 2}
+              AND "pilgrimId"   = $${params.length - 1}
+              AND "companyId"   = $${params.length}`,
+          params,
+        );
+        if ((r.rowCount ?? 0) > 0) updated++;
+        else skipped++;
+      }
+    });
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.transport.bulk_check_in", entity: "umrah_transport", entityId: transportId,
+      details: JSON.stringify({ updated, skipped, total: rows.length }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json({ updated, skipped, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Manifest bulk check-in error"); }
+});
+
 // Surface the built-in Arabic-header dictionaries to the wizard so the
 // column-mapping step can pre-fill the operator's choices for known
 // NUSK / MOFA layouts. The operator only types when their source uses
@@ -2607,14 +2826,19 @@ router.get("/import/header-maps", authorize({ feature: "umrah", action: "create"
       }
       return out;
     };
+    // labels: { dbField → canonical Arabic label } so the wizard's
+    // column-mapping dropdown shows comprehensible Arabic instead of raw
+    // English identifiers (nuskInvoiceNumber, mutamerCount, ...).
     res.json({
       mutamers: {
         forward: MUTAMER_HEADER_MAP,
         targets: invertMap(MUTAMER_HEADER_MAP),
+        labels: UMRAH_FIELD_LABELS_AR,
       },
       vouchers: {
         forward: VOUCHER_HEADER_MAP,
         targets: invertMap(VOUCHER_HEADER_MAP),
+        labels: UMRAH_FIELD_LABELS_AR,
       },
     });
   } catch (err) { handleRouteError(err, res, "Import header maps error"); }
@@ -2638,9 +2862,36 @@ const suggestMappingSchema = z.object({
 
 router.post("/import/suggest-mapping", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
+    const scope = req.scope!;
     const { headers, fileType } = zodParse(suggestMappingSchema.safeParse(req.body));
     const { suggestColumnMapping } = await import("../lib/umrahImportEngine.js");
-    res.json({ suggestions: suggestColumnMapping(headers, fileType) });
+    const suggestions = suggestColumnMapping(headers, fileType);
+    // Usage telemetry — which headers operators send + how many the
+    // matcher catches at each confidence band. Without this, we can't
+    // see which incoming Excel variants are escaping the built-in
+    // dictionary (signal for adding them to the dictionary). Mirrors
+    // the assistant.ask pattern (#1625): event broadcasts only counts,
+    // audit log carries the raw headers (RBAC-gated).
+    const hitCount = Object.keys(suggestions ?? {}).length;
+    const missCount = Math.max(0, headers.length - hitCount);
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "umrah.import.suggest_mapping",
+      entity: "umrah_import_mapping_presets",
+      entityId: scope.userId,
+      after: { fileType, headers, hitCount, missCount },
+    });
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "umrah.import.suggest_mapping",
+      entity: "umrah_import_mapping_presets",
+      entityId: scope.userId,
+      details: JSON.stringify({ fileType, total: headers.length, hitCount, missCount }),
+    }).catch((e) => logger.error(e, "umrah suggest-mapping event emit failed"));
+    res.json({ suggestions });
   } catch (err) { handleRouteError(err, res, "Suggest mapping error"); }
 });
 
@@ -3311,6 +3562,50 @@ router.get("/nusk-wallet", authorize({ feature: "umrah", action: "view" }), asyn
       totalRefunds,
     });
   } catch (err) { handleRouteError(err, res, "Get NUSK wallet error"); }
+});
+
+// Test internal notification — the operator clicks "اختبار" in
+// settings and we send a one-off in-app notification to their own
+// assignment. Confirms the notification seam is wired without
+// forcing a real pilgrim row through the pipeline.
+router.post("/notifications/test", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    // Find this operator's assignment id — that's where the test
+    // notification lands. NULL means the user has no active
+    // employee assignment; we surface a clear error instead of
+    // silently dropping.
+    const [me] = await rawQuery<{ id: number }>(
+      `SELECT ea.id FROM employee_assignments ea
+        WHERE ea."userId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+        ORDER BY ea.id DESC LIMIT 1`,
+      [scope.userId, scope.companyId],
+    );
+    if (!me) {
+      throw new ValidationError("ليس لديك تكليف موظف نشط — لا يمكن استلام إشعار تجريبي", {
+        field: "userId",
+        fix: "تأكد من ربط حسابك بـemployee_assignment نشط في إعدادات الموارد البشرية",
+      });
+    }
+    const { createNotification } = await import("../lib/businessHelpers.js");
+    await createNotification({
+      companyId: scope.companyId,
+      assignmentId: me.id,
+      type: "umrah",
+      title: "🔔 إشعار تجريبي من نظام العمرة",
+      body: `اختبار نظام الإشعارات الداخلية — التاريخ: ${todayISO()}. إذا وصلتك هذه الرسالة فالنظام جاهز.`,
+      priority: "normal",
+      refType: "umrah_notifications",
+      refId: undefined,
+      actionUrl: "/umrah/settings",
+    });
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.notifications.test.sent", entity: "notifications", entityId: me.id,
+      details: JSON.stringify({ recipientAssignmentId: me.id }),
+    }).catch((e) => logger.error(e, "umrah test notify event failed"));
+    res.json({ ok: true, recipientAssignmentId: me.id });
+  } catch (err) { handleRouteError(err, res, "Test notification error"); }
 });
 
 export default router;

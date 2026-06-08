@@ -10,8 +10,11 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
+import { resolveAttendancePolicy } from "../lib/attendancePolicyEngine.js";
 import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { resolveRequester } from "../lib/rbac/selfApprovalCreators.js";
+import { invalidateDelegationCache } from "../lib/rbac/delegationService.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
@@ -30,10 +33,23 @@ import {
   currentMonthPadded,
   combineDateAndShiftTime,
   toDateISO,
+  currentDateInTz,
   roundTo2,
   softDeleteJournalEntry,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import {
+  annualLeaveEntitlement,
+  countLeaveDaysExcludingRest,
+  yearsOfService as calcYearsOfService,
+} from "../lib/hrHelpers.js";
+import {
+  HR_TEXT_LIMITS,
+  HR_MONEY_CAPS,
+  trimmedRequired,
+  trimmedOptional,
+  moneyAmount,
+} from "../lib/hrValidation.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, LifecycleError } from "../lib/lifecycleEngine.js";
 import {
@@ -59,29 +75,36 @@ const checkInSchema = z.object({
 
 const leaveRequestSchema = z.object({
   leaveTypeId: z.coerce.number().optional(),
-  leaveType: z.string().optional(),
-  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
-  endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
-  reason: z.string().optional(),
-  documentUrl: z.string().optional(),
-  reliefOfficer: z.string().optional(),
-  contactDuringLeave: z.string().optional(),
+  leaveType: trimmedOptional(HR_TEXT_LIMITS.SHORT),
+  startDate: trimmedRequired("تاريخ البداية مطلوب", HR_TEXT_LIMITS.SHORT),
+  endDate: trimmedRequired("تاريخ النهاية مطلوب", HR_TEXT_LIMITS.SHORT),
+  reason: trimmedOptional(HR_TEXT_LIMITS.TEXT),
+  documentUrl: trimmedOptional(HR_TEXT_LIMITS.NAME),
+  reliefOfficer: trimmedOptional(HR_TEXT_LIMITS.NAME),
+  contactDuringLeave: trimmedOptional(HR_TEXT_LIMITS.NAME),
 });
 
+// VAL-2, VAL-4: all free-text fields are trimmed + length-capped;
+// `deduction` is capped at one month's basic salary to refuse the
+// "extra zero" typo that would deduct more than the employee earns.
 const violationSchema = z.object({
   assignmentId: z.coerce.number({ required_error: "يرجى اختيار الموظف" }),
-  type: z.string().min(1, "نوع المخالفة مطلوب"),
-  description: z.string().min(1, "وصف المخالفة مطلوب"),
+  type: trimmedRequired("نوع المخالفة مطلوب", HR_TEXT_LIMITS.SHORT),
+  description: trimmedRequired("وصف المخالفة مطلوب", HR_TEXT_LIMITS.TEXT),
   severity: z.enum(["low", "medium", "high", "minor", "major", "critical"]).optional(),
-  deduction: z.coerce.number().optional(),
-  period: z.string().optional(),
-  incidentDate: z.string().optional(),
+  deduction: moneyAmount("قيمة الخصم", HR_MONEY_CAPS.DEDUCTION_MAX).optional(),
+  period: z.string().trim().max(HR_TEXT_LIMITS.SHORT).optional(),
+  incidentDate: z.string().trim().max(HR_TEXT_LIMITS.SHORT).optional(),
   regulationId: z.coerce.number().optional(),
-  witness: z.string().optional(),
-  location: z.string().optional(),
-  actionTaken: z.string().optional(),
+  witness: trimmedOptional(HR_TEXT_LIMITS.NAME),
+  location: trimmedOptional(HR_TEXT_LIMITS.NAME),
+  actionTaken: trimmedOptional(HR_TEXT_LIMITS.TEXT),
 });
 
+// Saudi Labor Law Article 104: the worker is entitled to a paid
+// 24-hour weekly rest. The default rest day is Friday; an employer may
+// substitute another day with worker consent, but the shift MUST omit
+// at least one weekday. A 7-day shift definition is illegal.
 const shiftSchema = z.object({
   name: z.string().min(1, "اسم الوردية مطلوب"),
   startTime: z.string().optional(),
@@ -97,6 +120,26 @@ const shiftSchema = z.object({
   flexStartLatest: z.string().optional(),
   breakMinutes: z.coerce.number().optional(),
   gracePeriod: z.coerce.number().optional(),
+}).superRefine((val, ctx) => {
+  if (val.days == null) return;
+  let arr: number[] = [];
+  if (Array.isArray(val.days)) {
+    arr = val.days.map((d) => Number(d)).filter((n) => Number.isFinite(n));
+  } else if (typeof val.days === "string") {
+    arr = val.days
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n));
+  }
+  const unique = new Set(arr.filter((n) => n >= 0 && n <= 6));
+  if (unique.size >= 7) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["days"],
+      message:
+        "نظام العمل السعودي (المادة 104): يلزم تخصيص يوم راحة أسبوعي واحد على الأقل. لا يجوز تعريف وردية تعمل 7 أيام في الأسبوع.",
+    });
+  }
 });
 
 const performanceSchema = z.object({
@@ -147,12 +190,15 @@ const shiftAssignmentSchema = z.object({
   endDate: z.string().optional(),
 });
 
+// VAL-1: content was uncapped, so a single request could submit 1MB of
+// text. Caps at LONG_TEXT (10,000 chars) which fits the longest
+// internal HR letter template comfortably.
 const officialLetterSchema = z.object({
   employeeId: z.coerce.number({ required_error: "الموظف مطلوب" }),
-  type: z.string().optional(),
-  subject: z.string().min(1, "موضوع الخطاب مطلوب"),
-  content: z.string().min(1, "محتوى الخطاب مطلوب"),
-  status: z.string().optional(),
+  type: trimmedOptional(HR_TEXT_LIMITS.SHORT),
+  subject: trimmedRequired("موضوع الخطاب مطلوب", HR_TEXT_LIMITS.NAME),
+  content: trimmedRequired("محتوى الخطاب مطلوب", HR_TEXT_LIMITS.LONG_TEXT),
+  status: trimmedOptional(HR_TEXT_LIMITS.SHORT),
 });
 
 const publicHolidaySchema = z.object({
@@ -210,12 +256,12 @@ const employeeDocumentSchema = z.object({
 
 const excuseRequestSchema = z.object({
   assignmentId: z.coerce.number().optional(),
-  excuseDate: z.string().min(1, "تاريخ الاستئذان مطلوب"),
-  excuseType: z.string().min(1, "نوع الاستئذان مطلوب"),
-  startTime: z.string().optional(),
-  endTime: z.string().optional(),
-  estimatedMinutes: z.coerce.number().optional(),
-  reason: z.string().optional(),
+  excuseDate: trimmedRequired("تاريخ الاستئذان مطلوب", HR_TEXT_LIMITS.SHORT),
+  excuseType: trimmedRequired("نوع الاستئذان مطلوب", HR_TEXT_LIMITS.SHORT),
+  startTime: trimmedOptional(HR_TEXT_LIMITS.SHORT),
+  endTime: trimmedOptional(HR_TEXT_LIMITS.SHORT),
+  estimatedMinutes: z.coerce.number().min(0).max(1440).optional(), // 1 day max
+  reason: trimmedOptional(HR_TEXT_LIMITS.TEXT),
 });
 
 const evaluationCycleSchema = z.object({
@@ -234,6 +280,13 @@ const delegationSchema = z.object({
   reason: z.string().min(1, "سبب التفويض مطلوب"),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  // Granular: the specific feature keys delegated (["*"] = all the delegator's
+  // authority). Empty/omitted ⇒ defaults to ["*"] for backward compatibility.
+  features: z.array(z.string()).optional(),
+  // Optional provenance — set when created from another flow (e.g. a leave req).
+  source: z.string().optional(),
+  refType: z.string().optional(),
+  refId: z.coerce.number().optional(),
 });
 
 const checkOutSchema = z.object({
@@ -480,7 +533,11 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
   try {
     const scope = req.scope!;
     const now = new Date();
-    const today = toDateISO(now);
+    // TZ-1 (HR audit P1): the attendance date must reflect the
+    // employee's local calendar day in Riyadh, not the server's UTC
+    // calendar. A check-in at 02:30 KSA was being recorded as the
+    // previous UTC day before this fix.
+    const today = currentDateInTz("Asia/Riyadh");
     const period = today.slice(0, 7);
     const { lat, lon, notes, workType } = zodParse(checkInSchema.safeParse(req.body));
 
@@ -614,8 +671,37 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
        FROM attendance_policies WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    const gpsRadius = Number(policy?.gpsRadiusMeters ?? 500);
-    const lateThreshold = Number(policy?.lateThresholdMinutes ?? 15);
+    // HR-003 / #1799 priority #6 wiring — overlay the company-default
+    // policy with the per-category resolution. The engine returns
+    // `autoDeductionEnabled = false` for managers/executives so the
+    // late-deduction + violation INSERTs below are SKIPPED for them,
+    // even though we still RECORD the attendance row (we just don't
+    // turn lateness into money). NULL categoryKey ⇒ engine returns
+    // the legacy company-default values unchanged, so this is fully
+    // backward-compatible for any assignment that hasn't been
+    // categorized yet.
+    const resolvedPolicy = scope.activeAssignmentId
+      ? await resolveAttendancePolicy({
+          companyId: scope.companyId,
+          assignmentId: scope.activeAssignmentId,
+        }).catch((e) => { logger.error(e, "attendance policy resolution failed — falling back to company default"); return null; })
+      : null;
+    // HR-003 — apply resolved per-category overrides on top of the
+    // company default. The engine returns numbers for both fields (it
+    // falls back to company default ⇒ 500/15 internally), so we use
+    // them verbatim when present.
+    const gpsRadius = resolvedPolicy
+      ? resolvedPolicy.gpsRadiusMeters
+      : Number(policy?.gpsRadiusMeters ?? 500);
+    const lateThreshold = resolvedPolicy
+      ? resolvedPolicy.lateThresholdMinutes
+      : Number(policy?.lateThresholdMinutes ?? 15);
+    // The exempt flag — manager/executive categories have this set to
+    // FALSE in the engine (autoDeductionEnabled = false). Workers and
+    // drivers stay TRUE. NULL category ⇒ TRUE (legacy behavior).
+    const autoDeductionEnabled = resolvedPolicy
+      ? resolvedPolicy.autoDeductionEnabled
+      : true;
 
     if (!isRemoteShift && lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
       distanceMeters = Math.round(
@@ -666,7 +752,15 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     }
 
     // ── Step 9: Check policy threshold — after holiday/status resolution ──
-    const exceedsThreshold = isLate && lateMinutes > lateThreshold && !publicHoliday && isWorkDay;
+    // HR-003 / #1799 priority #6 — the exempt flag on the resolved
+    // policy (managers/executives) collapses `exceedsThreshold` to
+    // false BEFORE any deduction or violation INSERTs fire. The
+    // attendance row itself is still recorded (with lateMinutes!),
+    // so managers still show up in late-arrival reports — we just
+    // don't turn lateness into automatic money. This implements the
+    // #1799 §C rule «المدراء لا يعاملون مثل السائق أو العامل».
+    const exceedsThreshold =
+      isLate && lateMinutes > lateThreshold && !publicHoliday && isWorkDay && autoDeductionEnabled;
 
     // ── Step 10: Calculate deduction ──
     let deductionAmount = 0;
@@ -847,7 +941,10 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
   try {
     const scope = req.scope!;
     const now = new Date();
-    const today = toDateISO(now);
+    // TZ-1: same fix as /check-in — use Riyadh calendar day for
+    // the attendance row's `date` so cross-midnight punches don't
+    // land on the wrong row.
+    const today = currentDateInTz("Asia/Riyadh");
     const period = today.slice(0, 7);
     const { notes, lat, lon } = zodParse(checkOutSchema.safeParse(req.body ?? {}));
 
@@ -918,7 +1015,23 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
       `SELECT "gpsRadiusMeters" FROM attendance_policies WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    const gpsRadius = Number(policy?.gpsRadiusMeters ?? 500);
+    // HR-004 / #1799 priority #6 wiring (check-out branch) — overlay
+    // per-category resolution on top of the company-default GPS radius
+    // AND derive the exempt flag so the early-departure deduction +
+    // violation INSERTs further down are SKIPPED for managers and
+    // executives. Same pattern as the check-in path (HR-003).
+    const resolvedCheckoutPolicy = scope.activeAssignmentId
+      ? await resolveAttendancePolicy({
+          companyId: scope.companyId,
+          assignmentId: scope.activeAssignmentId,
+        }).catch((e) => { logger.error(e, "attendance policy resolution failed on check-out — falling back to company default"); return null; })
+      : null;
+    const gpsRadius = resolvedCheckoutPolicy
+      ? resolvedCheckoutPolicy.gpsRadiusMeters
+      : Number(policy?.gpsRadiusMeters ?? 500);
+    const autoDeductionEnabledCheckout = resolvedCheckoutPolicy
+      ? resolvedCheckoutPolicy.autoDeductionEnabled
+      : true;
     let checkOutDistanceMeters: number | null = null;
     let isCheckOutOutOfRange = false;
     if (lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
@@ -1014,8 +1127,17 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
       }
 
       // Early departure violation + deduction
+      // HR-004 / #1799 priority #6 — `autoDeductionEnabledCheckout`
+      // gates both the violation INSERT and the deduction INSERT for
+      // exempt categories (manager / executive). When the policy says
+      // FALSE, early departure is still REFLECTED in the attendance
+      // row (checkOut + earlyDepartureMinutes via the monthly stat
+      // update above), but no `employee_violations` row is created
+      // and no `attendance_deductions` row is queued for payroll.
+      // Result: managers stay visible in early-departure reports but
+      // never face an automatic salary deduction.
       let earlyViolationId: number | null = null;
-      if (earlyDepartureMinutes > 0 && !excusedEarlyLeave) {
+      if (earlyDepartureMinutes > 0 && !excusedEarlyLeave && autoDeductionEnabledCheckout) {
         const vRes = await client.query(
           `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
            VALUES ($1,$2,'early_departure',$3,'medium',$4,$5)
@@ -1136,6 +1258,160 @@ router.get("/attendance", authorize({ feature: "hr.attendance", action: "list" }
   }
 });
 
+// ── HR-005 / #1799 priority #7 — Field tracking ingestion + read ──
+//
+// The legacy field-tracking page was a read-only shell over check-in
+// lat/lng. Migration 271 added `field_tracking_points` for persistent
+// breadcrumbs; these two endpoints write + read them.
+//
+// The ingestion endpoint enforces the per-category tracking frequency
+// from `attendancePolicyEngine` (migration 270): a driver's category
+// is 30s, a field employee's 300s, office/manager/executive 0 (= no
+// live tracking — their pings are rejected). This makes the policy the
+// single source of truth for "who is tracked and how often".
+const fieldPingSchema = z.object({
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
+  accuracy: z.coerce.number().nonnegative().optional(),
+  speed: z.coerce.number().optional(),
+  heading: z.coerce.number().min(0).max(360).optional(),
+  altitude: z.coerce.number().optional(),
+  battery: z.coerce.number().int().min(0).max(100).optional(),
+  deviceId: z.string().max(120).optional(),
+  source: z.enum(["mobile", "web", "device", "manual"]).optional(),
+  taskId: z.coerce.number().int().positive().optional(),
+  tripId: z.coerce.number().int().positive().optional(),
+  visitId: z.coerce.number().int().positive().optional(),
+  // Device-reported capture time. Defaults to server now() when absent.
+  capturedAt: z.string().optional(),
+});
+
+router.post("/attendance/field-ping", authorize({ feature: "hr.attendance.checkin", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!scope.activeAssignmentId) {
+      throw new ValidationError("لا يوجد تعيين نشط لتسجيل نقطة التتبع", {
+        field: "assignment",
+        fix: "يجب أن يكون لديك تعيين نشط في الشركة لإرسال نقاط الموقع.",
+      });
+    }
+    const b = zodParse(fieldPingSchema.safeParse(req.body));
+
+    // Resolve the employee's category policy. Office/manager/executive
+    // categories carry trackingFrequencySeconds = 0 ⇒ no live tracking
+    // ⇒ reject the ping with a clear message rather than silently
+    // storing data the policy says we shouldn't collect.
+    const policy = await resolveAttendancePolicy({
+      companyId: scope.companyId,
+      assignmentId: scope.activeAssignmentId,
+    }).catch((e) => { logger.error(e, "field-ping policy resolution failed"); return null; });
+
+    const freq = policy?.trackingFrequencySeconds ?? 0;
+    if (freq <= 0) {
+      throw new ForbiddenError("فئة الموظف لا تخضع للتتبع اللحظي", {
+        fix: "التتبع الميداني مفعّل فقط للسائقين والموظفين الميدانيين. راجع فئة الموظف في إعدادات الحضور.",
+        meta: { categoryKey: policy?.categoryKey ?? null, trackingFrequencySeconds: freq },
+      });
+    }
+
+    // Throttle: reject pings arriving faster than the category allows.
+    // We compare against the most recent stored point for this
+    // assignment. A small 20% tolerance absorbs jitter from mobile
+    // timers without letting a misbehaving client flood the table.
+    const [last] = await rawQuery<{ capturedAt: string }>(
+      `SELECT "capturedAt" FROM field_tracking_points
+        WHERE "assignmentId" = $1
+        ORDER BY "capturedAt" DESC LIMIT 1`,
+      [scope.activeAssignmentId],
+    );
+    const capturedAt = b.capturedAt ? new Date(b.capturedAt) : new Date();
+    if (last) {
+      const gapSeconds = (capturedAt.getTime() - new Date(last.capturedAt).getTime()) / 1000;
+      if (gapSeconds >= 0 && gapSeconds < freq * 0.8) {
+        // Not an error — just an accepted no-op so the client doesn't
+        // treat throttling as a failure and retry-storm.
+        res.status(202).json({ accepted: false, reason: "throttled", minIntervalSeconds: freq });
+        return;
+      }
+    }
+
+    const [assignment] = await rawQuery<{ employeeId: number; branchId: number | null }>(
+      `SELECT "employeeId", "branchId" FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
+      [scope.activeAssignmentId, scope.companyId],
+    );
+
+    const [row] = await rawQuery<{ id: number }>(
+      `INSERT INTO field_tracking_points
+        ("companyId","branchId","assignmentId","employeeId",lat,lng,accuracy,speed,heading,altitude,battery,"deviceId",source,"taskId","tripId","visitId","capturedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       RETURNING id`,
+      [
+        scope.companyId, assignment?.branchId ?? scope.branchId, scope.activeAssignmentId,
+        assignment?.employeeId ?? null,
+        b.lat, b.lng, b.accuracy ?? null, b.speed ?? null, b.heading ?? null, b.altitude ?? null,
+        b.battery ?? null, b.deviceId ?? null, b.source ?? "mobile",
+        b.taskId ?? null, b.tripId ?? null, b.visitId ?? null, capturedAt.toISOString(),
+      ],
+    );
+
+    res.status(201).json({ accepted: true, id: row?.id, minIntervalSeconds: freq });
+  } catch (err) {
+    handleRouteError(err, res, "Field ping error:");
+  }
+});
+
+router.get("/attendance/field-track", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { assignmentId, date } = req.query as { assignmentId?: string; date?: string };
+    const day = date || todayISO();
+
+    // Two modes:
+    //   - assignmentId set  → one employee's full breadcrumb for the day
+    //   - assignmentId unset → latest point per assignment for the day
+    //     (the company-wide live map view)
+    if (assignmentId) {
+      const aid = parseId(assignmentId, "assignmentId");
+      const points = await rawQuery<Record<string, unknown>>(
+        `SELECT ftp.id, ftp.lat, ftp.lng, ftp.accuracy, ftp.speed, ftp.heading,
+                ftp.battery, ftp."deviceId", ftp.source, ftp."taskId", ftp."tripId",
+                ftp."visitId", ftp."capturedAt",
+                e.name AS "employeeName"
+           FROM field_tracking_points ftp
+           JOIN employee_assignments ea ON ea.id = ftp."assignmentId"
+           JOIN employees e ON e.id = ea."employeeId"
+          WHERE ftp."assignmentId" = $1
+            AND ftp."companyId" = $2
+            AND ftp."capturedAt"::date = $3::date
+          ORDER BY ftp."capturedAt" ASC
+          LIMIT 5000`,
+        [aid, scope.companyId, day],
+      );
+      res.json(maskFields(req, { data: points, total: points.length, mode: "breadcrumb", date: day }));
+      return;
+    }
+
+    // Live map: DISTINCT ON picks the newest point per assignment.
+    const latest = await rawQuery<Record<string, unknown>>(
+      `SELECT DISTINCT ON (ftp."assignmentId")
+              ftp.id, ftp."assignmentId", ftp.lat, ftp.lng, ftp.accuracy, ftp.speed,
+              ftp.battery, ftp.source, ftp."capturedAt",
+              e.name AS "employeeName"
+         FROM field_tracking_points ftp
+         JOIN employee_assignments ea ON ea.id = ftp."assignmentId"
+         JOIN employees e ON e.id = ea."employeeId"
+        WHERE ftp."companyId" = $1
+          AND ftp."capturedAt"::date = $2::date
+        ORDER BY ftp."assignmentId", ftp."capturedAt" DESC
+        LIMIT 2000`,
+      [scope.companyId, day],
+    );
+    res.json(maskFields(req, { data: latest, total: latest.length, mode: "live", date: day }));
+  } catch (err) {
+    handleRouteError(err, res, "Field track error:");
+  }
+});
+
 router.get("/attendance/today-summary", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1245,6 +1521,138 @@ router.get("/leave-types", authorize({ feature: "hr.leaves", action: "list" }), 
     handleRouteError(err, res, "خطأ غير متوقع");
   }
 });
+
+// API-1 (HR audit P2): the leave-management UI calls
+// `PATCH /hr/leave-types/:id` expecting to edit annualDays / isPaid /
+// gender restriction / minServiceMonths. The endpoint didn't exist —
+// the frontend was hitting a 404 and silently swallowing the error.
+// These three handlers close the gap; HR_ROLES gated because changing
+// leave entitlement is a compensation-level decision.
+const leaveTypePayloadSchema = z.object({
+  name: trimmedRequired("اسم نوع الإجازة مطلوب", HR_TEXT_LIMITS.NAME),
+  annualDays: z.coerce.number().int().min(0).max(365).optional(),
+  isPaid: z.boolean().optional(),
+  genderRestriction: z.enum(["male", "female"]).nullable().optional(),
+  minServiceMonths: z.coerce.number().int().min(0).max(120).optional(),
+  oncePerCareer: z.boolean().optional(),
+  requiresDocument: z.boolean().optional(),
+  maxDeptAbsentPct: z.coerce.number().min(0).max(100).optional(),
+});
+
+router.post(
+  "/leave-types",
+  authorize({ feature: "hr.leaves", action: "create" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      if (!HR_ROLES.includes(scope.role)) {
+        res.status(403).json({
+          error: "تعديل أنواع الإجازات يتطلب دور موارد بشرية",
+          meta: { yourRole: scope.role, requiredRoles: HR_ROLES },
+        });
+        return;
+      }
+      const body = zodParse(leaveTypePayloadSchema.safeParse(req.body));
+      const [row] = await rawQuery<Record<string, unknown>>(
+        `INSERT INTO hr_leave_types
+           ("companyId", name, "annualDays", "isPaid", "genderRestriction",
+            "minServiceMonths", "oncePerCareer", "requiresDocument", "maxDeptAbsentPct")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, name, "annualDays" AS "maxDays", "isPaid",
+                   "genderRestriction", "minServiceMonths", "oncePerCareer",
+                   "requiresDocument", "maxDeptAbsentPct"`,
+        [
+          scope.companyId,
+          body.name,
+          body.annualDays ?? null,
+          body.isPaid ?? true,
+          body.genderRestriction ?? null,
+          body.minServiceMonths ?? 0,
+          body.oncePerCareer ?? false,
+          body.requiresDocument ?? false,
+          body.maxDeptAbsentPct ?? null,
+        ],
+      );
+      createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "create",
+        entity: "hr_leave_types",
+        entityId: Number(row?.id ?? 0),
+        after: body,
+      }).catch((e) => logger.error(e, "hr leave-types audit failed"));
+      res.status(201).json(maskFields(req, row));
+    } catch (err) {
+      handleRouteError(err, res, "Create leave type error:");
+    }
+  },
+);
+
+router.patch(
+  "/leave-types/:id",
+  authorize({
+    feature: "hr.leaves",
+    action: "update",
+    resource: { table: "hr_leave_types", idParam: "id" },
+  }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      if (!HR_ROLES.includes(scope.role)) {
+        res.status(403).json({
+          error: "تعديل أنواع الإجازات يتطلب دور موارد بشرية",
+          meta: { yourRole: scope.role, requiredRoles: HR_ROLES },
+        });
+        return;
+      }
+      const id = parseId(req.params.id, "id");
+      const body = zodParse(leaveTypePayloadSchema.partial().safeParse(req.body));
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      let idx = 1;
+      const addField = (col: string, val: unknown) => {
+        if (val !== undefined) {
+          sets.push(`"${col}" = $${idx}`);
+          params.push(val);
+          idx++;
+        }
+      };
+      addField("name", body.name);
+      addField("annualDays", body.annualDays);
+      addField("isPaid", body.isPaid);
+      addField("genderRestriction", body.genderRestriction);
+      addField("minServiceMonths", body.minServiceMonths);
+      addField("oncePerCareer", body.oncePerCareer);
+      addField("requiresDocument", body.requiresDocument);
+      addField("maxDeptAbsentPct", body.maxDeptAbsentPct);
+      if (sets.length === 0) {
+        throw new ValidationError("لا توجد بيانات للتحديث");
+      }
+      params.push(id);
+      params.push(scope.companyId);
+      const [row] = await rawQuery<Record<string, unknown>>(
+        `UPDATE hr_leave_types SET ${sets.join(", ")}
+         WHERE id = $${idx} AND "companyId" = $${idx + 1}
+         RETURNING id, name, "annualDays" AS "maxDays", "isPaid",
+                   "genderRestriction", "minServiceMonths", "oncePerCareer",
+                   "requiresDocument", "maxDeptAbsentPct"`,
+        params,
+      );
+      if (!row) throw new NotFoundError("نوع الإجازة غير موجود");
+      createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "update",
+        entity: "hr_leave_types",
+        entityId: id,
+        after: body,
+      }).catch((e) => logger.error(e, "hr leave-types audit failed"));
+      res.json(maskFields(req, row));
+    } catch (err) {
+      handleRouteError(err, res, "Update leave type error:");
+    }
+  },
+);
 
 router.get("/leave-balance", authorize({ feature: "hr.leaves", action: "list" }), async (req, res) => {
   try {
@@ -1443,20 +1851,42 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     }
 
     const start = new Date(startDate);
-    const end = new Date(endDate);
-    let rawDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1);
     const year = start.getFullYear();
 
-    // Exclude public holidays that fall within the leave range from the day count
+    // Saudi Labor Law Article 104: Friday is the default weekly rest
+    // day. Article 109: leave-day counting excludes the weekly rest day
+    // and any public holiday that falls inside the leave window — those
+    // days are not deducted from the entitlement balance.
+    const REST_DAYS = [5]; // Friday by default; future: read per-branch from settings
+    const workingDaysInRange = countLeaveDaysExcludingRest(
+      startDate,
+      endDate,
+      REST_DAYS,
+    );
+
+    // Public holidays inside the range that ALSO fall on a working day
+    // (already excluded if they're a Friday).
     const holidayOverlap = await rawQuery<Record<string, unknown>>(
-      `SELECT SUM(LEAST("endDate"::date, $2::date) - GREATEST("startDate"::date, $1::date) + 1) AS "holidayDays"
+      `SELECT COALESCE(SUM(GREATEST(
+          LEAST("endDate"::date, $2::date) - GREATEST("startDate"::date, $1::date) + 1
+            - (
+              -- count Fridays that fall in the overlap so we don't
+              -- double-deduct (already excluded above).
+              SELECT COUNT(*) FROM generate_series(
+                GREATEST("startDate"::date, $1::date),
+                LEAST("endDate"::date, $2::date),
+                interval '1 day'
+              ) AS d WHERE EXTRACT(DOW FROM d) = 5
+            ),
+          0
+       )), 0) AS "holidayDays"
        FROM public_holidays
        WHERE "companyId"=$3
          AND "startDate" <= $2::date AND "endDate" >= $1::date AND "deletedAt" IS NULL`,
       [startDate, endDate, scope.companyId]
     );
     const holidayDays = Math.max(0, Number(holidayOverlap[0]?.holidayDays ?? 0));
-    const days = Math.max(1, rawDays - holidayDays);
+    const days = Math.max(1, workingDaysInRange - holidayDays);
 
     // ── Validation 1: Fetch leave type with extended rules ──
     const [leaveType] = await rawQuery<Record<string, unknown>>(
@@ -1504,7 +1934,21 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
            AND EXTRACT(YEAR FROM "startDate") = $3 AND "deletedAt" IS NULL`,
         [scope.employeeId, leaveTypeId, year]
       );
-      const entitled = Number(leaveType.annualDays ?? 21);
+      // Saudi Labor Law Article 109: 21 days during the first 5 years
+      // of service, 30 days after 5 years. Auto-upgrade based on the
+      // employee's years of service at the start of the leave year.
+      const [hireRow] = await rawQuery<Record<string, unknown>>(
+        `SELECT "hireDate" FROM employee_assignments WHERE id = $1`,
+        [scope.activeAssignmentId]
+      );
+      const hireDate = hireRow?.hireDate
+        ? String(hireRow.hireDate).slice(0, 10)
+        : `${year}-01-01`;
+      const yearsServed = calcYearsOfService(hireDate, `${year}-01-01`);
+      const entitled = annualLeaveEntitlement(
+        yearsServed,
+        leaveType.annualDays as number | null,
+      );
       const alreadyUsed = Number(usedRow?.used ?? 0);
       const effectiveRemaining = entitled - alreadyUsed;
       if (effectiveRemaining < days) {
@@ -2139,6 +2583,18 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
         // every active assignment's company would eat `used += days` from
         // companies that never reserved, so an employee taking 5 days off
         // in Company A would lose 5 days from Company B's balance too.
+        //
+        // RACE-1 (HR audit P1): two overlapping approvals on different
+        // requests for the SAME employee could both read `reserved=10`,
+        // both subtract their `request.days`, and arrive at an incorrect
+        // final reserved. Take SELECT ... FOR UPDATE on the balance row
+        // first so the second transaction blocks until ours commits.
+        await client.query(
+          `SELECT 1 FROM hr_leave_balances
+           WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND year = $4
+           FOR UPDATE`,
+          [request.companyId, request.employeeId, request.leaveTypeId, year],
+        );
         await client.query(
           `UPDATE hr_leave_balances
            SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
@@ -2591,20 +3047,31 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     }
 
     const gosiSettings = await rawQuery<{ key: string; value: string }>(
-      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate','gosiCeiling')`,
+      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate','gosiCeiling','gosiIncludeHousing')`,
       [scope.companyId]
     );
     const gosiSettingsMap = new Map(gosiSettings.map((r) => [r.key, r.value]));
     const gosiComponent = salaryComponents.find((c) => c.isGosi && c.type === 'deduction');
+    // Saudi GOSI Article 19: total 22% on basic + housing (employee 10%
+    // + employer 12%). Previous defaults of 9.75/11.75 understated the
+    // liability. Companies that need the older split must explicitly set
+    // gosiEmployeeRate/gosiEmployerRate in system_settings.
     const GOSI_EMPLOYEE_RATE = gosiComponent && Number(gosiComponent.value) > 0
       ? Number(gosiComponent.value) / 100
-      : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "9.75") / 100;
-    const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "11.75") / 100;
+      : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "10") / 100;
+    const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "12") / 100;
     // Saudi GOSI caps the contribution wage at SAR 45,000/month. A
     // company can override via system_settings.gosiCeiling (e.g. set
     // to a huge number to effectively disable, or to a different
     // ceiling if the regulator changes it).
     const GOSI_CEILING = Number(gosiSettingsMap.get("gosiCeiling") ?? "45000");
+    // GOSI Article 19: contribution wage = basic salary + housing
+    // allowance (transport and "other" allowances are NOT included).
+    // Default ON; companies that need the legacy basic-only base must
+    // set system_settings.gosiIncludeHousing = 'false' explicitly.
+    const GOSI_INCLUDE_HOUSING =
+      (gosiSettingsMap.get("gosiIncludeHousing") ?? "true").toLowerCase() !==
+      "false";
 
     const earningComponents = salaryComponents.filter((c) => c.type === 'earning' && !c.isGosi);
 
@@ -2646,9 +3113,23 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         [scope.companyId, targetPeriod]
       ),
       rawQuery<Record<string, unknown>>(
+        // Saudi Labor Law Article 109: weekly rest day (default Friday)
+        // is NOT a payable absence. Likewise public holidays are paid
+        // — neither should incur the (basic/30) absence deduction.
+        // EXTRACT(DOW FROM date): 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat.
         `SELECT a."assignmentId", COUNT(*) AS "absentDays"
          FROM attendance a
-         WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent' AND a."deletedAt" IS NULL
+         WHERE a."companyId" = $1
+           AND TO_CHAR(a.date, 'YYYY-MM') = $2
+           AND a.status = 'absent'
+           AND a."deletedAt" IS NULL
+           AND EXTRACT(DOW FROM a.date) <> 5
+           AND NOT EXISTS (
+             SELECT 1 FROM public_holidays ph
+             WHERE ph."companyId" = a."companyId"
+               AND ph."deletedAt" IS NULL
+               AND a.date BETWEEN ph."startDate" AND ph."endDate"
+           )
          GROUP BY a."assignmentId"`,
         [scope.companyId, targetPeriod]
       ),
@@ -2762,7 +3243,13 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       const absenceDeduction = roundTo2(absentDays * (basic / 30));
       const violationDeduction = (penaltyMap.get(aId) ?? 0) + (violationMap.get(aId) ?? 0);
       const loanDeduction = loanMap.get(aId) ?? 0;
-      const gosiBase = Math.min(basic, GOSI_CEILING);
+      // GOSI Article 19: contribution wage = basic + housing allowance,
+      // capped at GOSI_CEILING. Transport & "other" earnings are NOT
+      // included in the contribution base.
+      const gosiContributionWage = GOSI_INCLUDE_HOUSING
+        ? basic + housingAllowance
+        : basic;
+      const gosiBase = Math.min(gosiContributionWage, GOSI_CEILING);
       const gosiEmployee = roundTo2(gosiBase * GOSI_EMPLOYEE_RATE);
       const gosiEmployer = roundTo2(gosiBase * GOSI_EMPLOYER_RATE);
       totalGosiEmployer += gosiEmployer;
@@ -2807,6 +3294,30 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     const totalGosiPayable = roundTo2(totalGosiEmployer + totalGosiEmployee);
 
     const runId = await withTransaction(async (client) => {
+      // RACE-2 (HR audit P1): two concurrent `POST /hr/payroll` calls
+      // for the same period could both pass the "no existing run"
+      // SELECT above and create duplicate runs. Take a transaction-
+      // scoped advisory lock keyed by (companyId, period) so the
+      // second caller waits for the first to either commit (then sees
+      // the row via the SELECT below and aborts) or rollback.
+      //
+      // pg_advisory_xact_lock(int4, int4) takes two int32 keys. We use
+      // companyId as the first key and a stable hash of the YYYY-MM
+      // period string as the second so different periods don't
+      // serialize against each other.
+      await client.query(
+        `SELECT pg_advisory_xact_lock($1::int, hashtext($2)::int)`,
+        [scope.companyId, `payroll_run:${targetPeriod}`],
+      );
+      // Re-check inside the lock — if another caller inserted while
+      // we were waiting, fail cleanly.
+      const dup = await client.query(
+        `SELECT id FROM payroll_runs WHERE "companyId" = $1 AND period = $2 AND "deletedAt" IS NULL`,
+        [scope.companyId, targetPeriod],
+      );
+      if (dup.rows.length > 0) {
+        throw new ConflictError(`الرواتب لشهر ${targetPeriod} تمت معالجتها مسبقاً`);
+      }
       const runResult = await client.query(
         `INSERT INTO payroll_runs ("companyId", period, status, "totalNet", "runBy", reference, notes)
          VALUES ($1,$2,'pending_approval',$3,$4,$5,$6) RETURNING id`,
@@ -2870,15 +3381,40 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
            WHERE "companyId" = $1 AND period = $2 AND status = 'pending'`,
           [scope.companyId, targetPeriod]
         );
+        // Pre-aggregate paid-installment sums via CTE + LEFT JOIN
+        // instead of running the SAME scalar SUM subquery THREE times
+        // per row (paidAmount column + remainingAmount column +
+        // CASE expression). At 100 active loans that's 300 redundant
+        // lookups through hr_loan_installments.
+        //
+        // Two CTEs: paid_sums aggregates installments once; to_update
+        // LEFT JOINs that against the active loans so EVERY active
+        // loan gets a row (even ones with zero paid installments).
+        // The outer UPDATE then matches to_update by id — UPDATE FROM
+        // is an implicit INNER JOIN so we'd lose zero-installment
+        // loans without this indirection.
         await client.query(
-          `UPDATE hr_employee_loans l SET
-             "paidAmount" = COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0),
-             "remainingAmount" = l.amount - COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0),
+          `WITH paid_sums AS (
+             SELECT "loanId", SUM(amount) AS paid
+             FROM hr_loan_installments
+             WHERE status = 'paid'
+             GROUP BY "loanId"
+           ),
+           to_update AS (
+             SELECT l.id, COALESCE(ps.paid, 0) AS paid
+             FROM hr_employee_loans l
+             LEFT JOIN paid_sums ps ON ps."loanId" = l.id
+             WHERE l."companyId" = $1 AND l.status = 'active'
+           )
+           UPDATE hr_employee_loans l SET
+             "paidAmount" = tu.paid,
+             "remainingAmount" = l.amount - tu.paid,
              status = CASE
-               WHEN l.amount - COALESCE((SELECT SUM(amount) FROM hr_loan_installments WHERE "loanId" = l.id AND status = 'paid'), 0) <= 0
+               WHEN l.amount - tu.paid <= 0
                THEN 'completed' ELSE l.status END,
              "updatedAt" = NOW()
-           WHERE l."companyId" = $1 AND l.status = 'active'`,
+           FROM to_update tu
+           WHERE l.id = tu.id`,
           [scope.companyId]
         );
       }
@@ -3016,13 +3552,23 @@ router.patch("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", act
 router.get("/violations", authorize({ feature: "hr.violations", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // SEC-2 (HR audit P1): an `employee`-role caller without ownership
+    // flag must only see THEIR OWN violations — disciplinary records
+    // are confidential between the employee and HR/managers. Without
+    // this filter the list endpoint exposed peers' violations.
+    const params: unknown[] = [scope.companyId];
+    let where = `ev."companyId" = $1 AND ev."deletedAt" IS NULL`;
+    if (scope.role === "employee" && !scope.isOwner && scope.activeAssignmentId) {
+      where += ` AND ev."assignmentId" = $2`;
+      params.push(scope.activeAssignmentId);
+    }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ev.*, e.name AS "employeeName"
        FROM employee_violations ev
        JOIN employee_assignments ea ON ea.id = ev."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       WHERE ev."companyId" = $1 AND ev."deletedAt" IS NULL ORDER BY ev."createdAt" DESC LIMIT 100`,
-      [scope.companyId]
+       WHERE ${where} ORDER BY ev."createdAt" DESC LIMIT 100`,
+      params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { logger.error(err, "Get violations error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
@@ -3032,6 +3578,13 @@ router.get("/violations/:id", authorize({ feature: "hr.violations", action: "vie
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // SEC-2: same employee-scope gate at the detail level.
+    const detailParams: unknown[] = [id, scope.companyId];
+    let detailWhere = `ev.id = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL`;
+    if (scope.role === "employee" && !scope.isOwner && scope.activeAssignmentId) {
+      detailWhere += ` AND ev."assignmentId" = $3`;
+      detailParams.push(scope.activeAssignmentId);
+    }
     const [item] = await rawQuery<Record<string, unknown>>(
       `SELECT ev.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
@@ -3039,8 +3592,8 @@ router.get("/violations/:id", authorize({ feature: "hr.violations", action: "vie
        JOIN employee_assignments ea ON ea.id = ev."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
-       WHERE ev.id = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL`,
-      [id, scope.companyId]
+       WHERE ${detailWhere}`,
+      detailParams
     );
     if (!item) throw new NotFoundError("المخالفة غير موجودة");
 
@@ -3432,6 +3985,18 @@ router.get("/salary-components", authorize({ feature: "hr.payroll.runs", action:
 router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // SEC-3 (HR audit P1): adding / editing salary components changes
+    // EVERY future payroll run. The capability flag "hr.payroll.runs"
+    // is too coarse — generic editors with payroll-update permission
+    // shouldn't be allowed to set deduction rates or tax thresholds.
+    // Restrict the write paths to PAYROLL_ROLES.
+    if (!PAYROLL_ROLES.includes(scope.role)) {
+      res.status(403).json({
+        error: "تعديل مكوّنات الراتب يتطلب دور موارد بشرية أو مالية",
+        meta: { yourRole: scope.role, requiredRoles: PAYROLL_ROLES },
+      });
+      return;
+    }
     const { name, type, calculationType, value, taxable } = zodParse(salaryComponentSchema.safeParse(req.body));
     const { insertId } = await rawExecute(
       `INSERT INTO salary_components ("companyId",name,type,"calculationType",value,"isTaxable","isActive")
@@ -3456,6 +4021,15 @@ router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action
 router.patch("/salary-components/:id", authorize({ feature: "hr.payroll.runs", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // SEC-3: same SoD gate as POST — payroll-component edits propagate
+    // to every subsequent run.
+    if (!PAYROLL_ROLES.includes(scope.role)) {
+      res.status(403).json({
+        error: "تعديل مكوّنات الراتب يتطلب دور موارد بشرية أو مالية",
+        meta: { yourRole: scope.role, requiredRoles: PAYROLL_ROLES },
+      });
+      return;
+    }
     const id = parseId(req.params.id, "id");
     const b = zodParse(salaryComponentPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
@@ -3486,6 +4060,16 @@ router.patch("/salary-components/:id", authorize({ feature: "hr.payroll.runs", a
 router.delete("/salary-components/:id", authorize({ feature: "hr.payroll.runs", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // SEC-3: delete is the most destructive write — same PAYROLL_ROLES
+    // gate. A deletion silently disappears the component from future
+    // payroll runs without any UI prompt to back it out.
+    if (!PAYROLL_ROLES.includes(scope.role)) {
+      res.status(403).json({
+        error: "حذف مكوّنات الراتب يتطلب دور موارد بشرية أو مالية",
+        meta: { yourRole: scope.role, requiredRoles: PAYROLL_ROLES },
+      });
+      return;
+    }
     const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!beforeRow) throw new NotFoundError("مكوّن الراتب غير موجود");
@@ -3650,28 +4234,28 @@ router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organizat
       throw new ForbiddenError("هذا الطلب مخصص لموافق آخر. لا يمكنك اتخاذ القرار.");
     }
 
-    const refCreatorMap: Record<string, { table: string; col: string }> = {
-      leave_request: { table: "hr_leave_requests", col: '"assignmentId"' },
-      purchase_order: { table: "purchase_orders", col: '"createdByAssignmentId"' },
-      expense: { table: "expenses", col: '"createdByAssignmentId"' },
-      salary_advance: { table: "salary_advances", col: '"createdByAssignmentId"' },
-      custody: { table: "custodies", col: '"createdByAssignmentId"' },
-      official_letter: { table: "official_letters", col: '"createdByAssignmentId"' },
-    };
-    const refMap = refCreatorMap[request.refType as string];
-    let requesterId: number | undefined;
-    if (refMap) {
-      try {
-        const [refRow] = await rawQuery<Record<string, unknown>>(
-          `SELECT ${refMap.col} AS "requesterId" FROM ${refMap.table} WHERE id = $1 LIMIT 1`,
-          [request.refId]
-        );
-        requesterId = (refRow?.requesterId as number | undefined) ?? undefined;
-      } catch (e) {
-        logger.warn(e, "hr approval requester lookup (column may not exist for entity type)");
-      }
+    // Self-approval (maker-checker) guard: the same employee may not approve
+    // a request they created. We resolve the creator's *employee* id — the
+    // canonical "same person" key — for the request's refType, and also keep
+    // their assignment id for processApprovalStep's secondary check.
+    let requesterId: number | undefined; // creator assignment id (when stored)
+    let requesterEmployeeId: number | undefined;
+    try {
+      const creator = await resolveRequester(
+        request.refType as string,
+        request.refId as number,
+        scope.companyId,
+      );
+      requesterId = creator?.assignmentId ?? undefined;
+      requesterEmployeeId = creator?.employeeId ?? undefined;
+    } catch (e) {
+      logger.warn(e, "hr approval requester lookup failed");
     }
-    if (requesterId !== undefined && requesterId === scope.activeAssignmentId) {
+    if (
+      requesterEmployeeId !== undefined &&
+      scope.employeeId != null &&
+      requesterEmployeeId === scope.employeeId
+    ) {
       throw new ForbiddenError("لا يمكنك الموافقة على طلبك الخاص");
     }
 
@@ -5965,6 +6549,7 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT d.id, d."delegatorId", d."delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
+              d.features, d.source, d."refType", d."refId",
               e1.name AS "delegatorName", e2.name AS "delegateName"
        FROM delegations d
        LEFT JOIN employees e1 ON e1.id = d."delegatorId"
@@ -5982,7 +6567,8 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
 router.post("/delegations", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { delegateId, scope: delegationScope, reason, startDate, endDate } = zodParse(delegationSchema.safeParse(req.body));
+    const { delegateId, scope: delegationScope, reason, startDate, endDate, features, source, refType, refId } = zodParse(delegationSchema.safeParse(req.body));
+    const delegatedFeatures = features && features.length > 0 ? features : ["*"];
     if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
       throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
         field: "endDate",
@@ -6020,19 +6606,54 @@ router.post("/delegations", authorize({ feature: "hr.organization", action: "app
     // which silently swallowed FK / constraint errors and still returned
     // { success: true, id: null } — a lie to the caller. Drop the catch so
     // real DB errors surface through handleRouteError (with requestId).
+    // Correct columns are delegatorId/delegateId (the previous INSERT used the
+    // non-existent fromUserId/toUserId and 500'd on every create). Granular
+    // `features` make the delegation real + scoped; createdBy/source/ref give
+    // a controllable, auditable trail.
     const r = await rawExecute(
-      `INSERT INTO delegations ("fromUserId","toUserId","companyId",scope,reason,status,"startDate","endDate") VALUES ($1,$2,$3,$4,$5,'active',$6,$7)`,
-      [emp.id, Number(delegateId), scope.companyId, delegationScope || "عام", String(reason).trim(), startDate || new Date(), endDate || null]
+      `INSERT INTO delegations ("delegatorId","delegateId","companyId",scope,reason,status,"startDate","endDate",features,"createdBy",source,"refType","refId")
+       VALUES ($1,$2,$3,$4,$5,'active',$6,$7,$8::jsonb,$9,$10,$11,$12)`,
+      [emp.id, Number(delegateId), scope.companyId, delegationScope || "عام", String(reason).trim(),
+       startDate || new Date(), endDate || null, JSON.stringify(delegatedFeatures), scope.activeAssignmentId,
+       source || "manual", refType || null, refId ?? null]
     );
+    // Make the new authority effective immediately (drop the delegate's cache).
+    invalidateDelegationCache(scope.companyId, Number(delegateId));
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "delegations", entityId: r.insertId,
-      after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, startDate: startDate || null, endDate: endDate || null },
+      after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, features: delegatedFeatures, startDate: startDate || null, endDate: endDate || null },
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.created", entity: "hr_delegations", entityId: r.insertId, details: JSON.stringify({ delegateId: Number(delegateId), scope: delegationScope || "عام" }) }).catch((e) => logger.error(e, "hr background task failed"));
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM delegations WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
   } catch (err) { handleRouteError(err, res, "خطأ في إنشاء التفويض"); }
+});
+
+// Revoke a delegation — controllability: a manager can cut delegated authority
+// at any moment. Sets status='revoked' and drops the delegate's cache so the
+// change takes effect immediately.
+router.patch("/delegations/:id/revoke", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [existing] = await rawQuery<{ delegateId: number }>(
+      `SELECT "delegateId" FROM delegations WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("التفويض غير موجود");
+    await rawExecute(
+      `UPDATE delegations SET status = 'revoked' WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    invalidateDelegationCache(scope.companyId, existing.delegateId);
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "delegations", entityId: id, after: { status: "revoked" },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.revoked", entity: "delegations", entityId: id, details: "{}" }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json({ success: true, id, status: "revoked" });
+  } catch (err) { handleRouteError(err, res, "خطأ في إلغاء التفويض"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

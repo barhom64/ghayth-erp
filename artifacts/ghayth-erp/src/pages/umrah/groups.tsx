@@ -17,12 +17,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, PageShell, resolveStatus } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Users, Split, Merge, ChevronRight } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { formatUmrahDate, formatCurrency } from "@/lib/formatters";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
@@ -75,6 +77,7 @@ export default function UmrahGroups() {
   const { toast } = useToast();
   const { data: resp, isLoading, isError } = useApiQuery<{ data: Group[] }>(["umrah-groups"], "/umrah/groups");
   const items = resp?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
@@ -249,7 +252,7 @@ export default function UmrahGroups() {
     } },
     { key: "programDuration", header: "المدة", render: (g) => g.programDuration ? `${g.programDuration} يوم` : "—" },
     { key: "status", header: "الحالة" },
-    { key: "createdAt", header: "تاريخ الإنشاء", render: (g) => formatDateAr(g.createdAt) },
+    { key: "createdAt", header: "تاريخ الإنشاء", render: (g) => formatUmrahDate(g.createdAt) },
     {
       key: "actions" as any,
       header: "إجراءات",
@@ -321,6 +324,22 @@ export default function UmrahGroups() {
             <Users className="h-4 w-4" />
             مجموعة جديدة
           </GuardedButton>
+          <PrintButton
+            entityType="report_umrah_groups"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "مجموعات العمرة", total: printRows.length },
+              items: printRows.map((g: any) => ({
+                "الاسم": g.name || "—",
+                "رقم نسك": g.nuskGroupNumber || "—",
+                "الوكيل": g.agentName || "—",
+                "الموسم": g.seasonName || "—",
+                "العدد": g.pilgrimCount ?? 0,
+                "الحالة": (g.status && resolveStatus(g.status)?.label) ?? g.status ?? "—",
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -341,6 +360,7 @@ export default function UmrahGroups() {
       <DataTable
         data={items}
         columns={columns}
+        onSortedDataChange={setPrintRows}
         emptyMessage="لا توجد مجموعات"
         selectable
         onSelectionChange={setSelectedIds}

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
@@ -17,7 +18,8 @@ import {
   User, Phone, Mail, Briefcase, Calendar, Building, CreditCard,
   ListTodo, Clock, BookOpen, DollarSign, AlertTriangle, Printer,
   FileText, TrendingUp, Award, Activity, CheckCircle2,
-  XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, Check, X
+  XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, Check, X,
+  KeyRound, ShieldCheck, Lock, Star, FileSignature, Package
 } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -128,6 +130,128 @@ function AttendanceSummary({ attendance }: { attendance: any[] }) {
   );
 }
 
+// FinanceLinkageCard — surfaces the subsidiary custody account,
+// outstanding custody balance, linked vehicle (driver case), and the
+// internal vs personal email split. Drives the "is this employee
+// properly wired into finance / fleet?" check at a glance instead of
+// the operator hunting across 4 modules.
+function FinanceLinkageCard({ employeeId }: { employeeId: string }) {
+  const { data } = useApiQuery<any>(["employee-finance-summary", employeeId], `/employees/${employeeId}/finance-summary`, !!employeeId);
+  if (!data) return null;
+  const custody = data.custody ?? {};
+  const vehicle = data.vehicle ?? null;
+  const emails = data.emails ?? {};
+  const pbxExtension = data.pbxExtension ?? null;
+  const userAcct = data.userAccount ?? null;
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-muted-foreground font-medium">الربط المالي والوظيفي</p>
+          <Badge variant="outline" className="text-[10px]">batch HR</Badge>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">حساب العهدة الفرعي</p>
+            {custody.subsidiaryAccountCode ? (
+              <>
+                <p className="font-mono text-sm font-bold" data-testid="finance-link-custody-code">{custody.subsidiaryAccountCode}</p>
+                <p className="text-xs text-status-neutral-foreground">{custody.subsidiaryAccountName}</p>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">لا يوجد — أنشئ حساب فرعي للموظف من شاشة المحاسبة</p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">رصيد العهدة المفتوحة</p>
+            <p className="font-bold text-lg" data-testid="finance-link-custody-balance">
+              {Number(custody.outstandingAmount || 0).toLocaleString("ar-SA")} ر.س
+            </p>
+            <p className="text-xs text-muted-foreground">{Number(custody.openCount || 0)} عهدة مفتوحة</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">المركبة المرتبطة (سائق)</p>
+            {vehicle ? (
+              <p className="font-mono text-sm font-bold" data-testid="finance-link-vehicle">
+                {vehicle.plateNumber}{vehicle.brand ? ` — ${vehicle.brand}` : ""}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">لا توجد مركبة مرتبطة</p>
+            )}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t">
+          <div>
+            <p className="text-xs text-muted-foreground">بريد الدخول</p>
+            <p className="font-mono text-xs" dir="ltr" data-testid="finance-link-internal-email">{emails.loginEmail || "—"}</p>
+            {userAcct && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {userAcct.isActive ? "حساب نشط" : "حساب غير نشط"}
+                {userAcct.lastLoginAt ? ` · آخر دخول ${new Date(userAcct.lastLoginAt).toLocaleDateString("ar-SA")}` : " · لم يدخل بعد"}
+              </p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">البريد الشخصي</p>
+            <p className="font-mono text-xs" dir="ltr" data-testid="finance-link-personal-email">{emails.personal || "—"}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">للتواصل فقط — لا يُستخدم لتسجيل الدخول</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">تحويلة السنترال</p>
+            {pbxExtension ? (
+              <ClickToCallButton extension={pbxExtension.extension} employeeId={Number(employeeId)} />
+            ) : (
+              <p className="text-xs text-muted-foreground">لا توجد تحويلة مرتبطة</p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ClickToCallButton — POSTs to /communications/click-to-call. When a
+// PBX integration is wired (config.clickToCallUrl) the server originates
+// the call directly; when it isn't, the server returns mode='tel' with
+// a tel: URI the browser opens (system dialer). Either way the attempt
+// is logged so an operator can audit who tried to call whom.
+function ClickToCallButton({ extension, employeeId }: { extension: string; employeeId: number }) {
+  const { toast } = useToast();
+  const callMut = useApiMutation<
+    { data: { mode: "pbx" | "tel"; telUri: string; detail: string; callId: string } },
+    { target: string; relatedType?: string; relatedId?: number }
+  >("/communications/click-to-call", "POST", undefined, { silent: true });
+
+  const onClick = async () => {
+    try {
+      const r = await callMut.mutateAsync({ target: extension, relatedType: "employees", relatedId: employeeId });
+      if (r.data.mode === "tel") {
+        // Server didn't reach a PBX — fall back to the system dialer.
+        window.location.href = r.data.telUri;
+        toast({ title: "تم فتح برنامج الاتصال", description: "لم نتمكّن من توجيه السنترال — اتصل من جوالك" });
+      } else {
+        toast({ title: "تم بدء المكالمة", description: `السنترال يتصل بـ ${extension}` });
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "تعذّر بدء المكالمة", description: e?.message ?? String(e) });
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={callMut.isPending}
+      data-testid="finance-link-pbx-extension"
+      className="font-mono text-sm font-bold text-status-info-foreground hover:underline disabled:opacity-50 inline-flex items-center gap-1"
+      dir="ltr"
+    >
+      <Phone className="h-3.5 w-3.5" />
+      {extension}
+    </button>
+  );
+}
+
 function LeaveBalanceSummary({ employeeId }: { employeeId: string }) {
   const { data } = useApiQuery<any>(["leave-balance-emp", employeeId], `/hr/leave-balance?employeeId=${employeeId}`, !!employeeId);
   const balances = data?.data || [];
@@ -219,11 +343,27 @@ function ViolationTimeline({ violations }: { violations: any[] }) {
   );
 }
 
+// HR-001 / #1799 priority #1 — Employee 360 tabs.
+// Two new tabs added: "الحساب والدخول" + "الأدوار والصلاحيات".
+// These surface the user-account row and rbac_user_roles grants that
+// were already loaded by the backend (see routes/employees.ts) so
+// every HR officer can see at-a-glance: does this employee have a
+// login? when did they last sign in? which roles do they hold?
+// Roadmap (docs/HR_OPERATING_FOUNDATION_TASK.md §A.1) target is 14
+// tabs; this batch adds 2/5 of the missing ones.
 const TABS = [
+  // HR-012 / #1799 priority #1 — Employee 360 final 3 tabs complete
+  // the 14-tab target from the inventory. After this PR every section
+  // of an employee profile lives under one screen.
   { key: "overview", label: "نظرة شاملة", icon: Activity },
   { key: "info", label: "البيانات الشخصية", icon: User },
+  { key: "titles", label: "المسميات والمناصب", icon: Briefcase },
+  { key: "account", label: "الحساب والدخول", icon: KeyRound },
+  { key: "roles", label: "الأدوار والصلاحيات", icon: ShieldCheck },
+  { key: "contract", label: "العقد", icon: FileSignature },
   { key: "attendance", label: "الحضور", icon: Clock },
   { key: "leaves", label: "الإجازات", icon: Calendar },
+  { key: "custodies", label: "العهد والأصول", icon: Package },
   { key: "payroll", label: "الرواتب", icon: DollarSign },
   { key: "violations", label: "المخالفات", icon: AlertTriangle },
   { key: "tasks", label: "المهام", icon: ListTodo },
@@ -319,6 +459,19 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const violations: any[] = employee?.violations || [];
   const loans: any[] = employee?.loans || [];
   const overtime: any[] = employee?.overtime || [];
+  // HR-001 / #1799 priority #1 — fed by the GET /:id Promise.all
+  // additions in routes/employees.ts. `userAccount` is null when the
+  // employee has no login row in `users`; `roles` is empty when the
+  // employee either has no account or has no rbac_user_roles grants.
+  const userAccount: any = employee?.userAccount ?? null;
+  const roles: any[] = employee?.roles || [];
+  // HR-012 — second expansion: contract is single-row or null,
+  // position is the admin position resolved from employee_assignments
+  // (NULL when assignment is uncategorized), custodies is the
+  // asset-bridge list (active first, then returned history).
+  const contract: any = employee?.contract ?? null;
+  const position: any = employee?.position ?? null;
+  const custodies: any[] = employee?.custodies || [];
 
   const hireDate = employee?.hireDate ? new Date(employee.hireDate) : null;
   const serviceDays = hireDate ? Math.floor((Date.now() - hireDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
@@ -363,7 +516,9 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             : tab.key === "leaves" ? leaves.length
             : tab.key === "payroll" ? payroll.length
             : tab.key === "violations" ? violations.length
-            : tab.key === "attendance" ? attendance.length : 0;
+            : tab.key === "attendance" ? attendance.length
+            : tab.key === "roles" ? roles.length
+            : tab.key === "custodies" ? custodies.length : 0;
           return (
             <button
               key={tab.key}
@@ -388,6 +543,11 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
       {activeTab === "overview" && (
         <div className="space-y-4">
           <QuickSummaryCard employee={employee} serviceDays={serviceDays} />
+
+          {/* Integrated HR — finance/role/vehicle/email linkage at a glance.
+              Renders the "is everything wired?" check in one card so HR
+              doesn't have to bounce between custody/fleet/admin pages. */}
+          <FinanceLinkageCard employeeId={id ?? ""} />
 
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
@@ -609,6 +769,406 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* HR-001 / #1799 priority #1 — Tab: الحساب والدخول.
+          Surfaces the linked user-account row (or its absence) so an HR
+          officer doesn't have to bounce to /admin/users to know whether
+          the employee can sign in, when they last did, and whether the
+          account is locked. Sensitive material (passwordHash, MFA secret)
+          is never returned by the backend. */}
+      {activeTab === "account" && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-status-info-foreground" />
+              حساب الدخول
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!userAccount ? (
+              <div className="text-center py-8">
+                <Lock className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">لا يوجد حساب دخول مرتبط بهذا الموظف.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  يمكن إنشاء حساب من شاشة <a href="/admin/users" className="text-primary hover:underline">إدارة المستخدمين</a>.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">البريد الإلكتروني</p>
+                  <p className="font-mono text-sm" dir="ltr">{userAccount.email || "-"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">الدور الرئيسي (legacy)</p>
+                  <p className="text-sm">{userAccount.role || "-"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">حالة الحساب</p>
+                  {userAccount.isActive ? (
+                    <Badge className="bg-status-success-surface text-status-success-foreground">
+                      <CheckCircle2 className="h-3 w-3 me-1" /> نشط
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="bg-status-error-surface text-status-error-foreground">
+                      <XCircle className="h-3 w-3 me-1" /> معطل
+                    </Badge>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">آخر دخول</p>
+                  <p className="text-sm">
+                    {userAccount.lastLoginAt
+                      ? `${formatDateAr(userAccount.lastLoginAt)} · ${formatTimeAr(userAccount.lastLoginAt)}`
+                      : <span className="text-muted-foreground">لم يسجل دخول بعد</span>}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">محاولات فاشلة (7 أيام)</p>
+                  <p className="text-sm">
+                    {(userAccount.failedLoginAttempts ?? 0) > 0 ? (
+                      <span className="text-status-warning-foreground font-semibold">
+                        {userAccount.failedLoginAttempts}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">0</span>
+                    )}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">قفل حتى</p>
+                  <p className="text-sm">
+                    {userAccount.lockedUntil ? (
+                      <span className="text-status-error-foreground">
+                        <Lock className="h-3 w-3 inline me-1" />
+                        {formatDateAr(userAccount.lockedUntil)} · {formatTimeAr(userAccount.lockedUntil)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">لا قفل</span>
+                    )}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">تاريخ إنشاء الحساب</p>
+                  <p className="text-sm">{userAccount.createdAt ? formatDateAr(userAccount.createdAt) : "-"}</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* HR-001 / #1799 priority #1 — Tab: الأدوار والصلاحيات.
+          Lists every rbac_user_roles row attached to the employee's user
+          account, scoped to the current company. Primary role surfaces
+          first (is_primary DESC), then by level. Expired grants are
+          shown but visually faded so the HR officer knows the role is
+          no longer active. The "Effective Permissions" deep link goes
+          to /admin/users/:id (RBAC-004 — the viewer UI itself is still
+          a stub per the inventory doc; this is the entry point). */}
+      {activeTab === "roles" && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-purple-600" />
+              الأدوار النشطة ({roles.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!userAccount ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground">يتطلب وجود حساب دخول أولاً.</p>
+              </div>
+            ) : roles.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground">لا توجد أدوار RBAC مسندة لهذا الموظف.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  يمكن إسناد الأدوار من <a href={`/admin/users/${userAccount.id}`} className="text-primary hover:underline">شاشة المستخدم</a>.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {roles.map((r) => {
+                  const isExpired = r.expiresAt && new Date(r.expiresAt) < new Date();
+                  return (
+                    <div
+                      key={r.userRoleId}
+                      className={cn(
+                        "flex items-center justify-between gap-3 p-3 rounded-lg border",
+                        isExpired ? "opacity-50 bg-muted/30" : "bg-surface-subtle/30"
+                      )}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div
+                          className="w-2 h-8 rounded-full"
+                          style={{ backgroundColor: r.color || "#94a3b8" }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm">{r.labelAr || r.roleKey}</span>
+                            {r.isPrimary && (
+                              <Badge variant="outline" className="text-[10px] gap-1 border-amber-400 text-amber-700">
+                                <Star className="h-2.5 w-2.5" /> رئيسي
+                              </Badge>
+                            )}
+                            {r.isTemplate && (
+                              <Badge variant="secondary" className="text-[10px]">قالب</Badge>
+                            )}
+                            {isExpired && (
+                              <Badge variant="secondary" className="text-[10px] bg-status-error-surface text-status-error-foreground">
+                                منتهي
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                            <span className="font-mono" dir="ltr">{r.roleKey}</span>
+                            {r.level != null && <span>· مستوى {r.level}</span>}
+                            {r.labelEn && <span>· {r.labelEn}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-end text-xs text-muted-foreground shrink-0">
+                        <div>أسند: {r.assignedAt ? formatDateAr(r.assignedAt) : "-"}</div>
+                        {r.expiresAt && (
+                          <div className={isExpired ? "text-status-error" : ""}>
+                            ينتهي: {formatDateAr(r.expiresAt)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="pt-2 border-t mt-3">
+                  <a
+                    href={`/admin/users/${userAccount.id}`}
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    عرض الصلاحيات الفعلية الكاملة (Effective Permissions) →
+                  </a>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* HR-012 / #1799 priority #1 — Tab: المسميات والمناصب.
+          Joins the assignment's professional jobTitle (existing) with
+          the new admin position (from §B migration 274). Same employee
+          can be «محامي» (job title) holding the position «مدير قسم
+          القانوني» (admin role) — both surfaces here. */}
+      {activeTab === "titles" && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-status-info-foreground" />
+              المسميات والمناصب
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">المسمى المهني (Job Title)</p>
+                <p className="text-sm font-medium">{employee?.jobTitle || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">المنصب الإداري (Position)</p>
+                {position ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{position.labelAr || position.positionKey}</span>
+                    {position.level != null && (
+                      <Badge variant="outline" className="text-[10px]">مستوى {position.level}</Badge>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    لم يُسند بعد — راجع §B في وثيقة الإصلاح
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">القسم</p>
+                <p className="text-sm">{employee?.departmentName || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">الفرع</p>
+                <p className="text-sm">{employee?.branchName || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">المدير المباشر</p>
+                <p className="text-sm">{employee?.managerName || <span className="text-muted-foreground italic">—</span>}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">الفئة (للسياسات)</p>
+                <p className="text-sm">
+                  {employee?.categoryKey || (
+                    <span className="text-muted-foreground italic">غير مصنّف</span>
+                  )}
+                </p>
+              </div>
+            </div>
+            {position?.description && (
+              <p className="text-xs text-muted-foreground mt-4 pt-3 border-t">
+                {position.description}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* HR-012 / #1799 priority #1 — Tab: العقد.
+          Loads the active employment contract (employee_contracts).
+          Salary is NOT surfaced here — it lives on the «الرواتب» tab
+          which has its own RBAC field-policy gate. */}
+      {activeTab === "contract" && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileSignature className="h-5 w-5 text-emerald-600" />
+              العقد
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!contract ? (
+              <div className="text-center py-6">
+                <FileSignature className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">لا يوجد عقد نشط.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  يمكن إنشاء العقد من <a href="/hr/contracts" className="text-primary hover:underline">شاشة العقود</a>.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">رقم العقد</p>
+                  <p className="font-mono text-sm">{contract.ref || `#${contract.id}`}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">نوع العقد</p>
+                  <p className="text-sm">{contract.contractType || "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">الحالة</p>
+                  <PageStatusBadge status={contract.status} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">حالة الاعتماد</p>
+                  <PageStatusBadge status={contract.approvalStatus} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">تاريخ البدء</p>
+                  <p className="text-sm">{contract.startDate ? formatDateAr(contract.startDate) : "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">تاريخ الانتهاء</p>
+                  <p className="text-sm">{contract.endDate ? formatDateAr(contract.endDate) : <span className="text-muted-foreground italic">غير محدد</span>}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">انتهاء فترة التجربة</p>
+                  <p className="text-sm">{contract.probationEndDate ? formatDateAr(contract.probationEndDate) : "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">حالة فترة التجربة</p>
+                  <p className="text-sm">{contract.probationStatus || "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">توقيع الموظف</p>
+                  {contract.signedByEmployee ? (
+                    <Badge className="bg-status-success-surface text-status-success-foreground">
+                      <CheckCircle2 className="h-3 w-3 me-1" /> موقّع
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">لم يوقّع</Badge>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* HR-012 / #1799 priority #1 — Tab: العهد والأصول.
+          Lists every asset (laptop, phone, SIM, etc.) from
+          employee_assets (§9 migration 276) — active first then
+          returned. Damage notes from condition fields surface as
+          tooltip. Used by exit-clearance to know what's outstanding. */}
+      {activeTab === "custodies" && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-5 w-5 text-purple-600" />
+              العهد والأصول ({custodies.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {custodies.length === 0 ? (
+              <div className="text-center py-6">
+                <Package className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">لا توجد عهد مسجلة لهذا الموظف.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  يُسجَّل اللابتوب، الهاتف، SIM، المركبة، إلخ — كل ما يحوزه الموظف من أصول الشركة.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {custodies.map((asset) => {
+                  const isReturned = !!asset.returnedAt;
+                  return (
+                    <div
+                      key={asset.id}
+                      className={cn(
+                        "flex items-center justify-between gap-3 p-3 rounded-lg border",
+                        isReturned ? "opacity-60 bg-muted/30" : "bg-surface-subtle/30"
+                      )}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-purple-50">
+                          <Package className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm">
+                              {asset.assetLabel || asset.assetKey}
+                            </span>
+                            <Badge variant="outline" className="text-[10px]">
+                              {asset.assetType}
+                            </Badge>
+                            {isReturned ? (
+                              <Badge className="bg-status-success-surface text-status-success-foreground text-[10px]">
+                                مُعَاد
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-status-warning-surface text-status-warning-foreground text-[10px]">
+                                نشط
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                            <span className="font-mono">{asset.assetKey}</span>
+                            {asset.serialNumber && <span>· S/N: {asset.serialNumber}</span>}
+                          </div>
+                          {(asset.conditionOnAssign || asset.conditionOnReturn) && (
+                            <div className="text-[11px] text-muted-foreground mt-1">
+                              {asset.conditionOnAssign && <span>عند التسليم: {asset.conditionOnAssign}</span>}
+                              {asset.conditionOnReturn && <span> · عند الاسترداد: {asset.conditionOnReturn}</span>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-end text-xs text-muted-foreground shrink-0">
+                        <div>سُلّم: {asset.assignedAt ? formatDateAr(asset.assignedAt) : "—"}</div>
+                        {asset.returnedAt && (
+                          <div>أُعيد: {formatDateAr(asset.returnedAt)}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === "attendance" && (
@@ -901,6 +1461,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
           <div className="flex items-center gap-2 flex-wrap">
             <OperationalStatusBar employeeId={id} />
             <EntityPrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
+            {id && <EntityPnlButton entityType="employee" entityId={Number(id)} />}
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setShowPrintMenu(!showPrintMenu)}>
                 <Printer className="h-4 w-4 me-1" />طباعة قوالب HR

@@ -12,6 +12,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   PageShell,
 } from "@workspace/ui-core";
 import { Plus, Route, Navigation, CheckCircle, MapPin, List, CalendarDays } from "lucide-react";
@@ -19,6 +20,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "list" | "schedule";
@@ -55,6 +58,7 @@ export default function TripsPage() {
     statusField: "status",
     dateField: "tripDate",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -106,6 +110,27 @@ export default function TripsPage() {
           <Link href="/fleet/trips/create">
             <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />رحلة جديدة</GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_fleet_trips"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: "قائمة رحلات الأسطول",
+                total: printRows.length,
+              },
+              items: printRows.map((t: any) => ({
+                "رقم الرحلة": t.id,
+                "المركبة": t.plateNumber || t.vehiclePlate || "—",
+                "السائق": t.driverName || "—",
+                "من": t.fromLocation || "—",
+                "إلى": t.toLocation || "—",
+                "التاريخ": t.startTime || t.date || "—",
+                "المسافة (كم)": t.distance ?? 0,
+                "الحالة": t.status || "—",
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -130,6 +155,21 @@ export default function TripsPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "driverName", label: "السائق" },
+              { key: "vehiclePlate", label: "المركبة" },
+              { key: "origin", label: "من" },
+              { key: "destination", label: "إلى" },
+              { key: "distance", label: "المسافة (كم)" },
+              { key: "tripDate", label: "تاريخ الرحلة" },
+              { key: "status", label: "الحالة" },
+            ],
+            "رحلات-الأسطول",
+          )
+        }
         resultCount={filtered?.length}
       />
 
@@ -157,6 +197,7 @@ export default function TripsPage() {
       {viewMode === "list" ? (
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={filtered}
           isLoading={isLoading}
           isError={isError}

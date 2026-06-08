@@ -9,6 +9,54 @@ export const SEPARATION_OF_DUTIES: Array<{ roleA: string; roleB: string; reason:
   { roleA: "owner", roleB: "bi_manager", reason: "المالك لا يحتاج دور BI منفصل — wildcard كافي" },
 ];
 
+/**
+ * Request-time SoD enforcement (#1605). Given the roles a user ALREADY holds and
+ * a role about to be granted, return the conflicting pair (or null). Pure +
+ * synchronous so it can gate role-assignment routes before the write. This turns
+ * the previously audit-only SoD definitions into an actual block at the source
+ * (preventing a conflicting combination from ever being created), rather than
+ * detecting it after the fact.
+ */
+export function findSeparationOfDutiesConflict(
+  existingRoles: string[],
+  newRole: string,
+): { roleA: string; roleB: string; reason: string } | null {
+  const have = new Set(existingRoles.filter(Boolean));
+  for (const rule of SEPARATION_OF_DUTIES) {
+    if (newRole === rule.roleA && have.has(rule.roleB)) return rule;
+    if (newRole === rule.roleB && have.has(rule.roleA)) return rule;
+  }
+  return null;
+}
+
+/**
+ * Returns every role key the user currently effectively holds in the given
+ * company, across all three assignment tables (legacy `user_roles`, RBAC-v2
+ * `rbac_user_roles`, and active `employee_assignments`). Used by SoD gates at
+ * the two role-grant endpoints (`admin POST /user-roles` and
+ * `rbac/v2 POST /users/:userId/roles`) so a v1-granted role can still block a
+ * conflicting v2 grant — and vice versa.
+ */
+export async function getActiveRoleKeysForUser(
+  userId: number,
+  companyId: number,
+): Promise<string[]> {
+  const rows = await rawQuery<{ role: string | null }>(
+    `SELECT r.role_key AS role FROM rbac_user_roles ur
+       JOIN rbac_roles r ON r.id = ur.role_id
+       WHERE ur."userId" = $1 AND ur."companyId" = $2
+         AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+     UNION
+     SELECT ea.role FROM employee_assignments ea
+       JOIN users u ON u."employeeId" = ea."employeeId"
+       WHERE u.id = $1 AND ea."companyId" = $2
+         AND ea.status = 'active' AND ea.role IS NOT NULL`,
+    [userId, companyId],
+  );
+  return rows.map((r) => r.role).filter((x): x is string => !!x);
+}
+
+
 // ─── Maximum Privilege Rules ──────────────────────────────────────────────
 // Prevents over-privileged accounts.
 
@@ -59,6 +107,7 @@ export const ROLE_STRATEGIES: RoleStrategy[] = [
   { role: "support_manager", label: "مدير الدعم", tier: "manager", canDelegate: false, maxBranches: null, description: "إدارة تذاكر الدعم الفني" },
   { role: "crm_manager", label: "مدير العلاقات", tier: "manager", canDelegate: false, maxBranches: null, description: "إدارة العملاء والفرص" },
   { role: "bi_manager", label: "محلل الأعمال", tier: "operational", canDelegate: false, maxBranches: null, description: "قراءة التقارير والتحليلات" },
+  { role: "driver", label: "سائق", tier: "self-service", canDelegate: false, maxBranches: 1, description: "السائق: يرى رحلاته وبضائعه فقط، يحدّث حالته، يبدأ/يكمل/يسلّم من نفس واجهة الـERP بصلاحيات self-service" },
   { role: "employee", label: "موظف", tier: "self-service", canDelegate: false, maxBranches: 1, description: "خدمة ذاتية محدودة" },
 ];
 
@@ -99,12 +148,25 @@ export async function auditSeparationOfDuties(companyId: number): Promise<Policy
 
 export async function auditMaxPrivilege(companyId: number): Promise<PolicyViolation[]> {
   const violations: PolicyViolation[] = [];
+  // Was N+1: scalar COUNT subquery per active assignment over
+  // role_permissions, keyed by ea.role. For 200 active assignments
+  // that's 200 lookups against role_permissions per audit run. Single
+  // CTE pre-aggregates the company's permission counts by role, so
+  // the outer join is one scan per assignment regardless of size.
   const rows = await rawQuery<{ userId: number; email: string; role: string; permCount: number }>(
-    `SELECT u.id AS "userId", u.email, ea.role,
-            (SELECT COUNT(*) FROM role_permissions rp WHERE rp.role = ea.role AND (rp."companyId" = $1 OR rp."companyId" IS NULL))::int AS "permCount"
-     FROM users u
-     JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
-     WHERE u."employeeId" IS NOT NULL AND ea."companyId" = $1 AND ea.status = 'active'`,
+    `WITH role_perm_counts AS (
+       SELECT r.role_key AS role, COUNT(*)::int AS c
+         FROM rbac_roles r
+         JOIN rbac_role_grants g ON g.role_id = r.id
+        WHERE r."companyId" = $1
+        GROUP BY r.role_key
+     )
+     SELECT u.id AS "userId", u.email, ea.role,
+            COALESCE(rpc.c, 0) AS "permCount"
+       FROM users u
+       JOIN employee_assignments ea ON ea."employeeId" = u."employeeId"
+       LEFT JOIN role_perm_counts rpc ON rpc.role = ea.role
+      WHERE u."employeeId" IS NOT NULL AND ea."companyId" = $1 AND ea.status = 'active'`,
     [companyId]
   );
   for (const r of rows) {

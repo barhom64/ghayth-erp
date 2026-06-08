@@ -784,6 +784,160 @@ describe("Print Engine v2 — listPrintableEntityTypes (catalogue endpoint)", ()
   });
 });
 
+// ──────────────────────────────────────────────────────────────────────────
+// Live coverage audit — answers the user's question "هل النظام شغال على
+// كل النماذج؟" by walking entityRegistry and confirming every entity
+// marked `print.hasTemplate: true` has BOTH a working data path AND a
+// preset (or a registered table for the universal fallback).
+//
+// A regression here means a user clicks a print button on entity X and
+// the printed doc is empty (or the dataLoader silently returns
+// `{ entity: { id } }`). We treat that as a stop-ship today, not a
+// best-effort.
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("Print Engine v2 — every printable entityType has a real data path AND a preset (live audit)", () => {
+  it("every entityRegistry entry with hasTemplate=true is end-to-end printable", async () => {
+    const registrySrc = read(ENTITY_REGISTRY);
+    const loaderSrc = read(join(PRINT_LIB, "dataLoader.ts"));
+    const presetSrc = read(join(PRINT_LIB, "templateResolver.ts"));
+
+    // 1. Pull printable entities — every block carrying `hasTemplate: true`
+    //    in the registry's `print:` field.
+    const printableIds = Array.from(registrySrc.matchAll(
+      /id:\s*"([a-z_]+)"[\s\S]*?print:\s*\{[^}]*?hasTemplate:\s*true/g,
+    )).map((m) => m[1]);
+    expect(printableIds.length, "registry must declare at least 30 printable entities").toBeGreaterThan(30);
+
+    // 2. Where can each entity get its data?
+    //    a) dispatch switch case in dataLoader.ts (bespoke loader)
+    //    b) FALLBACK_TABLE_MAP entry (generic loadByTable)
+    //    c) registry's `table:` field (generic loadByTable)
+    const switchCases = new Set(
+      Array.from(loaderSrc.matchAll(/case\s+"([a-z_]+)"/g)).map((m) => m[1]),
+    );
+    const fallbackMatch = loaderSrc.match(/const\s+FALLBACK_TABLE_MAP[^{]*=\s*\{([\s\S]*?)\n\};/);
+    const fallbackKeys = new Set(
+      fallbackMatch
+        ? Array.from(fallbackMatch[1].matchAll(/^\s*([a-z_]+):/gm)).map((m) => m[1])
+        : [],
+    );
+    // Registry `table:` field — pulled by entry id so we can look it up.
+    const registryTables = new Map<string, string>();
+    for (const m of registrySrc.matchAll(
+      /id:\s*"([a-z_]+)"[\s\S]*?table:\s*"([a-z_]+)"/g,
+    )) {
+      registryTables.set(m[1], m[2]);
+    }
+
+    // 3. Preset coverage — BESPOKE_PRESETS map keys.
+    const bespokeMatch = presetSrc.match(
+      /const\s+BESPOKE_PRESETS[^{]*=\s*\{([\s\S]*?)\n\};\s+function\s+buildInvoicePreset/,
+    );
+    const bespokeKeys = new Set(
+      bespokeMatch
+        ? Array.from(bespokeMatch[1].matchAll(/^\s*([a-z_]+):\s*\(/gm)).map((m) => m[1])
+        : [],
+    );
+
+    // 4. Walk each printable entity and verify the data axis.
+    //    A bespoke preset is preferred but not required: when missing,
+    //    resolveTemplate falls back to universalFallback which renders
+    //    the meta-grid + auto-built items table. Either way the doc has
+    //    real content — but a missing DATA path means the printed body
+    //    is blank, which is the actual stop-ship.
+    const dataFailures: string[] = [];
+    const presetGaps: string[] = []; // recorded for visibility, not asserted as failure
+    for (const id of printableIds) {
+      const hasDataPath =
+        switchCases.has(id) || fallbackKeys.has(id) || registryTables.has(id);
+      if (!hasDataPath) {
+        dataFailures.push(`${id}: no switch case, no FALLBACK_TABLE_MAP entry, no registry table`);
+      }
+      if (!bespokeKeys.has(id)) {
+        presetGaps.push(id);
+      }
+    }
+
+    expect(
+      dataFailures,
+      `${dataFailures.length}/${printableIds.length} printable entities have no data path — print button would render empty.`,
+    ).toEqual([]);
+    // The bespoke-preset gap list is INFORMATIONAL. We assert it stays
+    // short — any future drift (a developer adding a new entity with
+    // hasTemplate=true but no preset) shows up here so they remember
+    // to wire it.
+    expect(
+      presetGaps.length,
+      `presetGaps (${presetGaps.length}) — these entities use universalFallback:\n  ${presetGaps.join(", ")}`,
+    ).toBeLessThan(10);
+  });
+
+  it("verify route is mounted before authMiddleware and returns the full audit subset", () => {
+    const verifySrc = read(join(REPO_ROOT, "artifacts/api-server/src/routes/printVerify.ts"));
+    const indexSrc = read(join(REPO_ROOT, "artifacts/api-server/src/routes/index.ts"));
+    // Route file shape
+    expect(verifySrc).toMatch(/router\.get\(\s*"\/:jobId"/);
+    expect(verifySrc).toMatch(/SELECT\s+pj\."entityType"[\s\S]*?print_jobs/);
+    expect(verifySrc).toMatch(/LEFT JOIN companies/);
+    expect(verifySrc).toMatch(/LEFT JOIN branches/);
+    expect(verifySrc).toMatch(/verified:\s*true/);
+    expect(verifySrc).toMatch(/copyNumber/);
+    expect(verifySrc).toMatch(/isReprint/);
+    expect(verifySrc).toMatch(/printedAt/);
+    expect(verifySrc).toMatch(/issuer:/);
+    // Mounted BEFORE authMiddleware so QR scanners hit the public path.
+    expect(indexSrc).toMatch(/printVerifyRouter/);
+    expect(indexSrc).toMatch(/router\.use\("\/print\/verify",\s*printVerifyRouter\)/);
+    // Verify the public-route mount appears before `router.use(authMiddleware`.
+    const mountIdx = indexSrc.search(/router\.use\("\/print\/verify"/);
+    const authIdx = indexSrc.search(/router\.use\(authMiddleware\)/);
+    expect(mountIdx, "/print/verify must be mounted").toBeGreaterThan(-1);
+    if (authIdx > -1) {
+      expect(
+        mountIdx,
+        "verify route must mount BEFORE authMiddleware so anonymous QR scanners pass through",
+      ).toBeLessThan(authIdx);
+    }
+  });
+
+  it("SPA /print/verify/:jobId page is wired in the public route block (no auth)", () => {
+    const appSrc = read(join(REPO_ROOT, "artifacts/ghayth-erp/src/App.tsx"));
+    // Lazy-loaded page exists
+    expect(appSrc).toMatch(/PrintVerify\s*=\s*lazy\(/);
+    // Mounted at /print/verify/:jobId
+    expect(appSrc).toMatch(/<Route\s+path="\/print\/verify\/:jobId">/);
+    // In the public block (outside ProtectedRoutes — the diff between the
+    // anonymous /login + this route and the rest of the app).
+    const protectedIdx = appSrc.search(/function\s+ProtectedRoutes/);
+    const verifyMountIdx = appSrc.search(/<Route\s+path="\/print\/verify\/:jobId">/);
+    const routerIdx = appSrc.search(/function\s+Router\(/);
+    expect(verifyMountIdx).toBeGreaterThan(routerIdx);
+    expect(verifyMountIdx).toBeGreaterThan(protectedIdx); // declared after ProtectedRoutes but inside the public Router fn
+  });
+
+  it("loadEmployeeContract + loadPayrollRun JOIN the employees table by name (no hard-coded data)", () => {
+    const loaderSrc = read(join(PRINT_LIB, "dataLoader.ts"));
+    // Employee contract — joins employees for the employee bag
+    expect(loaderSrc).toMatch(/loadEmployeeContract[\s\S]*?FROM employees/);
+    // Payroll roster — explicit alias selects e.name AS "employeeName"
+    expect(loaderSrc).toMatch(/loadPayrollRun[\s\S]*?LEFT JOIN employees/);
+    expect(loaderSrc).toMatch(/e\.name AS "employeeName"/);
+    expect(loaderSrc).toMatch(/e\."empNumber"/);
+    // Payslip — single-employee detail also resolves the employee name
+    expect(loaderSrc).toMatch(/loadPayslip[\s\S]*?SELECT id, name, "empNumber" FROM employees/);
+  });
+
+  it("Payroll preset references the JOINed columns inside its {{#each items}} block", () => {
+    const presetSrc = read(join(PRINT_LIB, "templateResolver.ts"));
+    // The preset must consume what the loader produces — otherwise the
+    // printed doc shows blank cells where employee names should be.
+    expect(presetSrc).toMatch(/buildPayrollRunPreset[\s\S]*?\{\{this\.employeeName\}\}/);
+    expect(presetSrc).toMatch(/buildPayrollRunPreset[\s\S]*?\{\{this\.empNumber\}\}/);
+    expect(presetSrc).toMatch(/buildPayrollRunPreset[\s\S]*?\{\{this\.netSalary\}\}/);
+  });
+});
+
 describe("Print Engine v2 — print-grade CSS (browser HTML→PDF quality)", () => {
   // The HTML-via-browser-print path is the entire render pipeline for A4
   // + thermal. To produce a real, professionally-paginated PDF the
@@ -1113,7 +1267,8 @@ describe("Print platform — PrintButton.payload contract (#1286 follow-up)", ()
   it("PrintButton forwards payload to /print/render only when provided", () => {
     // Conditional spread keeps the wire format clean — no `payload: undefined`
     // ending up in the JSON body for the common no-payload case.
-    expect(printButton).toMatch(/\.\.\.\(payload\s*\?\s*\{\s*payload\s*\}\s*:\s*\{\}\)/);
+    // Accept either the simple `payload` or the resolved variant (function-form payloads).
+    expect(printButton).toMatch(/\.\.\.\((?:resolvedPayload|payload)\s*\?\s*\{\s*payload:?\s*(?:resolvedPayload)?\s*\}\s*:\s*\{\}\)/);
   });
 });
 
@@ -1281,4 +1436,99 @@ describe("Print platform — finance reports wave 6 migrated (#1286 last sweep)"
       expect(src, `${path} must pass payload`).toMatch(/payload=\{/);
     });
   }
+});
+
+describe("Print Engine v2 — branded default themes", () => {
+  it("exposes getBrandedThemeHtml with all three theme keys", async () => {
+    const mod = await import("../../src/lib/print/brandedThemes.js");
+    expect(typeof mod.getBrandedThemeHtml).toBe("function");
+    expect(mod.THEME_KEYS).toEqual(["classic", "modern", "compact"]);
+  });
+
+  it("invoice theme carries items loop + totals + ZATCA QR token", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    for (const theme of ["classic", "modern", "compact"] as const) {
+      const { html } = getBrandedThemeHtml("invoice", theme);
+      expect(html, `${theme} must loop items`).toContain("{{#each items}}");
+      expect(html, `${theme} must show grand total`).toContain("{{entity.total}}");
+      expect(html, `${theme} must embed ZATCA QR`).toContain("{{entity.zatcaQr}}");
+      expect(html, `${theme} must embed verify block`).toContain("{{system.verifyBlock}}");
+      expect(html, `${theme} must include letterhead`).toContain("{{branch.letterhead}}");
+    }
+  });
+
+  it("each theme produces visually distinct HTML", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    const classic = getBrandedThemeHtml("invoice", "classic").html;
+    const modern = getBrandedThemeHtml("invoice", "modern").html;
+    const compact = getBrandedThemeHtml("invoice", "compact").html;
+    expect(classic).not.toBe(modern);
+    expect(modern).not.toBe(compact);
+    // Modern uses the gradient title band; classic uses a bordered h2.
+    expect(modern).toContain("linear-gradient");
+    expect(classic).not.toContain("linear-gradient");
+  });
+
+  it("unknown preset key falls back to classic theme", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    const fallback = getBrandedThemeHtml("invoice", "nonsense");
+    expect(fallback.theme).toBe("classic");
+  });
+
+  it("entity without a bespoke recipe falls back to a branded generic document", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    // `campaign` has no recipe -> generic doc with the auto itemsTable token.
+    const { html } = getBrandedThemeHtml("campaign", "modern");
+    expect(html).toContain("{{entity.itemsTable}}");
+    expect(html).toContain("{{branch.letterhead}}");
+  });
+});
+
+describe("Print Engine v2 — branded document families", () => {
+  it("exposes branded recipes for all major document families", async () => {
+    const { brandedRecipeKeys } = await import("../../src/lib/print/brandedThemes.js");
+    const keys = brandedRecipeKeys();
+    // Spot-check one from each family.
+    for (const k of [
+      "quotation", "purchase_order", "delivery_note",       // line-item
+      "payment_voucher", "receipt_voucher", "salary_advance", // vouchers
+      "customer_statement", "vendor_statement",               // statements
+      "journal_entry", "recurring_journal",                   // journals
+      "payslip", "payroll",                                   // payslips
+      "official_letter", "correspondence",                    // letters
+      "employee_contract", "rental_contract",                 // contracts
+    ]) {
+      expect(keys, `${k} must have a branded recipe`).toContain(k);
+    }
+    expect(keys.length).toBeGreaterThanOrEqual(30);
+  });
+
+  it("every recipe renders in all three themes with letterhead + footer + verify", async () => {
+    const { getBrandedThemeHtml, brandedRecipeKeys } = await import("../../src/lib/print/brandedThemes.js");
+    for (const entity of brandedRecipeKeys()) {
+      for (const theme of ["classic", "modern", "compact"] as const) {
+        const { html } = getBrandedThemeHtml(entity, theme);
+        expect(html, `${entity}/${theme} letterhead`).toContain("{{branch.letterhead}}");
+        expect(html, `${entity}/${theme} footer`).toContain("{{branch.footer}}");
+        expect(html, `${entity}/${theme} verify`).toContain("{{system.verifyBlock}}");
+      }
+    }
+  });
+
+  it("voucher family shows an amount box, statement family a running balance", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    const voucher = getBrandedThemeHtml("payment_voucher", "classic").html;
+    expect(voucher).toContain("المبلغ");
+    expect(voucher).toContain("{{entity.amountInWords}}");
+    const stmt = getBrandedThemeHtml("customer_statement", "classic").html;
+    expect(stmt).toContain("{{this.balance}}");
+    expect(stmt).toContain("الرصيد الختامي");
+  });
+
+  it("journal family shows debit/credit totals", async () => {
+    const { getBrandedThemeHtml } = await import("../../src/lib/print/brandedThemes.js");
+    const j = getBrandedThemeHtml("journal_entry", "modern").html;
+    expect(j).toContain("{{entity.totalDebit}}");
+    expect(j).toContain("{{entity.totalCredit}}");
+  });
 });

@@ -9,6 +9,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   PageShell,
   PageStatusBadge,
 } from "@workspace/ui-core";
@@ -17,6 +18,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Button } from "@/components/ui/button";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 /**
  * Fiscal periods list — migrated in R.2 iter 2 to the unified template
  * stack (PageShell + PageStatusBadge). The underlying data source is
@@ -93,13 +96,16 @@ export default function FiscalPeriodsPage() {
     },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items as unknown as Record<string, unknown>[], filters, {
     searchFields: ["name", "period"],
     statusField: "status",
   }) as unknown as FiscalPeriodV1Row[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const activeCount = items.filter((p) => p.status === "active").length;
   const closedCount = items.filter((p) => p.status === "closed").length;
@@ -178,6 +184,25 @@ export default function FiscalPeriodsPage() {
       subtitle="الفترات الشهرية وعدد القيود وإجمالي الحركات"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الفترات المالية" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_finance_fiscal_periods"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "الفترات المالية", total: printRows.length },
+            items: printRows.map((p: any) => ({
+              "الفترة": p.period || "—",
+              "الاسم": p.name || "—",
+              "تاريخ البدء": p.startDate || "—",
+              "تاريخ الانتهاء": p.endDate || "—",
+              "عدد القيود": p.journalCount ?? 0,
+              "إجمالي الحركات": Number(p.totalActivity ?? 0),
+              "الحالة": p.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
@@ -227,11 +252,25 @@ export default function FiscalPeriodsPage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered as unknown as Record<string, unknown>[] || [],
+            [
+              { key: "period", label: "الفترة" },
+              { key: "name", label: "الاسم" },
+              { key: "entries", label: "عدد القيود" },
+              { key: "totalAmount", label: "إجمالي الحركات" },
+              { key: "status", label: "الحالة" },
+            ],
+            "فترات-مالية",
+          )
+        }
         resultCount={filtered.length}
       />
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

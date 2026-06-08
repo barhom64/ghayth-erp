@@ -30,6 +30,8 @@ import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick
 import { useAppContext } from "@/contexts/app-context";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { withListFilters } from "@/lib/list-query";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function Fleet() {
   const [tab, setTab] = useState("vehicles");
@@ -78,6 +80,7 @@ function VehiclesTab() {
   const total = vehiclesResp?.total || vehicles.length;
 
   const filtered = vehicles;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/fleet/vehicles",
@@ -200,6 +203,23 @@ function VehiclesTab() {
             resultCount={filtered?.length}
           />
         </div>
+        <PrintButton
+          entityType="report_fleet_vehicles"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة المركبات"
+          payload={() => ({
+            entity: { title: "قائمة مركبات الأسطول", total: printRows.length },
+            items: printRows.map((v: any) => ({
+              "اللوحة": v.plateNumber || "—",
+              "المركبة": `${v.make || ""} ${v.model || ""} ${v.year || ""}`.trim() || "—",
+              "اللون": v.color || "—",
+              "المسافة (كم)": Number(v.currentMileage || 0),
+              "السائق": v.driverName || "—",
+              "الحالة": v.status || "—",
+            })),
+          })}
+        />
         {canManage && <Link href="/fleet/vehicles/create"><GuardedButton perm="fleet:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة مركبة</GuardedButton></Link>}
       </div>
 
@@ -209,6 +229,7 @@ function VehiclesTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
@@ -248,6 +269,7 @@ function DriversTab() {
   const drivers = asList(driversResp);
 
   const filtered = drivers;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/fleet/drivers",
@@ -313,6 +335,23 @@ function DriversTab() {
             resultCount={filtered?.length}
           />
         </div>
+        <PrintButton
+          entityType="report_fleet_drivers"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة السائقين"
+          payload={() => ({
+            entity: { title: "قائمة سائقي الأسطول", total: printRows.length },
+            items: printRows.map((d: any) => ({
+              "الاسم": d.name || "—",
+              "الهاتف": d.phone || "—",
+              "رقم الرخصة": d.licenseNumber || "—",
+              "التقييم": d.rating ?? "—",
+              "الرحلات": d.totalTrips ?? 0,
+              "الحالة": d.status || "—",
+            })),
+          })}
+        />
         <Link href="/fleet/drivers/create"><GuardedButton perm="fleet:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة سائق</GuardedButton></Link>
       </div>
       <Card>
@@ -320,6 +359,7 @@ function DriversTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
@@ -357,6 +397,7 @@ function TripsTab() {
   const total = tripsResp?.total || trips.length;
 
   const filtered = trips;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "plateNumber", header: "المركبة", sortable: true, render: (t) => t.plateNumber || "-" },
@@ -369,35 +410,57 @@ function TripsTab() {
 
   return (
     <div className="space-y-4">
-      <AdvancedFilters
-        config={{
-          searchPlaceholder: "بحث بالمركبة أو السائق...",
-          statuses: [
-            { value: "scheduled", label: "مجدولة" },
-            { value: "in_progress", label: "جارية" },
-            { value: "completed", label: "مكتملة" },
-            { value: "cancelled", label: "ملغاة" },
-          ],
-          showDateRange: true,
-        }}
-        values={filters}
-        onChange={setFilters}
-        onExportCSV={() => exportToCSV(filtered || [], [
-          { key: "plateNumber", label: "المركبة" },
-          { key: "driverName", label: "السائق" },
-          { key: "fromLocation", label: "من" },
-          { key: "toLocation", label: "إلى" },
-          { key: "distance", label: "المسافة" },
-          { key: "status", label: "الحالة" },
-        ], "الرحلات")}
-        resultCount={filtered?.length}
-      />
+      <div className="flex items-start gap-2">
+        <div className="flex-1">
+          <AdvancedFilters
+            config={{
+              searchPlaceholder: "بحث بالمركبة أو السائق...",
+              statuses: [
+                { value: "scheduled", label: "مجدولة" },
+                { value: "in_progress", label: "جارية" },
+                { value: "completed", label: "مكتملة" },
+                { value: "cancelled", label: "ملغاة" },
+              ],
+              showDateRange: true,
+            }}
+            values={filters}
+            onChange={setFilters}
+            onExportCSV={() => exportToCSV(filtered || [], [
+              { key: "plateNumber", label: "المركبة" },
+              { key: "driverName", label: "السائق" },
+              { key: "fromLocation", label: "من" },
+              { key: "toLocation", label: "إلى" },
+              { key: "distance", label: "المسافة" },
+              { key: "status", label: "الحالة" },
+            ], "الرحلات")}
+            resultCount={filtered?.length}
+          />
+        </div>
+        <PrintButton
+          entityType="report_fleet_trips"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة الرحلات"
+          payload={() => ({
+            entity: { title: "قائمة رحلات الأسطول", total: printRows.length },
+            items: printRows.map((t: any) => ({
+              "المركبة": t.plateNumber || "—",
+              "السائق": t.driverName || "—",
+              "من": t.fromLocation || "—",
+              "إلى": t.toLocation || "—",
+              "المسافة (كم)": t.distance ?? "—",
+              "الحالة": t.status || "—",
+            })),
+          })}
+        />
+      </div>
       <Card>
         <CardHeader><CardTitle>الرحلات</CardTitle></CardHeader>
         <CardContent>
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
@@ -426,6 +489,7 @@ function MaintenanceTab() {
   const records = asList(maintResp);
 
   const filtered = records;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "plateNumber", header: "المركبة", sortable: true, render: (r) => r.plateNumber || "-" },
@@ -438,34 +502,56 @@ function MaintenanceTab() {
 
   return (
     <div className="space-y-4">
-      <AdvancedFilters
-        config={{
-          searchPlaceholder: "بحث بالمركبة أو الوصف...",
-          statuses: [
-            { value: "pending", label: "معلقة" },
-            { value: "in_progress", label: "جارية" },
-            { value: "completed", label: "مكتملة" },
-          ],
-          showDateRange: true,
-        }}
-        values={filters}
-        onChange={setFilters}
-        onExportCSV={() => exportToCSV(filtered || [], [
-          { key: "plateNumber", label: "المركبة" },
-          { key: "type", label: "النوع" },
-          { key: "description", label: "الوصف" },
-          { key: "cost", label: "التكلفة" },
-          { key: "serviceDate", label: "التاريخ" },
-          { key: "status", label: "الحالة" },
-        ], "الصيانة")}
-        resultCount={filtered?.length}
-      />
+      <div className="flex items-start gap-2">
+        <div className="flex-1">
+          <AdvancedFilters
+            config={{
+              searchPlaceholder: "بحث بالمركبة أو الوصف...",
+              statuses: [
+                { value: "pending", label: "معلقة" },
+                { value: "in_progress", label: "جارية" },
+                { value: "completed", label: "مكتملة" },
+              ],
+              showDateRange: true,
+            }}
+            values={filters}
+            onChange={setFilters}
+            onExportCSV={() => exportToCSV(filtered || [], [
+              { key: "plateNumber", label: "المركبة" },
+              { key: "type", label: "النوع" },
+              { key: "description", label: "الوصف" },
+              { key: "cost", label: "التكلفة" },
+              { key: "serviceDate", label: "التاريخ" },
+              { key: "status", label: "الحالة" },
+            ], "الصيانة")}
+            resultCount={filtered?.length}
+          />
+        </div>
+        <PrintButton
+          entityType="report_fleet_maintenance"
+          entityId="list"
+          size="icon"
+          label="طباعة سجلات الصيانة"
+          payload={() => ({
+            entity: { title: "سجلات صيانة الأسطول", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "المركبة": r.plateNumber || "—",
+              "النوع": r.type || "—",
+              "الوصف": r.description || "—",
+              "التكلفة": Number(r.cost || 0),
+              "التاريخ": r.serviceDate ? formatDateAr(r.serviceDate) : "—",
+              "الحالة": r.status || "—",
+            })),
+          })}
+        />
+      </div>
       <Card>
         <CardHeader><CardTitle>سجلات الصيانة</CardTitle></CardHeader>
         <CardContent>
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
@@ -489,6 +575,7 @@ function FuelTab() {
   const logs = asList(fuelResp);
 
   const filtered = logs;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "plateNumber", header: "المركبة", sortable: true, render: (l) => l.plateNumber || "-" },
@@ -501,29 +588,51 @@ function FuelTab() {
 
   return (
     <div className="space-y-4">
-      <AdvancedFilters
-        config={{
-          searchPlaceholder: "بحث بالمركبة أو المحطة...",
-          showDateRange: true,
-        }}
-        values={filters}
-        onChange={setFilters}
-        onExportCSV={() => exportToCSV(filtered || [], [
-          { key: "plateNumber", label: "المركبة" },
-          { key: "fuelDate", label: "التاريخ" },
-          { key: "liters", label: "اللترات" },
-          { key: "costPerLiter", label: "سعر اللتر" },
-          { key: "totalCost", label: "الإجمالي" },
-          { key: "stationName", label: "المحطة" },
-        ], "الوقود")}
-        resultCount={filtered?.length}
-      />
+      <div className="flex items-start gap-2">
+        <div className="flex-1">
+          <AdvancedFilters
+            config={{
+              searchPlaceholder: "بحث بالمركبة أو المحطة...",
+              showDateRange: true,
+            }}
+            values={filters}
+            onChange={setFilters}
+            onExportCSV={() => exportToCSV(filtered || [], [
+              { key: "plateNumber", label: "المركبة" },
+              { key: "fuelDate", label: "التاريخ" },
+              { key: "liters", label: "اللترات" },
+              { key: "costPerLiter", label: "سعر اللتر" },
+              { key: "totalCost", label: "الإجمالي" },
+              { key: "stationName", label: "المحطة" },
+            ], "الوقود")}
+            resultCount={filtered?.length}
+          />
+        </div>
+        <PrintButton
+          entityType="report_fleet_fuel"
+          entityId="list"
+          size="icon"
+          label="طباعة سجلات الوقود"
+          payload={() => ({
+            entity: { title: "سجلات وقود الأسطول", total: printRows.length },
+            items: printRows.map((l: any) => ({
+              "المركبة": l.plateNumber || "—",
+              "التاريخ": l.fuelDate ? formatDateAr(l.fuelDate) : "—",
+              "اللترات": l.liters ?? "—",
+              "سعر اللتر": Number(l.costPerLiter || 0),
+              "الإجمالي": Number(l.totalCost || 0),
+              "المحطة": l.stationName || "—",
+            })),
+          })}
+        />
+      </div>
       <Card>
         <CardHeader><CardTitle>سجلات الوقود</CardTitle></CardHeader>
         <CardContent>
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

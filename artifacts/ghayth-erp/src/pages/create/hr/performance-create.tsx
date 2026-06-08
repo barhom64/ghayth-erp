@@ -80,6 +80,7 @@ export default function PerformanceCreate() {
   });
   const [competencies, setCompetencies] = useState<Competency[]>(defaultCompetencies.map((c) => ({ ...c })));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -95,7 +96,6 @@ export default function PerformanceCreate() {
   };
 
   const selectedEmployee = employees.find((e: any) => String(e.assignmentId || e.id) === form.assignmentId);
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = () => {
     const firstError = validate({

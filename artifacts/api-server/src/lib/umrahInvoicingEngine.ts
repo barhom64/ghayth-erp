@@ -4,6 +4,7 @@ import { issueNumber } from "./numberingService.js";
 import { NotFoundError, ConflictError, ValidationError } from "./errorHandler.js";
 import { logger } from "./logger.js";
 import { getProvider as getEInvoiceProvider } from "./einvoice/index.js";
+import { resolveRevenueAccount } from "./revenueAccountResolver.js";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -87,13 +88,23 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
   if (!subAgent.clientId) throw new ConflictError("الوكيل الفرعي غير مربوط بعميل — يرجى ربطه أولاً", { field: "clientId" });
 
+  // Was N+1: correlated MIN("arrivalDate") per group over umrah_pilgrims.
+  // For batch invoicing 20-50 groups that's 20-50 lookups against the
+  // large pilgrims table per call. Single GROUP BY CTE collapses to one
+  // scan — scoped to the requested groups via the same ANY($1) gate.
   const groups = await rawQuery<Record<string, unknown>>(
-    `SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
+    `WITH first_arrival AS (
+       SELECT "groupId", MIN("arrivalDate") AS "entryDate"
+         FROM umrah_pilgrims
+        WHERE "groupId" = ANY($1) AND "deletedAt" IS NULL
+        GROUP BY "groupId"
+     )
+     SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
             g."subAgentId", g."agentId",
-            (SELECT MIN(p."arrivalDate") FROM umrah_pilgrims p
-             WHERE p."groupId" = g.id AND p."deletedAt" IS NULL) AS "entryDate"
-     FROM umrah_groups g
-     WHERE g.id = ANY($1) AND g."companyId" = $2 AND g."deletedAt" IS NULL`,
+            fa."entryDate"
+       FROM umrah_groups g
+       LEFT JOIN first_arrival fa ON fa."groupId" = g.id
+      WHERE g.id = ANY($1) AND g."companyId" = $2 AND g."deletedAt" IS NULL`,
     [groupIds, scope.companyId]
   );
   if (groups.length !== groupIds.length) {
@@ -169,6 +180,28 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
       WHERE c.id = $1`,
     [scope.companyId],
   );
+
+  // Hierarchical revenue-account override — driven by
+  // subsidiary_accounts (migration 250). Resolves the most-specific
+  // override for this invoice context: sub-agent → agent → season.
+  // When set, this code REPLACES whatever product-default the
+  // /umrah/settings mapping produced. Why most-specific-wins:
+  // the operator's question was «ربط الوكيل بحساب مبيعات مخصص ...
+  // مع عدم تعارض ربطها بحساب الوكيل» — a custom-account binding on
+  // the sub-agent should dominate the season-wide override, which
+  // should dominate the company-wide product default.
+  // Null result ⇒ no override configured ⇒ existing behaviour
+  // (per-product accountCode) is preserved byte-identical.
+  const dimensionalOverride = await resolveRevenueAccount(
+    scope.companyId,
+    {
+      subAgentId,
+      agentId: (subAgent.agentId as number | null) ?? null,
+      seasonId,
+    },
+    "revenue",
+  );
+  const overrideAccountCode = dimensionalOverride?.accountCode ?? null;
 
   // Phase 3d — when all 3 service products are configured, the
   // engine splits each group's lineTotal into 3 distinct lines
@@ -286,7 +319,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
           unitPrice: mutamerCount > 0 ? visaPortion / mutamerCount : visaPortion,
           lineTotal: visaPortion,
           productId: productMap!.visaProductId,
-          accountCode: productMap!.visaAccountCode,
+          accountCode: overrideAccountCode ?? productMap!.visaAccountCode,
           vatRate: taxCodeToVat(productMap!.visaTaxCode),
         });
       }
@@ -303,7 +336,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
           unitPrice: transportPortion,
           lineTotal: transportPortion,
           productId: productMap!.transportProductId,
-          accountCode: productMap!.transportAccountCode,
+          accountCode: overrideAccountCode ?? productMap!.transportAccountCode,
           vatRate: taxCodeToVat(productMap!.transportTaxCode),
         });
       }
@@ -320,7 +353,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
         unitPrice: servicesPortion,
         lineTotal: servicesPortion,
         productId: productMap!.servicesProductId,
-        accountCode: productMap!.servicesAccountCode,
+        accountCode: overrideAccountCode ?? productMap!.servicesAccountCode,
         vatRate: taxCodeToVat(productMap!.servicesTaxCode),
       });
     } else {
@@ -340,7 +373,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
         unitPrice: price,
         lineTotal,
         productId: servicesProductId,
-        accountCode: servicesAccountCode,
+        accountCode: overrideAccountCode ?? servicesAccountCode,
         vatRate: servicesVatRate,
       });
     }
@@ -848,11 +881,27 @@ export async function listUninvoicedGroups(scope: Scope, subAgentId: number, sea
   // (no row in umrah_sales_invoice_items for a non-cancelled invoice).
   const seasonClause = seasonId ? "AND g.\"seasonId\" = $3" : "";
   const seasonParams = seasonId ? [subAgentId, scope.companyId, seasonId] : [subAgentId, scope.companyId];
+  // Same N+1 shape as the targeted-groups loader above — correlated
+  // MIN("arrivalDate") per unbilled group over umrah_pilgrims. A
+  // sub-agent with 100 unbilled groups would hit pilgrims 100 times
+  // per invoice-suggestion call. Single GROUP BY CTE collapses to one
+  // scan; scoped to the same sub-agent/company gate as the outer
+  // query so the planner can still prune effectively.
   const groups = await rawQuery<Record<string, unknown>>(
-    `SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
-            (SELECT MIN(p."arrivalDate") FROM umrah_pilgrims p
-              WHERE p."groupId" = g.id AND p."deletedAt" IS NULL) AS "entryDate"
+    `WITH first_arrival AS (
+       SELECT p."groupId", MIN(p."arrivalDate") AS "entryDate"
+         FROM umrah_pilgrims p
+         JOIN umrah_groups g2 ON g2.id = p."groupId"
+        WHERE g2."subAgentId" = $1
+          AND g2."companyId" = $2
+          AND g2."deletedAt" IS NULL
+          AND p."deletedAt" IS NULL
+        GROUP BY p."groupId"
+     )
+     SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
+            fa."entryDate"
        FROM umrah_groups g
+       LEFT JOIN first_arrival fa ON fa."groupId" = g.id
       WHERE g."subAgentId" = $1
         AND g."companyId" = $2
         AND g."deletedAt" IS NULL
@@ -1199,3 +1248,4 @@ export async function getDashboard(scope: Scope, seasonId: number) {
     agentPerformance,
   };
 }
+

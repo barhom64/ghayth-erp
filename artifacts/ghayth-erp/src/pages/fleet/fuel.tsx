@@ -13,6 +13,8 @@ import { useAppContext } from "@/contexts/app-context";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function FuelPage() {
   const [, navigate] = useLocation();
@@ -20,6 +22,7 @@ export default function FuelPage() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fuel", scopeQueryString], `/fleet/fuel-logs${scopeSuffix}`);
   const items = asList(data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const columns: DataTableColumn<any>[] = [
     { key: "vehiclePlate", header: "المركبة", sortable: true, searchable: true, render: (f) => <span className="font-medium">{f.vehiclePlate}</span> },
@@ -39,9 +42,29 @@ export default function FuelPage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "استهلاك الوقود" }]}
       loading={isLoading}
       actions={
-        <Link href="/fleet/fuel/create">
-          <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />تسجيل تعبئة</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_fuel"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "سجل استهلاك الوقود", total: printRows.length },
+              items: printRows.map((f: any) => ({
+                "المركبة": f.plateNumber || f.vehiclePlate || "—",
+                "السائق": f.driverName || "—",
+                "التاريخ": f.fuelDate || f.date || "—",
+                "نوع الوقود": f.fuelType || "—",
+                "الكمية (لتر)": f.quantity ?? 0,
+                "السعر": f.pricePerLiter ?? 0,
+                "الإجمالي": f.totalCost ?? 0,
+                "العدّاد": f.odometer ?? "—",
+              })),
+            })}
+          />
+          <Link href="/fleet/fuel/create">
+            <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />تسجيل تعبئة</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <FleetTabsNav />
@@ -54,6 +77,7 @@ export default function FuelPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={items}
         isLoading={isLoading}
         isError={isError}

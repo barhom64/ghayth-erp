@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { formatDateAr, todayLocal } from "@/lib/formatters";
+import { formatUmrahDate, todayLocal } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   PageStatusBadge,
@@ -20,20 +20,18 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { BulkCheckbox } from "@/components/shared/bulk-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+
+import { UMRAH_PILGRIM_STATUS_OPTIONS, umrahPilgrimStatusLabel } from "@/lib/umrah-pilgrim-status";
 
 // PILGRIM_STATUSES is mirrored from the backend enum in routes/umrah.ts;
 // the bulk-status dropdown should match the same option set so an
-// operator picking a state can never send something the backend
-// rejects.
-const PILGRIM_STATUS_OPTIONS = [
-  { value: "pending", label: "لم يصل" },
-  { value: "arrived", label: "وصل" },
-  { value: "active", label: "نشط" },
-  { value: "overstayed", label: "متأخر" },
-  { value: "departed", label: "غادر" },
-  { value: "violated", label: "مخالف" },
-  { value: "cancelled", label: "ملغي" },
-];
+// operator picking a state can never send something the backend rejects.
+// Labels live in `@/lib/umrah-pilgrim-status` so this dropdown, the
+// AdvancedFilters strip below, and `pilgrim-detail.tsx`'s header badge
+// all read the SAME wording — no divergence between cells.
+const PILGRIM_STATUS_OPTIONS = UMRAH_PILGRIM_STATUS_OPTIONS;
 
 export default function UmrahPilgrims() {
   const { toast } = useToast();
@@ -104,6 +102,7 @@ export default function UmrahPilgrims() {
   const { data: groupsResp } = useApiQuery<{ data: any[] }>(["umrah-groups"], "/umrah/groups");
   const groups = asList(groupsResp?.data || groupsResp);
   const items = resp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const total = resp?.total || 0;
 
   // GET /umrah/unassigned — pilgrims without an agent. Shows up as an
@@ -235,13 +234,13 @@ export default function UmrahPilgrims() {
       key: "arrivalDate",
       header: "الوصول",
       sortable: true,
-      render: (p) => formatDateAr(p.arrivalDate),
+      render: (p) => formatUmrahDate(p.arrivalDate),
     },
     {
       key: "departureDate",
       header: "المغادرة",
       sortable: true,
-      render: (p) => formatDateAr(p.departureDate),
+      render: (p) => formatUmrahDate(p.departureDate),
     },
     {
       key: "status",
@@ -257,9 +256,32 @@ export default function UmrahPilgrims() {
       subtitle="متابعة ملفات المعتمرين وحالاتهم"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المعتمرين" }]}
       actions={
-        <Link href="/umrah/pilgrims/create">
-          <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_pilgrims"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: "قائمة المعتمرين",
+                total: printRows.length,
+                unassigned: unassignedCount,
+              },
+              items: printRows.map((p: any) => ({
+                "الاسم": p.fullName || p.name || "—",
+                "رقم نسك": p.nuskNumber || "—",
+                "الجواز": p.passportNumber || "—",
+                "الجنسية": p.nationality || "—",
+                "المجموعة": p.groupName || "—",
+                "الوكيل الفرعي": p.subAgentName || "—",
+                "الحالة": umrahPilgrimStatusLabel(p.status),
+              })),
+            })}
+          />
+          <Link href="/umrah/pilgrims/create">
+            <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <UmrahTabsNav />
@@ -375,15 +397,7 @@ export default function UmrahPilgrims() {
           // Placeholder enumerates everything the search box hits so the
           // operator stops asking "can I search by NUSK?" — answer is yes.
           searchPlaceholder: "بحث بالاسم / الجواز / التأشيرة / رقم نسك...",
-          statuses: [
-            { value: "pending", label: "لم يصل" },
-            { value: "arrived", label: "وصل" },
-            { value: "active", label: "نشط" },
-            { value: "overstayed", label: "متأخر" },
-            { value: "departed", label: "غادر" },
-            { value: "violated", label: "مخالف" },
-            { value: "cancelled", label: "ملغي" },
-          ],
+          statuses: [...PILGRIM_STATUS_OPTIONS],
           extraFilters: [
             {
               key: "seasonId",
@@ -479,6 +493,7 @@ export default function UmrahPilgrims() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={items}
         isLoading={isLoading}
         isError={isError}

@@ -18,6 +18,9 @@ import {
   emitEvent,
   createAuditLog,
   initiateApprovalChain,
+  checkFinancialPeriodOpen,
+  todayISO,
+  reverseAccountBalances,
 } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -152,6 +155,11 @@ const createCustodySchema = z.object({
   amount: z.coerce.number(),
   description: z.string().optional(),
   sourceAccountCode: z.string().optional(),
+  // #1715 guardrail #6: optional payment method so the custody disbursement
+  // can be validated against its money source through the unified context
+  // (cash→cash_box, bank_transfer→bank, …). Absent → policy is a no-op, so
+  // existing callers are unaffected.
+  paymentMethod: z.string().optional(),
   purpose: z.string().optional(),
   expectedReturnDate: z.string().optional(),
 });
@@ -190,24 +198,43 @@ custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", acti
       dateFilter += ` AND je."createdAt" < ($${queryParams.length}::date + interval '1 day')`;
     }
 
+    // Was 2× correlated subquery per row over journal_lines — one
+    // for "find first debit-line accountCode", one for "the name of
+    // that account". With LIMIT 1000 custodies that's up to 2000
+    // extra lookups against the big journal_lines table.
+    //
+    // first_debit_line CTE picks ROW_NUMBER()=1 per journal so we get
+    // the canonical debit-line accountCode in one scan; the LEFT JOIN
+    // to chart_of_accounts pulls the display name without a second
+    // correlated subquery.
     const rows = await rawQuery<CustodyListRow>(
-      `SELECT je.id, je.ref, je.description, je.status AS "approvalStatus",
+      `WITH first_debit_line AS (
+         SELECT DISTINCT ON (jlx."journalId")
+                jlx."journalId",
+                jlx."accountCode"
+           FROM journal_lines jlx
+          WHERE jlx.debit > 0
+          ORDER BY jlx."journalId", jlx.id
+       )
+       SELECT je.id, je.ref, je.description, je.status AS "approvalStatus",
               COALESCE(SUM(jl.debit), 0) AS amount,
               je."createdAt" AS date,
               je.notes AS purpose,
               je."dueDate" AS "expectedReturnDate",
               e.name AS "employeeName",
               ea.id AS "assignmentId",
-              (SELECT jl2."accountCode" FROM journal_lines jl2 WHERE jl2."journalId" = je.id AND jl2.debit > 0 LIMIT 1) AS "custodyAccountCode",
-              (SELECT ca.name FROM journal_lines jl3 JOIN chart_of_accounts ca ON ca.code = jl3."accountCode" AND ca."companyId" = $1 WHERE jl3."journalId" = je.id AND jl3.debit > 0 LIMIT 1) AS "custodyAccountName"
-       FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
-       LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'${dateFilter}
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id
-       ORDER BY je."createdAt" DESC
-       LIMIT 1000`,
+              fdl."accountCode" AS "custodyAccountCode",
+              ca.name AS "custodyAccountName"
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
+         LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
+         LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
+         LEFT JOIN first_debit_line fdl ON fdl."journalId" = je.id
+         LEFT JOIN chart_of_accounts ca ON ca.code = fdl."accountCode" AND ca."companyId" = $1
+        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'${dateFilter}
+        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id, fdl."accountCode", ca.name
+        ORDER BY je."createdAt" DESC
+        LIMIT 1000`,
       queryParams
     );
 
@@ -416,27 +443,41 @@ custodiesRouter.get("/custodies/summary", authorize({ feature: "finance.custodie
   }
 });
 
-custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", action: "view", resource: { table: "custodies", idParam: "id" } }), async (req, res) => {
+custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", action: "view", resource: { table: "journal_entries", idParam: "id", columns: ['"companyId"', '"branchId"', '"departmentId"'] } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 
+    // Same first-debit-line CTE shape as the list endpoint above —
+    // single-row lookup (WHERE je.id = $1) but keeping shapes uniform
+    // means the list and detail compose the same maintenance surface.
     const [custody] = await rawQuery<CustodyListRow>(
-      `SELECT je.id, je.ref, je.description, je.status AS "approvalStatus",
+      `WITH first_debit_line AS (
+         SELECT DISTINCT ON (jlx."journalId")
+                jlx."journalId",
+                jlx."accountCode"
+           FROM journal_lines jlx
+          WHERE jlx.debit > 0
+            AND jlx."journalId" = $1
+          ORDER BY jlx."journalId", jlx.id
+       )
+       SELECT je.id, je.ref, je.description, je.status AS "approvalStatus",
               COALESCE(SUM(jl.debit), 0) AS amount,
               je."createdAt" AS date,
               je.notes AS purpose,
               je."dueDate" AS "expectedReturnDate",
               e.name AS "employeeName",
               ea.id AS "assignmentId",
-              (SELECT jl2."accountCode" FROM journal_lines jl2 WHERE jl2."journalId" = je.id AND jl2.debit > 0 LIMIT 1) AS "custodyAccountCode",
-              (SELECT ca.name FROM journal_lines jl3 JOIN chart_of_accounts ca ON ca.code = jl3."accountCode" AND ca."companyId" = $2 WHERE jl3."journalId" = je.id AND jl3.debit > 0 LIMIT 1) AS "custodyAccountName"
-       FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
-       LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id`,
+              fdl."accountCode" AS "custodyAccountCode",
+              ca.name AS "custodyAccountName"
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
+         LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
+         LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
+         LEFT JOIN first_debit_line fdl ON fdl."journalId" = je.id
+         LEFT JOIN chart_of_accounts ca ON ca.code = fdl."accountCode" AND ca."companyId" = $2
+        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id, fdl."accountCode", ca.name`,
       [id, scope.companyId]
     );
 
@@ -521,13 +562,25 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
   try {
     const scope = req.scope!;
 
-    const { assignmentId, employeeName, amount, description, sourceAccountCode, purpose, expectedReturnDate } = zodParse(createCustodySchema.safeParse(req.body ?? {}));
+    const { assignmentId, employeeName, amount, description, sourceAccountCode, paymentMethod, purpose, expectedReturnDate } = zodParse(createCustodySchema.safeParse(req.body ?? {}));
 
     if (!amount) {
       throw new ValidationError("المبلغ مطلوب", {
         field: "amount",
         fix: "أدخل مبلغ العهدة",
       });
+    }
+
+    // F5 (audit follow-up): typed period gate up front. The JE engine
+    // guards internally so no GL leaks into a closed period, but the
+    // operator-facing error becomes a clean ConflictError with the
+    // period name instead of an opaque engine throw.
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن إصدار عهدة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { meta: { periodName: periodCheck.periodName } },
+      );
     }
 
     let resolvedAssignmentId = assignmentId ? Number(assignmentId) : null;
@@ -550,6 +603,25 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
     }
 
     const sourceAcct = sourceAccountCode || "1100";
+
+    // #1715 guardrail #6 — the custody disbursement is a finance operation,
+    // so it flows through the unified FinanceOperationContext. When the caller
+    // supplies a paymentMethod, assertOperationValid enforces the same
+    // money-source ↔ method policy as expenses/vouchers (a cash custody can't
+    // be drawn from a bank account, etc.). Absent paymentMethod → no-op, so
+    // existing callers keep working unchanged.
+    {
+      const { assertOperationValid, fromLegacyCustodyForm } = await import("../lib/financeOperationContext.js");
+      await assertOperationValid(fromLegacyCustodyForm({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        sourceAccountCode: sourceAcct,
+        paymentMethod,
+        assignmentId: resolvedAssignmentId,
+        employeeName: resolvedEmployeeName,
+      }));
+    }
+
     const idempotencyToken = requestIdempotencyToken(req);
     const ref = `CUSTODY-${idempotencyToken}`;
     const custodyAssignmentId = resolvedAssignmentId || scope.activeAssignmentId;
@@ -578,6 +650,34 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
       }
     }
 
+    // Centralised resolver — auto-derives the cost-centre from the
+    // employee's department (migration 257 seeds the 'custody' rule).
+    // Account stays as the engine-resolved 1400 (or per-employee
+    // sub-account when one exists); only the costCenterId slot is
+    // filled here.
+    let resolvedCostCenterId: number | null = null;
+    if (custodyEmployeeId) {
+      const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+      const resolved = await resolveLineAllocation({
+        companyId: scope.companyId,
+        documentType: "custody",
+        entityType: "employee",
+        accountCode: custodyAccountCode,
+        costCenterId: null,
+        dimensions: {
+          vehicleId: null, propertyId: null, unitId: null, assetId: null,
+          projectId: null, employeeId: custodyEmployeeId, driverId: null,
+          contractId: null, umrahSeasonId: null, umrahAgentId: null,
+          productId: null, clientId: null, vendorId: null,
+        },
+        sourceTable: "journal_lines",
+        sourceLineId: 0,
+      });
+      if (resolved.status === "resolved" || resolved.status === "manual_override") {
+        resolvedCostCenterId = resolved.costCenterId;
+      }
+    }
+
     // Atomicity guarantee: custody JE, metadata UPDATE, approval-chain
     // initiation, and the pending_approval status flip all commit or
     // roll back together. The earlier shape ran them sequentially with
@@ -602,7 +702,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
         sourceId: 0,
         sourceKey: `finance:custody:${ref}`,
         lines: [
-          { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId ?? undefined },
+          { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId ?? undefined, costCenterId: resolvedCostCenterId ?? undefined },
           // Cash CR carries employeeId too so per-employee cashflow drilldowns
           // (and custody-outstanding-by-employee aging) tie out from the GL.
           // Without this the DR tied to the employee but the matching cash
@@ -679,6 +779,15 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
         field: !custodyRef ? "custodyRef" : "amount",
         fix: "أدخل مرجع العهدة (CUSTODY-...) ومبلغ التسوية الموجب",
       });
+    }
+
+    // F5 (audit follow-up): typed period gate up front.
+    const settlePeriodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!settlePeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسوية عهدة في فترة مُقفلة: ${settlePeriodCheck.periodName ?? ""}`,
+        { meta: { periodName: settlePeriodCheck.periodName } },
+      );
     }
 
     const settleAmount = Number(amount);
@@ -839,6 +948,15 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
     const custodyId = parseId(req.params.id, "id");
     const { amount, description, sourceAccountCode } = zodParse(settleCustodyByIdSchema.safeParse(req.body ?? {}));
 
+    // F5 (audit follow-up): typed period gate up front.
+    const settleByIdPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!settleByIdPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تسوية عهدة في فترة مُقفلة: ${settleByIdPeriodCheck.periodName ?? ""}`,
+        { meta: { periodName: settleByIdPeriodCheck.periodName } },
+      );
+    }
+
     const [custody] = await rawQuery<CustodyRefStatusRow>(
       `SELECT je.ref, je.status AS "approvalStatus" FROM journal_entries je
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'`,
@@ -990,7 +1108,7 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
   }
 });
 
-custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.custodies", action: "approve", resource: { table: "custodies", idParam: "id" } }), async (req, res) => {
+custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.custodies", action: "approve", resource: { table: "journal_entries", idParam: "id", columns: ['"companyId"', '"branchId"', '"departmentId"'] } }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1036,12 +1154,28 @@ custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.cu
       toState: newStatus,
       reason: notes ?? undefined,
       extraWhere: `"deletedAt" IS NULL AND ref LIKE 'CUSTODY%'`,
-      onApply: async (_row, client) => {
+      onApply: async (row, client) => {
         await client.query(
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
            VALUES ('custody',$1,$2,$3,$4,$5)`,
           [custodyId, newStatus, notes || null, scope.userId, scope.companyId]
         );
+
+        // F10 (audit follow-up): when a custody auto-posted directly to
+        // 'posted' (sub-threshold amount) and is later rejected or
+        // returned, the GL balances that the original POST applied to
+        // chart_of_accounts.currentBalance must be reversed. Symmetric
+        // to the invoice reject/return path in finance-invoices.ts. The
+        // engine flips status='cancelled' after the reversal so the
+        // entry won't double-reverse on retry.
+        if ((newStatus === "rejected" || newStatus === "returned") && (row as any).balancesApplied) {
+          await reverseAccountBalances(scope.companyId, custodyId);
+          await client.query(
+            `UPDATE journal_entries SET status = 'cancelled'
+              WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved') AND "deletedAt" IS NULL`,
+            [custodyId, scope.companyId]
+          );
+        }
       },
       after: { ref: cust.ref, notes: notes ?? null, decision: newStatus },
     });

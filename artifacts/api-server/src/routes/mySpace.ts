@@ -237,10 +237,20 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
         [scope.activeAssignmentId]
       ), []),
       safe(rawQuery<Record<string, unknown>>(
-        `SELECT je.id, je.description,
-                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl WHERE jl."journalId" = je.id AND jl.debit > 0), 0) AS amount,
+        // Pre-aggregate journal_lines debit sums once via CTE instead
+        // of running a scalar subquery per row. Same N+1 shape as the
+        // action-center fix (#1624) applied to my-space custodies.
+        `WITH cust_debit AS (
+           SELECT "journalId", SUM(debit) AS amount
+           FROM journal_lines
+           WHERE debit > 0
+           GROUP BY "journalId"
+         )
+         SELECT je.id, je.description,
+                COALESCE(cd.amount, 0) AS amount,
                 je.status, je."createdAt"
          FROM journal_entries je
+         LEFT JOIN cust_debit cd ON cd."journalId" = je.id
          WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
            AND je.status IN ('approved','draft','pending_approval')
          ORDER BY je."createdAt" DESC LIMIT 10`,
@@ -615,12 +625,24 @@ router.get("/requests", authorize({ feature: "my_space", action: "view" }), asyn
     }
 
     params.push(Math.min(Number(limit) || 20, 500));
+    // Pre-aggregate workflow_step_actions once instead of running a
+    // scalar subquery per row. The original SELECT-list correlated
+    // subquery was N+1: postgres planned one execution PER returned
+    // workflow_instance, so 500 instances == 501 lookups through
+    // workflow_step_actions. The CTE below scans the join table once
+    // and joins per-instance counts back.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT wi.id, wi."requestType", wi.title, wi.status, wi."slaStatus",
+      `WITH action_counts AS (
+         SELECT "instanceId", COUNT(*) AS "actionCount"
+         FROM workflow_step_actions
+         GROUP BY "instanceId"
+       )
+       SELECT wi.id, wi."requestType", wi.title, wi.status, wi."slaStatus",
               wi."currentStepOrder", wi."createdAt", wi."completedAt",
               wi."refTable", wi."refId",
-              (SELECT COUNT(*) FROM workflow_step_actions wsa WHERE wsa."instanceId" = wi.id) AS "actionCount"
+              COALESCE(ac."actionCount", 0)::int AS "actionCount"
        FROM workflow_instances wi
+       LEFT JOIN action_counts ac ON ac."instanceId" = wi.id
        WHERE ${conditions.join(" AND ")}
        ORDER BY wi."createdAt" DESC
        LIMIT $${params.length}`,

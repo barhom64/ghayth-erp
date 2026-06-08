@@ -308,6 +308,18 @@ export default function Dashboard() {
   const { currencyLabel } = useSettings();
   const [, setLocation] = useLocation();
 
+  // Driver-role users land on /me/driver instead of the full operator
+  // dashboard. The standalone /driver-portal was retired (#1354) so
+  // drivers now share the same auth + RBAC plumbing as everyone else;
+  // their narrow self-service surface lives at /me/driver. Both
+  // `user.role` and the role-picker `selectedRole` carry "driver" so
+  // we redirect on either to handle the cross-role-switch case.
+  useEffect(() => {
+    if (user?.role === "driver" || selectedRole?.roleKey === "driver") {
+      setLocation("/me/driver", { replace: true });
+    }
+  }, [user?.role, selectedRole?.roleKey, setLocation]);
+
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
 
   const { data: cmdCenter, isLoading, isError } = useApiQuery<any>(["dashboard-cmd", scopeQueryString], `/dashboard${scopeSuffix}`);

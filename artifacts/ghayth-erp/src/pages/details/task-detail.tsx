@@ -141,12 +141,54 @@ export default function TaskDetail() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground">الموظف</p>
-            <p className="font-medium">
-              {task?.assignedToName || (task?.assignedTo ? `#${task.assignedTo}` : "غير مُعيَّن")}
-            </p>
-          </div>
+          {/* Multi-assignee team — backend returns task.assignees[] with
+              role='primary' for the accountable owner + role='member' for
+              the rest. Falls back to legacy single-assignee rendering when
+              no team rows exist (e.g. old tasks created before migration
+              250). */}
+          {Array.isArray(task?.assignees) && task!.assignees.length > 0 ? (
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">
+                فريق المهمة ({task!.assignees.length}{" "}
+                {task!.assignees.length === 1 ? "عضو" : "أعضاء"})
+              </p>
+              <ul className="space-y-1">
+                {task!.assignees.map((a: any) => (
+                  <li
+                    key={a.id ?? a.assignmentId}
+                    className="flex items-center gap-2"
+                  >
+                    {a.role === "primary" ? (
+                      <span className="text-[10px] font-medium bg-primary text-primary-foreground rounded px-1.5 py-0.5">
+                        رئيسي
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5">
+                        عضو
+                      </span>
+                    )}
+                    <span className="font-medium">
+                      {a.employeeName ?? `#${a.assignmentId}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div>
+              <p className="text-xs text-muted-foreground">الموظف</p>
+              <p className="font-medium">
+                {task?.assigneeName || task?.assignedToName ||
+                  (task?.assignedTo ? `#${task.assignedTo}` : "غير مُعيَّن")}
+              </p>
+            </div>
+          )}
+          {task?.creatorName && (
+            <div className="border-t pt-2">
+              <p className="text-xs text-muted-foreground">المنشئ</p>
+              <p className="font-medium">{task.creatorName}</p>
+            </div>
+          )}
           {(task?.lat && task?.lon) ? (
             <div>
               <p className="text-xs text-muted-foreground flex items-center gap-1">

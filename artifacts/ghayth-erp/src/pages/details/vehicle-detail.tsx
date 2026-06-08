@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
+import { EntitySubsidiaryAccounts } from "@/components/shared/entity-subsidiary-accounts";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare, Video } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -29,6 +30,7 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { PrintButton } from "@/components/shared/print-button";
+import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
   { key: "info", label: "المعلومات", icon: Car },
@@ -869,6 +871,12 @@ export default function VehicleDetail() {
               <FinancialTab entityType="vehicle" entityId={id} />
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-base flex items-center gap-2"><BookOpen className="h-4 w-4 text-status-info-foreground" /> الحسابات الفرعية للمركبة</CardTitle></CardHeader>
+            <CardContent>
+              <EntitySubsidiaryAccounts entityType="vehicle" entityId={id} />
+            </CardContent>
+          </Card>
         </div>
       )}
       {id && (
@@ -902,6 +910,7 @@ export default function VehicleDetail() {
             </Button>
           </Link>
           <PrintButton entityType="vehicle" entityId={(id as any) ?? 0} label="طباعة" />
+          {id != null && <EntityPnlButton entityType="vehicle" entityId={Number(id)} />}
         </div>
       }
       hideTabs={[...registryHideTabs, "tasks"]}

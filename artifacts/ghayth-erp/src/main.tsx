@@ -21,6 +21,21 @@ if (typeof window !== "undefined") {
       event.preventDefault();
     }
   });
+
+  // Stale-deploy recovery. A new build purges the old hashed chunk files, so a
+  // browser holding a stale index.html (or an open tab) 404s on dynamic imports
+  // ("Failed to fetch dynamically imported module"). Vite fires
+  // `vite:preloadError` in that case — force a one-time full reload to fetch the
+  // fresh index.html + chunk graph. The timestamp guard prevents a reload loop
+  // if a chunk is genuinely missing, while still recovering on each later deploy.
+  window.addEventListener("vite:preloadError", (event) => {
+    event.preventDefault();
+    const KEY = "erp:chunk-reload-at";
+    const last = Number(sessionStorage.getItem(KEY) || "0");
+    if (Date.now() - last < 10000) return;
+    sessionStorage.setItem(KEY, String(Date.now()));
+    window.location.reload();
+  });
 }
 
 document.documentElement.dir = "rtl";

@@ -26,10 +26,12 @@ import {
 import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Download, RefreshCw } from "lucide-react";
-import { formatDateAr, todayLocal } from "@/lib/formatters";
+import { formatUmrahDate, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
 // Compliance rollup for the per-pilgrim exemption flag (PRs #1482-1484).
@@ -192,6 +194,7 @@ export default function UmrahExemptPilgrims() {
   if (isError) return <ErrorState onRetry={refetch} />;
 
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
 
@@ -283,7 +286,7 @@ export default function UmrahExemptPilgrims() {
     {
       key: "exemptedAt",
       header: "تاريخ الاستثناء",
-      render: (p) => p.exemptedAt ? <span className="text-xs">{formatDateAr(p.exemptedAt)}</span> : "—",
+      render: (p) => p.exemptedAt ? <span className="text-xs">{formatUmrahDate(p.exemptedAt)}</span> : "—",
     },
     {
       key: "actions" as any,
@@ -364,6 +367,21 @@ export default function UmrahExemptPilgrims() {
           >
             <Download className="h-3 w-3" /> تصدير CSV
           </Button>
+          <PrintButton
+            entityType="report_umrah_exempt_pilgrims"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "المعتمرون المستثنون", total: printRows.length },
+              items: printRows.map((p: any) => ({
+                "الاسم": p.pilgrimName || p.name || "—",
+                "رقم الجواز": p.passportNumber || "—",
+                "الجنسية": p.nationality || "—",
+                "السبب": p.exemptionReason || p.reason || "—",
+                "التاريخ": p.exemptedAt || p.createdAt || "—",
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -415,7 +433,8 @@ export default function UmrahExemptPilgrims() {
             </div>
           ) : (
             <DataTable<ExemptRow>
-              data={rows}
+              onSortedDataChange={setPrintRows}
+        data={rows}
               columns={cols}
               data-testid="exempt-pilgrims-table"
             />

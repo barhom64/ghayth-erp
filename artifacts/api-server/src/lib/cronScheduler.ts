@@ -1,12 +1,15 @@
 import cron from "node-cron";
 import { randomUUID } from "node:crypto";
 import { rawQuery, rawExecute, pool, withTransaction } from "./rawdb.js";
+import { scoreEmployee, currentPeriodKey } from "./employeeScoringEngine.js";
+import { detectSignals, persistSignals } from "./employeeSignalsEngine.js";
 import { issueNumber } from "./numberingService.js";
 import { logger } from "./logger.js";
 import { config } from "./config.js";
 import { saveAllCompaniesKPISnapshots } from "./kpiEngine.js";
 import { runSmartAlertsAllCompanies } from "./smartAlerts.js";
 import { runSelfAuditAllCompanies } from "./selfAuditEngine.js";
+import { backfillCompany } from "./partyService.js";
 import {
   createNotification,
   getManagerAssignmentId,
@@ -22,6 +25,7 @@ import {
   roundTo2,
 } from "./businessHelpers.js";
 import { broadcastAlert, sendNotification } from "./notificationService.js";
+import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
 import { syncMailbox } from "./mailboxSync.js";
 import { processFallbackChains } from "./notificationEngine.js";
 import { runPendingTranscription } from "./pbxControl.js";
@@ -40,7 +44,7 @@ import {
 } from "./fleet/telematicsCron.js";
 import { telematicsBreaker } from "./fleet/telematicsReliability.js";
 import { setupBreakerCoordination } from "./fleet/telematicsBreakerCoordinator.js";
-import { scanObligations } from "./obligationsEngine.js";
+import { scanObligations, registerObligation } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
 import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
 import { zatcaRetryDrain } from "./zatca/worker.js";
@@ -340,18 +344,30 @@ async function documentExpiryAlerts(): Promise<string> {
           });
           alerted++;
         }
-        // Also notify the employee directly
+        // Also notify the employee directly — fan out across the
+        // employee's channels (email/sms/whatsapp) via the bilingual
+        // `document.expiring` template, picking the language from the
+        // employee's linked user preferredLocale.
         const [empAsgn] = await rawQuery<Record<string, unknown>>(
           `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
           [doc.employeeId, company.id]
         );
         if (empAsgn && empAsgn.id !== hrAsgn?.id) {
-          await createNotification({
-            companyId: company.id, assignmentId: empAsgn.id as number,
-            type: "document_expiry_employee", title: `وثيقتك تنتهي خلال ${daysLeft} يوم`,
-            body: `${doc.documentType} — تاريخ الانتهاء: ${doc.expiryDate}. يرجى تجديدها في أقرب وقت.`,
+          await notifyBusinessEvent({
+            companyId: company.id,
+            templateKey: "document.expiring",
+            templateVars: {
+              documentType: String(doc.documentType ?? "—"),
+              documentNumber: String(doc.documentNumber ?? doc.id ?? "—"),
+              expiryDate: String(doc.expiryDate ?? "—"),
+            },
+            fallbackTitle: `وثيقتك تنتهي خلال ${daysLeft} يوم`,
+            fallbackBody: `${doc.documentType} — تاريخ الانتهاء: ${doc.expiryDate}. يرجى تجديدها في أقرب وقت.`,
+            assignmentId: empAsgn.id as number,
+            recipientUser: doc.employeeId ? { type: "employee", id: doc.employeeId as number } : undefined,
             priority: daysLeft <= 14 ? "high" : "normal",
-            refType: "employee_document", refId: doc.id ?? doc.employeeId,
+            refType: "employee_document",
+            refId: (doc.id ?? doc.employeeId) as number,
           });
           alerted++;
         }
@@ -387,6 +403,82 @@ async function contractExpiryAlerts(): Promise<string> {
     }
   }
   return `Alerted ${alerted} expiring contracts`;
+}
+
+// #1715 §5 — activate the dormant vehicle_maintenance_schedules table.
+// It already models recurring preventive maintenance (intervalType
+// days/mileage/hours + nextDueDate/nextDueKm) but NO job ever read it, so
+// no reminder ever fired. This scan raises an alert + a maintenance
+// obligation for every schedule that has come due (by date or by odometer),
+// then advances nextDue* so it re-arms for the next cycle. Reuses the
+// existing obligations/notifications backbone — no new table.
+export async function scanVehicleMaintenanceSchedules(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let dueCount = 0;
+  for (const company of companies) {
+    const rows = await rawQuery<{
+      id: number; vehicleId: number | null; scheduleName: string;
+      intervalValue: number; nextDueDate: string | null; nextDueKm: number | null;
+      plateNumber: string | null; currentMileage: number | null;
+    }>(
+      `SELECT s.id, s."vehicleId", s."scheduleName", s."intervalValue",
+              s."nextDueDate"::text AS "nextDueDate", s."nextDueKm",
+              v."plateNumber", v."currentMileage"
+         FROM vehicle_maintenance_schedules s
+         LEFT JOIN fleet_vehicles v ON v.id = s."vehicleId"
+        WHERE s."companyId" = $1 AND s."isActive" = true AND s."deletedAt" IS NULL
+          AND (
+            (s."nextDueDate" IS NOT NULL AND s."nextDueDate" <= CURRENT_DATE)
+            OR (s."nextDueKm" IS NOT NULL AND v."currentMileage" IS NOT NULL AND v."currentMileage" >= s."nextDueKm")
+          )`,
+      [company.id],
+    );
+    for (const s of rows) {
+      const label = s.plateNumber ? `${s.scheduleName} — ${s.plateNumber}` : s.scheduleName;
+      try {
+        await broadcastAlert(
+          company.id, "vehicle_maintenance_due",
+          `صيانة مجدولة مستحقّة: ${label}`,
+          `حان موعد «${s.scheduleName}»${s.plateNumber ? ` للمركبة ${s.plateNumber}` : ""} — جدول صيانة وقائية.`,
+          "warning", "fleet_vehicle", s.vehicleId ?? undefined,
+        );
+        if (s.vehicleId) {
+          await registerObligation({
+            companyId: company.id,
+            entityType: "vehicle",
+            entityId: s.vehicleId,
+            obligationType: "maintenance",
+            title: `صيانة مجدولة: ${s.scheduleName}`,
+            dueAt: s.nextDueDate ?? new Date().toISOString(),
+            escalationSteps: [{ hoursAfterDue: 24, notifyRole: "fleet_manager" }],
+            dedupeKey: `vmsched-${s.id}-${s.nextDueDate ?? s.nextDueKm ?? "due"}`,
+            metadata: { scheduleId: s.id, nextDueKm: s.nextDueKm },
+          });
+        }
+      } catch (e) {
+        logger.error(e, "[cronScheduler] vehicle maintenance schedule notify failed");
+      }
+      // Re-arm: advance whichever trigger fired so it doesn't re-fire next run.
+      await rawExecute(
+        `UPDATE vehicle_maintenance_schedules
+            SET "lastTriggeredAt" = now(),
+                "lastTriggeredKm" = COALESCE($2, "lastTriggeredKm"),
+                "nextDueDate" = CASE
+                  WHEN "nextDueDate" IS NOT NULL AND "nextDueDate" <= CURRENT_DATE
+                  THEN (CURRENT_DATE + (GREATEST("intervalValue", 1) || ' days')::interval)::date
+                  ELSE "nextDueDate" END,
+                "nextDueKm" = CASE
+                  WHEN "nextDueKm" IS NOT NULL AND $2 IS NOT NULL AND $2 >= "nextDueKm"
+                  THEN $2 + GREATEST("intervalValue", 1)
+                  ELSE "nextDueKm" END,
+                "updatedAt" = now()
+          WHERE id = $1`,
+        [s.id, s.currentMileage],
+      );
+      dueCount++;
+    }
+  }
+  return `vehicle_maintenance_schedule_scan: ${dueCount} due schedule(s) processed`;
 }
 
 async function fleetStatusCheck(): Promise<string> {
@@ -1195,6 +1287,33 @@ async function dailyInventoryCheck(): Promise<string> {
           logger.error(e, "[cronScheduler] auto purchase order issue+insert failed");
         }
       }
+
+      // Notify the warehouse / general manager that a product hit its
+      // reorder threshold — fan out via the bilingual `inventory.low_stock`
+      // template (in_app + email/sms/whatsapp per routing rule).
+      const [whMgr] = await rawQuery<Record<string, unknown>>(
+        `SELECT id FROM employee_assignments
+         WHERE "companyId" = $1 AND role IN ('warehouse_manager','general_manager','owner') AND status = 'active'
+         LIMIT 1`,
+        [company.id]
+      );
+      if (whMgr) {
+        await notifyBusinessEvent({
+          companyId: company.id,
+          templateKey: "inventory.low_stock",
+          templateVars: {
+            productName: String(p.name ?? "—"),
+            currentQty: String(p.currentStock ?? "0"),
+          },
+          fallbackTitle: "مخزون منخفض",
+          fallbackBody: `الصنف ${p.name} وصل لحد المخزون الأدنى (${p.currentStock} متبقي)`,
+          assignmentId: whMgr.id as number,
+          priority: "normal",
+          refType: "warehouse_product",
+          refId: p.id as number,
+          actionUrl: `/warehouse/products/${p.id}`,
+        });
+      }
     }
   }
   return `Inventory check: ${pos} purchase orders created`;
@@ -1255,6 +1374,50 @@ async function dailyPropertyCheck(): Promise<string> {
         });
       } catch (e) { logger.error(e, "[cronScheduler] rental renewal notice event failed"); }
       renewalNotices++;
+    }
+
+    // 2b. Rent-due reminders — notify the property manager about rent
+    // installments due within 3 days that are still unpaid, via the
+    // bilingual `property.rent.due` template. Once per (payment, 3-day
+    // window) — keyed on dueDate landing exactly 3/1/0 days out so we
+    // don't spam every run.
+    const dueSoon = await rawQuery<Record<string, unknown>>(
+      `SELECT rp.id, rp."dueDate", rp.amount,
+              (rp."dueDate"::date - CURRENT_DATE) AS "daysLeft",
+              rc."tenantName", rc."unitId",
+              pu.name AS "unitName"
+       FROM rent_payments rp
+       JOIN rental_contracts rc ON rc.id = rp."contractId"
+       LEFT JOIN property_units pu ON pu.id = rc."unitId"
+       WHERE rc."companyId" = $1
+         AND rp.status IN ('pending','partial')
+         AND (rp."dueDate"::date - CURRENT_DATE) IN (3, 1, 0)`,
+      [company.id]
+    );
+    const [propMgr] = await rawQuery<Record<string, unknown>>(
+      `SELECT id FROM employee_assignments
+       WHERE "companyId" = $1 AND role IN ('property_manager','general_manager','owner') AND status = 'active'
+       LIMIT 1`,
+      [company.id]
+    );
+    for (const rp of dueSoon) {
+      await notifyBusinessEvent({
+        companyId: company.id,
+        templateKey: "property.rent.due",
+        templateVars: {
+          unitName: String(rp.unitName ?? rp.tenantName ?? "—"),
+          dueDate: String(rp.dueDate ?? "—"),
+          amount: String(rp.amount ?? "0"),
+        },
+        fallbackTitle: "إيجار مستحق",
+        fallbackBody: `إيجار الوحدة ${rp.unitName ?? "—"} مستحق بتاريخ ${rp.dueDate}`,
+        assignmentId: propMgr?.id as number | undefined,
+        priority: Number(rp.daysLeft) <= 0 ? "high" : "normal",
+        refType: "rent_payment",
+        refId: rp.id as number,
+        actionUrl: `/properties/rent-payments/${rp.id}`,
+      });
+      alerted++;
     }
 
     // 3. Auto-expire contracts whose endDate has passed — mark expired, free the unit, cancel pending rent_payments
@@ -1721,11 +1884,23 @@ async function weeklyClientClassification(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let classified = 0;
   for (const company of companies) {
+    // Was N+1: correlated MAX("createdAt") per client over invoices.
+    // For 500 clients per company that's 500 lookups against invoices
+    // — per company, per weekly run. Single GROUP BY CTE collapses to
+    // one scan per company.
     const clients = await rawQuery<Record<string, unknown>>(
-      `SELECT c.id, c.name, c.classification,
+      `WITH last_invoice_per_client AS (
+         SELECT "clientId", MAX("createdAt") AS "lastInvoice"
+           FROM invoices
+          WHERE "companyId" = $1
+          GROUP BY "clientId"
+       )
+       SELECT c.id, c.name, c.classification,
               COALESCE(c."totalRevenue", 0) AS revenue,
-              (SELECT MAX(i."createdAt") FROM invoices i WHERE i."clientId" = c.id) AS "lastInvoice"
-       FROM clients c WHERE c."companyId" = $1`,
+              li."lastInvoice"
+         FROM clients c
+         LEFT JOIN last_invoice_per_client li ON li."clientId" = c.id
+        WHERE c."companyId" = $1`,
       [company.id]
     );
     for (const client of clients) {
@@ -1752,6 +1927,83 @@ async function weeklyClientClassification(): Promise<string> {
     }
   }
   return `Client classification: ${classified} updated`;
+}
+
+/**
+ * HR-009 / #1799 priority #10 — weekly + monthly score computation.
+ *
+ * Iterates every active assignment in every company, computes the
+ * 6-dimension composite score via `scoreEmployee`, then runs the
+ * signals engines (Risk/Promotion/Burnout) and persists them.
+ *
+ * Backed by:
+ *   - employee_scores (migration 272)        — the score itself
+ *   - employee_signals (migration 273)       — the manager-actionable
+ *                                              flags computed from
+ *                                              that score
+ *
+ * Idempotent on re-run: both write paths UPSERT on their unique key
+ * (assignment × scope × periodKey [× signalType for signals]).
+ *
+ * scope is passed in so a single handler can serve weekly + monthly +
+ * quarterly cron entries below.
+ */
+async function runEmployeeScoringPeriod(scope: "weekly" | "monthly" | "quarterly"): Promise<string> {
+  const periodKey = currentPeriodKey(scope);
+  let scored = 0;
+  let withSignals = 0;
+  // Pull every active assignment in every company. This is the same
+  // shape used by other HR cron handlers — single query, then per-row
+  // loop with try/catch so one failure doesn't abort the whole run.
+  const assignments = await rawQuery<{
+    id: number; employeeId: number; companyId: number; branchId: number | null;
+  }>(
+    `SELECT id, "employeeId", "companyId", "branchId"
+       FROM employee_assignments
+      WHERE status = 'active'`,
+  );
+  for (const a of assignments) {
+    try {
+      const result = await scoreEmployee({
+        companyId: a.companyId,
+        assignmentId: a.id,
+        employeeId: a.employeeId,
+        branchId: a.branchId,
+        scope,
+        periodKey,
+      });
+      scored++;
+      const signals = await detectSignals({
+        assignmentId: a.id,
+        scope,
+        periodKey,
+      });
+      if (signals.length > 0) {
+        await persistSignals({
+          companyId: a.companyId,
+          branchId: a.branchId,
+          assignmentId: a.id,
+          employeeId: a.employeeId,
+          scope,
+          periodKey,
+          compositeScore: result.composite,
+          signals,
+        });
+        withSignals++;
+      }
+    } catch (e) {
+      logger.error(e, `[cron] employee scoring failed for assignment ${a.id}`);
+    }
+  }
+  return `Employee scoring (${scope} ${periodKey}): ${scored} scored, ${withSignals} flagged`;
+}
+
+async function weeklyEmployeeScoring(): Promise<string> {
+  return runEmployeeScoringPeriod("weekly");
+}
+
+async function monthlyEmployeeScoring(): Promise<string> {
+  return runEmployeeScoringPeriod("monthly");
 }
 
 async function monthlyInventoryAudit(): Promise<string> {
@@ -2957,8 +3209,11 @@ async function monthlyBadDebtReminder(): Promise<string> {
     try {
       const [cfoRow] = await rawQuery<{ id: number }>(
         `SELECT ea.id FROM employee_assignments ea
-         JOIN user_roles ur ON ur."userId" = ea."employeeId"
-         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         JOIN users u ON u."employeeId" = ea."employeeId"
+         JOIN rbac_user_roles ur ON ur."userId" = u.id AND ur."companyId" = ea."companyId"
+         JOIN rbac_roles r ON r.id = ur.role_id
+         WHERE ea."companyId"=$1 AND ea.status='active' AND r.role_key='finance_manager'
+           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
          LIMIT 1`,
         [c.id]
         // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
@@ -3001,8 +3256,11 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
 
       const [cfoRow] = await rawQuery<{ id: number }>(
         `SELECT ea.id FROM employee_assignments ea
-         JOIN user_roles ur ON ur."userId" = ea."employeeId"
-         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         JOIN users u ON u."employeeId" = ea."employeeId"
+         JOIN rbac_user_roles ur ON ur."userId" = u.id AND ur."companyId" = ea."companyId"
+         JOIN rbac_roles r ON r.id = ur.role_id
+         WHERE ea."companyId"=$1 AND ea.status='active' AND r.role_key='finance_manager'
+           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
          LIMIT 1`,
         [c.id]
         // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
@@ -3068,8 +3326,11 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
 
       const [cfoRow] = await rawQuery<{ id: number }>(
         `SELECT ea.id FROM employee_assignments ea
-         JOIN user_roles ur ON ur."userId" = ea."employeeId"
-         WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
+         JOIN users u ON u."employeeId" = ea."employeeId"
+         JOIN rbac_user_roles ur ON ur."userId" = u.id AND ur."companyId" = ea."companyId"
+         JOIN rbac_roles r ON r.id = ur.role_id
+         WHERE ea."companyId"=$1 AND ea.status='active' AND r.role_key='finance_manager'
+           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
          LIMIT 1`,
         [c.id]
         // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
@@ -3312,19 +3573,28 @@ async function umrahWeeklyAgentPerformance(): Promise<string> {
 
 async function umrahVisaExpiryAlerts(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
+  const { gccExclusionSqlFragment } = await import("./umrahNationalityRules.js");
+  const { resolveSettings } = await import("./settings.js");
   let alerted = 0;
+  let notifSent = 0;
   for (const c of companies) {
+    // GCC nationals enter KSA visa-free — their `visaExpiry` row (if
+    // any) is operator data entry from another jurisdiction; alerting
+    // on it is a false positive that nags the GM every morning.
     const expiring = await rawQuery<Record<string, unknown>>(
-      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g.name AS "groupName"
+      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", p.phone, g.name AS "groupName",
+              (p."visaExpiry"::date - CURRENT_DATE) AS "daysRemaining"
        FROM umrah_pilgrims p
        LEFT JOIN umrah_groups g ON g.id = p."groupId"
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
          AND p.status NOT IN ('departed','cancelled')
          AND p."visaExpiry" IS NOT NULL
-         AND p."visaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`,
+         AND p."visaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+         AND ${gccExclusionSqlFragment(`p."nationality"`)}`,
       [c.id]
     );
     if (expiring.length === 0) continue;
+    // Always notify the GM/manager — that's the historical behaviour.
     const mgr = await getManagerAssignmentId(c.id, 0);
     if (mgr) {
       await createNotification({
@@ -3335,8 +3605,123 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
       });
     }
     alerted += expiring.length;
+    // In-app pilgrim-specific notifications — OPT-IN per company via
+    // `umrah.notify.visa_expiry`. Goes to every branch manager + GM
+    // assignment via the platform's notification seam (bell icon),
+    // with a deep-link to the pilgrim's detail page.
+    const enabledRaw = await resolveSettings("umrah.notify.visa_expiry", c.id);
+    const enabled = enabledRaw === true || enabledRaw === "true" || enabledRaw === 1;
+    if (!enabled) continue;
+    const { notifyInternalVisaExpiring } = await import("./umrahInternalNotifications.js");
+    for (const row of expiring) {
+      try {
+        const recipients = await notifyInternalVisaExpiring(
+          {
+            companyId: c.id,
+            branchId: null,
+            pilgrimId: row.id as number,
+            pilgrimName: (row.fullName as string) ?? null,
+            agentId: null,
+          },
+          Number(row.daysRemaining ?? 0),
+        );
+        notifSent += recipients;
+      } catch (e) {
+        logger.error(e, "[cronScheduler] umrah visa internal notify failed");
+      }
+    }
   }
-  return `تنبيهات انتهاء التأشيرات: ${alerted} تأشيرة عبر ${companies.length} شركة`;
+  return `تنبيهات انتهاء التأشيرات: ${alerted} تأشيرة عبر ${companies.length} شركة، أُرسل ${notifSent} إشعار داخلي`;
+}
+
+// Departure-reminder in-app notification — runs daily at 18:00 and
+// finds pilgrims whose `arrivalDate` is tomorrow. Notifies the
+// branch manager + GM so they confirm transport. Opt-in via
+// `umrah.notify.departure_reminder`.
+async function umrahDepartureReminderSms(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
+  const { resolveSettings } = await import("./settings.js");
+  const { notifyInternalDepartureTomorrow } = await import("./umrahInternalNotifications.js");
+  let enabled = 0, sent = 0;
+  for (const c of companies) {
+    const flagRaw = await resolveSettings("umrah.notify.departure_reminder", c.id);
+    const flag = flagRaw === true || flagRaw === "true" || flagRaw === 1;
+    if (!flag) continue;
+    enabled++;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.id, p."fullName", p."arrivalDate", p."entryFlight"
+         FROM umrah_pilgrims p
+        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+          AND p.status = 'pending'
+          AND p."arrivalDate" = CURRENT_DATE + INTERVAL '1 day'`,
+      [c.id],
+    );
+    for (const row of rows) {
+      try {
+        const r = await notifyInternalDepartureTomorrow(
+          {
+            companyId: c.id,
+            branchId: null,
+            pilgrimId: row.id as number,
+            pilgrimName: (row.fullName as string) ?? null,
+            agentId: null,
+          },
+          {
+            tripDate: String(row.arrivalDate),
+            flightNumber: (row.entryFlight as string) ?? null,
+          },
+        );
+        sent += r;
+      } catch (e) {
+        logger.error(e, "[cronScheduler] umrah departure notify failed");
+      }
+    }
+  }
+  return `تذكير الرحيل: ${enabled}/${companies.length} شركة مفعّلة، أُرسل ${sent} إشعار`;
+}
+
+// Overstay-warning in-app notification — companies with
+// `umrah.notify.overstay_warning` enabled get a daily alert per
+// overstaying pilgrim. Skips exempt pilgrims (mirrors penalty engine).
+async function umrahOverstayWarningSms(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
+  const { resolveSettings } = await import("./settings.js");
+  const { notifyInternalOverstayWarning } = await import("./umrahInternalNotifications.js");
+  let enabled = 0, sent = 0;
+  for (const c of companies) {
+    const flagRaw = await resolveSettings("umrah.notify.overstay_warning", c.id);
+    const flag = flagRaw === true || flagRaw === "true" || flagRaw === 1;
+    if (!flag) continue;
+    enabled++;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.id, p."fullName",
+              (CURRENT_DATE - p."departureDate"::date) AS "daysOverstayed"
+         FROM umrah_pilgrims p
+        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+          AND p.status = 'overstayed'
+          AND NOT COALESCE(p."overstayExempt", false)
+          AND p."departureDate" < CURRENT_DATE`,
+      [c.id],
+    );
+    for (const row of rows) {
+      try {
+        const r = await notifyInternalOverstayWarning(
+          {
+            companyId: c.id,
+            branchId: null,
+            pilgrimId: row.id as number,
+            pilgrimName: (row.fullName as string) ?? null,
+            agentId: null,
+          },
+          Number(row.daysOverstayed ?? 0),
+        );
+        sent += r;
+      } catch (e) {
+        logger.error(e, "[cronScheduler] umrah overstay notify failed");
+      }
+    }
+  }
+  return `تنبيه التجاوز: ${enabled}/${companies.length} شركة مفعّلة، أُرسل ${sent} إشعار`;
 }
 
 async function umrahMonthlyFinancialSummary(): Promise<string> {
@@ -3462,6 +3847,70 @@ async function umrahDailyStatusAdvance(): Promise<string> {
     }
   }
   return `تقديم حالة المعتمرين: ${arrived} وصول، ${overstayed} تجاوز، ${departed} مغادرة عبر ${companies.length} شركة`;
+}
+
+// Automated overstay-penalty generation (#5 of the maturity gap report).
+//
+// `umrahDailyStatusAdvance` above transitions pilgrims into `overstayed`
+// state, but the penalty engine (financial impact) had remained manual
+// — operators had to click "تشغيل المحرك" daily. That was a deliberate
+// safety choice (manual supervision of GL postings), but it left a
+// long-running operational debt: forgotten clicks let penalties stack
+// silently.
+//
+// The fix makes auto-penalty OPT-IN per company via three settings:
+//   `umrah.auto_penalty.enabled`       — boolean, default false
+//   `umrah.auto_penalty.overstay_days` — number, default 3
+//   `umrah.auto_penalty.daily_rate`    — number, default 500 (SAR/day)
+//
+// Companies that prefer manual supervision keep the current behavior
+// (their flag stays false, the cron returns "skipped"). Companies that
+// want automation flip the flag in Settings and the cron creates the
+// penalties + GL entries on schedule. Exempt pilgrims (migration 242)
+// are honoured by the engine query.
+//
+// Schedule: 0 7 * * * (7 AM, one hour after the 6 AM violation scan and
+// the 5 AM status advance, so all upstream signals are settled).
+async function umrahDailyAutoPenaltyGeneration(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
+  const { resolveSettings } = await import("./settings.js");
+  const { generateOverstayPenalties } = await import("./umrahPenaltyEngine.js");
+  let enabled = 0, totalCreated = 0, totalChecked = 0, totalSkippedExempt = 0;
+  for (const c of companies) {
+    const flagRaw = await resolveSettings("umrah.auto_penalty.enabled", c.id);
+    const flag = flagRaw === true || flagRaw === "true" || flagRaw === 1;
+    if (!flag) continue;
+    enabled++;
+    const overstayDaysRaw = await resolveSettings("umrah.auto_penalty.overstay_days", c.id);
+    const dailyRateRaw = await resolveSettings("umrah.auto_penalty.daily_rate", c.id);
+    const overstayDays = Number(overstayDaysRaw ?? 3);
+    const dailyRate = Number(dailyRateRaw ?? 500);
+    try {
+      const result = await generateOverstayPenalties(
+        { companyId: c.id, branchId: null, userId: 0 },
+        { overstayDays, dailyRate },
+      );
+      totalCreated += result.penaltiesCreated;
+      totalChecked += result.checked;
+      totalSkippedExempt += result.skippedExempt;
+      emitEvent({
+        companyId: c.id, userId: null,
+        action: "umrah.auto_penalty.cron_run", entity: "umrah_penalties", entityId: 0,
+        details: JSON.stringify({
+          source: "cron",
+          checked: result.checked,
+          penaltiesCreated: result.penaltiesCreated,
+          violationsLinked: result.violationsLinked,
+          skippedExempt: result.skippedExempt,
+          overstayDays,
+          dailyRate,
+        }),
+      }).catch((e) => logger.error(e, "[cronScheduler] umrah auto penalty event failed"));
+    } catch (e) {
+      logger.error(e, `[cronScheduler] umrah auto penalty failed for company ${c.id}`);
+    }
+  }
+  return `تشغيل تلقائي لمحرك الغرامات: ${enabled}/${companies.length} شركة مفعلة، فُحص ${totalChecked} معتمر، أُنشئت ${totalCreated} غرامة، تم تجاهل ${totalSkippedExempt} (معفى)`;
 }
 
 // --- Rate-limit fallback alerter (Task #176) ---------------------------------
@@ -3787,11 +4236,32 @@ export async function rateLimitFallbackAlertCheck(): Promise<string> {
   return "ok";
 }
 
+// Party registry sync — keeps the master-data identity registry (parties /
+// party_links) current as new entity rows are created. backfillCompany is
+// idempotent and only processes rows not yet linked, so this is cheap after
+// the initial backfill. Eventually-consistent (daily) by design; no per-create
+// hooks needed across the 9 silo tables. See lib/partyService.ts.
+async function partyRegistrySync(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let linked = 0;
+  for (const c of companies) {
+    try {
+      const results = await backfillCompany(c.id);
+      linked += results.reduce((a, r) => a + r.linked, 0);
+    } catch (e) {
+      logger.error(e, `[party_registry_sync] company ${c.id} failed`);
+    }
+  }
+  return `synced ${companies.length} companies · ${linked} new party link(s)`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "party_registry_sync", description: "مزامنة سجل الأطراف (Party) — ربط الكيانات الجديدة", schedule: "30 3 * * *", handler: partyRegistrySync },
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
+  { name: "vehicle_maintenance_schedule_scan", description: "فحص جداول الصيانة الوقائية المستحقّة (بالتاريخ أو العداد) وإطلاق التنبيهات/الالتزامات", schedule: "0 6 * * *", handler: scanVehicleMaintenanceSchedules },
   { name: "fleet_telematics_retention", description: "تنظيف بيانات Telematics القديمة (مواقع + سجلات مزامنة + جلسات بث منتهية)", schedule: "0 3 * * *", handler: fleetTelematicsRetention },
   { name: "fleet_telematics_heartbeat", description: "كشف الأجهزة غير المتصلة بناءً على آخر موقع", schedule: "*/2 * * * *", handler: fleetTelematicsHeartbeat },
   { name: "fleet_telematics_poll", description: "Auto-poll للمواقع من CMSV6 لكل تكامل نشط (مع retry + circuit breaker)", schedule: "* * * * *", handler: fleetTelematicsPoll },
@@ -3810,6 +4280,9 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "umrah_visa_expiry_alerts", description: "تنبيهات انتهاء تأشيرات العمرة", schedule: "0 7 * * *", handler: umrahVisaExpiryAlerts },
   { name: "umrah_monthly_financial_summary", description: "ملخص العمرة المالي الشهري", schedule: "0 9 1 * *", handler: umrahMonthlyFinancialSummary },
   { name: "umrah_daily_status_advance", description: "C5 — تقديم حالة المعتمرين اليومية (وصول/تجاوز/مغادرة) — حالة فقط دون غرامات", schedule: "0 5 * * *", handler: umrahDailyStatusAdvance },
+  { name: "umrah_daily_auto_penalty_generation", description: "توليد تلقائي لغرامات التأخر للشركات المفعّلة (umrah.auto_penalty.enabled)", schedule: "0 7 * * *", handler: umrahDailyAutoPenaltyGeneration },
+  { name: "umrah_departure_reminder_notify", description: "إشعار داخلي للمدير: معتمر يصل غدًا (umrah.notify.departure_reminder)", schedule: "0 18 * * *", handler: umrahDepartureReminderSms },
+  { name: "umrah_overstay_warning_notify", description: "إشعار داخلي للمدير: معتمر تجاوز مدة الإقامة (umrah.notify.overstay_warning)", schedule: "0 10 * * *", handler: umrahOverstayWarningSms },
   { name: "daily_invoice_overdue", description: "تصعيد الفواتير المتأخرة 6 مراحل", schedule: "0 8 * * *", handler: dailyInvoiceOverdueEscalation },
   { name: "daily_fuel_monitor", description: "مراقبة استهلاك الوقود", schedule: "0 9 * * *", handler: dailyFuelMonitor },
   { name: "daily_inventory_check", description: "فحص المخزون + طلب شراء تلقائي", schedule: "0 10 * * *", handler: dailyInventoryCheck },
@@ -3827,6 +4300,13 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_cash_flow", description: "فحص التدفق النقدي الأسبوعي", schedule: "0 9 * * 1", handler: weeklyCashFlowCheck },
   { name: "weekly_property_revenue", description: "إيرادات عقارية أسبوعية", schedule: "0 9 * * 1", handler: weeklyPropertyRevenue },
   { name: "weekly_client_classification", description: "تصنيف العملاء الأسبوعي", schedule: "0 2 * * 0", handler: weeklyClientClassification },
+  // HR-009 / #1799 priority #10 — scoring cron entries.
+  // Weekly runs at 03:00 every Monday (1 day after the weekly client
+  // classification, so the week's data has settled). Monthly runs at
+  // 04:00 on the 1st so dashboards show the prior month's score on
+  // day 1.
+  { name: "weekly_employee_scoring", description: "حساب درجات الموظف الأسبوعية + إشاراتها", schedule: "0 3 * * 1", handler: weeklyEmployeeScoring },
+  { name: "monthly_employee_scoring", description: "حساب درجات الموظف الشهرية + إشاراتها", schedule: "0 4 1 * *", handler: monthlyEmployeeScoring },
   { name: "monthly_inventory_audit", description: "جرد المخزون الشهري", schedule: "0 6 1 * *", handler: monthlyInventoryAudit },
   { name: "monthly_auto_depreciation", description: "إهلاك الأصول الثابتة التلقائي", schedule: "0 6 2 * *", handler: monthlyAutoDepreciation },
   { name: "yearly_leave_balance_renewal", description: "تجديد أرصدة الإجازات 1 يناير", schedule: "0 0 1 1 *", handler: yearlyLeaveBalanceRenewal },

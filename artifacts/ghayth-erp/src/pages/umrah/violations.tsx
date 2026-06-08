@@ -17,7 +17,9 @@ import {
 } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { formatCurrency, formatUmrahDate, formatNumber } from "@/lib/formatters";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Eye, Plus, Pencil, Trash2, AlertTriangle, Clock, HelpCircle, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -91,6 +93,7 @@ export default function UmrahViolations() {
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
 
   const violations = violationsQ.data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(violations);
   const agents = agentsQ.data?.data ?? [];
   const subAgents = subAgentsQ.data?.data ?? [];
   const seasons = seasonsQ.data?.data ?? [];
@@ -248,7 +251,7 @@ export default function UmrahViolations() {
     {
       key: "detectedAt",
       header: "تاريخ الرصد",
-      render: (v) => formatDateAr(v.detectedAt),
+      render: (v) => formatUmrahDate(v.detectedAt),
     },
     {
       key: "__actions",
@@ -281,12 +284,32 @@ export default function UmrahViolations() {
       subtitle="رصد المخالفات: تأخر المغادرة، الهروب، وأخرى"
       breadcrumbs={[{ label: "العمرة" }, { label: "المخالفات" }]}
       actions={
-        <GuardedButton perm="umrah:create" asChild className="gap-2">
-          <Link href="/umrah/violations/create">
-            <Plus className="h-4 w-4" />
-            مخالفة جديدة
-          </Link>
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_violations"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "مخالفات العمرة", total: printRows.length },
+              items: printRows.map((v: any) => ({
+                "الرقم المرجعي": v.referenceNumber || v.id,
+                "النوع": v.type || "—",
+                "الوكيل": v.agentName || "—",
+                "الوكيل الفرعي": v.subAgentName || "—",
+                "المعتمر": v.mutamerName || "—",
+                "قيمة الغرامة": v.penaltyAmount ?? 0,
+                "تاريخ الرصد": v.detectedAt || v.createdAt || "—",
+                "الحالة": STATUS_LABEL[v.status as ViolationStatus]?.label ?? v.status ?? "—",
+              })),
+            })}
+          />
+          <GuardedButton perm="umrah:create" asChild className="gap-2">
+            <Link href="/umrah/violations/create">
+              <Plus className="h-4 w-4" />
+              مخالفة جديدة
+            </Link>
+          </GuardedButton>
+        </div>
       }
     >
       <UmrahTabsNav />
@@ -389,6 +412,7 @@ export default function UmrahViolations() {
       >
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={filtered}
           emptyMessage="لا توجد مخالفات مطابقة"
           pageSize={20}

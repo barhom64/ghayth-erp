@@ -76,19 +76,23 @@ describe("Phase 3d — 3 lineItems per group", () => {
     // (operator's "visa pass-through at fixed cost" rule).
     expect(ENGINE).toMatch(/description: `تأشيرة عمرة — مجموعة \$\{grp\.nuskGroupNumber\}`/);
     expect(ENGINE).toMatch(/quantity: mutamerCount,\s*unitPrice: mutamerCount > 0 \? visaPortion \/ mutamerCount : visaPortion/);
-    expect(ENGINE).toMatch(/productId: productMap!\.visaProductId,\s*accountCode: productMap!\.visaAccountCode,\s*vatRate: taxCodeToVat\(productMap!\.visaTaxCode\)/);
+    // Migration 250 / revenueAccountResolver: dimensional override
+    // (subsidiary_accounts) wins over the product-default code, but
+    // the product-default is the documented fallback. Pattern shape:
+    // `accountCode: overrideAccountCode ?? productMap!.visaAccountCode`
+    expect(ENGINE).toMatch(/productId: productMap!\.visaProductId,\s*accountCode: (?:overrideAccountCode \?\? )?productMap!\.visaAccountCode,\s*vatRate: taxCodeToVat\(productMap!\.visaTaxCode\)/);
   });
 
   it("transport lineItem: quantity 1, transport product's account + taxCode", () => {
     // Transport is typically per-trip not per-pilgrim. quantity=1
     // keeps the e-invoice line readable.
     expect(ENGINE).toMatch(/description: `نقل — مجموعة \$\{grp\.nuskGroupNumber\}`/);
-    expect(ENGINE).toMatch(/productId: productMap!\.transportProductId,\s*accountCode: productMap!\.transportAccountCode,\s*vatRate: taxCodeToVat\(productMap!\.transportTaxCode\)/);
+    expect(ENGINE).toMatch(/productId: productMap!\.transportProductId,\s*accountCode: (?:overrideAccountCode \?\? )?productMap!\.transportAccountCode,\s*vatRate: taxCodeToVat\(productMap!\.transportTaxCode\)/);
   });
 
   it("services lineItem: quantity 1, services product's account + taxCode", () => {
     expect(ENGINE).toMatch(/description: `خدمات أرضية — مجموعة \$\{grp\.nuskGroupNumber\}`/);
-    expect(ENGINE).toMatch(/productId: productMap!\.servicesProductId,\s*accountCode: productMap!\.servicesAccountCode,\s*vatRate: taxCodeToVat\(productMap!\.servicesTaxCode\)/);
+    expect(ENGINE).toMatch(/productId: productMap!\.servicesProductId,\s*accountCode: (?:overrideAccountCode \?\? )?productMap!\.servicesAccountCode,\s*vatRate: taxCodeToVat\(productMap!\.servicesTaxCode\)/);
   });
 
   it("zero-amount visa or transport lines are SUPPRESSED (no noise on the invoice)", () => {

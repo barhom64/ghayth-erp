@@ -3,6 +3,8 @@ import { z } from "zod";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,7 @@ import {
 } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { isMoneyAccount } from "@/lib/finance-account-usage";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -103,13 +106,16 @@ export default function CustodiesPage() {
   const [settleTarget, setSettleTarget] = useState<any>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref", "employeeName", "purpose"],
     statusField: "status",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -236,6 +242,23 @@ export default function CustodiesPage() {
               </>
             )}
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_custodies"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "العهد المالية", total: printRows.length },
+              items: printRows.map((c: any) => ({
+                "المرجع": c.ref || c.id,
+                "الموظف": c.employeeName || "—",
+                "تاريخ الصرف": c.issueDate || "—",
+                "المبلغ المصروف": c.amountIssued ?? c.amount ?? 0,
+                "المتبقي": c.remainingBalance ?? 0,
+                "الغرض": c.purpose || "—",
+                "الحالة": c.status || "—",
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -309,6 +332,7 @@ export default function CustodiesPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}
@@ -386,9 +410,7 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
   );
   const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
-  const sourceAccounts = (accountsData?.data || []).filter(
-    (a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"),
-  );
+  const sourceAccounts = (accountsData?.data || []).filter((a: any) => isMoneyAccount(a));
   const employees = employeesData?.data || [];
 
   return (

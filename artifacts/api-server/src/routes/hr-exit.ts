@@ -80,7 +80,7 @@ import {
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
-import { generateSequentialNumber } from "../lib/hrHelpers.js";
+import { generateSequentialNumber, calcGratuity, type ExitType } from "../lib/hrHelpers.js";
 import { HR_TABLES, NUMBER_PREFIXES } from "../lib/hrEnums.js";
 import { logger } from "../lib/logger.js";
 
@@ -313,25 +313,35 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
     );
     const yearsOfService = dayDiff / 365.25;
     const salary = Number(emp.salary || 0);
-    const first5 = Math.min(yearsOfService, 5);
-    const above5 = Math.max(yearsOfService - 5, 0);
-    let gratuity = (salary / 2) * first5 + salary * above5;
 
-    // المادة 85: الاستقالة — التخفيض يُحسب على كل شريحة على حدة
-    if (b.exitType === "resignation") {
-      if (yearsOfService < 2) gratuity = 0;
-      else if (yearsOfService < 5) gratuity = (salary / 2) * first5 / 3;
-      else if (yearsOfService < 10) {
-        gratuity = ((salary / 2) * first5 * 2) / 3 + (salary * above5 * 2) / 3;
-      }
-      // 10+ سنوات: كامل المكافأة
-    }
-    gratuity = roundTo2(gratuity);
+    // Articles 84 + 85 + 80 of the Saudi Labor Law:
+    //   - termination (الفصل من صاحب العمل): full gratuity (0.5 month
+    //     × first 5 years + 1.0 month × remaining years).
+    //   - resignation (الاستقالة): fraction of full — 0 if <2y, 1/3 if
+    //     2–5y, 2/3 if 5–10y, full if 10y+.
+    //   - just_cause (الفصل لسبب — المادة 80): no gratuity.
+    // The exitType comes from the request schema; default is
+    // "termination" if unset.
+    const eosExitType: ExitType =
+      b.exitType === "resignation"
+        ? "resignation"
+        : b.exitType === "just_cause"
+          ? "just_cause"
+          : "termination";
+    const eos = calcGratuity(salary, yearsOfService, eosExitType);
+    const gratuity = eos.total;
 
-    // رصيد الإجازات
+    // رصيد الإجازات — استعلم من جدول hr_leave_balances (الحالي) لا
+    // leave_balances (المهجور). الحقول الفعلية: entitled, used, reserved
+    // و(carried سطر اختياري). نأخذ السنة الأخيرة فقط من الإجازة السنوية
+    // كما تنص المادة 109 — المتبقي من السنوات السابقة يُعالج كمستحقّ سابق
+    // إن وُجد. للتبسيط نأخذ مجموع الأرصدة الفعّالة لجميع أنواع الإجازات
+    // العادية وقت التسوية.
     const [lb] = await rawQuery<{ balance: number | string | null }>(
-      `SELECT COALESCE(SUM(entitled - used - pending + carried), 0) AS balance FROM leave_balances
-       WHERE "employeeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1 LIMIT 1) AND "companyId" = $2`,
+      `SELECT COALESCE(SUM(GREATEST(entitled - used - reserved, 0)), 0) AS balance
+       FROM hr_leave_balances
+       WHERE "employeeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1 LIMIT 1)
+         AND "companyId" = $2`,
       [b.assignmentId, scope.companyId]
     ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ balance: 0 }] as { balance: number }[]; });
     const leaveBalance = Number(lb?.balance ?? 0);
@@ -618,6 +628,18 @@ router.patch("/exit/:id/complete", authorize({ feature: "hr.exit", action: "upda
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // SEC-1 (HR audit P1): completing an exit triggers termination,
+    // EOS payout posting, and clearance closure — all
+    // separation-of-duties events that the feature-level "update"
+    // permission alone is not enough to authorize. The /approve
+    // endpoint already gates on HR_ROLES; /complete must too.
+    if (!HR_ROLES.includes(scope.role)) {
+      res.status(403).json({
+        error: "غير مصرّح لك بإتمام نهاية الخدمة — يلزم دور موارد بشرية",
+        meta: { yourRole: scope.role, requiredRoles: HR_ROLES },
+      });
+      return;
+    }
     // Pre-check clearance before attempting the transition
     const [item] = await rawQuery<ExitRequestRow>(
       `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -625,6 +647,43 @@ router.patch("/exit/:id/complete", authorize({ feature: "hr.exit", action: "upda
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (!item.clearanceCompleted) throw new ConflictError("يجب إكمال إخلاء الطرف أولاً");
+    // SEC-1 hardening: enforce the state-machine boundary explicitly.
+    // applyTransition() already validates fromStates=["approved"], but
+    // checking here gives a clearer Arabic error and prevents a race
+    // where a UI button accidentally fires twice on a non-approved row.
+    if (item.status !== "approved") {
+      throw new ConflictError("يجب اعتماد نهاية الخدمة قبل إتمامها", {
+        field: "status",
+        fix: "اعتمد الطلب أولاً عبر مسار /approve",
+        meta: { currentStatus: item.status },
+      });
+    }
+
+    // INT-2 (HR audit P1): an employee with outstanding active loans
+    // must not be terminated before those loans are settled or
+    // explicitly waived. Without this gate, the EOS settlement would
+    // hide unrecovered debt behind a "completed" status. The block can
+    // be lifted by the finance team via /loans/:id/settle or by
+    // including the balance in the exit deductions before approval.
+    const [openLoans] = await rawQuery<{ remaining: number | string | null; cnt: string }>(
+      `SELECT COALESCE(SUM("remainingAmount"), 0) AS remaining, COUNT(*)::text AS cnt
+       FROM hr_employee_loans
+       WHERE "assignmentId" = $1 AND "companyId" = $2
+         AND status IN ('active','approved') AND "deletedAt" IS NULL
+         AND "remainingAmount" > 0`,
+      [item.assignmentId, scope.companyId],
+    ).catch(() => [{ remaining: 0, cnt: "0" }] as { remaining: number; cnt: string }[]);
+    const remainingLoanBalance = Number(openLoans?.remaining ?? 0);
+    if (remainingLoanBalance > 0) {
+      throw new ConflictError(
+        `لا يمكن إتمام نهاية الخدمة قبل تسوية القروض المستحقة (${remainingLoanBalance.toFixed(2)} ريال)`,
+        {
+          field: "outstandingLoans",
+          fix: "سدد القروض أو ضمّن المبلغ في خصومات نهاية الخدمة قبل الاعتماد",
+          meta: { remainingLoanBalance, loanCount: Number(openLoans?.cnt ?? 0) },
+        },
+      );
+    }
 
     // FIN-AUD-09 — exit settlement posts EOS + leave-compensation expense
     // and matching liability/cash CRs. Without an up-front period gate,
@@ -658,6 +717,48 @@ router.patch("/exit/:id/complete", authorize({ feature: "hr.exit", action: "upda
           `UPDATE employee_assignments SET status = 'terminated', "endDate" = CURRENT_DATE
            WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
           [item.assignmentId, scope.companyId]
+        );
+        // INT-1 (HR audit P1): cancel pending/approved leave requests
+        // that extend beyond the exit date. A terminated employee
+        // cannot consume future leave, and leaving rows in 'pending'
+        // pollutes the approval inbox forever.
+        await client.query(
+          `UPDATE hr_leave_requests
+             SET status = 'cancelled',
+                 "rejectedReason" = COALESCE("rejectedReason", 'تم إنهاء خدمة الموظف')
+           WHERE "employeeId" = (
+             SELECT "employeeId" FROM employee_assignments WHERE id = $1 LIMIT 1
+           )
+             AND "companyId" = $2
+             AND status IN ('pending')
+             AND "deletedAt" IS NULL`,
+          [item.assignmentId, scope.companyId],
+        );
+        // Release reserved leave days back to the balance for the
+        // requests we just cancelled — otherwise EOS leave compensation
+        // would double-count days that were never taken.
+        await client.query(
+          `UPDATE hr_leave_balances lb
+             SET reserved = GREATEST(reserved - sub.total_reserved, 0)
+           FROM (
+             SELECT "leaveTypeId", EXTRACT(YEAR FROM "startDate")::int AS yr,
+                    SUM(days) AS total_reserved
+             FROM hr_leave_requests
+             WHERE "employeeId" = (
+               SELECT "employeeId" FROM employee_assignments WHERE id = $1 LIMIT 1
+             )
+               AND "companyId" = $2
+               AND status = 'cancelled'
+               AND "rejectedReason" = 'تم إنهاء خدمة الموظف'
+             GROUP BY "leaveTypeId", EXTRACT(YEAR FROM "startDate")::int
+           ) sub
+           WHERE lb."employeeId" = (
+             SELECT "employeeId" FROM employee_assignments WHERE id = $1 LIMIT 1
+           )
+             AND lb."companyId" = $2
+             AND lb."leaveTypeId" = sub."leaveTypeId"
+             AND lb.year = sub.yr`,
+          [item.assignmentId, scope.companyId],
         );
       },
     });

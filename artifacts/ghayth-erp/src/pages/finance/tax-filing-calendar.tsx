@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Calendar, AlertTriangle, CheckCircle2, Receipt, Building2,
   Banknote, Users, FileCheck2, ChevronRight, Info,
@@ -223,6 +224,20 @@ export default function TaxFilingCalendarPage() {
               تقارير ZATCA
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_tax_filing_calendar"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "تقويم الإقرارات الضريبية", total: filtered.length },
+              items: filtered.map((f) => ({
+                "النوع": f.label,
+                "الفترة": f.periodLabel,
+                "الموعد النهائي": f.deadline,
+                "أيام متبقية": diffDays(f.deadline, todayLocal()),
+              })),
+            }}
+          />
         </div>
       }
     >

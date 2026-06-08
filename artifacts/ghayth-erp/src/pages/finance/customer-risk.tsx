@@ -12,6 +12,9 @@ import {
   ChevronRight, Phone, Megaphone, Clock, FileWarning,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Customer Risk Dashboard — concentration + behavior analysis
@@ -195,8 +198,6 @@ export default function CustomerRiskPage() {
       .sort((a, b) => b.outstandingAmount - a.outstandingAmount);
   }, [receivablesResp, collectionData]);
 
-  if (arLoading || collLoading) return <LoadingSpinner />;
-
   // ── Concentration metrics
   const totalAr = customers.reduce((s, c) => s + c.outstandingAmount, 0);
   const top1Share = customers[0]?.shareOfTotal ?? 0;
@@ -206,6 +207,20 @@ export default function CustomerRiskPage() {
   const totalOverdue = customers.reduce((s, c) => s + c.overdueAmount, 0);
 
   const filtered = bandFilter ? customers.filter((c) => c.riskBand === bandFilter) : customers;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  // Pareto cumulative on outstanding — `customers` is already
+  // outstanding-DESC. Crown marks the row crossing 80%: the operator
+  // gets "these N customers carry 80% of total AR — collect THESE
+  // first, the long tail can wait."
+  const { cumulativePcts: arCumulativePcts, thresholdIdx: arThresholdIdx } =
+    computeParetoCumulative(customers.map((c) => c.outstandingAmount), 80);
+  const cumulativeByName = new Map(
+    customers.map((c, i) => [c.clientName, { pct: arCumulativePcts[i] ?? 0, isThreshold: i === arThresholdIdx }]),
+  );
+
+  if (arLoading || collLoading) return <LoadingSpinner />;
+
 
   const cols: DataTableColumn<CustomerAggregate>[] = [
     {
@@ -247,6 +262,20 @@ export default function CustomerRiskPage() {
               }`} style={{ width: `${Math.min(c.shareOfTotal, 100)}%` }} />
             </div>
           </div>
+        );
+      },
+    },
+    {
+      key: "_arPareto",
+      header: "حصة تراكمية",
+      render: (c) => {
+        const e = cumulativeByName.get(c.clientName);
+        return (
+          <ParetoMarker
+            cumulativePct={e?.pct ?? 0}
+            isThresholdRow={e?.isThreshold ?? false}
+            testidPrefix={`customer-risk-pareto-${c.clientName}`}
+          />
         );
       },
     },
@@ -337,6 +366,24 @@ export default function CustomerRiskPage() {
               الديون المشكوك بها
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_customer_risk"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "تحليل مخاطر العملاء", total: printRows.length },
+              items: printRows.map((c: any) => ({
+                "العميل": c.clientName || "—",
+                "الرصيد القائم": Number(c.outstandingAmount ?? 0),
+                "المتأخر": Number(c.overdueAmount ?? 0),
+                "% من إجمالي AR": (Number(c.shareOfTotal ?? 0) * 100).toFixed(1),
+                "أسوأ تأخر (أيام)": c.maxDaysOverdue ?? 0,
+                "عدد الفواتير المتأخرة": c.overdueCount ?? 0,
+                "درجة المخاطر": c.riskScore ?? 0,
+                "التصنيف": c.riskBand || "—",
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -448,6 +495,7 @@ export default function CustomerRiskPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={filtered}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا يوجد عملاء بمستحقات حالية"
           />

@@ -16,6 +16,29 @@ interface FleetGLContext {
   createdBy: number;
 }
 
+// Look up the auto-created cost-centre for a vehicle so every fleet
+// GL line carries costCenterId directly. Soft fail → NULL when no CC
+// row exists yet (legacy vehicles pre-autoCreate).
+async function resolveVehicleCostCenter(
+  companyId: number,
+  vehicleId: number,
+): Promise<number | null> {
+  try {
+    const [row] = await rawQuery<{ id: number }>(
+      `SELECT id FROM cost_centers
+        WHERE "companyId" = $1
+          AND ("linkedEntityType" = 'vehicle' AND "linkedEntityId" = $2
+            OR  "relatedEntityType" = 'vehicle' AND "relatedEntityId" = $2)
+          AND "deletedAt" IS NULL
+        ORDER BY id ASC LIMIT 1`,
+      [companyId, vehicleId]
+    );
+    return row?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 class FleetEngineImpl implements DomainEngine {
   readonly domainId = "fleet";
   readonly label = "إدارة الأسطول";
@@ -28,6 +51,7 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5200"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
     ]);
+    const costCenterId = await resolveVehicleCostCenter(ctx.companyId, fuelLog.vehicleId);
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -42,8 +66,8 @@ class FleetEngineImpl implements DomainEngine {
       guardTable: "fleet_fuel_logs",
       guardId: fuelLog.id,
       lines: [
-        { accountCode: debitCode, debit: fuelLog.amount, credit: 0, description: "مصروف وقود", vehicleId: fuelLog.vehicleId, driverId: fuelLog.driverId },
-        { accountCode: creditCode, debit: 0, credit: fuelLog.amount, vehicleId: fuelLog.vehicleId, driverId: fuelLog.driverId },
+        { accountCode: debitCode, debit: fuelLog.amount, credit: 0, description: "مصروف وقود", vehicleId: fuelLog.vehicleId, driverId: fuelLog.driverId, costCenterId: costCenterId ?? undefined },
+        { accountCode: creditCode, debit: 0, credit: fuelLog.amount, vehicleId: fuelLog.vehicleId, driverId: fuelLog.driverId, costCenterId: costCenterId ?? undefined },
       ],
     });
   }
@@ -56,6 +80,8 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5300"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
     ]);
+
+    const costCenterId = await resolveVehicleCostCenter(ctx.companyId, maintenance.vehicleId);
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -70,8 +96,8 @@ class FleetEngineImpl implements DomainEngine {
       guardTable: "fleet_maintenance",
       guardId: maintenance.id,
       lines: [
-        { accountCode: debitCode, debit: maintenance.totalCost, credit: 0, description: `صيانة — ${maintenance.type ?? "عامة"}`, vehicleId: maintenance.vehicleId },
-        { accountCode: creditCode, debit: 0, credit: maintenance.totalCost, vehicleId: maintenance.vehicleId },
+        { accountCode: debitCode, debit: maintenance.totalCost, credit: 0, description: `صيانة — ${maintenance.type ?? "عامة"}`, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: creditCode, debit: 0, credit: maintenance.totalCost, vehicleId: maintenance.vehicleId, costCenterId: costCenterId ?? undefined },
       ],
     });
   }
@@ -84,6 +110,8 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_prepaid_insurance", "debit", "1350"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
     ]);
+
+    const costCenterId = await resolveVehicleCostCenter(ctx.companyId, insurance.vehicleId);
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -98,8 +126,8 @@ class FleetEngineImpl implements DomainEngine {
       guardTable: "fleet_insurance",
       guardId: insurance.id,
       lines: [
-        { accountCode: debitCode, debit: insurance.premium, credit: 0, description: "قسط تأمين", vehicleId: insurance.vehicleId },
-        { accountCode: creditCode, debit: 0, credit: insurance.premium, vehicleId: insurance.vehicleId },
+        { accountCode: debitCode, debit: insurance.premium, credit: 0, description: "قسط تأمين", vehicleId: insurance.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: creditCode, debit: 0, credit: insurance.premium, vehicleId: insurance.vehicleId, costCenterId: costCenterId ?? undefined },
       ],
     });
   }
@@ -112,6 +140,8 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_expense", "debit", "5290"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2100"),
     ]);
+
+    const costCenterId = await resolveVehicleCostCenter(ctx.companyId, violation.vehicleId);
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -126,8 +156,8 @@ class FleetEngineImpl implements DomainEngine {
       guardTable: "fleet_traffic_violations",
       guardId: violation.id,
       lines: [
-        { accountCode: debitCode, debit: violation.amount, credit: 0, description: "مخالفة مرورية", vehicleId: violation.vehicleId, driverId: violation.driverId },
-        { accountCode: creditCode, debit: 0, credit: violation.amount, vehicleId: violation.vehicleId },
+        { accountCode: debitCode, debit: violation.amount, credit: 0, description: "مخالفة مرورية", vehicleId: violation.vehicleId, driverId: violation.driverId, costCenterId: costCenterId ?? undefined },
+        { accountCode: creditCode, debit: 0, credit: violation.amount, vehicleId: violation.vehicleId, costCenterId: costCenterId ?? undefined },
       ],
     });
   }
@@ -190,6 +220,32 @@ class FleetEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+   * Resolve a vehicle's own postable subsidiary account code for a given
+   * accountType ("fuel" | "maintenance" | "depreciation"), auto-created on
+   * vehicle creation. Returns null when none is configured (caller falls back
+   * to the company/default account), so the routing is purely additive.
+   */
+  private async resolveVehicleAccountCode(
+    companyId: number,
+    vehicleId: number,
+    accountType: string,
+  ): Promise<string | null> {
+    if (!vehicleId) return null;
+    const rows = await rawQuery<{ code: string }>(
+      `SELECT coa.code
+         FROM subsidiary_accounts sa
+         JOIN chart_of_accounts coa ON coa.id = sa."accountId"
+        WHERE sa."companyId" = $1 AND sa."entityType" = 'vehicle'
+          AND sa."entityId" = $2 AND sa."accountType" = $3
+          AND sa."isActive" = true
+          AND coa."allowPosting" = true AND coa."deletedAt" IS NULL
+        LIMIT 1`,
+      [companyId, vehicleId, accountType],
+    );
+    return rows[0]?.code ?? null;
+  }
+
   async postTripCompletionGL(
     ctx: FleetGLContext,
     trip: {
@@ -203,11 +259,20 @@ class FleetEngineImpl implements DomainEngine {
   ) {
     if (trip.totalCost <= 0) return null;
 
+    // Per-vehicle GL routing (#1594): prefer the vehicle's OWN subsidiary
+    // account (auto-created on vehicle creation) so cost posts per-plate; fall
+    // back to the per-company accounting_mappings override, then to the
+    // standard fleet COA leaf (corrected from the old non-postable parents
+    // 5200/1100 → 5510/5710 fuel/depreciation, 5140 transport, 1110 bank).
+    const [vehFuel, vehDep] = await Promise.all([
+      this.resolveVehicleAccountCode(ctx.companyId, trip.vehicleId, "fuel"),
+      this.resolveVehicleAccountCode(ctx.companyId, trip.vehicleId, "depreciation"),
+    ]);
     const [fuelCode, fareCode, depCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_driver_fare", "debit", "5210"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_depreciation", "debit", "5220"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
+      vehFuel ?? financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5510"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_driver_fare", "debit", "5140"),
+      vehDep ?? financialEngine.resolveAccountCode(ctx.companyId, "fleet_depreciation", "debit", "5710"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -285,6 +350,172 @@ class FleetEngineImpl implements DomainEngine {
         { accountCode: debitCode, debit: trip.totalCost, credit: 0, description: "تكلفة رحلة", vehicleId: trip.vehicleId, driverId: trip.driverId },
         { accountCode: creditCode, debit: 0, credit: trip.totalCost, description: "مستحقات رحلة", vehicleId: trip.vehicleId },
       ],
+    });
+  }
+
+  /**
+   * #1733 — transport never posts to GL. After the operational close
+   * (`delivered` transition), we insert a pending row into
+   * `transport_billing_candidates` that the accountant reviews and
+   * materializes from the finance side. Idempotent on
+   * (companyId, sourceType, sourceId): re-firing the transition is
+   * a no-op once the candidate exists.
+   *
+   * Returns the candidate id (existing or newly inserted) or null when
+   * the source carries no commercial dimension (zero revenue + cost).
+   */
+  async createCargoBillingCandidate(
+    ctx: FleetGLContext,
+    manifest: {
+      id: number;
+      manifestNumber: string;
+      freightRevenue: number;
+      freightCost: number;
+      customerId?: number | null;
+      vehicleId?: number | null;
+      driverId?: number | null;
+      fromLocation?: string | null;
+      toLocation?: string | null;
+      totalWeight?: number | null;
+      deliveryDate?: string | null;
+      notes?: string | null;
+    }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const revenue = Number(manifest.freightRevenue) || 0;
+    const cost = Number(manifest.freightCost) || 0;
+    // A zero-revenue + zero-cost manifest is a pure operational record
+    // (internal transfer, sample run) — no handoff needed.
+    if (revenue <= 0 && cost <= 0) return null;
+
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId",
+           "sourceType", "sourceId", "sourceRef",
+           "customerId", "serviceType", "serviceDate",
+           "routeFrom", "routeTo",
+           "vehicleId", "driverId",
+           quantity, "unitOfMeasure",
+           "operationalStatus",
+           "suggestedRevenue", "suggestedCost",
+           notes,
+           "createdBy"
+         )
+         VALUES (
+           $1, $2,
+           'cargo_manifest', $3, $4,
+           $5, 'freight', COALESCE($6::date, CURRENT_DATE),
+           $7, $8,
+           $9, $10,
+           $11, 'kg',
+           'delivered',
+           $12, $13,
+           $14,
+           $15
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'cargo_manifest' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [
+        ctx.companyId,
+        ctx.branchId || null,
+        manifest.id,
+        manifest.manifestNumber,
+        manifest.customerId ?? null,
+        manifest.deliveryDate ?? null,
+        manifest.fromLocation ?? null,
+        manifest.toLocation ?? null,
+        manifest.vehicleId ?? null,
+        manifest.driverId ?? null,
+        Number(manifest.totalWeight) || 0,
+        revenue > 0 ? revenue : null,
+        cost > 0 ? cost : null,
+        manifest.notes ?? null,
+        ctx.createdBy,
+      ]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    if (!row.existed) {
+      eventBus.emit("fleet.cargo.billing_candidate.created", {
+        companyId: ctx.companyId,
+        manifestId: manifest.id,
+        candidateId: row.id,
+      });
+    }
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
+   * Post the financial impact of a delivered cargo manifest in ONE
+   * balanced journal entry. A road-freight shipment has two money
+   * flows that net to a single balanced JE:
+   *   • Revenue earned from the customer  → DR A/R, CR freight revenue
+   *   • Cost owed for hauling the freight → DR freight cost, CR payable
+   * Total debits (revenue + cost) == total credits (revenue + cost),
+   * so the entry balances even when only one side is non-zero (the
+   * zero-amount lines are dropped before posting).
+   *
+   * #1733 — Transport routes MUST NOT call this directly. It is invoked
+   * from the accountant-side materialize endpoint
+   * (`/api/finance/transport-billing-candidates/:id/materialize`) which
+   * resolves a candidate row and only then asks fleetEngine to post.
+   * The financialEngine guard (cargo_manifests / id) keeps the JE
+   * idempotent even when the accountant clicks materialize twice.
+   */
+  async postCargoDeliveryGL(
+    ctx: FleetGLContext,
+    manifest: {
+      id: number;
+      manifestNumber: string;
+      freightRevenue: number;
+      freightCost: number;
+      customerId?: number | null;
+      vehicleId?: number | null;
+      driverId?: number | null;
+    }
+  ) {
+    const revenue = Number(manifest.freightRevenue) || 0;
+    const cost = Number(manifest.freightCost) || 0;
+    if (revenue <= 0 && cost <= 0) return null;
+
+    const [arCode, revenueCode, costCode, payableCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_receivable", "debit", "1210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4300"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_cost", "debit", "5310"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2100"),
+    ]);
+
+    const lines: JournalEntryLine[] = [];
+    if (revenue > 0) {
+      lines.push({ accountCode: arCode, debit: revenue, credit: 0, description: `ذمم شحن — بوليصة ${manifest.manifestNumber}`, clientId: manifest.customerId ?? undefined, vehicleId: manifest.vehicleId ?? undefined, driverId: manifest.driverId ?? undefined });
+      lines.push({ accountCode: revenueCode, debit: 0, credit: revenue, description: `إيراد شحن — بوليصة ${manifest.manifestNumber}`, clientId: manifest.customerId ?? undefined, vehicleId: manifest.vehicleId ?? undefined });
+    }
+    if (cost > 0) {
+      lines.push({ accountCode: costCode, debit: cost, credit: 0, description: `تكلفة شحن — بوليصة ${manifest.manifestNumber}`, vehicleId: manifest.vehicleId ?? undefined, driverId: manifest.driverId ?? undefined });
+      lines.push({ accountCode: payableCode, debit: 0, credit: cost, description: `مستحقات شحن — بوليصة ${manifest.manifestNumber}`, vehicleId: manifest.vehicleId ?? undefined });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-CARGO-${manifest.id}`,
+      description: `تسليم بوليصة شحن ${manifest.manifestNumber} — إيراد: ${revenue.toFixed(2)} / تكلفة: ${cost.toFixed(2)} ريال`,
+      type: "general",
+      sourceType: "cargo_manifest",
+      sourceId: manifest.id,
+      sourceKey: `fleet:cargo:${manifest.id}`,
+      guardTable: "cargo_manifests",
+      guardId: manifest.id,
+      lines,
     });
   }
 

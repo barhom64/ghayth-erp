@@ -11,6 +11,15 @@ const ROUTE = readFileSync(
   join(REPO_ROOT, "artifacts/api-server/src/routes/umrah.ts"),
   "utf8"
 );
+// The overstay penalty caller (postPenaltyGL invocation with
+// `type: "overstay"` + agent/season dims) lives in the extracted
+// penalty engine module after the auto-generation cron split. The
+// dimensional contract is unchanged — the test just has to look in
+// the right file for it.
+const PENALTY_ENGINE = readFileSync(
+  join(REPO_ROOT, "artifacts/api-server/src/lib/umrahPenaltyEngine.ts"),
+  "utf8"
+);
 
 // ─── umrahEngine.postPenaltyGL + postPenaltyWaiverGL ─────────────────────
 // Pre-fix: penalty lines had ZERO dim fields. Per-agent + per-season
@@ -70,8 +79,10 @@ describe("postPenaltyWaiverGL", () => {
 
 describe("umrah.ts callers pass agentId + seasonId", () => {
   it("overstay penalty caller passes agentId + seasonId", () => {
-    // Match the overstay block specifically by its type literal.
-    expect(ROUTE).toMatch(/type: "overstay"[\s\S]{0,400}agentId:[\s\S]{0,200}seasonId:/);
+    // The overstay caller moved to the extracted engine module. The
+    // dimensional contract — type: "overstay" with agentId + seasonId
+    // dims threaded through — is intact, just in the engine now.
+    expect(PENALTY_ENGINE).toMatch(/type: "overstay"[\s\S]{0,400}agentId:[\s\S]{0,200}seasonId:/);
   });
 
   it("manual penalty caller passes agentId + seasonId from req body", () => {

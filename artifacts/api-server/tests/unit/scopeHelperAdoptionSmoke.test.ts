@@ -49,6 +49,9 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "admin-vendor-settings.ts",
   "admin.ts",
   "approvalActions.ts",
+  // assistant.ts: curated owner Q&A — vetted aggregate queries keyed by
+  // (companyId), not list endpoints; manual companyId scoping is correct here.
+  "assistant.ts",
   "auth.ts",
   "automation.ts",
   "bi.ts",
@@ -56,7 +59,6 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "cargo.ts",
   "careersPortal.ts",
   "clientPortal.ts",
-  "driverPortal.ts",
   "communications.ts",
   "correspondence.ts",
   "digital-signature.ts",
@@ -85,8 +87,18 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "notification-engine.ts",
   "numbering.ts",
   "obligations.ts",
+  // org.ts: admin CRUD for the operational enterprise model (#1799 §B —
+  // legal_entities, positions, teams, committees, supervision_lines,
+  // approval_authorities). Tight (companyId = $1) scoping is correct here:
+  // every list/write is per-company by design and templates (companyId
+  // IS NULL for positions) are read-only system rows.
+  "org.ts",
   "pdpl.ts",
   "permissions.ts",
+  // parties.ts: master-data registry — point lookups by (companyId, entityTable,
+  // entityId) / (companyId, id), not list endpoints. Manual companyId scoping is
+  // correct here; buildScopedWhere targets company/branch list cascades. (slice 1)
+  "parties.ts",
   "print.ts",
   "properties.ts",
   "publicData.ts",
@@ -99,6 +111,37 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "storage.ts",
   "store.ts",
   "training.ts",
+  // transport-billing-candidates.ts: accountant queue for the #1733 handoff.
+  // Three small endpoints, each a single-row lookup by id keyed on
+  // (companyId, id) — no list cascade where buildScopedWhere would add
+  // branch/department filtering. Manual companyId scoping is correct here.
+  "transport-billing-candidates.ts",
+  // transport-bookings.ts: #1733 Booking + Dispatch layer. List queries
+  // filter by (companyId, status / customer / date window) — buildScopedWhere
+  // would unnecessarily branch-cascade. The booking lookup is by id keyed on
+  // (companyId, id) like the other transport surfaces.
+  "transport-bookings.ts",
+  // vehicle-profile.ts: #1733 vehicle sub-resources (components, driver
+  // assignments, maintenance schedules). All endpoints are scoped by
+  // (companyId, vehicleId) and the vehicle ownership is checked up front
+  // by assertVehicleBelongsToTenant — buildScopedWhere has nothing to add.
+  "vehicle-profile.ts",
+  // transport-pricing.ts: #1733 pricing engine + service-line queue +
+  // invoice-batch merger. All queries are scoped on (companyId, customerId
+  // / serviceType / status / date window) — buildScopedWhere has no
+  // branch cascade to add.
+  "transport-pricing.ts",
+  // transport-planning.ts: #1812 planning engine — assignment suggestion,
+  // ops dashboard, itineraries, driver navigation sessions. All queries
+  // are scoped on (companyId, id/dispatchOrderId/…) — buildScopedWhere
+  // has no branch cascade to add.
+  "transport-planning.ts",
+  // transport-integration.ts: #1812 governing comment — pulls bookings
+  // from umrah groups + iCalendar feed. Pure cross-domain reads scoped
+  // on (companyId, sourceTable.id) — buildScopedWhere has no branch
+  // cascade to add for a cross-domain bridge.
+  "transport-integration.ts",
+  "fleet-rules-admin.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -183,9 +226,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 104,
+      total: 113,
       helperUsers: 36,
-      manualOnly: 65,
+      manualOnly: 74,
     });
   });
 });

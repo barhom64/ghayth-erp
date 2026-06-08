@@ -50,9 +50,11 @@ export interface EnginePayload {
   recipientName?: string;
   recipientPhone?: string;
   recipientWhatsApp?: string;
+  recipientUserId?: number;
   clientId?: number;
   templateKey?: string;
   templateVars?: Record<string, string>;
+  language?: "ar" | "en";
   fallbackChainId?: number;
   metadata?: Record<string, unknown>;
 }
@@ -63,18 +65,6 @@ interface RoutingRule {
   channels: EngineChannel[];
   priority: string;
   fallbackChainId: number | null;
-}
-
-interface UserPreference {
-  category: string;
-  inApp: boolean;
-  email: boolean;
-  sms: boolean;
-  whatsapp: boolean;
-  push: boolean;
-  webhook: boolean;
-  quietHoursStart: string | null;
-  quietHoursEnd: string | null;
 }
 
 interface TemplateRow {
@@ -158,33 +148,109 @@ async function getRoutingRule(companyId: number, eventCategory: string): Promise
   };
 }
 
-async function getUserPreferences(companyId: number, userId: number, category: string): Promise<UserPreference | null> {
-  const rows = await rawQuery<UserPreference>(
-    `SELECT category, "inApp", email, sms, whatsapp, push, webhook, "quietHoursStart"::text, "quietHoursEnd"::text
-     FROM notification_preferences
-     WHERE "companyId" = $1 AND "userId" = $2 AND category = $3
-     LIMIT 1`,
+/**
+ * Channels a user has explicitly opted OUT of, for a given event
+ * category. Reads the row-per-channel shape the preferences UI actually
+ * writes (notification_preferences: channel + category + enabled, the
+ * shape the UNIQUE(userId, channel, category) constraint enforces).
+ *
+ * A category-specific row (e.g. category='leave') overrides the global
+ * 'general' master switch the UI toggles. Returns the set of disabled
+ * channel names; absence of a row means "not opted out" (default on).
+ *
+ * Before this, the engine read the legacy boolean columns (inApp/email/…)
+ * which the UI never wrote — so every user channel toggle was silently
+ * ignored. This makes the preference panel actually take effect.
+ */
+export interface PreferenceRow {
+  channel: string;
+  category: string;
+  enabled: boolean;
+}
+
+/**
+ * Pure reducer: given the preference rows for a user and the target
+ * category, return the set of channels the user has opted out of. The
+ * global 'general' master switch applies first; a category-specific row
+ * then overrides it, so a per-category preference always wins.
+ */
+export function computeDisabledChannels(rows: PreferenceRow[], category: string): Set<string> {
+  const byChannel = new Map<string, boolean>();
+  for (const r of rows) if (r.category === "general") byChannel.set(r.channel, r.enabled);
+  for (const r of rows) if (r.category === category) byChannel.set(r.channel, r.enabled);
+  const disabled = new Set<string>();
+  for (const [ch, enabled] of byChannel) if (!enabled) disabled.add(ch);
+  return disabled;
+}
+
+async function getDisabledChannels(companyId: number, userId: number, category: string): Promise<Set<string>> {
+  const rows = await rawQuery<PreferenceRow>(
+    `SELECT channel, category, enabled
+       FROM notification_preferences
+      WHERE "companyId" = $1 AND "userId" = $2 AND category IN ($3, 'general')`,
     [companyId, userId, category]
   );
-  return rows[0] ?? null;
+  return computeDisabledChannels(rows, category);
 }
 
-function applyUserPreferences(channels: EngineChannel[], prefs: UserPreference | null): EngineChannel[] {
-  if (!prefs) return channels;
-  return channels.filter((ch) => {
-    switch (ch) {
-      case "in_app": return prefs.inApp;
-      case "email": return prefs.email;
-      case "sms": return prefs.sms;
-      case "whatsapp": return prefs.whatsapp;
-      case "push": return prefs.push;
-      case "webhook": return prefs.webhook;
-      default: return true;
-    }
-  });
+function applyUserPreferences(channels: EngineChannel[], disabled: Set<string>): EngineChannel[] {
+  if (disabled.size === 0) return channels;
+  return channels.filter((ch) => !disabled.has(ch));
 }
 
-async function getTemplate(companyId: number, templateKey: string, channel: string): Promise<TemplateRow | null> {
+/**
+ * Pure reducer: is `now` inside the user's quiet-hours window? Handles
+ * windows that wrap past midnight (e.g. 22:00 → 07:00).
+ *
+ * Returns false when either bound is missing — quiet hours are
+ * unconfigured. Returns false when the bounds are equal — no window.
+ */
+export function isWithinQuietHours(start: string | null, end: string | null, now: Date): boolean {
+  if (!start || !end) return false;
+  const parse = (s: string) => {
+    const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(s);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  };
+  const s = parse(start);
+  const e = parse(end);
+  if (s == null || e == null || s === e) return false;
+  const cur = now.getHours() * 60 + now.getMinutes();
+  // Same-day window (e.g. 12:00 → 14:00): inclusive of start, exclusive of end.
+  if (s < e) return cur >= s && cur < e;
+  // Wrap-around window (e.g. 22:00 → 07:00): midnight is inside the window.
+  return cur >= s || cur < e;
+}
+
+async function getUserQuietHours(companyId: number, userId: number): Promise<{ start: string | null; end: string | null }> {
+  const rows = await rawQuery<{ quietHoursStart: string | null; quietHoursEnd: string | null }>(
+    `SELECT "quietHoursStart"::text, "quietHoursEnd"::text
+       FROM notification_preferences
+      WHERE "companyId" = $1 AND "userId" = $2
+        AND channel = 'in_app' AND category = 'general'
+      LIMIT 1`,
+    [companyId, userId]
+  );
+  return { start: rows[0]?.quietHoursStart ?? null, end: rows[0]?.quietHoursEnd ?? null };
+}
+
+async function resolveLanguage(companyId: number, payload: EnginePayload): Promise<"ar" | "en"> {
+  if (payload.language) return payload.language;
+  if (payload.recipientUserId) {
+    const rows = await rawQuery<{ preferredLocale: string }>(
+      `SELECT "preferredLocale" FROM users WHERE id = $1 LIMIT 1`,
+      [payload.recipientUserId],
+    );
+    const loc = rows[0]?.preferredLocale;
+    if (loc === "ar" || loc === "en") return loc;
+  }
+  return "ar";
+}
+
+async function getTemplate(companyId: number, templateKey: string, channel: string, language: "ar" | "en" = "ar"): Promise<TemplateRow | null> {
+  // Order by language match first (preferred wins), then company specificity.
+  // Falls back to the other language if the preferred one is missing for
+  // this (companyId, templateKey, channel) tuple.
   const rows = await rawQuery<TemplateRow>(
     `SELECT id, "templateKey", channel, "titleTemplate", "bodyTemplate"
      FROM notification_templates
@@ -192,9 +258,9 @@ async function getTemplate(companyId: number, templateKey: string, channel: stri
        AND "templateKey" = $2
        AND channel = $3
        AND "isActive" = true
-     ORDER BY "companyId" DESC NULLS LAST
+     ORDER BY (language = $4) DESC, "companyId" DESC NULLS LAST
      LIMIT 1`,
-    [companyId, templateKey, channel]
+    [companyId, templateKey, channel, language]
   );
   return rows[0] ?? null;
 }
@@ -399,8 +465,21 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
       [payload.assignmentId]
     );
     if (userRow) {
-      const prefs = await getUserPreferences(companyId, userRow.id, eventCategory.split(".")[0] ?? eventCategory);
-      channels = applyUserPreferences(channels, prefs);
+      const disabled = await getDisabledChannels(companyId, userRow.id, eventCategory.split(".")[0] ?? eventCategory);
+      channels = applyUserPreferences(channels, disabled);
+
+      // Quiet-hours suppression: inside the user's window, drop every
+      // external channel (email/sms/whatsapp/push) so they don't get
+      // pinged at 2am. in_app + webhook still fire so the record lands
+      // and the user sees it when they look in the morning. `urgent`
+      // priority bypasses the window — actual emergencies (sla breach,
+      // security incident) cut through.
+      if (priority !== "urgent") {
+        const { start, end } = await getUserQuietHours(companyId, userRow.id);
+        if (isWithinQuietHours(start, end, new Date())) {
+          channels = channels.filter((ch) => ch === "in_app" || ch === "webhook");
+        }
+      }
     }
   }
 
@@ -408,10 +487,12 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
     channels = ["in_app"];
   }
 
+  const language = await resolveLanguage(companyId, payload);
+
   for (const channel of channels) {
     try {
       const template = payload.templateKey
-        ? await getTemplate(companyId, payload.templateKey, channel === "in_app" ? "in_app" : channel)
+        ? await getTemplate(companyId, payload.templateKey, channel === "in_app" ? "in_app" : channel, language)
         : null;
 
       const title = resolveTitle(payload, template);

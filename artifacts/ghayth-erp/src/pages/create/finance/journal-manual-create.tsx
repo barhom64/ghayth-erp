@@ -162,10 +162,10 @@ export default function JournalManualCreatePage() {
                           <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
                         </td>
                         <td className="px-2 py-1">
-                          <NumberField label="مدين" className="w-24" min={0} value={line.debit || ""} onChange={v => updateLine(i, "debit", v)} placeholder="0" />
+                          <NumberField label="مدين" hideLabel className="w-24" min={0} value={line.debit || ""} onChange={v => updateLine(i, "debit", v)} placeholder="0" />
                         </td>
                         <td className="px-2 py-1">
-                          <NumberField label="دائن" className="w-24" min={0} value={line.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
+                          <NumberField label="دائن" hideLabel className="w-24" min={0} value={line.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
                         </td>
                         <td className="px-2 py-1">
                           <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-status-error-foreground text-lg leading-none">&times;</button>

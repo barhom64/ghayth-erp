@@ -46,6 +46,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { AllocationHealthCard } from "@/components/shared/allocation-health-card";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 /**
  * Finance Dashboard — R.1.5 of the Reference UI/UX phase.
  *
@@ -292,10 +293,74 @@ export default function FinanceDashboard() {
               قيد يدوي جديد
             </Link>
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_dashboard"
+            entityId="summary"
+            size="icon"
+            payload={{
+              entity: { title: "لوحة المالية — ملخص", total: 6 },
+              items: [
+                { "البند": "إجمالي الإيرادات", "القيمة": Number((summary.data as any)?.revenue ?? 0) },
+                { "البند": "الذمم المستحقة", "القيمة": Number(sOut) },
+                { "البند": "إجمالي المصروفات", "القيمة": Number((summary.data as any)?.expenses ?? 0) },
+                { "البند": "الضمانات النشطة (عدد)", "القيمة": guarantees.length },
+                { "البند": "قيود معلقة للاعتماد", "القيمة": pendingJournals.length },
+                { "البند": "حالة الفترة المالية", "القيمة": periods[0]?.status ?? "—" },
+              ],
+            }}
+          />
         </div>
       }
     >
       <FinanceTabsNav />
+
+      {/* ── Quick Create row — one-click access to the everyday financial
+           creation flows. Addresses the operator complaint that finance
+           shortcuts didn't exist: dashboards alone don't help when the
+           daily work is "issue an invoice / record an expense / log a
+           voucher". Each tile lands directly on the create form. ── */}
+      <div className="mb-3">
+        <div className="text-xs text-muted-foreground mb-1">إنشاء سريع</div>
+        <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-9 gap-2">
+          <Link href="/finance/invoices/create" className="border rounded p-2 text-center hover:bg-status-info-surface transition group flex flex-col items-center gap-1">
+            <FileText className="h-4 w-4 text-status-info-foreground" />
+            <div className="text-xs font-semibold">فاتورة</div>
+          </Link>
+          <Link href="/finance/expenses/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+            <Receipt className="h-4 w-4 text-destructive" />
+            <div className="text-xs font-semibold">مصروف</div>
+          </Link>
+          <Link href="/finance/vouchers/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+            <Wallet className="h-4 w-4" />
+            <div className="text-xs font-semibold">سند صرف</div>
+          </Link>
+          <Link href="/finance/journal/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+            <Edit className="h-4 w-4" />
+            <div className="text-xs font-semibold">قيد يومية</div>
+          </Link>
+          <Link href="/finance/customer-advances/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+            <Plus className="h-4 w-4 text-emerald-600" />
+            <div className="text-xs font-semibold">دفعة مقدمة</div>
+          </Link>
+          <Link href="/finance/purchase-orders/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+            <Send className="h-4 w-4" />
+            <div className="text-xs font-semibold">أمر شراء</div>
+          </Link>
+          <Link href="/finance/purchase-requests/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+            <MessageCircle className="h-4 w-4" />
+            <div className="text-xs font-semibold">طلب شراء</div>
+          </Link>
+          <Link href="/finance/custodies/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+            <ShieldCheck className="h-4 w-4" />
+            <div className="text-xs font-semibold">عهدة</div>
+          </Link>
+          <Link href="/finance/recurring-journals/create" className="border rounded p-2 text-center hover:bg-muted/30 transition flex flex-col items-center gap-1">
+            <Clock className="h-4 w-4" />
+            <div className="text-xs font-semibold">قيد متكرر</div>
+          </Link>
+        </div>
+      </div>
+
       {/* ── Allocation engine health — surfaced at the top of finance so the
            enforce flag + coverage % + bypass count are always visible from
            the home page, not buried in settings (integration polish). ── */}

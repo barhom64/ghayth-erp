@@ -283,17 +283,6 @@ function TemplatesTab() {
   const [newTitle, setNewTitle] = useState("");
   const [newBody, setNewBody] = useState("");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
-  const templates = asList(templatesData);
-  const grouped = templates.reduce((acc: Record<string, Array<Record<string, unknown>>>, t: Record<string, unknown>) => {
-    const key = t.templateKey as string;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(t);
-    return acc;
-  }, {} as Record<string, Array<Record<string, unknown>>>);
-
   const saveEditMut = useApiMutation<any, { id: number; titleTemplate: string | null; bodyTemplate: string }>(
     (body) => `/notification-engine/templates/${body.id}`,
     "PUT",
@@ -324,6 +313,17 @@ function TemplatesTab() {
     [["notif-templates"]],
     { successMessage: "تم الحذف" }
   );
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
+
+  const templates = asList(templatesData);
+  const grouped = templates.reduce((acc: Record<string, Array<Record<string, unknown>>>, t: Record<string, unknown>) => {
+    const key = t.templateKey as string;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(t);
+    return acc;
+  }, {} as Record<string, Array<Record<string, unknown>>>);
 
   const saveEdit = () => {
     if (!editId) return;

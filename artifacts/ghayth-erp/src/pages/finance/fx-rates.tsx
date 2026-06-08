@@ -13,6 +13,8 @@ import { formatNumber, formatDateAr, todayLocal } from "@/lib/formatters";
 import { Globe, Plus, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface FxRate {
   id: number;
@@ -78,10 +80,13 @@ export default function FxRatesPage() {
 
   const upsertMut = useApiMutation("/finance/fx/rates", "POST", [["fx-rates"]]);
 
+  const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const rows = data?.data ?? [];
 
   const handleSubmit = async () => {
     if (!form.rate || Number(form.rate) <= 0) {
@@ -152,9 +157,26 @@ export default function FxRatesPage() {
         { label: "أسعار الصرف" },
       ]}
       actions={
-        <GuardedButton perm="finance:create" onClick={() => setShowForm((s) => !s)}>
-          <Plus className="h-4 w-4 me-1" /> {showForm ? "إلغاء" : "إضافة سعر صرف"}
-        </GuardedButton>
+        <>
+          <GuardedButton perm="finance:create" onClick={() => setShowForm((s) => !s)}>
+            <Plus className="h-4 w-4 me-1" /> {showForm ? "إلغاء" : "إضافة سعر صرف"}
+          </GuardedButton>
+          <PrintButton
+            entityType="report_finance_fx_rates"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "أسعار صرف العملات", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "التاريخ": r.effectiveDate || "—",
+                "من": r.fromCurrency || "—",
+                "إلى": r.toCurrency || "—",
+                "السعر": Number(r.rate ?? 0).toFixed(6),
+                "المصدر": SOURCE_LABEL[r.source] ?? r.source ?? "—",
+              })),
+            })}
+          />
+        </>
       }
     >
       <FinanceTabsNav />
@@ -290,6 +312,7 @@ export default function FxRatesPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage="لا توجد أسعار صرف لهذي الفلاتر"
           />

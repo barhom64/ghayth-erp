@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatNumber } from "@/lib/formatters";
 import { ShieldAlert, RefreshCw, Globe, Calendar, AlertTriangle } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface OverrideRecord {
   id: number;
@@ -44,10 +46,13 @@ export default function ApprovalOverridesReportPage() {
     `/approval-actions/overrides/report${suffix}`,
   );
 
+  const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const rows = data?.data ?? [];
 
   const uniqueUsers = new Set(rows.map((r) => r.userId)).size;
   const uniqueEntities = new Set(rows.map((r) => `${r.entity}#${r.entityId ?? "?"}`)).size;
@@ -121,10 +126,29 @@ export default function ApprovalOverridesReportPage() {
         { label: "تجاوز Workflow" },
       ]}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
-          تحديث
-        </Button>
+        <>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
+            تحديث
+          </Button>
+          <PrintButton
+            entityType="report_admin_approval_overrides"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "سجل تجاوز Workflow", total: printRows.length },
+              items: printRows.map((r) => ({
+                "الوقت": r.createdAt || "—",
+                "المسؤول": r.userEmail ?? `user#${r.userId}`,
+                "الإجراء": r.action || "—",
+                "الكيان": r.entity || "—",
+                "رقم الكيان": r.entityId ?? "—",
+                "السبب": r.reason || "—",
+                "IP": r.ipAddress || "—",
+              })),
+            })}
+          />
+        </>
       }
     >
       <Card className="mb-4 border-red-300 bg-red-50/30">
@@ -196,6 +220,7 @@ export default function ApprovalOverridesReportPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               from || to

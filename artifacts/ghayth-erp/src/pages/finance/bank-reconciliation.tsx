@@ -19,6 +19,7 @@ import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 export default function BankReconciliationPage() {
   const [activeBatch, setActiveBatch] = useState<string | null>(null);
   const [accountCode, setAccountCode] = useState("1120");
@@ -147,6 +148,24 @@ export default function BankReconciliationPage() {
               ورقة تسوية
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_bank_reconciliation"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "دفعات التسوية البنكية", total: batches.length },
+              items: batches.map((b: any) => ({
+                "المجموعة": b.batchRef || b.id || "—",
+                "الحساب": b.accountCode || "—",
+                "تاريخ البدء": b.startDate || "—",
+                "تاريخ الانتهاء": b.endDate || "—",
+                "عدد السطور": b.linesCount ?? "—",
+                "مطابق": b.matchedCount ?? "—",
+                "غير مطابق": b.unmatchedCount ?? "—",
+                "الحالة": b.status || "—",
+              })),
+            }}
+          />
         </div>
       }
     >
@@ -160,7 +179,7 @@ export default function BankReconciliationPage() {
               <Select value={accountCode} onValueChange={setAccountCode}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {bankAccOptions.length > 0 ? bankAccOptions.map((a: any) => (
+                  {bankAccOptions.length > 0 ? bankAccOptions.filter((a: any) => a.code).map((a: any) => (
                     <SelectItem key={a.code} value={a.code}>{a.code} - {a.name}</SelectItem>
                   )) : (
                     <>

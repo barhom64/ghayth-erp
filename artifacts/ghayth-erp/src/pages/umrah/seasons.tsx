@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { formatDateAr } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { formatUmrahDate } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +15,7 @@ import {
   type DataTableColumn,
   PageStatusBadge,
   PageShell,
+  resolveStatus,
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
@@ -22,6 +25,7 @@ export default function UmrahSeasons() {
   const [, navigate] = useLocation();
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const items = resp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>({});
   const { toast } = useToast();
@@ -50,8 +54,8 @@ export default function UmrahSeasons() {
 
   const columns: DataTableColumn<any>[] = [
     { key: "title", header: "العنوان", sortable: true, searchable: true },
-    { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => formatDateAr(r.startDate) },
-    { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => formatDateAr(r.endDate) },
+    { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => formatUmrahDate(r.startDate) },
+    { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => formatUmrahDate(r.endDate) },
     { key: "status", header: "الحالة", render: (r: any) => <PageStatusBadge status={r.status} /> },
     {
       key: "actions" as any, header: "إجراءات", render: (r: any) =>
@@ -67,7 +71,27 @@ export default function UmrahSeasons() {
       subtitle="إدارة مواسم العمرة"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "مواسم العمرة" }]}
       loading={isLoading}
-      actions={<GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />موسم جديد</GuardedButton>}
+      actions={
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_seasons"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "مواسم العمرة", total: printRows.length },
+              items: printRows.map((s: any) => ({
+                "الاسم": s.name || "—",
+                "السنة الهجرية": s.hijriYear || "—",
+                "السنة الميلادية": s.gregorianYear || "—",
+                "تاريخ البدء": s.startDate || "—",
+                "تاريخ النهاية": s.endDate || "—",
+                "الحالة": (s.status && resolveStatus(s.status)?.label) ?? s.status ?? "—",
+              })),
+            })}
+          />
+          <GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />موسم جديد</GuardedButton>
+        </div>
+      }
     >
       <UmrahTabsNav />
       <div className="flex gap-3 text-sm text-muted-foreground">

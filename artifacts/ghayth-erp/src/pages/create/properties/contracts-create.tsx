@@ -82,9 +82,6 @@ export default function ContractsCreate() {
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
-  if (loadingU || loadingT || loadingO) return <LoadingSpinner />;
-  if (errorU || errorT || errorO) return <ErrorState />;
-
   const set = (field: string, value: any) => {
     setIsDirty(true);
     setForm(prev => {
@@ -145,6 +142,9 @@ export default function ContractsCreate() {
     }
     return items;
   }, [form.startDate, form.endDate, form.monthlyRent, form.paymentFrequency, form.paymentDay, form.totalContractValue, form.numberOfInstallments]);
+
+  if (loadingU || loadingT || loadingO) return <LoadingSpinner />;
+  if (errorU || errorT || errorO) return <ErrorState />;
 
   const handleSubmit = async () => {
     const firstError = validate({

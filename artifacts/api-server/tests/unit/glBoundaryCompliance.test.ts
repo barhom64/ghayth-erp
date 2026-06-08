@@ -22,6 +22,7 @@ const ALLOWED_PATHS = new Set([
   "src/lib/recurringJournalProcessor.ts",
   "src/lib/umrahImportEngine.ts",
   "src/lib/umrahInvoicingEngine.ts",
+  "src/lib/umrahReclassifyEngine.ts",
   "src/lib/umrahCommissionEngine.ts",
   "src/lib/eventListeners.ts",
   "src/lib/saudi-compliance/mudad/post-salary-journal.ts",

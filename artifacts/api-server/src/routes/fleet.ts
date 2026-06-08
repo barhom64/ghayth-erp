@@ -22,10 +22,56 @@ import { getVehicleStatusImpact } from "../lib/impactPreview.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { registerObligation, markObligationMet, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
-import { fleetEngine } from "../lib/engines/index.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
+import { fleetEngine, hrEngine } from "../lib/engines/index.js";
 import { z } from "zod";
 
 // ─── Zod schemas for POST route body validation ─────────────────────────────
+
+// #1733 Phase 2 — KSA-aligned license-class enum used by the
+// eligibility helper (lib/fleet/driverEligibility.ts). The driver row
+// carries `licenseClass`; the vehicle row carries `requiredLicenseClass`;
+// the helper enforces hierarchy + override rules at cargo/umrah
+// assignment time.
+const LICENSE_CLASS_VALUES = [
+  "private", "light_trans", "medium", "heavy",
+  "public_trans", "motorcycle", "equipment",
+] as const;
+
+// #1733 Blocker #2 — vehicle technical profile.
+// Optional everywhere: the field set is large and most callers fill it
+// in incrementally (operator creates a stub, mechanic finishes the
+// profile). The capacity validator treats NULL as "unknown" — no hard
+// block, soft warning — so legacy vehicles keep working.
+const vehicleTechnicalProfileSchema = z.object({
+  vehicleType: z.enum(["truck", "bus", "van", "pickup", "sedan", "trailer", "equipment"]).optional(),
+  payloadKg: z.coerce.number().nonnegative().optional(),
+  boxLengthCm: z.coerce.number().int().nonnegative().optional(),
+  boxWidthCm: z.coerce.number().int().nonnegative().optional(),
+  boxHeightCm: z.coerce.number().int().nonnegative().optional(),
+  axleCount: z.coerce.number().int().positive().optional(),
+  tireCount: z.coerce.number().int().positive().optional(),
+  tireSize: z.string().max(50).optional(),
+  engineDisplacementCc: z.coerce.number().int().positive().optional(),
+  transmissionType: z.enum(["manual", "automatic", "amt", "cvt"]).optional(),
+  seatCount: z.coerce.number().int().positive().optional(),
+  hasAc: z.boolean().optional(),
+  screenCount: z.coerce.number().int().nonnegative().optional(),
+  doorCount: z.coerce.number().int().positive().optional(),
+  upholsteryType: z.enum(["fabric", "leather", "premium"]).optional(),
+  safetyFeatures: z.array(z.string()).optional(),
+  operatingHours: z.coerce.number().nonnegative().optional(),
+  equipmentAttachments: z.array(z.string()).optional(),
+});
+
+// #1733 Pricing tier (Issue Comment 3) — driverServiceProfile extends
+// the #1761 licence-class guard with a service-type specialisation.
+// A driver might hold the right class for a bus but only be trained
+// for cargo runs; the dispatch board filters accordingly.
+const DRIVER_SERVICE_PROFILES = [
+  "cargo_driver", "umrah_driver", "passenger_driver", "rental_driver", "mixed",
+] as const;
+
 const createVehicleSchema = z.object({
   plateNumber: z.string().min(1),
   make: z.string().min(1),
@@ -50,7 +96,11 @@ const createVehicleSchema = z.object({
   // stripped the fields and both were dead.
   purchasePrice: z.coerce.number().optional(),
   purchaseDate: z.string().optional(),
-});
+  // #1733 Phase 2 — eligibility guard reads this column on cargo /
+  // umrah assignment to refuse drivers who don't hold (or cover) the
+  // required class.
+  requiredLicenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
+}).merge(vehicleTechnicalProfileSchema);
 
 const createDriverSchema = z.object({
   name: z.string().min(1),
@@ -58,6 +108,11 @@ const createDriverSchema = z.object({
   licenseNumber: z.string().min(1),
   licenseExpiry: z.string().optional(),
   licenseType: z.string().optional(),
+  licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
+  // #1733 Pricing tier — service-type specialisation. Used by the
+  // dispatch board to surface only drivers whose profile matches the
+  // booking's transportServiceType.
+  driverServiceProfile: z.enum(DRIVER_SERVICE_PROFILES).optional(),
   employeeId: z.coerce.number().optional(),
   status: z.string().optional(),
 });
@@ -122,7 +177,10 @@ const updateVehicleSchema = z.object({
   plateType: z.string().optional(),
   sequenceNumber: z.string().optional(),
   vinNumber: z.string().optional(),
-});
+  // #1733 Phase 2 — PATCHable so operators can set / change the
+  // required class without re-creating the vehicle row.
+  requiredLicenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
+}).merge(vehicleTechnicalProfileSchema);
 
 const updateDriverSchema = z.object({
   name: z.string().optional(),
@@ -131,6 +189,8 @@ const updateDriverSchema = z.object({
   licenseExpiry: z.string().optional(),
   status: z.string().optional(),
   licenseType: z.string().optional(),
+  licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
+  driverServiceProfile: z.enum(DRIVER_SERVICE_PROFILES).optional(),
 });
 
 const createTripSchema = z.object({
@@ -354,7 +414,42 @@ router.get("/vehicles", authorize({ feature: "fleet.vehicles", action: "list" })
     if (status) { where += ` AND v.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (dateFrom) { where += ` AND v."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
     if (dateTo) { where += ` AND v."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT v.*, d.name AS "driverName", (SELECT COUNT(*) FROM gov_integration_links gl WHERE gl."entityType" = 'vehicle' AND gl."entityId" = v.id AND gl."companyId" = v."companyId")::int AS "govLinkCount", (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id AND fi."companyId" = v."companyId" AND fi."deletedAt" IS NULL) AS "insuranceExpiry" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL WHERE ${where} AND v."deletedAt" IS NULL ORDER BY v.id DESC LIMIT 500`, params);
+    // Dedicated binding for the gov_counts + insurance CTEs so we
+    // don't depend on any specific position inside the scoped where
+    // clause (which may pass companyId as an array via = ANY($1)).
+    params.push(scope.companyId);
+    const govCompanyIdx = paramIdx++;
+    // Pre-aggregate gov_integration_links + fleet_insurance once
+    // each instead of running scalar subqueries per row. The original
+    // pair of SELECT-list correlated subqueries was N+1: postgres
+    // planned one execution PER returned row, so 500 vehicles = 1001
+    // index lookups (501 gov + 500 insurance). Two CTEs scan each
+    // table once and the main SELECT LEFT JOINs the aggregates.
+    const rows = await rawQuery<Record<string, unknown>>(
+      `WITH gov_counts AS (
+         SELECT "entityId", COUNT(*) AS "govLinkCount"
+         FROM gov_integration_links
+         WHERE "entityType" = 'vehicle' AND "companyId" = $${govCompanyIdx}
+         GROUP BY "entityId"
+       ),
+       insurance_expiry AS (
+         SELECT "vehicleId", MAX("endDate") AS "insuranceExpiry"
+         FROM fleet_insurance
+         WHERE "companyId" = $${govCompanyIdx} AND "deletedAt" IS NULL
+         GROUP BY "vehicleId"
+       )
+       SELECT v.*,
+              d.name AS "driverName",
+              COALESCE(gc."govLinkCount", 0)::int AS "govLinkCount",
+              ie."insuranceExpiry"
+       FROM fleet_vehicles v
+       LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL
+       LEFT JOIN gov_counts gc ON gc."entityId" = v.id
+       LEFT JOIN insurance_expiry ie ON ie."vehicleId" = v.id
+       WHERE ${where} AND v."deletedAt" IS NULL
+       ORDER BY v.id DESC LIMIT 500`,
+      params,
+    );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Fleet vehicles error:"); }
 });
@@ -392,11 +487,30 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
-      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null]
+      `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate","requiredLicenseClass",
+        "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,
+        $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)`,
+      [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null, b.requiredLicenseClass || null,
+        b.vehicleType ?? null, b.payloadKg ?? null, b.boxLengthCm ?? null, b.boxWidthCm ?? null, b.boxHeightCm ?? null, b.axleCount ?? null, b.tireCount ?? null, b.tireSize ?? null, b.engineDisplacementCc ?? null, b.transmissionType ?? null, b.seatCount ?? null, b.hasAc ?? null, b.screenCount ?? null, b.doorCount ?? null, b.upholsteryType ?? null, b.safetyFeatures ? JSON.stringify(b.safetyFeatures) : null, b.operatingHours ?? null, b.equipmentAttachments ? JSON.stringify(b.equipmentAttachments) : null]
     );
     assertInsert(insertId, "fleet_vehicles");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    // Vehicle → custody subsidiary (fuel-card / parking-deposit cash
+    // held on the plate) + cost-centre nested under the vehicle's branch
+    // (per-vehicle maintenance + fuel cost roll-up). Both fire-and-
+    // forget — the vehicle create must succeed regardless.
+    const vehicleLabel = `${b.make} ${b.model} — ${b.plateNumber}`;
+    createSubsidiaryAccountsForEntity(scope.companyId, "vehicle", insertId, vehicleLabel)
+      .catch((e) => logger.error(e, "vehicle subsidiary auto-create failed"));
+    createCostCenterForEntity(
+      scope.companyId, "vehicle", insertId, vehicleLabel,
+      {
+        parentEntityType: (b.branchId || scope.branchId) ? "branch" : null,
+        parentEntityId: b.branchId ?? scope.branchId ?? null,
+        actorUserId: scope.userId,
+      },
+    ).catch((e) => logger.error(e, "vehicle cost-centre auto-create failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_vehicles", entityId: insertId,
@@ -447,6 +561,250 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     }
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create vehicle error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Driver self-service surface (#1354).
+//
+// Replaces the standalone /driver-portal/* JWT-separated app. Drivers
+// log in with their regular ERP credentials (employees / users), get
+// the `driver` role on their employee_assignment, and call the same
+// endpoints below — bound to req.scope.employeeId via fleet_drivers.
+//
+// This is the architecturally-correct shape: one auth, one RBAC, one
+// session boundary. A driver who's fired (assignment ended) loses
+// access immediately — no separate driver_portal_accounts row to
+// chase. The operator-side fleet.cargo + fleet.trips features stay
+// invisible to the driver because the role doesn't carry them.
+// ─────────────────────────────────────────────────────────────────────────
+async function resolveDriverFromScope(req: import("express").Request): Promise<{ id: number; companyId: number; status: string } | null> {
+  const scope = req.scope!;
+  if (!scope.employeeId) return null;
+  const [driver] = await rawQuery<{ id: number; companyId: number; status: string }>(
+    `SELECT id, "companyId", status FROM fleet_drivers
+      WHERE "employeeId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+      LIMIT 1`,
+    [scope.employeeId, scope.companyId]
+  );
+  return driver ?? null;
+}
+
+router.get("/me", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const [row] = await rawQuery(
+      `SELECT id, name, phone, "licenseNumber", "licenseExpiry", "licenseType",
+              status, rating, "totalTrips"
+         FROM fleet_drivers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [driver.id, driver.companyId]
+    );
+    res.json({ data: row });
+  } catch (err) { handleRouteError(err, res, "Driver self-profile error:"); }
+});
+
+router.patch("/me/availability", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const status = String(req.body?.status ?? "");
+    if (status !== "available" && status !== "off_duty") {
+      throw new ValidationError("الحالة يجب أن تكون 'available' أو 'off_duty'");
+    }
+    if (driver.status === "on_trip") {
+      throw new ConflictError("لا يمكن تغيير الحالة أثناء وجود رحلة جارية");
+    }
+    if (driver.status === "suspended") {
+      throw new ConflictError("الحساب موقوف، الرجاء التواصل مع الإدارة");
+    }
+    await rawExecute(
+      `UPDATE fleet_drivers SET status = $1, "updatedAt" = NOW()
+        WHERE id = $2 AND "companyId" = $3`,
+      [status, driver.id, driver.companyId]
+    );
+    void createAuditLog({ companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "fleet_drivers", entityId: driver.id,
+      before: { status: driver.status }, after: { status, source: "driver_self" } });
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.driver.availability_changed", entity: "fleet_drivers", entityId: driver.id,
+      details: JSON.stringify({ from: driver.status, to: status, source: "driver_self" }) });
+    res.json({ data: { status } });
+  } catch (err) { handleRouteError(err, res, "Driver availability error:"); }
+});
+
+router.get("/me/trips", authorize({ feature: "fleet.trips.my", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) { res.json({ data: [] }); return; }
+    const { status } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [driver.id, scope.companyId];
+    let where = `t."driverId" = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL`;
+    if (status) { params.push(status); where += ` AND t.status = $${params.length}`; }
+    const rows = await rawQuery(
+      `SELECT t.id, t.status, t."startTime" AS "tripDate", t."startTime", t."endTime",
+              t."fromLocation", t."toLocation", t.distance, t.cost, t.notes,
+              v."plateNumber" AS "vehiclePlate"
+         FROM fleet_trips t
+         LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId" AND v."companyId" = t."companyId" AND v."deletedAt" IS NULL
+        WHERE ${where}
+        ORDER BY COALESCE(t."startTime", t."createdAt") DESC LIMIT 200`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "Driver trips error:"); }
+});
+
+router.post("/me/trips/:id/start", authorize({ feature: "fleet.trips.my", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const id = parseId(req.params.id, "id");
+    const [trip] = await rawQuery<{ status: string }>(
+      `SELECT status FROM fleet_trips
+        WHERE id = $1 AND "driverId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+      [id, driver.id, scope.companyId]
+    );
+    if (!trip) throw new NotFoundError("الرحلة غير موجودة");
+    if (trip.status !== "scheduled" && trip.status !== "planned") {
+      throw new ConflictError(`لا يمكن بدء رحلة بحالة ${trip.status}`);
+    }
+    await rawExecute(
+      `UPDATE fleet_trips
+          SET status = 'in_progress', "startTime" = COALESCE("startTime", NOW()), "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.driver_started", entity: "fleet_trips", entityId: id,
+      details: JSON.stringify({ driverId: driver.id }) });
+    res.json({ data: { id, status: "in_progress" } });
+  } catch (err) { handleRouteError(err, res, "Driver trip-start error:"); }
+});
+
+router.post("/me/trips/:id/complete", authorize({ feature: "fleet.trips.my", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const id = parseId(req.params.id, "id");
+    const [trip] = await rawQuery<{ status: string }>(
+      `SELECT status FROM fleet_trips
+        WHERE id = $1 AND "driverId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+      [id, driver.id, scope.companyId]
+    );
+    if (!trip) throw new NotFoundError("الرحلة غير موجودة");
+    if (trip.status !== "in_progress") {
+      throw new ConflictError(`لا يمكن إنهاء رحلة بحالة ${trip.status}`);
+    }
+    await rawExecute(
+      `UPDATE fleet_trips
+          SET status = 'completed', "endTime" = COALESCE("endTime", NOW()), "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    // Free the driver (only flip when they're on_trip — operator-only states stay).
+    await rawExecute(
+      `UPDATE fleet_drivers SET status = 'available', "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 AND status = 'on_trip'`,
+      [driver.id, scope.companyId]
+    );
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.driver_completed", entity: "fleet_trips", entityId: id,
+      details: JSON.stringify({ driverId: driver.id }) });
+    res.json({ data: { id, status: "completed" } });
+  } catch (err) { handleRouteError(err, res, "Driver trip-complete error:"); }
+});
+
+router.get("/me/cargo", authorize({ feature: "fleet.cargo.my", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) { res.json({ data: [] }); return; }
+    const { status } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [driver.id, scope.companyId];
+    let where = `m."driverId" = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL`;
+    if (status) { params.push(status); where += ` AND m.status = $${params.length}`; }
+    const rows = await rawQuery(
+      `SELECT m.id, m."manifestNumber", m.status, m."fromLocation", m."toLocation",
+              m."pickupDate", m."deliveryDate", m."customerName", m."totalWeight",
+              v."plateNumber" AS "vehiclePlate"
+         FROM cargo_manifests m
+         LEFT JOIN fleet_vehicles v ON v.id = m."vehicleId" AND v."companyId" = m."companyId" AND v."deletedAt" IS NULL
+        WHERE ${where}
+        ORDER BY COALESCE(m."pickupDate", m."createdAt") DESC LIMIT 200`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "Driver cargo error:"); }
+});
+
+router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const id = parseId(req.params.id, "id");
+    const status = String(req.body?.status ?? "");
+    // #1733 Blocker #3 — driver-controlled forward path. The dispatcher
+    // owns draft / requested / approved / assigned_to_driver; the moment
+    // the assignment lands the driver carries it through the operational
+    // states up to `delivered`. Operational close (`completed`) and the
+    // billing-candidate handoff are dispatcher / accountant moves.
+    const DRIVER_ALLOWED_TRANSITIONS = [
+      "driver_accepted",
+      "trip_started",
+      "arrived_pickup",
+      "loaded",
+      "in_transit",
+      "arrived_delivery",
+      "delivered",
+    ];
+    if (!DRIVER_ALLOWED_TRANSITIONS.includes(status)) {
+      throw new ValidationError(
+        `الانتقال المسموح للسائق: ${DRIVER_ALLOWED_TRANSITIONS.join(" / ")}`,
+      );
+    }
+    const [manifest] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM cargo_manifests
+        WHERE id = $1 AND "driverId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+      [id, driver.id, scope.companyId]
+    );
+    if (!manifest) throw new NotFoundError("بوليصة الشحن غير موجودة");
+    const current = String(manifest.status);
+    // Strict forward-only walk. The dispatcher's machine in cargo.ts
+    // owns cancellation; this map only allows the driver to advance one
+    // step at a time so an operator can audit the timeline cleanly.
+    const allowed: Record<string, string[]> = {
+      assigned_to_driver: ["driver_accepted"],
+      driver_accepted:    ["trip_started"],
+      trip_started:       ["arrived_pickup"],
+      arrived_pickup:     ["loaded"],
+      loaded:             ["in_transit"],
+      in_transit:         ["arrived_delivery"],
+      arrived_delivery:   ["delivered"],
+    };
+    if (!(allowed[current] ?? []).includes(status)) {
+      throw new ConflictError(`الانتقال من ${current} إلى ${status} غير مسموح للسائق`);
+    }
+    await rawExecute(
+      `UPDATE cargo_manifests SET status = $1, "updatedAt" = NOW()
+        WHERE id = $2 AND "companyId" = $3`,
+      [status, id, scope.companyId]
+    );
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.cargo.manifest.status_changed", entity: "cargo_manifests", entityId: id,
+      details: JSON.stringify({ from: current, to: status, source: "driver_self" }) });
+
+    // #1733 Foundation — the driver's `delivered` tap never triggers
+    // any financial artefact. The dispatcher carries the manifest from
+    // `delivered → completed → ready_for_invoice`, and that last
+    // transition is where the candidate + service line are created
+    // (see cargo.ts PATCH /manifests/:id).
+    res.json({ data: { id, status } });
+  } catch (err) { handleRouteError(err, res, "Driver cargo-advance error:"); }
 });
 
 router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
@@ -512,10 +870,37 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.employeeId || null, b.status || 'available']
+      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","licenseClass","driverServiceProfile","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.licenseClass || null, b.driverServiceProfile || null, b.employeeId || null, b.status || 'available']
     );
     assertInsert(insertId, "fleet_drivers");
+
+    // Auto-grant the `driver` role on the linked employee's PRIMARY
+    // active assignment so the SSO flow lands them on /me/driver next
+    // login. Routes through hrEngine to respect the fleet→hr domain
+    // boundary (employee_assignments is HR-owned). The engine method
+    // only upgrades from the lowest tiers ('employee' / '') so a GM
+    // doing a one-off driver assignment isn't silently demoted.
+    if (b.employeeId) {
+      try {
+        const upgraded = await hrEngine.upgradePrimaryAssignmentRoleIfLowTier({
+          companyId: scope.companyId,
+          employeeId: b.employeeId,
+          toRole: "driver",
+        });
+        if (upgraded > 0) {
+          void emitEvent({
+            companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+            action: "hr.assignment.role_auto_upgraded", entity: "employee_assignments", entityId: 0,
+            details: JSON.stringify({ employeeId: b.employeeId, to: "driver", reason: "fleet_driver_linked" }),
+          });
+        }
+      } catch (assignErr) {
+        logger.warn({ err: assignErr, employeeId: b.employeeId },
+          "[fleet] auto-upgrade to driver role failed — HR can set manually");
+      }
+    }
+
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch((e) => logger.error(e, "fleet background task failed"));
@@ -541,7 +926,7 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
 
 // RBAC v2: vehicle detail with scope check + maskFields. Branch-scoped
 // roles see only their branch's vehicles.
-router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
+router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "fleet_vehicles", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vehicleId = parseId(req.params.id, "id");
@@ -640,7 +1025,13 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
 
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: unknown[] = [];
-    const trackedFields = ["plateNumber","make","model","year","color","status","fuelType","notes","assignedDriverId","registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","vinNumber"] as const;
+    const trackedFields = [
+      "plateNumber","make","model","year","color","status","fuelType","notes","assignedDriverId","registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","vinNumber",
+      // #1733 Phase 2 — eligibility guard reads this column at PATCH time.
+      "requiredLicenseClass",
+      // #1733 Blocker #2 — technical profile fields.
+      "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments",
+    ] as const;
     const colMap: Record<string, string> = {
       plateNumber: '"plateNumber"',
       make: "make",
@@ -658,14 +1049,39 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
       plateType: '"plateType"',
       sequenceNumber: '"sequenceNumber"',
       vinNumber: '"vinNumber"',
+      // #1733 Phase 2.
+      requiredLicenseClass: '"requiredLicenseClass"',
+      // #1733 Blocker #2 — technical profile column mapping.
+      vehicleType: '"vehicleType"',
+      payloadKg: '"payloadKg"',
+      boxLengthCm: '"boxLengthCm"',
+      boxWidthCm: '"boxWidthCm"',
+      boxHeightCm: '"boxHeightCm"',
+      axleCount: '"axleCount"',
+      tireCount: '"tireCount"',
+      tireSize: '"tireSize"',
+      engineDisplacementCc: '"engineDisplacementCc"',
+      transmissionType: '"transmissionType"',
+      seatCount: '"seatCount"',
+      hasAc: '"hasAc"',
+      screenCount: '"screenCount"',
+      doorCount: '"doorCount"',
+      upholsteryType: '"upholsteryType"',
+      safetyFeatures: '"safetyFeatures"',
+      operatingHours: '"operatingHours"',
+      equipmentAttachments: '"equipmentAttachments"',
     };
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     for (const f of trackedFields) {
       if (b[f] !== undefined && b[f] !== existing[f]) {
-        const val = (f === "registrationExpiry" || f === "inspectionDate" || f === "nextInspectionDate")
-          ? (b[f] || null)
-          : b[f];
+        let val: unknown = b[f];
+        if (f === "registrationExpiry" || f === "inspectionDate" || f === "nextInspectionDate") {
+          val = b[f] || null;
+        } else if (f === "safetyFeatures" || f === "equipmentAttachments") {
+          // jsonb columns — Array<string> must be stringified.
+          val = b[f] != null ? JSON.stringify(b[f]) : null;
+        }
         params.push(val);
         sets.push(`${colMap[f]}=$${params.length}`);
         before[f] = existing[f];
@@ -726,7 +1142,7 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
   } catch (err) { handleRouteError(err, res, "Update vehicle error:"); }
 });
 
-router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
+router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "fleet_vehicles", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -827,7 +1243,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       }
     }
 
-    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType"] as const;
+    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType","licenseClass","driverServiceProfile"] as const;
     const colMap: Record<string, string> = {
       name: "name",
       phone: "phone",
@@ -835,6 +1251,10 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       licenseExpiry: '"licenseExpiry"',
       status: "status",
       licenseType: '"licenseType"',
+      // #1733 Phase 2 — KSA driving-licence stack used by the eligibility guard.
+      licenseClass: '"licenseClass"',
+      // #1733 Pricing tier — service-type specialisation.
+      driverServiceProfile: '"driverServiceProfile"',
     };
     const sets: string[] = [];
     const params: unknown[] = [];
@@ -882,7 +1302,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
 
 // Drivers fall under the parent "fleet" feature; no dedicated catalog
 // entry yet. Delete checks scope against the drivers table.
-router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "drivers", idParam: "id" } }), async (req, res) => {
+router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "fleet_drivers", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1055,7 +1475,7 @@ router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), asyn
 
 // RBAC v2: trip detail. Drivers can have scope=self via fleet.trips.my
 // (self-service) for their own trips; managers via fleet.trips at branch.
-router.get("/trips/:id", authorize({ feature: "fleet.trips", action: "view", resource: { table: "trips", idParam: "id" } }), async (req, res) => {
+router.get("/trips/:id", authorize({ feature: "fleet.trips", action: "view", resource: { table: "fleet_trips", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
@@ -1143,11 +1563,29 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
     }
 
     if (!selectedVehicleId) {
+      // Pre-aggregate fleet_trips + fleet_insurance once instead of
+      // running scalar subqueries per row. Original was N+1: 20
+      // vehicles × 2 subqueries = ~41 round-trips. CTEs reduce to one
+      // scan per joined table.
       const vehicles = await rawQuery<Record<string, unknown>>(
-        `SELECT v.*,
-                (SELECT COUNT(*) FROM fleet_trips WHERE "vehicleId"=v.id AND status='completed' AND "deletedAt" IS NULL) AS "tripCount",
-                (SELECT MAX("endDate") FROM fleet_insurance WHERE "vehicleId"=v.id AND "companyId"=v."companyId" AND "deletedAt" IS NULL) AS "insuranceEnd"
+        `WITH v_trip_counts AS (
+           SELECT "vehicleId", COUNT(*) AS "tripCount"
+           FROM fleet_trips
+           WHERE status='completed' AND "deletedAt" IS NULL
+           GROUP BY "vehicleId"
+         ),
+         v_insurance_max AS (
+           SELECT "vehicleId", MAX("endDate") AS "insuranceEnd"
+           FROM fleet_insurance
+           WHERE "companyId"=$1 AND "deletedAt" IS NULL
+           GROUP BY "vehicleId"
+         )
+         SELECT v.*,
+                COALESCE(vtc."tripCount", 0)::int AS "tripCount",
+                vim."insuranceEnd"
          FROM fleet_vehicles v
+         LEFT JOIN v_trip_counts vtc ON vtc."vehicleId" = v.id
+         LEFT JOIN v_insurance_max vim ON vim."vehicleId" = v.id
          WHERE v."companyId"=$1 AND v.status='available' AND v."deletedAt" IS NULL
          ORDER BY v.id LIMIT 20`,
         [scope.companyId]
@@ -1172,12 +1610,25 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
     }
 
     if (!selectedDriverId) {
+      // Pre-aggregate fleet_trips counts once instead of running TWO
+      // scalar subqueries per row. Original was N+1: 20 drivers × 2
+      // subqueries = ~41 round-trips. The single CTE below uses
+      // FILTER to count both completed + in-progress in one scan.
       const drivers = await rawQuery<Record<string, unknown>>(
-        `SELECT d.*,
-                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='completed' AND "deletedAt" IS NULL) AS "tripCount",
-                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='in_progress' AND "deletedAt" IS NULL) AS "activeTrips",
+        `WITH d_trip_counts AS (
+           SELECT "driverId",
+                  COUNT(*) FILTER (WHERE status='completed') AS "tripCount",
+                  COUNT(*) FILTER (WHERE status='in_progress') AS "activeTrips"
+           FROM fleet_trips
+           WHERE "deletedAt" IS NULL
+           GROUP BY "driverId"
+         )
+         SELECT d.*,
+                COALESCE(dtc."tripCount", 0)::int AS "tripCount",
+                COALESCE(dtc."activeTrips", 0)::int AS "activeTrips",
                 COALESCE(d.rating, 3) AS "driverRating"
          FROM fleet_drivers d
+         LEFT JOIN d_trip_counts dtc ON dtc."driverId" = d.id
          WHERE d."companyId"=$1 AND d.status='available'
            AND d."deletedAt" IS NULL
            AND (d."licenseExpiry" IS NULL OR d."licenseExpiry" > CURRENT_DATE)

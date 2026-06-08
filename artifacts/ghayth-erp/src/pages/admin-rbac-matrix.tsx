@@ -30,6 +30,10 @@ export default function AdminRbacMatrix() {
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["rbac-matrix"], "/admin/governance/rbac-matrix"
   );
+  // Unified simplified Arabic permission-level catalog (PR: rbac levels).
+  // Read-only here — surfaces the intuitive vocabulary (عرض/مسودة/اعتماد/تحكم)
+  // a non-technical owner controls, instead of raw feature:action strings.
+  const { data: levelCatalog } = useApiQuery<any>(["rbac-levels"], "/rbac/v2/levels");
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
 
   const permissions = data?.permissions ?? [];
@@ -66,6 +70,39 @@ export default function AdminRbacMatrix() {
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
         <div className="space-y-6">
+          {/* النموذج المبسّط الموحّد — مستويات ونطاقات عربية لمستخدم غير تقني */}
+          {levelCatalog?.levels && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Shield className="w-4 h-4" /> النموذج المبسّط للصلاحيات
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">المستويات (من الأقل للأعلى):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {levelCatalog.levels.map((l: any) => (
+                      <Badge key={l.key} variant="outline" className="text-xs" title={l.descriptionAr}>
+                        {l.labelAr}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">نطاق السلطة:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {levelCatalog.scopeTiers?.map((t: any) => (
+                      <Badge key={t.key} variant="outline" className="text-xs bg-surface-subtle">
+                        {t.labelAr}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card>
               <CardContent className="p-4 text-center">

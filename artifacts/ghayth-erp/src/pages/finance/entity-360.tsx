@@ -18,6 +18,7 @@ import {
   Wallet, Layers, FileText, AlertCircle, Calendar,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Universal Entity 360° Financial View
@@ -210,6 +211,29 @@ export default function Entity360Page() {
         { href: "/finance", label: "المالية" },
         { label: "Entity 360" },
       ]}
+      actions={
+        enabled ? (
+          <PrintButton
+            entityType="report_finance_entity_360"
+            entityId={`${entityType}-${entityId}`}
+            size="icon"
+            payload={{
+              entity: { title: `Entity 360 — ${ENTITY_TYPE_LABEL[entityType]} #${entityId}`, total: transactions.length },
+              items: [
+                { "البند": "نوع الكيان", "القيمة": ENTITY_TYPE_LABEL[entityType] },
+                { "البند": "إجمالي المدين", "القيمة": Number(totalDebit) },
+                { "البند": "إجمالي الدائن", "القيمة": Number(totalCredit) },
+                { "البند": "صافي الحركة", "القيمة": Number(netMovement) },
+                { "البند": "عدد القيود", "القيمة": journalCount },
+                ...costBreakdown.map((c) => ({
+                  "البند": `حساب: ${c.code} — ${c.name}`,
+                  "القيمة": Number(c.netAmount || 0),
+                })),
+              ],
+            }}
+          />
+        ) : undefined
+      }
     >
       <FinanceTabsNav />
 

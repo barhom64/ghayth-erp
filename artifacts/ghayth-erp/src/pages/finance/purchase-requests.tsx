@@ -20,6 +20,8 @@ import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { ClipboardList, Plus, Send, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface PurchaseRequestItem {
   id: number;
@@ -128,10 +130,13 @@ export default function PurchaseRequestsPage() {
     setConvertTarget(null);
   };
 
+  const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const rows = data?.data ?? [];
 
   const draftCount     = rows.filter((r) => r.status === "draft").length;
   const pendingCount   = rows.filter((r) => r.status === "pending" || r.status === "submitted").length;
@@ -258,11 +263,30 @@ export default function PurchaseRequestsPage() {
         { label: "طلبات الشراء" },
       ]}
       actions={
-        <Link href="/finance/purchase-orders/create">
-          <GuardedButton perm="finance:create">
-            <Plus className="h-4 w-4 me-1" /> طلب جديد
-          </GuardedButton>
-        </Link>
+        <>
+          <Link href="/finance/purchase-orders/create">
+            <GuardedButton perm="finance:create">
+              <Plus className="h-4 w-4 me-1" /> طلب جديد
+            </GuardedButton>
+          </Link>
+          <PrintButton
+            entityType="report_finance_purchase_requests"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "طلبات الشراء", total: printRows.length },
+              items: printRows.map((r) => ({
+                "المرجع": r.ref,
+                "مقدم الطلب": r.requestedByName || "—",
+                "المورد المقترح": r.supplierName || "—",
+                "الإجمالي": Number(r.totalAmount || 0),
+                "تاريخ الإنشاء": r.createdAt || "—",
+                "عدد الأصناف": Array.isArray(r.items) ? r.items.length : "—",
+                "الحالة": STATUS_LABEL[r.status] || r.status,
+              })),
+            })}
+          />
+        </>
       }
     >
       <FinanceTabsNav />
@@ -341,6 +365,7 @@ export default function PurchaseRequestsPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={rows}
+            onSortedDataChange={setPrintRows}
             pageSize={30}
             emptyMessage={
               statusFilter

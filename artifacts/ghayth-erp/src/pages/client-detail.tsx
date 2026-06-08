@@ -11,6 +11,7 @@ import {
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -667,7 +668,7 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "tenancies" && (
-        <ClientRelationshipCard<any>
+        <ClientRelationshipCard
           icon={Home}
           title="الإيجارات المرتبطة"
           emptyMessage="لا توجد إيجارات مرتبطة بهذا العميل — اربط مستأجراً من صفحة تفاصيله ليظهر هنا"
@@ -690,7 +691,7 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "legal" && (
-        <ClientRelationshipCard<any>
+        <ClientRelationshipCard
           icon={Scale}
           title="القضايا القانونية"
           emptyMessage="لا توجد قضايا قانونية مرتبطة بهذا العميل"
@@ -766,8 +767,11 @@ export default function ClientDetail() {
             <EntityPrintButton
               entityType="client"
               entityId={client.id ?? params?.id}
-             
+
             />
+          )}
+          {client?.id != null && (
+            <EntityPnlButton entityType="client" entityId={Number(client.id)} />
           )}
           {client && (client.email || client.phone) && (
             <Button size="sm" variant="default" className="gap-1" onClick={() => setComposeOpen(true)}>
