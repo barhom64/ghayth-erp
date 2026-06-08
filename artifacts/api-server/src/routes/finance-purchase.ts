@@ -612,7 +612,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
       onApply: async (_row: any, client: any) => {
         const poRes = await client.query(
           `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"createdBy")
-           VALUES ($1,$2,$3,'pending',$4,$5,$6,$7) RETURNING id`,
+           VALUES ($1,$2,$3,'pending_approval',$4,$5,$6,$7) RETURNING id`,
           [scope.companyId, scope.branchId, poRef, totalAmount, pr.supplierId ?? null, pr.notes ?? null, scope.activeAssignmentId]
         );
         poId = poRes.rows[0].id;
@@ -770,7 +770,7 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
       });
       const result = await rawExecute(
         `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","createdBy")
-         VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$8)`,
+         VALUES ($1,$2,$3,'pending_approval',$4,$5,$6,$7,$8)`,
         [effectiveCompanyId, effectiveBranchId, issued.number, Number(totalAmount), supplierId, notes ?? null, expectedDelivery ?? null, scope.userId]
       );
       assertInsert(result.insertId, "purchase_orders");
@@ -2081,7 +2081,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
         onApply: async (_row: any, client: any) => {
           const poRes = await client.query(
             `INSERT INTO purchase_orders ("companyId",ref,"supplierId","requestId",status,"totalAmount","expectedDelivery","createdBy",notes,"branchId")
-             VALUES ($1,$2,$3,$4,'pending',$5,$6,$7,$8,$9) RETURNING id`,
+             VALUES ($1,$2,$3,$4,'pending_approval',$5,$6,$7,$8,$9) RETURNING id`,
             [
               scope.companyId,
               poRef,
