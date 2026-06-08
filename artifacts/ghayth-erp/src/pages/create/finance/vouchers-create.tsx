@@ -226,6 +226,36 @@ export default function VouchersCreate() {
     lineAllocation: allocTarget.target !== "none"
       ? buildAllocationPayload(allocTarget.allocation)
       : undefined,
+    // #1715 (owner gap-closure) — a سند can pay for maintenance / fuel / asset
+    // just like an expense, so it fires the SAME operational effects.
+    maintenanceTicket:
+      allocTarget.target === "vehicle_maintenance" || allocTarget.target === "property_maintenance"
+        ? {
+            create: true,
+            maintenanceType: allocTarget.maintenanceType || undefined,
+            odometer: allocTarget.odometer ? Number(allocTarget.odometer) : undefined,
+            costBearer: allocTarget.costBearer || undefined,
+            existingTicketId: allocTarget.existingTicketId ? Number(allocTarget.existingTicketId) : undefined,
+          }
+        : undefined,
+    assetCreation:
+      allocTarget.target === "fixed_asset" && allocTarget.createAsset && allocTarget.assetName
+        ? {
+            create: true,
+            name: allocTarget.assetName,
+            usefulLifeYears: allocTarget.assetUsefulLifeYears ? Number(allocTarget.assetUsefulLifeYears) : undefined,
+          }
+        : undefined,
+    fuelLog:
+      allocTarget.target === "vehicle" && allocTarget.createFuelLog
+        ? {
+            create: true,
+            liters: allocTarget.fuelLiters ? Number(allocTarget.fuelLiters) : undefined,
+            costPerLiter: allocTarget.fuelCostPerLiter ? Number(allocTarget.fuelCostPerLiter) : undefined,
+            odometer: allocTarget.fuelOdometer ? Number(allocTarget.fuelOdometer) : undefined,
+            stationName: allocTarget.fuelStation || undefined,
+          }
+        : undefined,
     ...extra,
   });
 
