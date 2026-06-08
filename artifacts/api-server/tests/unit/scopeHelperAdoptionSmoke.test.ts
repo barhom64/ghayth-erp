@@ -87,6 +87,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "notification-engine.ts",
   "numbering.ts",
   "obligations.ts",
+  // org.ts: admin CRUD for the operational enterprise model (#1799 §B —
+  // legal_entities, positions, teams, committees, supervision_lines,
+  // approval_authorities). Tight (companyId = $1) scoping is correct here:
+  // every list/write is per-company by design and templates (companyId
+  // IS NULL for positions) are read-only system rows.
+  "org.ts",
   "pdpl.ts",
   "permissions.ts",
   // parties.ts: master-data registry — point lookups by (companyId, entityTable,
@@ -135,6 +141,7 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // on (companyId, sourceTable.id) — buildScopedWhere has no branch
   // cascade to add for a cross-domain bridge.
   "transport-integration.ts",
+  "fleet-rules-admin.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -219,9 +226,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 111,
+      total: 113,
       helperUsers: 36,
-      manualOnly: 72,
+      manualOnly: 74,
     });
   });
 });

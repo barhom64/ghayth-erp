@@ -21,7 +21,7 @@ import {
   FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
-import { ROLE_OPTIONS } from "./shared";
+import { useRbacRoles } from "./use-rbac-roles";
 
 // Schema enforces email validity client-side (the old `!form.email`
 // guard accepted "x" as valid). employeeId stays a string until the
@@ -61,8 +61,11 @@ export function UsersTab() {
   const [showResetPw, setShowResetPw] = useState(false);
   const items = data?.data || [];
   const employees = employeesData?.data || [];
+  // Dynamic roles (custom roles included) — single shared source so every
+  // admin user screen stays in sync and a role you build is assignable.
+  const { options: roleOptions } = useRbacRoles();
 
-  const roleLabel = (r: string) => ROLE_OPTIONS.find(o => o.value === r)?.label || r;
+  const roleLabel = (r: string) => roleOptions.find(o => o.value === r)?.label || r;
 
   const createUser = async (values: NewUserForm) => {
     try {
@@ -213,7 +216,7 @@ export function UsersTab() {
           >
             <FormGrid cols={2}>
               <FormEmailField name="email" label="البريد الإلكتروني" required className="md:col-span-2" placeholder="user@company.com" />
-              <FormSelectField name="role" label="الدور الوظيفي" options={ROLE_OPTIONS} />
+              <FormSelectField name="role" label="الدور الوظيفي" options={roleOptions} />
               <div className="space-y-2">
                 <FormSelectField
                   name="employeeId"
