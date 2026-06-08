@@ -1117,6 +1117,44 @@ router.patch("/violations/:id/resolve", authorize({ feature: "admin", action: "u
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
+// Bulk-resolve open audit violations — governance backlog cleanup (the "1307
+// findings" case). Optional filters narrow to a type/priority/department;
+// an empty body resolves ALL open violations for the company in one action.
+const bulkResolveViolationsSchema = z.object({
+  type: z.string().optional(),
+  priority: z.enum(["critical", "high", "medium", "low"]).optional(),
+  department: z.string().optional(),
+}).strict();
+
+router.patch("/violations/bulk-resolve", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    await assertAdmin(req);
+    const scope = req.scope!;
+    const f = zodParse(bulkResolveViolationsSchema.safeParse(req.body ?? {}));
+    const conds = [`"companyId" = $1`, `status = 'open'`];
+    const params: unknown[] = [scope.companyId];
+    if (f.type) { params.push(f.type); conds.push(`type = $${params.length}`); }
+    if (f.priority) { params.push(f.priority); conds.push(`priority = $${params.length}`); }
+    if (f.department) { params.push(f.department); conds.push(`department = $${params.length}`); }
+    params.push(scope.activeAssignmentId || scope.userId);
+    const { affectedRows } = await rawExecute(
+      `UPDATE audit_violations SET status='resolved', "resolvedBy"=$${params.length}, "resolvedAt"=NOW() WHERE ${conds.join(" AND ")}`,
+      params
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "bulk_resolve", entity: "audit_violations", entityId: scope.companyId,
+      after: { resolved: affectedRows ?? 0, filters: f },
+    }).catch((e) => logger.error(e, "admin background task failed"));
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "admin.violations.bulk_resolved", entity: "audit_violations", entityId: scope.companyId,
+      details: JSON.stringify({ count: affectedRows ?? 0, filters: f }),
+    }).catch((e) => logger.error(e, "admin background task failed"));
+    res.json({ ok: true, resolved: affectedRows ?? 0, message: `تم إغلاق ${affectedRows ?? 0} مخالفة` });
+  } catch (err) { handleRouteError(err, res, "admin"); }
+});
+
 router.get("/security-log", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
