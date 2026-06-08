@@ -13,6 +13,7 @@ import { PageShell } from "@workspace/ui-core";
 import { ArrowLeft, Plus, Users, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
@@ -315,9 +316,46 @@ export default function TransportBookingCreate() {
               </div>
               {isUmrah && (
                 <>
-                  <div>
-                    <Label htmlFor="umrahGroupId">رقم مجموعة العمرة</Label>
-                    <Input id="umrahGroupId" type="number" min={0} value={umrahGroupId} onChange={(e) => setUmrahGroupId(e.target.value)} />
+                  <div className="md:col-span-2">
+                    <Label htmlFor="umrahGroupId">مجموعة العمرة (من النظام)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="umrahGroupId"
+                        type="number"
+                        min={0}
+                        value={umrahGroupId}
+                        onChange={(e) => setUmrahGroupId(e.target.value)}
+                        placeholder="اختر من القائمة لتعبئة البيانات تلقائياً"
+                        className="flex-1"
+                      />
+                      <UmrahGroupPicker
+                        onSelect={(g) => {
+                          setUmrahGroupId(String(g.id));
+                          // Auto-fill passenger count from the group's
+                          // mutamerCount — operator can still edit.
+                          if (g.mutamerCount > 0) {
+                            setPassengerCount(String(g.mutamerCount));
+                          }
+                          // Auto-fill customer name with group name as a
+                          // sensible default (the operator can override).
+                          if (!customerName && g.name) {
+                            setCustomerName(g.name);
+                          }
+                          // Flip booking source so audit trail shows the
+                          // link, not "manual_entry".
+                          setBookingSource("umrah_group");
+                          toast({
+                            title: `تم ربط المجموعة ${g.nuskGroupNumber}`,
+                            description: `${g.mutamerCount} معتمر — تم تعبئة عدد الركاب تلقائياً.`,
+                          });
+                        }}
+                      />
+                    </div>
+                    {umrahGroupId && (
+                      <div className="text-xs text-status-info-foreground mt-1">
+                        مرتبط بمجموعة العمرة #{umrahGroupId} — أي تعديل على عدد الركاب موثّق في سجل التدقيق.
+                      </div>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="flightNumber">رقم الرحلة</Label>

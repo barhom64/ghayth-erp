@@ -19,7 +19,7 @@ import {
   ListTodo, Clock, BookOpen, DollarSign, AlertTriangle, Printer,
   FileText, TrendingUp, Award, Activity, CheckCircle2,
   XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, Check, X,
-  KeyRound, ShieldCheck, Lock, Star
+  KeyRound, ShieldCheck, Lock, Star, FileSignature, Package
 } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -352,12 +352,18 @@ function ViolationTimeline({ violations }: { violations: any[] }) {
 // Roadmap (docs/HR_OPERATING_FOUNDATION_TASK.md §A.1) target is 14
 // tabs; this batch adds 2/5 of the missing ones.
 const TABS = [
+  // HR-012 / #1799 priority #1 — Employee 360 final 3 tabs complete
+  // the 14-tab target from the inventory. After this PR every section
+  // of an employee profile lives under one screen.
   { key: "overview", label: "نظرة شاملة", icon: Activity },
   { key: "info", label: "البيانات الشخصية", icon: User },
+  { key: "titles", label: "المسميات والمناصب", icon: Briefcase },
   { key: "account", label: "الحساب والدخول", icon: KeyRound },
   { key: "roles", label: "الأدوار والصلاحيات", icon: ShieldCheck },
+  { key: "contract", label: "العقد", icon: FileSignature },
   { key: "attendance", label: "الحضور", icon: Clock },
   { key: "leaves", label: "الإجازات", icon: Calendar },
+  { key: "custodies", label: "العهد والأصول", icon: Package },
   { key: "payroll", label: "الرواتب", icon: DollarSign },
   { key: "violations", label: "المخالفات", icon: AlertTriangle },
   { key: "tasks", label: "المهام", icon: ListTodo },
@@ -459,6 +465,13 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   // employee either has no account or has no rbac_user_roles grants.
   const userAccount: any = employee?.userAccount ?? null;
   const roles: any[] = employee?.roles || [];
+  // HR-012 — second expansion: contract is single-row or null,
+  // position is the admin position resolved from employee_assignments
+  // (NULL when assignment is uncategorized), custodies is the
+  // asset-bridge list (active first, then returned history).
+  const contract: any = employee?.contract ?? null;
+  const position: any = employee?.position ?? null;
+  const custodies: any[] = employee?.custodies || [];
 
   const hireDate = employee?.hireDate ? new Date(employee.hireDate) : null;
   const serviceDays = hireDate ? Math.floor((Date.now() - hireDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
@@ -504,7 +517,8 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             : tab.key === "payroll" ? payroll.length
             : tab.key === "violations" ? violations.length
             : tab.key === "attendance" ? attendance.length
-            : tab.key === "roles" ? roles.length : 0;
+            : tab.key === "roles" ? roles.length
+            : tab.key === "custodies" ? custodies.length : 0;
           return (
             <button
               key={tab.key}
@@ -933,6 +947,224 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                     عرض الصلاحيات الفعلية الكاملة (Effective Permissions) →
                   </a>
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* HR-012 / #1799 priority #1 — Tab: المسميات والمناصب.
+          Joins the assignment's professional jobTitle (existing) with
+          the new admin position (from §B migration 274). Same employee
+          can be «محامي» (job title) holding the position «مدير قسم
+          القانوني» (admin role) — both surfaces here. */}
+      {activeTab === "titles" && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-status-info-foreground" />
+              المسميات والمناصب
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">المسمى المهني (Job Title)</p>
+                <p className="text-sm font-medium">{employee?.jobTitle || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">المنصب الإداري (Position)</p>
+                {position ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{position.labelAr || position.positionKey}</span>
+                    {position.level != null && (
+                      <Badge variant="outline" className="text-[10px]">مستوى {position.level}</Badge>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    لم يُسند بعد — راجع §B في وثيقة الإصلاح
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">القسم</p>
+                <p className="text-sm">{employee?.departmentName || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">الفرع</p>
+                <p className="text-sm">{employee?.branchName || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">المدير المباشر</p>
+                <p className="text-sm">{employee?.managerName || <span className="text-muted-foreground italic">—</span>}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">الفئة (للسياسات)</p>
+                <p className="text-sm">
+                  {employee?.categoryKey || (
+                    <span className="text-muted-foreground italic">غير مصنّف</span>
+                  )}
+                </p>
+              </div>
+            </div>
+            {position?.description && (
+              <p className="text-xs text-muted-foreground mt-4 pt-3 border-t">
+                {position.description}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* HR-012 / #1799 priority #1 — Tab: العقد.
+          Loads the active employment contract (employee_contracts).
+          Salary is NOT surfaced here — it lives on the «الرواتب» tab
+          which has its own RBAC field-policy gate. */}
+      {activeTab === "contract" && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileSignature className="h-5 w-5 text-emerald-600" />
+              العقد
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!contract ? (
+              <div className="text-center py-6">
+                <FileSignature className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">لا يوجد عقد نشط.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  يمكن إنشاء العقد من <a href="/hr/contracts" className="text-primary hover:underline">شاشة العقود</a>.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">رقم العقد</p>
+                  <p className="font-mono text-sm">{contract.ref || `#${contract.id}`}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">نوع العقد</p>
+                  <p className="text-sm">{contract.contractType || "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">الحالة</p>
+                  <PageStatusBadge status={contract.status} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">حالة الاعتماد</p>
+                  <PageStatusBadge status={contract.approvalStatus} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">تاريخ البدء</p>
+                  <p className="text-sm">{contract.startDate ? formatDateAr(contract.startDate) : "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">تاريخ الانتهاء</p>
+                  <p className="text-sm">{contract.endDate ? formatDateAr(contract.endDate) : <span className="text-muted-foreground italic">غير محدد</span>}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">انتهاء فترة التجربة</p>
+                  <p className="text-sm">{contract.probationEndDate ? formatDateAr(contract.probationEndDate) : "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">حالة فترة التجربة</p>
+                  <p className="text-sm">{contract.probationStatus || "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">توقيع الموظف</p>
+                  {contract.signedByEmployee ? (
+                    <Badge className="bg-status-success-surface text-status-success-foreground">
+                      <CheckCircle2 className="h-3 w-3 me-1" /> موقّع
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">لم يوقّع</Badge>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* HR-012 / #1799 priority #1 — Tab: العهد والأصول.
+          Lists every asset (laptop, phone, SIM, etc.) from
+          employee_assets (§9 migration 276) — active first then
+          returned. Damage notes from condition fields surface as
+          tooltip. Used by exit-clearance to know what's outstanding. */}
+      {activeTab === "custodies" && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Package className="h-5 w-5 text-purple-600" />
+              العهد والأصول ({custodies.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {custodies.length === 0 ? (
+              <div className="text-center py-6">
+                <Package className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">لا توجد عهد مسجلة لهذا الموظف.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  يُسجَّل اللابتوب، الهاتف، SIM، المركبة، إلخ — كل ما يحوزه الموظف من أصول الشركة.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {custodies.map((asset) => {
+                  const isReturned = !!asset.returnedAt;
+                  return (
+                    <div
+                      key={asset.id}
+                      className={cn(
+                        "flex items-center justify-between gap-3 p-3 rounded-lg border",
+                        isReturned ? "opacity-60 bg-muted/30" : "bg-surface-subtle/30"
+                      )}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-purple-50">
+                          <Package className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm">
+                              {asset.assetLabel || asset.assetKey}
+                            </span>
+                            <Badge variant="outline" className="text-[10px]">
+                              {asset.assetType}
+                            </Badge>
+                            {isReturned ? (
+                              <Badge className="bg-status-success-surface text-status-success-foreground text-[10px]">
+                                مُعَاد
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-status-warning-surface text-status-warning-foreground text-[10px]">
+                                نشط
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                            <span className="font-mono">{asset.assetKey}</span>
+                            {asset.serialNumber && <span>· S/N: {asset.serialNumber}</span>}
+                          </div>
+                          {(asset.conditionOnAssign || asset.conditionOnReturn) && (
+                            <div className="text-[11px] text-muted-foreground mt-1">
+                              {asset.conditionOnAssign && <span>عند التسليم: {asset.conditionOnAssign}</span>}
+                              {asset.conditionOnReturn && <span> · عند الاسترداد: {asset.conditionOnReturn}</span>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-end text-xs text-muted-foreground shrink-0">
+                        <div>سُلّم: {asset.assignedAt ? formatDateAr(asset.assignedAt) : "—"}</div>
+                        {asset.returnedAt && (
+                          <div>أُعيد: {formatDateAr(asset.returnedAt)}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>
