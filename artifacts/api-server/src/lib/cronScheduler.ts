@@ -1,6 +1,8 @@
 import cron from "node-cron";
 import { randomUUID } from "node:crypto";
 import { rawQuery, rawExecute, pool, withTransaction } from "./rawdb.js";
+import { scoreEmployee, currentPeriodKey } from "./employeeScoringEngine.js";
+import { detectSignals, persistSignals } from "./employeeSignalsEngine.js";
 import { issueNumber } from "./numberingService.js";
 import { logger } from "./logger.js";
 import { config } from "./config.js";
@@ -1849,6 +1851,83 @@ async function weeklyClientClassification(): Promise<string> {
     }
   }
   return `Client classification: ${classified} updated`;
+}
+
+/**
+ * HR-009 / #1799 priority #10 — weekly + monthly score computation.
+ *
+ * Iterates every active assignment in every company, computes the
+ * 6-dimension composite score via `scoreEmployee`, then runs the
+ * signals engines (Risk/Promotion/Burnout) and persists them.
+ *
+ * Backed by:
+ *   - employee_scores (migration 272)        — the score itself
+ *   - employee_signals (migration 273)       — the manager-actionable
+ *                                              flags computed from
+ *                                              that score
+ *
+ * Idempotent on re-run: both write paths UPSERT on their unique key
+ * (assignment × scope × periodKey [× signalType for signals]).
+ *
+ * scope is passed in so a single handler can serve weekly + monthly +
+ * quarterly cron entries below.
+ */
+async function runEmployeeScoringPeriod(scope: "weekly" | "monthly" | "quarterly"): Promise<string> {
+  const periodKey = currentPeriodKey(scope);
+  let scored = 0;
+  let withSignals = 0;
+  // Pull every active assignment in every company. This is the same
+  // shape used by other HR cron handlers — single query, then per-row
+  // loop with try/catch so one failure doesn't abort the whole run.
+  const assignments = await rawQuery<{
+    id: number; employeeId: number; companyId: number; branchId: number | null;
+  }>(
+    `SELECT id, "employeeId", "companyId", "branchId"
+       FROM employee_assignments
+      WHERE status = 'active'`,
+  );
+  for (const a of assignments) {
+    try {
+      const result = await scoreEmployee({
+        companyId: a.companyId,
+        assignmentId: a.id,
+        employeeId: a.employeeId,
+        branchId: a.branchId,
+        scope,
+        periodKey,
+      });
+      scored++;
+      const signals = await detectSignals({
+        assignmentId: a.id,
+        scope,
+        periodKey,
+      });
+      if (signals.length > 0) {
+        await persistSignals({
+          companyId: a.companyId,
+          branchId: a.branchId,
+          assignmentId: a.id,
+          employeeId: a.employeeId,
+          scope,
+          periodKey,
+          compositeScore: result.composite,
+          signals,
+        });
+        withSignals++;
+      }
+    } catch (e) {
+      logger.error(e, `[cron] employee scoring failed for assignment ${a.id}`);
+    }
+  }
+  return `Employee scoring (${scope} ${periodKey}): ${scored} scored, ${withSignals} flagged`;
+}
+
+async function weeklyEmployeeScoring(): Promise<string> {
+  return runEmployeeScoringPeriod("weekly");
+}
+
+async function monthlyEmployeeScoring(): Promise<string> {
+  return runEmployeeScoringPeriod("monthly");
 }
 
 async function monthlyInventoryAudit(): Promise<string> {
@@ -4144,6 +4223,13 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_cash_flow", description: "فحص التدفق النقدي الأسبوعي", schedule: "0 9 * * 1", handler: weeklyCashFlowCheck },
   { name: "weekly_property_revenue", description: "إيرادات عقارية أسبوعية", schedule: "0 9 * * 1", handler: weeklyPropertyRevenue },
   { name: "weekly_client_classification", description: "تصنيف العملاء الأسبوعي", schedule: "0 2 * * 0", handler: weeklyClientClassification },
+  // HR-009 / #1799 priority #10 — scoring cron entries.
+  // Weekly runs at 03:00 every Monday (1 day after the weekly client
+  // classification, so the week's data has settled). Monthly runs at
+  // 04:00 on the 1st so dashboards show the prior month's score on
+  // day 1.
+  { name: "weekly_employee_scoring", description: "حساب درجات الموظف الأسبوعية + إشاراتها", schedule: "0 3 * * 1", handler: weeklyEmployeeScoring },
+  { name: "monthly_employee_scoring", description: "حساب درجات الموظف الشهرية + إشاراتها", schedule: "0 4 1 * *", handler: monthlyEmployeeScoring },
   { name: "monthly_inventory_audit", description: "جرد المخزون الشهري", schedule: "0 6 1 * *", handler: monthlyInventoryAudit },
   { name: "monthly_auto_depreciation", description: "إهلاك الأصول الثابتة التلقائي", schedule: "0 6 2 * *", handler: monthlyAutoDepreciation },
   { name: "yearly_leave_balance_renewal", description: "تجديد أرصدة الإجازات 1 يناير", schedule: "0 0 1 1 *", handler: yearlyLeaveBalanceRenewal },
