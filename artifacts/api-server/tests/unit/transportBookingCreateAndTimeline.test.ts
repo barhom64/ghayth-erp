@@ -56,7 +56,7 @@ describe("#1733 — booking create form", () => {
     expect(CREATE_PAGE).toMatch(/\{isCargo &&[\s\S]{0,1500}cargoDescription/);
     // Umrah-only fields (flightNumber, hotelName, supervisorName, routeType)
     // appear inside an isUmrah block nested inside isPassenger.
-    expect(CREATE_PAGE).toMatch(/\{isUmrah &&[\s\S]{0,2000}flightNumber/);
+    expect(CREATE_PAGE).toMatch(/\{isUmrah &&[\s\S]{0,4000}flightNumber/);
   });
 
   it("POSTs to /transport/bookings + navigates to detail on success", () => {

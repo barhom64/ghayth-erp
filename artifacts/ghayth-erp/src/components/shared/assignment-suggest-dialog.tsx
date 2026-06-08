@@ -142,9 +142,50 @@ export function AssignmentSuggestDialog({
           )}
           {candidates && candidates.length === 0 && !loading && !error && (
             <div className="text-center py-8 text-sm text-muted-foreground">
-              لم يجد النظام أي مرشّح مناسب. حاول توسيع النافذة الزمنية أو راجع
-              اتفاق العميل + نوع المركبة المطلوب.
+              لا توجد مركبات أو سائقون في الشركة، أو الحجز ليس له نافذة زمنية محددة.
+              تأكد من إعدادات الأسطول والسائقين أولاً.
             </div>
+          )}
+          {/* #1812 — when ALL candidates have HARD blockers (score 0),
+              the previous UX showed them ranked but didn't tell the
+              operator WHY everything failed. This aggregator surfaces
+              the dominant blocker reasons so they can fix the root
+              cause (e.g. "all drivers need rest" vs "no vehicle has
+              capacity"). */}
+          {candidates && candidates.length > 0 && candidates.every((c) => c.blockers.length > 0) && (
+            <Card className="border-rose-300 bg-rose-50">
+              <CardContent className="p-3 text-sm space-y-2">
+                <div className="font-medium text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  جميع المرشحين البالغ عددهم {candidates.length} لديهم عوائق صارمة. الأسباب الأكثر تكراراً:
+                </div>
+                {(() => {
+                  const counts = new Map<string, number>();
+                  for (const c of candidates) for (const b of c.blockers) {
+                    // Bucket by the leading phrase to dedupe minor
+                    // variations (e.g. specific values inside the message).
+                    const key = b.replace(/\d+(\.\d+)?/g, "N").slice(0, 80);
+                    counts.set(key, (counts.get(key) ?? 0) + 1);
+                  }
+                  const top = Array.from(counts.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+                  return (
+                    <ul className="text-xs text-rose-700 space-y-1">
+                      {top.map(([msg, count], i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <span className="font-mono bg-rose-100 px-1.5 rounded">{count}×</span>
+                          {msg}
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                })()}
+                <div className="text-xs text-muted-foreground">
+                  راجع إعدادات راحة السائقين، التعارضات الزمنية، أو اتفاق العميل (سياسة الاستبدال).
+                </div>
+              </CardContent>
+            </Card>
           )}
           {candidates && candidates.map((c, idx) => (
             <Card
