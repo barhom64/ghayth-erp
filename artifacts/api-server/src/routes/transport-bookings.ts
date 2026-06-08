@@ -140,6 +140,25 @@ const createBookingSchema = z.object({
   projectId: z.coerce.number().int().positive().optional(),
   waqfId: z.coerce.number().int().positive().optional(),
   costCenterId: z.coerce.number().int().positive().optional(),
+  // #1812 customer-agreement fields (Comment 3 — اتفاق العميل).
+  // The schema columns were added in migration 271; this surface
+  // lets operators actually set them on create/update.
+  requestedVehicleClass: z.string().max(32).optional(),
+  vehicleSubstitutionPolicy: z.enum([
+    "exact_only", "same_class_only", "equivalent_allowed",
+    "upgrade_allowed", "operator_approval", "customer_approval",
+  ]).optional(),
+  allowUpgrade: z.boolean().optional(),
+  requiredExactVehicleId: z.coerce.number().int().positive().optional(),
+  requiredExactDriverId: z.coerce.number().int().positive().optional(),
+  // #1812 time-window fields.
+  pickupWindowStart: z.string().optional(),
+  pickupWindowEnd: z.string().optional(),
+  dropoffWindowStart: z.string().optional(),
+  dropoffWindowEnd: z.string().optional(),
+  fixedAppointmentTime: z.string().optional(),
+  isFlexibleTime: z.boolean().optional(),
+  priority: z.coerce.number().int().optional(),
   notes: z.string().max(2000).optional(),
 });
 
@@ -315,10 +334,21 @@ transportBookingsRouter.post(
             "passengerCount", "umrahGroupId", "flightNumber", "supervisorName", "supervisorPhone",
             "hotelName", "hotelLocation",
             "beneficiaryType", "beneficiaryId", "projectId", "waqfId", "costCenterId",
+            "requestedVehicleClass", "vehicleSubstitutionPolicy", "allowUpgrade",
+            "requiredExactVehicleId", "requiredExactDriverId",
+            "pickupWindowStart", "pickupWindowEnd",
+            "dropoffWindowStart", "dropoffWindowEnd",
+            "fixedAppointmentTime", "isFlexibleTime", priority,
             notes, "createdBy")
          VALUES ($1,$2,$3,$4,$5, $6,$7,$8,$9, $10,$11,$12,$13,$14, $15,$16,$17,$18,
                  $19,$20,$21,$22, $23,$24,$25,$26,$27, $28,$29,
-                 $30,$31,$32,$33,$34, $35,$36)`,
+                 $30,$31,$32,$33,$34,
+                 $35,$36,$37,
+                 $38,$39,
+                 $40,$41,
+                 $42,$43,
+                 $44,$45,$46,
+                 $47,$48)`,
         [
           scope.companyId, scope.branchId ?? null, b.bookingNumber,
           b.bookingSource ?? "manual_entry", b.transportServiceType,
@@ -329,6 +359,14 @@ transportBookingsRouter.post(
           b.passengerCount ?? null, b.umrahGroupId ?? null, b.flightNumber ?? null, b.supervisorName ?? null, b.supervisorPhone ?? null,
           b.hotelName ?? null, b.hotelLocation ?? null,
           b.beneficiaryType ?? null, b.beneficiaryId ?? null, b.projectId ?? null, b.waqfId ?? null, b.costCenterId ?? null,
+          b.requestedVehicleClass ?? null,
+          b.vehicleSubstitutionPolicy ?? "equivalent_allowed",
+          b.allowUpgrade ?? false,
+          b.requiredExactVehicleId ?? null, b.requiredExactDriverId ?? null,
+          b.pickupWindowStart ?? null, b.pickupWindowEnd ?? null,
+          b.dropoffWindowStart ?? null, b.dropoffWindowEnd ?? null,
+          b.fixedAppointmentTime ?? null, b.isFlexibleTime ?? false,
+          b.priority ?? 0,
           b.notes ?? null, scope.userId,
         ],
       );
