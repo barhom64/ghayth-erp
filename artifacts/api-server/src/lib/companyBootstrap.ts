@@ -226,9 +226,6 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "1113", name: "العهد النقدية", nameEn: "Cash Custody", type: "asset", level: 4, parentCode: "1110" },
 
   { code: "1120", name: "البنوك", nameEn: "Banks", type: "asset", level: 3, parentCode: "1100", allowPosting: false },
-  { code: "1121", name: "بنك الراجحي", nameEn: "Al-Rajhi Bank", type: "asset", level: 4, parentCode: "1120" },
-  { code: "1122", name: "البنك الأهلي السعودي", nameEn: "SNB", type: "asset", level: 4, parentCode: "1120" },
-  { code: "1123", name: "بنك الرياض", nameEn: "Riyad Bank", type: "asset", level: 4, parentCode: "1120" },
   { code: "1124", name: "بنوك أخرى", nameEn: "Other Banks", type: "asset", level: 4, parentCode: "1120" },
 
   { code: "1130", name: "العملاء (الذمم المدينة)", nameEn: "Accounts Receivable", type: "asset", level: 3, parentCode: "1100", allowPosting: false },

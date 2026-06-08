@@ -43,7 +43,7 @@
 | `POST /employees` (إنشاء كامل) | 🟢 مكتمل | يدعم تحويل من application (sourceApplicationId) |
 | `GET /employees/:id/finance-summary` | 🟢 مكتمل | subsidiary custody + loans + vehicles |
 | Documents expiry obligations (iqama/passport/visa/work permit) | 🟢 مكتمل | `businessHelpers.registerObligation()` |
-| ملف الموظف 360 — 9 تبويبات | 🟡 يحتاج تطوير | الناقص: account+login، titles+positions، roles+permissions، contract، custodies، training محتوى موسّع |
+| ملف الموظف 360 — 14 تبويبات | 🟢 مكتمل (HR-012) | overview / info / titles / account / roles / contract / attendance / leaves / custodies / payroll / violations / tasks / trainings / finance |
 | Employee → User dual model | 🟢 مكتمل | `users.employeeId` FK + multi-role |
 | Performance / 360 / IDP TABS داخل الملف | 🟠 يحتاج ربط | موجود في `/hr/performance` و `/hr/evaluation-360` و `/hr/idp` كصفحات مستقلة |
 
@@ -400,18 +400,18 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 
 | # | الأولوية | الحالة الحالية | PR-Scope مقترح |
 |---|---|---|---|
-| 1 | سجل الموظف الرئيسي الموحد | 🟡 9/14 tabs | توسعة `employee-detail.tsx` لـ 14 تبويب — embed بدل routes |
+| 1 | سجل الموظف الرئيسي الموحد | 🟢 **مكتمل 14/14 tabs** (HR-012) | overview / info / titles / account / roles / contract / attendance / leaves / custodies / payroll / violations / tasks / trainings / finance ✅ |
 | 2 | ربط الموظف بالأدوار والصلاحيات | 🟢 موجود لكن غير مرئي في ملف الموظف | إضافة تبويب "الأدوار والصلاحيات" يقرأ من `rbac_user_roles` + يعرض effective permissions |
 | 3 | نموذج "ماذا يظهر لمن ومتى" | 🟡 RBAC scope يفي بالغرض | UI viewer للـ Effective Permissions per user (RBAC-004) |
-| 4 | كتالوج خدمات HR | 🟡 موجود مبعثر في القائمة | بناء صفحة "خدمات HR" تجمع الخدمات (طلب إجازة، طلب OT، عذر، قرض، ...) كـ catalog |
+| 4 | كتالوج خدمات HR | 🟢 **مكتمل** (HR-010) — صفحة `/hr/services` بـ 8 خدمات في 4 categories. | بناء صفحة "خدمات HR" ✅ |
 | 5 | محرك الطلبات وسلاسل الاعتماد | 🟢 موجود | توحيد UI inbox واحد بدل تشتيت |
 | 6 | الحضور حسب طبيعة العمل | 🟢 **مكتمل من جانب الـ engine + كل callsites السيرفر** (HR-002 → HR-004). بقي: UI لإدارة الفئات والـ overrides من شاشة الإعدادات. | جداول + engine ✅ — check-in ✅ — check-out ✅ — autoViolation cron ✅ — UI لاحقًا |
 | 7 | التتبع حسب السياسة | 🟡 **الأساس + ingestion مبني** (HR-005): `field_tracking_points` + `POST field-ping` (مع enforcement لتردد الفئة) + `GET field-track` (breadcrumb + live). بقي: ربط الواجهة + تقرير المسار/التوقفات. | إنشاء `field_tracking_points` ✅ + ingestion API ✅ + policy frequency ✅ — UI wiring لاحقًا |
 | 8 | الربط المالي | 🟢 موجود (payroll GL + WPS) | لا تغيير معماري |
-| 9 | العهد والأصول | 🟡 موجود subsidiary accounts فقط | إضافة `employee_assets` bridge |
-| 10 | التقييم وإشارات الأداء | 🟢 **Engine + storage + Signals (Risk/Promotion/Burnout) مبني** (HR-006, HR-007). بقي: cron + UI داخل ملف الموظف 360. | بناء `employeeScoringEngine` ✅ + Risk/Promotion/Burnout engines ✅ + UI لاحقًا |
-| 11 | صندوق الأعمال والجدولة | 🟡 موجود `/hr/approvals` لكن جزئي | توحيد inbox واحد لكل HR workflows |
-| 12 | تهذيب الواجهات | 🟡 91 route، 51 صفحة | تنفيذ جدول الدمج في D.2 — `navigation.registry.ts` |
+| 9 | العهد والأصول | 🟢 **مكتمل** (HR-011) — `employee_assets` bridge مع lifecycle كامل + condition tracking. | إضافة `employee_assets` bridge ✅ |
+| 10 | التقييم وإشارات الأداء | 🟢 **مكتمل من جانب الـ engine + cron** (HR-006, HR-007, HR-009). UI داخل ملف الموظف لاحقًا. | scoring + signals + cron ✅ |
+| 11 | صندوق الأعمال والجدولة | 🟡 موجود `/hr/approvals` + Services Catalog (HR-010). توحيد inbox واحد لـ HR workflows لاحقًا. | catalog ✅ |
+| 12 | تهذيب الواجهات | 🟢 **مكتمل** (HR-011) — 17 entries → 9 canonical entries من §D.2، كل route قديم محفوظ. | تنفيذ §D.2 ✅ |
 
 ---
 
@@ -428,7 +428,11 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 | #1831 | **الأولوية #10 — Employee Scoring Engine**. راجع HR-006 سابقاً. 27/27 smoke tests خضراء. | 2026-06-08 |
 | HR-007 | **الأولوية #10 §G — Risk/Promotion/Burnout Signals**. Migration 273 + `lib/employeeSignalsEngine.ts` بـ 3 detection engines. UPSERT idempotent مع acknowledgement reset عند escalation الـ severity فقط. 32/32 smoke tests خضراء. | 2026-06-08 |
 | #1836 | **§B (نموذج المؤسسة التشغيلي) — الدفعة الأساسية**. راجع HR-008 سابقاً (5 جداول + 3 أعمدة + 9 system positions). 18/18 smoke tests. | 2026-06-08 |
-| HR-009 | **§B (إكمال) + #10 (cron)**. Migration 275 يُنشئ: (1) `supervision_lines` — matrix reporting مع 4 lineTypes (administrative/project/functional/dotted)، CHECK يرفض self-supervision، UNIQUE يسمح بنفس supervisor-supervisee في scopes مختلفة، indexes جزئية على endDate IS NULL. (2) `approval_authorities` — per-person approval limits مع `maxAmount NUMERIC(14,2)` nullable (NULL = unlimited)، `reason TEXT NOT NULL` (auditable override)، `requiresDualControl`، expiry support، UNIQUE (assignment, feature, action, currency). + ربط cron الـ scoring: handler عام `runEmployeeScoringPeriod` يستهلك engines من #1831 + #1833، تسجيلان جديدان: `weekly_employee_scoring` (الاثنين 03:00) و `monthly_employee_scoring` (1st @ 04:00). per-row try/catch فلا تفشل دفعة كاملة. UPSERT idempotent. 22/22 smoke tests خضراء. | 2026-06-08 |
+| #1837 | **§B إكمال + #10 cron**. supervision_lines + approval_authorities + scoring cron entries. 22/22 smoke tests. | 2026-06-08 |
+| #1838 | **الأولوية #4 — HR Services Catalog** — راجع HR-010. 16/16 smoke tests. | 2026-06-08 |
+| HR-011 | **الأولوية #12 (تهذيب القائمة) + الأولوية #9 (employee_assets)**. (أ) إعادة هيكلة `navigation.registry.ts` HR section من 17 entry إلى 9 canonical entries من §D.2: لوحة HR / الموظفون / النشاط والحضور / الطلبات / الامتثال والجزاءات / الأداء والتطوير / الرواتب / التقارير / إعدادات. **كل route قديم محفوظ** كـ sub-link — الـ bookmarks والـ deep-links لا تنكسر. (ب) Migration 276 يُنشئ `employee_assets` bridge مع assetType + assetKey + serialNumber + warehouseAssetId اختياري + lifecycle كامل (assignedAt/assignedBy/returnedAt/returnedBy) + conditionOnAssign/conditionOnReturn للـ damage claims + partial index على returnedAt IS NULL للقوائم النشطة. 24/24 smoke tests خضراء. | 2026-06-08 |
+| HR-012 | **الأولوية #1 إكمال — 14/14 تبويبات + §J seed 4/4 templates**. (أ) إضافة 3 تبويبات نهائية لـ `employee-detail.tsx`: **«المسميات والمناصب»** يعرض الـ job title + position من جدول `positions` (مع level badge من §B.5) + الفئة الإدارية + categoryKey badge — **«العقد»** يعرض العقد النشط من `employee_contracts` (ref + dates + probation + signature status) مع empty-state deep-link لـ `/hr/contracts` — **«العهد والأصول»** يعرض custodies من `employee_assets` بـ active-first ordering + opacity 60 للمُعَاد + condition fields. (ب) `GET /employees/:id` يمرر contract + position + custodies ضمن نفس Promise.all (3 queries إضافية، لا N+1). (ج) custodies count badge في tab header. (د) Migration 278 يبذر 4 من 9 HR role templates الناقصة من §J (احتُجِز 277 من قِبل main لـ maintenance_request_linked_expense): `attendance_officer` (40) + `payroll_officer` (50) + `discipline_officer` (45) + `performance_reviewer` (45) كـ system templates (companyId IS NULL) — idempotent عبر `ON CONFLICT ("companyId", role_key) DO NOTHING`. 25/25 smoke tests خضراء. | 2026-06-08 |
+| HR-013 | **§B (نموذج المؤسسة) — تفعيل الجداول اليتيمة بـ admin UI**. الجداول الـ6 التي أنشأتها migrations 274/275 (`legal_entities`, `positions`, `teams`, `committees`, `supervision_lines`, `approval_authorities`) كانت موجودة في DB بدون **أي** route أو صفحة — مدير HR لا يستطيع إنشاء فريق أو لجنة من النظام. (أ) `routes/org.ts` جديد بـ 18 endpoint (CRUD كامل + UPSERT للـ approval_authorities + soft delete لـ entities/positions/teams/committees + hard delete لـ approval_authorities + end-date لـ supervision_lines). كل endpoint محمي بـ `authorize({feature:"admin"})` + `companyId` scope + audit log + `activeRoleKey` في الـ audit. مرفق تحت `/org` بـ HR module gate. (ب) صفحة واحدة `/admin/org-model` بـ 6 tabs (Tabs/TabsList/TabsContent من ui-core) — كل tab له DataTable + add form + soft delete. (ج) nav entry تحت «إعدادات الموارد البشرية». (د) supervision_lines يرفض self-supervision في الـ frontend + الـ backend + DB CHECK constraint. approval_authorities يفرض `reason` كحقل مطلوب (audit trail للـ override). 25/25 smoke tests خضراء. **يُغلق الـ 🟡 «جداول بدون UI» إلى 🟢 «مُنفّذ ومدمج»**. | 2026-06-08 |
 
 ---
 

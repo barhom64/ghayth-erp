@@ -48,6 +48,18 @@ export interface AllocationTargetValue {
   odometer?: string;
   costBearer?: string;
   reason?: string;
+  // #1715 §5 — link to an existing maintenance ticket instead of creating one.
+  existingTicketId?: string;
+  // #1715 — capital purchase: create a NEW fixed asset (depreciated by the engine).
+  createAsset?: boolean;
+  assetName?: string;
+  assetUsefulLifeYears?: string;
+  // #1715 — vehicle fuel: open a fuel log (liters / price / odometer / station).
+  createFuelLog?: boolean;
+  fuelLiters?: string;
+  fuelCostPerLiter?: string;
+  fuelOdometer?: string;
+  fuelStation?: string;
 }
 
 const TARGET_OPTIONS: { value: AllocationTarget; label: string }[] = [
@@ -90,6 +102,21 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
   const { data: tripsData } = useApiQuery<{ data: any[] }>(["fleet-trips"], "/fleet/trips", value.target === "transport_trip");
   const { data: assetsData } = useApiQuery<{ data: any[] }>(["fixed-assets"], "/finance/fixed-assets", value.target === "fixed_asset");
 
+  // #1715 §5 — open maintenance tickets the operator can link to (finance-owned
+  // endpoint, so no fleet/properties permission needed). Loaded once the
+  // maintenance target + its key dimension are chosen.
+  const ticketTarget = value.target === "vehicle_maintenance" ? "vehicle" : value.target === "property_maintenance" ? "property" : "";
+  const ticketDimId = ticketTarget === "vehicle" ? value.allocation.vehicleId : ticketTarget === "property" ? value.allocation.unitId : undefined;
+  const ticketOptsUrl = ticketTarget && ticketDimId
+    ? `/finance/maintenance-ticket-options?target=${ticketTarget}&${ticketTarget === "vehicle" ? "vehicleId" : "unitId"}=${ticketDimId}`
+    : "/finance/maintenance-ticket-options";
+  const { data: ticketOptsData } = useApiQuery<{ data: { id: number; label: string }[] }>(
+    ["maint-ticket-opts", ticketTarget, String(ticketDimId ?? "")],
+    ticketOptsUrl,
+    Boolean(ticketTarget && ticketDimId),
+  );
+  const ticketOptions = ticketOptsData?.data ?? [];
+
   const onTargetChange = (t: AllocationTarget) => {
     // Reset the allocation when switching target so stale dims don't leak.
     onChange({ target: t, allocation: value.allocation.manualOverrideReason ? { manualOverrideReason: value.allocation.manualOverrideReason } : {} });
@@ -108,10 +135,18 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
 
       {(value.target === "vehicle" || value.target === "vehicle_maintenance") && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <VehicleSelect value={value.allocation.vehicleId ?? ""} onChange={(v) => setAlloc({ vehicleId: v })} label="المركبة" allowCreate={false} />
+          <VehicleSelect value={value.allocation.vehicleId ?? ""} onChange={(v) => onChange({ ...value, allocation: { ...value.allocation, vehicleId: v }, existingTicketId: undefined })} label="المركبة" allowCreate={false} />
           <DriverSelect value={value.allocation.driverId ?? ""} onChange={(v) => setAlloc({ driverId: v })} label="السائق" allowCreate={false} />
           {value.target === "vehicle_maintenance" && (
             <>
+              {ticketOptions.length > 0 && (
+                <FormFieldWrapper label="ربط بتذكرة قائمة (اختياري)">
+                  <Select value={value.existingTicketId ?? ""} onValueChange={(v) => set({ existingTicketId: v })}>
+                    <SelectTrigger><SelectValue placeholder="إنشاء تذكرة جديدة" /></SelectTrigger>
+                    <SelectContent>{ticketOptions.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </FormFieldWrapper>
+              )}
               <FormFieldWrapper label="قراءة العداد">
                 <Input value={value.odometer ?? ""} onChange={(e) => set({ odometer: e.target.value })} placeholder="كم" />
               </FormFieldWrapper>
@@ -125,6 +160,30 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
                 <Input value={value.reason ?? ""} onChange={(e) => set({ reason: e.target.value })} placeholder="سبب الصيانة" />
               </FormFieldWrapper>
             </>
+          )}
+          {value.target === "vehicle" && (
+            <div className="md:col-span-2 space-y-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={value.createFuelLog ?? false} onChange={(e) => set({ createFuelLog: e.target.checked })} />
+                تسجيل تعبئة وقود (يفتح سجل وقود ويحدّث عدّاد المركبة)
+              </label>
+              {value.createFuelLog && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <FormFieldWrapper label="عدد اللترات">
+                    <Input type="number" step="0.01" value={value.fuelLiters ?? ""} onChange={(e) => set({ fuelLiters: e.target.value })} placeholder="لتر" />
+                  </FormFieldWrapper>
+                  <FormFieldWrapper label="سعر اللتر">
+                    <Input type="number" step="0.01" value={value.fuelCostPerLiter ?? ""} onChange={(e) => set({ fuelCostPerLiter: e.target.value })} placeholder="ر.س/لتر" />
+                  </FormFieldWrapper>
+                  <FormFieldWrapper label="قراءة العداد (الممشى)">
+                    <Input type="number" value={value.fuelOdometer ?? ""} onChange={(e) => set({ fuelOdometer: e.target.value })} placeholder="كم" />
+                  </FormFieldWrapper>
+                  <FormFieldWrapper label="المحطة">
+                    <Input value={value.fuelStation ?? ""} onChange={(e) => set({ fuelStation: e.target.value })} placeholder="اسم المحطة" />
+                  </FormFieldWrapper>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -141,7 +200,7 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
           </FormFieldWrapper>
           {(value.target === "unit" || value.target === "property_maintenance") && (
             <FormFieldWrapper label="الوحدة">
-              <Select value={value.allocation.unitId ?? ""} onValueChange={(v) => setAlloc({ unitId: v })}>
+              <Select value={value.allocation.unitId ?? ""} onValueChange={(v) => onChange({ ...value, allocation: { ...value.allocation, unitId: v }, existingTicketId: undefined })}>
                 <SelectTrigger><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
                 <SelectContent>
                   {(unitsData?.data ?? []).map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber ?? u.name ?? `وحدة #${u.id}`}</SelectItem>)}
@@ -151,6 +210,14 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
           )}
           {value.target === "property_maintenance" && (
             <>
+              {ticketOptions.length > 0 && (
+                <FormFieldWrapper label="ربط بتذكرة قائمة (اختياري)">
+                  <Select value={value.existingTicketId ?? ""} onValueChange={(v) => set({ existingTicketId: v })}>
+                    <SelectTrigger><SelectValue placeholder="إنشاء تذكرة جديدة" /></SelectTrigger>
+                    <SelectContent>{ticketOptions.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </FormFieldWrapper>
+              )}
               <FormFieldWrapper label="العقد / المستأجر">
                 <Select value={value.allocation.contractId ?? ""} onValueChange={(v) => setAlloc({ contractId: v })}>
                   <SelectTrigger><SelectValue placeholder="اختر العقد" /></SelectTrigger>
@@ -252,14 +319,35 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
       )}
 
       {value.target === "fixed_asset" && (
-        <FormFieldWrapper label="الأصل الثابت">
-          <Select value={value.allocation.assetId ?? ""} onValueChange={(v) => setAlloc({ assetId: v })}>
-            <SelectTrigger><SelectValue placeholder="اختر الأصل" /></SelectTrigger>
-            <SelectContent>
-              {(assetsData?.data ?? []).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name ?? `أصل #${a.id}`}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={value.createAsset ?? false}
+              onChange={(e) => set({ createAsset: e.target.checked })}
+            />
+            شراء أصل جديد (يفتح أصلاً ثابتاً ويبدأ إهلاكه تلقائياً)
+          </label>
+          {value.createAsset ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <FormFieldWrapper label="اسم الأصل *">
+                <Input value={value.assetName ?? ""} onChange={(e) => set({ assetName: e.target.value })} placeholder="مثال: سيارة تويوتا 2026" />
+              </FormFieldWrapper>
+              <FormFieldWrapper label="العمر الإنتاجي (سنوات)">
+                <Input type="number" min={1} value={value.assetUsefulLifeYears ?? ""} onChange={(e) => set({ assetUsefulLifeYears: e.target.value })} placeholder="5" />
+              </FormFieldWrapper>
+            </div>
+          ) : (
+            <FormFieldWrapper label="الأصل الثابت القائم">
+              <Select value={value.allocation.assetId ?? ""} onValueChange={(v) => setAlloc({ assetId: v })}>
+                <SelectTrigger><SelectValue placeholder="اختر الأصل" /></SelectTrigger>
+                <SelectContent>
+                  {(assetsData?.data ?? []).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name ?? `أصل #${a.id}`}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+          )}
+        </div>
       )}
 
       {value.target !== "none" && (
