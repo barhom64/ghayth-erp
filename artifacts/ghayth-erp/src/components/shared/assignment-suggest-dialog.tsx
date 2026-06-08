@@ -47,7 +47,15 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   scheduledStartAt?: string;
   scheduledEndAt?: string;
-  onSelect?: (candidate: SuggestionCandidate) => void;
+  /** Called after the candidate is selected. If `autoCreate` is true
+   *  AND the engine returns a usable window, the dispatch order is
+   *  already created by the time this fires (with the new id passed).
+   *  Otherwise the caller is responsible for creating the dispatch. */
+  onSelect?: (candidate: SuggestionCandidate, dispatchOrderId?: number) => void;
+  /** When true, picking a candidate POSTs to the bulk-plan endpoint
+   *  for this single booking and creates the dispatch order
+   *  inline. Default: true. */
+  autoCreate?: boolean;
 }
 
 const SCORE_BAND = (s: number) =>
@@ -67,7 +75,8 @@ const SCORE_LABEL: Record<keyof SuggestionCandidate["scores"], string> = {
 };
 
 export function AssignmentSuggestDialog({
-  bookingId, open, onOpenChange, scheduledStartAt, scheduledEndAt, onSelect,
+  bookingId, open, onOpenChange, scheduledStartAt, scheduledEndAt,
+  onSelect, autoCreate = true,
 }: Props) {
   const { toast } = useToast();
   const [candidates, setCandidates] = useState<SuggestionCandidate[] | null>(null);
@@ -105,16 +114,54 @@ export function AssignmentSuggestDialog({
     setError(null);
   }
 
-  const pick = (c: SuggestionCandidate) => {
+  const [creating, setCreating] = useState(false);
+
+  const pick = async (c: SuggestionCandidate) => {
     if (c.blockers.length > 0) {
       toast({
         variant: "destructive",
         title: "هذا الاقتراح يحتوي على عوائق صارمة",
         description: "وثّق سبب الاستثناء في شاشة الإسناد إذا أردت المتابعة.",
       });
+      onSelect?.(c);
+      onOpenChange(false);
+      return;
     }
-    onSelect?.(c);
-    onOpenChange(false);
+    if (!autoCreate) {
+      onSelect?.(c);
+      onOpenChange(false);
+      return;
+    }
+    // Auto-create path — fire the bulk-plan endpoint with this single
+    // booking so the dispatch order is materialized atomically.
+    setCreating(true);
+    try {
+      const res = await apiFetch<{ data: { results: Array<{
+        bookingId: number; outcome: string; dispatchOrderId?: number;
+        reason?: string;
+      }> } }>(
+        "/transport/integration/plan-bookings",
+        { method: "POST", body: JSON.stringify({ bookingIds: [bookingId] }) },
+      );
+      const r = res?.data?.results?.[0];
+      if (r?.outcome === "planned") {
+        toast({ title: `تم إنشاء أمر التوزيع #${r.dispatchOrderId}` });
+        onSelect?.(c, r.dispatchOrderId);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "تعذّر الإنشاء التلقائي",
+          description: r?.reason ?? `الناتج: ${r?.outcome ?? "غير معروف"}`,
+        });
+        onSelect?.(c);
+      }
+      onOpenChange(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "فشل الاتصال", description: message });
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -219,8 +266,16 @@ export function AssignmentSuggestDialog({
                 )}
 
                 <div className="mt-2 flex justify-end">
-                  <Button size="sm" variant={c.blockers.length > 0 ? "outline" : "default"} onClick={() => pick(c)} rateLimitAware>
-                    {c.blockers.length > 0 ? "اعتمد رغم العوائق" : "اعتمد هذا الاقتراح"}
+                  <Button
+                    size="sm"
+                    variant={c.blockers.length > 0 ? "outline" : "default"}
+                    onClick={() => pick(c)}
+                    disabled={creating}
+                    rateLimitAware
+                  >
+                    {creating ? "جارٍ الإنشاء…" :
+                     c.blockers.length > 0 ? "اعتمد رغم العوائق" :
+                     autoCreate ? "اعتمد + أنشئ أمر التوزيع" : "اعتمد هذا الاقتراح"}
                   </Button>
                 </div>
               </CardContent>
