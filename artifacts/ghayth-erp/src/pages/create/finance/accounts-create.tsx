@@ -28,20 +28,6 @@ const CHILDREN_USAGE_POLICY_LABELS: Record<string, string> = {
   manual_required: "إلزام اختيار تصنيف يدوي لكل ابن",
 };
 
-// #1715 auto-numbering: suggest the next free child code under a parent.
-// Prefers numeric siblings sharing the parent's code prefix (the common COA
-// scheme), max+1; falls back to `${parentCode}01`. Pure suggestion — the
-// operator can always override the editable code field.
-function suggestChildCode(parentCode: string, accounts: any[]): string {
-  if (!parentCode) return "";
-  const siblings = accounts.filter(
-    (a) => typeof a.code === "string" && a.code.length > parentCode.length && a.code.startsWith(parentCode),
-  );
-  const nums = siblings.map((a) => Number(a.code)).filter((n) => Number.isFinite(n));
-  if (nums.length) return String(Math.max(...nums) + 1);
-  return `${parentCode}01`;
-}
-
 const DRAFT_KEY = "finance_accounts_create";
 const SHARED = "__shared__";
 const INITIAL = { code: "", name: "", nameEn: "", type: "asset", parentCode: "", nature: "debit", allowPosting: true, isAnalytical: false, branchScope: SHARED, accountUsage: USAGE_UNSET, childrenUsagePolicy: "inherit_default" };
@@ -56,9 +42,20 @@ export default function AccountsCreate() {
   const accounts = accountsData?.data || [];
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
+  // #1715 (Comment #6): the next free code is derived server-side by the
+  // level/step-aware /finance/accounts/next-code endpoint — the single source
+  // of truth so the UI, imports and API all agree (the old client-side
+  // startsWith+max guesser produced wrong codes like "110001" on the 4-digit
+  // SOCPA tree). Re-runs whenever the chosen parent changes.
+  const { data: nextCodeData } = useApiQuery<{ code: string | null }>(
+    ["account-next-code", form.parentCode],
+    `/finance/accounts/next-code?parentCode=${encodeURIComponent(form.parentCode)}`,
+    { enabled: !!form.parentCode },
+  );
+
   // #1715: when launched from a tree node's «إضافة حساب فرعي» (?parent=CODE),
-  // pre-fill the parent and suggest the next code once accounts have loaded.
-  // Guarded by a ref so it runs once and never clobbers an in-progress draft.
+  // pre-fill the parent once accounts have loaded. The code is then filled by
+  // the suggestion effect below. Guarded so it runs once.
   const prefilledRef = useRef(false);
   useEffect(() => {
     if (prefilledRef.current) return;
@@ -66,12 +63,15 @@ export default function AccountsCreate() {
     if (!parentParam || accounts.length === 0) return;
     prefilledRef.current = true;
     if (form.parentCode) return; // a restored draft already has a parent — respect it
-    setForm((f) => ({
-      ...f,
-      parentCode: parentParam,
-      code: f.code || suggestChildCode(parentParam, accounts),
-    }));
+    setForm((f) => ({ ...f, parentCode: parentParam }));
   }, [accounts.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-fill the suggested code only while the field is empty, so it never
+  // clobbers a code the operator typed or a restored draft.
+  useEffect(() => {
+    const suggested = nextCodeData?.code;
+    if (suggested && !form.code) setForm((f) => (f.code ? f : { ...f, code: suggested }));
+  }, [nextCodeData?.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
