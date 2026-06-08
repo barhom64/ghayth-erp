@@ -165,6 +165,16 @@ const createPilgrimSchema = z.object({
   passportNumber: z.string().min(1, "رقم جواز السفر مطلوب"),
   seasonId: z.coerce.number().optional(),
   agentId: z.coerce.number().optional(),
+  // subAgentId / groupId / nuskNumber: parity with the import path.
+  // Without these the row lands with NULL FKs and is invisible on
+  // group statements + sub-agent rollups (same shape as the
+  // /import/mutamers bug — operator created the pilgrim manually,
+  // the screen said "saved", but the new pilgrim never appeared on
+  // the agent's roster because manual creation couldn't capture the
+  // group or sub-agent linkage).
+  subAgentId: z.coerce.number().optional(),
+  groupId: z.coerce.number().optional(),
+  nuskNumber: z.string().trim().optional(),
   packageId: z.coerce.number().optional(),
   visaNumber: z.string().optional(),
   nationality: z.string().optional(),
@@ -1187,6 +1197,47 @@ router.post("/pilgrims", authorize({ feature: "umrah", action: "create" }), asyn
         });
       }
     }
+    if (b.subAgentId) {
+      // Verify sub-agent belongs to the company AND, if an agent was
+      // selected, that the sub-agent's parent is that agent. Without
+      // this the operator could attach pilgrim → sub-agent of agent
+      // B while the pilgrim itself sits under agent A — the rollups
+      // would double-count and the agent statement would be wrong.
+      const [sub] = await rawQuery<{ id: number; agentId: number | null }>(
+        `SELECT id, "agentId" FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [Number(b.subAgentId), scope.companyId]
+      );
+      if (!sub) {
+        throw new ValidationError(`المكتب (الوكيل الفرعي) رقم ${b.subAgentId} غير موجود`, {
+          field: "subAgentId",
+          fix: "اختر مكتباً مسجلاً أو اتركه فارغاً",
+        });
+      }
+      if (b.agentId && sub.agentId !== null && sub.agentId !== Number(b.agentId)) {
+        throw new ValidationError("المكتب المختار لا ينتمي للوكيل المحدد", {
+          field: "subAgentId",
+          fix: "اختر مكتباً تابعاً للوكيل، أو غيّر الوكيل",
+        });
+      }
+    }
+    if (b.groupId) {
+      const [group] = await rawQuery<{ id: number; agentId: number | null }>(
+        `SELECT id, "agentId" FROM umrah_groups WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [Number(b.groupId), scope.companyId]
+      );
+      if (!group) {
+        throw new ValidationError(`المجموعة رقم ${b.groupId} غير موجودة`, {
+          field: "groupId",
+          fix: "اختر مجموعة مسجلة أو اتركها فارغة",
+        });
+      }
+      if (b.agentId && group.agentId !== null && group.agentId !== Number(b.agentId)) {
+        throw new ValidationError("المجموعة المختارة لا تنتمي للوكيل المحدد", {
+          field: "groupId",
+          fix: "اختر مجموعة تابعة للوكيل، أو غيّر الوكيل",
+        });
+      }
+    }
     if (b.packageId) {
       const [pkg] = await rawQuery<{ id: number }>(
         `SELECT id FROM umrah_packages WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
@@ -1203,13 +1254,16 @@ router.post("/pilgrims", authorize({ feature: "umrah", action: "create" }), asyn
     const passportPlain = String(b.passportNumber).trim();
     const visaPlain = b.visaNumber ? String(b.visaNumber).trim() : null;
     const rows = await rawQuery(
-      `INSERT INTO umrah_pilgrims ("companyId","branchId","seasonId","agentId","packageId","fullName","passportNumber","passportNumber_hash","visaNumber","visaNumber_hash",nationality,gender,"dateOfBirth",phone,"arrivalDate","departureDate","hotelName","roomNumber",notes,"createdBy","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW()) RETURNING *`,
+      `INSERT INTO umrah_pilgrims ("companyId","branchId","seasonId","agentId","subAgentId","groupId","nuskNumber","packageId","fullName","passportNumber","passportNumber_hash","visaNumber","visaNumber_hash",nationality,gender,"dateOfBirth",phone,"arrivalDate","departureDate","hotelName","roomNumber",notes,"createdBy","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,NOW()) RETURNING *`,
       [
         scope.companyId,
         scope.branchId || null,
         Number(b.seasonId),
         b.agentId ? Number(b.agentId) : null,
+        b.subAgentId ? Number(b.subAgentId) : null,
+        b.groupId ? Number(b.groupId) : null,
+        b.nuskNumber ? String(b.nuskNumber).trim() : null,
         b.packageId ? Number(b.packageId) : null,
         String(b.fullName).trim(),
         encryptField(passportPlain),
@@ -3094,10 +3148,64 @@ router.post("/violations", authorize({ feature: "umrah", action: "create" }), as
   try {
     const scope = req.scope!;
     const b = zodParse(createViolationSchema.safeParse(req.body));
+
+    // FK consistency. The route accepts mutamerId / agentId /
+    // subAgentId independently. Without validation an operator
+    // could attach a violation to pilgrim P (under agent A) with
+    // agentId=B, and the dashboard filter "violations by agent"
+    // would attribute the penalty to the wrong party. The pilgrim
+    // is the source of truth — if a mutamerId is supplied, the
+    // agent / sub-agent fields must either match the pilgrim's
+    // FKs or be omitted (in which case we auto-fill from the
+    // pilgrim row so the rollup queries don't have to LEFT JOIN
+    // umrah_pilgrims for every filter).
+    let agentId = b.agentId ?? null;
+    let subAgentId = b.subAgentId ?? null;
+    if (b.mutamerId) {
+      const [p] = await rawQuery<{ id: number; agentId: number | null; subAgentId: number | null }>(
+        `SELECT id, "agentId", "subAgentId" FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [Number(b.mutamerId), scope.companyId]
+      );
+      if (!p) {
+        throw new ValidationError(`المعتمر رقم ${b.mutamerId} غير موجود`, {
+          field: "mutamerId",
+          fix: "اختر معتمراً مسجلاً أو اتركه فارغاً",
+        });
+      }
+      if (agentId !== null && p.agentId !== null && Number(agentId) !== p.agentId) {
+        throw new ValidationError("الوكيل المحدد لا يطابق وكيل المعتمر", {
+          field: "agentId",
+          fix: "اترك حقل الوكيل فارغاً ليُملأ تلقائياً من المعتمر، أو غيّر المعتمر",
+        });
+      }
+      if (subAgentId !== null && p.subAgentId !== null && Number(subAgentId) !== p.subAgentId) {
+        throw new ValidationError("المكتب المحدد لا يطابق مكتب المعتمر", {
+          field: "subAgentId",
+          fix: "اترك حقل المكتب فارغاً ليُملأ تلقائياً من المعتمر، أو غيّر المعتمر",
+        });
+      }
+      agentId = agentId ?? p.agentId;
+      subAgentId = subAgentId ?? p.subAgentId;
+    } else if (b.agentId && b.subAgentId) {
+      // No pilgrim → still verify the sub-agent belongs to the
+      // supplied agent, otherwise the dashboard's per-agent
+      // penalty totals will double-count when both filters fire.
+      const [sub] = await rawQuery<{ id: number; agentId: number | null }>(
+        `SELECT id, "agentId" FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+        [Number(b.subAgentId), scope.companyId]
+      );
+      if (sub && sub.agentId !== null && sub.agentId !== Number(b.agentId)) {
+        throw new ValidationError("المكتب لا ينتمي للوكيل المحدد", {
+          field: "subAgentId",
+          fix: "اختر مكتباً تابعاً للوكيل، أو غيّر الوكيل",
+        });
+      }
+    }
+
     const rows = await rawQuery(
       `INSERT INTO umrah_violations ("companyId","branchId",type,"referenceType","referenceNumber","mutamerId","agentId","subAgentId",description,"penaltyAmount",status,"createdBy","updatedAt")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()) RETURNING *`,
-      [scope.companyId, scope.branchId || null, b.type, b.referenceType || null, b.referenceNumber || null, b.mutamerId || null, b.agentId || null, b.subAgentId || null, b.description || null, b.penaltyAmount || 0, b.status || "open", scope.userId]
+      [scope.companyId, scope.branchId || null, b.type, b.referenceType || null, b.referenceNumber || null, b.mutamerId || null, agentId, subAgentId, b.description || null, b.penaltyAmount || 0, b.status || "open", scope.userId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type, penaltyAmount: b.penaltyAmount } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.violation.created", entity: "umrah_violations", entityId: rows[0]?.id, after: { type: b.type } }).catch((e) => logger.error(e, "umrah background task failed"));
