@@ -31,6 +31,7 @@ import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/
 import { logger } from "../lib/logger.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
 import {
+  confirmMutamersImport,
   confirmVouchersImport,
   previewMutamersImport,
   previewVouchersImport,
@@ -298,6 +299,7 @@ const importPreviewSchema = z.object({
 const importMutamersSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
   rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  fileName: z.string().trim().optional(),
   columnMapping: columnMappingSchema,
 });
 
@@ -1612,19 +1614,29 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
 router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, columnMapping } = zodParse(importMutamersSchema.safeParse(req.body));
-    // Translate Arabic-keyed Excel rows BEFORE the legacy doImport
-    // touches them — doImport reads fields like `passportNumber`,
-    // `fullName`, `nuskNumber` directly. Without normalization the
-    // values would all be `undefined` and every row would be dropped
-    // as an "error row" silently.
+    const { seasonId, rows: importRows, fileName, columnMapping } = zodParse(importMutamersSchema.safeParse(req.body));
+    await requireOpenSeason(seasonId, scope.companyId);
+    // Engine path. The pre-fix route called a legacy `doImport`
+    // helper that INSERTed every row with `agentId = NULL` (no
+    // groupId / subAgentId either), because it never invoked
+    // resolveAgent / resolveGroup / resolveSubAgent. Operator
+    // reported a 1,363-row import that "succeeded" but produced
+    // zero visible pilgrims / zero agents / zero details.
+    // `confirmMutamersImport` is the same path /import/preview
+    // already uses for the diff, and /import/vouchers uses for
+    // vouchers — see umrahImportFkResolutionSmoke.test.ts.
+    const importScope = {
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      seasonId,
+    };
     const normalizedRows = normalizeImportRows(importRows, "mutamers", columnMapping);
-    const importBody = { seasonId, rows: normalizedRows, fileType: "mutamers", fileName: "import-mutamers" };
-    const result = await doImport(scope, importBody);
+    const result = await confirmMutamersImport(importScope, normalizedRows, fileName ?? "import-mutamers");
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "umrah.import.mutamers.completed", entity: "umrah_import_logs",
-      entityId: (result as { batchId?: number } | null)?.batchId ?? 0,
+      action: "umrah.import.mutamers.completed", entity: "umrah_import_batches",
+      entityId: result.batchId ?? 0,
       details: JSON.stringify({ seasonId, rowCount: importRows.length }),
     }).catch((e) => logger.error(e, "umrah import bg"));
     res.json(result);
@@ -1663,89 +1675,42 @@ router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }
 
 
 
-async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileType?: string; fileName?: string }) {
-  const { seasonId, rows: importRows, fileType, fileName } = body;
-  if (!seasonId || !Array.isArray(importRows) || importRows.length === 0) {
-    throw new ValidationError("بيانات الاستيراد غير مكتملة");
-  }
-  await requireOpenSeason(seasonId, scope.companyId);
-
-  const { insertId: logId } = await rawExecute(
-    `INSERT INTO umrah_import_logs ("companyId","seasonId","userId","fileName","fileType","totalRows","newRecords","updatedRecords","duplicateRecords","errorRecords",errors,status)
-     VALUES ($1,$2,$3,$4,$5,$6,0,0,0,0,'[]','processing') RETURNING id`,
-    [scope.companyId, seasonId, scope.userId, fileName || "import", fileType || "excel", importRows.length]
-  );
-
-  const BATCH_SIZE = 100;
-  let newCount = 0, updateCount = 0, dupCount = 0, errCount = 0;
-  const errors: any[] = [];
-
-  for (let batchStart = 0; batchStart < importRows.length; batchStart += BATCH_SIZE) {
-    const batch = importRows.slice(batchStart, batchStart + BATCH_SIZE);
-    const passportHashes = batch.filter((r) => r.passportNumber).map((r) => blindIndex(String(r.passportNumber)));
-    const existingRows = passportHashes.length > 0
-      ? await rawQuery<Record<string, unknown>>(`SELECT id, "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
-      : [];
-    const existingMap = new Map<string, number>(existingRows.map((r) => [r.passportNumber_hash as string, r.id as number]));
-
-    for (let i = 0; i < batch.length; i++) {
-      const globalRow = batchStart + i;
-      const r = batch[i];
-      if (!r.passportNumber || !r.fullName) { errCount++; errors.push({ row: globalRow + 1, error: "بيانات ناقصة" }); continue; }
-      const ppHash = blindIndex(String(r.passportNumber));
-      if (existingMap.has(ppHash)) {
-        const existingId = existingMap.get(ppHash)!;
-        const sets: string[] = []; const params: unknown[] = [];
-        const encryptedFields = new Set(["fullName", "visaNumber"]);
-        for (const key of ["fullName","visaNumber","nationality","gender","phone","arrivalDate","departureDate","agentId","hotelName","roomNumber"]) {
-          if (r[key] !== undefined && r[key] !== null && r[key] !== "") {
-            const val = encryptedFields.has(key) ? encryptField(String(r[key])) : r[key];
-            params.push(val); sets.push(`"${key}"=$${params.length}`);
-            if (key === "visaNumber") { params.push(blindIndex(String(r[key]))); sets.push(`"visaNumber_hash"=$${params.length}`); }
-          }
-        }
-        if (sets.length > 0) {
-          sets.push(`"updatedAt"=NOW()`); params.push(existingId); params.push(scope.companyId);
-          await rawExecute(`UPDATE umrah_pilgrims SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-          updateCount++;
-        } else { dupCount++; }
-      } else {
-        try {
-          const encPassport = encryptField(String(r.passportNumber));
-          const encVisa = r.visaNumber ? encryptField(String(r.visaNumber)) : null;
-          const visaHash = r.visaNumber ? blindIndex(String(r.visaNumber)) : null;
-          await rawExecute(
-            `INSERT INTO umrah_pilgrims ("companyId","seasonId","agentId","fullName","passportNumber","passportNumber_hash","visaNumber","visaNumber_hash",nationality,gender,phone,"arrivalDate","departureDate","hotelName","roomNumber") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-            [scope.companyId, seasonId, r.agentId || null, r.fullName, encPassport, ppHash, encVisa, visaHash, r.nationality || null, r.gender || null, r.phone || null, r.arrivalDate || null, r.departureDate || null, r.hotelName || null, r.roomNumber || null]
-          );
-          newCount++;
-        } catch (insertErr: any) { errCount++; errors.push({ row: globalRow + 1, error: insertErr?.message ?? "خطأ في الإدراج" }); }
-      }
-    }
-    await rawExecute(
-      `UPDATE umrah_import_logs SET "newRecords"=$1,"updatedRecords"=$2,"duplicateRecords"=$3,"errorRecords"=$4,errors=$5,"processedRows"=$6 WHERE id=$7 AND "companyId"=$8`,
-      [newCount, updateCount, dupCount, errCount, JSON.stringify(errors), Math.min(batchStart + BATCH_SIZE, importRows.length), logId, scope.companyId]
-    ).catch((e) => logger.error(e, "umrah background task failed"));
-  }
-
-  await rawExecute(
-    `UPDATE umrah_import_logs SET "newRecords"=$1,"updatedRecords"=$2,"duplicateRecords"=$3,"errorRecords"=$4,errors=$5,"processedRows"=$6,status='completed' WHERE id=$7 AND "companyId"=$8`,
-    [newCount, updateCount, dupCount, errCount, JSON.stringify(errors), importRows.length, logId, scope.companyId]
-  );
-  createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_import_logs", entityId: logId, after: { total: importRows.length, new: newCount, updated: updateCount } }).catch((e) => logger.error(e, "umrah background task failed"));
-  emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.import.completed", entity: "umrah_import_logs", entityId: logId, details: JSON.stringify({ total: importRows.length, new: newCount, updated: updateCount, errors: errCount }) }).catch((e) => logger.error(e, "umrah background task failed"));
-  return { importLogId: logId, batchId: logId, total: importRows.length, new: newCount, updated: updateCount, duplicates: dupCount, errors: errCount, errorDetails: errors };
-}
-
+// Legacy passthrough. Originally called a `doImport` helper that
+// inserted rows into umrah_pilgrims with `agentId = NULL` (no
+// groupId, no subAgentId) because it never resolved the row's FK
+// references — the same root cause the /import/mutamers wizard
+// route just got fixed for. The wizard never calls this endpoint
+// (it picks /import/mutamers or /import/vouchers); a few legacy
+// scripted callers still POST raw rows here, so we keep the URL
+// alive but route it through the proper engines too:
+//   - fileType "vouchers" → confirmVouchersImport
+//   - anything else        → confirmMutamersImport
+// `umrah_import_logs` is left untouched for back-compat with the
+// legacy dashboard query; the new audit row lands in
+// `umrah_import_batches` via the engine.
 router.post("/import", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const body = zodParse(importSchema.safeParse(req.body));
-    const result = await doImport(scope, body);
+    await requireOpenSeason(body.seasonId, scope.companyId);
+    const importScope = {
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      seasonId: body.seasonId,
+    };
+    const normalizedFileType = String(body.fileType ?? "mutamers").toLowerCase();
+    const normalizedRows = normalizeImportRows(
+      body.rows,
+      normalizedFileType === "vouchers" ? "vouchers" : "mutamers",
+    );
+    const result = normalizedFileType === "vouchers"
+      ? await confirmVouchersImport(importScope, normalizedRows, body.fileName ?? "import")
+      : await confirmMutamersImport(importScope, normalizedRows, body.fileName ?? "import");
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "umrah.import.completed", entity: "umrah_import_logs",
-      entityId: (result as { batchId?: number } | null)?.batchId ?? 0,
+      action: "umrah.import.completed", entity: "umrah_import_batches",
+      entityId: result.batchId ?? 0,
       details: JSON.stringify({ seasonId: body.seasonId, fileType: body.fileType, rowCount: body.rows?.length ?? 0 }),
     }).catch((e) => logger.error(e, "umrah import bg"));
     res.json(result);

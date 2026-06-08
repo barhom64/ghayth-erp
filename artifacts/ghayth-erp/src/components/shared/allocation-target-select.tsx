@@ -50,6 +50,16 @@ export interface AllocationTargetValue {
   reason?: string;
   // #1715 §5 — link to an existing maintenance ticket instead of creating one.
   existingTicketId?: string;
+  // #1715 — capital purchase: create a NEW fixed asset (depreciated by the engine).
+  createAsset?: boolean;
+  assetName?: string;
+  assetUsefulLifeYears?: string;
+  // #1715 — vehicle fuel: open a fuel log (liters / price / odometer / station).
+  createFuelLog?: boolean;
+  fuelLiters?: string;
+  fuelCostPerLiter?: string;
+  fuelOdometer?: string;
+  fuelStation?: string;
 }
 
 const TARGET_OPTIONS: { value: AllocationTarget; label: string }[] = [
@@ -150,6 +160,30 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
                 <Input value={value.reason ?? ""} onChange={(e) => set({ reason: e.target.value })} placeholder="سبب الصيانة" />
               </FormFieldWrapper>
             </>
+          )}
+          {value.target === "vehicle" && (
+            <div className="md:col-span-2 space-y-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={value.createFuelLog ?? false} onChange={(e) => set({ createFuelLog: e.target.checked })} />
+                تسجيل تعبئة وقود (يفتح سجل وقود ويحدّث عدّاد المركبة)
+              </label>
+              {value.createFuelLog && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <FormFieldWrapper label="عدد اللترات">
+                    <Input type="number" step="0.01" value={value.fuelLiters ?? ""} onChange={(e) => set({ fuelLiters: e.target.value })} placeholder="لتر" />
+                  </FormFieldWrapper>
+                  <FormFieldWrapper label="سعر اللتر">
+                    <Input type="number" step="0.01" value={value.fuelCostPerLiter ?? ""} onChange={(e) => set({ fuelCostPerLiter: e.target.value })} placeholder="ر.س/لتر" />
+                  </FormFieldWrapper>
+                  <FormFieldWrapper label="قراءة العداد (الممشى)">
+                    <Input type="number" value={value.fuelOdometer ?? ""} onChange={(e) => set({ fuelOdometer: e.target.value })} placeholder="كم" />
+                  </FormFieldWrapper>
+                  <FormFieldWrapper label="المحطة">
+                    <Input value={value.fuelStation ?? ""} onChange={(e) => set({ fuelStation: e.target.value })} placeholder="اسم المحطة" />
+                  </FormFieldWrapper>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -285,14 +319,35 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
       )}
 
       {value.target === "fixed_asset" && (
-        <FormFieldWrapper label="الأصل الثابت">
-          <Select value={value.allocation.assetId ?? ""} onValueChange={(v) => setAlloc({ assetId: v })}>
-            <SelectTrigger><SelectValue placeholder="اختر الأصل" /></SelectTrigger>
-            <SelectContent>
-              {(assetsData?.data ?? []).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name ?? `أصل #${a.id}`}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={value.createAsset ?? false}
+              onChange={(e) => set({ createAsset: e.target.checked })}
+            />
+            شراء أصل جديد (يفتح أصلاً ثابتاً ويبدأ إهلاكه تلقائياً)
+          </label>
+          {value.createAsset ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <FormFieldWrapper label="اسم الأصل *">
+                <Input value={value.assetName ?? ""} onChange={(e) => set({ assetName: e.target.value })} placeholder="مثال: سيارة تويوتا 2026" />
+              </FormFieldWrapper>
+              <FormFieldWrapper label="العمر الإنتاجي (سنوات)">
+                <Input type="number" min={1} value={value.assetUsefulLifeYears ?? ""} onChange={(e) => set({ assetUsefulLifeYears: e.target.value })} placeholder="5" />
+              </FormFieldWrapper>
+            </div>
+          ) : (
+            <FormFieldWrapper label="الأصل الثابت القائم">
+              <Select value={value.allocation.assetId ?? ""} onValueChange={(v) => setAlloc({ assetId: v })}>
+                <SelectTrigger><SelectValue placeholder="اختر الأصل" /></SelectTrigger>
+                <SelectContent>
+                  {(assetsData?.data ?? []).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name ?? `أصل #${a.id}`}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+          )}
+        </div>
       )}
 
       {value.target !== "none" && (
@@ -309,3 +364,42 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
 }
 
 export const EMPTY_ALLOCATION_TARGET: AllocationTargetValue = { target: "none", allocation: {} };
+
+/**
+ * #1715 — build the operational-effect payload (maintenance ticket / fixed-asset
+ * creation / fuel log) from the chosen allocation target. Shared by the expense
+ * AND voucher forms so the mapping can never drift between them. All effects are
+ * gated on their toggle; an unrelated target yields all-undefined (omitted).
+ */
+export function buildOperationalEffectsPayload(t: AllocationTargetValue) {
+  return {
+    maintenanceTicket:
+      t.target === "vehicle_maintenance" || t.target === "property_maintenance"
+        ? {
+            create: true,
+            maintenanceType: t.maintenanceType || undefined,
+            odometer: t.odometer ? Number(t.odometer) : undefined,
+            costBearer: t.costBearer || undefined,
+            existingTicketId: t.existingTicketId ? Number(t.existingTicketId) : undefined,
+          }
+        : undefined,
+    assetCreation:
+      t.target === "fixed_asset" && t.createAsset && t.assetName
+        ? {
+            create: true,
+            name: t.assetName,
+            usefulLifeYears: t.assetUsefulLifeYears ? Number(t.assetUsefulLifeYears) : undefined,
+          }
+        : undefined,
+    fuelLog:
+      t.target === "vehicle" && t.createFuelLog
+        ? {
+            create: true,
+            liters: t.fuelLiters ? Number(t.fuelLiters) : undefined,
+            costPerLiter: t.fuelCostPerLiter ? Number(t.fuelCostPerLiter) : undefined,
+            odometer: t.fuelOdometer ? Number(t.fuelOdometer) : undefined,
+            stationName: t.fuelStation || undefined,
+          }
+        : undefined,
+  };
+}
