@@ -280,6 +280,15 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], displayOrder: 330 },
 
+  // #1733 follow-up — manager-side admin for the 3-bucket expense
+  // classification rules engine (fleet_expense_rules). Operators
+  // continue to see resolved defaults on fuel / maintenance /
+  // violation forms; this feature controls who can EDIT those rules.
+  { key: "fleet.expenses", parentKey: "fleet", moduleKey: "fleet",
+    labelAr: "قواعد تصنيف النفقات",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    displayOrder: 331 },
+
   // Cargo / freight (#1354 — road-freight manifests). Separate from
   // fleet.trips because cargo dispatch is typically a different role
   // (logistics coordinator) and the data surface — manifest, items,
