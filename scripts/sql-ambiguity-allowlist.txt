@@ -57,3 +57,26 @@ routes/finance-reports.ts:activityType
 routes/finance-reports.ts:createdAt
 routes/hr-saudi-compliance.ts:employeeId
 routes/hr.ts:status
+
+# ── Refreshed-dump FPs (missing-column class, surfaced 2026-06-08) ──────
+# The dump refresh aligned the canonical schema to live (dropping columns
+# live no longer has), which surfaced 8 missing-column hits that are all
+# false positives of the fragment-inlining / alias heuristic — in every
+# case the real SQL uses the correct column:
+#   d.deletedAt   → query is `FROM documents d` (documents HAS deletedAt);
+#                   detector mis-binds `d` to a `departments d` from another handler.
+#   v.brand       → `v.make AS brand` (output alias; fleet_vehicles has `make`).
+#   pr.deductions → `pr."totalDeductions" AS credit` (output alias).
+#   grn.status    → `CASE WHEN grn."journalId"… END AS status` (output alias).
+#   je.postingDate→ `je."date"::text AS "postingDate"` (output alias).
+#   cd.title/type → company_documents is created dynamically at runtime with
+#                   title/type cols (INSERT proves it); not in the static dump.
+#   ea.isActive   → no literal ea.isActive; alias mis-resolution (employee_assignments has `status`).
+routes/documents.ts:d.deletedAt
+routes/employees.ts:v.brand
+routes/finance-reports.ts:pr.deductions
+routes/finance-reports.ts:grn.status
+routes/finance-reports.ts:je.postingDate
+routes/hr.ts:cd.title
+routes/hr.ts:cd.type
+routes/workspace.ts:ea.isActive
