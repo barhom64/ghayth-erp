@@ -158,6 +158,30 @@ export default function ExpensesPage() {
       ),
     },
     {
+      key: "paymentMethod",
+      header: "طريقة الدفع",
+      sortable: true,
+      // Returned by the expenses API and already in the CSV export, but the
+      // table never showed it.
+      render: (e) => {
+        const labels: Record<string, string> = { cash: "نقدي", bank: "تحويل بنكي", card: "بطاقة", credit: "آجل", cheque: "شيك" };
+        return <span className="text-muted-foreground text-xs">{e.paymentMethod ? (labels[e.paymentMethod] ?? e.paymentMethod) : "—"}</span>;
+      },
+    },
+    {
+      key: "isPaid",
+      header: "حالة السداد",
+      sortable: true,
+      // isPaid is returned by the API but was hidden everywhere — yet whether
+      // an expense is settled is one of the most important things to see.
+      render: (e) =>
+        e.isPaid ? (
+          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-xs bg-status-success-surface text-status-success-foreground">مدفوع</span>
+        ) : (
+          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-xs bg-status-warning-surface text-status-warning-foreground">غير مدفوع</span>
+        ),
+    },
+    {
       key: "status",
       header: "الحالة",
       sortable: true,
@@ -255,6 +279,7 @@ export default function ExpensesPage() {
           { key: "amount", label: "المبلغ" },
           { key: "operationType", label: "نوع العملية" },
           { key: "paymentMethod", label: "طريقة الدفع" },
+          { key: "isPaid", label: "حالة السداد" },
           { key: "costCenter", label: "مركز التكلفة" },
           { key: "createdAt", label: "التاريخ" },
           { key: "status", label: "الحالة" },
