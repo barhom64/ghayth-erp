@@ -57,6 +57,10 @@ export default function InvoicesPage() {
     dateField: "dueDate",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((i: any) => tagFilteredIds.has(i.id)) : preFiltered;
+  // Derive `outstanding` (total − paid) onto each row so the "المتبقّي"
+  // column can sort on it (DataTable sorts by row[key]) and the CSV export
+  // can reference it by key — both previously read a non-existent field.
+  const filteredWithBalance = (filtered || []).map((i: any) => ({ ...i, outstanding: Number(i.total ?? 0) - Number(i.paidAmount ?? 0) }));
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const previewFields: PreviewField[] = [
@@ -278,7 +282,7 @@ export default function InvoicesPage() {
         values={filters}
         onChange={setFilters}
         onExportCSV={() => exportToCSV(
-          ((filtered || []) as any[]).map((i) => ({ ...i, outstanding: Number(i.total ?? 0) - Number(i.paidAmount ?? 0) })),
+          filteredWithBalance as any[],
           [
             { key: "ref", label: "رقم الفاتورة" },
             { key: "clientName", label: "العميل" },
@@ -315,7 +319,7 @@ export default function InvoicesPage() {
       <DataTable
         columns={columns}
         onSortedDataChange={setPrintRows}
-        data={filtered}
+        data={filteredWithBalance}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
