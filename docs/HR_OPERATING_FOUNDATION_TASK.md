@@ -408,10 +408,10 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 | 6 | الحضور حسب طبيعة العمل | 🟢 **مكتمل من جانب الـ engine + كل callsites السيرفر** (HR-002 → HR-004). بقي: UI لإدارة الفئات والـ overrides من شاشة الإعدادات. | جداول + engine ✅ — check-in ✅ — check-out ✅ — autoViolation cron ✅ — UI لاحقًا |
 | 7 | التتبع حسب السياسة | 🟡 **الأساس + ingestion مبني** (HR-005): `field_tracking_points` + `POST field-ping` (مع enforcement لتردد الفئة) + `GET field-track` (breadcrumb + live). بقي: ربط الواجهة + تقرير المسار/التوقفات. | إنشاء `field_tracking_points` ✅ + ingestion API ✅ + policy frequency ✅ — UI wiring لاحقًا |
 | 8 | الربط المالي | 🟢 موجود (payroll GL + WPS) | لا تغيير معماري |
-| 9 | العهد والأصول | 🟡 موجود subsidiary accounts فقط | إضافة `employee_assets` bridge |
-| 10 | التقييم وإشارات الأداء | 🟢 **Engine + storage + Signals (Risk/Promotion/Burnout) مبني** (HR-006, HR-007). بقي: cron + UI داخل ملف الموظف 360. | بناء `employeeScoringEngine` ✅ + Risk/Promotion/Burnout engines ✅ + UI لاحقًا |
-| 11 | صندوق الأعمال والجدولة | 🟡 موجود `/hr/approvals` لكن جزئي | توحيد inbox واحد لكل HR workflows |
-| 12 | تهذيب الواجهات | 🟡 91 route، 51 صفحة | تنفيذ جدول الدمج في D.2 — `navigation.registry.ts` |
+| 9 | العهد والأصول | 🟢 **مكتمل** (HR-011) — `employee_assets` bridge مع lifecycle كامل + condition tracking. | إضافة `employee_assets` bridge ✅ |
+| 10 | التقييم وإشارات الأداء | 🟢 **مكتمل من جانب الـ engine + cron** (HR-006, HR-007, HR-009). UI داخل ملف الموظف لاحقًا. | scoring + signals + cron ✅ |
+| 11 | صندوق الأعمال والجدولة | 🟡 موجود `/hr/approvals` + Services Catalog (HR-010). توحيد inbox واحد لـ HR workflows لاحقًا. | catalog ✅ |
+| 12 | تهذيب الواجهات | 🟢 **مكتمل** (HR-011) — 17 entries → 9 canonical entries من §D.2، كل route قديم محفوظ. | تنفيذ §D.2 ✅ |
 
 ---
 
@@ -429,7 +429,8 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 | HR-007 | **الأولوية #10 §G — Risk/Promotion/Burnout Signals**. Migration 273 + `lib/employeeSignalsEngine.ts` بـ 3 detection engines. UPSERT idempotent مع acknowledgement reset عند escalation الـ severity فقط. 32/32 smoke tests خضراء. | 2026-06-08 |
 | #1836 | **§B (نموذج المؤسسة التشغيلي) — الدفعة الأساسية**. راجع HR-008 سابقاً (5 جداول + 3 أعمدة + 9 system positions). 18/18 smoke tests. | 2026-06-08 |
 | #1837 | **§B إكمال + #10 cron**. supervision_lines + approval_authorities + scoring cron entries. 22/22 smoke tests. | 2026-06-08 |
-| HR-010 | **الأولوية #4 — HR Services Catalog**. صفحة جديدة `/hr/services` تعرض كل خدمات HR (8 خدمات: leave/overtime/excuse/loan/letter/transfer/training/exit) مجمّعة بـ 4 categories (time-off/compensation/career/compliance). كل بطاقة router-link إلى الـ create-form الموجود ⇒ لا formspread ولا تكرار validation. مسجّلة في `routes/hrRoutes.tsx` + `navigation.registry.ts` تحت «بوابة الموظف → طلباتي». 16/16 smoke tests خضراء. | 2026-06-08 |
+| #1838 | **الأولوية #4 — HR Services Catalog** — راجع HR-010. 16/16 smoke tests. | 2026-06-08 |
+| HR-011 | **الأولوية #12 (تهذيب القائمة) + الأولوية #9 (employee_assets)**. (أ) إعادة هيكلة `navigation.registry.ts` HR section من 17 entry إلى 9 canonical entries من §D.2: لوحة HR / الموظفون / النشاط والحضور / الطلبات / الامتثال والجزاءات / الأداء والتطوير / الرواتب / التقارير / إعدادات. **كل route قديم محفوظ** كـ sub-link — الـ bookmarks والـ deep-links لا تنكسر. (ب) Migration 276 يُنشئ `employee_assets` bridge مع assetType + assetKey + serialNumber + warehouseAssetId اختياري + lifecycle كامل (assignedAt/assignedBy/returnedAt/returnedBy) + conditionOnAssign/conditionOnReturn للـ damage claims + partial index على returnedAt IS NULL للقوائم النشطة. 24/24 smoke tests خضراء. | 2026-06-08 |
 
 ---
 
