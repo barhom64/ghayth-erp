@@ -1556,6 +1556,189 @@ router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: 
 });
 
 // ============================================================================
+// LEGACY ORPHAN-PILGRIM RECOVERY (#1870 §3 — extension)
+// ============================================================================
+//
+// PR #1878 added per-batch recovery for unlinked rows imported AFTER
+// the engine fix landed. But rows imported via the pre-#1867 legacy
+// `doImport()` helper (notably the operator's 1,363-row case) were
+// never tagged in `umrah_import_changes`, so the per-batch screen
+// can't find them. This pair of endpoints sweeps `umrah_pilgrims`
+// directly for ANY row with a NULL agent / group / sub-agent FK,
+// independent of batch lineage — recovering legacy orphans without
+// the "re-import the file" advice that the original PR had to give.
+//
+// Defence: the link path requires the operator to pick ONE dimension
+// at a time, so we only touch the FK column they explicitly chose.
+
+router.get("/orphan-pilgrims", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const dimension = String(req.query.dimension ?? "agent");
+    const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
+    if (!["agent", "group", "subAgent"].includes(dimension)) {
+      throw new ValidationError("البُعد المطلوب غير صالح", { field: "dimension" });
+    }
+    const fkColumn = dimension === "agent" ? "agentId"
+                   : dimension === "group" ? "groupId"
+                   : "subAgentId";
+
+    // Same shape the per-batch endpoint returns so the FE page can
+    // reuse the row table component. No `umrah_import_changes` join
+    // here — that's the whole point.
+    const params: unknown[] = [scope.companyId];
+    let seasonClause = "";
+    if (seasonId) {
+      params.push(seasonId);
+      seasonClause = ` AND p."seasonId" = $${params.length}`;
+    }
+    const rows = await rawQuery<{
+      id: number; nuskNumber: string | null; fullName: string;
+      nationality: string | null; status: string | null;
+      seasonId: number | null;
+      agentId: number | null; groupId: number | null; subAgentId: number | null;
+    }>(
+      `SELECT p.id, p."nuskNumber", p."fullName", p.nationality, p.status,
+              p."seasonId", p."agentId", p."groupId", p."subAgentId"
+         FROM umrah_pilgrims p
+        WHERE p."companyId" = $1
+          AND p."${fkColumn}" IS NULL
+          AND p."deletedAt" IS NULL${seasonClause}
+        ORDER BY p."nuskNumber" NULLS LAST, p.id
+        LIMIT 2000`,
+      params
+    );
+
+    // Headline counts per dimension so the FE renders the three
+    // tabs with badges. Cheap — three COUNT(*) over the same
+    // filtered set.
+    const [counts] = await rawQuery<{
+      agentCount: string; groupCount: string; subAgentCount: string;
+    }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE p."agentId" IS NULL)::text AS "agentCount",
+         COUNT(*) FILTER (WHERE p."groupId" IS NULL)::text AS "groupCount",
+         COUNT(*) FILTER (WHERE p."subAgentId" IS NULL)::text AS "subAgentCount"
+       FROM umrah_pilgrims p
+      WHERE p."companyId" = $1 AND p."deletedAt" IS NULL${seasonClause}`,
+      params
+    );
+
+    res.json(maskFields(req, {
+      data: rows,
+      dimension,
+      totals: {
+        agent: Number(counts?.agentCount ?? "0"),
+        group: Number(counts?.groupCount ?? "0"),
+        subAgent: Number(counts?.subAgentCount ?? "0"),
+      },
+    }));
+  } catch (err) { handleRouteError(err, res, "List orphan pilgrims"); }
+});
+
+const linkOrphanSchema = z.object({
+  dimension: z.enum(["agent", "group", "subAgent"]),
+  pilgrimIds: z.array(z.coerce.number().int().positive()).min(1, "اختر صفًا واحدًا على الأقل"),
+  targetId: z.coerce.number().int().positive().optional(),
+  newEntityName: z.string().trim().min(1).optional(),
+  parentAgentId: z.coerce.number().int().positive().optional(),
+}).refine((v) => (v.targetId !== undefined) !== (v.newEntityName !== undefined), {
+  message: "يجب تحديد إما هدف موجود أو اسم لإنشاء كيان جديد، لا الاثنين معًا",
+});
+
+router.post("/orphan-pilgrims/link", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(linkOrphanSchema.safeParse(req.body));
+
+    const result = await withTransaction(async (client) => {
+      // Resolve the target — same shape as the per-batch link route
+      // (existing-entity ownership check OR create-new).
+      let resolvedTargetId: number;
+      if (b.targetId !== undefined) {
+        const table = b.dimension === "agent" ? "umrah_agents"
+                    : b.dimension === "group" ? "umrah_groups"
+                    : "umrah_sub_agents";
+        const exists = await client.query(
+          `SELECT id FROM ${table} WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+          [b.targetId, scope.companyId]
+        );
+        if (exists.rows.length === 0) {
+          throw new NotFoundError(
+            b.dimension === "agent" ? "الوكيل غير موجود"
+            : b.dimension === "group" ? "المجموعة غير موجودة"
+            : "الوكيل الفرعي غير موجود"
+          );
+        }
+        resolvedTargetId = b.targetId;
+      } else {
+        const name = b.newEntityName!;
+        if (b.dimension === "agent") {
+          const ins = await client.query(
+            `INSERT INTO umrah_agents ("companyId","branchId",name,"createdBy","createdAt","updatedAt")
+             VALUES ($1,$2,$3,$4,NOW(),NOW()) RETURNING id`,
+            [scope.companyId, scope.branchId || null, name, scope.userId]
+          );
+          resolvedTargetId = ins.rows[0].id;
+        } else if (b.dimension === "group") {
+          const ins = await client.query(
+            `INSERT INTO umrah_groups ("companyId","branchId",name,"agentId","createdBy","createdAt","updatedAt")
+             VALUES ($1,$2,$3,$4,$5,NOW(),NOW()) RETURNING id`,
+            [scope.companyId, scope.branchId || null, name, b.parentAgentId || null, scope.userId]
+          );
+          resolvedTargetId = ins.rows[0].id;
+        } else {
+          if (!b.parentAgentId) {
+            throw new ValidationError("يجب اختيار الوكيل الأم للوكيل الفرعي", { field: "parentAgentId" });
+          }
+          const parent = await client.query(
+            `SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+            [b.parentAgentId, scope.companyId]
+          );
+          if (parent.rows.length === 0) throw new NotFoundError("الوكيل الأم غير موجود");
+          const ins = await client.query(
+            `INSERT INTO umrah_sub_agents ("companyId","branchId","agentId",name,"createdBy","createdAt","updatedAt")
+             VALUES ($1,$2,$3,$4,$5,NOW(),NOW()) RETURNING id`,
+            [scope.companyId, scope.branchId || null, b.parentAgentId, name, scope.userId]
+          );
+          resolvedTargetId = ins.rows[0].id;
+        }
+      }
+
+      const fkColumn = b.dimension === "agent" ? "agentId"
+                     : b.dimension === "group" ? "groupId"
+                     : "subAgentId";
+      // STILL-NULL guard — if another operator already linked any of
+      // these rows since the page loaded, skip those (no double-link).
+      // Tenant guard is already on companyId.
+      const upd = await client.query(
+        `UPDATE umrah_pilgrims p
+            SET "${fkColumn}" = $1, "updatedBy" = $2, "updatedAt" = NOW()
+          WHERE p."companyId" = $3
+            AND p.id = ANY($4::int[])
+            AND p."${fkColumn}" IS NULL
+            AND p."deletedAt" IS NULL
+          RETURNING id`,
+        [resolvedTargetId, scope.userId, scope.companyId, b.pilgrimIds]
+      );
+      return { linkedCount: upd.rows.length, resolvedTargetId };
+    });
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update",
+      entity: "umrah_pilgrims", entityId: 0,
+      after: { source: "orphan_recovery", dimension: b.dimension, targetId: result.resolvedTargetId, linkedCount: result.linkedCount },
+    }).catch((e) => logger.error(e, "orphan-link bg"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.orphan_pilgrims.linked", entity: "umrah_pilgrims", entityId: 0,
+      after: { dimension: b.dimension, linkedCount: result.linkedCount },
+    }).catch((e) => logger.error(e, "orphan-link bg"));
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "Link orphan pilgrims"); }
+});
+
+// ============================================================================
 // SALES INVOICES
 // ============================================================================
 
@@ -2801,7 +2984,7 @@ router.get("/reports/compliance", authorize({ feature: "umrah", action: "list" }
       seasonPenP = ` AND pen."seasonId" = $${params.length}`;
     }
 
-    const [exemptRow, visaRow, overstayRow, penaltyRow] = await Promise.all([
+    const [exemptRow, visaRow, overstayRow, penaltyRow, orphanRow] = await Promise.all([
       // Currently exempt (PR #1482-1484 flag)
       rawQuery<{ c: string }>(
         `SELECT COUNT(*)::text AS c
@@ -2840,6 +3023,18 @@ router.get("/reports/compliance", authorize({ feature: "umrah", action: "list" }
             AND pen.status NOT IN ('paid', 'waived')${seasonPenP}`,
         params,
       ),
+      // §3 extension — pilgrims with ANY NULL FK (agent/group/subAgent)
+      // regardless of import batch lineage. Catches legacy orphans from
+      // the pre-#1867 doImport era that aren't visible on the per-batch
+      // recovery screen (no umrah_import_changes row). Same seasonP
+      // filter so the dashboard can scope by season.
+      rawQuery<{ c: string }>(
+        `SELECT COUNT(*)::text AS c
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
+            AND (p."agentId" IS NULL OR p."groupId" IS NULL OR p."subAgentId" IS NULL)${seasonP}`,
+        params,
+      ),
     ]);
 
     res.json(maskFields(req, {
@@ -2848,6 +3043,7 @@ router.get("/reports/compliance", authorize({ feature: "umrah", action: "list" }
       currentlyOverstaying: Number(overstayRow[0]?.c ?? "0"),
       unpaidPenaltiesCount: Number(penaltyRow[0]?.c ?? "0"),
       unpaidPenaltiesTotal: Number(penaltyRow[0]?.total ?? "0"),
+      orphanPilgrims: Number(orphanRow[0]?.c ?? "0"),
     }));
   } catch (err) { handleRouteError(err, res, "Compliance dashboard"); }
 });
