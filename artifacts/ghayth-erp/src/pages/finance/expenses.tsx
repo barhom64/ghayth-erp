@@ -222,6 +222,15 @@ export default function ExpensesPage() {
       render: (e) => <span className="text-muted-foreground text-xs">{e.createdByName || "—"}</span>,
     },
     {
+      key: "approvedByName",
+      header: "المعتمِد",
+      sortable: true,
+      // Resolved from the latest approval_actions 'approved' row (actionBy →
+      // user → employee); the expense approve path records the approver there,
+      // not on journal_entries.approvedBy.
+      render: (e) => <span className="text-muted-foreground text-xs">{e.approvedByName || "—"}</span>,
+    },
+    {
       key: "expand",
       header: "",
       render: (e) => (
@@ -312,6 +321,7 @@ export default function ExpensesPage() {
           { key: "relatedEntityType", label: "نوع الكيان المرتبط" },
           { key: "createdAt", label: "التاريخ" },
           { key: "createdByName", label: "المنشئ" },
+          { key: "approvedByName", label: "المعتمِد" },
           { key: "status", label: "الحالة" },
         ], "المصروفات")}
         resultCount={filtered?.length}
