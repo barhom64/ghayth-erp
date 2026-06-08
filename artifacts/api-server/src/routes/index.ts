@@ -120,6 +120,7 @@ import { vendorsRouter } from "./finance-vendors.js";
 import { vendorContractsRouter } from "./finance-vendor-contracts.js";
 import { costCentersRouter } from "./finance-cost-centers.js";
 import disciplineRouter from "./hr-discipline.js";
+import orgRouter from "./org.js";
 import loansRouter from "./hr-loans.js";
 import overtimeRouter from "./hr-overtime.js";
 import exitRouter from "./hr-exit.js";
@@ -347,6 +348,8 @@ router.use("/hr", requireModule("hr"), wpsRouter);
 router.use("/hr", requireModule("hr"), complianceRouter);
 router.use("/hr/training", requireModule("hr"), trainingRouter);
 router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
+// نموذج المؤسسة التشغيلي — مرفق تحت /org، يتطلب صلاحية HR (نفس family).
+router.use("/org", requireModule("hr"), orgRouter);
 // Per-user finance limiter — mounted once on /finance so the dozen+
 // finance sub-routers below share a single per-user budget.
 router.use("/finance", financeUserLimiter);

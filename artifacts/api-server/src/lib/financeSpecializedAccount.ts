@@ -91,3 +91,43 @@ export function deriveSpecializedAccount(input: {
   const target = (input.targetType ? round(input.targetType) : "none") as AllocationTargetType;
   return TARGET_MAP[target] ?? GENERAL;
 }
+
+// #1715 (owner feedback) — the human-readable «التوجيه المحاسبي المتوقّع»
+// consequence of an allocation target: the linked-entity name, the operational
+// effect the link produces, and any future task it schedules. Pure mapping so
+// the impact-preview endpoint (and tests) can reuse it.
+const ENTITY_LABELS: Record<string, string> = {
+  vehicle: "مركبة", vehicle_maintenance: "صيانة مركبة", property: "عقار",
+  property_maintenance: "صيانة عقار", unit: "وحدة عقارية", contract: "عقد",
+  project: "مشروع", umrah_season: "موسم عمرة", umrah_agent: "وكيل عمرة",
+  transport_trip: "رحلة نقل", supplier: "مورد", customer: "عميل",
+  employee: "موظف", fixed_asset: "أصل ثابت",
+};
+
+export function deriveOperationalEffectHint(input: {
+  targetType?: string | null;
+  spec: SpecializedAccount;
+}): { entityLabel: string | null; effect: string | null; futureTask: string | null } {
+  const t = input.targetType ?? "none";
+  const entityLabel = ENTITY_LABELS[t] ?? (t !== "none" ? t : null);
+  let effect: string | null = null;
+  let futureTask: string | null = null;
+  if (t === "vehicle_maintenance") {
+    effect = "ستُنشأ تذكرة صيانة مركبة وتُربط بهذا المصروف، ويُحدَّث عدّاد المركبة.";
+    futureTask = "تذكير الصيانة الوقائية القادم يُحتسب من جدول صيانة المركبة.";
+  } else if (t === "property_maintenance") {
+    effect = "ستُنشأ تذكرة صيانة عقارية وتُربط بهذا المصروف (العقار/الوحدة/المستأجر).";
+  } else if (input.spec.capitalize && (t === "fixed_asset" || input.spec.purpose === "fixed_asset_purchase")) {
+    effect = "يُرسمَل كأصل ثابت بدل قيده مصروفًا، وتزداد قيمة الأصل الدفترية.";
+    futureTask = "سيبدأ احتساب الإهلاك الشهري تلقائيًا عبر محرك الإهلاك.";
+  } else if (input.spec.capitalize) {
+    effect = "يُضاف إلى المخزون بدل قيده مصروفًا.";
+  } else if (t === "vehicle") {
+    effect = "يُحمَّل على المركبة ويظهر في تقرير تكلفة المركبة.";
+  } else if (t === "property" || t === "unit" || t === "contract") {
+    effect = "يُحمَّل على العقار/الوحدة ويظهر في تقرير ربحية العقار.";
+  } else if (t === "project") {
+    effect = "يُحمَّل على المشروع ويظهر في تكلفة المشروع.";
+  }
+  return { entityLabel, effect, futureTask };
+}

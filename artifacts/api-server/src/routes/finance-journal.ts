@@ -143,6 +143,24 @@ const createExpenseSchema = z.object({
     // #1715 §5 — link to an existing ticket instead of creating a new one.
     existingTicketId: z.coerce.number().int().positive().optional(),
   }).optional(),
+  // #1715 (owner acceptance) — a capital purchase opens a fixed asset that the
+  // depreciation engine then depreciates. Gated on create + name.
+  assetCreation: z.object({
+    create: z.boolean().optional(),
+    name: z.string().optional(),
+    usefulLifeYears: z.coerce.number().int().positive().optional(),
+    category: z.string().optional(),
+    depreciationMethod: z.string().optional(),
+    salvageValue: z.coerce.number().optional(),
+  }).optional(),
+  // #1715 (owner acceptance) — a vehicle fuel expense opens a fuel log.
+  fuelLog: z.object({
+    create: z.boolean().optional(),
+    liters: z.coerce.number().optional(),
+    costPerLiter: z.coerce.number().optional(),
+    odometer: z.coerce.number().optional(),
+    stationName: z.string().optional(),
+  }).optional(),
 });
 
 const updateDescriptionSchema = z.object({
@@ -450,6 +468,22 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
         value: `${spec.label} (${resolvedCode})${spec.capitalize ? " — يُرسمَل كأصل/مخزون بدل قيده مصروفًا" : ""}`,
         severity: spec.capitalize ? "warning" : "info",
       });
+
+      // #1715 (owner feedback) — surface the full «التوجيه المحاسبي المتوقّع»:
+      // the linked entity, the OPERATIONAL EFFECT the link produces, and any
+      // future task it schedules — so the operator sees the consequence before
+      // saving («لا يوجد ربط بلا أثر»).
+      const { deriveOperationalEffectHint } = await import("../lib/financeSpecializedAccount.js");
+      const hint = deriveOperationalEffectHint({ targetType, spec });
+      if (hint.entityLabel) {
+        items.push({ category: "الكيان المرتبط", label: "مربوط بـ", value: hint.entityLabel, severity: "info" });
+      }
+      if (hint.effect) {
+        items.push({ category: "الأثر التشغيلي", label: "الأثر", value: hint.effect, severity: "success" });
+      }
+      if (hint.futureTask) {
+        items.push({ category: "مهمة مستقبلية", label: "لاحقًا", value: hint.futureTask, severity: "info" });
+      }
     }
 
     if (costCenter) {
@@ -549,6 +583,9 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       costCenterDistribution,
       lineAllocation,
       maintenanceTicket,
+      assetCreation,
+      fuelLog,
+      date: expenseDate,
     } = b;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
@@ -915,6 +952,45 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
           }
           logger.info({ journalId: posted.journalId, effect: eff }, "[finance] maintenance ticket effect applied");
         }
+      }
+
+      // #1715 (owner acceptance: «شراء مركبة يفتح أصل وإهلاك») — a capital
+      // purchase creates a fixed asset; the depreciation engine takes over.
+      // In-txn + idempotency-guarded so a retry never creates a duplicate asset.
+      if (assetCreation?.create && assetCreation.name && !posted.alreadyExists) {
+        const { applyAssetCreationEffect } = await import("../lib/financeOperationalEffect.js");
+        const a = await applyAssetCreationEffect(client, {
+          companyId: effectiveCompanyId,
+          branchId: branchId ?? scope.branchId ?? null,
+          journalId: posted.journalId,
+          name: assetCreation.name,
+          cost: baseAmount,
+          usefulLifeYears: assetCreation.usefulLifeYears ?? null,
+          category: assetCreation.category ?? null,
+          depreciationMethod: assetCreation.depreciationMethod ?? null,
+          salvageValue: assetCreation.salvageValue ?? null,
+          purchaseDate: expenseDate ?? null,
+        });
+        logger.info({ journalId: posted.journalId, assetId: a.assetId }, "[finance] capital asset created from expense");
+      }
+
+      // #1715 (owner acceptance: «وقود مركبة يظهر الممشى واللترات وسعر اللتر») —
+      // a vehicle fuel expense opens a fuel log + updates the odometer.
+      if (fuelLog?.create && entityLink.vehicleId != null && !posted.alreadyExists) {
+        const { applyFuelLogEffect } = await import("../lib/financeOperationalEffect.js");
+        const fl = await applyFuelLogEffect(client, {
+          companyId: effectiveCompanyId,
+          branchId: branchId ?? scope.branchId ?? null,
+          journalId: posted.journalId,
+          vehicleId: entityLink.vehicleId,
+          totalCost: baseAmount,
+          liters: fuelLog.liters ?? null,
+          costPerLiter: fuelLog.costPerLiter ?? null,
+          mileageAtFuel: fuelLog.odometer ?? null,
+          stationName: fuelLog.stationName ?? null,
+          fuelDate: expenseDate ?? null,
+        });
+        logger.info({ journalId: posted.journalId, fuelLogId: fl.fuelLogId }, "[finance] fuel log created from expense");
       }
 
       const approval = await initiateApprovalChain({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, chainType: "expenses", refType: "expense", refId: posted.journalId, amount: Number(amount ?? 0) });
