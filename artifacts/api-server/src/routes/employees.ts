@@ -1381,7 +1381,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
       throw new NotFoundError("الموظف غير موجود");
     }
 
-    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles] = await Promise.all([
+    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles, contract, custodies, position] = await Promise.all([
       rawQuery<Record<string, unknown>>(
         `SELECT pt.id, pt.title, pt.status, pt.priority, pt."dueDate", p.name AS "projectName"
          FROM project_tasks pt
@@ -1482,6 +1482,54 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
           ORDER BY ur.is_primary DESC NULLS LAST, r.level DESC NULLS LAST, r.role_key`,
         [id, scope.companyId]
       ).catch((e) => { logger.error(e, "employees roles query failed"); return []; }),
+      // HR-012 / #1799 priority #1 — Employee 360 tab «العقد».
+      // Loads the active employment contract joined to the type label
+      // + branch. Returns NULL when no contract row exists (rare, but
+      // pre-onboarding employees may not have one yet). Sensitive
+      // fields (salary breakdown) aren't returned here — they live on
+      // the `payroll` tab which has separate RBAC.
+      rawQuery<Record<string, unknown>>(
+        `SELECT c.id, c.ref, c."contractType", c."startDate", c."endDate",
+                c.status, c."approvalStatus", c."probationEndDate",
+                c."probationStatus", c."signedByEmployee",
+                c."employeeSignedAt", c."createdAt"
+           FROM employee_contracts c
+          WHERE c."employeeId" = $1 AND c."companyId" = $2
+            AND (c.status = 'active' OR c.status IS NULL)
+          ORDER BY c."startDate" DESC NULLS LAST, c.id DESC LIMIT 1`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "employees contract query failed"); return []; }),
+      // HR-012 / #1799 priority #1 — Employee 360 tab «العهد».
+      // Pulls every asset (laptop, phone, SIM, …) from the
+      // employee_assets bridge (#1799 #9, migration 276) — active
+      // first, then returned history. Bounded LIMIT 50 so a long-tenure
+      // employee's record doesn't blow the response.
+      rawQuery<Record<string, unknown>>(
+        `SELECT ea.id, ea."assetType", ea."assetKey", ea."assetLabel",
+                ea."serialNumber", ea."assignedAt", ea."returnedAt",
+                ea."conditionOnAssign", ea."conditionOnReturn", ea.notes
+           FROM employee_assets ea
+          WHERE ea."assignmentId" = $3 AND ea."companyId" = $2
+          ORDER BY ea."returnedAt" NULLS FIRST, ea."assignedAt" DESC
+          LIMIT 50`,
+        [id, scope.companyId, employee.assignmentId]
+      ).catch((e) => { logger.error(e, "employees custodies query failed"); return []; }),
+      // HR-012 / #1799 priority #1 — Employee 360 tab «المسميات».
+      // Resolves the assignment's position (admin role) to its label
+      // alongside the existing job_title (professional). Returns NULL
+      // when the assignment hasn't been categorized yet (legacy
+      // assignments pre §B migration 274). The position table is
+      // company-scoped (companyId IS NULL = system template), so we
+      // match by either.
+      employee.assignmentId ? rawQuery<Record<string, unknown>>(
+        `SELECT p.id, p."positionKey", p."labelAr", p."labelEn",
+                p.level, p.description
+           FROM employee_assignments ea
+           JOIN positions p ON p.id = ea."positionId"
+            AND (p."companyId" IS NULL OR p."companyId" = $2)
+          WHERE ea.id = $3 LIMIT 1`,
+        [id, scope.companyId, employee.assignmentId]
+      ).catch((e) => { logger.error(e, "employees position query failed"); return []; }) : Promise.resolve([]),
     ]);
 
     res.json(maskFields(req, {
@@ -1492,6 +1540,13 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
       // login). `roles` is always an array (empty when no rbac grants).
       userAccount: Array.isArray(userAccount) && userAccount.length > 0 ? userAccount[0] : null,
       roles: roles ?? [],
+      // HR-012 — second expansion. `contract` is single-row or null;
+      // `position` is the resolved admin position (single object or
+      // null); `custodies` is the asset list (active first, then
+      // returned).
+      contract: Array.isArray(contract) && contract.length > 0 ? contract[0] : null,
+      position: Array.isArray(position) && position.length > 0 ? position[0] : null,
+      custodies: custodies ?? [],
     }));
   } catch (err) {
     handleRouteError(err, res, "Get employee error:");
