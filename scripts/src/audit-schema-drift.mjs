@@ -57,6 +57,11 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  extractRawQueryBodies,
+  stripInterpolations,
+} from "./lib/raw-query-bodies.mjs";
+
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 // db/schema.sql is a tiny wrapper that `\ir`s schema_pre.sql + schema_post.sql
 // (split because the proxied GitHub upload path tops out around 800 KB).
@@ -208,9 +213,14 @@ async function loadSchemaIdentifiers() {
 
 // Strip ${…} interpolations and single-quoted string values from a
 // template literal body so we only see SQL structure.
-function sanitiseTemplate(body) {
-  // Replace ${…} (non-greedy, balanced-ish) with a neutral placeholder.
-  let out = body.replace(/\$\{[^}]*\}/g, " ? ");
+export function sanitiseTemplate(body) {
+  // Replace ${…} interpolations with a neutral placeholder, tolerating
+  // balanced/nested braces. A one-level regex (`/\$\{[^}]*\}/g`) stops at
+  // the FIRST `}`, so a nested interpolation like `${ cond ? `${x}` : '' }`
+  // is only partially blanked — leftover SQL debris can produce a false
+  // finding or let a real identifier drift slip through unscanned (see
+  // stripInterpolations header for the full bug class).
+  let out = stripInterpolations(body, " ? ");
   // Remove single-quoted string literals (values, not identifiers).
   out = out.replace(/'(?:[^'\\]|\\.)*'/g, " ");
   // Remove SQL line comments.
@@ -220,54 +230,6 @@ function sanitiseTemplate(body) {
   return out;
 }
 
-// Pull every `rawQuery(`…`)` template literal body out of a source
-// file, including multi-line ones and ones with embedded ${} expressions.
-//
-// The `<[^>]*>?` segment makes the regex tolerant of TypeScript generic
-// type parameters between `rawQuery` and `(` — without it, every
-// `rawQuery<RowType>(\`…\`)` call (which is the dominant shape: ~90%
-// of usages) was silently skipped by this audit. Note the inner `[^>]*`
-// is greedy enough for single-level generics like `<{ id: number }>` and
-// `<RowType & { extra?: string }>`; we don't try to balance nested
-// `<...>` because none of the codebase's generics nest.
-function extractRawQueryBodies(source) {
-  const bodies = [];
-  const re = /rawQuery\s*(?:<[^>]*>)?\s*\(\s*`/g;
-  let match;
-  while ((match = re.exec(source)) !== null) {
-    // Walk forward from match end, handling nested ${...} blocks.
-    let i = match.index + match[0].length;
-    let depth = 0; // depth of ${...} interpolations
-    let body = "";
-    while (i < source.length) {
-      const ch = source[i];
-      if (ch === "\\" && i + 1 < source.length) {
-        body += source[i] + source[i + 1];
-        i += 2;
-        continue;
-      }
-      if (ch === "$" && source[i + 1] === "{") {
-        depth++;
-        body += "${";
-        i += 2;
-        continue;
-      }
-      if (ch === "}" && depth > 0) {
-        depth--;
-        body += "}";
-        i++;
-        continue;
-      }
-      if (ch === "`" && depth === 0) {
-        break;
-      }
-      body += ch;
-      i++;
-    }
-    bodies.push(body);
-  }
-  return bodies;
-}
 
 // Find every Postgres-style quoted identifier "foo" inside a sanitised
 // SQL fragment. Skips identifiers that are column ALIASES introduced
@@ -280,7 +242,7 @@ function extractRawQueryBodies(source) {
 // is also treated as the alias rather than a schema column. That's how
 // `ORDER BY "avgHours"` and `WHERE "totalDue" > 0` legitimately work
 // against an alias defined upstream in the same SELECT.
-function findQuotedIdentifiers(sql) {
+export function findQuotedIdentifiers(sql) {
   const aliases = new Set();
   const aliasRe = /\bAS\s+"([a-zA-Z_][a-zA-Z0-9_]*)"/gi;
   let am;
@@ -407,7 +369,12 @@ async function main() {
   process.exit(1);
 }
 
-main().catch((err) => {
-  console.error("[audit-schema-drift] crashed:", err);
-  process.exit(2);
-});
+// Only run main() when invoked directly (not when imported by the test).
+const invokedDirectly =
+  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error("[audit-schema-drift] crashed:", err);
+    process.exit(2);
+  });
+}
