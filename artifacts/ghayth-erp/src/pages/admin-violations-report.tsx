@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   PageShell,
@@ -89,11 +90,36 @@ export default function ViolationsReportPage() {
   );
   const resolving = resolveMut.isPending ? resolveMut.variables?.id ?? null : null;
 
+  // Bulk-resolve the currently-filtered OPEN backlog in one action (governance
+  // cleanup for the "1307 findings" case). Sends only the active filters.
+  const { toast } = useToast();
+  const bulkMut = useApiMutation<{ resolved: number }, { type?: string; priority?: string; department?: string }>(
+    "/admin/violations/bulk-resolve",
+    "PATCH",
+    [["violations-report"]],
+    { onSuccess: (res) => toast({ title: `تم إغلاق ${res?.resolved ?? 0} مخالفة` }) },
+  );
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
   const handleResolve = (id: number) => {
     resolveMut.mutate({ id });
+  };
+
+  const openCount = Number(summary.open || 0);
+  const handleBulkResolve = () => {
+    const scopeLabel = [
+      filters.type && (TYPE_LABELS[filters.type] || filters.type),
+      filters.department && (DEPARTMENT_LABELS[filters.department] || filters.department),
+      filters.priority && (PRIORITY_CONFIG[filters.priority]?.label || filters.priority),
+    ].filter(Boolean).join(" / ") || "كل الأنواع والأقسام";
+    if (!window.confirm(`سيتم إغلاق كل المخالفات المفتوحة المطابقة (${scopeLabel}). متابعة؟`)) return;
+    bulkMut.mutate({
+      type: filters.type || undefined,
+      priority: filters.priority || undefined,
+      department: filters.department || undefined,
+    });
   };
 
   const violationColumns: DataTableColumn<any>[] = [
@@ -188,29 +214,41 @@ export default function ViolationsReportPage() {
       subtitle="تحليل وتتبع المخالفات الإدارية"
       breadcrumbs={[{ href: "/hr/violations", label: "المخالفات" }, { label: "التقرير" }]}
       actions={
-        <PrintButton
-          entityType="report_violations_report"
-          entityId="list"
-          size="icon"
-          label="طباعة تقرير المخالفات"
-          payload={() => ({
-            entity: {
-              title: "تقرير المخالفات الإدارية",
-              totalViolations: violations.length,
-              filters: JSON.stringify(filters),
-            },
-            items: violations.map((v: any) => ({
-              "#": v.id,
-              "الموظف": v.employeeName || "—",
-              "النوع": TYPE_LABELS[v.type] || v.type || "—",
-              "القسم": DEPARTMENT_LABELS[v.department] || v.department || "—",
-              "الأولوية": PRIORITY_CONFIG[v.priority]?.label || v.priority || "—",
-              "الوصف": v.description || "—",
-              "التاريخ": v.createdAt ? formatDateAr(v.createdAt) : "—",
-              "الحالة": v.status === "resolved" ? "تم حلها" : "مفتوحة",
-            })),
-          })}
-        />
+        <div className="flex items-center gap-2">
+          <GuardedButton
+            perm="admin:update"
+            variant="outline"
+            size="sm"
+            disabled={bulkMut.isPending || openCount === 0}
+            onClick={handleBulkResolve}
+          >
+            <CheckCircle2 className="h-4 w-4 me-1" />
+            {bulkMut.isPending ? "جارٍ الإغلاق…" : "إغلاق المخالفات المطابقة"}
+          </GuardedButton>
+          <PrintButton
+            entityType="report_violations_report"
+            entityId="list"
+            size="icon"
+            label="طباعة تقرير المخالفات"
+            payload={() => ({
+              entity: {
+                title: "تقرير المخالفات الإدارية",
+                totalViolations: violations.length,
+                filters: JSON.stringify(filters),
+              },
+              items: violations.map((v: any) => ({
+                "#": v.id,
+                "الموظف": v.employeeName || "—",
+                "النوع": TYPE_LABELS[v.type] || v.type || "—",
+                "القسم": DEPARTMENT_LABELS[v.department] || v.department || "—",
+                "الأولوية": PRIORITY_CONFIG[v.priority]?.label || v.priority || "—",
+                "الوصف": v.description || "—",
+                "التاريخ": v.createdAt ? formatDateAr(v.createdAt) : "—",
+                "الحالة": v.status === "resolved" ? "تم حلها" : "مفتوحة",
+              })),
+            })}
+          />
+        </div>
       }
     >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
