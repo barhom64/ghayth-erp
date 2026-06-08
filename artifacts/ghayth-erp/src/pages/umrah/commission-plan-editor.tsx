@@ -21,7 +21,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, currentMonthPaddedRiyadh, currentYearRiyadh } from "@/lib/formatters";
 import { ArrowRight, Plus, Save, Trash2, Calculator, AlertCircle } from "lucide-react";
 
 // Simulator schema. Its FormShell is independent because the
@@ -461,9 +461,12 @@ function SimulatorTab({
   const runSim = async (values: SimForm) => {
     setSimBusy(true);
     try {
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
+      // Riyadh-local month/year — the check:finance-period-drift
+      // guard rejects `new Date().getMonth()` for finance-impacting
+      // sites because Saudi operators wall-clock differs from UTC by
+      // 3h, which silently shifts the calculation month by a day.
+      const month = Number(currentMonthPaddedRiyadh());
+      const year = currentYearRiyadh();
       let res: any;
       if (planRowId) {
         res = await apiFetch(`/umrah/commission-plans/${planRowId}/simulate`, {
