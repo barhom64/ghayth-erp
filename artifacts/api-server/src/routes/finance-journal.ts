@@ -371,6 +371,43 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
   }
 });
 
+// #1715 §5 — finance-owned helper for «ربط بتذكرة قائمة». Returns the OPEN
+// (unlinked) maintenance tickets the operator can link an expense to. Scoped
+// to finance.journal so a finance user needn't hold the fleet/properties
+// maintenance permission, and only ever exposes id + a short label.
+journalRouter.get("/maintenance-ticket-options", authorize({ feature: "finance.journal", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const target = String(req.query.target ?? "");
+    const vehicleId = req.query.vehicleId != null ? Number(req.query.vehicleId) : null;
+    const unitId = req.query.unitId != null ? Number(req.query.unitId) : null;
+    let options: { id: number; label: string }[] = [];
+    if (target === "vehicle" && vehicleId) {
+      const rows = await rawQuery<{ id: number; type: string | null; serviceDate: string | null }>(
+        `SELECT id, type, "serviceDate"::text AS "serviceDate"
+           FROM fleet_maintenance
+          WHERE "companyId" = $1 AND "vehicleId" = $2 AND "deletedAt" IS NULL AND "linkedExpenseId" IS NULL
+          ORDER BY id DESC LIMIT 50`,
+        [scope.companyId, vehicleId],
+      );
+      options = rows.map((r) => ({ id: r.id, label: `#${r.id} · ${r.type ?? "صيانة"}${r.serviceDate ? ` · ${r.serviceDate}` : ""}` }));
+    } else if (target === "property" && unitId) {
+      const rows = await rawQuery<{ id: number; category: string | null; status: string | null }>(
+        `SELECT id, category, status
+           FROM maintenance_requests
+          WHERE "companyId" = $1 AND "unitId" = $2 AND "deletedAt" IS NULL AND "linkedExpenseId" IS NULL
+          ORDER BY id DESC LIMIT 50`,
+        [scope.companyId, unitId],
+      );
+      options = rows.map((r) => ({ id: r.id, label: `#${r.id} · ${r.category ?? "صيانة"}${r.status ? ` · ${r.status}` : ""}` }));
+    }
+    res.json({ data: options });
+  } catch (err) {
+    logger.error(err, "Get maintenance ticket options error:");
+    res.json({ data: [] });
+  }
+});
+
 // Impact preview — shows what will happen when the expense is created
 journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
