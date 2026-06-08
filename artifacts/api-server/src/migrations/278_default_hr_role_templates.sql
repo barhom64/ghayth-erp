@@ -1,4 +1,4 @@
--- Migration 277 — Default HR role templates (#1799 §J seed)
+-- Migration 278 — Default HR role templates (#1799 §J seed)
 --
 -- @rollback: Idempotent seed; to undo manually:
 --   DELETE FROM rbac_roles WHERE is_template = TRUE AND role_key IN

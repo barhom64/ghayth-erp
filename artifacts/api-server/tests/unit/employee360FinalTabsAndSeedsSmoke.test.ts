@@ -27,7 +27,7 @@ const PAGE_SRC = readFileSync(
   "utf8",
 );
 const MIGRATION_SRC = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/migrations/277_default_hr_role_templates.sql"),
+  join(REPO_ROOT, "artifacts/api-server/src/migrations/278_default_hr_role_templates.sql"),
   "utf8",
 );
 
