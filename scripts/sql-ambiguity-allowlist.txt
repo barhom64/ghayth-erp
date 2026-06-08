@@ -58,13 +58,13 @@ routes/finance-reports.ts:createdAt
 routes/hr-saudi-compliance.ts:employeeId
 routes/hr.ts:status
 
-# ── Refreshed-dump FPs (missing-column class, surfaced 2026-06-08) ──────
-# The dump refresh aligned the canonical schema to live (dropping columns
-# live no longer has), which surfaced 8 missing-column hits that are all
-# false positives of the fragment-inlining / alias heuristic — in every
-# case the real SQL uses the correct column:
-#   d.deletedAt   → query is `FROM documents d` (documents HAS deletedAt);
-#                   detector mis-binds `d` to a `departments d` from another handler.
+# ── Scanner-heuristic FPs (missing-column class) ───────────────────────
+# Surfaced once the hardened generic-tolerant extractor began enforcing
+# the missing-column check. Each is a false positive of the
+# fragment-inlining / alias-resolution heuristic — the real SQL uses the
+# correct column:
+#   d.deletedAt   → real query is `FROM documents d` (documents HAS deletedAt);
+#                   detector mis-binds `d` to a `departments d` in another handler.
 #   v.brand       → `v.make AS brand` (output alias; fleet_vehicles has `make`).
 #   pr.deductions → `pr."totalDeductions" AS credit` (output alias).
 #   grn.status    → `CASE WHEN grn."journalId"… END AS status` (output alias).
@@ -81,4 +81,19 @@ routes/hr.ts:cd.title
 routes/hr.ts:cd.type
 routes/workspace.ts:ea.isActive
 
-# Re-trigger guard CI on a fresh head after refreshed-dump FP baseline (2026-06-08).
+# ── Stale-dump FPs (missing-column class, surfaced 2026-06-08) ──────────
+# Same root cause as scripts/schema-drift-allowlist.txt: CI loads the
+# committed (stale) db/schema*.sql dump and marks every migration at or
+# below db/.baseline-cutoff (258) "applied" WITHOUT running it. Several
+# columns added by PRE-cutoff migrations are therefore missing from the CI
+# harness even though production has them, so the scanner reports them as
+# "column does not exist". Each was verified to EXIST in the live DB:
+#   jl.branchId      → journal_lines.branchId    (migration 236)
+#   gl.deletedAt     → gov_integration_links.deletedAt (pre-cutoff)
+#   e.isNonResident  → employees.isNonResident   (migration 233)
+#   e.whtRate        → employees.whtRate         (migration 233)
+# Drop the matching line once the committed dump is regenerated.
+routes/finance-cost-centers.ts:jl.branchId
+routes/gov-integrations.ts:gl.deletedAt
+routes/hr.ts:e.isNonResident
+routes/hr.ts:e.whtRate
