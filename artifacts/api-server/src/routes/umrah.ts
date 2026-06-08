@@ -31,6 +31,7 @@ import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/
 import { logger } from "../lib/logger.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
 import {
+  confirmMutamersImport,
   confirmVouchersImport,
   previewMutamersImport,
   previewVouchersImport,
@@ -288,6 +289,7 @@ const importPreviewSchema = z.object({
 const importMutamersSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
   rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  fileName: z.string().trim().optional(),
   columnMapping: columnMappingSchema,
 });
 
@@ -1558,19 +1560,36 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
 router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, columnMapping } = zodParse(importMutamersSchema.safeParse(req.body));
-    // Translate Arabic-keyed Excel rows BEFORE the legacy doImport
-    // touches them — doImport reads fields like `passportNumber`,
-    // `fullName`, `nuskNumber` directly. Without normalization the
-    // values would all be `undefined` and every row would be dropped
-    // as an "error row" silently.
+    const { seasonId, rows: importRows, fileName, columnMapping } = zodParse(importMutamersSchema.safeParse(req.body));
+    await requireOpenSeason(seasonId, scope.companyId);
+    // Route through the engine's `confirmMutamersImport` — NOT the
+    // legacy `doImport` helper. `doImport` inserts every row with
+    // `agentId = NULL` (and no groupId / subAgentId) because it
+    // never calls resolveAgent / resolveGroup / resolveSubAgent,
+    // which means a "successful" import lands rows that show up on
+    // NO agent's roster, NO group dashboard, and NO sub-agent
+    // statement — operator reported a 1,363-row import that
+    // appeared to succeed but produced zero visible pilgrims /
+    // agents / details. The engine path:
+    //   - Resolves nuskAgentNumber → umrah_agents.id (auto-creates
+    //     primary agents when the file references a new one).
+    //   - Resolves group + sub-agent via the same lookup tables the
+    //     UI uses.
+    //   - Writes a real `umrah_import_batches` row (the dashboard
+    //     and /umrah/imports list query this, not umrah_import_logs)
+    //     so the operator can drill into "what came in on batch N".
+    const importScope = {
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      seasonId,
+    };
     const normalizedRows = normalizeImportRows(importRows, "mutamers", columnMapping);
-    const importBody = { seasonId, rows: normalizedRows, fileType: "mutamers", fileName: "import-mutamers" };
-    const result = await doImport(scope, importBody);
+    const result = await confirmMutamersImport(importScope, normalizedRows, fileName ?? "import-mutamers");
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "umrah.import.mutamers.completed", entity: "umrah_import_logs",
-      entityId: (result as { batchId?: number } | null)?.batchId ?? 0,
+      action: "umrah.import.mutamers.completed", entity: "umrah_import_batches",
+      entityId: result.batchId ?? 0,
       details: JSON.stringify({ seasonId, rowCount: importRows.length }),
     }).catch((e) => logger.error(e, "umrah import bg"));
     res.json(result);

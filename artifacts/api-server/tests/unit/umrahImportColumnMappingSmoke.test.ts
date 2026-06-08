@@ -107,12 +107,13 @@ describe("umrah route — normalization wired into every import path", () => {
     expect(ROUTE).toMatch(/previewMutamersImport\(importScope, normalizedRows\)/);
   });
 
-  it("/import/mutamers normalizes BEFORE handing to doImport (legacy path)", () => {
-    // doImport reads fields like passportNumber/fullName/nuskNumber
-    // directly. Without normalization those would all be undefined and
-    // every row dropped silently.
+  it("/import/mutamers normalizes BEFORE calling confirmMutamersImport", () => {
+    // The route is now wired to the engine (not the legacy doImport
+    // helper) so the import resolves agentId / groupId / subAgentId
+    // FKs from each row — without that resolution every row landed
+    // with NULL FKs and didn't show on any agent roster.
     expect(ROUTE).toMatch(/const normalizedRows = normalizeImportRows\(importRows, "mutamers", columnMapping\)/);
-    expect(ROUTE).toMatch(/rows: normalizedRows, fileType: "mutamers"/);
+    expect(ROUTE).toMatch(/confirmMutamersImport\(importScope, normalizedRows,/);
   });
 
   it("/import/vouchers normalizes BEFORE calling confirmVouchersImport", () => {
