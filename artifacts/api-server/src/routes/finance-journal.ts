@@ -450,6 +450,22 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
         value: `${spec.label} (${resolvedCode})${spec.capitalize ? " — يُرسمَل كأصل/مخزون بدل قيده مصروفًا" : ""}`,
         severity: spec.capitalize ? "warning" : "info",
       });
+
+      // #1715 (owner feedback) — surface the full «التوجيه المحاسبي المتوقّع»:
+      // the linked entity, the OPERATIONAL EFFECT the link produces, and any
+      // future task it schedules — so the operator sees the consequence before
+      // saving («لا يوجد ربط بلا أثر»).
+      const { deriveOperationalEffectHint } = await import("../lib/financeSpecializedAccount.js");
+      const hint = deriveOperationalEffectHint({ targetType, spec });
+      if (hint.entityLabel) {
+        items.push({ category: "الكيان المرتبط", label: "مربوط بـ", value: hint.entityLabel, severity: "info" });
+      }
+      if (hint.effect) {
+        items.push({ category: "الأثر التشغيلي", label: "الأثر", value: hint.effect, severity: "success" });
+      }
+      if (hint.futureTask) {
+        items.push({ category: "مهمة مستقبلية", label: "لاحقًا", value: hint.futureTask, severity: "info" });
+      }
     }
 
     if (costCenter) {
