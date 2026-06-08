@@ -153,6 +153,14 @@ const createExpenseSchema = z.object({
     depreciationMethod: z.string().optional(),
     salvageValue: z.coerce.number().optional(),
   }).optional(),
+  // #1715 (owner acceptance) — a vehicle fuel expense opens a fuel log.
+  fuelLog: z.object({
+    create: z.boolean().optional(),
+    liters: z.coerce.number().optional(),
+    costPerLiter: z.coerce.number().optional(),
+    odometer: z.coerce.number().optional(),
+    stationName: z.string().optional(),
+  }).optional(),
 });
 
 const updateDescriptionSchema = z.object({
@@ -576,6 +584,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       lineAllocation,
       maintenanceTicket,
       assetCreation,
+      fuelLog,
       date: expenseDate,
     } = b;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -963,6 +972,25 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
           purchaseDate: expenseDate ?? null,
         });
         logger.info({ journalId: posted.journalId, assetId: a.assetId }, "[finance] capital asset created from expense");
+      }
+
+      // #1715 (owner acceptance: «وقود مركبة يظهر الممشى واللترات وسعر اللتر») —
+      // a vehicle fuel expense opens a fuel log + updates the odometer.
+      if (fuelLog?.create && entityLink.vehicleId != null && !posted.alreadyExists) {
+        const { applyFuelLogEffect } = await import("../lib/financeOperationalEffect.js");
+        const fl = await applyFuelLogEffect(client, {
+          companyId: effectiveCompanyId,
+          branchId: branchId ?? scope.branchId ?? null,
+          journalId: posted.journalId,
+          vehicleId: entityLink.vehicleId,
+          totalCost: baseAmount,
+          liters: fuelLog.liters ?? null,
+          costPerLiter: fuelLog.costPerLiter ?? null,
+          mileageAtFuel: fuelLog.odometer ?? null,
+          stationName: fuelLog.stationName ?? null,
+          fuelDate: expenseDate ?? null,
+        });
+        logger.info({ journalId: posted.journalId, fuelLogId: fl.fuelLogId }, "[finance] fuel log created from expense");
       }
 
       const approval = await initiateApprovalChain({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, chainType: "expenses", refType: "expense", refId: posted.journalId, amount: Number(amount ?? 0) });
