@@ -78,6 +78,7 @@ import { transportBillingCandidatesRouter } from "./transport-billing-candidates
 import { transportBookingsRouter } from "./transport-bookings.js";
 import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
+import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
 import { transportPlanningRouter } from "./transport-planning.js";
 import { transportIntegrationRouter } from "./transport-integration.js";
 import entityMetaRouter from "./entityMeta.js";
@@ -395,12 +396,10 @@ router.use(requireModule("fleet"), requireGuards("financial"), vehicleProfileRou
 // #1733 Pricing engine + invoice merging (Issue Comment 3). URLs land at
 // /transport/price-rules, /transport/service-lines, /transport/invoice-batches.
 router.use(requireModule("fleet"), requireGuards("financial"), transportPricingRouter);
-// #1812 Planning engine — assignment-suggestion + maps + ops dashboard +
-// itineraries + in-app driver navigation sessions. URLs land at
-// /transport/planning-settings, /transport/bookings/:id/suggest-assignment,
-// /transport/ops-dashboard, /transport/itineraries, and
-// /transport/dispatch-orders/:id/navigation/*. Fleet-module + financial
-// guards (same as the other transport routers).
+// #1733 follow-up — admin CRUD for the two rules engines created in
+// migration 269.
+router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRouter);
+// #1812 Planning engine.
 router.use(requireModule("fleet"), requireGuards("financial"), transportPlanningRouter);
 // #1812 integration bridges — pulls bookings FROM umrah groups + lists
 // linked sources that don't yet have transport materialized + iCalendar

@@ -182,6 +182,24 @@ const dispatchOrderActionSchema = z.object({
   declinedReason: z.string().max(500).optional(),
 });
 
+// #1733 Comment 9 — reschedule by dispatcher (e.g. drag-and-drop on the
+// dispatch board). Any subset of the four fields may be supplied; the
+// guard chain (eligibility + tstzrange conflict detection) is re-run
+// against the NEW combination so a drop onto a busy driver still gets
+// rejected unless overrideReason is supplied. Status must be a
+// pre-execution state (pending / notified) — the operator can't
+// retroactively reschedule a trip that's already executing.
+const dispatchOrderRescheduleSchema = z.object({
+  driverId: z.coerce.number().int().positive().optional(),
+  vehicleId: z.coerce.number().int().positive().optional(),
+  scheduledStartAt: z.string().optional(),
+  scheduledEndAt: z.string().optional(),
+  overrideReason: z.string().min(1).max(500).optional(),
+}).refine(
+  (d) => d.driverId != null || d.vehicleId != null || d.scheduledStartAt != null || d.scheduledEndAt != null,
+  { message: "يجب إرسال حقل واحد على الأقل من: driverId / vehicleId / scheduledStartAt / scheduledEndAt" },
+);
+
 const createLocationSchema = z.object({
   code: z.string().max(32).optional(),
   name: z.string().min(1).max(255),
@@ -619,6 +637,128 @@ transportBookingsRouter.patch(
       res.json({ ok: true, status: result.next });
     } catch (err) {
       handleRouteError(err, res, "Dispatch order action error:");
+    }
+  },
+);
+
+// #1733 Comment 9 — reschedule (drag-and-drop entry point).
+// Atomically validates the NEW combination against eligibility and
+// time-window conflicts, then updates the row inside a transaction.
+transportBookingsRouter.post(
+  "/transport/dispatch-orders/:id/reschedule",
+  authorize({ feature: "fleet.dispatch", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(dispatchOrderRescheduleSchema.safeParse(req.body));
+
+      const result = await withTransaction(async (tx) => {
+        const lockRes = await tx.query<{
+          id: number; companyId: number; bookingLineId: number;
+          vehicleId: number; driverId: number;
+          scheduledStartAt: string; scheduledEndAt: string;
+          status: typeof DISPATCH_STATUSES[number];
+        }>(
+          `SELECT id, "companyId", "bookingLineId",
+                  "vehicleId", "driverId",
+                  "scheduledStartAt", "scheduledEndAt", status
+             FROM transport_dispatch_orders
+            WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
+          [id, scope.companyId],
+        );
+        const order = lockRes.rows[0];
+        if (!order) throw new NotFoundError("أمر التوزيع غير موجود");
+        // Only pre-execution states can be rescheduled. Once executing
+        // / completed / closed the operator must cancel + create a
+        // fresh order.
+        if (!["pending", "notified"].includes(order.status)) {
+          throw new ConflictError(
+            `لا يمكن إعادة جدولة أمر بحالة "${order.status}". الرجاء إلغاؤه وإنشاء أمر جديد.`,
+          );
+        }
+
+        const targetDriverId = b.driverId ?? order.driverId;
+        const targetVehicleId = b.vehicleId ?? order.vehicleId;
+        const targetStart = b.scheduledStartAt ?? order.scheduledStartAt;
+        const targetEnd = b.scheduledEndAt ?? order.scheduledEndAt;
+
+        // 1) Re-run driver eligibility against the new combination.
+        if (b.driverId != null || b.vehicleId != null) {
+          await assertDriverEligibility({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            userId: scope.userId,
+            driverId: targetDriverId,
+            vehicleId: targetVehicleId,
+            sourceType: "fleet_trip",
+            sourceId: order.bookingLineId,
+            overrideReason: b.overrideReason ?? null,
+          });
+        }
+
+        // 2) Re-run time-window conflict detection EXCLUDING this row
+        //    itself (otherwise an unchanged window reads as a conflict).
+        const conflicts = await tx.query<{ id: number; kind: string }>(
+          `SELECT id, 'driver' AS kind FROM transport_dispatch_orders
+            WHERE "companyId" = $1 AND "driverId" = $2 AND id <> $6
+              AND status NOT IN ('declined', 'cancelled')
+              AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
+                  && tstzrange($3::timestamptz, $4::timestamptz, '[)')
+           UNION
+           SELECT id, 'vehicle' AS kind FROM transport_dispatch_orders
+            WHERE "companyId" = $1 AND "vehicleId" = $5 AND id <> $6
+              AND status NOT IN ('declined', 'cancelled')
+              AND tstzrange("scheduledStartAt", "scheduledEndAt", '[)')
+                  && tstzrange($3::timestamptz, $4::timestamptz, '[)')`,
+          [scope.companyId, targetDriverId, targetStart, targetEnd, targetVehicleId, id],
+        );
+        if (conflicts.rows.length > 0 && !b.overrideReason) {
+          const kinds = [...new Set(conflicts.rows.map((c) => c.kind))].join("+");
+          throw new ConflictError(
+            `تعارض في الجدولة: ${kinds === "driver+vehicle" ? "السائق والمركبة" : kinds === "driver" ? "السائق" : "المركبة"} محجوز/ة في الفترة المطلوبة. أرسل overrideReason للموافقة على التعارض.`,
+            { field: kinds, fix: "اختر موعداً آخر أو وضّح سبب الاستثناء" },
+          );
+        }
+
+        await tx.query(
+          `UPDATE transport_dispatch_orders
+              SET "driverId" = $1,
+                  "vehicleId" = $2,
+                  "scheduledStartAt" = $3,
+                  "scheduledEndAt" = $4,
+                  "updatedAt" = NOW()
+            WHERE id = $5 AND "companyId" = $6`,
+          [targetDriverId, targetVehicleId, targetStart, targetEnd, id, scope.companyId],
+        );
+
+        return {
+          before: {
+            driverId: order.driverId, vehicleId: order.vehicleId,
+            scheduledStartAt: order.scheduledStartAt, scheduledEndAt: order.scheduledEndAt,
+          },
+          after: {
+            driverId: targetDriverId, vehicleId: targetVehicleId,
+            scheduledStartAt: targetStart, scheduledEndAt: targetEnd,
+          },
+        };
+      });
+
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "update", entity: "transport_dispatch_orders", entityId: id,
+        before: result.before, after: result.after,
+      }).catch((e) => logger.error(e, "dispatch reschedule audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
+        action: "fleet.dispatch.rescheduled",
+        entity: "transport_dispatch_orders", entityId: id,
+        details: JSON.stringify({ ...result, overrideUsed: !!b.overrideReason }),
+      }).catch((e) => logger.error(e, "dispatch reschedule event failed"));
+
+      res.json({ ok: true, ...result.after });
+    } catch (err) {
+      handleRouteError(err, res, "Dispatch order reschedule error:");
     }
   },
 );
