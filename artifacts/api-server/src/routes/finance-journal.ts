@@ -321,16 +321,20 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
               je."govSyncEnabled", je."govIntegrationId", je."govEntityType", je."govEntityId",
               json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines,
               MAX(coa.name) FILTER (WHERE jl.debit > 0) AS "accountName",
-              COALESCE(SUM(jl.debit), 0) AS amount
+              COALESCE(SUM(jl.debit), 0) AS amount,
+              e_cre.name AS "createdByName"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id = je."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where} AND je.ref LIKE 'EXP%' AND je."deletedAt" IS NULL
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
                 je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
                 je."paymentMethod", je.reference, je."isPaid", je."attachmentUrl", je."attachmentType",
                 je."expenseType", je."operationType",
-                je."govSyncEnabled", je."govIntegrationId", je."govEntityType", je."govEntityId"
+                je."govSyncEnabled", je."govIntegrationId", je."govEntityType", je."govEntityId",
+                e_cre.name
        ORDER BY je."createdAt" DESC LIMIT 100`,
       params
     );
