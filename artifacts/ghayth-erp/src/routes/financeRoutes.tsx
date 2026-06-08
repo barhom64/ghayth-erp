@@ -41,6 +41,7 @@ const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuatio
 const NegativeStock = lazy(() => import("@/pages/finance/negative-stock"));
 const InventoryTurnover = lazy(() => import("@/pages/finance/inventory-turnover"));
 const GlIntegrityGaps = lazy(() => import("@/pages/finance/gl-integrity-gaps"));
+const OperationGaps = lazy(() => import("@/pages/finance/operation-gaps"));
 const GlAnomalyDetector = lazy(() => import("@/pages/finance/gl-anomaly-detector"));
 const UnmappedLines = lazy(() => import("@/pages/finance/unmapped-lines"));
 const WhtSummary = lazy(() => import("@/pages/finance/wht-summary"));
@@ -236,6 +237,7 @@ export const financeRoutes = [
   { path: "/finance/wht-categories/:id/edit", component: WhtCategoriesEdit },
   // GL integrity gaps — period-close pre-flight (#1043).
   { path: "/finance/reports/gl-integrity-gaps", component: GlIntegrityGaps },
+  { path: "/finance/reports/operation-gaps", component: OperationGaps },
   { path: "/finance/gl-anomaly-detector", component: GlAnomalyDetector },
   { path: "/finance/reports/unmapped-lines", component: UnmappedLines },
   { path: "/finance/reports/wht-summary", component: WhtSummary },

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -25,6 +25,11 @@ import {
   type AccountUsage,
   type ChildrenUsagePolicy,
 } from "../lib/financeAccountClassifier.js";
+import {
+  inferCodeWidth,
+  suggestNextChildCode,
+  suggestNextRootCode,
+} from "../lib/financeAccountNumbering.js";
 
 const ACCOUNT_TYPES = ["asset", "liability", "equity", "revenue", "expense"] as const;
 const ACCOUNT_NATURES = ["debit", "credit"] as const;
@@ -271,6 +276,41 @@ accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts"
   }
 });
 
+// GET /finance/accounts/next-code — suggest the next free account code
+// (#1715, Comment #6). With ?parentCode= returns the next child slot under
+// that parent (level/step aware: 1000→1100, 1100→1110, 1110→1111); without it
+// returns the next root, optionally seeded by ?type=. Authoritative server-
+// side numbering so every caller (UI, import, API) agrees. Read-only.
+accountsRouter.get("/accounts/next-code", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { parentCode, type } = req.query as Record<string, string | undefined>;
+    const all = await rawQuery<{ code: string; level: number; parentCode: string | null }>(
+      `SELECT code, level, "parentCode" FROM chart_of_accounts
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+      [scope.companyId],
+    );
+    const allCodes = new Set(all.map((a) => a.code));
+    const codeWidth = inferCodeWidth(all.map((a) => a.code));
+    if (parentCode) {
+      const parent = all.find((a) => a.code === parentCode);
+      if (!parent) {
+        res.status(404).json({ error: "الحساب الأب غير موجود" });
+        return;
+      }
+      const childCodes = all.filter((a) => a.parentCode === parentCode).map((a) => a.code);
+      const r = suggestNextChildCode({ parentCode, parentLevel: parent.level, codeWidth, childCodes, allCodes });
+      res.json({ code: r.code, reason: r.reason ?? null, parentCode, level: parent.level + 1 });
+      return;
+    }
+    const rootCodes = all.filter((a) => !a.parentCode || a.level === 1).map((a) => a.code);
+    const r = suggestNextRootCode({ codeWidth, rootCodes, allCodes, type: type ?? null });
+    res.json({ code: r.code, reason: r.reason ?? null, parentCode: null, level: 1 });
+  } catch (err) {
+    handleRouteError(err, res, "Next account code error:");
+  }
+});
+
 // GET /finance/accounts/usage-gaps — accounts the auto-classifier could
 // not classify (accountUsage IS NULL). Drives the «classify before you
 // post» governance workflow (#1715). Postable, asset/liability accounts
@@ -296,6 +336,56 @@ accountsRouter.get("/accounts/usage-gaps", authorize({ feature: "finance.account
     res.json(maskFields(req, { data: rows, total: rows.length, byType }));
   } catch (err) {
     handleRouteError(err, res, "Usage-gaps report error:");
+  }
+});
+
+// POST /finance/accounts/classify-usage — backfill `accountUsage` on existing
+// accounts from their code/name/type via classifyAccountUsage (#1715 §10
+// "تصنيف الحسابات الحالية آلياً"). Only fills NULLs, never overwrites a
+// usage an operator already set, so it is safe to re-run. Accounts the
+// classifier can't confidently place stay NULL and remain in the usage-gaps
+// report for manual classification.
+accountsRouter.post("/accounts/classify-usage", authorize({ feature: "finance.accounts", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<{ id: number; code: string | null; name: string | null; type: string | null }>(
+      `SELECT id, code, name, type
+         FROM chart_of_accounts
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "accountUsage" IS NULL`,
+      [scope.companyId],
+    );
+    const updates: { id: number; usage: string }[] = [];
+    for (const r of rows) {
+      const usage = classifyAccountUsage({ code: r.code, name: r.name, type: r.type });
+      if (usage) updates.push({ id: r.id, usage });
+    }
+    if (updates.length > 0) {
+      await withTransaction(async (client) => {
+        for (const u of updates) {
+          await client.query(
+            `UPDATE chart_of_accounts SET "accountUsage" = $1, "updatedAt" = NOW()
+               WHERE id = $2 AND "companyId" = $3 AND "accountUsage" IS NULL`,
+            [u.usage, u.id, scope.companyId],
+          );
+        }
+      });
+      createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? undefined,
+        userId: scope.activeAssignmentId ?? 0,
+        action: "classify_usage",
+        entity: "chart_of_accounts",
+        entityId: 0,
+        after: { scanned: rows.length, classified: updates.length },
+      }).catch((e) => logger.error(e, "classify-usage audit failed"));
+    }
+    res.json({
+      scanned: rows.length,
+      classified: updates.length,
+      remaining: rows.length - updates.length,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Classify-usage backfill error:");
   }
 });
 

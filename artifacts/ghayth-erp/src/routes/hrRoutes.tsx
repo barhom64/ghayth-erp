@@ -1,6 +1,7 @@
 import { lazy } from "react";
 
 const HR = lazy(() => import("@/pages/hr"));
+const HrServices = lazy(() => import("@/pages/hr/services"));
 const Employees = lazy(() => import("@/pages/employees"));
 const EmployeeDetail = lazy(() => import("@/pages/employee-detail"));
 const EmployeesCreate = lazy(() => import("@/pages/create/employees-create"));
@@ -96,6 +97,8 @@ const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
 
 export const hrRoutes = [
   { path: "/hr", component: HR },
+  // HR-010 / #1799 priority #4 — Services Catalog landing page.
+  { path: "/hr/services", component: HrServices, subKey: "services" },
   { path: "/employees", component: Employees, subKey: "employees" },
   { path: "/employees/create", component: EmployeesCreate, subKey: "employees" },
   { path: "/employees/:id", component: EmployeeDetail, subKey: "employees" },

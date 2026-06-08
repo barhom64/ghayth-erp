@@ -26,6 +26,8 @@
 | الاستيراد العام (preview→confirm→rollback) | #1679، #1766 (رفع CSV) | `verify-import-journey.sh` + `import-csv-upload.spec.ts` |
 | تصريف الـoutbox (Phase 2) | #1682 | `verify-outbox-drain.sh` |
 | إنفاذ فصل المهام (SoD) وقت الطلب | #1706 | `verify-sod-enforcement.sh` |
+| الانضباط (غياب→محضر→قرار→جزاء→أثر بالراتب) + إصلاح عطل gm-decision | #1849 | `verify-hr-discipline-journey.sh` 10/10 |
+| القانونية (قضية→جلسة→حكم→تكلفة→إغلاق + الأحداث) | — | `verify-legal-journey.sh` 9/9 |
 | مراجعة التكامل + إصلاح ترحيل 257 + تصليب الحزمة | #1711 | 75/75 فحصًا، قابلة لإعادة التشغيل |
 | **واجهات تشغيلية (UI):** الحسابات الفرعية من صفحة الكيان (مركبة/وكيل/وحدة/مستأجر) | #1730، #1735 | `vehicle-subsidiary-accounts.spec.ts` |
 | **واجهة** مراقبة/تفريغ الـoutbox | #1741 | `/admin/outbox` + `admin-outbox.spec.ts` |
@@ -47,7 +49,9 @@
 
 ## 4) أُصلِحت أعطال حقيقية أثناء التفعيل
 
-204 (serial defaults لـ9 جداول)، 251 (chk_invoices_status)، 252 (fleet_trips.updatedAt)، 253 (subsidiary entityType)، 255 (umrah PII varchar→text)، 257 (custody: `companies` بلا deletedAt)، properties `c.branchId` 500، سباق journeyTracking.
+204 (serial defaults لـ9 جداول)، 251 (chk_invoices_status)، 252 (fleet_trips.updatedAt)، 253 (subsidiary entityType)، 255 (umrah PII varchar→text)، 257 (custody: `companies` بلا deletedAt)، properties `c.branchId` 500، سباق journeyTracking، **والانضباط: `gm-decision` كان يفشل بـ500 (`incidentDate.slice is not a function` — العمود `date` يصل ككائن Date) فيمنع تطبيق أي جزاء عبر قرار الإدارة العليا — أُصلِح باشتقاق فترة الراتب من أجزاء التاريخ المحلية.**
+
+> **رحلة الانضباط (المرحلة 7 HR) مُثبتة:** `scripts/verify-hr-discipline-journey.sh` → **10/10** (غياب→محضر→تبرير→توصية المدير→قرار الإدارة العليا→جزاء مُطبَّق→خصم `pending_payroll` في `attendance_deductions` = أثر بالراتب).
 
 ## 5) ما لم يُنفَّذ ولماذا (مؤجَّل بسببه)
 
