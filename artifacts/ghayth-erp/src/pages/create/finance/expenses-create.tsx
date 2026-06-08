@@ -444,6 +444,17 @@ export default function ExpensesCreate() {
                 usefulLifeYears: allocTarget.assetUsefulLifeYears ? Number(allocTarget.assetUsefulLifeYears) : undefined,
               }
             : undefined,
+        // #1715 — vehicle fuel: open a fuel log + update odometer.
+        fuelLog:
+          allocTarget.target === "vehicle" && allocTarget.createFuelLog
+            ? {
+                create: true,
+                liters: allocTarget.fuelLiters ? Number(allocTarget.fuelLiters) : undefined,
+                costPerLiter: allocTarget.fuelCostPerLiter ? Number(allocTarget.fuelCostPerLiter) : undefined,
+                odometer: allocTarget.fuelOdometer ? Number(allocTarget.fuelOdometer) : undefined,
+                stationName: allocTarget.fuelStation || undefined,
+              }
+            : undefined,
       });
       toast({ title: "تم إضافة المصروف بنجاح" });
       clearDraft();

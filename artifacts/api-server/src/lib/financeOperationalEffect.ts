@@ -205,3 +205,53 @@ export async function applyAssetCreationEffect(
   );
   return { assetId: r.rows[0].id as number };
 }
+
+// #1715 (owner acceptance: «وقود مركبة يظهر الممشى واللترات وسعر اللتر») — a
+// vehicle fuel expense CREATES a fuel log linked to the JE and updates the
+// vehicle odometer. fleet_fuel_logs already carries linkedExpenseId (same
+// design as fleet_maintenance). Runs in the JE transaction.
+export interface FuelLogInput {
+  companyId: number;
+  branchId?: number | null;
+  journalId: number;
+  vehicleId: number;
+  totalCost: number;
+  liters?: number | null;
+  costPerLiter?: number | null;
+  mileageAtFuel?: number | null;
+  stationName?: string | null;
+  fuelDate?: string | null;
+}
+
+export async function applyFuelLogEffect(
+  client: TxnClient,
+  input: FuelLogInput,
+): Promise<{ fuelLogId: number }> {
+  const r = await client.query(
+    `INSERT INTO fleet_fuel_logs
+       ("companyId", "vehicleId", "fuelDate", liters, "costPerLiter", "totalCost",
+        "mileageAtFuel", "stationName", "linkedExpenseId", "createdAt")
+     VALUES ($1, $2, COALESCE($3::date, CURRENT_DATE), $4, $5, $6, $7, $8, $9, now())
+     RETURNING id`,
+    [
+      input.companyId,
+      input.vehicleId,
+      input.fuelDate ?? null,
+      input.liters ?? null,
+      input.costPerLiter ?? null,
+      input.totalCost,
+      input.mileageAtFuel ?? null,
+      input.stationName ?? null,
+      input.journalId,
+    ],
+  );
+  if (input.mileageAtFuel != null) {
+    await client.query(
+      `UPDATE fleet_vehicles
+          SET "currentMileage" = GREATEST(COALESCE("currentMileage", 0), $2)
+        WHERE id = $1 AND "companyId" = $3`,
+      [input.vehicleId, input.mileageAtFuel, input.companyId],
+    );
+  }
+  return { fuelLogId: r.rows[0].id as number };
+}

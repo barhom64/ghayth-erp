@@ -133,3 +133,26 @@ describe("applyAssetCreationEffect (#1715 capital purchase)", () => {
     expect(calls[0].params).toContain("سيارة تويوتا");
   });
 });
+
+describe("applyFuelLogEffect (#1715 fuel)", () => {
+  it("inserts a fuel log linked to the JE + bumps odometer", async () => {
+    const calls: { text: string; params: unknown[] }[] = [];
+    const client = { query: async (text: string, params?: unknown[]) => { calls.push({ text, params: params ?? [] }); return { rows: [{ id: 6001 }] }; } };
+    const { applyFuelLogEffect } = await import("../../src/lib/financeOperationalEffect.js");
+    const res = await applyFuelLogEffect(client, { companyId: 2, journalId: 991020, vehicleId: 9, totalCost: 300, liters: 40, costPerLiter: 7.5, mileageAtFuel: 52000, stationName: "أرامكو" });
+    expect(res.fuelLogId).toBe(6001);
+    expect(calls).toHaveLength(2); // insert + odometer update
+    expect(calls[0].text).toMatch(/INSERT INTO fleet_fuel_logs/);
+    expect(calls[0].params).toContain(991020); // linkedExpenseId
+    expect(calls[0].params).toContain(40);     // liters
+    expect(calls[1].text).toMatch(/UPDATE fleet_vehicles/);
+    expect(calls[1].params).toContain(52000);
+  });
+  it("no odometer → no vehicle update", async () => {
+    const calls: { text: string; params: unknown[] }[] = [];
+    const client = { query: async (text: string, params?: unknown[]) => { calls.push({ text, params: params ?? [] }); return { rows: [{ id: 1 }] }; } };
+    const { applyFuelLogEffect } = await import("../../src/lib/financeOperationalEffect.js");
+    await applyFuelLogEffect(client, { companyId: 2, journalId: 1, vehicleId: 9, totalCost: 100 });
+    expect(calls).toHaveLength(1);
+  });
+});

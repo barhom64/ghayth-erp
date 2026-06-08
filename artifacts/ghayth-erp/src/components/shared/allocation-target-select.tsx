@@ -54,6 +54,12 @@ export interface AllocationTargetValue {
   createAsset?: boolean;
   assetName?: string;
   assetUsefulLifeYears?: string;
+  // #1715 — vehicle fuel: open a fuel log (liters / price / odometer / station).
+  createFuelLog?: boolean;
+  fuelLiters?: string;
+  fuelCostPerLiter?: string;
+  fuelOdometer?: string;
+  fuelStation?: string;
 }
 
 const TARGET_OPTIONS: { value: AllocationTarget; label: string }[] = [
@@ -154,6 +160,30 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
                 <Input value={value.reason ?? ""} onChange={(e) => set({ reason: e.target.value })} placeholder="سبب الصيانة" />
               </FormFieldWrapper>
             </>
+          )}
+          {value.target === "vehicle" && (
+            <div className="md:col-span-2 space-y-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={value.createFuelLog ?? false} onChange={(e) => set({ createFuelLog: e.target.checked })} />
+                تسجيل تعبئة وقود (يفتح سجل وقود ويحدّث عدّاد المركبة)
+              </label>
+              {value.createFuelLog && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <FormFieldWrapper label="عدد اللترات">
+                    <Input type="number" step="0.01" value={value.fuelLiters ?? ""} onChange={(e) => set({ fuelLiters: e.target.value })} placeholder="لتر" />
+                  </FormFieldWrapper>
+                  <FormFieldWrapper label="سعر اللتر">
+                    <Input type="number" step="0.01" value={value.fuelCostPerLiter ?? ""} onChange={(e) => set({ fuelCostPerLiter: e.target.value })} placeholder="ر.س/لتر" />
+                  </FormFieldWrapper>
+                  <FormFieldWrapper label="قراءة العداد (الممشى)">
+                    <Input type="number" value={value.fuelOdometer ?? ""} onChange={(e) => set({ fuelOdometer: e.target.value })} placeholder="كم" />
+                  </FormFieldWrapper>
+                  <FormFieldWrapper label="المحطة">
+                    <Input value={value.fuelStation ?? ""} onChange={(e) => set({ fuelStation: e.target.value })} placeholder="اسم المحطة" />
+                  </FormFieldWrapper>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
