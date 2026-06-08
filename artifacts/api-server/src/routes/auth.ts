@@ -328,8 +328,8 @@ router.post("/bootstrap-tenant", registerLimiter, async (req, res) => {
       );
       const newEmployeeId = empRes.rows[0].id as number;
       await client.query(
-        `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", status, "startDate")
-         VALUES ($1, $2, $3, 'active', CURRENT_DATE)`,
+        `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "jobTitle", role, status, "hireDate", "isPrimary")
+         VALUES ($1, $2, $3, 'مالك', 'owner', 'active', CURRENT_DATE, true)`,
         [newEmployeeId, newCompanyId, newBranchId]
       );
 

@@ -15,6 +15,9 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { ClientSelect, AccountSelect } from "@/components/shared/entity-selects";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
+import { EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
+import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import {
   ReceiptText, CheckCircle2, AlertCircle, Wand2, ListChecks,
 } from "lucide-react";
@@ -76,6 +79,10 @@ export default function CustomerReceiptWizardPage() {
 
   const [applyMode, setApplyMode] = useState<"manual" | "fifo">("fifo");
   const [rows, setRows] = useState<ApplyRow[]>([]);
+  // #1715 §6 — optional operation context: tag the receipt to a project /
+  // cost-center / other dimension (stamped on the cash line so the inflow
+  // shows up in that dimension's reports).
+  const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
 
   // Pick customer → fetch open invoices for that customer
   const enabled = !!header.clientId;
@@ -151,12 +158,15 @@ export default function CustomerReceiptWizardPage() {
   // ── Build JE
   const buildJournalLines = () => {
     const lines: any[] = [];
+    // Operation-context dims (project / cost-center / …) ride on the cash line.
+    const contextDims = allocTarget.target !== "none" ? buildAllocationPayload(allocTarget.allocation) : {};
     lines.push({
       accountCode: header.receiptAccountCode,
       debit: totalAmount,
       credit: 0,
       description: `استلام من العميل ${header.clientId} — ${header.reference || todayLocal()}`,
       clientId: Number(header.clientId),
+      ...contextDims,
     });
 
     // CR AR per applied invoice
@@ -283,6 +293,14 @@ export default function CustomerReceiptWizardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Operation context (optional) ─────────────────────── */}
+      <FinanceOperationContextPanel
+        value={allocTarget}
+        onChange={setAllocTarget}
+        title="ربط الاستلام بـ (اختياري)"
+        description="اربط هذا الاستلام بمشروع / مركز تكلفة / بُعد آخر ليظهر في تقاريره. العميل والفواتير مرتبطة تلقائياً."
+      />
 
       {/* ── Application ──────────────────────────────────────── */}
       {header.clientId && (

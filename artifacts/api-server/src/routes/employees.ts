@@ -722,6 +722,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // a contact, not a credential.
       const loginEmail = internalEmailIn || email || null;
       let userId: number | null = null;
+      let createdNewUser = false;
       let tempPassword: string | null = null;
       if (loginEmail) {
         const existingUser = await client.query(`SELECT id FROM users WHERE email=$1`, [loginEmail]);
@@ -733,6 +734,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
             [loginEmail, hashedPw, role || "employee", empId]
           );
           userId = userRes.rows[0].id;
+          createdNewUser = true;
         } else {
           userId = existingUser.rows[0].id;
           await client.query(`UPDATE users SET "employeeId"=$1 WHERE id=$2`, [empId, userId]);
@@ -744,11 +746,13 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // didn't override `role`, prefer the job-title default. Same for
       // opensCustody — flips on the auto-custody flag.
       let opensCustody = Boolean((body as any).createCustodyAccount);
+      let defaultRoleKeyFromJob: string | null = null;
       if (resolvedJobTitleId) {
         const [jt] = await client.query<{ defaultRoleKey: string | null; opensCustody: boolean }>(
           `SELECT "defaultRoleKey", "opensCustody" FROM job_titles WHERE id = $1`,
           [resolvedJobTitleId]
         ).then(r => r.rows as Array<{ defaultRoleKey: string | null; opensCustody: boolean }>);
+        defaultRoleKeyFromJob = jt?.defaultRoleKey ?? null;
         if (jt?.defaultRoleKey && (!role || role === "employee")) {
           // Re-apply the role only on the assignment we just inserted.
           await client.query(
@@ -757,6 +761,47 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
           );
         }
         if (jt?.opensCustody) opensCustody = true;
+      }
+
+      // ── Step 8a-bis: Grant the RBAC v2 role (the real access) ──
+      // Historically the normal "create employee" flow only ever set the
+      // legacy `employee_assignments.role` / `users.role` strings and NEVER
+      // inserted an rbac_user_roles row. Since RBAC v2 (checkAccess) is the
+      // enforcement authority, that left freshly-created employees able to
+      // log in and SEE the modules their role implies (via the predefined
+      // fallback in /permissions/my) but blocked with 403 on every actual
+      // action — "الخدمات تظهر لكن غير فعّالة". HR then had to go to the
+      // separate /admin/user-onboarding screen to grant the role by hand.
+      //
+      // Now we close that gap atomically: resolve the effective role key
+      // (job-title defaultRoleKey wins when the body didn't override) to an
+      // rbac_roles row and bind it in rbac_user_roles — exactly what
+      // /admin/onboard does. Soft-skip (warn) when the key has no rbac role
+      // so employee creation never fails just because a role is unmapped.
+      if (createdNewUser && userId) {
+        const effectiveRoleKey =
+          (defaultRoleKeyFromJob && (!role || role === "employee"))
+            ? defaultRoleKeyFromJob
+            : (role || "employee");
+        const roleRow = await client.query<{ id: number }>(
+          `SELECT id FROM rbac_roles
+            WHERE role_key = $1 AND ("companyId" = $2 OR "companyId" IS NULL)
+            ORDER BY "companyId" NULLS LAST LIMIT 1`,
+          [effectiveRoleKey, effectiveCompanyId]
+        ).then(r => r.rows as Array<{ id: number }>);
+        if (roleRow.length > 0) {
+          await client.query(
+            `INSERT INTO rbac_user_roles ("userId","companyId",role_id,"branchId","departmentId",is_primary,"assignedBy","createdAt")
+             VALUES ($1,$2,$3,$4,$5,true,$6,NOW())
+             ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
+            [userId, effectiveCompanyId, roleRow[0].id, targetBranchId, resolvedDepartmentId, scope.userId]
+          );
+        } else {
+          logger.warn(
+            { roleKey: effectiveRoleKey, companyId: effectiveCompanyId, userId },
+            "[employees] no rbac_roles row for effective role key — RBAC role not auto-granted; assign manually via /admin/users"
+          );
+        }
       }
 
       // ── Step 8b: Open employee subsidiary custody account ──
@@ -1336,7 +1381,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
       throw new NotFoundError("الموظف غير موجود");
     }
 
-    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles] = await Promise.all([
+    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles, contract, custodies, position] = await Promise.all([
       rawQuery<Record<string, unknown>>(
         `SELECT pt.id, pt.title, pt.status, pt.priority, pt."dueDate", p.name AS "projectName"
          FROM project_tasks pt
@@ -1437,6 +1482,54 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
           ORDER BY ur.is_primary DESC NULLS LAST, r.level DESC NULLS LAST, r.role_key`,
         [id, scope.companyId]
       ).catch((e) => { logger.error(e, "employees roles query failed"); return []; }),
+      // HR-012 / #1799 priority #1 — Employee 360 tab «العقد».
+      // Loads the active employment contract joined to the type label
+      // + branch. Returns NULL when no contract row exists (rare, but
+      // pre-onboarding employees may not have one yet). Sensitive
+      // fields (salary breakdown) aren't returned here — they live on
+      // the `payroll` tab which has separate RBAC.
+      rawQuery<Record<string, unknown>>(
+        `SELECT c.id, c.ref, c."contractType", c."startDate", c."endDate",
+                c.status, c."approvalStatus", c."probationEndDate",
+                c."probationStatus", c."signedByEmployee",
+                c."employeeSignedAt", c."createdAt"
+           FROM employee_contracts c
+          WHERE c."employeeId" = $1 AND c."companyId" = $2
+            AND (c.status = 'active' OR c.status IS NULL)
+          ORDER BY c."startDate" DESC NULLS LAST, c.id DESC LIMIT 1`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "employees contract query failed"); return []; }),
+      // HR-012 / #1799 priority #1 — Employee 360 tab «العهد».
+      // Pulls every asset (laptop, phone, SIM, …) from the
+      // employee_assets bridge (#1799 #9, migration 276) — active
+      // first, then returned history. Bounded LIMIT 50 so a long-tenure
+      // employee's record doesn't blow the response.
+      rawQuery<Record<string, unknown>>(
+        `SELECT ea.id, ea."assetType", ea."assetKey", ea."assetLabel",
+                ea."serialNumber", ea."assignedAt", ea."returnedAt",
+                ea."conditionOnAssign", ea."conditionOnReturn", ea.notes
+           FROM employee_assets ea
+          WHERE ea."assignmentId" = $3 AND ea."companyId" = $2
+          ORDER BY ea."returnedAt" NULLS FIRST, ea."assignedAt" DESC
+          LIMIT 50`,
+        [id, scope.companyId, employee.assignmentId]
+      ).catch((e) => { logger.error(e, "employees custodies query failed"); return []; }),
+      // HR-012 / #1799 priority #1 — Employee 360 tab «المسميات».
+      // Resolves the assignment's position (admin role) to its label
+      // alongside the existing job_title (professional). Returns NULL
+      // when the assignment hasn't been categorized yet (legacy
+      // assignments pre §B migration 274). The position table is
+      // company-scoped (companyId IS NULL = system template), so we
+      // match by either.
+      employee.assignmentId ? rawQuery<Record<string, unknown>>(
+        `SELECT p.id, p."positionKey", p."labelAr", p."labelEn",
+                p.level, p.description
+           FROM employee_assignments ea
+           JOIN positions p ON p.id = ea."positionId"
+            AND (p."companyId" IS NULL OR p."companyId" = $2)
+          WHERE ea.id = $3 LIMIT 1`,
+        [id, scope.companyId, employee.assignmentId]
+      ).catch((e) => { logger.error(e, "employees position query failed"); return []; }) : Promise.resolve([]),
     ]);
 
     res.json(maskFields(req, {
@@ -1447,6 +1540,13 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
       // login). `roles` is always an array (empty when no rbac grants).
       userAccount: Array.isArray(userAccount) && userAccount.length > 0 ? userAccount[0] : null,
       roles: roles ?? [],
+      // HR-012 — second expansion. `contract` is single-row or null;
+      // `position` is the resolved admin position (single object or
+      // null); `custodies` is the asset list (active first, then
+      // returned).
+      contract: Array.isArray(contract) && contract.length > 0 ? contract[0] : null,
+      position: Array.isArray(position) && position.length > 0 ? position[0] : null,
+      custodies: custodies ?? [],
     }));
   } catch (err) {
     handleRouteError(err, res, "Get employee error:");

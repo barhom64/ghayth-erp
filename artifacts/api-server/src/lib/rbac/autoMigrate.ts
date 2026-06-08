@@ -306,11 +306,73 @@ export async function bindUsersFromAssignments(
 }
 
 /**
- * Top-level entry — called once at server boot from index.ts. Seeds the v2
- * default roles/grants for every company and binds users from their active
- * assignments. Idempotent (ON CONFLICT DO NOTHING): safe on every boot, no
- * legacy-table reads.
+ * Safety-net backfill for the gap bindUsersFromAssignments leaves behind.
+ *
+ * That function only binds a user when their ACTIVE assignment has a
+ * non-null `role`. A user created before role-tracking — or one whose
+ * assignment.role is NULL while `users.role` is set — therefore ends up
+ * with NO rbac_user_roles row. Since checkAccess is pure RBAC v2 with no
+ * legacy fallback, such a user is locked out of every non-self-service
+ * feature even though their legacy role says they're an hr_manager, etc.
+ * ("الخدمات تظهر لكن لا تعمل" for existing/legacy accounts.)
+ *
+ * Here we bind any company-linked user who STILL has zero rbac_user_roles
+ * rows to the v2 role matching their `users.role`, scoped to their primary
+ * assignment's branch/department. The JOIN LATERAL also serves as the
+ * company-scoping link (we only touch users with an assignment in this
+ * company). Idempotent and additive-only: it never overrides an existing
+ * assignment — `NOT EXISTS (rbac_user_roles)` + ON CONFLICT DO NOTHING.
  */
+export async function bindUsersFromUserRole(
+  client: PoolClient,
+  companyId: number,
+  roleIdByKey: Record<string, number> = {},
+): Promise<number> {
+  let usersBound = 0;
+  const localMap: Record<string, number> = { ...roleIdByKey };
+
+  const rows = await client.query<{ userId: number; role: string; branchId: number | null; departmentId: number | null }>(
+    `SELECT u.id AS "userId", u.role, ea."branchId", ea."departmentId"
+       FROM users u
+       JOIN LATERAL (
+         SELECT ea2."branchId", ea2."departmentId"
+           FROM employee_assignments ea2
+          WHERE ea2."employeeId" = u."employeeId" AND ea2."companyId" = $1
+          ORDER BY ea2."isPrimary" DESC NULLS LAST, ea2.id
+          LIMIT 1
+       ) ea ON true
+      WHERE u.role IS NOT NULL
+        AND u."employeeId" IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM rbac_user_roles ur
+           WHERE ur."userId" = u.id AND ur."companyId" = $1
+        )`,
+    [companyId]
+  );
+
+  for (const a of rows.rows) {
+    let roleId = localMap[a.role];
+    if (!roleId) {
+      const idRow = await client.query<{ id: number }>(
+        `SELECT id FROM rbac_roles WHERE role_key = $1 AND ("companyId" = $2 OR "companyId" IS NULL)
+          ORDER BY "companyId" NULLS LAST LIMIT 1`,
+        [a.role, companyId]
+      );
+      if (!idRow.rows[0]) continue;
+      roleId = idRow.rows[0].id;
+      localMap[a.role] = roleId;
+    }
+    await client.query(
+      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary)
+       VALUES ($1, $2, $3, $4, $5, true)
+       ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+      [a.userId, companyId, roleId, a.branchId, a.departmentId]
+    );
+    usersBound++;
+  }
+
+  return usersBound;
+}
 export async function syncLegacyToV2(): Promise<SyncSummary> {
   const summary: SyncSummary = { companies: 0, rolesCreated: 0, grantsCreated: 0, usersBound: 0 };
 
@@ -323,6 +385,10 @@ export async function syncLegacyToV2(): Promise<SyncSummary> {
     const result = await withTransaction(async (client) => {
       const seeded = await seedRolesAndGrantsV2(client, companyId, DEFAULT_ROLE_DEFS);
       const usersBound = await bindUsersFromAssignments(client, companyId, seeded.roleIdByKey);
+      // Safety net for legacy/existing users whose assignment.role is NULL but
+      // who carry a users.role — without this they have zero rbac_user_roles
+      // and are denied everything (checkAccess has no legacy fallback).
+      const usersBoundByRole = await bindUsersFromUserRole(client, companyId, seeded.roleIdByKey);
       // Bump cache version so the engine picks up new grants.
       await client.query(
         `INSERT INTO rbac_cache_version ("companyId", version, "updatedAt")
@@ -330,7 +396,7 @@ export async function syncLegacyToV2(): Promise<SyncSummary> {
          ON CONFLICT ("companyId") DO UPDATE SET version = rbac_cache_version.version + 1, "updatedAt" = NOW()`,
         [companyId]
       );
-      return { rolesCreated: seeded.rolesCreated, grantsCreated: seeded.grantsCreated, usersBound };
+      return { rolesCreated: seeded.rolesCreated, grantsCreated: seeded.grantsCreated, usersBound: usersBound + usersBoundByRole };
     });
     summary.companies++;
     summary.rolesCreated += result.rolesCreated;

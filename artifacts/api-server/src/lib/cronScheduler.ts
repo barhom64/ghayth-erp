@@ -1,6 +1,8 @@
 import cron from "node-cron";
 import { randomUUID } from "node:crypto";
 import { rawQuery, rawExecute, pool, withTransaction } from "./rawdb.js";
+import { scoreEmployee, currentPeriodKey } from "./employeeScoringEngine.js";
+import { detectSignals, persistSignals } from "./employeeSignalsEngine.js";
 import { issueNumber } from "./numberingService.js";
 import { logger } from "./logger.js";
 import { config } from "./config.js";
@@ -42,7 +44,7 @@ import {
 } from "./fleet/telematicsCron.js";
 import { telematicsBreaker } from "./fleet/telematicsReliability.js";
 import { setupBreakerCoordination } from "./fleet/telematicsBreakerCoordinator.js";
-import { scanObligations } from "./obligationsEngine.js";
+import { scanObligations, registerObligation } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
 import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
 import { zatcaRetryDrain } from "./zatca/worker.js";
@@ -401,6 +403,82 @@ async function contractExpiryAlerts(): Promise<string> {
     }
   }
   return `Alerted ${alerted} expiring contracts`;
+}
+
+// #1715 §5 — activate the dormant vehicle_maintenance_schedules table.
+// It already models recurring preventive maintenance (intervalType
+// days/mileage/hours + nextDueDate/nextDueKm) but NO job ever read it, so
+// no reminder ever fired. This scan raises an alert + a maintenance
+// obligation for every schedule that has come due (by date or by odometer),
+// then advances nextDue* so it re-arms for the next cycle. Reuses the
+// existing obligations/notifications backbone — no new table.
+export async function scanVehicleMaintenanceSchedules(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let dueCount = 0;
+  for (const company of companies) {
+    const rows = await rawQuery<{
+      id: number; vehicleId: number | null; scheduleName: string;
+      intervalValue: number; nextDueDate: string | null; nextDueKm: number | null;
+      plateNumber: string | null; currentMileage: number | null;
+    }>(
+      `SELECT s.id, s."vehicleId", s."scheduleName", s."intervalValue",
+              s."nextDueDate"::text AS "nextDueDate", s."nextDueKm",
+              v."plateNumber", v."currentMileage"
+         FROM vehicle_maintenance_schedules s
+         LEFT JOIN fleet_vehicles v ON v.id = s."vehicleId"
+        WHERE s."companyId" = $1 AND s."isActive" = true AND s."deletedAt" IS NULL
+          AND (
+            (s."nextDueDate" IS NOT NULL AND s."nextDueDate" <= CURRENT_DATE)
+            OR (s."nextDueKm" IS NOT NULL AND v."currentMileage" IS NOT NULL AND v."currentMileage" >= s."nextDueKm")
+          )`,
+      [company.id],
+    );
+    for (const s of rows) {
+      const label = s.plateNumber ? `${s.scheduleName} — ${s.plateNumber}` : s.scheduleName;
+      try {
+        await broadcastAlert(
+          company.id, "vehicle_maintenance_due",
+          `صيانة مجدولة مستحقّة: ${label}`,
+          `حان موعد «${s.scheduleName}»${s.plateNumber ? ` للمركبة ${s.plateNumber}` : ""} — جدول صيانة وقائية.`,
+          "warning", "fleet_vehicle", s.vehicleId ?? undefined,
+        );
+        if (s.vehicleId) {
+          await registerObligation({
+            companyId: company.id,
+            entityType: "vehicle",
+            entityId: s.vehicleId,
+            obligationType: "maintenance",
+            title: `صيانة مجدولة: ${s.scheduleName}`,
+            dueAt: s.nextDueDate ?? new Date().toISOString(),
+            escalationSteps: [{ hoursAfterDue: 24, notifyRole: "fleet_manager" }],
+            dedupeKey: `vmsched-${s.id}-${s.nextDueDate ?? s.nextDueKm ?? "due"}`,
+            metadata: { scheduleId: s.id, nextDueKm: s.nextDueKm },
+          });
+        }
+      } catch (e) {
+        logger.error(e, "[cronScheduler] vehicle maintenance schedule notify failed");
+      }
+      // Re-arm: advance whichever trigger fired so it doesn't re-fire next run.
+      await rawExecute(
+        `UPDATE vehicle_maintenance_schedules
+            SET "lastTriggeredAt" = now(),
+                "lastTriggeredKm" = COALESCE($2, "lastTriggeredKm"),
+                "nextDueDate" = CASE
+                  WHEN "nextDueDate" IS NOT NULL AND "nextDueDate" <= CURRENT_DATE
+                  THEN (CURRENT_DATE + (GREATEST("intervalValue", 1) || ' days')::interval)::date
+                  ELSE "nextDueDate" END,
+                "nextDueKm" = CASE
+                  WHEN "nextDueKm" IS NOT NULL AND $2 IS NOT NULL AND $2 >= "nextDueKm"
+                  THEN $2 + GREATEST("intervalValue", 1)
+                  ELSE "nextDueKm" END,
+                "updatedAt" = now()
+          WHERE id = $1`,
+        [s.id, s.currentMileage],
+      );
+      dueCount++;
+    }
+  }
+  return `vehicle_maintenance_schedule_scan: ${dueCount} due schedule(s) processed`;
 }
 
 async function fleetStatusCheck(): Promise<string> {
@@ -1849,6 +1927,83 @@ async function weeklyClientClassification(): Promise<string> {
     }
   }
   return `Client classification: ${classified} updated`;
+}
+
+/**
+ * HR-009 / #1799 priority #10 — weekly + monthly score computation.
+ *
+ * Iterates every active assignment in every company, computes the
+ * 6-dimension composite score via `scoreEmployee`, then runs the
+ * signals engines (Risk/Promotion/Burnout) and persists them.
+ *
+ * Backed by:
+ *   - employee_scores (migration 272)        — the score itself
+ *   - employee_signals (migration 273)       — the manager-actionable
+ *                                              flags computed from
+ *                                              that score
+ *
+ * Idempotent on re-run: both write paths UPSERT on their unique key
+ * (assignment × scope × periodKey [× signalType for signals]).
+ *
+ * scope is passed in so a single handler can serve weekly + monthly +
+ * quarterly cron entries below.
+ */
+async function runEmployeeScoringPeriod(scope: "weekly" | "monthly" | "quarterly"): Promise<string> {
+  const periodKey = currentPeriodKey(scope);
+  let scored = 0;
+  let withSignals = 0;
+  // Pull every active assignment in every company. This is the same
+  // shape used by other HR cron handlers — single query, then per-row
+  // loop with try/catch so one failure doesn't abort the whole run.
+  const assignments = await rawQuery<{
+    id: number; employeeId: number; companyId: number; branchId: number | null;
+  }>(
+    `SELECT id, "employeeId", "companyId", "branchId"
+       FROM employee_assignments
+      WHERE status = 'active'`,
+  );
+  for (const a of assignments) {
+    try {
+      const result = await scoreEmployee({
+        companyId: a.companyId,
+        assignmentId: a.id,
+        employeeId: a.employeeId,
+        branchId: a.branchId,
+        scope,
+        periodKey,
+      });
+      scored++;
+      const signals = await detectSignals({
+        assignmentId: a.id,
+        scope,
+        periodKey,
+      });
+      if (signals.length > 0) {
+        await persistSignals({
+          companyId: a.companyId,
+          branchId: a.branchId,
+          assignmentId: a.id,
+          employeeId: a.employeeId,
+          scope,
+          periodKey,
+          compositeScore: result.composite,
+          signals,
+        });
+        withSignals++;
+      }
+    } catch (e) {
+      logger.error(e, `[cron] employee scoring failed for assignment ${a.id}`);
+    }
+  }
+  return `Employee scoring (${scope} ${periodKey}): ${scored} scored, ${withSignals} flagged`;
+}
+
+async function weeklyEmployeeScoring(): Promise<string> {
+  return runEmployeeScoringPeriod("weekly");
+}
+
+async function monthlyEmployeeScoring(): Promise<string> {
+  return runEmployeeScoringPeriod("monthly");
 }
 
 async function monthlyInventoryAudit(): Promise<string> {
@@ -4106,6 +4261,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
+  { name: "vehicle_maintenance_schedule_scan", description: "فحص جداول الصيانة الوقائية المستحقّة (بالتاريخ أو العداد) وإطلاق التنبيهات/الالتزامات", schedule: "0 6 * * *", handler: scanVehicleMaintenanceSchedules },
   { name: "fleet_telematics_retention", description: "تنظيف بيانات Telematics القديمة (مواقع + سجلات مزامنة + جلسات بث منتهية)", schedule: "0 3 * * *", handler: fleetTelematicsRetention },
   { name: "fleet_telematics_heartbeat", description: "كشف الأجهزة غير المتصلة بناءً على آخر موقع", schedule: "*/2 * * * *", handler: fleetTelematicsHeartbeat },
   { name: "fleet_telematics_poll", description: "Auto-poll للمواقع من CMSV6 لكل تكامل نشط (مع retry + circuit breaker)", schedule: "* * * * *", handler: fleetTelematicsPoll },
@@ -4144,6 +4300,13 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_cash_flow", description: "فحص التدفق النقدي الأسبوعي", schedule: "0 9 * * 1", handler: weeklyCashFlowCheck },
   { name: "weekly_property_revenue", description: "إيرادات عقارية أسبوعية", schedule: "0 9 * * 1", handler: weeklyPropertyRevenue },
   { name: "weekly_client_classification", description: "تصنيف العملاء الأسبوعي", schedule: "0 2 * * 0", handler: weeklyClientClassification },
+  // HR-009 / #1799 priority #10 — scoring cron entries.
+  // Weekly runs at 03:00 every Monday (1 day after the weekly client
+  // classification, so the week's data has settled). Monthly runs at
+  // 04:00 on the 1st so dashboards show the prior month's score on
+  // day 1.
+  { name: "weekly_employee_scoring", description: "حساب درجات الموظف الأسبوعية + إشاراتها", schedule: "0 3 * * 1", handler: weeklyEmployeeScoring },
+  { name: "monthly_employee_scoring", description: "حساب درجات الموظف الشهرية + إشاراتها", schedule: "0 4 1 * *", handler: monthlyEmployeeScoring },
   { name: "monthly_inventory_audit", description: "جرد المخزون الشهري", schedule: "0 6 1 * *", handler: monthlyInventoryAudit },
   { name: "monthly_auto_depreciation", description: "إهلاك الأصول الثابتة التلقائي", schedule: "0 6 2 * *", handler: monthlyAutoDepreciation },
   { name: "yearly_leave_balance_renewal", description: "تجديد أرصدة الإجازات 1 يناير", schedule: "0 0 1 1 *", handler: yearlyLeaveBalanceRenewal },
