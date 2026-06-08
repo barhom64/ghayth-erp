@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { z } from "zod";
 import { useApiQuery, apiFetch, isRateLimitedError } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,6 +54,10 @@ import { roleKeyColors } from "@/contexts/app-context";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 
+// Fallback set used only until the live RBAC roles load (or if that call
+// fails). The dropdowns below are driven by the dynamic list so CUSTOM roles
+// (created via the role composer "نسخ وعدّل") are assignable too — a role you
+// build must be selectable when creating/editing a user.
 const ROLE_OPTIONS = [
   { value: "owner", label: "مالك النظام" },
   { value: "general_manager", label: "مدير عام" },
@@ -75,6 +79,15 @@ export default function AdminUsersPage() {
   const { toast } = useToast();
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["admin-users"], "/admin/users");
   const { data: employeesData } = useApiQuery<any>(["employees-list-admin"], "/employees?limit=200");
+  // Live RBAC roles (incl. custom ones) drive every role dropdown so the page
+  // never falls out of sync with the role composer. Falls back to the static
+  // standard list until loaded / on error.
+  const { data: rbacRolesData } = useApiQuery<any>(["rbac-roles-options"], "/rbac/v2/roles");
+  const roleOptions = useMemo(() => {
+    const rows: any[] = rbacRolesData?.data ?? [];
+    if (rows.length === 0) return ROLE_OPTIONS;
+    return rows.map((r) => ({ value: r.role_key, label: r.label_ar || r.role_key }));
+  }, [rbacRolesData]);
   const [showForm, setShowForm] = useState(false);
   const [createdUser, setCreatedUser] = useState<any>(null);
   const [resetUserId, setResetUserId] = useState<number | null>(null);
@@ -89,7 +102,7 @@ export default function AdminUsersPage() {
   const items: any[] = data?.data || [];
   const employees: any[] = employeesData?.data || [];
 
-  const roleLabel = (r: string) => ROLE_OPTIONS.find(o => o.value === r)?.label || r;
+  const roleLabel = (r: string) => roleOptions.find(o => o.value === r)?.label || r;
 
   const filtered = items.filter(u => {
     if (search && !u.email?.includes(search) && !u.employeeName?.includes(search)) return false;
@@ -338,7 +351,7 @@ export default function AdminUsersPage() {
           >
             <FormGrid cols={2}>
               <FormEmailField name="email" label="البريد الإلكتروني" required className="md:col-span-2" placeholder="user@company.com" />
-              <FormSelectField name="role" label="الدور الوظيفي" options={ROLE_OPTIONS} />
+              <FormSelectField name="role" label="الدور الوظيفي" options={roleOptions} />
               <FormSelectField
                 name="employeeId"
                 label="ربط بموظف (اختياري)"
@@ -401,7 +414,7 @@ export default function AdminUsersPage() {
               }}
             >
               <FormGrid cols={3}>
-                <FormSelectField name="role" label="الدور الوظيفي" options={ROLE_OPTIONS} />
+                <FormSelectField name="role" label="الدور الوظيفي" options={roleOptions} />
                 <FormSelectField
                   name="employeeId"
                   label="ربط بموظف"
@@ -467,7 +480,7 @@ export default function AdminUsersPage() {
               <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">كل الأدوار</SelectItem>
-                {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                {roleOptions.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterStatus || "_none"} onValueChange={(v) => setFilterStatus(v === "_none" ? "" : v)}>
@@ -494,11 +507,16 @@ export default function AdminUsersPage() {
 
 function RoleAssignmentSection({ users }: { users: any[] }) {
   const { toast } = useToast();
-  const { data: predefinedData } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
+  // Source the assignable roles from RBAC v2 (the authoritative list that
+  // includes roles cloned in the composer) — not /admin/predefined-roles,
+  // which only sees legacy custom_roles and would hide v2-cloned roles.
+  const { data: rolesData } = useApiQuery<any>(["rbac-roles-assign"], "/rbac/v2/roles");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [userRoles, setUserRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const predefinedRoles: any[] = predefinedData?.data || [];
+  const predefinedRoles: any[] = (rolesData?.data ?? []).map((r: any) => ({
+    roleKey: r.role_key, label: r.label_ar || r.role_key, level: r.level,
+  }));
 
   const loadUserRoles = async (userId: number) => {
     setLoading(true);
@@ -555,8 +573,8 @@ function RoleAssignmentSection({ users }: { users: any[] }) {
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">إضافة دور</p>
-            <div className="space-y-1">
-              {predefinedRoles.filter(r => !assignedKeys.includes(r.roleKey)).slice(0, 8).map((role) => (
+            <div className="space-y-1 max-h-64 overflow-y-auto pe-1">
+              {predefinedRoles.filter(r => !assignedKeys.includes(r.roleKey)).map((role) => (
                 <button key={role.roleKey} onClick={() => assignRole(role.roleKey)}
                   className="w-full text-start flex items-center gap-2 p-2 rounded-lg border border-dashed hover:border-blue-400 hover:bg-status-info-surface text-xs transition-all">
                   <span className="font-medium">{role.label}</span>
