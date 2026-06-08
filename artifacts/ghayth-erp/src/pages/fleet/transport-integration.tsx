@@ -88,20 +88,51 @@ export default function TransportIntegration() {
         `/transport/integration/from-umrah-group/${group.id}`,
         { method: "POST", body: JSON.stringify({}) },
       );
-      const createdCount = res?.data?.created?.length ?? 0;
+      const createdIds = res?.data?.created?.map((c) => c.id) ?? [];
       const skippedCount = res?.data?.skipped?.length ?? 0;
       toast({
-        title: `تم إنشاء ${createdCount} حجزاً`,
+        title: `تم إنشاء ${createdIds.length} حجزاً`,
         description: skippedCount > 0
           ? `تم تجاوز ${skippedCount} حجز كان موجوداً مسبقاً.`
           : undefined,
       });
+      // Auto-trigger bulk planning if anything was created.
+      if (createdIds.length > 0 && confirm(
+        `هل تريد التخطيط الفوري؟ سيقوم النظام باقتراح المركبة والسائق وإنشاء أوامر التوزيع لـ ${createdIds.length} حجزاً.`,
+      )) {
+        await runBulkPlanning(createdIds);
+      }
       qc.invalidateQueries({ queryKey: ["transport-linked-sources", fromDate, toDate] });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       toast({ variant: "destructive", title: "تعذّر إنشاء الحجوزات", description: message });
     } finally {
       setMaterializingId(null);
+    }
+  };
+
+  // Bulk-plan endpoint — runs suggest-assignment on each booking +
+  // creates dispatch orders for the top non-blocked candidate.
+  const runBulkPlanning = async (bookingIds: number[]) => {
+    try {
+      const res = await apiFetch<{ data: { summary: {
+        total: number; planned: number; needsAttention: number;
+        noCandidate: number; noLine: number; skipped: number;
+      } } }>("/transport/integration/plan-bookings", {
+        method: "POST",
+        body: JSON.stringify({ bookingIds }),
+      });
+      const s = res?.data?.summary;
+      if (!s) return;
+      toast({
+        title: `تم تخطيط ${s.planned} من ${s.total} حجوزات`,
+        description: s.needsAttention > 0
+          ? `${s.needsAttention} يحتاج تدخلاً يدوياً — افتح لوحة التوزيع لإكمالها.`
+          : undefined,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر التخطيط", description: message });
     }
   };
 
