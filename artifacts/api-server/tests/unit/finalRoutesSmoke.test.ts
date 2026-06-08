@@ -181,10 +181,18 @@ describe("search — endpoints", () => {
     expect(SEARCH).not.toContain("authMiddleware");
   });
 
-  it("GET / requires operations:read", () => {
-    const idx = SEARCH.indexOf('.get("/",');
-    const section = SEARCH.slice(idx, idx + 200);
-    expect(section).toContain('authorize(');
+  it("gates each entity by its own feature via per-entity checkAccess", () => {
+    // Global search fans out across domains; a single coarse authorize()
+    // gate would leak employees/invoices/legal/tenants to anyone who could
+    // reach the endpoint. Instead each entity query is gated individually
+    // against its feature's list access — and it fails closed.
+    expect(SEARCH).toContain("FEATURE_BY_ENTITY");
+    expect(SEARCH).toContain("checkAccess(scope, { feature: f, action: \"list\" })");
+    expect(SEARCH).toContain('featureAllowed.get(FEATURE_BY_ENTITY[t]) === true');
+    // Sensitive domains must be mapped to real features (not blanket-open).
+    expect(SEARCH).toContain('employees: "hr.employees"');
+    expect(SEARCH).toContain('invoices: "finance.invoices"');
+    expect(SEARCH).toContain('legal_cases: "legal.cases"');
   });
 });
 
