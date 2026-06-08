@@ -160,8 +160,21 @@ export default function UmrahImportWizard() {
   // operator's choices from these so the column-mapping step is empty
   // typing only for unknown layouts.
   const headerMapsQ = useApiQuery<{
-    mutamers: { forward: Record<string, string>; targets: Record<string, string[]>; labels?: Record<string, string> };
-    vouchers: { forward: Record<string, string>; targets: Record<string, string[]>; labels?: Record<string, string> };
+    mutamers: {
+      forward: Record<string, string>;
+      targets: Record<string, string[]>;
+      labels?: Record<string, string>;
+      // groups + groupLabels added by §2 of #1870 — see /umrah/import/header-maps.
+      groups?: Record<string, string>;
+      groupLabels?: Record<string, string>;
+    };
+    vouchers: {
+      forward: Record<string, string>;
+      targets: Record<string, string[]>;
+      labels?: Record<string, string>;
+      groups?: Record<string, string>;
+      groupLabels?: Record<string, string>;
+    };
   }>(["umrah-import-header-maps"], "/umrah/import/header-maps");
   // Saved column-mapping presets for THIS operator + fileType. The
   // dropdown lists them so a one-click pick replaces re-mapping every
@@ -641,41 +654,69 @@ export default function UmrahImportWizard() {
                     );
                   })()}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2" data-testid="column-mapping-grid">
                   {detectedHeaders.map((h) => {
                     const targets = headerMapsQ.data?.[fileType]?.targets ?? {};
                     const labels = headerMapsQ.data?.[fileType]?.labels ?? {};
-                    // Sort by the ARABIC label the operator actually reads,
-                    // not the English identifier — so the dropdown is in
-                    // Arabic alphabetical order. Falls back to the raw
-                    // field name only if a label is somehow missing.
-                    const dbFields = Object.keys(targets).sort((a, b) =>
-                      (labels[a] ?? a).localeCompare(labels[b] ?? b, "ar"),
-                    );
+                    // groups + groupLabels added by §2 of #1870. When a
+                    // field is missing from the group catalog it falls
+                    // back to "أخرى" so the dropdown never silently
+                    // hides a real option (e.g. a brand-new field
+                    // shipped before this catalog was updated).
+                    const groups = headerMapsQ.data?.[fileType]?.groups ?? {};
+                    const groupLabels = headerMapsQ.data?.[fileType]?.groupLabels ?? {};
+                    // Logical render order top-down. Matches the engine
+                    // catalog's intent: operator skims left-to-right
+                    // pilgrim → identity → agent → group → travel →
+                    // status → finance.
+                    const groupOrder = ["pilgrim", "identity", "agent", "group", "travel", "status", "finance"];
+                    const dbFields = Object.keys(targets).sort((a, b) => {
+                      const gA = groups[a] ?? "other";
+                      const gB = groups[b] ?? "other";
+                      const iA = groupOrder.indexOf(gA);
+                      const iB = groupOrder.indexOf(gB);
+                      const oA = iA === -1 ? 999 : iA;
+                      const oB = iB === -1 ? 999 : iB;
+                      if (oA !== oB) return oA - oB;
+                      // Within a group, sort by ARABIC label so the
+                      // operator scans alphabetically inside each
+                      // heading. Falls back to the raw field name if
+                      // a label is missing.
+                      return (labels[a] ?? a).localeCompare(labels[b] ?? b, "ar");
+                    });
                     const value = columnMapping[h] ?? "";
                     // Smart-mapping suggestion for this header (PR
                     // #1474). Only shown when the value MATCHES the
-                    // suggestion — i.e. the engine pre-filled and the
-                    // operator hasn't overridden. Lets the operator
-                    // confirm "yes, this is the column I meant" at a
-                    // glance, or notice + override when the fuzzy
-                    // guess was wrong.
+                    // suggestion — confirms the auto-pick at a glance.
                     const suggestion = mappingSuggestions[h];
                     const showHint =
                       suggestion != null && suggestion.target === value;
+                    // Build SearchableSelect options with group headers.
+                    // The "ignore" sentinel is its own group at the top
+                    // so the operator can pick it without scrolling.
+                    const options = [
+                      { value: "_none", label: "— تجاهل العمود —", group: "إجراء" },
+                      ...dbFields.map((field) => ({
+                        value: field,
+                        label: labels[field] ?? field,
+                        group: groupLabels[groups[field] ?? "other"] ?? "أخرى",
+                      })),
+                    ];
                     return (
                       <div key={h} className="flex flex-col gap-1 text-xs">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-muted-foreground truncate w-1/2" title={h}>{h}</span>
-                          <Select value={value || "_none"} onValueChange={(v) => setColumnMapping((m) => ({ ...m, [h]: v === "_none" ? "" : v }))}>
-                            <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="— تجاهل —" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="_none">— تجاهل العمود —</SelectItem>
-                              {dbFields.map((field) => (
-                                <SelectItem key={field} value={field}>{labels[field] ?? field}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex-1">
+                            <SearchableSelect
+                              options={options}
+                              value={value || "_none"}
+                              onValueChange={(v) => setColumnMapping((m) => ({ ...m, [h]: v === "_none" ? "" : v }))}
+                              placeholder="— تجاهل —"
+                              searchPlaceholder="ابحث في الحقول..."
+                              emptyText="لا توجد حقول مطابقة"
+                              className="h-8"
+                            />
+                          </div>
                         </div>
                         {showHint && (
                           <span

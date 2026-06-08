@@ -137,6 +137,53 @@ export const UMRAH_FIELD_LABELS_AR: Record<string, string> = {
   expiryDate: "تاريخ الانتهاء",
 };
 
+// ---------------------------------------------------------------------------
+// Field-group catalog — used by the wizard's column-mapping dropdown to
+// render headings (المعتمر / الوكيل / الفنادق ...) instead of a flat
+// 50-item alphabetical list. Each engine field maps to exactly one
+// group. Groups are ordered logically (pilgrim → identity → agent →
+// travel → status → finance) so the dropdown reads top-down the way an
+// operator skims the file from left to right.
+// ---------------------------------------------------------------------------
+export const UMRAH_FIELD_GROUP_LABELS_AR: Record<string, string> = {
+  pilgrim: "بيانات المعتمر",
+  identity: "الجواز والتأشيرة",
+  agent: "الوكيل والمكتب",
+  group: "المجموعة",
+  travel: "الدخول والخروج",
+  status: "الحالة والإقامة",
+  finance: "المالية",
+};
+
+export const UMRAH_FIELD_GROUPS: Record<string, keyof typeof UMRAH_FIELD_GROUP_LABELS_AR> = {
+  // pilgrim
+  nuskNumber: "pilgrim", fullName: "pilgrim", nationality: "pilgrim",
+  gender: "pilgrim", country: "pilgrim",
+  // identity
+  passportNumber: "identity", passportExpiry: "identity", visaNumber: "identity",
+  borderNumber: "identity", mofaNumber: "identity",
+  // agent / sub-agent
+  nuskAgentNumber: "agent", agentName: "agent",
+  nuskCode: "agent", subAgentName: "agent",
+  // group
+  nuskGroupNumber: "group", groupName: "group",
+  // travel
+  entryDate: "travel", exitDate: "travel",
+  entryPort: "travel", entryFlight: "travel",
+  exitPort: "travel", exitFlight: "travel",
+  // status / stay
+  status: "status", isInsideKingdom: "status", hasUmrahPermit: "status",
+  programDuration: "status", actualStayDays: "status", overstayDays: "status",
+  // finance (vouchers)
+  nuskInvoiceNumber: "finance", mutamerCount: "finance",
+  groundServices: "finance", electronicFees: "finance",
+  visaFees: "finance", insuranceFees: "finance",
+  enrichmentServices: "finance", additionalServices: "finance",
+  transportTotal: "finance", hotelTotal: "finance",
+  refundAmount: "finance", netCost: "finance", totalAmount: "finance",
+  nuskStatus: "finance", issueDate: "finance", expiryDate: "finance",
+};
+
 const STATUS_MAP: Record<string, string> = {
   "داخل المملكة": "arrived",
   "خرج": "departed",

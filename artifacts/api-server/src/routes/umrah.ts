@@ -38,6 +38,8 @@ import {
   MUTAMER_HEADER_MAP,
   VOUCHER_HEADER_MAP,
   UMRAH_FIELD_LABELS_AR,
+  UMRAH_FIELD_GROUPS,
+  UMRAH_FIELD_GROUP_LABELS_AR,
 } from "../lib/umrahImportEngine.js";
 import { gccExclusionSqlFragment } from "../lib/umrahNationalityRules.js";
 
@@ -2829,16 +2831,24 @@ router.get("/import/header-maps", authorize({ feature: "umrah", action: "create"
     // labels: { dbField → canonical Arabic label } so the wizard's
     // column-mapping dropdown shows comprehensible Arabic instead of raw
     // English identifiers (nuskInvoiceNumber, mutamerCount, ...).
+    // groups: { dbField → groupKey } and groupLabels: { groupKey → Arabic }
+    // — surfaces field categories (pilgrim / agent / finance / ...) so the
+    // wizard's column-mapping dropdown can render headings instead of a
+    // flat 50-item list. §2 of #1870.
     res.json({
       mutamers: {
         forward: MUTAMER_HEADER_MAP,
         targets: invertMap(MUTAMER_HEADER_MAP),
         labels: UMRAH_FIELD_LABELS_AR,
+        groups: UMRAH_FIELD_GROUPS,
+        groupLabels: UMRAH_FIELD_GROUP_LABELS_AR,
       },
       vouchers: {
         forward: VOUCHER_HEADER_MAP,
         targets: invertMap(VOUCHER_HEADER_MAP),
         labels: UMRAH_FIELD_LABELS_AR,
+        groups: UMRAH_FIELD_GROUPS,
+        groupLabels: UMRAH_FIELD_GROUP_LABELS_AR,
       },
     });
   } catch (err) { handleRouteError(err, res, "Import header maps error"); }
