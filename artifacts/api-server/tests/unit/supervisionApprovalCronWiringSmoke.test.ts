@@ -92,9 +92,15 @@ describe("Migration 275 — approval_authorities (per-person limits)", () => {
     );
   });
 
-  it("partial index filters expired grants", () => {
+  it("indexes approval authorities by assignment with an IMMUTABLE predicate", () => {
+    // The index must NOT use now() in its predicate — Postgres rejects
+    // non-IMMUTABLE functions in an index predicate, which broke fresh
+    // bootstraps (see migration 275 fix). Expiry is filtered at query time.
     expect(MIGRATION_SRC).toMatch(
-      /idx_approval_authorities_assignment[\s\S]*?WHERE "expiresAt" IS NULL OR "expiresAt" > now/,
+      /idx_approval_authorities_assignment[\s\S]*?ON approval_authorities\("assignmentId"\)/,
+    );
+    expect(MIGRATION_SRC).not.toMatch(
+      /idx_approval_authorities_assignment[\s\S]*?now\(\)/,
     );
   });
 
