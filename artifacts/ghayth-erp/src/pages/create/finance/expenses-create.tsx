@@ -425,6 +425,7 @@ export default function ExpensesCreate() {
                 maintenanceType: allocTarget.maintenanceType || undefined,
                 odometer: allocTarget.odometer ? Number(allocTarget.odometer) : undefined,
                 costBearer: allocTarget.costBearer || undefined,
+                existingTicketId: allocTarget.existingTicketId ? Number(allocTarget.existingTicketId) : undefined,
               }
             : undefined,
       });
