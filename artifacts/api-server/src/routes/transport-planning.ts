@@ -135,10 +135,10 @@ transportPlanningRouter.post(
 );
 
 const estimateRouteSchema = z.object({
-  originLat: z.coerce.number(),
-  originLng: z.coerce.number(),
-  destinationLat: z.coerce.number(),
-  destinationLng: z.coerce.number(),
+  originLat: z.coerce.number().min(-90).max(90),
+  originLng: z.coerce.number().min(-180).max(180),
+  destinationLat: z.coerce.number().min(-90).max(90),
+  destinationLng: z.coerce.number().min(-180).max(180),
 });
 
 transportPlanningRouter.post(
@@ -758,10 +758,10 @@ transportPlanningRouter.post(
 );
 
 const pingSchema = z.object({
-  lat: z.coerce.number(),
-  lng: z.coerce.number(),
-  speedKmh: z.coerce.number().optional(),
-  heading: z.coerce.number().optional(),
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
+  speedKmh: z.coerce.number().min(0).max(400).optional(),
+  heading: z.coerce.number().min(0).max(360).optional(),
   etaSeconds: z.coerce.number().int().nonnegative().optional(),
   remainingMeters: z.coerce.number().int().nonnegative().optional(),
 });
