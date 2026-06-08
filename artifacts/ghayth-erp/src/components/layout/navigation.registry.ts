@@ -237,6 +237,7 @@ export const allNavSections: NavSection[] = [
       { label: "إعدادات الموارد البشرية", path: "/hr/attendance-policy", icon: Settings, module: "hr", children: [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
+        { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
       ]},
     ],
   },
