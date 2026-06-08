@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -296,6 +296,56 @@ accountsRouter.get("/accounts/usage-gaps", authorize({ feature: "finance.account
     res.json(maskFields(req, { data: rows, total: rows.length, byType }));
   } catch (err) {
     handleRouteError(err, res, "Usage-gaps report error:");
+  }
+});
+
+// POST /finance/accounts/classify-usage — backfill `accountUsage` on existing
+// accounts from their code/name/type via classifyAccountUsage (#1715 §10
+// "تصنيف الحسابات الحالية آلياً"). Only fills NULLs, never overwrites a
+// usage an operator already set, so it is safe to re-run. Accounts the
+// classifier can't confidently place stay NULL and remain in the usage-gaps
+// report for manual classification.
+accountsRouter.post("/accounts/classify-usage", authorize({ feature: "finance.accounts", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<{ id: number; code: string | null; name: string | null; type: string | null }>(
+      `SELECT id, code, name, type
+         FROM chart_of_accounts
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "accountUsage" IS NULL`,
+      [scope.companyId],
+    );
+    const updates: { id: number; usage: string }[] = [];
+    for (const r of rows) {
+      const usage = classifyAccountUsage({ code: r.code, name: r.name, type: r.type });
+      if (usage) updates.push({ id: r.id, usage });
+    }
+    if (updates.length > 0) {
+      await withTransaction(async (client) => {
+        for (const u of updates) {
+          await client.query(
+            `UPDATE chart_of_accounts SET "accountUsage" = $1, "updatedAt" = NOW()
+               WHERE id = $2 AND "companyId" = $3 AND "accountUsage" IS NULL`,
+            [u.usage, u.id, scope.companyId],
+          );
+        }
+      });
+      createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? undefined,
+        userId: scope.activeAssignmentId ?? 0,
+        action: "classify_usage",
+        entity: "chart_of_accounts",
+        entityId: 0,
+        after: { scanned: rows.length, classified: updates.length },
+      }).catch((e) => logger.error(e, "classify-usage audit failed"));
+    }
+    res.json({
+      scanned: rows.length,
+      classified: updates.length,
+      remaining: rows.length - updates.length,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Classify-usage backfill error:");
   }
 });
 

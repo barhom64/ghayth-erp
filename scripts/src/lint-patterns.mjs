@@ -181,6 +181,30 @@ const RULES = [
       "bypassed by a route that forgets to call it.",
   },
   {
+    // ─── #1715 guardrail #2 (frontend) — account-code prefix logic ────────
+    // `code.startsWith("11"/"12"/"23"…)` as CORE account logic inside a
+    // finance page/component is the scattered pattern #1715 PR-2 centralised
+    // into `lib/finance-account-usage.ts` (accountUsage-driven). This ratchet
+    // locks the current count so no NEW in-page prefix logic is added; each
+    // migration of a page to finance-account-usage drops the baseline by the
+    // same number. Started at 18; → 15 (expense + voucher money pickers) → 13
+    // (salary-advances + custodies money pickers), all on `isMoneyAccount`.
+    id: "account-code-startswith-in-finance-page",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx"],
+    regex: /\bcode\??\)?\.startsWith\(\s*["'`][0-9]/,
+    countBaseline: 13,
+    message:
+      "Account-code prefix logic (`code.startsWith(\"11\"/\"12\"/\"23\"…)`) " +
+      "inside a finance page/component is forbidden as CORE logic (#1715 " +
+      "guardrail #2). Use the centralised helpers in " +
+      "`@/lib/finance-account-usage` (accountUsage-driven) so cash / bank / " +
+      "receivable / payable classification has ONE source of truth instead of " +
+      "a code-prefix guess duplicated per page. Ratchet: the baseline never " +
+      "goes up — when you migrate a page off prefix logic, drop the " +
+      "countBaseline in scripts/src/lint-patterns.mjs by the same number.",
+  },
+  {
     id: "unlocalized-toLocaleString",
     scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
     extensions: [".tsx", ".ts"],

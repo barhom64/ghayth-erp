@@ -13,7 +13,9 @@ const MonthlyClosePack = lazy(() => import("@/pages/finance/monthly-close-pack")
 const DailyCloseChecklist = lazy(() => import("@/pages/finance/daily-close-checklist"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
 const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
+const FinanceIntakeCenter = lazy(() => import("@/pages/finance/finance-intake-center"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
+const AccountsUsageGaps = lazy(() => import("@/pages/finance/accounts-usage-gaps"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
@@ -216,6 +218,8 @@ export const financeRoutes = [
   { path: "/finance/daily-close-checklist", component: DailyCloseChecklist },
   { path: "/finance/gl-health", component: GlHealthScore },
   { path: "/finance/approvals-inbox", component: ApprovalsInbox },
+  { path: "/finance/intake", component: FinanceIntakeCenter },
+  { path: "/finance/usage-gaps", component: AccountsUsageGaps },
   { path: "/finance/accounts", component: Accounts },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },

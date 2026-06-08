@@ -74,6 +74,11 @@ import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
+import { transportBillingCandidatesRouter } from "./transport-billing-candidates.js";
+import { transportBookingsRouter } from "./transport-bookings.js";
+import { vehicleProfileRouter } from "./vehicle-profile.js";
+import { transportPricingRouter } from "./transport-pricing.js";
+import { transportPlanningRouter } from "./transport-planning.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -360,6 +365,9 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), ven
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
+// #1733 — Transport-to-finance handoff queue. Lives under /finance because
+// only finance-side roles see it (transport NEVER materialises JEs).
+router.use("/finance", requireModule("finance"), requireGuards("financial"), transportBillingCandidatesRouter);
 // financeRouter (finance.ts monolith) removed in Phase 7.1 — the 13
 // singleton routes it still owned were migrated to finance-purchase.ts,
 // finance-vendors.ts, and finance-reports.ts during canonicalisation.
@@ -375,6 +383,24 @@ router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetTe
 // URLs stay /cargo/* at the top level (not /fleet/cargo/*) because
 // cargo is its own RBAC feature (fleet.cargo) and its own SPA tab.
 router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRouter);
+// #1733 Booking + Dispatch (Issue Comment 9). The routers carry their
+// own full paths (/transport/bookings, /transport/dispatch-orders,
+// /fleet/vehicles/:vehicleId/...) so they mount without a prefix.
+// Same fleet-module + financial guards.
+router.use(requireModule("fleet"), requireGuards("financial"), transportBookingsRouter);
+// #1733 Vehicle profile sub-resources (Issue Comment 7). URLs land at
+// /fleet/vehicles/:vehicleId/{components,driver-assignments,maintenance-schedules}.
+router.use(requireModule("fleet"), requireGuards("financial"), vehicleProfileRouter);
+// #1733 Pricing engine + invoice merging (Issue Comment 3). URLs land at
+// /transport/price-rules, /transport/service-lines, /transport/invoice-batches.
+router.use(requireModule("fleet"), requireGuards("financial"), transportPricingRouter);
+// #1812 Planning engine — assignment-suggestion + maps + ops dashboard +
+// itineraries + in-app driver navigation sessions. URLs land at
+// /transport/planning-settings, /transport/bookings/:id/suggest-assignment,
+// /transport/ops-dashboard, /transport/itineraries, and
+// /transport/dispatch-orders/:id/navigation/*. Fleet-module + financial
+// guards (same as the other transport routers).
+router.use(requireModule("fleet"), requireGuards("financial"), transportPlanningRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);

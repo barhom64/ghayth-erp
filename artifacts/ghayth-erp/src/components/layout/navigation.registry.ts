@@ -219,6 +219,7 @@ export const allNavSections: NavSection[] = [
       // (2) الحسابات والقيود
       { label: "الحسابات والقيود", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
+        { label: "فجوات تصنيف الحسابات", path: "/finance/usage-gaps", icon: ShieldAlert },
         { label: "حسابات فرعية", path: "/finance/subsidiary-accounts", icon: Layers },
         { label: "مراكز التكلفة", path: "/finance/cost-centers", icon: Network },
         { label: "شجرة مراكز التكلفة", path: "/finance/cost-centers/tree", icon: Network },
@@ -347,7 +348,8 @@ export const allNavSections: NavSection[] = [
         { label: "اعتماد الميزانية", path: "/finance/budget-approvals", icon: ClipboardCheck },
       ]},
       // (10) الصناديق والارتباطات — دمج «صناديق الواردات» مع «ارتباطات الموظفين».
-      { label: "الصناديق والارتباطات", path: "/finance/approvals-inbox", icon: Bell, module: "finance", children: [
+      { label: "الصناديق والارتباطات", path: "/finance/intake", icon: Bell, module: "finance", children: [
+        { label: "مركز التلقّي المالي", path: "/finance/intake", icon: Truck },
         { label: "Approvals Inbox", path: "/finance/approvals-inbox", icon: Bell },
         { label: "ملف الجهة 360°", path: "/finance/entity-360", icon: Sparkles },
         { label: "ترتيب الجهات", path: "/finance/entity-ranking", icon: BarChart3 },
@@ -431,6 +433,7 @@ export const allNavSections: NavSection[] = [
         { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
         { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
         { label: "الصيانة", path: "/fleet/maintenance", icon: Wrench, perm: "fleet.maintenance:list" },
+        { label: "أثر الصيانة → التذاكر", path: "/fleet/maintenance-impact", icon: AlertTriangle, perm: "fleet.maintenance:list" },
         { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
         { label: "التأمين", path: "/fleet/insurance", icon: Shield, perm: "fleet.vehicles:list" },
         { label: "التنبيهات", path: "/fleet/alerts", icon: Bell, perm: "fleet.vehicles:list" },

@@ -48,11 +48,15 @@ describe("FND-005 — company event LOG is no longer readable by any authenticat
 });
 
 describe("RBAC-007 — primary role is the default active role (#1413 §10)", () => {
-  it("the user-roles union query orders by is_primary first", () => {
-    expect(AUTH).toMatch(/ORDER BY is_primary DESC, source_order, level DESC/);
+  // #1791: the legacy user_roles half of the role-selector UNION was removed.
+  // The query is now pure RBAC-v2 (rbac_user_roles), so the `source_order`
+  // tiebreaker no longer applies — `is_primary DESC` still leads, preserving
+  // "primary role is the default active role".
+  it("the user-roles query orders by is_primary first", () => {
+    expect(AUTH).toMatch(/ORDER BY is_primary DESC, level DESC/);
   });
 
-  it("the union still selects is_primary so the ordering has a column to sort on", () => {
+  it("the query still selects is_primary so the ordering has a column to sort on", () => {
     expect(AUTH).toMatch(/is_primary/);
   });
 });

@@ -105,6 +105,31 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "storage.ts",
   "store.ts",
   "training.ts",
+  // transport-billing-candidates.ts: accountant queue for the #1733 handoff.
+  // Three small endpoints, each a single-row lookup by id keyed on
+  // (companyId, id) — no list cascade where buildScopedWhere would add
+  // branch/department filtering. Manual companyId scoping is correct here.
+  "transport-billing-candidates.ts",
+  // transport-bookings.ts: #1733 Booking + Dispatch layer. List queries
+  // filter by (companyId, status / customer / date window) — buildScopedWhere
+  // would unnecessarily branch-cascade. The booking lookup is by id keyed on
+  // (companyId, id) like the other transport surfaces.
+  "transport-bookings.ts",
+  // vehicle-profile.ts: #1733 vehicle sub-resources (components, driver
+  // assignments, maintenance schedules). All endpoints are scoped by
+  // (companyId, vehicleId) and the vehicle ownership is checked up front
+  // by assertVehicleBelongsToTenant — buildScopedWhere has nothing to add.
+  "vehicle-profile.ts",
+  // transport-pricing.ts: #1733 pricing engine + service-line queue +
+  // invoice-batch merger. All queries are scoped on (companyId, customerId
+  // / serviceType / status / date window) — buildScopedWhere has no
+  // branch cascade to add.
+  "transport-pricing.ts",
+  // transport-planning.ts: #1812 planning engine — assignment suggestion,
+  // ops dashboard, itineraries, driver navigation sessions. All queries
+  // are scoped on (companyId, id/dispatchOrderId/…) — buildScopedWhere
+  // has no branch cascade to add.
+  "transport-planning.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -189,9 +214,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 105,
+      total: 110,
       helperUsers: 36,
-      manualOnly: 66,
+      manualOnly: 71,
     });
   });
 });
