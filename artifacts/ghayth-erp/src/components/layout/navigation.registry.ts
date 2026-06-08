@@ -348,7 +348,8 @@ export const allNavSections: NavSection[] = [
         { label: "اعتماد الميزانية", path: "/finance/budget-approvals", icon: ClipboardCheck },
       ]},
       // (10) الصناديق والارتباطات — دمج «صناديق الواردات» مع «ارتباطات الموظفين».
-      { label: "الصناديق والارتباطات", path: "/finance/approvals-inbox", icon: Bell, module: "finance", children: [
+      { label: "الصناديق والارتباطات", path: "/finance/intake", icon: Bell, module: "finance", children: [
+        { label: "مركز التلقّي المالي", path: "/finance/intake", icon: Truck },
         { label: "Approvals Inbox", path: "/finance/approvals-inbox", icon: Bell },
         { label: "ملف الجهة 360°", path: "/finance/entity-360", icon: Sparkles },
         { label: "ترتيب الجهات", path: "/finance/entity-ranking", icon: BarChart3 },
