@@ -80,6 +80,7 @@ import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
 import { transportPlanningRouter } from "./transport-planning.js";
 import { transportIntegrationRouter } from "./transport-integration.js";
+import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -407,6 +408,7 @@ router.use(requireModule("fleet"), requireGuards("financial"), transportPlanning
 // feed for the central calendar. The user's governing comment: "النقل
 // ليس جزيرة" — this router is the proof.
 router.use(requireModule("fleet"), requireGuards("financial"), transportIntegrationRouter);
+router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);

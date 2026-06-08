@@ -135,6 +135,8 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // on (companyId, sourceTable.id) — buildScopedWhere has no branch
   // cascade to add for a cross-domain bridge.
   "transport-integration.ts",
+  // fleet-rules-admin.ts: admin CRUD for fleet_expense_rules + transport_intake_rules.
+  "fleet-rules-admin.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -219,9 +221,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 111,
+      total: 112,
       helperUsers: 36,
-      manualOnly: 72,
+      manualOnly: 73,
     });
   });
 });
