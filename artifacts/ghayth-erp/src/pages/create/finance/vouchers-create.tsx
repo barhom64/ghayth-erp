@@ -14,7 +14,8 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { amountTaxSplit } from "@/lib/tax-math";
 import { allowedUsagesForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
-import { AllocationTargetSelect, EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
+import { EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
+import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
 import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -376,14 +377,12 @@ export default function VouchersCreate() {
         </div>
       </div>
 
-      <div className="border rounded-lg p-4 mb-4 space-y-3">
-        <h3 className="font-semibold text-sm text-muted-foreground">ربط السند بـ</h3>
-        <p className="text-xs text-muted-foreground">
-          اختر ما يُربط به السند، وستظهر الحقول المناسبة فقط. الربط يُنتج
-          الأبعاد المحاسبية ومركز التكلفة تلقائياً.
-        </p>
-        <AllocationTargetSelect value={allocTarget} onChange={setAllocTarget} label="ربط السند بـ" />
-      </div>
+      <FinanceOperationContextPanel
+        value={allocTarget}
+        onChange={setAllocTarget}
+        title="ربط السند بـ"
+        description="اختر ما يُربط به السند، وستظهر الحقول المناسبة فقط. الربط يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً."
+      />
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">الطرف الآخر والمرجع</h3>
