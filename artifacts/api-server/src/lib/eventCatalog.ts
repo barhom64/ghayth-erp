@@ -1373,7 +1373,10 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "umrah.commission_plan.created", label: "إنشاء commission_plan", domain: "umrah", description: "تُصدر عند إنشاء commission_plan", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "umrah.commission_plan.updated", label: "تحديث commission_plan", domain: "umrah", description: "تُصدر عند تحديث commission_plan", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.import.completed", label: "إتمام import", domain: "umrah", description: "تُصدر عند إتمام import", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
-  { name: "umrah.import.previewed", label: "معاينة import", domain: "umrah", description: "تُصدر عند معاينة import", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  // umrah.import.previewed is declared earlier in the §10 block with
+  // a richer Arabic label + the operator-facing payload schema. The
+  // auto-generated boilerplate entry that used to sit here would have
+  // shadowed it as a duplicate.
   { name: "umrah.invoice.gl_posted", label: "gl_posted فاتورة", domain: "umrah", description: "تُصدر عند gl_posted فاتورة", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.invoice.updated", label: "تحديث فاتورة", domain: "umrah", description: "تُصدر عند تحديث فاتورة", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.mutamers.imported", label: "استيراد mutamers", domain: "umrah", description: "تُصدر عند استيراد mutamers", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
