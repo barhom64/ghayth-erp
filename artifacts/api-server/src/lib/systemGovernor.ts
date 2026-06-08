@@ -94,23 +94,18 @@ const postingFailuresGuard: GuardFn = async (companyId, context) => {
 };
 
 // ─── Guard: Unresolved Audit Violations ───────────────────────────────────
-
-const auditViolationsGuard: GuardFn = async (companyId, context) => {
-  if (context?.role === "owner" || context?.role === "general_manager") {
-    return { allowed: true, guardName: "audit_violations" };
-  }
-  const [result] = await rawQuery<{ cnt: number }>(
-    `SELECT COUNT(*)::int AS cnt FROM audit_violations
-     WHERE "companyId" = $1 AND status = 'open' AND priority = 'critical'`,
-    [companyId]
-  );
-  if (result && result.cnt >= 10) {
-    return {
-      allowed: false,
-      guardName: "audit_violations",
-      reason: `يوجد ${result.cnt} مخالفة تدقيق حرجة غير محلولة — راجعها في لوحة الحوكمة`,
-    };
-  }
+// NOTE: audit_violations are GOVERNANCE FINDINGS (e.g. "employee without
+// contract", "vehicle without insurance") surfaced in the governance
+// dashboard — they are advisory, NOT an operational halt condition. Letting
+// them hard-block every financial mutation once a backlog accumulates (the
+// "1307 critical violations" lockout) punishes every user for unrelated
+// findings. Real halts are handled by systemStopGuard (explicit red button),
+// postingFailuresGuard (GL integrity), financialPeriodGuard, and
+// companyActiveGuard. This guard is therefore advisory-only (always allows);
+// the count is still visible in the governance dashboard.
+// Exported (not registered) so it stays available for explicit/opt-in use and
+// for the governance dashboard's reference, without blanket-blocking.
+export const auditViolationsGuard: GuardFn = async () => {
   return { allowed: true, guardName: "audit_violations" };
 };
 
@@ -154,7 +149,8 @@ const GUARD_REGISTRY: Array<{ guard: GuardFn; scope: GuardScope }> = [
   { guard: financialPeriodGuard, scope: "financial" },
   { guard: trialLimitsGuard, scope: "all" },
   { guard: postingFailuresGuard, scope: "financial" },
-  { guard: auditViolationsGuard, scope: "financial" },
+  // auditViolationsGuard intentionally NOT registered — governance findings are
+  // advisory (dashboard), not a blanket operational halt. See its definition.
 ];
 
 export async function checkSystemGuards(
@@ -188,6 +184,40 @@ export async function checkSystemGuards(
 
 export function registerGuard(guard: GuardFn, scope: GuardScope): void {
   GUARD_REGISTRY.push({ guard, scope });
+}
+
+// ─── Role-aware denial message ─────────────────────────────────────────────
+// When a guard blocks an operation, the reply must understand the user's
+// صفة (role) and answer with a message + a SHORT fix suited to what THAT role
+// can actually do about it. A line clerk shouldn't get a technical governance
+// dump; a manager should get the actionable detail.
+function isManagerRole(role?: string): boolean {
+  if (!role) return false;
+  return role === "owner" || role === "general_manager" || role === "branch_manager"
+    || /_manager$/.test(role) || role === "accountant" || role === "finance_manager";
+}
+
+export function buildGuardDenial(violations: GuardResult[], role?: string): { error: string; fix: string; code: string } {
+  const stop = violations.find((v) => v.guardName === "system_stop");
+  // Explicit red-button stop — everyone sees the reason (it's an announced halt).
+  if (stop) {
+    return { error: stop.reason || "النظام موقوف مؤقتًا", fix: "العملية متوقفة بقرار إداري. راجع مدير النظام لرفع الإيقاف.", code: "SYSTEM_GUARD_BLOCK" };
+  }
+  const reasons = violations.map((v) => v.reason).filter(Boolean) as string[];
+  if (isManagerRole(role)) {
+    // Managers get the actionable detail + where to resolve it.
+    return {
+      error: reasons.join(" | ") || "العملية محجوبة بضوابط الحوكمة",
+      fix: "راجع لوحة الحوكمة (الإدارة ← المراقبة) وعالِج العناصر الحرجة، ثم أعد المحاولة.",
+      code: "SYSTEM_GUARD_BLOCK",
+    };
+  }
+  // Regular staff get a concise message + who to contact — no technical dump.
+  return {
+    error: "تعذّرت العملية مؤقتًا بسبب ضوابط الحوكمة في النظام.",
+    fix: "الحل المختصر: تواصل مع مدير قسمك أو المالية لرفع الحجب — لا يلزمك إجراء تقني.",
+    code: "SYSTEM_GUARD_BLOCK",
+  };
 }
 
 import type { Request, Response, NextFunction } from "express";
@@ -229,10 +259,14 @@ export function requireGuards(scope: GuardScope = "financial") {
       bypassPostingFailures: isFailureResolution,
     });
     if (!result.allowed) {
-      const reasons = result.violations.map(v => v.reason).join(" | ");
+      // Role-aware reply: understand the صفة and answer with a message + short
+      // fix suited to what that role can do (#governance UX).
+      const denial = buildGuardDenial(result.violations, s?.role);
       return _res.status(403).json({
-        error: reasons,
-        code: "SYSTEM_GUARD_BLOCK",
+        error: denial.error,
+        fix: denial.fix,
+        code: denial.code,
+        role: s?.role ?? null,
         violations: result.violations,
       });
     }

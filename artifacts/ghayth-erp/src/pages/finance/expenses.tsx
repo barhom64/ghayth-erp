@@ -144,6 +144,26 @@ export default function ExpensesPage() {
       render: (e) => <span className="text-muted-foreground text-xs">{e.accountName || "-"}</span>,
     },
     {
+      key: "costCenter",
+      header: "مركز التكلفة",
+      sortable: true,
+      // Returned by the expenses API but only ever shown in the CSV — a core
+      // control dimension that belongs in the list.
+      render: (e) => <span className="text-muted-foreground text-xs">{e.costCenter || "—"}</span>,
+    },
+    {
+      key: "relatedEntity",
+      header: "الكيان المرتبط",
+      // relatedEntityType / relatedEntityId are returned by the API and link
+      // the expense to its subject (supplier, vehicle, property, …).
+      render: (e) => {
+        const labels: Record<string, string> = { supplier: "مورد", client: "عميل", employee: "موظف", vehicle: "مركبة", property: "عقار", project: "مشروع", contract: "عقد" };
+        return e.relatedEntityType
+          ? <span className="text-muted-foreground text-xs">{(labels[e.relatedEntityType] ?? e.relatedEntityType)}{e.relatedEntityId ? ` #${e.relatedEntityId}` : ""}</span>
+          : <span className="text-xs text-gray-300">—</span>;
+      },
+    },
+    {
       key: "amount",
       header: "المبلغ",
       sortable: true,
@@ -158,6 +178,30 @@ export default function ExpensesPage() {
       ),
     },
     {
+      key: "paymentMethod",
+      header: "طريقة الدفع",
+      sortable: true,
+      // Returned by the expenses API and already in the CSV export, but the
+      // table never showed it.
+      render: (e) => {
+        const labels: Record<string, string> = { cash: "نقدي", bank: "تحويل بنكي", card: "بطاقة", credit: "آجل", cheque: "شيك" };
+        return <span className="text-muted-foreground text-xs">{e.paymentMethod ? (labels[e.paymentMethod] ?? e.paymentMethod) : "—"}</span>;
+      },
+    },
+    {
+      key: "isPaid",
+      header: "حالة السداد",
+      sortable: true,
+      // isPaid is returned by the API but was hidden everywhere — yet whether
+      // an expense is settled is one of the most important things to see.
+      render: (e) =>
+        e.isPaid ? (
+          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-xs bg-status-success-surface text-status-success-foreground">مدفوع</span>
+        ) : (
+          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-xs bg-status-warning-surface text-status-warning-foreground">غير مدفوع</span>
+        ),
+    },
+    {
       key: "status",
       header: "الحالة",
       sortable: true,
@@ -168,6 +212,23 @@ export default function ExpensesPage() {
       header: "التاريخ",
       sortable: true,
       render: (e) => <span className="text-muted-foreground text-xs">{e.createdAt ? formatDateAr(e.createdAt) : "-"}</span>,
+    },
+    {
+      key: "createdByName",
+      header: "المنشئ",
+      sortable: true,
+      // Resolved server-side from journal_entries.createdBy via the proven
+      // employee_assignments → employees join — control data for the audit.
+      render: (e) => <span className="text-muted-foreground text-xs">{e.createdByName || "—"}</span>,
+    },
+    {
+      key: "approvedByName",
+      header: "المعتمِد",
+      sortable: true,
+      // Resolved from the latest approval_actions 'approved' row (actionBy →
+      // user → employee); the expense approve path records the approver there,
+      // not on journal_entries.approvedBy.
+      render: (e) => <span className="text-muted-foreground text-xs">{e.approvedByName || "—"}</span>,
     },
     {
       key: "expand",
@@ -255,8 +316,12 @@ export default function ExpensesPage() {
           { key: "amount", label: "المبلغ" },
           { key: "operationType", label: "نوع العملية" },
           { key: "paymentMethod", label: "طريقة الدفع" },
+          { key: "isPaid", label: "حالة السداد" },
           { key: "costCenter", label: "مركز التكلفة" },
+          { key: "relatedEntityType", label: "نوع الكيان المرتبط" },
           { key: "createdAt", label: "التاريخ" },
+          { key: "createdByName", label: "المنشئ" },
+          { key: "approvedByName", label: "المعتمِد" },
           { key: "status", label: "الحالة" },
         ], "المصروفات")}
         resultCount={filtered?.length}

@@ -405,11 +405,11 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 | 3 | نموذج "ماذا يظهر لمن ومتى" | 🟡 RBAC scope يفي بالغرض | UI viewer للـ Effective Permissions per user (RBAC-004) |
 | 4 | كتالوج خدمات HR | 🟡 موجود مبعثر في القائمة | بناء صفحة "خدمات HR" تجمع الخدمات (طلب إجازة، طلب OT، عذر، قرض، ...) كـ catalog |
 | 5 | محرك الطلبات وسلاسل الاعتماد | 🟢 موجود | توحيد UI inbox واحد بدل تشتيت |
-| 6 | الحضور حسب طبيعة العمل | 🔴 سياسة واحدة | بناء `attendance_policies_per_category` + `attendancePolicyEngine` |
-| 7 | التتبع حسب السياسة | 🔴 لا توجد persistent tracking | إنشاء `field_tracking_points` + ingestion API + policy frequency |
+| 6 | الحضور حسب طبيعة العمل | 🟢 **مكتمل من جانب الـ engine + كل callsites السيرفر** (HR-002 → HR-004). بقي: UI لإدارة الفئات والـ overrides من شاشة الإعدادات. | جداول + engine ✅ — check-in ✅ — check-out ✅ — autoViolation cron ✅ — UI لاحقًا |
+| 7 | التتبع حسب السياسة | 🟡 **الأساس + ingestion مبني** (HR-005): `field_tracking_points` + `POST field-ping` (مع enforcement لتردد الفئة) + `GET field-track` (breadcrumb + live). بقي: ربط الواجهة + تقرير المسار/التوقفات. | إنشاء `field_tracking_points` ✅ + ingestion API ✅ + policy frequency ✅ — UI wiring لاحقًا |
 | 8 | الربط المالي | 🟢 موجود (payroll GL + WPS) | لا تغيير معماري |
 | 9 | العهد والأصول | 🟡 موجود subsidiary accounts فقط | إضافة `employee_assets` bridge |
-| 10 | التقييم وإشارات الأداء | 🔴 الـ Engine غير موجود | بناء `employeeScoringEngine` + `riskEngine` + `promotionEngine` + `burnoutEngine` |
+| 10 | التقييم وإشارات الأداء | 🟢 **Engine + storage + Signals (Risk/Promotion/Burnout) مبني** (HR-006, HR-007). بقي: cron + UI داخل ملف الموظف 360. | بناء `employeeScoringEngine` ✅ + Risk/Promotion/Burnout engines ✅ + UI لاحقًا |
 | 11 | صندوق الأعمال والجدولة | 🟡 موجود `/hr/approvals` لكن جزئي | توحيد inbox واحد لكل HR workflows |
 | 12 | تهذيب الواجهات | 🟡 91 route، 51 صفحة | تنفيذ جدول الدمج في D.2 — `navigation.registry.ts` |
 
@@ -420,7 +420,15 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 | PR | ما تم | التاريخ |
 |---|---|---|
 | #1803 | مرحلة 0 — وثيقة الجرد + خارطة الـ12 أولوية + قسم نموذج المؤسسة. | 2026-06-07 |
-| HR-001 | الأولوية #1 جزئية — تبويبا «الحساب والدخول» + «الأدوار والصلاحيات» داخل ملف الموظف 360. البَك إند يعيد `userAccount` (single row من `users`، بدون passwordHash/MFA) + `roles` (array من `rbac_user_roles` مع primary/templates/expiry). الواجهة تعرض حالة الحساب + آخر دخول + محاولات فاشلة + قفل + قائمة الأدوار مع primary highlight + expired styling + deep-link لشاشة الصلاحيات الفعلية. التبويبات الآن 11/14 — باقي 3 (titles+positions، contract embed، custodies embed). | 2026-06-08 |
+| #1807 | الأولوية #1 جزئية — تبويبا «الحساب والدخول» + «الأدوار والصلاحيات» داخل ملف الموظف 360. البَك إند يعيد `userAccount` (single row من `users`، بدون passwordHash/MFA) + `roles` (array من `rbac_user_roles` مع primary/templates/expiry). الواجهة تعرض حالة الحساب + آخر دخول + محاولات فاشلة + قفل + قائمة الأدوار مع primary highlight + expired styling + deep-link لشاشة الصلاحيات الفعلية. التبويبات الآن 11/14 — باقي 3 (titles+positions، contract embed، custodies embed). | 2026-06-08 |
+| #1809 | **الأولوية #6 — الحضور حسب فئة الموظف (الأساس)**. Migration 270 يُضيف: (1) جدول `employee_categories` مع seed لـ 6 فئات نظام (worker/driver/field/office/manager/executive) — manager و executive لديهما `exemptFromAutoDeduction = TRUE`؛ driver لديه `trackingFrequencySeconds = 30`؛ field لديه `300`. (2) جدول `attendance_policies_per_category` للـ override لكل (company × category). (3) عمود `employee_assignments.categoryKey` (nullable) + backfill heuristic من role/jobTitle. **محرك جديد** `lib/attendancePolicyEngine.ts` يحلّ السياسة الفعلية بـ 3 طبقات (override → system category → company default) مع batch resolver للـ cron jobs. Backward-compatible: NULL category يُرجِع نفس السلوك القديم. 18/18 smoke tests خضراء. | 2026-06-08 |
+| #1814 | **الأولوية #6 — wiring 1/2**. ربط `POST /hr/check-in` بـ `resolveAttendancePolicy`. `lateThresholdMinutes` و `gpsRadiusMeters` يقرآن من المحرك (مع legacy fallback). `autoDeductionEnabled` يُمرَّر إلى exceedsThreshold حتى لا يفتح violation/deduction للمدراء والتنفيذيين تلقائيًا. 8/8 wiring smoke tests خضراء. | 2026-06-08 |
+| #1817 | **الأولوية #6 — wiring 2/2**. (أ) ربط `POST /hr/check-out` بنفس النمط — early-departure violation + deduction يحرسهما `autoDeductionEnabledCheckout`. (ب) ربط `autoViolationEngine.runAutoDetection` بـ `resolveBatch` (memoized) ⇒ الـ cron الليلي يحذف incidents الفئات المُعفاة قبل INSERT INTO `employee_violations` و قبل `ensureInquiryMemoForViolation`. `result.detected` يبقى يعكس الـ raw count قبل الفلترة للـ audit. fallback آمن: فشل engine = legacy behavior + error log. 12/12 wiring smoke tests خضراء، 23/23 existing autoViolation tests لا تزال خضراء. | 2026-06-08 |
+| #1822 | **الأولوية #7 — التتبع الميداني (الأساس + ingestion)**. Migration 271 + endpoints `POST/GET /hr/attendance/field-{ping,track}` (راجع HR-005 سابقاً). 17/17 smoke tests خضراء. | 2026-06-08 |
+| #1831 | **الأولوية #10 — Employee Scoring Engine**. راجع HR-006 سابقاً. 27/27 smoke tests خضراء. | 2026-06-08 |
+| HR-007 | **الأولوية #10 §G — Risk/Promotion/Burnout Signals**. Migration 273 + `lib/employeeSignalsEngine.ts` بـ 3 detection engines. UPSERT idempotent مع acknowledgement reset عند escalation الـ severity فقط. 32/32 smoke tests خضراء. | 2026-06-08 |
+| #1836 | **§B (نموذج المؤسسة التشغيلي) — الدفعة الأساسية**. راجع HR-008 سابقاً (5 جداول + 3 أعمدة + 9 system positions). 18/18 smoke tests. | 2026-06-08 |
+| HR-009 | **§B (إكمال) + #10 (cron)**. Migration 275 يُنشئ: (1) `supervision_lines` — matrix reporting مع 4 lineTypes (administrative/project/functional/dotted)، CHECK يرفض self-supervision، UNIQUE يسمح بنفس supervisor-supervisee في scopes مختلفة، indexes جزئية على endDate IS NULL. (2) `approval_authorities` — per-person approval limits مع `maxAmount NUMERIC(14,2)` nullable (NULL = unlimited)، `reason TEXT NOT NULL` (auditable override)، `requiresDualControl`، expiry support، UNIQUE (assignment, feature, action, currency). + ربط cron الـ scoring: handler عام `runEmployeeScoringPeriod` يستهلك engines من #1831 + #1833، تسجيلان جديدان: `weekly_employee_scoring` (الاثنين 03:00) و `monthly_employee_scoring` (1st @ 04:00). per-row try/catch فلا تفشل دفعة كاملة. UPSERT idempotent. 22/22 smoke tests خضراء. | 2026-06-08 |
 
 ---
 
