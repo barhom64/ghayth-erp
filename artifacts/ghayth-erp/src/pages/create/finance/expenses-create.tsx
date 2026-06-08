@@ -414,6 +414,18 @@ export default function ExpensesCreate() {
         costCenterDistribution: ccRows.length > 0
           ? ccRows.map((r) => ({ costCenterId: Number(r.costCenterId), percentage: Number(r.percentage) }))
           : undefined,
+        // #1715 §5 — when the operator chose a maintenance allocation target,
+        // open + link a maintenance ticket. The fields are already collected
+        // by AllocationTargetSelect (odometer / maintenanceType / costBearer).
+        maintenanceTicket:
+          allocTarget.target === "vehicle_maintenance" || allocTarget.target === "property_maintenance"
+            ? {
+                create: true,
+                maintenanceType: allocTarget.maintenanceType || undefined,
+                odometer: allocTarget.odometer ? Number(allocTarget.odometer) : undefined,
+                costBearer: allocTarget.costBearer || undefined,
+              }
+            : undefined,
       });
       toast({ title: "تم إضافة المصروف بنجاح" });
       clearDraft();
