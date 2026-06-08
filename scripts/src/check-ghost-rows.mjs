@@ -52,6 +52,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import { loadDrizzleSchema } from "./lib/drizzle-schema.mjs";
+import { extractRawQueryBodies } from "./lib/raw-query-bodies.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const ROUTES_DIR = join(REPO_ROOT, "artifacts/api-server/src/routes");
@@ -118,42 +119,12 @@ async function walk(dir, acc = []) {
 }
 
 // Pull every rawQuery(`…`) body, preserving ${…} interpolations as
-// literal text so the per-statement scanner can detect them.
-export function extractRawQueryBodies(source) {
-  const bodies = [];
-  const re = /rawQuery\s*\(\s*`/g;
-  let match;
-  while ((match = re.exec(source)) !== null) {
-    let i = match.index + match[0].length;
-    let depth = 0;
-    let body = "";
-    while (i < source.length) {
-      const ch = source[i];
-      if (ch === "\\" && i + 1 < source.length) {
-        body += source[i] + source[i + 1];
-        i += 2;
-        continue;
-      }
-      if (ch === "$" && source[i + 1] === "{") {
-        depth++;
-        body += "${";
-        i += 2;
-        continue;
-      }
-      if (ch === "}" && depth > 0) {
-        depth--;
-        body += "}";
-        i++;
-        continue;
-      }
-      if (ch === "`" && depth === 0) break;
-      body += ch;
-      i++;
-    }
-    bodies.push(body);
-  }
-  return bodies;
-}
+// literal text so the per-statement scanner can detect them. The
+// extractor is the shared canonical one (tolerates nested inline
+// generics like `rawQuery<Record<string, unknown>>(`…`)`); imported and
+// re-exported here so this module's main() and existing importers (e.g.
+// check-sql-ambiguity.mjs) keep working unchanged.
+export { extractRawQueryBodies };
 
 // Strip line/block SQL comments and quoted string literals so they
 // don't trip the FROM/JOIN/WHERE scanners. ${…} interpolations are
