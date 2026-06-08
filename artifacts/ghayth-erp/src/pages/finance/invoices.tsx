@@ -102,10 +102,42 @@ export default function InvoicesPage() {
       render: (inv) => <span className="font-semibold">{formatCurrency(Number(inv.total))}</span>,
     },
     {
+      key: "vatAmount",
+      header: "الضريبة",
+      sortable: true,
+      render: (inv) =>
+        inv.vatAmount != null ? (
+          <span className="text-muted-foreground tabular-nums">{formatCurrency(Number(inv.vatAmount))}</span>
+        ) : (
+          <span className="text-xs text-gray-300">—</span>
+        ),
+    },
+    {
       key: "paidAmount",
       header: "المدفوع",
       sortable: true,
       render: (inv) => <span className="text-emerald-600">{formatCurrency(Number(inv.paidAmount || 0))}</span>,
+    },
+    {
+      key: "outstanding",
+      header: "المتبقّي",
+      sortable: true,
+      // Backend already returns total + paidAmount; the remaining balance
+      // is the single most useful AR number and was previously hidden.
+      render: (inv) => {
+        const remaining = Number(inv.total || 0) - Number(inv.paidAmount || 0);
+        return (
+          <span className={remaining > 0 ? "text-status-warning-foreground font-medium tabular-nums" : "text-emerald-600 tabular-nums"}>
+            {formatCurrency(remaining)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "issueDate",
+      header: "تاريخ الإصدار",
+      sortable: true,
+      render: (inv) => <span className="text-muted-foreground">{inv.issueDate ? formatDateAr(inv.issueDate) : "-"}</span>,
     },
     {
       key: "dueDate",
@@ -209,11 +241,12 @@ export default function InvoicesPage() {
               items: printRows.map((i: any) => ({
                 "رقم الفاتورة": i.invoiceNumber || i.ref || i.id,
                 "العميل": i.clientName || "—",
-                "التاريخ": i.invoiceDate || i.date || "—",
+                "تاريخ الإصدار": i.issueDate || "—",
                 "تاريخ الاستحقاق": i.dueDate || "—",
                 "الإجمالي": i.total ?? i.amount ?? 0,
+                "الضريبة": i.vatAmount ?? 0,
                 "المدفوع": i.paidAmount ?? 0,
-                "المتبقي": i.remainingAmount ?? 0,
+                "المتبقي": Number(i.total ?? 0) - Number(i.paidAmount ?? 0),
                 "الحالة": i.status || "—",
               })),
             })}
@@ -244,14 +277,19 @@ export default function InvoicesPage() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV((filtered || []) as any[], [
-          { key: "ref", label: "رقم الفاتورة" },
-          { key: "clientName", label: "العميل" },
-          { key: "total", label: "الإجمالي" },
-          { key: "paidAmount", label: "المدفوع" },
-          { key: "dueDate", label: "الاستحقاق" },
-          { key: "status", label: "الحالة" },
-        ], "الفواتير")}
+        onExportCSV={() => exportToCSV(
+          ((filtered || []) as any[]).map((i) => ({ ...i, outstanding: Number(i.total ?? 0) - Number(i.paidAmount ?? 0) })),
+          [
+            { key: "ref", label: "رقم الفاتورة" },
+            { key: "clientName", label: "العميل" },
+            { key: "issueDate", label: "تاريخ الإصدار" },
+            { key: "total", label: "الإجمالي" },
+            { key: "vatAmount", label: "الضريبة" },
+            { key: "paidAmount", label: "المدفوع" },
+            { key: "outstanding", label: "المتبقّي" },
+            { key: "dueDate", label: "الاستحقاق" },
+            { key: "status", label: "الحالة" },
+          ], "الفواتير")}
         resultCount={filtered?.length}
       />
       <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
