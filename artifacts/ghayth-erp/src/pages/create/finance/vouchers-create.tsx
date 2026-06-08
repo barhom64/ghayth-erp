@@ -351,6 +351,15 @@ export default function VouchersCreate() {
         </div>
       </div>
 
+      {/* #1715 (owner: «وحّد النماذج ورتّبها») — السيناريو التشغيلي يأتي مباشرة
+          بعد معلومات العملية، قبل المبالغ والحسابات، تماماً كنموذج المصروف. */}
+      <FinanceOperationContextPanel
+        value={allocTarget}
+        onChange={setAllocTarget}
+        title="ربط السند بـ (السيناريو التشغيلي)"
+        description="اختر ما يُربط به السند، وستظهر الحقول المناسبة فقط. الربط يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً."
+      />
+
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">المبالغ والضريبة</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -432,13 +441,6 @@ export default function VouchersCreate() {
           />
         </div>
       </div>
-
-      <FinanceOperationContextPanel
-        value={allocTarget}
-        onChange={setAllocTarget}
-        title="ربط السند بـ"
-        description="اختر ما يُربط به السند، وستظهر الحقول المناسبة فقط. الربط يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً."
-      />
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">الطرف الآخر والمرجع</h3>
