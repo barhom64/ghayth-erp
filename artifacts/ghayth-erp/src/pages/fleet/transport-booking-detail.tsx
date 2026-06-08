@@ -235,6 +235,11 @@ export default function TransportBookingDetail() {
           <Link href="/fleet/transport/dispatch">
             <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />لوحة التوزيع</Button>
           </Link>
+          {/* #1812 — booking confirmation (gap #10). Opens a print-friendly
+              Arabic confirmation page with QR for customer pickup. */}
+          <Link href={`/fleet/transport/bookings/${id}/confirmation`}>
+            <Button variant="outline" size="sm">تأكيد الحجز (طباعة / PDF)</Button>
+          </Link>
           <Select
             value={b.status}
             onValueChange={(v) => statusMut.mutate({ status: v })}

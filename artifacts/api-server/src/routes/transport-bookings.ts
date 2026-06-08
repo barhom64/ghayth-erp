@@ -335,6 +335,53 @@ transportBookingsRouter.get(
   },
 );
 
+// #1812 — booking confirmation document (user's gap #10).
+// Returns the booking + lines + dispatch + a QR data-URL the SPA can
+// drop into a printable confirmation page. The QR encodes a deeplink
+// payload so a scan can be reconciled against the live booking.
+transportBookingsRouter.get(
+  "/transport/bookings/:id/confirmation",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const [booking] = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!booking) throw new NotFoundError("الحجز غير موجود");
+      const lines = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM transport_booking_lines WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
+        [id],
+      );
+      const dispatchOrders = await rawQuery<Record<string, unknown>>(
+        `SELECT d.*, v."plateNumber" AS "vehiclePlate", dr.name AS "driverName", dr.phone AS "driverPhone"
+           FROM transport_dispatch_orders d
+           LEFT JOIN fleet_vehicles v ON v.id = d."vehicleId" AND v."companyId" = d."companyId"
+           LEFT JOIN fleet_drivers dr ON dr.id = d."driverId" AND dr."companyId" = d."companyId"
+          WHERE d."bookingId" = $1
+          ORDER BY d."scheduledStartAt" ASC`,
+        [id],
+      );
+      const qrPayload = `GHAYTH|TRANSPORT_BOOKING|${booking.bookingNumber}|${id}|${scope.companyId}`;
+      let qrDataUrl: string | null = null;
+      try {
+        // qrcode is already a project dep (ZATCA invoicing uses it).
+        const QRCode = (await import("qrcode")).default;
+        qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 200, margin: 1 });
+      } catch (err) {
+        logger.warn({ err }, "[transport-bookings] QR generation failed (decorative)");
+      }
+      res.json(maskFields(req, {
+        data: { ...booking, lines, dispatchOrders, qrDataUrl, qrPayload },
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Get transport booking confirmation error:");
+    }
+  },
+);
+
 transportBookingsRouter.post(
   "/transport/bookings",
   authorize({ feature: "fleet.bookings", action: "create" }),
