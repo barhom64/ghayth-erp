@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -290,6 +291,9 @@ export default function ExpensesCreate() {
   // (the operation context + impact preview) is the default for everyone else.
   const canManualOverride = usePermission("finance:approve");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  // #1715 (owner feedback) — purchase/fleet line item: بند / كمية / وحدة /
+  // سعر الوحدة. When quantity × unit price is entered the amount auto-fills.
+  const [lineItem, setLineItem] = useState({ itemName: "", quantity: "", unit: "", unitPrice: "" });
   // #1715 — optional multi cost-center distribution. Each row pins a cost
   // center (department id) and a percentage; the backend splits the expense
   // DR into one balanced leg per row. Empty = single-line (legacy) behaviour.
@@ -383,7 +387,12 @@ export default function ExpensesCreate() {
         accountCode: form.accountCode || undefined,
         sourceAccountCode: form.sourceAccountCode || undefined,
         amount: Number(form.amount),
-        description: form.description,
+        description: [
+          form.description,
+          lineItem.itemName
+            ? `بند: ${lineItem.itemName}${lineItem.quantity ? ` — ${lineItem.quantity} ${lineItem.unit || "وحدة"} × ${lineItem.unitPrice}` : ""}`
+            : "",
+        ].filter(Boolean).join(" | ") || undefined,
         date: form.date || undefined,
         period: form.period || undefined,
         operationType: form.operationType,
@@ -567,6 +576,38 @@ export default function ExpensesCreate() {
             </FormFieldWrapper>
           </div>
         </div>
+
+        {/* #1715 (owner feedback) — purchase/fleet line item: بند / كمية /
+            وحدة / سعر الوحدة. The amount auto-fills from الكمية × سعر الوحدة. */}
+        {(form.operationType === "purchase" || form.expenseType === "fleet") && (
+          <div className="border rounded-lg p-4 mb-4 space-y-3">
+            <h3 className="font-semibold text-sm text-muted-foreground">تفاصيل البند</h3>
+            <p className="text-xs text-muted-foreground">أدخل بند الشراء وكميته؛ يُحسب المبلغ تلقائياً (الكمية × سعر الوحدة).</p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <FormFieldWrapper label="بند المصروف">
+                <Input value={lineItem.itemName} onChange={(e) => setLineItem({ ...lineItem, itemName: e.target.value })} placeholder="مثال: إطارات" />
+              </FormFieldWrapper>
+              <FormFieldWrapper label="الكمية">
+                <Input type="number" step="0.01" value={lineItem.quantity} onChange={(e) => {
+                  const q = e.target.value; setLineItem((li) => ({ ...li, quantity: q }));
+                  if (Number(q) > 0 && Number(lineItem.unitPrice) > 0) setForm((f) => ({ ...f, amount: String(Number((Number(q) * Number(lineItem.unitPrice)).toFixed(2))) }));
+                }} placeholder="0" />
+              </FormFieldWrapper>
+              <FormFieldWrapper label="الوحدة">
+                <Input value={lineItem.unit} onChange={(e) => setLineItem({ ...lineItem, unit: e.target.value })} placeholder="قطعة / لتر / كجم" />
+              </FormFieldWrapper>
+              <FormFieldWrapper label="سعر الوحدة">
+                <Input type="number" step="0.01" value={lineItem.unitPrice} onChange={(e) => {
+                  const p = e.target.value; setLineItem((li) => ({ ...li, unitPrice: p }));
+                  if (Number(lineItem.quantity) > 0 && Number(p) > 0) setForm((f) => ({ ...f, amount: String(Number((Number(lineItem.quantity) * Number(p)).toFixed(2))) }));
+                }} placeholder="0.00" />
+              </FormFieldWrapper>
+            </div>
+            {Number(lineItem.quantity) > 0 && Number(lineItem.unitPrice) > 0 && (
+              <p className="text-xs text-status-info-foreground">الإجمالي: {formatCurrency(Number(lineItem.quantity) * Number(lineItem.unitPrice))} ({lineItem.quantity} × {lineItem.unitPrice})</p>
+            )}
+          </div>
+        )}
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">المبالغ والضريبة</h3>
