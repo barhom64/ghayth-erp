@@ -407,13 +407,17 @@ export const AccountSelect = buildEntitySelect({
 
 export const VehicleSelect = buildEntitySelect({
   queryKey: "fleet-list",
-  endpoint: "/fleet?limit=500",
+  // Must hit the real vehicles list/create route. `/fleet` has no root GET,
+  // so the picker silently returned nothing — newly-added vehicles (and all
+  // others) never appeared in «ربط المصروف» (#1715). The fleet page and every
+  // other caller use `/fleet/vehicles`; align the picker with that source.
+  endpoint: "/fleet/vehicles?limit=500",
   defaultLabel: "المركبة",
   defaultPlaceholder: "اختر المركبة",
   searchPlaceholder: "ابحث عن مركبة...",
   createTitle: "إضافة مركبة جديدة",
   createLabel: "+ مركبة جديدة",
-  createApiPath: "/fleet",
+  createApiPath: "/fleet/vehicles",
   createFields: [
     { key: "plateNumber", label: "رقم اللوحة", required: true },
     { key: "make", label: "الشركة المصنعة" },
