@@ -42,6 +42,7 @@ const AdminZatcaAudits = lazy(() => import("@/pages/admin-zatca-audits"));
 const AdminIntegrationsDiagnostics = lazy(() => import("@/pages/admin-integrations-diagnostics"));
 const AdminExpiringDocs = lazy(() => import("@/pages/admin/expiring-docs")); // originally PR #1128
 const AdminOrgModel = lazy(() => import("@/pages/admin/org-model"));
+const AdminEffectivePermissions = lazy(() => import("@/pages/admin/effective-permissions"));
 
 export const adminRoutes = [
   { path: "/admin/expiring-docs", component: AdminExpiringDocs },
@@ -85,4 +86,5 @@ export const adminRoutes = [
   { path: "/admin/zatca-audits", component: AdminZatcaAudits },
   { path: "/admin/integrations-diagnostics", component: AdminIntegrationsDiagnostics },
   { path: "/admin/org-model", component: AdminOrgModel },
+  { path: "/admin/effective-permissions", component: AdminEffectivePermissions },
 ];

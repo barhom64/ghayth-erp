@@ -32,6 +32,7 @@ import {
   BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator, LayoutGrid,
   RefreshCw, Globe, TrendingDown as TrendingDown2,
   Satellite, Bot, HardDrive, Video as VideoIcon, Award,
+  ShieldCheck,
 } from "lucide-react";
 
 export interface NavItem {
@@ -238,6 +239,7 @@ export const allNavSections: NavSection[] = [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
         { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
+        { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
       ]},
     ],
   },
