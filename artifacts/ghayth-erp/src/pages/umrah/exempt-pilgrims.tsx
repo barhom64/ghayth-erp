@@ -89,8 +89,22 @@ function buildQuery(seasonId: string, agentId: string): string {
 }
 
 export default function UmrahExemptPilgrims() {
-  const [seasonFilter, setSeasonFilter] = useState("all");
-  const [agentFilter, setAgentFilter] = useState("all");
+  // Hydrate the season + agent filters from the URL query string on
+  // mount so deep-links from the compliance dashboard (e.g.
+  // /umrah/exempt-pilgrims?seasonId=5) actually apply the filter
+  // instead of silently dropping it. Matches the pattern that
+  // `pilgrims.tsx` and `penalties.tsx` already use; was the only
+  // remaining compliance deep-link target without it.
+  const initialFromUrl = (() => {
+    if (typeof window === "undefined") return { seasonId: "all", agentId: "all" };
+    const sp = new URLSearchParams(window.location.search);
+    return {
+      seasonId: sp.get("seasonId") ?? "all",
+      agentId: sp.get("agentId") ?? "all",
+    };
+  })();
+  const [seasonFilter, setSeasonFilter] = useState(initialFromUrl.seasonId);
+  const [agentFilter, setAgentFilter] = useState(initialFromUrl.agentId);
   const { toast } = useToast();
 
   const qs = useMemo(() => buildQuery(seasonFilter, agentFilter), [seasonFilter, agentFilter]);
