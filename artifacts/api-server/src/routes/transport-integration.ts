@@ -38,6 +38,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
+import { suggestAssignments } from "../lib/fleet/assignmentSuggestionEngine.js";
 
 export const transportIntegrationRouter = Router();
 transportIntegrationRouter.use(authMiddleware);
@@ -390,6 +391,224 @@ transportIntegrationRouter.get(
       res.send(ICS.join("\r\n"));
     } catch (err) {
       handleRouteError(err, res, "Calendar feed error:");
+    }
+  },
+);
+
+// ─── Bulk planning ───────────────────────────────────────────────────
+// Closes the user's mandate end-to-end: "النظام يأخذه من مصدره،
+// يخططه، يجدوله، يختار المركبة والسائق، ثم يتابع التنفيذ."
+//
+// Given a set of bookings (typically the 3 legs just materialized
+// from an umrah group), runs the AssignmentSuggestionEngine on each
+// and creates dispatch_orders for the top non-blocked candidate.
+//
+// Skips bookings that don't yet have lines (caller must add lines
+// first) and any candidate with HARD blockers (returned as
+// "needs_attention" so the operator can intervene).
+
+const planBookingsSchema = z.object({
+  bookingIds: z.array(z.coerce.number().int().positive()).min(1).max(50),
+  /** If supplied, only auto-create dispatch orders when the top
+   *  candidate's score is ≥ this threshold. Default: 60. */
+  minScore: z.coerce.number().int().min(0).max(100).optional(),
+  /** When true, also create a transport_booking_line for any booking
+   *  that lacks one (one synthetic line per booking with the booking's
+   *  pickup window). Default: true. */
+  createMissingLines: z.boolean().optional(),
+});
+
+transportIntegrationRouter.post(
+  "/transport/integration/plan-bookings",
+  authorize({ feature: "fleet.dispatch", action: "create" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const b = zodParse(planBookingsSchema.safeParse(req.body));
+      const minScore = b.minScore ?? 60;
+      const createMissingLines = b.createMissingLines ?? true;
+
+      const results: Array<{
+        bookingId: number;
+        outcome: "planned" | "needs_attention" | "no_candidate" | "no_line" | "skipped";
+        score?: number;
+        vehicleId?: number | null;
+        driverId?: number | null;
+        dispatchOrderId?: number;
+        reason?: string;
+        blockers?: string[];
+      }> = [];
+
+      for (const bookingId of b.bookingIds) {
+        try {
+          const [bk] = await rawQuery<{
+            id: number;
+            pickupWindowStart: string | null;
+            pickupWindowEnd: string | null;
+            fixedAppointmentTime: string | null;
+            requestedPickupDate: string | null;
+            transportServiceType: string;
+            existingDispatchOrders: number;
+          }>(
+            `SELECT b.id,
+                    b."pickupWindowStart", b."pickupWindowEnd",
+                    b."fixedAppointmentTime",
+                    b."requestedPickupDate"::text AS "requestedPickupDate",
+                    b."transportServiceType",
+                    (
+                      SELECT COUNT(*)::int FROM transport_dispatch_orders d
+                             JOIN transport_booking_lines l ON l.id = d."bookingLineId"
+                       WHERE l."bookingId" = b.id
+                         AND d.status NOT IN ('declined', 'cancelled')
+                    ) AS "existingDispatchOrders"
+               FROM transport_bookings b
+              WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL`,
+            [bookingId, scope.companyId],
+          );
+          if (!bk) {
+            results.push({ bookingId, outcome: "skipped", reason: "الحجز غير موجود" });
+            continue;
+          }
+          if (bk.existingDispatchOrders > 0) {
+            results.push({ bookingId, outcome: "skipped", reason: "يوجد أمر توزيع مرتبط" });
+            continue;
+          }
+
+          // Compute the window. Default to the requested pickup date +
+          // a 2h block if no explicit window is set.
+          let startAt = bk.pickupWindowStart ?? bk.fixedAppointmentTime;
+          let endAt   = bk.pickupWindowEnd   ?? bk.fixedAppointmentTime;
+          if (!startAt && bk.requestedPickupDate) {
+            startAt = `${bk.requestedPickupDate}T08:00:00Z`;
+            endAt   = `${bk.requestedPickupDate}T10:00:00Z`;
+          }
+          if (!startAt || !endAt) {
+            results.push({ bookingId, outcome: "no_candidate", reason: "لا توجد نافذة زمنية محددة" });
+            continue;
+          }
+
+          // Ensure at least one booking_line exists.
+          let lineId: number | null = null;
+          const [existingLine] = await rawQuery<{ id: number }>(
+            `SELECT id FROM transport_booking_lines
+              WHERE "bookingId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+              ORDER BY "lineNumber" ASC LIMIT 1`,
+            [bookingId, scope.companyId],
+          );
+          if (existingLine) {
+            lineId = existingLine.id;
+          } else if (createMissingLines) {
+            const r = await rawExecute(
+              `INSERT INTO transport_booking_lines
+                 ("companyId", "bookingId", "lineNumber",
+                  "scheduledPickupAt", "scheduledDeliveryAt")
+               VALUES ($1, $2, 1, $3, $4)`,
+              [scope.companyId, bookingId, startAt, endAt],
+            );
+            assertInsert(r.insertId, "transport_booking_lines");
+            lineId = r.insertId;
+          } else {
+            results.push({ bookingId, outcome: "no_line", reason: "لا يوجد سطر حجز" });
+            continue;
+          }
+
+          // Run suggest-assignment engine.
+          const candidates = await suggestAssignments({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            bookingId,
+            scheduledStartAt: startAt,
+            scheduledEndAt: endAt,
+            limit: 5,
+          });
+          const top = candidates[0];
+          if (!top) {
+            results.push({ bookingId, outcome: "no_candidate", reason: "لم يجد المحرّك مرشحاً" });
+            continue;
+          }
+          if (top.blockers.length > 0) {
+            results.push({
+              bookingId, outcome: "needs_attention",
+              score: top.score,
+              vehicleId: top.vehicleId, driverId: top.driverId,
+              blockers: top.blockers,
+            });
+            continue;
+          }
+          if (top.score < minScore) {
+            results.push({
+              bookingId, outcome: "needs_attention",
+              score: top.score,
+              vehicleId: top.vehicleId, driverId: top.driverId,
+              reason: `أعلى درجة ${top.score} أقل من الحد ${minScore}`,
+            });
+            continue;
+          }
+
+          // Create the dispatch order.
+          const insRes = await rawExecute(
+            `INSERT INTO transport_dispatch_orders
+               ("companyId", "branchId", "bookingId", "bookingLineId",
+                "vehicleId", "driverId", "scheduledStartAt", "scheduledEndAt",
+                status, "dispatchedBy", "dispatchedAt")
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, NOW())`,
+            [
+              scope.companyId, scope.branchId ?? null, bookingId, lineId,
+              top.vehicleId, top.driverId, startAt, endAt, scope.userId,
+            ],
+          );
+          assertInsert(insRes.insertId, "transport_dispatch_orders");
+
+          await rawExecute(
+            `UPDATE transport_booking_lines
+                SET status = 'dispatched', "updatedAt" = NOW()
+              WHERE id = $1 AND "companyId" = $2`,
+            [lineId, scope.companyId],
+          );
+
+          results.push({
+            bookingId,
+            outcome: "planned",
+            score: top.score,
+            vehicleId: top.vehicleId,
+            driverId: top.driverId,
+            dispatchOrderId: insRes.insertId,
+          });
+
+          emitEvent({
+            companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
+            action: "fleet.dispatch.created",
+            entity: "transport_dispatch_orders", entityId: insRes.insertId,
+            details: JSON.stringify({
+              bookingId, vehicleId: top.vehicleId, driverId: top.driverId,
+              autoPlanned: true, score: top.score,
+            }),
+          }).catch((e) => logger.error(e, "bulk plan dispatch event failed"));
+        } catch (perBookingErr) {
+          const message = perBookingErr instanceof Error ? perBookingErr.message : String(perBookingErr);
+          results.push({ bookingId, outcome: "needs_attention", reason: message });
+        }
+      }
+
+      const summary = {
+        total: results.length,
+        planned:         results.filter((r) => r.outcome === "planned").length,
+        needsAttention:  results.filter((r) => r.outcome === "needs_attention").length,
+        noCandidate:     results.filter((r) => r.outcome === "no_candidate").length,
+        noLine:          results.filter((r) => r.outcome === "no_line").length,
+        skipped:         results.filter((r) => r.outcome === "skipped").length,
+      };
+
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "create", entity: "transport_dispatch_orders",
+        entityId: results[0]?.dispatchOrderId ?? 0,
+        after: { autoPlanned: true, summary, bookingIds: b.bookingIds },
+      }).catch((e) => logger.error(e, "bulk plan audit failed"));
+
+      res.status(200).json({ data: { results, summary } });
+    } catch (err) {
+      handleRouteError(err, res, "Bulk plan bookings error:");
     }
   },
 );
