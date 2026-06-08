@@ -49,6 +49,7 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
+import { assertDriverRest } from "../lib/fleet/driverRest.js";
 
 export const transportBookingsRouter = Router();
 transportBookingsRouter.use(authMiddleware);
@@ -487,6 +488,17 @@ transportBookingsRouter.post(
         vehicleId: b.vehicleId,
         sourceType: "fleet_trip", // dispatch orders predate the trip row; piggyback on the existing enum
         sourceId: b.bookingLineId,
+        overrideReason: b.overrideReason ?? null,
+      });
+
+      // 1b) Driver rest constraint (#1812) — block if the driver
+      //     hasn't had their required rest hours since the last duty.
+      await assertDriverRest({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        userId: scope.userId,
+        driverId: b.driverId,
+        nextAssignmentStartAt: b.scheduledStartAt,
         overrideReason: b.overrideReason ?? null,
       });
 

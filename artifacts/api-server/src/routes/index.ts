@@ -78,6 +78,7 @@ import { transportBillingCandidatesRouter } from "./transport-billing-candidates
 import { transportBookingsRouter } from "./transport-bookings.js";
 import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
+import { transportPlanningRouter } from "./transport-planning.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -393,6 +394,13 @@ router.use(requireModule("fleet"), requireGuards("financial"), vehicleProfileRou
 // #1733 Pricing engine + invoice merging (Issue Comment 3). URLs land at
 // /transport/price-rules, /transport/service-lines, /transport/invoice-batches.
 router.use(requireModule("fleet"), requireGuards("financial"), transportPricingRouter);
+// #1812 Planning engine — assignment-suggestion + maps + ops dashboard +
+// itineraries + in-app driver navigation sessions. URLs land at
+// /transport/planning-settings, /transport/bookings/:id/suggest-assignment,
+// /transport/ops-dashboard, /transport/itineraries, and
+// /transport/dispatch-orders/:id/navigation/*. Fleet-module + financial
+// guards (same as the other transport routers).
+router.use(requireModule("fleet"), requireGuards("financial"), transportPlanningRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);
