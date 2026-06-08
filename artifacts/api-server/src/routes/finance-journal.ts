@@ -86,6 +86,37 @@ const lineAllocationSchema = z.object({
   manualOverrideReason: z.string().optional(),
 }).optional();
 
+// #1715 — operational-effect inputs shared by BOTH the expense and voucher
+// create schemas (an expense and a سند صرف can each trigger the same
+// maintenance-ticket / fixed-asset / fuel-log effect). Defined once and spread
+// into both schemas so they can never drift — same model as lineAllocationSchema.
+const operationalEffectsShape = {
+  maintenanceTicket: z.object({
+    create: z.boolean().optional(),
+    maintenanceType: z.string().optional(),
+    odometer: z.coerce.number().optional(),
+    costBearer: z.string().optional(),
+    performedBy: z.string().optional(),
+    // #1715 §5 — link to an existing ticket instead of creating a new one.
+    existingTicketId: z.coerce.number().int().positive().optional(),
+  }).optional(),
+  assetCreation: z.object({
+    create: z.boolean().optional(),
+    name: z.string().optional(),
+    usefulLifeYears: z.coerce.number().int().positive().optional(),
+    category: z.string().optional(),
+    depreciationMethod: z.string().optional(),
+    salvageValue: z.coerce.number().optional(),
+  }).optional(),
+  fuelLog: z.object({
+    create: z.boolean().optional(),
+    liters: z.coerce.number().optional(),
+    costPerLiter: z.coerce.number().optional(),
+    odometer: z.coerce.number().optional(),
+    stationName: z.string().optional(),
+  }).optional(),
+};
+
 const createExpenseSchema = z.object({
   accountCode: z.string().optional(),
   amount: z.any().optional(),
@@ -130,37 +161,8 @@ const createExpenseSchema = z.object({
   lineAllocation: lineAllocationSchema,
   // #1715 — optional multi cost-center distribution for the expense DR.
   costCenterDistribution: z.array(costCenterSplitSchema).optional(),
-  // #1715 §5 — when the operator picks a maintenance allocation target
-  // (vehicle_maintenance / property_maintenance) and asks to open a ticket,
-  // this carries the operational-effect details. Creating the ticket is
-  // gated on `create: true`, so ordinary expenses are unaffected.
-  maintenanceTicket: z.object({
-    create: z.boolean().optional(),
-    maintenanceType: z.string().optional(),
-    odometer: z.coerce.number().optional(),
-    costBearer: z.string().optional(),
-    performedBy: z.string().optional(),
-    // #1715 §5 — link to an existing ticket instead of creating a new one.
-    existingTicketId: z.coerce.number().int().positive().optional(),
-  }).optional(),
-  // #1715 (owner acceptance) — a capital purchase opens a fixed asset that the
-  // depreciation engine then depreciates. Gated on create + name.
-  assetCreation: z.object({
-    create: z.boolean().optional(),
-    name: z.string().optional(),
-    usefulLifeYears: z.coerce.number().int().positive().optional(),
-    category: z.string().optional(),
-    depreciationMethod: z.string().optional(),
-    salvageValue: z.coerce.number().optional(),
-  }).optional(),
-  // #1715 (owner acceptance) — a vehicle fuel expense opens a fuel log.
-  fuelLog: z.object({
-    create: z.boolean().optional(),
-    liters: z.coerce.number().optional(),
-    costPerLiter: z.coerce.number().optional(),
-    odometer: z.coerce.number().optional(),
-    stationName: z.string().optional(),
-  }).optional(),
+  // #1715 — maintenance-ticket / fixed-asset / fuel-log effect inputs.
+  ...operationalEffectsShape,
 });
 
 const updateDescriptionSchema = z.object({
@@ -209,32 +211,10 @@ const createVoucherSchema = z.object({
   allocations: z.array(voucherAllocationSchema).optional(),
   // #1715: master «ربط السند بـ» allocation dims (AllocationTargetSelect).
   lineAllocation: lineAllocationSchema,
-  // #1715 (owner gap-closure) — a سند صرف can pay for the same operations as an
-  // expense (maintenance / fuel / asset purchase), so it must fire the SAME
-  // operational effects. Shapes mirror the expense schema; all gated on create.
-  maintenanceTicket: z.object({
-    create: z.boolean().optional(),
-    maintenanceType: z.string().optional(),
-    odometer: z.coerce.number().optional(),
-    costBearer: z.string().optional(),
-    performedBy: z.string().optional(),
-    existingTicketId: z.coerce.number().int().positive().optional(),
-  }).optional(),
-  assetCreation: z.object({
-    create: z.boolean().optional(),
-    name: z.string().optional(),
-    usefulLifeYears: z.coerce.number().int().positive().optional(),
-    category: z.string().optional(),
-    depreciationMethod: z.string().optional(),
-    salvageValue: z.coerce.number().optional(),
-  }).optional(),
-  fuelLog: z.object({
-    create: z.boolean().optional(),
-    liters: z.coerce.number().optional(),
-    costPerLiter: z.coerce.number().optional(),
-    odometer: z.coerce.number().optional(),
-    stationName: z.string().optional(),
-  }).optional(),
+  // #1715 (owner gap-closure) — a سند صرف pays for the same operations as an
+  // expense (maintenance / fuel / asset), so it fires the SAME effects via the
+  // SAME shared shape (no copy-paste — can't drift from the expense schema).
+  ...operationalEffectsShape,
 });
 
 const createSalaryAdvanceSchema = z.object({
