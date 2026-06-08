@@ -54,6 +54,7 @@
 //
 
 import { readdir, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -67,6 +68,43 @@ import {
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const ROUTES_DIR = join(REPO_ROOT, "artifacts/api-server/src/routes");
 const DRIZZLE_SCHEMA_FILE = join(REPO_ROOT, "lib/db/src/schema/index.ts");
+const ALLOWLIST_FILE = join(REPO_ROOT, "scripts/schema-drift-allowlist.txt");
+
+// Paths inside findings are relative to REPO_ROOT
+// (artifacts/api-server/src/routes/foo.ts). The allowlist file — like the
+// sibling sql-ambiguity / ghost-row allowlists — keys entries on the
+// shorter `routes/foo.ts` form, so normalise here.
+const ROUTES_REL_PREFIX = "artifacts/api-server/src/";
+
+function toRoutesRel(fileRel) {
+  return fileRel.startsWith(ROUTES_REL_PREFIX)
+    ? fileRel.slice(ROUTES_REL_PREFIX.length)
+    : fileRel;
+}
+
+// Load the schema-drift allowlist. Two entry shapes (mirrors the other
+// SQL guards):
+//   routes/<file>.ts          → skip every finding in that file
+//   routes/<file>.ts:<id>     → skip only that identifier within the file
+// `#` starts a comment; blank lines are ignored. Returns disjoint Sets so
+// the call site can match a finding against either form.
+async function loadAllowlist() {
+  if (!existsSync(ALLOWLIST_FILE)) return { files: new Set(), pairs: new Set() };
+  const txt = await readFile(ALLOWLIST_FILE, "utf8");
+  const files = new Set();
+  const pairs = new Set();
+  for (const raw of txt.split("\n")) {
+    const line = raw.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    const colonIdx = line.indexOf(":");
+    if (colonIdx === -1) {
+      files.add(line);
+    } else {
+      pairs.add(`${line.slice(0, colonIdx).trim()}:${line.slice(colonIdx + 1).trim()}`);
+    }
+  }
+  return { files, pairs };
+}
 
 // Object keys that legitimately appear inside `.values({…})` /
 // `.set({…})` literals but do NOT represent a column write — Drizzle
@@ -700,6 +738,7 @@ export function collectLocallyDefinedIdentifiers(bodies, source = "") {
 async function main() {
   const { columns, tables, tableColumns } = loadLiveSchema();
   const drizzleSchema = await loadDrizzleSchema(DRIZZLE_SCHEMA_FILE);
+  const allowlist = await loadAllowlist();
   if (columns.size === 0) {
     console.error(
       "[check:schema-drift] ERROR — no columns returned from information_schema. " +
@@ -835,14 +874,42 @@ async function main() {
     process.exit(0);
   }
 
-  // Collapse duplicates per (file, id, table?).
+  // Collapse duplicates per (file, id, table?), dropping allowlisted
+  // findings. An allowlist entry suppresses a finding either by whole file
+  // (`routes/foo.ts`) or by file+identifier (`routes/foo.ts:<id>`); see
+  // scripts/schema-drift-allowlist.txt for the rationale (chiefly objects
+  // that exist in the live DB but lag in the committed db/schema*.sql dump).
   const seen = new Set();
   const unique = [];
+  let allowlisted = 0;
   for (const f of findings) {
+    const routesRel = toRoutesRel(f.file);
+    if (
+      allowlist.files.has(routesRel) ||
+      allowlist.pairs.has(`${routesRel}:${f.id}`)
+    ) {
+      allowlisted++;
+      continue;
+    }
     const key = `${f.file}::${f.id}::${f.table ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push(f);
+  }
+
+  if (allowlisted > 0) {
+    console.log(
+      `[check:schema-drift] ${allowlisted} finding(s) suppressed by ` +
+        "scripts/schema-drift-allowlist.txt",
+    );
+  }
+
+  if (unique.length === 0) {
+    console.log(
+      "[check:schema-drift] OK — every non-allowlisted identifier in raw SQL " +
+        "and every Drizzle .values()/.set() key exists in the live database.",
+    );
+    process.exit(0);
   }
 
   console.error(
