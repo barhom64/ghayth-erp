@@ -79,6 +79,7 @@ export const allNavSections: NavSection[] = [
       { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar, minRoleLevel: 20 },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
+        { label: "ما ينتظر إجراءاتي", path: "/my/work-queue", icon: ListChecks },
         { label: "مساحتي", path: "/my-space", icon: User },
         { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
         { label: "إشعاراتي", path: "/notifications", icon: Bell },
@@ -240,6 +241,7 @@ export const allNavSections: NavSection[] = [
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
         { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
         { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
+        { label: "فئات الموظفين وسياسات الحضور", path: "/admin/attendance-categories", icon: Users, subKey: "settings" },
       ]},
     ],
   },

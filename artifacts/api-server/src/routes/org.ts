@@ -578,4 +578,109 @@ router.delete("/approval-authorities/:id", authorize(ADMIN_WRITE), async (req, r
   } catch (e) { handleRouteError(e, res, "تعذّر إلغاء صلاحية الاعتماد"); }
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// 7. EMPLOYEE CATEGORIES + ATTENDANCE POLICIES PER CATEGORY (HR-015)
+//    System categories live with companyId IS NULL (6 seeded in migration
+//    270). Companies can NOT edit system categories from this UI — only
+//    add per-company overrides in attendance_policies_per_category.
+// ════════════════════════════════════════════════════════════════════════════
+router.get("/employee-categories", authorize(ADMIN), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const rows = await rawQuery(
+      `SELECT id, "companyId", "categoryKey", "labelAr", "labelEn", description,
+              color, "displayOrder", "exemptFromAutoDeduction",
+              "trackingFrequencySeconds", "isActive",
+              ("companyId" IS NULL) AS "isSystem"
+         FROM employee_categories
+        WHERE "companyId" = $1 OR "companyId" IS NULL
+        ORDER BY "displayOrder", "labelAr"`,
+      [companyId],
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (e) { handleRouteError(e, res, "تعذّر جلب فئات الموظفين"); }
+});
+
+const attendancePolicyPerCategorySchema = z.object({
+  categoryKey: z.string().min(1).max(40),
+  lateThresholdMinutes: z.number().int().min(0).max(180).optional().nullable(),
+  gracePeriodMinutes: z.number().int().min(0).max(60).optional().nullable(),
+  gpsRadiusMeters: z.number().int().min(0).max(5000).optional().nullable(),
+  penaltyLevel1: z.number().nonnegative().optional().nullable(),
+  penaltyLevel2: z.number().nonnegative().optional().nullable(),
+  penaltyLevel3: z.number().nonnegative().optional().nullable(),
+  penaltyLevel4: z.number().nonnegative().optional().nullable(),
+  penaltyLevel5: z.number().nonnegative().optional().nullable(),
+  autoDeductionEnabled: z.boolean().optional().nullable(),
+  trackingFrequencySeconds: z.number().int().min(0).max(3600).optional().nullable(),
+});
+
+router.get("/attendance-policies-per-category", authorize(ADMIN), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const rows = await rawQuery(
+      `SELECT app.*, ec."labelAr" AS "categoryLabelAr",
+              ec."exemptFromAutoDeduction" AS "categoryExempt"
+         FROM attendance_policies_per_category app
+         LEFT JOIN employee_categories ec ON ec."categoryKey" = app."categoryKey"
+          AND (ec."companyId" IS NULL OR ec."companyId" = $1)
+        WHERE app."companyId" = $1
+        ORDER BY app."categoryKey"`,
+      [companyId],
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (e) { handleRouteError(e, res, "تعذّر جلب overrides سياسة الحضور"); }
+});
+
+router.post("/attendance-policies-per-category", authorize(ADMIN_WRITE), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const body = zodParse(attendancePolicyPerCategorySchema.safeParse(req.body));
+    const [row] = await rawQuery<any>(
+      `INSERT INTO attendance_policies_per_category
+        ("companyId", "categoryKey", "lateThresholdMinutes", "gracePeriodMinutes",
+         "gpsRadiusMeters", "penaltyLevel1", "penaltyLevel2", "penaltyLevel3",
+         "penaltyLevel4", "penaltyLevel5", "autoDeductionEnabled",
+         "trackingFrequencySeconds")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT ("companyId", "categoryKey") DO UPDATE
+          SET "lateThresholdMinutes" = EXCLUDED."lateThresholdMinutes",
+              "gracePeriodMinutes" = EXCLUDED."gracePeriodMinutes",
+              "gpsRadiusMeters" = EXCLUDED."gpsRadiusMeters",
+              "penaltyLevel1" = EXCLUDED."penaltyLevel1",
+              "penaltyLevel2" = EXCLUDED."penaltyLevel2",
+              "penaltyLevel3" = EXCLUDED."penaltyLevel3",
+              "penaltyLevel4" = EXCLUDED."penaltyLevel4",
+              "penaltyLevel5" = EXCLUDED."penaltyLevel5",
+              "autoDeductionEnabled" = EXCLUDED."autoDeductionEnabled",
+              "trackingFrequencySeconds" = EXCLUDED."trackingFrequencySeconds"
+       RETURNING *`,
+      [companyId, body.categoryKey,
+       body.lateThresholdMinutes ?? null, body.gracePeriodMinutes ?? null,
+       body.gpsRadiusMeters ?? null,
+       body.penaltyLevel1 ?? null, body.penaltyLevel2 ?? null, body.penaltyLevel3 ?? null,
+       body.penaltyLevel4 ?? null, body.penaltyLevel5 ?? null,
+       body.autoDeductionEnabled ?? null, body.trackingFrequencySeconds ?? null],
+    );
+    await audit(req, "upsert", "attendance_policy_per_category", row.id, {
+      categoryKey: body.categoryKey,
+    });
+    res.status(201).json({ data: row });
+  } catch (e) { handleRouteError(e, res, "تعذّر حفظ override سياسة الحضور"); }
+});
+
+router.delete("/attendance-policies-per-category/:id", authorize(ADMIN_WRITE), async (req, res) => {
+  try {
+    const { companyId } = requireScope(req);
+    const id = parseId(req.params.id);
+    const result = await rawExecute(
+      `DELETE FROM attendance_policies_per_category WHERE id = $1 AND "companyId" = $2`,
+      [id, companyId],
+    );
+    if (result.affectedRows === 0) throw new NotFoundError("override غير موجود");
+    await audit(req, "delete", "attendance_policy_per_category", id, {});
+    res.json({ data: { id, deleted: true } });
+  } catch (e) { handleRouteError(e, res, "تعذّر حذف override"); }
+});
+
 export default router;

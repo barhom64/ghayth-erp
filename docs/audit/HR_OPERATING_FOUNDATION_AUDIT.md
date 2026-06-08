@@ -345,17 +345,18 @@
 
 ## ٨. أولوية الإصلاحات (موصى به)
 
-| # | المهمة | تكلفة تقديرية | يُغلق |
+| # | المهمة | الحالة | يُغلق |
 |---|---|---|---|
-| HR-015 | Field tracking UI (map + report) + admin UI للـ attendance categories | 5 أيام | #7 + R3 + admin gap في #6 |
-| HR-016 | Unified `/my/workspace` inbox | 5-7 أيام | #11 + R3 |
-| HR-017 | Legacy `custom_roles` → `rbac_roles` migration | 7-10 أيام | R1 + cleanup كبير |
-| HR-018 | Org bridges CRUD (team/committee/project members) | 3-4 أيام | §B 3 bridges + R2 |
-| HR-019 | Scoring weights configurable + ranking dashboard | 3 أيام | R4 |
-| HR-020 | باقي §K integration tests (GPS pipeline، manual correction، scoring composition) | 4 أيام | R5 |
-| HR-021 | `pnpm db:dump-schema` بعد إنشاء DB local من migrations + commit refreshed dump | 1 يوم | R6 |
+| HR-015 | Field tracking UI (breadcrumb map + KPIs) + admin UI لفئات الحضور | 🟢 **مُنفّذ في هذا الـ batch** | #7 + R3 + admin gap في #6 |
+| HR-016 | Unified `/my/work-queue` يجمع approvals + tasks + notifications + inbox | 🟢 **مُنفّذ في هذا الـ batch** | #11 + توحيد التكرار |
+| HR-017 | توثيق حدود نماذج العهد الثلاثة (warehouse + employee_assets + subsidiary) | 🟢 **مُنفّذ في هذا الـ batch** | حسم "تكرار العهد" المرصود في §5 |
+| HR-018 | Legacy `custom_roles` → `rbac_roles` migration | 🔴 لاحقًا | R1 + cleanup كبير (7-10 أيام) |
+| HR-019 | Org bridges CRUD (team/committee/project members) | 🔴 لاحقًا | §B 3 bridges + R2 (3-4 أيام) |
+| HR-020 | Scoring weights configurable + company-wide ranking dashboard | 🔴 لاحقًا | R4 (3 أيام) |
+| HR-021 | باقي §K integration tests (GPS pipeline، manual correction، scoring composition) | 🔴 لاحقًا | R5 (4 أيام) |
+| HR-022 | `pnpm db:dump-schema` regen + commit | 🔴 لاحقًا | R6 (1 يوم) |
 
-**إجمالي تقديري:** 28-34 يوم عمل لإغلاق كل ما تبقى.
+**ما تبقى بعد HR-015/016/017:** 18-22 يوم عمل (HR-018→HR-022).
 
 ---
 

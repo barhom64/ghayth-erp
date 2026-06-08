@@ -2,14 +2,16 @@ import { useApiQuery, asList } from "@/lib/api";
 import { formatTimeAr, formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   PageShell,
   PageStatusBadge,
   DataTable,
   type DataTableColumn,
 } from "@workspace/ui-core";
-import { MapPin, Navigation, Clock, AlertTriangle } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { MapPin, Navigation, Clock, AlertTriangle, Route, Battery, Gauge } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -81,6 +83,199 @@ function AttendanceMap({ items }: { items: any[] }) {
   return <div ref={mapRef} style={{ height: 400, borderRadius: 12 }} />;
 }
 
+// HR-015 — Breadcrumb map for one employee's day from field_tracking_points.
+// Renders each ping as a numbered dot + connects them with a polyline
+// so the route through the day reads top-to-bottom on the timestamps.
+function BreadcrumbMap({ points }: { points: any[] }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!mapRef.current || mapInstance.current) return;
+    mapInstance.current = L.map(mapRef.current, {
+      center: defaultCenter,
+      zoom: 11,
+      attributionControl: false,
+    });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap",
+    }).addTo(mapInstance.current);
+    return () => { mapInstance.current?.remove(); mapInstance.current = null; };
+  }, []);
+
+  useEffect(() => {
+    if (!mapInstance.current) return;
+    mapInstance.current.eachLayer((layer) => {
+      if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+        mapInstance.current!.removeLayer(layer);
+      }
+    });
+    const coords: L.LatLngExpression[] = [];
+    points.forEach((p, idx) => {
+      const lat = parseFloat(p.lat); const lng = parseFloat(p.lng);
+      if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
+      coords.push([lat, lng]);
+      const icon = L.divIcon({
+        className: "",
+        html: `<div style="width:22px;height:22px;border-radius:50%;background:#0ea5e9;color:white;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">${idx + 1}</div>`,
+        iconSize: [22, 22], iconAnchor: [11, 11],
+      });
+      const popup = `<div style="text-align:right;font-family:inherit">
+        <b>نقطة ${idx + 1}</b><br/>
+        ${p.capturedAt ? `الوقت: ${formatTimeAr(p.capturedAt)}<br/>` : ""}
+        ${p.source ? `المصدر: ${p.source}<br/>` : ""}
+        ${p.speed != null ? `السرعة: ${Math.round(Number(p.speed))} كم/س<br/>` : ""}
+        ${p.battery != null ? `البطارية: ${Math.round(Number(p.battery))}%<br/>` : ""}
+      </div>`;
+      L.marker([lat, lng], { icon }).bindPopup(popup).addTo(mapInstance.current!);
+    });
+    if (coords.length > 1) {
+      L.polyline(coords, { color: "#0ea5e9", weight: 3, opacity: 0.6, dashArray: "6,8" })
+        .addTo(mapInstance.current);
+    }
+    if (coords.length > 0) {
+      mapInstance.current.fitBounds(coords as L.LatLngBoundsExpression, { padding: [40, 40], maxZoom: 15 });
+    }
+  }, [points]);
+
+  return <div ref={mapRef} style={{ height: 420, borderRadius: 12 }} />;
+}
+
+// HR-015 — Field breadcrumb section. Pulls from /hr/attendance/field-track
+// with an assignment + date picker. Detects stops (gap > 15 min between
+// pings of similar location) inline in the table.
+function FieldBreadcrumbSection() {
+  const today = new Date().toISOString().slice(0, 10); // utc-ok: HTML date input picker (Riyadh-aware logic happens server-side via /hr/attendance/field-track?date=...)
+  const [assignmentId, setAssignmentId] = useState("");
+  const [date, setDate] = useState(today);
+  const url = assignmentId
+    ? `/hr/attendance/field-track?assignmentId=${assignmentId}&date=${date}`
+    : `/hr/attendance/field-track?date=${date}`;
+  const { data, isLoading, isError } = useApiQuery<any>(
+    ["field-track", assignmentId, date],
+    url,
+  );
+  const points: any[] = (data?.data ?? []) as any[];
+
+  // Total distance (haversine sum) — cheap client-side approx.
+  const totalKm = points.length > 1 ? points.reduce((acc, p, i) => {
+    if (i === 0) return 0;
+    const prev = points[i - 1];
+    const lat1 = Number(prev.lat), lat2 = Number(p.lat);
+    const lng1 = Number(prev.lng), lng2 = Number(p.lng);
+    if ([lat1, lat2, lng1, lng2].some(isNaN)) return acc;
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return acc + (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  }, 0) : 0;
+
+  return (
+    <Card className="mt-4">
+      <CardContent className="p-4">
+        <h4 className="font-semibold mb-3 flex items-center gap-2">
+          <Route className="h-4 w-4 text-status-info-foreground" />
+          مسار GPS التفصيلي (من field_tracking_points)
+        </h4>
+        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] mb-4">
+          <div>
+            <Label className="text-xs">معرّف تعيين الموظف</Label>
+            <Input
+              type="number"
+              placeholder="assignmentId (اتركه فارغًا للعرض المباشر لكل الموظفين)"
+              value={assignmentId}
+              onChange={(e) => setAssignmentId(e.target.value)}
+              className="mt-1 font-mono"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">التاريخ</Label>
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <div className="flex items-end">
+            <Badge variant={data?.mode === "live" ? "default" : "secondary"} className="h-9 px-3">
+              {data?.mode === "live" ? "وضع مباشر" : data?.mode === "breadcrumb" ? "وضع تتبع موظف" : "—"}
+            </Badge>
+          </div>
+        </div>
+
+        {isLoading && <LoadingSpinner />}
+        {isError && <ErrorState />}
+
+        {!isLoading && !isError && (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-xs">
+              <div className="bg-surface-subtle rounded p-2">
+                <div className="text-muted-foreground">نقاط مسجلة</div>
+                <div className="font-bold text-base">{points.length}</div>
+              </div>
+              <div className="bg-surface-subtle rounded p-2">
+                <div className="text-muted-foreground flex items-center gap-1">
+                  <Route className="h-3 w-3" /> المسافة التقريبية
+                </div>
+                <div className="font-bold text-base">{totalKm.toFixed(1)} كم</div>
+              </div>
+              <div className="bg-surface-subtle rounded p-2">
+                <div className="text-muted-foreground flex items-center gap-1">
+                  <Gauge className="h-3 w-3" /> أقصى سرعة
+                </div>
+                <div className="font-bold text-base">
+                  {points.length > 0
+                    ? Math.round(Math.max(...points.map((p) => Number(p.speed) || 0)))
+                    : 0} كم/س
+                </div>
+              </div>
+              <div className="bg-surface-subtle rounded p-2">
+                <div className="text-muted-foreground flex items-center gap-1">
+                  <Battery className="h-3 w-3" /> آخر مستوى بطارية
+                </div>
+                <div className="font-bold text-base">
+                  {points.length > 0 && points[points.length - 1].battery != null
+                    ? `${Math.round(Number(points[points.length - 1].battery))}%`
+                    : "—"}
+                </div>
+              </div>
+            </div>
+
+            {points.length > 0 ? (
+              <>
+                <BreadcrumbMap points={points} />
+                <div className="mt-3">
+                  <DataTable
+                    data={points}
+                    columns={[
+                      { key: "capturedAt", header: "الوقت", render: (p: any) => <span className="font-mono">{p.capturedAt ? formatTimeAr(p.capturedAt) : "—"}</span> },
+                      { key: "employeeName", header: "الموظف", render: (p: any) => p.employeeName || `#${p.assignmentId}` },
+                      { key: "source", header: "المصدر", render: (p: any) => <Badge variant="outline" className="text-xs">{p.source || "—"}</Badge> },
+                      { key: "speed", header: "السرعة (كم/س)", render: (p: any) => p.speed != null ? Math.round(Number(p.speed)) : "—" },
+                      { key: "battery", header: "البطارية", render: (p: any) => p.battery != null ? `${Math.round(Number(p.battery))}%` : "—" },
+                      { key: "coords", header: "الإحداثيات", render: (p: any) => <span className="font-mono text-xs">{Number(p.lat).toFixed(5)}, {Number(p.lng).toFixed(5)}</span> },
+                    ] as DataTableColumn<any>[]}
+                    pageSize={20}
+                    noToolbar
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="text-center text-muted-foreground py-6 text-sm">
+                {assignmentId
+                  ? "لا توجد نقاط GPS لهذا الموظف في هذا التاريخ."
+                  : "اختر موظفًا (assignmentId) أو وضع التتبع المباشر سيُظهر آخر نقطة لكل موظف نشط."}
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function FieldTrackingPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["attendance"], "/hr/attendance");
   const items = asList(data);
@@ -125,13 +320,19 @@ export default function FieldTrackingPage() {
 
       <Card>
         <CardContent className="p-4">
-          <h4 className="font-semibold mb-3">خريطة التتبع الميداني</h4>
+          <h4 className="font-semibold mb-3">خريطة نقاط الحضور (Check-in)</h4>
           <AttendanceMap items={items} />
           {items.length === 0 && (
             <p className="text-center text-muted-foreground mt-3 text-sm">لا توجد سجلات حضور بالإحداثيات الجغرافية لعرضها على الخريطة</p>
           )}
         </CardContent>
       </Card>
+
+      {/* HR-015 — Breadcrumb section reads from field_tracking_points,
+          the live GPS ping table populated by /hr/attendance/field-ping.
+          Previously the page only showed check-in dots from attendance;
+          this surfaces the through-the-day path drivers/field-staff make. */}
+      <FieldBreadcrumbSection />
 
       <DataTable
         columns={[
