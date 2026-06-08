@@ -1,25 +1,26 @@
 import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageShell, PageStatusBadge } from "@workspace/ui-core";
-import { Calendar, Clock, Truck, User, AlertCircle, ArrowLeft } from "lucide-react";
+import { PageShell } from "@workspace/ui-core";
+import { Calendar, Clock, Truck, User, AlertCircle, ArrowLeft, GripVertical } from "lucide-react";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { useToast } from "@/hooks/use-toast";
 
 // #1733 Comment 9 — dispatch board surface. Shows scheduled dispatch
 // orders grouped per-driver in a daily timeline column so the
 // dispatcher can spot conflicts and gaps visually.
 //
-// True drag-and-drop scheduling (move a dispatch order from one driver
-// column to another) requires the @dnd-kit/* dependency which isn't
-// in this workspace. The pragmatic v1 here is read-only board view +
-// per-order detail / reschedule via clicking through. The reschedule
-// PATCH is already wired on the backend (PATCH
-// /transport/dispatch-orders/:id) so adding dnd-kit later is purely a
-// UI add-on; nothing else needs to change.
+// Drag-and-drop reschedule is wired using the browser-native HTML5
+// drag-and-drop API — no extra dependency needed. The card POSTs to
+// /transport/dispatch-orders/:id/reschedule which re-runs eligibility
+// + tstzrange conflict detection against the new combination on the
+// server, so the UI can be optimistic but the server is the source of
+// truth for safety.
 
 interface DispatchOrderRow {
   id: number;
@@ -76,8 +77,15 @@ function formatHourMinute(iso: string): string {
 
 export default function TransportDispatchBoard() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const today = toDateInputValue(new Date());
   const [dateFilter, setDateFilter] = useState<string>(today);
+  // Native HTML5 drag-and-drop state — track which order is being dragged
+  // and which driver column is currently the drop target.
+  const [draggingOrderId, setDraggingOrderId] = useState<number | null>(null);
+  const [dropTargetDriverId, setDropTargetDriverId] = useState<number | null>(null);
+  const [rescheduling, setRescheduling] = useState<number | null>(null);
 
   // 24-hour window for the chosen day.
   const fromDate = dateFilter;
@@ -131,6 +139,30 @@ export default function TransportDispatchBoard() {
     return flagged;
   }, [byDriver]);
 
+  // #1733 Comment 9 — drag-and-drop reschedule. The dispatcher drags an
+  // order from one driver column and drops it on another. The backend
+  // POST /transport/dispatch-orders/:id/reschedule re-runs eligibility +
+  // conflict-detection guards against the NEW combination.
+  const reschedule = async (orderId: number, newDriverId: number) => {
+    if (rescheduling != null) return;
+    setRescheduling(orderId);
+    try {
+      await apiFetch(`/transport/dispatch-orders/${orderId}/reschedule`, {
+        method: "POST",
+        body: JSON.stringify({ driverId: newDriverId }),
+      });
+      toast({ title: "تم تغيير السائق" });
+      qc.invalidateQueries({ queryKey: ["transport-dispatch", dateFilter] });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر إعادة الجدولة", description: message });
+    } finally {
+      setRescheduling(null);
+      setDraggingOrderId(null);
+      setDropTargetDriverId(null);
+    }
+  };
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -182,57 +214,153 @@ export default function TransportDispatchBoard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {byDriver.map(([driverId, { driverName, rows }]) => (
-                <Card key={driverId} className="border-2">
-                  <CardHeader className="pb-2 bg-surface-subtle">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <User className="h-4 w-4 text-status-info-foreground" />
-                      {driverName}
-                      <span className="ms-auto text-xs font-normal text-muted-foreground">
-                        {rows.length} مهمة
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-2 space-y-2">
-                    {rows.map((o) => {
-                      const isConflict = conflictRowIds.has(o.id);
-                      return (
-                        <button
-                          key={o.id}
-                          onClick={() => navigate(`/fleet/transport/bookings/${o.bookingId}`)}
-                          className={`w-full text-start p-2 rounded-md border text-xs hover:bg-surface-subtle transition-colors ${isConflict ? "border-rose-300 bg-rose-50" : ""}`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-mono">حجز #{o.bookingNumber}</span>
-                            <Badge variant="outline" className={STATUS_TONE[o.status] ?? ""}>
-                              {STATUS_LABEL[o.status] ?? o.status}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-3 text-muted-foreground">
-                            <span className="inline-flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatHourMinute(o.scheduledStartAt)} – {formatHourMinute(o.scheduledEndAt)}
-                            </span>
-                            {o.vehiclePlate && (
-                              <span className="inline-flex items-center gap-1 font-mono">
-                                <Truck className="h-3 w-3" />{o.vehiclePlate}
+              {byDriver.map(([driverId, { driverName, rows }]) => {
+                const draggedOrder = draggingOrderId != null
+                  ? orders.find((x) => x.id === draggingOrderId)
+                  : null;
+                const isValidDropTarget =
+                  draggedOrder != null && draggedOrder.driverId !== driverId;
+                const isHotTarget =
+                  isValidDropTarget && dropTargetDriverId === driverId;
+                return (
+                  <Card
+                    key={driverId}
+                    className={`border-2 transition-all ${
+                      isHotTarget
+                        ? "ring-2 ring-status-info-foreground border-status-info-foreground"
+                        : ""
+                    } ${
+                      isValidDropTarget && !isHotTarget ? "border-dashed" : ""
+                    }`}
+                    onDragOver={(e) => {
+                      if (!isValidDropTarget) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (dropTargetDriverId !== driverId) {
+                        setDropTargetDriverId(driverId);
+                      }
+                    }}
+                    onDragLeave={(e) => {
+                      // Only clear if leaving the card entirely (not moving between children).
+                      if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                      if (dropTargetDriverId === driverId) setDropTargetDriverId(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggingOrderId != null && isValidDropTarget) {
+                        reschedule(draggingOrderId, driverId);
+                      }
+                    }}
+                  >
+                    <CardHeader className="pb-2 bg-surface-subtle">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <User className="h-4 w-4 text-status-info-foreground" />
+                        {driverName}
+                        <span className="ms-auto text-xs font-normal text-muted-foreground">
+                          {rows.length} مهمة
+                        </span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-2 space-y-2 min-h-[80px]">
+                      {rows.length === 0 && isValidDropTarget && (
+                        <div className="text-[10px] text-center text-muted-foreground py-4 border border-dashed rounded-md">
+                          أفلت هنا لإسناد المهمة إلى {driverName}
+                        </div>
+                      )}
+                      {rows.map((o) => {
+                        const isConflict = conflictRowIds.has(o.id);
+                        const isDragging = draggingOrderId === o.id;
+                        const isBusy = rescheduling === o.id;
+                        const isDraggable =
+                          rescheduling == null &&
+                          (o.status === "pending" || o.status === "notified");
+                        return (
+                          <div
+                            key={o.id}
+                            draggable={isDraggable}
+                            onDragStart={(e) => {
+                              if (!isDraggable) {
+                                e.preventDefault();
+                                return;
+                              }
+                              e.dataTransfer.effectAllowed = "move";
+                              // Some browsers require setData to start the drag.
+                              try {
+                                e.dataTransfer.setData("text/plain", String(o.id));
+                              } catch {
+                                /* ignore — firefox legacy */
+                              }
+                              setDraggingOrderId(o.id);
+                            }}
+                            onDragEnd={() => {
+                              setDraggingOrderId(null);
+                              setDropTargetDriverId(null);
+                            }}
+                            className={`w-full text-start p-2 rounded-md border text-xs hover:bg-surface-subtle transition-all ${
+                              isConflict ? "border-rose-300 bg-rose-50" : ""
+                            } ${isDragging ? "opacity-40" : ""} ${
+                              isBusy ? "opacity-60 pointer-events-none" : ""
+                            } ${isDraggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
+                            onClick={() =>
+                              !isBusy &&
+                              !isDragging &&
+                              navigate(`/fleet/transport/bookings/${o.bookingId}`)
+                            }
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if ((e.key === "Enter" || e.key === " ") && !isBusy) {
+                                e.preventDefault();
+                                navigate(`/fleet/transport/bookings/${o.bookingId}`);
+                              }
+                            }}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-mono inline-flex items-center gap-1">
+                                {isDraggable && (
+                                  <GripVertical className="h-3 w-3 text-muted-foreground" />
+                                )}
+                                حجز #{o.bookingNumber}
                               </span>
+                              <Badge variant="outline" className={STATUS_TONE[o.status] ?? ""}>
+                                {STATUS_LABEL[o.status] ?? o.status}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-3 text-muted-foreground">
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatHourMinute(o.scheduledStartAt)} – {formatHourMinute(o.scheduledEndAt)}
+                              </span>
+                              {o.vehiclePlate && (
+                                <span className="inline-flex items-center gap-1 font-mono">
+                                  <Truck className="h-3 w-3" />{o.vehiclePlate}
+                                </span>
+                              )}
+                            </div>
+                            {isConflict && (
+                              <div className="mt-1 text-[10px] text-rose-700 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />تعارض في الجدولة مع مهمة أخرى
+                              </div>
+                            )}
+                            {o.declinedReason && (
+                              <div className="mt-1 text-[10px] text-rose-700">سبب الرفض: {o.declinedReason}</div>
+                            )}
+                            {isBusy && (
+                              <div className="mt-1 text-[10px] text-status-info-foreground">جارٍ إعادة الجدولة…</div>
                             )}
                           </div>
-                          {isConflict && (
-                            <div className="mt-1 text-[10px] text-rose-700 flex items-center gap-1">
-                              <AlertCircle className="h-3 w-3" />تعارض في الجدولة مع مهمة أخرى
-                            </div>
-                          )}
-                          {o.declinedReason && (
-                            <div className="mt-1 text-[10px] text-rose-700">سبب الرفض: {o.declinedReason}</div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </CardContent>
-                </Card>
-              ))}
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+          {draggingOrderId != null && (
+            <div className="mt-3 text-xs text-muted-foreground text-center">
+              اسحب البطاقة وأفلتها على عمود سائق آخر لإعادة الإسناد. لا يمكن نقل
+              المهام بعد القبول أو البدء.
             </div>
           )}
         </CardContent>
