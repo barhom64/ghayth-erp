@@ -43,7 +43,7 @@
 | `POST /employees` (إنشاء كامل) | 🟢 مكتمل | يدعم تحويل من application (sourceApplicationId) |
 | `GET /employees/:id/finance-summary` | 🟢 مكتمل | subsidiary custody + loans + vehicles |
 | Documents expiry obligations (iqama/passport/visa/work permit) | 🟢 مكتمل | `businessHelpers.registerObligation()` |
-| ملف الموظف 360 — 9 تبويبات | 🟡 يحتاج تطوير | الناقص: account+login، titles+positions، roles+permissions، contract، custodies، training محتوى موسّع |
+| ملف الموظف 360 — 14 تبويبات | 🟢 مكتمل (HR-012) | overview / info / titles / account / roles / contract / attendance / leaves / custodies / payroll / violations / tasks / trainings / finance |
 | Employee → User dual model | 🟢 مكتمل | `users.employeeId` FK + multi-role |
 | Performance / 360 / IDP TABS داخل الملف | 🟠 يحتاج ربط | موجود في `/hr/performance` و `/hr/evaluation-360` و `/hr/idp` كصفحات مستقلة |
 
@@ -400,7 +400,7 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 
 | # | الأولوية | الحالة الحالية | PR-Scope مقترح |
 |---|---|---|---|
-| 1 | سجل الموظف الرئيسي الموحد | 🟡 9/14 tabs | توسعة `employee-detail.tsx` لـ 14 تبويب — embed بدل routes |
+| 1 | سجل الموظف الرئيسي الموحد | 🟢 **مكتمل 14/14 tabs** (HR-012) | overview / info / titles / account / roles / contract / attendance / leaves / custodies / payroll / violations / tasks / trainings / finance ✅ |
 | 2 | ربط الموظف بالأدوار والصلاحيات | 🟢 موجود لكن غير مرئي في ملف الموظف | إضافة تبويب "الأدوار والصلاحيات" يقرأ من `rbac_user_roles` + يعرض effective permissions |
 | 3 | نموذج "ماذا يظهر لمن ومتى" | 🟡 RBAC scope يفي بالغرض | UI viewer للـ Effective Permissions per user (RBAC-004) |
 | 4 | كتالوج خدمات HR | 🟢 **مكتمل** (HR-010) — صفحة `/hr/services` بـ 8 خدمات في 4 categories. | بناء صفحة "خدمات HR" ✅ |
@@ -431,6 +431,7 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 | #1837 | **§B إكمال + #10 cron**. supervision_lines + approval_authorities + scoring cron entries. 22/22 smoke tests. | 2026-06-08 |
 | #1838 | **الأولوية #4 — HR Services Catalog** — راجع HR-010. 16/16 smoke tests. | 2026-06-08 |
 | HR-011 | **الأولوية #12 (تهذيب القائمة) + الأولوية #9 (employee_assets)**. (أ) إعادة هيكلة `navigation.registry.ts` HR section من 17 entry إلى 9 canonical entries من §D.2: لوحة HR / الموظفون / النشاط والحضور / الطلبات / الامتثال والجزاءات / الأداء والتطوير / الرواتب / التقارير / إعدادات. **كل route قديم محفوظ** كـ sub-link — الـ bookmarks والـ deep-links لا تنكسر. (ب) Migration 276 يُنشئ `employee_assets` bridge مع assetType + assetKey + serialNumber + warehouseAssetId اختياري + lifecycle كامل (assignedAt/assignedBy/returnedAt/returnedBy) + conditionOnAssign/conditionOnReturn للـ damage claims + partial index على returnedAt IS NULL للقوائم النشطة. 24/24 smoke tests خضراء. | 2026-06-08 |
+| HR-012 | **الأولوية #1 إكمال — 14/14 تبويبات + §J seed 4/4 templates**. (أ) إضافة 3 تبويبات نهائية لـ `employee-detail.tsx`: **«المسميات والمناصب»** يعرض الـ job title + position من جدول `positions` (مع level badge من §B.5) + الفئة الإدارية + categoryKey badge — **«العقد»** يعرض العقد النشط من `employee_contracts` (ref + dates + probation + signature status) مع empty-state deep-link لـ `/hr/contracts` — **«العهد والأصول»** يعرض custodies من `employee_assets` بـ active-first ordering + opacity 60 للمُعَاد + condition fields. (ب) `GET /employees/:id` يمرر contract + position + custodies ضمن نفس Promise.all (3 queries إضافية، لا N+1). (ج) custodies count badge في tab header. (د) Migration 278 يبذر 4 من 9 HR role templates الناقصة من §J (احتُجِز 277 من قِبل main لـ maintenance_request_linked_expense): `attendance_officer` (40) + `payroll_officer` (50) + `discipline_officer` (45) + `performance_reviewer` (45) كـ system templates (companyId IS NULL) — idempotent عبر `ON CONFLICT ("companyId", role_key) DO NOTHING`. 25/25 smoke tests خضراء. | 2026-06-08 |
 
 ---
 
