@@ -2469,7 +2469,7 @@ router.get("/reports/season-portfolio", authorize({ feature: "umrah", action: "l
          WHERE "deletedAt" IS NULL
          GROUP BY "seasonId", "companyId"
        )
-       SELECT s.id, s.title, s.status, s."hijriYear", s."startDate", s."endDate",
+       SELECT s.id, s.title, s.status, NULL::int AS "hijriYear", s."startDate", s."endDate",
               COALESCE(spc."pilgrimsCount", 0)::int AS "pilgrimsCount",
               COALESCE(sgc."groupsCount", 0)::int AS "groupsCount",
               COALESCE(sales.revenue, 0) AS revenue,
