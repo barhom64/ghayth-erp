@@ -3,20 +3,15 @@ import { useLocation, useRoute } from "wouter";
 import { useApiQuery, apiPatch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useQueryClient } from "@tanstack/react-query";
 import { CreatePageLayout } from "@workspace/ui-core";
-import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-
-
-const typeMap: Record<string, string> = {
-  asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات"
-};
+import {
+  AccountFormFields, ACCOUNT_FORM_INITIAL, accountToFormState, buildAccountUpdatePayload,
+} from "@/components/shared/account-form-fields";
 
 export default function AccountsEdit() {
   const [, params] = useRoute("/finance/accounts/:id/edit");
@@ -24,18 +19,17 @@ export default function AccountsEdit() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_accounts_edit", { name: "", code: "", type: "" });
+  // Same canonical form shape as the create page — the two now share one form.
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_accounts_edit", ACCOUNT_FORM_INITIAL);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  const { data, isLoading, isError } = useApiQuery<any>(["accounts"], "/finance/accounts");
+  const { data, isLoading, isError } = useApiQuery<any>(["accounts-list"], "/finance/accounts");
   const items = data?.data || [];
   const account = items.find((a: any) => String(a.id) === params?.id);
 
   useEffect(() => {
-    if (account) {
-      setForm({ name: account.name || "", code: account.code || "", type: account.type || "asset" });
-    }
-  }, [account]);
+    if (account) setForm(() => accountToFormState(account));
+  }, [account]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async () => {
     const firstError = validate({
@@ -47,16 +41,18 @@ export default function AccountsEdit() {
     }
     setSaving(true);
     try {
-      await apiPatch(`/finance/accounts/${params?.id}`, { name: form.name, type: form.type });
+      await apiPatch(`/finance/accounts/${params?.id}`, buildAccountUpdatePayload(form));
       clearDraft();
       toast({ title: "تم تحديث الحساب" });
       qc.invalidateQueries({ queryKey: ["accounts"] });
+      qc.invalidateQueries({ queryKey: ["accounts-list"] });
       setLocation("/finance/accounts");
     } catch (err: any) {
       setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء التحديث", description: err?.fix ?? err?.message });
+    } finally {
+      setSaving(false);
     }
-    finally { setSaving(false); }
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -75,23 +71,13 @@ export default function AccountsEdit() {
           <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField label="اسم الحساب" required value={form.name} onChange={(v) => setForm({ ...form, name: v })} error={fieldErrors.name} />
-          <FormFieldWrapper label="رمز الحساب" hint="رمز الحساب غير قابل للتعديل بعد الإنشاء">
-            <Input value={form.code} disabled />
-          </FormFieldWrapper>
-          <FormFieldWrapper label="النوع">
-            <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(typeMap).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-        </div>
-      </div>
-
+      <AccountFormFields
+        form={form}
+        setForm={setForm}
+        mode="edit"
+        accounts={items}
+        fieldErrors={fieldErrors}
+      />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/accounts")}>إلغاء</Button>
         <Button onClick={handleSave} disabled={saving} className="gap-2" rateLimitAware>
