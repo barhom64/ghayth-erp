@@ -57,6 +57,9 @@ const expenseImpactPreviewSchema = z.object({
   costCenter: z.string().optional(),
   supplierId: z.any().optional(),
   branchId: z.any().optional(),
+  // #1715 (comment 9) — the allocation target drives a specialized-account hint.
+  targetType: z.string().optional(),
+  itemType: z.string().optional(),
 });
 
 // Shared line-allocation payload (the LineAllocationPanel /
@@ -359,7 +362,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
 journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId } = zodParse(expenseImpactPreviewSchema.safeParse(req.body ?? {}));
+    const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId, targetType, itemType } = zodParse(expenseImpactPreviewSchema.safeParse(req.body ?? {}));
     const amt = Number(amount || 0);
 
     const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
@@ -381,6 +384,23 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
         : `مدين حساب المصروف ${amt.toLocaleString("ar-SA")} / دائن الذمم الدائنة`,
       severity: "info",
     });
+
+    // #1715 (comment 9) — when the operation is linked to an entity, suggest
+    // the specialized posting account derived from the target + item kind so
+    // the operator sees where it will land (and whether it capitalises) before
+    // saving. Read-only hint; the actual JE still uses the chosen account.
+    if (targetType && targetType !== "none") {
+      const { deriveSpecializedAccount } = await import("../lib/financeSpecializedAccount.js");
+      const spec = deriveSpecializedAccount({ targetType, itemType });
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const resolvedCode = await financialEngine.resolveAccountCode(scope.companyId, spec.purpose, "debit", spec.defaultCode);
+      items.push({
+        category: "محاسبي",
+        label: spec.capitalize ? "حساب الرسملة المقترح" : "حساب المصروف المقترح",
+        value: `${spec.label} (${resolvedCode})${spec.capitalize ? " — يُرسمَل كأصل/مخزون بدل قيده مصروفًا" : ""}`,
+        severity: spec.capitalize ? "warning" : "info",
+      });
+    }
 
     if (costCenter) {
       const [budget] = await rawQuery<Record<string, unknown>>(
