@@ -47,7 +47,9 @@
 
 ## 4) أُصلِحت أعطال حقيقية أثناء التفعيل
 
-204 (serial defaults لـ9 جداول)، 251 (chk_invoices_status)، 252 (fleet_trips.updatedAt)، 253 (subsidiary entityType)، 255 (umrah PII varchar→text)، 257 (custody: `companies` بلا deletedAt)، properties `c.branchId` 500، سباق journeyTracking.
+204 (serial defaults لـ9 جداول)، 251 (chk_invoices_status)، 252 (fleet_trips.updatedAt)، 253 (subsidiary entityType)، 255 (umrah PII varchar→text)، 257 (custody: `companies` بلا deletedAt)، properties `c.branchId` 500، سباق journeyTracking، **والانضباط: `gm-decision` كان يفشل بـ500 (`incidentDate.slice is not a function` — العمود `date` يصل ككائن Date) فيمنع تطبيق أي جزاء عبر قرار الإدارة العليا — أُصلِح باشتقاق فترة الراتب من أجزاء التاريخ المحلية.**
+
+> **رحلة الانضباط (المرحلة 7 HR) مُثبتة:** `scripts/verify-hr-discipline-journey.sh` → **10/10** (غياب→محضر→تبرير→توصية المدير→قرار الإدارة العليا→جزاء مُطبَّق→خصم `pending_payroll` في `attendance_deductions` = أثر بالراتب).
 
 ## 5) ما لم يُنفَّذ ولماذا (مؤجَّل بسببه)
 
