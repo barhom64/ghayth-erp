@@ -1,11 +1,13 @@
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Wand2 } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
+import { useToast } from "@/hooks/use-toast";
 
 /**
  * Account-usage gaps report (#1715). Lists chart-of-accounts rows the
@@ -34,7 +36,12 @@ interface GapsResponse {
 }
 
 export default function AccountsUsageGaps() {
-  const { data, isLoading, isError } = useApiQuery<GapsResponse>(["accounts-usage-gaps"], "/finance/accounts/usage-gaps");
+  const { data, isLoading, isError, refetch } = useApiQuery<GapsResponse>(["accounts-usage-gaps"], "/finance/accounts/usage-gaps");
+  const { toast } = useToast();
+  // #1715 §10 — one click auto-classifies every account the classifier can
+  // confidently place from its code/name/type; the rest stay in this report.
+  const classifyMut = useApiMutation<{ scanned: number; classified: number; remaining: number }, void>(
+    "/finance/accounts/classify-usage", "POST", [["accounts-usage-gaps"]]);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -69,6 +76,27 @@ export default function AccountsUsageGaps() {
         { label: "فجوات التصنيف" },
       ]}
     >
+      {total > 0 && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-surface-subtle p-3">
+          <p className="text-sm text-muted-foreground">
+            صنّف تلقائيًا كل حساب يمكن استنتاج تصنيفه من الرمز والاسم والنوع. ما يتعذّر تصنيفه بثقة يبقى هنا للمراجعة اليدوية.
+          </p>
+          <Button
+            onClick={async () => {
+              try {
+                const r = await classifyMut.mutateAsync();
+                toast({ title: `تم تصنيف ${formatNumber(r.classified)} حساب — تبقّى ${formatNumber(r.remaining)} للمراجعة` });
+                refetch();
+              } catch {
+                toast({ variant: "destructive", title: "تعذّر التصنيف التلقائي" });
+              }
+            }}
+            disabled={classifyMut.isPending}
+          >
+            <Wand2 className="h-4 w-4 me-1" /> تصنيف تلقائي للكل
+          </Button>
+        </div>
+      )}
       {total === 0 ? (
         <Card>
           <CardContent className="py-12 text-center flex flex-col items-center gap-2 text-status-success-foreground">
