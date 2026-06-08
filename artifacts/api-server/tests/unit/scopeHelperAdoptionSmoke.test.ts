@@ -222,9 +222,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 112,
+      total: 113,
       helperUsers: 36,
-      manualOnly: 73,
+      manualOnly: 74,
     });
   });
 });
