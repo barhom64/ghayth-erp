@@ -371,6 +371,21 @@ describe("Employees — audit, events, and obligations", () => {
     expect(s).toContain("tempPassword");
   });
 
+  it("POST / grants the RBAC v2 role (rbac_user_roles) so a new employee's services actually work", () => {
+    // Regression: previously creation only set the legacy role string and
+    // never inserted rbac_user_roles, so the new user saw modules but got
+    // 403 on every action (RBAC v2 is the enforcement authority). Creation
+    // must now resolve the effective role key → rbac_roles.id and bind it.
+    const s = fullHandler('router.post("/",');
+    expect(s).toContain("INSERT INTO rbac_user_roles");
+    expect(s).toContain("FROM rbac_roles");
+    expect(s).toContain("role_key = $1");
+    // Job-title defaultRoleKey wins when the body didn't override the role.
+    expect(s).toContain("defaultRoleKeyFromJob");
+    // Only when a fresh user account was actually created in this request.
+    expect(s).toContain("createdNewUser");
+  });
+
   it("POST / copies active salary components to the new employee", () => {
     const s = fullHandler('router.post("/",');
     expect(s).toContain("INSERT INTO employee_salary_components");
