@@ -272,8 +272,19 @@ describe("E2E: Season locking enforcement", () => {
   });
 
   it("import checks season status", () => {
-    const importSection = umrah.split("async function doImport")[1] || "";
-    expect(importSection).toContain("requireOpenSeason");
+    // PR #1867 deleted the legacy `doImport()` helper and rewired
+    // both import paths to the engine (confirmMutamersImport /
+    // confirmVouchersImport). The season-open guard now lives in
+    // each route handler instead of one shared helper, so the test
+    // pins it on each of the three import routes separately.
+    for (const handler of [
+      '/import/mutamers"',
+      '/import/vouchers"',
+      '/import"',
+    ]) {
+      const section = umrah.split(`router.post("${handler}`)[1] || "";
+      expect(section, `${handler} handler missing requireOpenSeason`).toContain("requireOpenSeason");
+    }
   });
 
   it("group creation checks season status", () => {
