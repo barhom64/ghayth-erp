@@ -18,7 +18,8 @@ import {
   User, Phone, Mail, Briefcase, Calendar, Building, CreditCard,
   ListTodo, Clock, BookOpen, DollarSign, AlertTriangle, Printer,
   FileText, TrendingUp, Award, Activity, CheckCircle2,
-  XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, Check, X
+  XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, Check, X,
+  KeyRound, ShieldCheck, Lock, Star
 } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -342,9 +343,19 @@ function ViolationTimeline({ violations }: { violations: any[] }) {
   );
 }
 
+// HR-001 / #1799 priority #1 — Employee 360 tabs.
+// Two new tabs added: "الحساب والدخول" + "الأدوار والصلاحيات".
+// These surface the user-account row and rbac_user_roles grants that
+// were already loaded by the backend (see routes/employees.ts) so
+// every HR officer can see at-a-glance: does this employee have a
+// login? when did they last sign in? which roles do they hold?
+// Roadmap (docs/HR_OPERATING_FOUNDATION_TASK.md §A.1) target is 14
+// tabs; this batch adds 2/5 of the missing ones.
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Activity },
   { key: "info", label: "البيانات الشخصية", icon: User },
+  { key: "account", label: "الحساب والدخول", icon: KeyRound },
+  { key: "roles", label: "الأدوار والصلاحيات", icon: ShieldCheck },
   { key: "attendance", label: "الحضور", icon: Clock },
   { key: "leaves", label: "الإجازات", icon: Calendar },
   { key: "payroll", label: "الرواتب", icon: DollarSign },
@@ -442,6 +453,12 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const violations: any[] = employee?.violations || [];
   const loans: any[] = employee?.loans || [];
   const overtime: any[] = employee?.overtime || [];
+  // HR-001 / #1799 priority #1 — fed by the GET /:id Promise.all
+  // additions in routes/employees.ts. `userAccount` is null when the
+  // employee has no login row in `users`; `roles` is empty when the
+  // employee either has no account or has no rbac_user_roles grants.
+  const userAccount: any = employee?.userAccount ?? null;
+  const roles: any[] = employee?.roles || [];
 
   const hireDate = employee?.hireDate ? new Date(employee.hireDate) : null;
   const serviceDays = hireDate ? Math.floor((Date.now() - hireDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
@@ -486,7 +503,8 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             : tab.key === "leaves" ? leaves.length
             : tab.key === "payroll" ? payroll.length
             : tab.key === "violations" ? violations.length
-            : tab.key === "attendance" ? attendance.length : 0;
+            : tab.key === "attendance" ? attendance.length
+            : tab.key === "roles" ? roles.length : 0;
           return (
             <button
               key={tab.key}
@@ -737,6 +755,188 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* HR-001 / #1799 priority #1 — Tab: الحساب والدخول.
+          Surfaces the linked user-account row (or its absence) so an HR
+          officer doesn't have to bounce to /admin/users to know whether
+          the employee can sign in, when they last did, and whether the
+          account is locked. Sensitive material (passwordHash, MFA secret)
+          is never returned by the backend. */}
+      {activeTab === "account" && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-status-info-foreground" />
+              حساب الدخول
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!userAccount ? (
+              <div className="text-center py-8">
+                <Lock className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">لا يوجد حساب دخول مرتبط بهذا الموظف.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  يمكن إنشاء حساب من شاشة <a href="/admin/users" className="text-primary hover:underline">إدارة المستخدمين</a>.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">البريد الإلكتروني</p>
+                  <p className="font-mono text-sm" dir="ltr">{userAccount.email || "-"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">الدور الرئيسي (legacy)</p>
+                  <p className="text-sm">{userAccount.role || "-"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">حالة الحساب</p>
+                  {userAccount.isActive ? (
+                    <Badge className="bg-status-success-surface text-status-success-foreground">
+                      <CheckCircle2 className="h-3 w-3 me-1" /> نشط
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="bg-status-error-surface text-status-error-foreground">
+                      <XCircle className="h-3 w-3 me-1" /> معطل
+                    </Badge>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">آخر دخول</p>
+                  <p className="text-sm">
+                    {userAccount.lastLoginAt
+                      ? `${formatDateAr(userAccount.lastLoginAt)} · ${formatTimeAr(userAccount.lastLoginAt)}`
+                      : <span className="text-muted-foreground">لم يسجل دخول بعد</span>}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">محاولات فاشلة (7 أيام)</p>
+                  <p className="text-sm">
+                    {(userAccount.failedLoginAttempts ?? 0) > 0 ? (
+                      <span className="text-status-warning-foreground font-semibold">
+                        {userAccount.failedLoginAttempts}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">0</span>
+                    )}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">قفل حتى</p>
+                  <p className="text-sm">
+                    {userAccount.lockedUntil ? (
+                      <span className="text-status-error-foreground">
+                        <Lock className="h-3 w-3 inline me-1" />
+                        {formatDateAr(userAccount.lockedUntil)} · {formatTimeAr(userAccount.lockedUntil)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">لا قفل</span>
+                    )}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">تاريخ إنشاء الحساب</p>
+                  <p className="text-sm">{userAccount.createdAt ? formatDateAr(userAccount.createdAt) : "-"}</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* HR-001 / #1799 priority #1 — Tab: الأدوار والصلاحيات.
+          Lists every rbac_user_roles row attached to the employee's user
+          account, scoped to the current company. Primary role surfaces
+          first (is_primary DESC), then by level. Expired grants are
+          shown but visually faded so the HR officer knows the role is
+          no longer active. The "Effective Permissions" deep link goes
+          to /admin/users/:id (RBAC-004 — the viewer UI itself is still
+          a stub per the inventory doc; this is the entry point). */}
+      {activeTab === "roles" && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-purple-600" />
+              الأدوار النشطة ({roles.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!userAccount ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground">يتطلب وجود حساب دخول أولاً.</p>
+              </div>
+            ) : roles.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground">لا توجد أدوار RBAC مسندة لهذا الموظف.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  يمكن إسناد الأدوار من <a href={`/admin/users/${userAccount.id}`} className="text-primary hover:underline">شاشة المستخدم</a>.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {roles.map((r) => {
+                  const isExpired = r.expiresAt && new Date(r.expiresAt) < new Date();
+                  return (
+                    <div
+                      key={r.userRoleId}
+                      className={cn(
+                        "flex items-center justify-between gap-3 p-3 rounded-lg border",
+                        isExpired ? "opacity-50 bg-muted/30" : "bg-surface-subtle/30"
+                      )}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div
+                          className="w-2 h-8 rounded-full"
+                          style={{ backgroundColor: r.color || "#94a3b8" }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm">{r.labelAr || r.roleKey}</span>
+                            {r.isPrimary && (
+                              <Badge variant="outline" className="text-[10px] gap-1 border-amber-400 text-amber-700">
+                                <Star className="h-2.5 w-2.5" /> رئيسي
+                              </Badge>
+                            )}
+                            {r.isTemplate && (
+                              <Badge variant="secondary" className="text-[10px]">قالب</Badge>
+                            )}
+                            {isExpired && (
+                              <Badge variant="secondary" className="text-[10px] bg-status-error-surface text-status-error-foreground">
+                                منتهي
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                            <span className="font-mono" dir="ltr">{r.roleKey}</span>
+                            {r.level != null && <span>· مستوى {r.level}</span>}
+                            {r.labelEn && <span>· {r.labelEn}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-end text-xs text-muted-foreground shrink-0">
+                        <div>أسند: {r.assignedAt ? formatDateAr(r.assignedAt) : "-"}</div>
+                        {r.expiresAt && (
+                          <div className={isExpired ? "text-status-error" : ""}>
+                            ينتهي: {formatDateAr(r.expiresAt)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="pt-2 border-t mt-3">
+                  <a
+                    href={`/admin/users/${userAccount.id}`}
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    عرض الصلاحيات الفعلية الكاملة (Effective Permissions) →
+                  </a>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === "attendance" && (
