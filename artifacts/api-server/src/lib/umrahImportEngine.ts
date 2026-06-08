@@ -137,6 +137,53 @@ export const UMRAH_FIELD_LABELS_AR: Record<string, string> = {
   expiryDate: "تاريخ الانتهاء",
 };
 
+// ---------------------------------------------------------------------------
+// Field-group catalog — used by the wizard's column-mapping dropdown to
+// render headings (المعتمر / الوكيل / الفنادق ...) instead of a flat
+// 50-item alphabetical list. Each engine field maps to exactly one
+// group. Groups are ordered logically (pilgrim → identity → agent →
+// travel → status → finance) so the dropdown reads top-down the way an
+// operator skims the file from left to right.
+// ---------------------------------------------------------------------------
+export const UMRAH_FIELD_GROUP_LABELS_AR: Record<string, string> = {
+  pilgrim: "بيانات المعتمر",
+  identity: "الجواز والتأشيرة",
+  agent: "الوكيل والمكتب",
+  group: "المجموعة",
+  travel: "الدخول والخروج",
+  status: "الحالة والإقامة",
+  finance: "المالية",
+};
+
+export const UMRAH_FIELD_GROUPS: Record<string, keyof typeof UMRAH_FIELD_GROUP_LABELS_AR> = {
+  // pilgrim
+  nuskNumber: "pilgrim", fullName: "pilgrim", nationality: "pilgrim",
+  gender: "pilgrim", country: "pilgrim",
+  // identity
+  passportNumber: "identity", passportExpiry: "identity", visaNumber: "identity",
+  borderNumber: "identity", mofaNumber: "identity",
+  // agent / sub-agent
+  nuskAgentNumber: "agent", agentName: "agent",
+  nuskCode: "agent", subAgentName: "agent",
+  // group
+  nuskGroupNumber: "group", groupName: "group",
+  // travel
+  entryDate: "travel", exitDate: "travel",
+  entryPort: "travel", entryFlight: "travel",
+  exitPort: "travel", exitFlight: "travel",
+  // status / stay
+  status: "status", isInsideKingdom: "status", hasUmrahPermit: "status",
+  programDuration: "status", actualStayDays: "status", overstayDays: "status",
+  // finance (vouchers)
+  nuskInvoiceNumber: "finance", mutamerCount: "finance",
+  groundServices: "finance", electronicFees: "finance",
+  visaFees: "finance", insuranceFees: "finance",
+  enrichmentServices: "finance", additionalServices: "finance",
+  transportTotal: "finance", hotelTotal: "finance",
+  refundAmount: "finance", netCost: "finance", totalAmount: "finance",
+  nuskStatus: "finance", issueDate: "finance", expiryDate: "finance",
+};
+
 const STATUS_MAP: Record<string, string> = {
   "داخل المملكة": "arrived",
   "خرج": "departed",
@@ -527,6 +574,19 @@ export interface ImportDiff {
    * a banner so the operator notices.
    */
   rowsWithoutAgent: number;
+  /**
+   * Rows with no `nuskGroupNumber` — same shape as `rowsWithoutAgent`
+   * but for the group dimension. They save with `groupId = NULL` and
+   * are invisible on agent → group → pilgrim rollups. Recoverable via
+   * the /umrah/import/:batchId/unlinked screen.
+   */
+  rowsWithoutGroup: number;
+  /**
+   * Rows with no `nuskCode` — same shape, sub-agent dimension. They
+   * save with `subAgentId = NULL` and don't appear on sub-agent
+   * statements. Recoverable via the same screen.
+   */
+  rowsWithoutSubAgent: number;
   totalRows: number;
   financialImpactCount: number;
 }
@@ -548,6 +608,8 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     unlinkedSubAgents: [],
     newAgentsToCreate: [],
     rowsWithoutAgent: 0,
+    rowsWithoutGroup: 0,
+    rowsWithoutSubAgent: 0,
     totalRows: rows.length,
     financialImpactCount: 0,
   };
@@ -655,6 +717,15 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
         else unlinkedMap.set(code, { name: String(row.subAgentName ?? row.nuskCode), count: 1 });
       }
 
+      // Group / sub-agent dimensions: same fallback shape as agent.
+      // resolveGroup returns null when `nuskGroupNumber` is missing
+      // → groupId = NULL on insert; same for resolveSubAgent vs
+      // `nuskCode`. Surface counts so the operator decides whether
+      // to (a) abort + re-prep the file, or (b) confirm and recover
+      // via /umrah/import/:batchId/unlinked.
+      if (!row.nuskGroupNumber) diff.rowsWithoutGroup++;
+      if (!row.nuskCode) diff.rowsWithoutSubAgent++;
+
       // Agent tracking — mirrors resolveAgent's match priority. Any row
       // that names an agent (number or name) which DOESN'T match an
       // existing umrah_agents row will trigger auto-creation on confirm.
@@ -754,6 +825,18 @@ export interface ImportResult {
   skippedCount: number;
   errorCount: number;
   financialImpactCount: number;
+  /**
+   * Number of inserted/updated pilgrims that landed with `agentId = NULL`
+   * because resolveAgent couldn't match (no nuskAgentNumber + no
+   * agentName). They are recoverable via the
+   * /umrah/import/:batchId/unlinked screen. Vouchers imports always
+   * return 0 here — the dimension only applies to mutamers.
+   */
+  unlinkedAgentCount: number;
+  /** Same shape, group dimension (groupId NULL). */
+  unlinkedGroupCount: number;
+  /** Same shape, sub-agent dimension (subAgentId NULL). */
+  unlinkedSubAgentCount: number;
 }
 
 export async function confirmMutamersImport(
@@ -771,6 +854,7 @@ export async function confirmMutamersImport(
     const batchId = batchRes.rows[0].id;
 
     let newCount = 0, updatedCount = 0, skippedCount = 0, errorCount = 0, financialImpactCount = 0;
+    let unlinkedAgentCount = 0, unlinkedGroupCount = 0, unlinkedSubAgentCount = 0;
     const BATCH_SIZE = 200;
 
     for (let offset = 0; offset < rows.length; offset += BATCH_SIZE) {
@@ -796,6 +880,15 @@ export async function confirmMutamersImport(
           const groupId = await resolveGroup(client, scope, row);
           const agentId = await resolveAgent(client, scope, row);
           const subAgentId = await resolveSubAgent(client, scope, row, agentId);
+
+          // Track unlinkage so the operator gets a precise count on
+          // the batch detail row + can drill into the recovery page.
+          // Counted before the upsert branches so updates and creates
+          // both contribute (an UPDATE that doesn't fix the FK still
+          // leaves the row unlinked).
+          if (agentId === null) unlinkedAgentCount++;
+          if (groupId === null) unlinkedGroupCount++;
+          if (subAgentId === null) unlinkedSubAgentCount++;
 
           const ex = existMap.get(String(row.nuskNumber));
           if (!ex) {
@@ -899,17 +992,36 @@ export async function confirmMutamersImport(
 
     await client.query(
       `UPDATE umrah_import_batches SET "newCount"=$1,"updatedCount"=$2,"skippedCount"=$3,
-       "errorCount"=$4,"financialImpactCount"=$5,"updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
-      [newCount, updatedCount, skippedCount, errorCount, financialImpactCount, batchId, scope.companyId]
+       "errorCount"=$4,"financialImpactCount"=$5,
+       "unlinkedAgentCount"=$6,"unlinkedGroupCount"=$7,"unlinkedSubAgentCount"=$8,
+       "updatedAt"=NOW() WHERE id=$9 AND "companyId"=$10`,
+      [newCount, updatedCount, skippedCount, errorCount, financialImpactCount,
+       unlinkedAgentCount, unlinkedGroupCount, unlinkedSubAgentCount,
+       batchId, scope.companyId]
     );
 
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "umrah.mutamers.imported", entity: "umrah_import_batches", entityId: batchId,
-      after: { newCount, updatedCount, skippedCount, errorCount },
+      after: { newCount, updatedCount, skippedCount, errorCount,
+               unlinkedAgentCount, unlinkedGroupCount, unlinkedSubAgentCount },
     }).catch((e) => logger.error(e, "umrah import event emit failed"));
 
-    return { batchId, newCount, updatedCount, skippedCount, errorCount, financialImpactCount };
+    // Extra signal so audit dashboards can wake operators on batches
+    // that mass-orphan rows. Only emitted when something is actually
+    // unlinked — quiet by default. Matches the §10 events catalog.
+    if (unlinkedAgentCount > 0 || unlinkedGroupCount > 0 || unlinkedSubAgentCount > 0) {
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "umrah.import.unlinked_rows_detected", entity: "umrah_import_batches", entityId: batchId,
+        after: { unlinkedAgentCount, unlinkedGroupCount, unlinkedSubAgentCount },
+      }).catch((e) => logger.error(e, "umrah import event emit failed"));
+    }
+
+    return {
+      batchId, newCount, updatedCount, skippedCount, errorCount, financialImpactCount,
+      unlinkedAgentCount, unlinkedGroupCount, unlinkedSubAgentCount,
+    };
   });
 }
 
@@ -1131,7 +1243,13 @@ export async function confirmVouchersImport(
       after: { newCount, updatedCount, skippedCount, errorCount },
     }).catch((e) => logger.error(e, "umrah import event emit failed"));
 
-    return { batchId, newCount, updatedCount, skippedCount, errorCount, financialImpactCount };
+    return {
+      batchId, newCount, updatedCount, skippedCount, errorCount, financialImpactCount,
+      // Vouchers don't carry agent/group/sub-agent FK linkage on the
+      // pilgrim, so the dimensions don't apply here. Zero out for
+      // type-shape parity with confirmMutamersImport.
+      unlinkedAgentCount: 0, unlinkedGroupCount: 0, unlinkedSubAgentCount: 0,
+    };
   });
 }
 
