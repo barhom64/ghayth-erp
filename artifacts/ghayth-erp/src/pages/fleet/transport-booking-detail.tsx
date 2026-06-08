@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AssignmentSuggestDialog } from "@/components/shared/assignment-suggest-dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -13,7 +15,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import {
-  ArrowLeft, Calendar, MapPin, Users, Package, User, Truck, Clock,
+  ArrowLeft, Calendar, MapPin, Users, Package, User, Truck, Clock, Wand2,
 } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -129,6 +131,7 @@ export default function TransportBookingDetail() {
   const [, params] = useRoute("/fleet/transport/bookings/:id");
   const [, navigate] = useLocation();
   const id = params?.id;
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: BookingDetail }>(
     ["transport-booking", id || ""],
@@ -218,6 +221,14 @@ export default function TransportBookingDetail() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSuggestOpen(true)}
+            disabled={!id}
+          >
+            <Wand2 className="h-4 w-4 me-1" />اقترح إسناداً
+          </Button>
           <Link href="/fleet/transport/dispatch">
             <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />لوحة التوزيع</Button>
           </Link>
@@ -345,6 +356,14 @@ export default function TransportBookingDetail() {
           )}
         </CardContent>
       </Card>
+      {id && (
+        <AssignmentSuggestDialog
+          bookingId={Number(id)}
+          open={suggestOpen}
+          onOpenChange={setSuggestOpen}
+          onSelect={() => navigate("/fleet/transport/dispatch")}
+        />
+      )}
     </PageShell>
   );
 }
