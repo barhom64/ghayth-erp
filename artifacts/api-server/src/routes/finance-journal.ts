@@ -322,7 +322,14 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
               json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines,
               MAX(coa.name) FILTER (WHERE jl.debit > 0) AS "accountName",
               COALESCE(SUM(jl.debit), 0) AS amount,
-              e_cre.name AS "createdByName"
+              e_cre.name AS "createdByName",
+              (SELECT COALESCE(e_apr.name, u_apr.email)
+                 FROM approval_actions aa
+                 LEFT JOIN users u_apr ON u_apr.id = aa."actionBy"
+                 LEFT JOIN employees e_apr ON e_apr.id = u_apr."employeeId" AND e_apr."deletedAt" IS NULL
+                WHERE aa."entityType" = 'expense' AND aa."entityId" = je.id
+                  AND aa.action = 'approved' AND aa."companyId" = je."companyId"
+                ORDER BY aa.id DESC LIMIT 1) AS "approvedByName"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
@@ -1005,14 +1012,18 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS type,
               je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
-              je."relatedEntityType", je."relatedEntityId", je."operationType",
-              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status
+              je."relatedEntityType", je."relatedEntityId", je."operationType", je."costCenter",
+              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status,
+              e_cre.name AS "createdByName"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id = je."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where} AND je."deletedAt" IS NULL AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
                 je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
-                je."relatedEntityType", je."relatedEntityId", je."operationType"
+                je."relatedEntityType", je."relatedEntityId", je."operationType", je."costCenter",
+                e_cre.name
        ORDER BY je."createdAt" DESC LIMIT 100`,
       params
     );

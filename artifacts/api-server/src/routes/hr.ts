@@ -1015,7 +1015,23 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
       `SELECT "gpsRadiusMeters" FROM attendance_policies WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    const gpsRadius = Number(policy?.gpsRadiusMeters ?? 500);
+    // HR-004 / #1799 priority #6 wiring (check-out branch) — overlay
+    // per-category resolution on top of the company-default GPS radius
+    // AND derive the exempt flag so the early-departure deduction +
+    // violation INSERTs further down are SKIPPED for managers and
+    // executives. Same pattern as the check-in path (HR-003).
+    const resolvedCheckoutPolicy = scope.activeAssignmentId
+      ? await resolveAttendancePolicy({
+          companyId: scope.companyId,
+          assignmentId: scope.activeAssignmentId,
+        }).catch((e) => { logger.error(e, "attendance policy resolution failed on check-out — falling back to company default"); return null; })
+      : null;
+    const gpsRadius = resolvedCheckoutPolicy
+      ? resolvedCheckoutPolicy.gpsRadiusMeters
+      : Number(policy?.gpsRadiusMeters ?? 500);
+    const autoDeductionEnabledCheckout = resolvedCheckoutPolicy
+      ? resolvedCheckoutPolicy.autoDeductionEnabled
+      : true;
     let checkOutDistanceMeters: number | null = null;
     let isCheckOutOutOfRange = false;
     if (lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
@@ -1111,8 +1127,17 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
       }
 
       // Early departure violation + deduction
+      // HR-004 / #1799 priority #6 — `autoDeductionEnabledCheckout`
+      // gates both the violation INSERT and the deduction INSERT for
+      // exempt categories (manager / executive). When the policy says
+      // FALSE, early departure is still REFLECTED in the attendance
+      // row (checkOut + earlyDepartureMinutes via the monthly stat
+      // update above), but no `employee_violations` row is created
+      // and no `attendance_deductions` row is queued for payroll.
+      // Result: managers stay visible in early-departure reports but
+      // never face an automatic salary deduction.
       let earlyViolationId: number | null = null;
-      if (earlyDepartureMinutes > 0 && !excusedEarlyLeave) {
+      if (earlyDepartureMinutes > 0 && !excusedEarlyLeave && autoDeductionEnabledCheckout) {
         const vRes = await client.query(
           `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
            VALUES ($1,$2,'early_departure',$3,'medium',$4,$5)

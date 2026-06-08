@@ -382,9 +382,12 @@ invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action:
               i.total, i."paidAmount", i."vatAmount", i.subtotal, i."vatRate",
               i."clientId", i.description, i."paymentTerms", i.notes,
               i."isTaxLinked", i."zatcaStatus",
-              c.name AS "clientName"
+              c.name AS "clientName",
+              e_cre.name AS "createdByName"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id = i."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY i."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
