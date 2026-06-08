@@ -316,7 +316,16 @@ transportIntegrationRouter.get(
       const scope = req.scope!;
       const { fromDate, toDate } = req.query as Record<string, string | undefined>;
       const from = fromDate || todayISO();
-      const to = toDate || new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10);
+      // 30 days from todayISO() — string arithmetic keeps the result
+      // in the same calendar timezone as the rest of the system.
+      let to: string;
+      if (toDate) {
+        to = toDate;
+      } else {
+        const [y, m, d] = from.split("-").map(Number);
+        const dt = new Date(Date.UTC(y!, (m! - 1), d! + 30));
+        to = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+      }
 
       const rows = await rawQuery<{
         id: number; bookingNumber: string;
@@ -439,6 +448,24 @@ transportIntegrationRouter.post(
         blockers?: string[];
       }> = [];
 
+      // Cross-batch claim tracker — prevents two bookings in the
+      // batch from picking the same (vehicle | driver) for the same
+      // time window. Without this, the engine ranks each booking
+      // independently and two overlapping bookings might both land
+      // on driver #3 + truck #7, then the second INSERT fails on
+      // the tstzrange conflict.
+      const claimedVehicleWindows: Array<{ vehicleId: number; start: string; end: string }> = [];
+      const claimedDriverWindows:  Array<{ driverId: number;  start: string; end: string }> = [];
+      const overlaps = (
+        aStart: string, aEnd: string, bStart: string, bEnd: string,
+      ): boolean => {
+        const aS = new Date(aStart).getTime();
+        const aE = new Date(aEnd).getTime();
+        const bS = new Date(bStart).getTime();
+        const bE = new Date(bEnd).getTime();
+        return aS < bE && bS < aE;
+      };
+
       for (const bookingId of b.bookingIds) {
         try {
           const [bk] = await rawQuery<{
@@ -512,36 +539,71 @@ transportIntegrationRouter.post(
             continue;
           }
 
-          // Run suggest-assignment engine.
+          // Run suggest-assignment engine. Request more candidates
+          // (limit 10) so we have alternates if the top one is
+          // already claimed by an earlier booking in this batch.
           const candidates = await suggestAssignments({
             companyId: scope.companyId,
             branchId: scope.branchId ?? null,
             bookingId,
             scheduledStartAt: startAt,
             scheduledEndAt: endAt,
-            limit: 5,
+            limit: 10,
           });
-          const top = candidates[0];
+
+          // Cross-batch dedup: skip candidates whose (vehicle | driver)
+          // is already claimed for an overlapping window earlier in
+          // the same batch. The first candidate that clears all the
+          // existing claims AND has no blockers AND meets minScore
+          // wins.
+          let top: typeof candidates[0] | undefined;
+          for (const c of candidates) {
+            if (c.blockers.length > 0) continue;
+            if (c.score < minScore) continue;
+            const vehicleClaimed = claimedVehicleWindows.some(
+              (w) => w.vehicleId === c.vehicleId && overlaps(startAt, endAt, w.start, w.end),
+            );
+            const driverClaimed = claimedDriverWindows.some(
+              (w) => w.driverId === c.driverId && overlaps(startAt, endAt, w.start, w.end),
+            );
+            if (!vehicleClaimed && !driverClaimed) {
+              top = c;
+              break;
+            }
+          }
+
           if (!top) {
-            results.push({ bookingId, outcome: "no_candidate", reason: "لم يجد المحرّك مرشحاً" });
-            continue;
-          }
-          if (top.blockers.length > 0) {
-            results.push({
-              bookingId, outcome: "needs_attention",
-              score: top.score,
-              vehicleId: top.vehicleId, driverId: top.driverId,
-              blockers: top.blockers,
-            });
-            continue;
-          }
-          if (top.score < minScore) {
-            results.push({
-              bookingId, outcome: "needs_attention",
-              score: top.score,
-              vehicleId: top.vehicleId, driverId: top.driverId,
-              reason: `أعلى درجة ${top.score} أقل من الحد ${minScore}`,
-            });
+            // Fall through: report the best (blocked or below-threshold)
+            // suggestion so the operator can see what the engine
+            // considered.
+            const fallback = candidates[0];
+            if (!fallback) {
+              results.push({ bookingId, outcome: "no_candidate", reason: "لم يجد المحرّك مرشحاً" });
+              continue;
+            }
+            if (fallback.blockers.length > 0) {
+              results.push({
+                bookingId, outcome: "needs_attention",
+                score: fallback.score,
+                vehicleId: fallback.vehicleId, driverId: fallback.driverId,
+                blockers: fallback.blockers,
+              });
+            } else if (fallback.score < minScore) {
+              results.push({
+                bookingId, outcome: "needs_attention",
+                score: fallback.score,
+                vehicleId: fallback.vehicleId, driverId: fallback.driverId,
+                reason: `أعلى درجة ${fallback.score} أقل من الحد ${minScore}`,
+              });
+            } else {
+              // All clean candidates conflict with earlier batch claims.
+              results.push({
+                bookingId, outcome: "needs_attention",
+                score: fallback.score,
+                vehicleId: fallback.vehicleId, driverId: fallback.driverId,
+                reason: "كل المرشحين المؤهلين محجوزون لحجز آخر في نفس الدفعة",
+              });
+            }
             continue;
           }
 
@@ -565,6 +627,12 @@ transportIntegrationRouter.post(
               WHERE id = $1 AND "companyId" = $2`,
             [lineId, scope.companyId],
           );
+
+          // Record the claim so subsequent bookings in this batch
+          // don't pick the same (vehicle | driver) for an overlapping
+          // window.
+          claimedVehicleWindows.push({ vehicleId: top.vehicleId, start: startAt, end: endAt });
+          claimedDriverWindows.push({  driverId:  top.driverId,  start: startAt, end: endAt });
 
           results.push({
             bookingId,
