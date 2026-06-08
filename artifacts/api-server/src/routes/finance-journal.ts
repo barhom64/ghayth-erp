@@ -841,7 +841,10 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       // maintenance op (gated on maintenanceTicket.create, so ordinary
       // expenses are untouched). Runs in THIS txn, so a JE/approval failure
       // rolls the ticket back too — never a ticket without its expense.
-      if (maintenanceTicket?.create) {
+      // `!posted.alreadyExists` guards idempotent replays: a retried expense
+      // returns the existing JE without re-posting, so we must NOT insert a
+      // second maintenance ticket for it.
+      if (maintenanceTicket?.create && !posted.alreadyExists) {
         const isVehicle = entityLink.vehicleId != null;
         const isProperty = entityLink.unitId != null || entityLink.propertyId != null;
         if (isVehicle || isProperty) {
