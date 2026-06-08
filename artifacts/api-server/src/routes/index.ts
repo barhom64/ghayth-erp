@@ -79,6 +79,7 @@ import { transportBookingsRouter } from "./transport-bookings.js";
 import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
 import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
+import { transportPlanningRouter } from "./transport-planning.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -395,11 +396,10 @@ router.use(requireModule("fleet"), requireGuards("financial"), vehicleProfileRou
 // /transport/price-rules, /transport/service-lines, /transport/invoice-batches.
 router.use(requireModule("fleet"), requireGuards("financial"), transportPricingRouter);
 // #1733 follow-up — admin CRUD for the two rules engines created in
-// migration 269: fleet_expense_rules (3-bucket classification of fuel /
-// maintenance / violations) + transport_intake_rules (Comment 5/6
-// Intake Engine defaults). URLs land at /fleet/expense-rules and
-// /transport/intake-rules.
+// migration 269.
 router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRouter);
+// #1812 Planning engine.
+router.use(requireModule("fleet"), requireGuards("financial"), transportPlanningRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);
