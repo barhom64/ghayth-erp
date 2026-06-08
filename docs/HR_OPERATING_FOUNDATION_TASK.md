@@ -405,7 +405,7 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 | 3 | نموذج "ماذا يظهر لمن ومتى" | 🟡 RBAC scope يفي بالغرض | UI viewer للـ Effective Permissions per user (RBAC-004) |
 | 4 | كتالوج خدمات HR | 🟡 موجود مبعثر في القائمة | بناء صفحة "خدمات HR" تجمع الخدمات (طلب إجازة، طلب OT، عذر، قرض، ...) كـ catalog |
 | 5 | محرك الطلبات وسلاسل الاعتماد | 🟢 موجود | توحيد UI inbox واحد بدل تشتيت |
-| 6 | الحضور حسب طبيعة العمل | 🔴 سياسة واحدة | بناء `attendance_policies_per_category` + `attendancePolicyEngine` |
+| 6 | الحضور حسب طبيعة العمل | 🟡 الأساس مبني (HR-002): جداول + 6 فئات seed + engine. بقي: ربط check-in/check-out + auto-violation cron باستهلاك الـ engine. | بناء `attendance_policies_per_category` + `attendancePolicyEngine` ✅ — wiring في PR لاحق |
 | 7 | التتبع حسب السياسة | 🔴 لا توجد persistent tracking | إنشاء `field_tracking_points` + ingestion API + policy frequency |
 | 8 | الربط المالي | 🟢 موجود (payroll GL + WPS) | لا تغيير معماري |
 | 9 | العهد والأصول | 🟡 موجود subsidiary accounts فقط | إضافة `employee_assets` bridge |
@@ -420,7 +420,8 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 | PR | ما تم | التاريخ |
 |---|---|---|
 | #1803 | مرحلة 0 — وثيقة الجرد + خارطة الـ12 أولوية + قسم نموذج المؤسسة. | 2026-06-07 |
-| HR-001 | الأولوية #1 جزئية — تبويبا «الحساب والدخول» + «الأدوار والصلاحيات» داخل ملف الموظف 360. البَك إند يعيد `userAccount` (single row من `users`، بدون passwordHash/MFA) + `roles` (array من `rbac_user_roles` مع primary/templates/expiry). الواجهة تعرض حالة الحساب + آخر دخول + محاولات فاشلة + قفل + قائمة الأدوار مع primary highlight + expired styling + deep-link لشاشة الصلاحيات الفعلية. التبويبات الآن 11/14 — باقي 3 (titles+positions، contract embed، custodies embed). | 2026-06-08 |
+| #1807 | الأولوية #1 جزئية — تبويبا «الحساب والدخول» + «الأدوار والصلاحيات» داخل ملف الموظف 360. البَك إند يعيد `userAccount` (single row من `users`، بدون passwordHash/MFA) + `roles` (array من `rbac_user_roles` مع primary/templates/expiry). الواجهة تعرض حالة الحساب + آخر دخول + محاولات فاشلة + قفل + قائمة الأدوار مع primary highlight + expired styling + deep-link لشاشة الصلاحيات الفعلية. التبويبات الآن 11/14 — باقي 3 (titles+positions، contract embed، custodies embed). | 2026-06-08 |
+| HR-002 | **الأولوية #6 — الحضور حسب فئة الموظف**. Migration 270 يُضيف: (1) جدول `employee_categories` مع seed لـ 6 فئات نظام (worker/driver/field/office/manager/executive) — manager و executive لديهما `exemptFromAutoDeduction = TRUE`؛ driver لديه `trackingFrequencySeconds = 30`؛ field لديه `300`. (2) جدول `attendance_policies_per_category` للـ override لكل (company × category). (3) عمود `employee_assignments.categoryKey` (nullable) + backfill heuristic من role/jobTitle. **محرك جديد** `lib/attendancePolicyEngine.ts` يحلّ السياسة الفعلية بـ 3 طبقات (override → system category → company default) مع batch resolver للـ cron jobs. Backward-compatible: NULL category يُرجِع نفس السلوك القديم. 18/18 smoke tests خضراء. | 2026-06-08 |
 
 ---
 
