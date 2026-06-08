@@ -276,7 +276,7 @@ describe("Memo step 3: GM final decision", () => {
 
   it("GM decision inserts attendance_deductions on approval", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/gm-decision"');
-    const section = DISCIPLINE_ROUTE.slice(idx, idx + 4000);
+    const section = DISCIPLINE_ROUTE.slice(idx, idx + 4600);
     expect(section).toContain("INSERT INTO attendance_deductions");
     expect(section).toContain("pending_payroll");
   });
@@ -290,14 +290,14 @@ describe("Memo step 3: GM final decision", () => {
 
   it("GM decision notifies employee of result", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/gm-decision"');
-    const section = DISCIPLINE_ROUTE.slice(idx, idx + 6000);
+    const section = DISCIPLINE_ROUTE.slice(idx, idx + 6600);
     expect(section).toContain("تم اعتماد جزاء المحضر");
     expect(section).toContain("تم رفض المحضر");
   });
 
   it("GM decision logs penalty_applied event on system", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/gm-decision"');
-    const section = DISCIPLINE_ROUTE.slice(idx, idx + 6000);
+    const section = DISCIPLINE_ROUTE.slice(idx, idx + 6600);
     expect(section).toContain("penalty_applied");
     expect(section).toContain("تم تطبيق الجزاء على كشف الرواتب");
   });

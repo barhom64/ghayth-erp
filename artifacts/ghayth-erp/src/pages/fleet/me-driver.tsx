@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import {
   PageShell,
 } from "@workspace/ui-core";
 import {
-  Truck, Package, MapPin, Activity, CheckCircle2, Route as RouteIcon, Weight,
+  Truck, Package, MapPin, Activity, CheckCircle2, Route as RouteIcon, Weight, Navigation,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -157,7 +158,17 @@ export default function MeDriver() {
   const activeCargo = cargo.find((m) => m.status === "in_transit");
 
   return (
-    <PageShell title={`مرحباً، ${me.name}`} subtitle="لوحة السائق — رحلاتك وبضائعك">
+    <PageShell
+      title={`مرحباً، ${me.name}`}
+      subtitle="لوحة السائق — رحلاتك وبضائعك"
+      actions={
+        <Link href="/me/driver/navigation">
+          <Button size="sm" variant="default">
+            <Navigation className="h-4 w-4 me-1" />الملاحة
+          </Button>
+        </Link>
+      }
+    >
       <Card className="mb-4">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">

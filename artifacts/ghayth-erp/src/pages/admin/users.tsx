@@ -53,28 +53,16 @@ import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-
-const ROLE_OPTIONS = [
-  { value: "owner", label: "مالك النظام" },
-  { value: "general_manager", label: "مدير عام" },
-  { value: "hr_manager", label: "مدير الموارد البشرية" },
-  { value: "finance_manager", label: "مدير المالية" },
-  { value: "fleet_manager", label: "مدير الأسطول" },
-  { value: "property_manager", label: "مدير الأملاك" },
-  { value: "projects_manager", label: "مدير المشاريع" },
-  { value: "warehouse_manager", label: "مدير المستودعات" },
-  { value: "legal_manager", label: "مدير الشؤون القانونية" },
-  { value: "support_manager", label: "مدير الدعم الفني" },
-  { value: "crm_manager", label: "مدير المبيعات" },
-  { value: "bi_manager", label: "مدير ذكاء الأعمال" },
-  { value: "branch_manager", label: "مدير فرع" },
-  { value: "employee", label: "موظف" },
-];
+import { useRbacRoles } from "./use-rbac-roles";
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["admin-users"], "/admin/users");
   const { data: employeesData } = useApiQuery<any>(["employees-list-admin"], "/employees?limit=200");
+  // Live RBAC roles (incl. custom ones) drive every role dropdown via the
+  // shared hook, so this page and the /admin users tab stay in sync with the
+  // role composer and a role you build is assignable.
+  const { options: roleOptions } = useRbacRoles();
   const [showForm, setShowForm] = useState(false);
   const [createdUser, setCreatedUser] = useState<any>(null);
   const [resetUserId, setResetUserId] = useState<number | null>(null);
@@ -89,7 +77,7 @@ export default function AdminUsersPage() {
   const items: any[] = data?.data || [];
   const employees: any[] = employeesData?.data || [];
 
-  const roleLabel = (r: string) => ROLE_OPTIONS.find(o => o.value === r)?.label || r;
+  const roleLabel = (r: string) => roleOptions.find(o => o.value === r)?.label || r;
 
   const filtered = items.filter(u => {
     if (search && !u.email?.includes(search) && !u.employeeName?.includes(search)) return false;
@@ -338,7 +326,7 @@ export default function AdminUsersPage() {
           >
             <FormGrid cols={2}>
               <FormEmailField name="email" label="البريد الإلكتروني" required className="md:col-span-2" placeholder="user@company.com" />
-              <FormSelectField name="role" label="الدور الوظيفي" options={ROLE_OPTIONS} />
+              <FormSelectField name="role" label="الدور الوظيفي" options={roleOptions} />
               <FormSelectField
                 name="employeeId"
                 label="ربط بموظف (اختياري)"
@@ -401,7 +389,7 @@ export default function AdminUsersPage() {
               }}
             >
               <FormGrid cols={3}>
-                <FormSelectField name="role" label="الدور الوظيفي" options={ROLE_OPTIONS} />
+                <FormSelectField name="role" label="الدور الوظيفي" options={roleOptions} />
                 <FormSelectField
                   name="employeeId"
                   label="ربط بموظف"
@@ -467,7 +455,7 @@ export default function AdminUsersPage() {
               <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">كل الأدوار</SelectItem>
-                {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                {roleOptions.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterStatus || "_none"} onValueChange={(v) => setFilterStatus(v === "_none" ? "" : v)}>
@@ -494,11 +482,15 @@ export default function AdminUsersPage() {
 
 function RoleAssignmentSection({ users }: { users: any[] }) {
   const { toast } = useToast();
-  const { data: predefinedData } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
+  // Same authoritative RBAC v2 list as the rest of the page (custom roles
+  // included). Shared hook → React Query dedupes to one request.
+  const { roles } = useRbacRoles();
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [userRoles, setUserRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const predefinedRoles: any[] = predefinedData?.data || [];
+  const predefinedRoles: any[] = roles.map((r) => ({
+    roleKey: r.role_key, label: r.label_ar || r.role_key, level: r.level,
+  }));
 
   const loadUserRoles = async (userId: number) => {
     setLoading(true);
@@ -555,8 +547,8 @@ function RoleAssignmentSection({ users }: { users: any[] }) {
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">إضافة دور</p>
-            <div className="space-y-1">
-              {predefinedRoles.filter(r => !assignedKeys.includes(r.roleKey)).slice(0, 8).map((role) => (
+            <div className="space-y-1 max-h-64 overflow-y-auto pe-1">
+              {predefinedRoles.filter(r => !assignedKeys.includes(r.roleKey)).map((role) => (
                 <button key={role.roleKey} onClick={() => assignRole(role.roleKey)}
                   className="w-full text-start flex items-center gap-2 p-2 rounded-lg border border-dashed hover:border-blue-400 hover:bg-status-info-surface text-xs transition-all">
                   <span className="font-medium">{role.label}</span>

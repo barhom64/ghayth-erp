@@ -90,5 +90,4 @@ CREATE TABLE IF NOT EXISTS approval_authorities (
 );
 
 CREATE INDEX IF NOT EXISTS idx_approval_authorities_assignment
-  ON approval_authorities("assignmentId")
-  WHERE "expiresAt" IS NULL OR "expiresAt" > now();
+  ON approval_authorities("assignmentId");

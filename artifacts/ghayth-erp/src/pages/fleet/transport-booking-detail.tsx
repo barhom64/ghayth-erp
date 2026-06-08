@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AssignmentSuggestDialog } from "@/components/shared/assignment-suggest-dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -13,7 +15,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import {
-  ArrowLeft, Calendar, MapPin, Users, Package, User, Truck, Clock,
+  ArrowLeft, Calendar, MapPin, Users, Package, User, Truck, Clock, Wand2,
 } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -47,6 +49,9 @@ interface BookingDetail {
   hotelName: string | null;
   hotelLocation: string | null;
   beneficiaryType: string | null;
+  contractId: number | null;
+  projectId: number | null;
+  waqfId: number | null;
   status: string;
   notes: string | null;
   createdAt: string;
@@ -129,6 +134,7 @@ export default function TransportBookingDetail() {
   const [, params] = useRoute("/fleet/transport/bookings/:id");
   const [, navigate] = useLocation();
   const id = params?.id;
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: BookingDetail }>(
     ["transport-booking", id || ""],
@@ -218,6 +224,14 @@ export default function TransportBookingDetail() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSuggestOpen(true)}
+            disabled={!id}
+          >
+            <Wand2 className="h-4 w-4 me-1" />اقترح إسناداً
+          </Button>
           <Link href="/fleet/transport/dispatch">
             <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />لوحة التوزيع</Button>
           </Link>
@@ -235,6 +249,48 @@ export default function TransportBookingDetail() {
         </div>
       }
     >
+      {/* #1812 linked-source banner — proves the booking isn't an
+          island. Surfaces the source entity (umrah group, contract,
+          project, waqf) and lets the operator jump back to it. */}
+      {(b.umrahGroupId || b.contractId || b.projectId || b.waqfId || b.customerId || b.bookingSource !== "manual_entry") && (
+        <Card className="mb-4 border-status-info-foreground/30 bg-status-info-surface/40">
+          <CardContent className="p-3 flex items-center gap-3 flex-wrap text-xs">
+            <Badge variant="outline" className="bg-status-info-surface">
+              مصدر: {SOURCE_LABEL[b.bookingSource] ?? b.bookingSource}
+            </Badge>
+            {b.umrahGroupId && (
+              <Link href={`/umrah/groups/${b.umrahGroupId}`}>
+                <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
+                  <Users className="h-3 w-3" />مجموعة عمرة #{b.umrahGroupId}
+                </a>
+              </Link>
+            )}
+            {b.contractId && (
+              <span className="inline-flex items-center gap-1 text-status-info-foreground">
+                <Calendar className="h-3 w-3" />عقد #{b.contractId}
+              </span>
+            )}
+            {b.projectId && (
+              <span className="inline-flex items-center gap-1 text-status-info-foreground">
+                مشروع #{b.projectId}
+              </span>
+            )}
+            {b.waqfId && (
+              <span className="inline-flex items-center gap-1 text-status-info-foreground">
+                وقف #{b.waqfId}
+              </span>
+            )}
+            {b.customerId && (
+              <Link href={`/clients/${b.customerId}`}>
+                <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
+                  <User className="h-3 w-3" />عميل #{b.customerId}
+                </a>
+              </Link>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -345,6 +401,14 @@ export default function TransportBookingDetail() {
           )}
         </CardContent>
       </Card>
+      {id && (
+        <AssignmentSuggestDialog
+          bookingId={Number(id)}
+          open={suggestOpen}
+          onOpenChange={setSuggestOpen}
+          onSelect={() => navigate("/fleet/transport/dispatch")}
+        />
+      )}
     </PageShell>
   );
 }

@@ -964,7 +964,14 @@ router.post("/memos/:id/gm-decision", authorize({ feature: "hr.discipline", acti
           // إدخال الخصم في attendance_deductions (pending_payroll) إن وجد مبلغ
           const totalDeduction = baseAmount + extraAmount;
           if (totalDeduction > 0) {
-            const period = memo.incidentDate.slice(0, 7);
+            // `incidentDate` arrives from pg as a Date object (the column is a
+            // `date`), so the old `.slice(0,7)` threw "slice is not a function"
+            // and broke the entire GM approval → penalty path. Derive the
+            // YYYY-MM payroll period from local date parts (TZ-safe; toISOString
+            // would shift the month at day boundaries).
+            const rawIncDate = memo.incidentDate as unknown as string | Date;
+            const incDate = rawIncDate instanceof Date ? rawIncDate : new Date(rawIncDate);
+            const period = `${incDate.getFullYear()}-${String(incDate.getMonth() + 1).padStart(2, "0")}`;
             await client.query(
               `INSERT INTO attendance_deductions
                  ("companyId","assignmentId",type,minutes,amount,period,status)

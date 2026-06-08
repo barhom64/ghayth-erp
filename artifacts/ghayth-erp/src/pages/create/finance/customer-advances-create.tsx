@@ -11,6 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ClientSelect, BranchSelect } from "@/components/shared/entity-selects";
+import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
+import { EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
+import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { todayLocal, formatCurrency } from "@/lib/formatters";
 
 const PAYMENT_METHODS = [
@@ -35,6 +38,8 @@ export default function CustomerAdvancesCreate() {
     branchId: "",
   });
 
+  const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
+
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const handleSubmit = async () => {
@@ -58,6 +63,8 @@ export default function CustomerAdvancesCreate() {
         // Multi-branch users must pick a branch (backend resolver throws
         // BRANCH_REQUIRED otherwise). Single-branch users can leave blank.
         branchId: form.branchId ? Number(form.branchId) : undefined,
+        // #1715 §6 — optional operation context, stamped on the cash line.
+        lineAllocation: allocTarget.target !== "none" ? buildAllocationPayload(allocTarget.allocation) : undefined,
       });
       toast({ title: "تم تسجيل الدفعة المقدمة" });
       setLocation("/finance/customer-advances");
@@ -146,6 +153,15 @@ export default function CustomerAdvancesCreate() {
             placeholder="سبب الدفعة المقدمة، تفاصيل الاتفاق، إلخ"
           />
         </FormFieldWrapper>
+      </div>
+
+      <div className="mt-4">
+        <FinanceOperationContextPanel
+          value={allocTarget}
+          onChange={setAllocTarget}
+          title="ربط الدفعة بـ (اختياري)"
+          description="اربط الدفعة المقدمة بمشروع / مركز تكلفة / بُعد آخر ليظهر في تقاريره. العميل مرتبط تلقائياً."
+        />
       </div>
 
       {amountNum > 0 && (
