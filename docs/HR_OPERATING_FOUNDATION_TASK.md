@@ -417,11 +417,10 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 
 ## G) ما تم تفعيله في هذه المهمة (سيُحدّث مع كل PR)
 
-> فارغ مبدئيًا. سيُحدَّث مع كل PR في إطار #1799.
-
 | PR | ما تم | التاريخ |
 |---|---|---|
-| — | — | — |
+| #1803 | مرحلة 0 — وثيقة الجرد + خارطة الـ12 أولوية + قسم نموذج المؤسسة. | 2026-06-07 |
+| HR-001 | الأولوية #1 جزئية — تبويبا «الحساب والدخول» + «الأدوار والصلاحيات» داخل ملف الموظف 360. البَك إند يعيد `userAccount` (single row من `users`، بدون passwordHash/MFA) + `roles` (array من `rbac_user_roles` مع primary/templates/expiry). الواجهة تعرض حالة الحساب + آخر دخول + محاولات فاشلة + قفل + قائمة الأدوار مع primary highlight + expired styling + deep-link لشاشة الصلاحيات الفعلية. التبويبات الآن 11/14 — باقي 3 (titles+positions، contract embed، custodies embed). | 2026-06-08 |
 
 ---
 
