@@ -170,6 +170,9 @@ const createCustomerAdvanceSchema = z.object({
   // single-branch users auto-resolve via the resolver. The advance JE
   // lands on this branch instead of the operator's working branch.
   branchId: z.coerce.number().optional(),
+  // #1715 §6 — optional operation context (project / cost-center / …). The
+  // dims ride on the cash (DR) line so the advance shows up in those reports.
+  lineAllocation: z.record(z.string(), z.any()).optional(),
 });
 
 const impactPreviewSchema = z.object({
@@ -382,9 +385,12 @@ invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action:
               i.total, i."paidAmount", i."vatAmount", i.subtotal, i."vatRate",
               i."clientId", i.description, i."paymentTerms", i.notes,
               i."isTaxLinked", i."zatcaStatus",
-              c.name AS "clientName"
+              c.name AS "clientName",
+              e_cre.name AS "createdByName"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id = i."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY i."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -3892,7 +3898,18 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
   try {
     const scope = req.scope!;
 
-    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate, branchId: bodyBranchId } = zodParse(createCustomerAdvanceSchema.safeParse(req.body));
+    const { clientId, amount, method = "bank_transfer", reference, notes, receivedDate, branchId: bodyBranchId, lineAllocation } = zodParse(createCustomerAdvanceSchema.safeParse(req.body));
+
+    // #1715 §6 — whitelist the operation-context dims that ride on the JE line.
+    const advDims: Record<string, number | string> = {};
+    if (lineAllocation) {
+      for (const k of ["costCenterId", "projectId", "departmentId", "vehicleId", "propertyId", "unitId", "contractId", "assetId", "driverId", "vendorId", "umrahAgentId", "umrahSeasonId"] as const) {
+        const v = (lineAllocation as Record<string, unknown>)[k];
+        if (v != null && v !== "") advDims[k] = Number(v);
+      }
+      const at = (lineAllocation as Record<string, unknown>).activityType;
+      if (typeof at === "string" && at) advDims.activityType = at;
+    }
 
     const [client] = await rawQuery<{ id: number }>(`SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [clientId, scope.companyId]);
     if (!client) throw new ValidationError("العميل غير موجود", { field: "clientId", fix: "اختر عميلاً من قائمة العملاء." });
@@ -4014,7 +4031,7 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
         sourceId: advanceId ?? 0,
         sourceKey: `finance:customer_advance:${advanceId}`,
         lines: [
-          { accountCode: cashCode, debit: amt, credit: 0, clientId: Number(clientId) },
+          { accountCode: cashCode, debit: amt, credit: 0, clientId: Number(clientId), ...advDims },
           { accountCode: advLiabCode, debit: 0, credit: amt, clientId: Number(clientId) },
         ],
         guardTable: "customer_advances",

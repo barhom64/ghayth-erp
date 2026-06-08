@@ -80,6 +80,7 @@ import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
 import { transportPlanningRouter } from "./transport-planning.js";
 import { transportIntegrationRouter } from "./transport-integration.js";
+import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -119,6 +120,7 @@ import { vendorsRouter } from "./finance-vendors.js";
 import { vendorContractsRouter } from "./finance-vendor-contracts.js";
 import { costCentersRouter } from "./finance-cost-centers.js";
 import disciplineRouter from "./hr-discipline.js";
+import orgRouter from "./org.js";
 import loansRouter from "./hr-loans.js";
 import overtimeRouter from "./hr-overtime.js";
 import exitRouter from "./hr-exit.js";
@@ -346,6 +348,8 @@ router.use("/hr", requireModule("hr"), wpsRouter);
 router.use("/hr", requireModule("hr"), complianceRouter);
 router.use("/hr/training", requireModule("hr"), trainingRouter);
 router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
+// نموذج المؤسسة التشغيلي — مرفق تحت /org، يتطلب صلاحية HR (نفس family).
+router.use("/org", requireModule("hr"), orgRouter);
 // Per-user finance limiter — mounted once on /finance so the dozen+
 // finance sub-routers below share a single per-user budget.
 router.use("/finance", financeUserLimiter);
@@ -407,6 +411,7 @@ router.use(requireModule("fleet"), requireGuards("financial"), transportPlanning
 // feed for the central calendar. The user's governing comment: "النقل
 // ليس جزيرة" — this router is the proof.
 router.use(requireModule("fleet"), requireGuards("financial"), transportIntegrationRouter);
+router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);

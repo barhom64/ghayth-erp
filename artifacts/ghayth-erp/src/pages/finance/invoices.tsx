@@ -150,6 +150,14 @@ export default function InvoicesPage() {
       render: (inv) => <span className="text-muted-foreground">{inv.dueDate ? formatDateAr(inv.dueDate) : "-"}</span>,
     },
     {
+      key: "createdByName",
+      header: "المنشئ",
+      sortable: true,
+      // Resolved server-side from invoices.createdBy (an assignment id) via the
+      // employee_assignments → employees join — control data for the audit.
+      render: (inv) => <span className="text-muted-foreground text-xs">{inv.createdByName || "—"}</span>,
+    },
+    {
       key: "status",
       header: "الحالة",
       sortable: true,
@@ -292,6 +300,7 @@ export default function InvoicesPage() {
             { key: "paidAmount", label: "المدفوع" },
             { key: "outstanding", label: "المتبقّي" },
             { key: "dueDate", label: "الاستحقاق" },
+            { key: "createdByName", label: "المنشئ" },
             { key: "status", label: "الحالة" },
           ], "الفواتير")}
         resultCount={filtered?.length}
@@ -310,6 +319,7 @@ export default function InvoicesPage() {
           { key: "ref", label: "رقم الفاتورة" },
           { key: "clientName", label: "العميل" },
           { key: "total", label: "الإجمالي" },
+          { key: "createdByName", label: "المنشئ" },
           { key: "status", label: "الحالة" },
         ]}
         csvFileName="الفواتير"

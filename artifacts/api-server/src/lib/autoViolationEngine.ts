@@ -22,6 +22,7 @@ import { ensureInquiryMemoForViolation, type IncidentType } from "./disciplineEn
 import { createNotification, getManagerAssignmentId, emitEvent, todayISO, combineDateAndShiftTime } from "./businessHelpers.js";
 import { eventBus } from "./eventBus.js";
 import { logger } from "./logger.js";
+import { resolveBatch as resolveAttendancePoliciesBatch } from "./attendancePolicyEngine.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // الأنواع
@@ -349,6 +350,51 @@ export async function runAutoDetection(
   }
 
   result.detected = incidents.length;
+
+  // HR-004 / #1799 priority #6 — Per-category exemption filter.
+  //
+  // Before processing the detected incidents we resolve each
+  // assignment's attendance policy and drop incidents whose policy
+  // says `autoDeductionEnabled = false`. The exempt categories
+  // (manager / executive by default — configurable per company in
+  // `attendance_policies_per_category`) must NOT be turned into
+  // violations or inquiry memos by the nightly auto-detection cron.
+  // They keep showing up in attendance reports (the `attendance` row
+  // still exists), but the cron stops queuing automatic discipline.
+  //
+  // `resolveBatch` memoizes per (companyId, categoryKey) so a 1000-
+  // assignment company hits the DB once per unique category, not 1000
+  // times per night.
+  if (incidents.length > 0) {
+    try {
+      const policies = await resolveAttendancePoliciesBatch(
+        incidents.map((i) => ({ assignmentId: i.assignmentId, companyId })),
+      );
+      const beforeCount = incidents.length;
+      const filtered = incidents.filter((i) => {
+        const policy = policies.get(i.assignmentId);
+        return policy?.autoDeductionEnabled !== false;
+      });
+      const skipped = beforeCount - filtered.length;
+      if (skipped > 0) {
+        logger.info(
+          { companyId, date, beforeCount, skipped, after: filtered.length },
+          "[autoViolationEngine] dropped incidents for exempt categories (manager/executive)",
+        );
+      }
+      // Replace the array in place so the downstream loop iterates
+      // only the non-exempt incidents. We don't change `result.detected`
+      // — that number reflects raw detection so HR can audit who was
+      // skipped vs who was escalated.
+      incidents.length = 0;
+      incidents.push(...filtered);
+    } catch (e) {
+      // Engine failure must NOT block the cron — fall through to the
+      // legacy behavior (process everything) and log loudly so HR
+      // sees the regression in monitoring.
+      logger.error(e, "[autoViolationEngine] policy resolution failed; processing all incidents (legacy behavior)");
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // معالجة الوقائع المكتشفة
