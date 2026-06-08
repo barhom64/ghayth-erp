@@ -496,6 +496,17 @@ export const allNavSections: NavSection[] = [
         { label: "الشحن والبضائع", path: "/fleet/cargo", icon: Package, perm: "fleet.cargo:list" },
         { label: "نظام التتبع (Telematics)", path: "/fleet/telematics", icon: Satellite, perm: "fleet.telematics.live:list" },
         { label: "الإطارات", path: "/fleet/tires", icon: Settings, perm: "fleet.maintenance:list" },
+        // النقل والمواصلات (#1812) — كانت هذه الصفحات مركّبة لكن بلا مدخل في
+        // القائمة (orphan)، فلا يصل إليها المستخدم إلا برابط مباشر. أُضيفت
+        // بنفس بوابات الـ backend: الحجوزات/التسعير/القواعد عبر fleet.bookings،
+        // والإرسال/المسارات/لوحة العمليات عبر fleet.dispatch.
+        { label: "حجوزات النقل", path: "/fleet/transport/bookings", icon: ClipboardList, perm: "fleet.bookings:list" },
+        { label: "الإرسال (Dispatch)", path: "/fleet/transport/dispatch", icon: Send, perm: "fleet.dispatch:list" },
+        { label: "خطط المسارات", path: "/fleet/transport/itineraries", icon: Navigation, perm: "fleet.dispatch:list" },
+        { label: "لوحة عمليات النقل", path: "/fleet/transport/ops-dashboard", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
+        { label: "قواعد تسعير النقل", path: "/fleet/transport/price-rules", icon: Percent, perm: "fleet.bookings:list" },
+        { label: "قواعد استقبال النقل", path: "/fleet/transport/rules", icon: ListChecks, perm: "fleet.bookings:list" },
+        { label: "تكامل النقل", path: "/fleet/transport/integration", icon: Network, perm: "fleet.bookings:list" },
       ]},
     ],
   },
