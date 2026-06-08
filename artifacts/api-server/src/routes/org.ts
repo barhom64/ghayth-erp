@@ -540,7 +540,7 @@ router.get("/approval-authorities", authorize(ADMIN), async (req, res) => {
               e.name AS "employeeName"
          FROM approval_authorities aa
          LEFT JOIN employee_assignments ea ON ea.id = aa."assignmentId"
-         LEFT JOIN employees e ON e.id = ea."employeeId"
+         LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
         WHERE ${where.join(" AND ")}
         ORDER BY aa."createdAt" DESC LIMIT 500`,
       vals,
@@ -743,7 +743,7 @@ router.get("/teams/:teamId/members", authorize(ADMIN), async (req, res) => {
               ea."jobTitle"
          FROM employee_team_memberships m
          JOIN employee_assignments ea ON ea.id = m."assignmentId"
-         JOIN employees e ON e.id = ea."employeeId"
+         JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
         WHERE m."teamId" = $1
           AND (m."endDate" IS NULL OR m."endDate" >= CURRENT_DATE)
         ORDER BY m.role DESC, e.name`,
@@ -819,7 +819,7 @@ router.get("/committees/:committeeId/members", authorize(ADMIN), async (req, res
               ea."jobTitle"
          FROM employee_committee_memberships m
          JOIN employee_assignments ea ON ea.id = m."assignmentId"
-         JOIN employees e ON e.id = ea."employeeId"
+         JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
         WHERE m."committeeId" = $1
           AND (m."endDate" IS NULL OR m."endDate" >= CURRENT_DATE)
         ORDER BY
@@ -899,7 +899,7 @@ router.get("/projects/:projectId/contributors", authorize(ADMIN), async (req, re
               ea."jobTitle"
          FROM employee_project_assignments m
          JOIN employee_assignments ea ON ea.id = m."assignmentId"
-         JOIN employees e ON e.id = ea."employeeId"
+         JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
         WHERE m."projectId" = $1
           AND (m."endDate" IS NULL OR m."endDate" >= CURRENT_DATE)
         ORDER BY m."allocationPercent" DESC, e.name`,
@@ -1063,7 +1063,7 @@ router.get("/scoring-ranking", authorize(ADMIN), async (req, res) => {
               ea."jobTitle",
               ROW_NUMBER() OVER (ORDER BY s."compositeScore" DESC) AS rank
          FROM employee_scores s
-         JOIN employees e ON e.id = s."employeeId"
+         JOIN employees e ON e.id = s."employeeId" AND e."deletedAt" IS NULL
          JOIN employee_assignments ea ON ea.id = s."assignmentId"
         WHERE s."companyId" = $1 AND s.scope = $2 AND s."periodKey" = $3
         ORDER BY s."compositeScore" DESC
