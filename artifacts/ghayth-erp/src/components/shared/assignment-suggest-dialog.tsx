@@ -41,8 +41,23 @@ export interface SuggestionCandidate {
   estimatedDistanceKm: number | null;
 }
 
-interface Props {
+interface BookingSource {
+  kind: "booking";
   bookingId: number;
+}
+interface LegSource {
+  kind: "leg";
+  itineraryId: number;
+  legId: number;
+}
+type SuggestSource = BookingSource | LegSource;
+
+interface Props {
+  /** Either { kind:"booking", bookingId } or { kind:"leg", itineraryId, legId }. */
+  source?: SuggestSource;
+  /** @deprecated — use `source` instead. Kept for back-compat with
+   *  the booking-detail call site that predates the leg variant. */
+  bookingId?: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   scheduledStartAt?: string;
@@ -54,7 +69,9 @@ interface Props {
   onSelect?: (candidate: SuggestionCandidate, dispatchOrderId?: number) => void;
   /** When true, picking a candidate POSTs to the bulk-plan endpoint
    *  for this single booking and creates the dispatch order
-   *  inline. Default: true. */
+   *  inline. Default: true for bookings, FALSE for legs (legs route
+   *  through PATCH itinerary leg to set assignedVehicleId/DriverId
+   *  directly — no dispatch order yet). */
   autoCreate?: boolean;
 }
 
@@ -75,13 +92,27 @@ const SCORE_LABEL: Record<keyof SuggestionCandidate["scores"], string> = {
 };
 
 export function AssignmentSuggestDialog({
-  bookingId, open, onOpenChange, scheduledStartAt, scheduledEndAt,
-  onSelect, autoCreate = true,
+  source, bookingId: legacyBookingId,
+  open, onOpenChange, scheduledStartAt, scheduledEndAt,
+  onSelect, autoCreate,
 }: Props) {
   const { toast } = useToast();
   const [candidates, setCandidates] = useState<SuggestionCandidate[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const effectiveSource: SuggestSource = source ??
+    (legacyBookingId != null
+      ? { kind: "booking", bookingId: legacyBookingId }
+      : { kind: "booking", bookingId: 0 });
+  // Default autoCreate: true for booking source, false for leg.
+  const effectiveAutoCreate =
+    autoCreate ?? (effectiveSource.kind === "booking");
+
+  const suggestUrl =
+    effectiveSource.kind === "booking"
+      ? `/transport/bookings/${effectiveSource.bookingId}/suggest-assignment`
+      : `/transport/itineraries/${effectiveSource.itineraryId}/legs/${effectiveSource.legId}/suggest-assignment`;
 
   const run = async () => {
     setLoading(true);
@@ -92,7 +123,7 @@ export function AssignmentSuggestDialog({
       if (scheduledStartAt) body.scheduledStartAt = scheduledStartAt;
       if (scheduledEndAt) body.scheduledEndAt = scheduledEndAt;
       const res = await apiFetch<{ data: SuggestionCandidate[] }>(
-        `/transport/bookings/${bookingId}/suggest-assignment`,
+        suggestUrl,
         { method: "POST", body: JSON.stringify(body) },
       );
       setCandidates(res?.data ?? []);
@@ -127,12 +158,42 @@ export function AssignmentSuggestDialog({
       onOpenChange(false);
       return;
     }
-    if (!autoCreate) {
+    if (!effectiveAutoCreate) {
       onSelect?.(c);
       onOpenChange(false);
       return;
     }
-    // Auto-create path — fire the bulk-plan endpoint with this single
+
+    // Leg path — PATCH the leg's assignedVehicleId/DriverId. No dispatch
+    // order is created (the leg becomes a booking line at a later
+    // materialization step).
+    if (effectiveSource.kind === "leg") {
+      setCreating(true);
+      try {
+        await apiFetch(
+          `/transport/itineraries/${effectiveSource.itineraryId}/legs/${effectiveSource.legId}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              assignedVehicleId: c.vehicleId,
+              assignedDriverId: c.driverId,
+              status: "assigned",
+            }),
+          },
+        );
+        toast({ title: `تم إسناد المرحلة (المركبة #${c.vehicleId}, السائق #${c.driverId})` });
+        onSelect?.(c);
+        onOpenChange(false);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast({ variant: "destructive", title: "تعذّر الإسناد", description: message });
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
+
+    // Booking path — fire the bulk-plan endpoint with this single
     // booking so the dispatch order is materialized atomically.
     setCreating(true);
     try {
@@ -141,7 +202,7 @@ export function AssignmentSuggestDialog({
         reason?: string;
       }> } }>(
         "/transport/integration/plan-bookings",
-        { method: "POST", body: JSON.stringify({ bookingIds: [bookingId] }) },
+        { method: "POST", body: JSON.stringify({ bookingIds: [effectiveSource.bookingId] }) },
       );
       const r = res?.data?.results?.[0];
       if (r?.outcome === "planned") {
@@ -275,7 +336,9 @@ export function AssignmentSuggestDialog({
                   >
                     {creating ? "جارٍ الإنشاء…" :
                      c.blockers.length > 0 ? "اعتمد رغم العوائق" :
-                     autoCreate ? "اعتمد + أنشئ أمر التوزيع" : "اعتمد هذا الاقتراح"}
+                     effectiveAutoCreate && effectiveSource.kind === "leg" ? "اعتمد + إسناد المرحلة" :
+                     effectiveAutoCreate ? "اعتمد + أنشئ أمر التوزيع" :
+                     "اعتمد هذا الاقتراح"}
                   </Button>
                 </div>
               </CardContent>
