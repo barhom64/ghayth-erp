@@ -54,7 +54,9 @@ describe("expense schema accepts lineAllocation", () => {
 
 describe("expense handler applies the overrides", () => {
   it("destructures lineAllocation from body", () => {
-    expect(ROUTE).toMatch(/lineAllocation,\s*\n\s*} = b;/);
+    // lineAllocation is destructured from `b`; later fields (maintenanceTicket,
+    // assetCreation, fuelLog, date) may follow before the closing `} = b;`.
+    expect(ROUTE).toMatch(/lineAllocation,[\s\S]*?\n\s*} = b;/);
   });
 
   it("operator accountCode wins over the default", () => {

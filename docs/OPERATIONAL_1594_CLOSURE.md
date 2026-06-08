@@ -28,6 +28,8 @@
 | إنفاذ فصل المهام (SoD) وقت الطلب | #1706 | `verify-sod-enforcement.sh` |
 | الانضباط (غياب→محضر→قرار→جزاء→أثر بالراتب) + إصلاح عطل gm-decision | #1849 | `verify-hr-discipline-journey.sh` 10/10 |
 | القانونية (قضية→جلسة→حكم→تكلفة→إغلاق + الأحداث) | — | `verify-legal-journey.sh` 9/9 |
+| العهد (صرف→اعتماد→تسوية، قيود متوازنة) | — | `verify-custody-journey.sh` 7/7 |
+| المشتريات (طلب→اعتماد→أمر شراء→اعتماد→استلام GRN→قيد متوازن) + 3 إصلاحات أعطال | — | `verify-purchase-journey.sh` 8/8 |
 | مراجعة التكامل + إصلاح ترحيل 257 + تصليب الحزمة | #1711 | 75/75 فحصًا، قابلة لإعادة التشغيل |
 | **واجهات تشغيلية (UI):** الحسابات الفرعية من صفحة الكيان (مركبة/وكيل/وحدة/مستأجر) | #1730، #1735 | `vehicle-subsidiary-accounts.spec.ts` |
 | **واجهة** مراقبة/تفريغ الـoutbox | #1741 | `/admin/outbox` + `admin-outbox.spec.ts` |
@@ -52,6 +54,8 @@
 204 (serial defaults لـ9 جداول)، 251 (chk_invoices_status)، 252 (fleet_trips.updatedAt)، 253 (subsidiary entityType)، 255 (umrah PII varchar→text)، 257 (custody: `companies` بلا deletedAt)، properties `c.branchId` 500، سباق journeyTracking، **والانضباط: `gm-decision` كان يفشل بـ500 (`incidentDate.slice is not a function` — العمود `date` يصل ككائن Date) فيمنع تطبيق أي جزاء عبر قرار الإدارة العليا — أُصلِح باشتقاق فترة الراتب من أجزاء التاريخ المحلية.**
 
 > **رحلة الانضباط (المرحلة 7 HR) مُثبتة:** `scripts/verify-hr-discipline-journey.sh` → **10/10** (غياب→محضر→تبرير→توصية المدير→قرار الإدارة العليا→جزاء مُطبَّق→خصم `pending_payroll` في `attendance_deductions` = أثر بالراتب).
+
+> **رحلة المشتريات (المرحلة 3.2) — 3 أعطال حقيقية اكتُشِفت في مراجعة المسارات الكتابية وأُصلِحت:** (1) أمر الشراء كان يُدرَج بحالة `'pending'` التي يرفضها `chk_purchase_orders_status` وليست حالة بداية صالحة في دورة الحياة → صُحّحت إلى `'pending_approval'`؛ (2) `purchase_orders` + 4 جداول دورة حياة (`fleet_maintenance`/`fleet_traffic_violations`/`payroll_runs`/`umrah_penalties`) تفتقد `updatedAt` فينهار أي انتقال حالة (نفس فئة عطل `fleet_trips`/migration 252) → migration 279؛ (3) حساب GRNI لم يكن يُحلّ (fallback 2115 غير موجود) → migration 280 يزرع ربط `purchase_grni` قابل للتحكم → 2111. النتيجة: `verify-purchase-journey.sh` **8/8**، قيد GRN متوازن.
 
 ## 5) ما لم يُنفَّذ ولماذا (مؤجَّل بسببه)
 

@@ -47,7 +47,15 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   scheduledStartAt?: string;
   scheduledEndAt?: string;
-  onSelect?: (candidate: SuggestionCandidate) => void;
+  /** Called after the candidate is selected. If `autoCreate` is true
+   *  AND the engine returns a usable window, the dispatch order is
+   *  already created by the time this fires (with the new id passed).
+   *  Otherwise the caller is responsible for creating the dispatch. */
+  onSelect?: (candidate: SuggestionCandidate, dispatchOrderId?: number) => void;
+  /** When true, picking a candidate POSTs to the bulk-plan endpoint
+   *  for this single booking and creates the dispatch order
+   *  inline. Default: true. */
+  autoCreate?: boolean;
 }
 
 const SCORE_BAND = (s: number) =>
@@ -67,7 +75,8 @@ const SCORE_LABEL: Record<keyof SuggestionCandidate["scores"], string> = {
 };
 
 export function AssignmentSuggestDialog({
-  bookingId, open, onOpenChange, scheduledStartAt, scheduledEndAt, onSelect,
+  bookingId, open, onOpenChange, scheduledStartAt, scheduledEndAt,
+  onSelect, autoCreate = true,
 }: Props) {
   const { toast } = useToast();
   const [candidates, setCandidates] = useState<SuggestionCandidate[] | null>(null);
@@ -105,16 +114,54 @@ export function AssignmentSuggestDialog({
     setError(null);
   }
 
-  const pick = (c: SuggestionCandidate) => {
+  const [creating, setCreating] = useState(false);
+
+  const pick = async (c: SuggestionCandidate) => {
     if (c.blockers.length > 0) {
       toast({
         variant: "destructive",
         title: "هذا الاقتراح يحتوي على عوائق صارمة",
         description: "وثّق سبب الاستثناء في شاشة الإسناد إذا أردت المتابعة.",
       });
+      onSelect?.(c);
+      onOpenChange(false);
+      return;
     }
-    onSelect?.(c);
-    onOpenChange(false);
+    if (!autoCreate) {
+      onSelect?.(c);
+      onOpenChange(false);
+      return;
+    }
+    // Auto-create path — fire the bulk-plan endpoint with this single
+    // booking so the dispatch order is materialized atomically.
+    setCreating(true);
+    try {
+      const res = await apiFetch<{ data: { results: Array<{
+        bookingId: number; outcome: string; dispatchOrderId?: number;
+        reason?: string;
+      }> } }>(
+        "/transport/integration/plan-bookings",
+        { method: "POST", body: JSON.stringify({ bookingIds: [bookingId] }) },
+      );
+      const r = res?.data?.results?.[0];
+      if (r?.outcome === "planned") {
+        toast({ title: `تم إنشاء أمر التوزيع #${r.dispatchOrderId}` });
+        onSelect?.(c, r.dispatchOrderId);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "تعذّر الإنشاء التلقائي",
+          description: r?.reason ?? `الناتج: ${r?.outcome ?? "غير معروف"}`,
+        });
+        onSelect?.(c);
+      }
+      onOpenChange(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "فشل الاتصال", description: message });
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -142,9 +189,42 @@ export function AssignmentSuggestDialog({
           )}
           {candidates && candidates.length === 0 && !loading && !error && (
             <div className="text-center py-8 text-sm text-muted-foreground">
-              لم يجد النظام أي مرشّح مناسب. حاول توسيع النافذة الزمنية أو راجع
-              اتفاق العميل + نوع المركبة المطلوب.
+              لا توجد مركبات أو سائقون في الشركة، أو الحجز ليس له نافذة زمنية محددة.
+              تأكد من إعدادات الأسطول والسائقين أولاً.
             </div>
+          )}
+          {candidates && candidates.length > 0 && candidates.every((c) => c.blockers.length > 0) && (
+            <Card className="border-rose-300 bg-rose-50">
+              <CardContent className="p-3 text-sm space-y-2">
+                <div className="font-medium text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  جميع المرشحين البالغ عددهم {candidates.length} لديهم عوائق صارمة. الأسباب الأكثر تكراراً:
+                </div>
+                {(() => {
+                  const counts = new Map<string, number>();
+                  for (const c of candidates) for (const b of c.blockers) {
+                    const key = b.replace(/\d+(\.\d+)?/g, "N").slice(0, 80);
+                    counts.set(key, (counts.get(key) ?? 0) + 1);
+                  }
+                  const top = Array.from(counts.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+                  return (
+                    <ul className="text-xs text-rose-700 space-y-1">
+                      {top.map(([msg, count], i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <span className="font-mono bg-rose-100 px-1.5 rounded">{count}×</span>
+                          {msg}
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                })()}
+                <div className="text-xs text-muted-foreground">
+                  راجع إعدادات راحة السائقين، التعارضات الزمنية، أو اتفاق العميل (سياسة الاستبدال).
+                </div>
+              </CardContent>
+            </Card>
           )}
           {candidates && candidates.map((c, idx) => (
             <Card
@@ -219,8 +299,16 @@ export function AssignmentSuggestDialog({
                 )}
 
                 <div className="mt-2 flex justify-end">
-                  <Button size="sm" variant={c.blockers.length > 0 ? "outline" : "default"} onClick={() => pick(c)} rateLimitAware>
-                    {c.blockers.length > 0 ? "اعتمد رغم العوائق" : "اعتمد هذا الاقتراح"}
+                  <Button
+                    size="sm"
+                    variant={c.blockers.length > 0 ? "outline" : "default"}
+                    onClick={() => pick(c)}
+                    disabled={creating}
+                    rateLimitAware
+                  >
+                    {creating ? "جارٍ الإنشاء…" :
+                     c.blockers.length > 0 ? "اعتمد رغم العوائق" :
+                     autoCreate ? "اعتمد + أنشئ أمر التوزيع" : "اعتمد هذا الاقتراح"}
                   </Button>
                 </div>
               </CardContent>

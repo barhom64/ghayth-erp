@@ -13,6 +13,7 @@ import { PageShell } from "@workspace/ui-core";
 import { ArrowLeft, Plus, Users, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
@@ -80,6 +81,22 @@ export default function TransportBookingCreate() {
   const [hotelName, setHotelName] = useState("");
   const [routeType, setRouteType] = useState<string>("");
 
+  // #1812 customer-agreement fields (Comment 3 — اتفاق العميل).
+  const [requestedVehicleClass, setRequestedVehicleClass] = useState("");
+  const [vehicleSubstitutionPolicy, setVehicleSubstitutionPolicy] = useState<string>("equivalent_allowed");
+  const [allowUpgrade, setAllowUpgrade] = useState(false);
+  const [requiredExactVehicleId, setRequiredExactVehicleId] = useState("");
+  const [requiredExactDriverId, setRequiredExactDriverId] = useState("");
+
+  // #1812 time-window fields.
+  const [pickupWindowStart, setPickupWindowStart] = useState("");
+  const [pickupWindowEnd, setPickupWindowEnd] = useState("");
+  const [dropoffWindowStart, setDropoffWindowStart] = useState("");
+  const [dropoffWindowEnd, setDropoffWindowEnd] = useState("");
+  const [fixedAppointmentTime, setFixedAppointmentTime] = useState("");
+  const [isFlexibleTime, setIsFlexibleTime] = useState(false);
+  const [priority, setPriority] = useState<string>("0");
+
   const isCargo = transportServiceType === "cargo_load";
   const isUmrah = transportServiceType === "passenger_umrah";
   const isPassenger = transportServiceType.startsWith("passenger_");
@@ -104,6 +121,20 @@ export default function TransportBookingCreate() {
         requestedPickupTime: requestedPickupTime || undefined,
         requestedDeliveryDate: requestedDeliveryDate || undefined,
         requestedDeliveryTime: requestedDeliveryTime || undefined,
+        // #1812 customer-agreement fields (Comment 3).
+        requestedVehicleClass: requestedVehicleClass.trim() || undefined,
+        vehicleSubstitutionPolicy,
+        allowUpgrade,
+        requiredExactVehicleId: requiredExactVehicleId ? Number(requiredExactVehicleId) : undefined,
+        requiredExactDriverId:  requiredExactDriverId  ? Number(requiredExactDriverId)  : undefined,
+        // #1812 time-window fields.
+        pickupWindowStart: pickupWindowStart || undefined,
+        pickupWindowEnd:   pickupWindowEnd   || undefined,
+        dropoffWindowStart: dropoffWindowStart || undefined,
+        dropoffWindowEnd:   dropoffWindowEnd   || undefined,
+        fixedAppointmentTime: fixedAppointmentTime || undefined,
+        isFlexibleTime,
+        priority: Number(priority || "0"),
         notes: notes.trim() || undefined,
       };
       if (isCargo) {
@@ -285,9 +316,46 @@ export default function TransportBookingCreate() {
               </div>
               {isUmrah && (
                 <>
-                  <div>
-                    <Label htmlFor="umrahGroupId">رقم مجموعة العمرة</Label>
-                    <Input id="umrahGroupId" type="number" min={0} value={umrahGroupId} onChange={(e) => setUmrahGroupId(e.target.value)} />
+                  <div className="md:col-span-2">
+                    <Label htmlFor="umrahGroupId">مجموعة العمرة (من النظام)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="umrahGroupId"
+                        type="number"
+                        min={0}
+                        value={umrahGroupId}
+                        onChange={(e) => setUmrahGroupId(e.target.value)}
+                        placeholder="اختر من القائمة لتعبئة البيانات تلقائياً"
+                        className="flex-1"
+                      />
+                      <UmrahGroupPicker
+                        onSelect={(g) => {
+                          setUmrahGroupId(String(g.id));
+                          // Auto-fill passenger count from the group's
+                          // mutamerCount — operator can still edit.
+                          if (g.mutamerCount > 0) {
+                            setPassengerCount(String(g.mutamerCount));
+                          }
+                          // Auto-fill customer name with group name as a
+                          // sensible default (the operator can override).
+                          if (!customerName && g.name) {
+                            setCustomerName(g.name);
+                          }
+                          // Flip booking source so audit trail shows the
+                          // link, not "manual_entry".
+                          setBookingSource("umrah_group");
+                          toast({
+                            title: `تم ربط المجموعة ${g.nuskGroupNumber}`,
+                            description: `${g.mutamerCount} معتمر — تم تعبئة عدد الركاب تلقائياً.`,
+                          });
+                        }}
+                      />
+                    </div>
+                    {umrahGroupId && (
+                      <div className="text-xs text-status-info-foreground mt-1">
+                        مرتبط بمجموعة العمرة #{umrahGroupId} — أي تعديل على عدد الركاب موثّق في سجل التدقيق.
+                      </div>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="flightNumber">رقم الرحلة</Label>
@@ -321,6 +389,111 @@ export default function TransportBookingCreate() {
             </CardContent>
           </Card>
         )}
+
+        {/* #1812 — اتفاق العميل + النوافذ الزمنية (Comment 3) */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">اتفاق العميل + النوافذ الزمنية</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <Label>فئة المركبة المطلوبة</Label>
+              <Input
+                value={requestedVehicleClass}
+                onChange={(e) => setRequestedVehicleClass(e.target.value)}
+                placeholder="مثلاً sedan / suv / bus_45 / truck"
+              />
+            </div>
+            <div>
+              <Label>سياسة استبدال المركبة</Label>
+              <Select value={vehicleSubstitutionPolicy} onValueChange={setVehicleSubstitutionPolicy}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="exact_only">نفس المركبة فقط</SelectItem>
+                  <SelectItem value="same_class_only">نفس الفئة فقط</SelectItem>
+                  <SelectItem value="equivalent_allowed">فئة مكافئة مسموحة</SelectItem>
+                  <SelectItem value="upgrade_allowed">ترقية مسموحة</SelectItem>
+                  <SelectItem value="operator_approval">بموافقة المشغل</SelectItem>
+                  <SelectItem value="customer_approval">بموافقة العميل</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>المركبة المحددة (id — اختياري)</Label>
+              <Input type="number" min={0}
+                value={requiredExactVehicleId}
+                onChange={(e) => setRequiredExactVehicleId(e.target.value)}
+                placeholder="إذا اشترط العميل مركبة بعينها"
+              />
+            </div>
+            <div>
+              <Label>السائق المحدد (id — اختياري)</Label>
+              <Input type="number" min={0}
+                value={requiredExactDriverId}
+                onChange={(e) => setRequiredExactDriverId(e.target.value)}
+                placeholder="إذا اشترط العميل سائقاً بعينه"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox" id="allowUpgrade"
+                checked={allowUpgrade}
+                onChange={(e) => setAllowUpgrade(e.target.checked)}
+              />
+              <Label htmlFor="allowUpgrade" className="cursor-pointer">يسمح العميل بترقية المركبة</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox" id="isFlexibleTime"
+                checked={isFlexibleTime}
+                onChange={(e) => setIsFlexibleTime(e.target.checked)}
+              />
+              <Label htmlFor="isFlexibleTime" className="cursor-pointer">الوقت مرن</Label>
+            </div>
+            <div>
+              <Label>نافذة التحميل — من</Label>
+              <Input type="datetime-local"
+                value={pickupWindowStart}
+                onChange={(e) => setPickupWindowStart(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>نافذة التحميل — إلى</Label>
+              <Input type="datetime-local"
+                value={pickupWindowEnd}
+                onChange={(e) => setPickupWindowEnd(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>نافذة التسليم — من</Label>
+              <Input type="datetime-local"
+                value={dropoffWindowStart}
+                onChange={(e) => setDropoffWindowStart(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>نافذة التسليم — إلى</Label>
+              <Input type="datetime-local"
+                value={dropoffWindowEnd}
+                onChange={(e) => setDropoffWindowEnd(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>موعد ثابت (إن وجد)</Label>
+              <Input type="datetime-local"
+                value={fixedAppointmentTime}
+                onChange={(e) => setFixedAppointmentTime(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>الأولوية (0 = عادي، أعلى = أهم)</Label>
+              <Input type="number" min={0}
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">ملاحظات</CardTitle></CardHeader>
