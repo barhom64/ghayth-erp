@@ -40,6 +40,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logAllocationOverride } from "../lib/accountingAllocation.js";
 import { resolveTransactionBranch } from "../lib/branchResolution.js";
+import { costCenterSplitSchema, resolveCostCenterSplits } from "../lib/costCenterSplit.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -56,6 +57,9 @@ const expenseImpactPreviewSchema = z.object({
   costCenter: z.string().optional(),
   supplierId: z.any().optional(),
   branchId: z.any().optional(),
+  // #1715 (comment 9) — the allocation target drives a specialized-account hint.
+  targetType: z.string().optional(),
+  itemType: z.string().optional(),
 });
 
 // Shared line-allocation payload (the LineAllocationPanel /
@@ -124,6 +128,8 @@ const createExpenseSchema = z.object({
   // JE line. `manualOverrideReason` is required when overriding any
   // resolved dimension and gets logged via logAllocationOverride().
   lineAllocation: lineAllocationSchema,
+  // #1715 — optional multi cost-center distribution for the expense DR.
+  costCenterDistribution: z.array(costCenterSplitSchema).optional(),
 });
 
 const updateDescriptionSchema = z.object({
@@ -356,7 +362,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
 journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId } = zodParse(expenseImpactPreviewSchema.safeParse(req.body ?? {}));
+    const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId, targetType, itemType } = zodParse(expenseImpactPreviewSchema.safeParse(req.body ?? {}));
     const amt = Number(amount || 0);
 
     const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
@@ -378,6 +384,23 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
         : `مدين حساب المصروف ${amt.toLocaleString("ar-SA")} / دائن الذمم الدائنة`,
       severity: "info",
     });
+
+    // #1715 (comment 9) — when the operation is linked to an entity, suggest
+    // the specialized posting account derived from the target + item kind so
+    // the operator sees where it will land (and whether it capitalises) before
+    // saving. Read-only hint; the actual JE still uses the chosen account.
+    if (targetType && targetType !== "none") {
+      const { deriveSpecializedAccount } = await import("../lib/financeSpecializedAccount.js");
+      const spec = deriveSpecializedAccount({ targetType, itemType });
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const resolvedCode = await financialEngine.resolveAccountCode(scope.companyId, spec.purpose, "debit", spec.defaultCode);
+      items.push({
+        category: "محاسبي",
+        label: spec.capitalize ? "حساب الرسملة المقترح" : "حساب المصروف المقترح",
+        value: `${spec.label} (${resolvedCode})${spec.capitalize ? " — يُرسمَل كأصل/مخزون بدل قيده مصروفًا" : ""}`,
+        severity: spec.capitalize ? "warning" : "info",
+      });
+    }
 
     if (costCenter) {
       const [budget] = await rawQuery<Record<string, unknown>>(
@@ -473,6 +496,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       attachmentUrl, attachmentType, operationType,
       autoDescription, projectId, taxCategory,
       govSyncEnabled, govIntegrationId, govEntityType, govEntityId,
+      costCenterDistribution,
       lineAllocation,
     } = b;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -701,6 +725,19 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     }
     journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat, ...entityLink });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
+
+    // #1715 multi cost-center distribution: when supplied, replace the single
+    // expense DR (journalLines[0]) with one balanced leg per cost center —
+    // same account + full entityLink, its own costCenterId and prorated
+    // amount. The legs sum exactly to baseAmount (remainder absorbed by the
+    // last) so the entry stays balanced; the VAT DR and cash CR are untouched.
+    if (costCenterDistribution && costCenterDistribution.length > 0) {
+      const debitAccount = journalLines[0].accountCode;
+      const splitLines = resolveCostCenterSplits(costCenterDistribution, baseAmount).map((leg) => ({
+        accountCode: debitAccount, debit: leg.amount, credit: 0, ...entityLink, costCenterId: leg.costCenterId,
+      }));
+      journalLines.splice(0, 1, ...splitLines);
+    }
 
     // C3 — the journal entry, its header metadata and the approval chain are
     // created in ONE transaction. A failure anywhere (or a crash) rolls the
