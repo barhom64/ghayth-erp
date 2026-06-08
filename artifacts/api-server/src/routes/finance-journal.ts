@@ -40,6 +40,7 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logAllocationOverride } from "../lib/accountingAllocation.js";
 import { resolveTransactionBranch } from "../lib/branchResolution.js";
+import { costCenterSplitSchema, resolveCostCenterSplits } from "../lib/costCenterSplit.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -124,6 +125,8 @@ const createExpenseSchema = z.object({
   // JE line. `manualOverrideReason` is required when overriding any
   // resolved dimension and gets logged via logAllocationOverride().
   lineAllocation: lineAllocationSchema,
+  // #1715 — optional multi cost-center distribution for the expense DR.
+  costCenterDistribution: z.array(costCenterSplitSchema).optional(),
 });
 
 const updateDescriptionSchema = z.object({
@@ -473,6 +476,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       attachmentUrl, attachmentType, operationType,
       autoDescription, projectId, taxCategory,
       govSyncEnabled, govIntegrationId, govEntityType, govEntityId,
+      costCenterDistribution,
       lineAllocation,
     } = b;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -701,6 +705,19 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     }
     journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat, ...entityLink });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
+
+    // #1715 multi cost-center distribution: when supplied, replace the single
+    // expense DR (journalLines[0]) with one balanced leg per cost center —
+    // same account + full entityLink, its own costCenterId and prorated
+    // amount. The legs sum exactly to baseAmount (remainder absorbed by the
+    // last) so the entry stays balanced; the VAT DR and cash CR are untouched.
+    if (costCenterDistribution && costCenterDistribution.length > 0) {
+      const debitAccount = journalLines[0].accountCode;
+      const splitLines = resolveCostCenterSplits(costCenterDistribution, baseAmount).map((leg) => ({
+        accountCode: debitAccount, debit: leg.amount, credit: 0, ...entityLink, costCenterId: leg.costCenterId,
+      }));
+      journalLines.splice(0, 1, ...splitLines);
+    }
 
     // C3 — the journal entry, its header metadata and the approval chain are
     // created in ONE transaction. A failure anywhere (or a crash) rolls the
