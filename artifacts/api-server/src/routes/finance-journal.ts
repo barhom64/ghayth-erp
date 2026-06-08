@@ -130,6 +130,17 @@ const createExpenseSchema = z.object({
   lineAllocation: lineAllocationSchema,
   // #1715 — optional multi cost-center distribution for the expense DR.
   costCenterDistribution: z.array(costCenterSplitSchema).optional(),
+  // #1715 §5 — when the operator picks a maintenance allocation target
+  // (vehicle_maintenance / property_maintenance) and asks to open a ticket,
+  // this carries the operational-effect details. Creating the ticket is
+  // gated on `create: true`, so ordinary expenses are unaffected.
+  maintenanceTicket: z.object({
+    create: z.boolean().optional(),
+    maintenanceType: z.string().optional(),
+    odometer: z.coerce.number().optional(),
+    costBearer: z.string().optional(),
+    performedBy: z.string().optional(),
+  }).optional(),
 });
 
 const updateDescriptionSchema = z.object({
@@ -498,6 +509,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       govSyncEnabled, govIntegrationId, govEntityType, govEntityId,
       costCenterDistribution,
       lineAllocation,
+      maintenanceTicket,
     } = b;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
@@ -821,6 +833,36 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
             blockers,
             overrideReason: lineAllocation.manualOverrideReason,
           });
+        }
+      }
+
+      // #1715 §5 — operational effect: open + link the maintenance ticket
+      // when the operator tagged this expense as a vehicle/property
+      // maintenance op (gated on maintenanceTicket.create, so ordinary
+      // expenses are untouched). Runs in THIS txn, so a JE/approval failure
+      // rolls the ticket back too — never a ticket without its expense.
+      if (maintenanceTicket?.create) {
+        const isVehicle = entityLink.vehicleId != null;
+        const isProperty = entityLink.unitId != null || entityLink.propertyId != null;
+        if (isVehicle || isProperty) {
+          const { applyMaintenanceTicketEffect } = await import("../lib/financeOperationalEffect.js");
+          const eff = await applyMaintenanceTicketEffect(client, {
+            companyId: effectiveCompanyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            journalId: posted.journalId,
+            target: isVehicle ? "vehicle" : "property",
+            vehicleId: entityLink.vehicleId ?? null,
+            propertyId: entityLink.propertyId ?? null,
+            unitId: entityLink.unitId ?? null,
+            contractId: entityLink.contractId ?? null,
+            cost: baseAmount,
+            maintenanceType: maintenanceTicket.maintenanceType ?? expenseType ?? null,
+            odometer: maintenanceTicket.odometer ?? null,
+            costBearer: maintenanceTicket.costBearer ?? null,
+            performedBy: maintenanceTicket.performedBy ?? null,
+            description: finalDescription ?? null,
+          });
+          logger.info({ journalId: posted.journalId, effect: eff }, "[finance] maintenance ticket effect applied");
         }
       }
 
