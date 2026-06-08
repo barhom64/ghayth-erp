@@ -130,6 +130,19 @@ const createExpenseSchema = z.object({
   lineAllocation: lineAllocationSchema,
   // #1715 — optional multi cost-center distribution for the expense DR.
   costCenterDistribution: z.array(costCenterSplitSchema).optional(),
+  // #1715 §5 — when the operator picks a maintenance allocation target
+  // (vehicle_maintenance / property_maintenance) and asks to open a ticket,
+  // this carries the operational-effect details. Creating the ticket is
+  // gated on `create: true`, so ordinary expenses are unaffected.
+  maintenanceTicket: z.object({
+    create: z.boolean().optional(),
+    maintenanceType: z.string().optional(),
+    odometer: z.coerce.number().optional(),
+    costBearer: z.string().optional(),
+    performedBy: z.string().optional(),
+    // #1715 §5 — link to an existing ticket instead of creating a new one.
+    existingTicketId: z.coerce.number().int().positive().optional(),
+  }).optional(),
 });
 
 const updateDescriptionSchema = z.object({
@@ -358,6 +371,43 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
   }
 });
 
+// #1715 §5 — finance-owned helper for «ربط بتذكرة قائمة». Returns the OPEN
+// (unlinked) maintenance tickets the operator can link an expense to. Scoped
+// to finance.journal so a finance user needn't hold the fleet/properties
+// maintenance permission, and only ever exposes id + a short label.
+journalRouter.get("/maintenance-ticket-options", authorize({ feature: "finance.journal", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const target = String(req.query.target ?? "");
+    const vehicleId = req.query.vehicleId != null ? Number(req.query.vehicleId) : null;
+    const unitId = req.query.unitId != null ? Number(req.query.unitId) : null;
+    let options: { id: number; label: string }[] = [];
+    if (target === "vehicle" && vehicleId) {
+      const rows = await rawQuery<{ id: number; type: string | null; serviceDate: string | null }>(
+        `SELECT id, type, "serviceDate"::text AS "serviceDate"
+           FROM fleet_maintenance
+          WHERE "companyId" = $1 AND "vehicleId" = $2 AND "deletedAt" IS NULL AND "linkedExpenseId" IS NULL
+          ORDER BY id DESC LIMIT 50`,
+        [scope.companyId, vehicleId],
+      );
+      options = rows.map((r) => ({ id: r.id, label: `#${r.id} · ${r.type ?? "صيانة"}${r.serviceDate ? ` · ${r.serviceDate}` : ""}` }));
+    } else if (target === "property" && unitId) {
+      const rows = await rawQuery<{ id: number; category: string | null; status: string | null }>(
+        `SELECT id, category, status
+           FROM maintenance_requests
+          WHERE "companyId" = $1 AND "unitId" = $2 AND "deletedAt" IS NULL AND "linkedExpenseId" IS NULL
+          ORDER BY id DESC LIMIT 50`,
+        [scope.companyId, unitId],
+      );
+      options = rows.map((r) => ({ id: r.id, label: `#${r.id} · ${r.category ?? "صيانة"}${r.status ? ` · ${r.status}` : ""}` }));
+    }
+    res.json({ data: options });
+  } catch (err) {
+    logger.error(err, "Get maintenance ticket options error:");
+    res.json({ data: [] });
+  }
+});
+
 // Impact preview — shows what will happen when the expense is created
 journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
@@ -400,6 +450,22 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
         value: `${spec.label} (${resolvedCode})${spec.capitalize ? " — يُرسمَل كأصل/مخزون بدل قيده مصروفًا" : ""}`,
         severity: spec.capitalize ? "warning" : "info",
       });
+
+      // #1715 (owner feedback) — surface the full «التوجيه المحاسبي المتوقّع»:
+      // the linked entity, the OPERATIONAL EFFECT the link produces, and any
+      // future task it schedules — so the operator sees the consequence before
+      // saving («لا يوجد ربط بلا أثر»).
+      const { deriveOperationalEffectHint } = await import("../lib/financeSpecializedAccount.js");
+      const hint = deriveOperationalEffectHint({ targetType, spec });
+      if (hint.entityLabel) {
+        items.push({ category: "الكيان المرتبط", label: "مربوط بـ", value: hint.entityLabel, severity: "info" });
+      }
+      if (hint.effect) {
+        items.push({ category: "الأثر التشغيلي", label: "الأثر", value: hint.effect, severity: "success" });
+      }
+      if (hint.futureTask) {
+        items.push({ category: "مهمة مستقبلية", label: "لاحقًا", value: hint.futureTask, severity: "info" });
+      }
     }
 
     if (costCenter) {
@@ -498,6 +564,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       govSyncEnabled, govIntegrationId, govEntityType, govEntityId,
       costCenterDistribution,
       lineAllocation,
+      maintenanceTicket,
     } = b;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
@@ -821,6 +888,48 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
             blockers,
             overrideReason: lineAllocation.manualOverrideReason,
           });
+        }
+      }
+
+      // #1715 §5 — operational effect: open + link the maintenance ticket
+      // when the operator tagged this expense as a vehicle/property
+      // maintenance op (gated on maintenanceTicket.create, so ordinary
+      // expenses are untouched). Runs in THIS txn, so a JE/approval failure
+      // rolls the ticket back too — never a ticket without its expense.
+      // `!posted.alreadyExists` guards idempotent replays: a retried expense
+      // returns the existing JE without re-posting, so we must NOT insert a
+      // second maintenance ticket for it.
+      if (maintenanceTicket?.create && !posted.alreadyExists) {
+        const isVehicle = entityLink.vehicleId != null;
+        const isProperty = entityLink.unitId != null || entityLink.propertyId != null;
+        if (isVehicle || isProperty) {
+          const { applyMaintenanceTicketEffect } = await import("../lib/financeOperationalEffect.js");
+          const eff = await applyMaintenanceTicketEffect(client, {
+            companyId: effectiveCompanyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            journalId: posted.journalId,
+            target: isVehicle ? "vehicle" : "property",
+            vehicleId: entityLink.vehicleId ?? null,
+            propertyId: entityLink.propertyId ?? null,
+            unitId: entityLink.unitId ?? null,
+            contractId: entityLink.contractId ?? null,
+            cost: baseAmount,
+            maintenanceType: maintenanceTicket.maintenanceType ?? expenseType ?? null,
+            odometer: maintenanceTicket.odometer ?? null,
+            costBearer: maintenanceTicket.costBearer ?? null,
+            performedBy: maintenanceTicket.performedBy ?? null,
+            description: finalDescription ?? null,
+            existingTicketId: maintenanceTicket.existingTicketId ?? null,
+          });
+          // Linking to a non-existent ticket must abort the whole expense —
+          // never post an expense that claims a link it didn't make.
+          if (maintenanceTicket.existingTicketId != null && eff.action === "none") {
+            throw new ValidationError("تذكرة الصيانة المحددة غير موجودة", {
+              field: "maintenanceTicket.existingTicketId",
+              fix: "اختر تذكرة صيانة قائمة صحيحة أو أنشئ تذكرة جديدة",
+            });
+          }
+          logger.info({ journalId: posted.journalId, effect: eff }, "[finance] maintenance ticket effect applied");
         }
       }
 

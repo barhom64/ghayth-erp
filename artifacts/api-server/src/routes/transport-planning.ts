@@ -276,6 +276,102 @@ transportPlanningRouter.get(
   },
 );
 
+// ─── Weekly planning view ────────────────────────────────────────────
+// Returns 7 days of dispatch activity, grouped by date + per-vehicle
+// utilisation rollup. Drives the "أسبوع كامل" tab on the ops
+// dashboard. The user's Comment 2: "التخطيط الأسبوعي — توزيع
+// الحجوزات على الأسبوع، أيام الضغط، المركبات الأعلى/الأقل استخدامًا."
+
+transportPlanningRouter.get(
+  "/transport/ops-weekly",
+  authorize({ feature: "fleet.dispatch", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const startDate = (req.query.startDate as string | undefined) ?? todayISO();
+
+      // Daily counters across 7 consecutive days starting from startDate.
+      const daily = await rawQuery<{
+        day: string;
+        total: string;
+        completed: string;
+        cancelled: string;
+        late: string;
+      }>(
+        `WITH days AS (
+           SELECT generate_series($2::date, $2::date + INTERVAL '6 days', INTERVAL '1 day')::date AS day
+         )
+         SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
+                COALESCE(COUNT(o.id) FILTER (WHERE o.id IS NOT NULL), 0)::text AS total,
+                COALESCE(COUNT(o.id) FILTER (WHERE o.status IN ('completed', 'closed')), 0)::text AS completed,
+                COALESCE(COUNT(o.id) FILTER (WHERE o.status = 'cancelled'), 0)::text AS cancelled,
+                COALESCE(COUNT(o.id) FILTER (
+                  WHERE o.status IN ('pending', 'notified')
+                    AND o."scheduledStartAt" + INTERVAL '15 minutes' < NOW()
+                ), 0)::text AS late
+           FROM days d
+                LEFT JOIN transport_dispatch_orders o
+                  ON o."companyId" = $1
+                 AND o."scheduledStartAt"::date = d.day
+          GROUP BY d.day
+          ORDER BY d.day`,
+        [scope.companyId, startDate],
+      );
+
+      // Per-vehicle utilisation: minutes booked across the 7-day window
+      // / total minutes in the window. Sorts heaviest at top so the
+      // dispatcher can spot the at-risk units (and the under-used ones).
+      const vehicleUtilisation = await rawQuery<{
+        vehicleId: number;
+        plateNumber: string | null;
+        vehicleType: string | null;
+        bookedMinutes: number;
+        tripCount: number;
+        utilisation: number;
+      }>(
+        `SELECT v.id AS "vehicleId",
+                v."plateNumber",
+                v."vehicleType",
+                COALESCE(SUM(
+                  EXTRACT(EPOCH FROM (o."scheduledEndAt" - o."scheduledStartAt")) / 60
+                )::int, 0) AS "bookedMinutes",
+                COUNT(o.id)::int AS "tripCount",
+                ROUND(
+                  COALESCE(SUM(
+                    EXTRACT(EPOCH FROM (o."scheduledEndAt" - o."scheduledStartAt"))
+                  )::numeric, 0) / NULLIF(7 * 24 * 3600, 0) * 100,
+                  1
+                ) AS utilisation
+           FROM fleet_vehicles v
+                LEFT JOIN transport_dispatch_orders o
+                  ON o."vehicleId" = v.id
+                 AND o."companyId" = v."companyId"
+                 AND o.status NOT IN ('declined', 'cancelled')
+                 AND o."scheduledStartAt"::date BETWEEN $2::date AND $2::date + INTERVAL '6 days'
+          WHERE v."companyId" = $1
+            AND v."deletedAt" IS NULL
+          GROUP BY v.id, v."plateNumber", v."vehicleType"
+          HAVING COUNT(o.id) > 0 OR v.status = 'available'
+          ORDER BY utilisation DESC NULLS LAST, v.id ASC
+          LIMIT 100`,
+        [scope.companyId, startDate],
+      );
+
+      res.json(maskFields(req, {
+        data: {
+          startDate,
+          endDate: new Date(new Date(startDate).getTime() + 6 * 86400_000)
+            .toISOString().slice(0, 10),
+          daily,
+          vehicleUtilisation,
+        },
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Ops weekly error:");
+    }
+  },
+);
+
 // ─── Itineraries ─────────────────────────────────────────────────────
 
 const TRANSPORT_SERVICE_TYPES = [

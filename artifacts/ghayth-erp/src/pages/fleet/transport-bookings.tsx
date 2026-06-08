@@ -164,9 +164,29 @@ export default function TransportBookingsList() {
               <Calendar className="h-4 w-4 me-1" />لوحة تشغيل اليوم
             </Button>
           </Link>
+          <Link href="/fleet/transport/integration">
+            <Button variant="outline" size="sm">
+              <Users className="h-4 w-4 me-1" />التكامل
+            </Button>
+          </Link>
+          <Link href="/fleet/transport/itineraries">
+            <Button variant="outline" size="sm">
+              <Calendar className="h-4 w-4 me-1" />البرامج
+            </Button>
+          </Link>
           <Link href="/fleet/transport/dispatch">
             <Button variant="outline" size="sm">
               <Calendar className="h-4 w-4 me-1" />لوحة التوزيع
+            </Button>
+          </Link>
+          <Link href="/fleet/transport/price-rules">
+            <Button variant="outline" size="sm">
+              <Clipboard className="h-4 w-4 me-1" />قواعد التسعير
+            </Button>
+          </Link>
+          <Link href="/fleet/transport/rules">
+            <Button variant="outline" size="sm">
+              <Clipboard className="h-4 w-4 me-1" />قواعد العمليات
             </Button>
           </Link>
           <Link href="/fleet/transport/bookings/create">

@@ -20,7 +20,8 @@ import { AlertCircle, Paperclip, Link2, Plus, Trash2, Split } from "lucide-react
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
-import { AllocationTargetSelect, EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
+import { EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
+import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
 import { useAppContext } from "@/contexts/app-context";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
@@ -414,6 +415,19 @@ export default function ExpensesCreate() {
         costCenterDistribution: ccRows.length > 0
           ? ccRows.map((r) => ({ costCenterId: Number(r.costCenterId), percentage: Number(r.percentage) }))
           : undefined,
+        // #1715 §5 — when the operator chose a maintenance allocation target,
+        // open + link a maintenance ticket. The fields are already collected
+        // by AllocationTargetSelect (odometer / maintenanceType / costBearer).
+        maintenanceTicket:
+          allocTarget.target === "vehicle_maintenance" || allocTarget.target === "property_maintenance"
+            ? {
+                create: true,
+                maintenanceType: allocTarget.maintenanceType || undefined,
+                odometer: allocTarget.odometer ? Number(allocTarget.odometer) : undefined,
+                costBearer: allocTarget.costBearer || undefined,
+                existingTicketId: allocTarget.existingTicketId ? Number(allocTarget.existingTicketId) : undefined,
+              }
+            : undefined,
       });
       toast({ title: "تم إضافة المصروف بنجاح" });
       clearDraft();
@@ -695,18 +709,12 @@ export default function ExpensesCreate() {
             disabled={form.autoDescription} />
         </div>
 
-        <div className="border rounded-lg p-4 mb-4 space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">ربط المصروف بـ</h3>
-          <p className="text-xs text-muted-foreground">
-            اختر ما يُربط به المصروف، وستظهر الحقول المناسبة فقط. الربط
-            يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً.
-          </p>
-          <AllocationTargetSelect
-            value={allocTarget}
-            onChange={(v) => { setAllocTarget(v); setAllocation((prev) => ({ ...prev, ...v.allocation })); }}
-            label="ربط المصروف بـ"
-          />
-        </div>
+        <FinanceOperationContextPanel
+          value={allocTarget}
+          onChange={(v) => { setAllocTarget(v); setAllocation((prev) => ({ ...prev, ...v.allocation })); }}
+          title="ربط المصروف بـ"
+          description="اختر ما يُربط به المصروف، وستظهر الحقول المناسبة فقط. الربط يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً."
+        />
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">تفاصيل محاسبية إضافية (اختياري)</h3>
