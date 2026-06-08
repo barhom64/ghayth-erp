@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -89,6 +89,32 @@ export function ImpactPreviewButton({ endpoint, payload, label = "معاينة �
       )}
     </div>
   );
+}
+
+/**
+ * Live, always-on variant (#1715 owner feedback): auto-fetches the impact
+ * (debounced) whenever the payload changes and renders the panel inline — so
+ * the «التوجيه المحاسبي المتوقّع» is visible under the operation without a click.
+ */
+export function LiveImpactPreview({ endpoint, payload, enabled = true }: { endpoint: string; payload: Record<string, any>; enabled?: boolean }) {
+  const [impact, setImpact] = useState<ImpactPreview | null>(null);
+  const key = JSON.stringify(payload);
+  useEffect(() => {
+    if (!enabled) { setImpact(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const result = await apiFetch<ImpactPreview>(endpoint, { method: "POST", body: JSON.stringify(payload) });
+        if (!cancelled) setImpact(result);
+      } catch {
+        if (!cancelled) setImpact(null);
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+    // key captures the payload contents; endpoint + enabled complete the deps.
+  }, [endpoint, key, enabled]);
+  if (!enabled || !impact) return null;
+  return <ImpactPreviewPanel impact={impact} />;
 }
 
 export function ImpactPreviewPanel({ impact }: { impact: ImpactPreview }) {

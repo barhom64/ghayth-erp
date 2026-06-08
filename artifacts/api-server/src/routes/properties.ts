@@ -19,6 +19,7 @@ import { issueNumber } from "../lib/numberingService.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { propertiesEngine } from "../lib/engines/index.js";
 
 const createUnitSchema = z.object({
@@ -614,6 +615,14 @@ router.post("/units", authorize({ feature: "properties.units", action: "create" 
     createSubsidiaryAccountsForEntity(
       scope.companyId, "property", insertId,
       `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`
+    ).catch((e) => logger.error(e, "properties background task failed"));
+    // #1715 (owner feedback) — consistent entity-provisioning policy: every
+    // trackable entity gets a cost centre for per-entity P&L. The unit's CC
+    // nests under its building's CC when the building has one.
+    createCostCenterForEntity(
+      scope.companyId, "unit", insertId,
+      `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`,
+      { parentEntityType: b.buildingId ? "property" : null, parentEntityId: b.buildingId ?? null, actorUserId: scope.userId },
     ).catch((e) => logger.error(e, "properties background task failed"));
 
     res.status(201).json(row);
@@ -2942,6 +2951,15 @@ router.post("/buildings", authorize({ feature: "properties.buildings", action: "
       action: "property.building.created", entity: "property_buildings", entityId: insertId,
       details: `مبنى جديد: ${b.name}${b.city ? ` — ${b.city}` : ''}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
+    // #1715 (owner feedback) — consistent entity-provisioning policy: a new
+    // property building gets BOTH a subsidiary account (per-property ledger)
+    // and a cost centre (per-property P&L), mirroring vehicle creation.
+    createSubsidiaryAccountsForEntity(scope.companyId, "property", insertId, b.name)
+      .catch((e) => logger.error(e, "property subsidiary auto-create failed"));
+    createCostCenterForEntity(
+      scope.companyId, "property", insertId, b.name,
+      { parentEntityType: scope.branchId ? "branch" : null, parentEntityId: scope.branchId ?? null, actorUserId: scope.userId },
+    ).catch((e) => logger.error(e, "property cost-centre auto-create failed"));
     if (b.purchasePrice && Number(b.purchasePrice) > 0) {
       (async () => {
         try {

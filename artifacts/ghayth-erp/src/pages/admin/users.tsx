@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, apiFetch, isRateLimitedError } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,41 +53,16 @@ import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-
-// Fallback set used only until the live RBAC roles load (or if that call
-// fails). The dropdowns below are driven by the dynamic list so CUSTOM roles
-// (created via the role composer "نسخ وعدّل") are assignable too — a role you
-// build must be selectable when creating/editing a user.
-const ROLE_OPTIONS = [
-  { value: "owner", label: "مالك النظام" },
-  { value: "general_manager", label: "مدير عام" },
-  { value: "hr_manager", label: "مدير الموارد البشرية" },
-  { value: "finance_manager", label: "مدير المالية" },
-  { value: "fleet_manager", label: "مدير الأسطول" },
-  { value: "property_manager", label: "مدير الأملاك" },
-  { value: "projects_manager", label: "مدير المشاريع" },
-  { value: "warehouse_manager", label: "مدير المستودعات" },
-  { value: "legal_manager", label: "مدير الشؤون القانونية" },
-  { value: "support_manager", label: "مدير الدعم الفني" },
-  { value: "crm_manager", label: "مدير المبيعات" },
-  { value: "bi_manager", label: "مدير ذكاء الأعمال" },
-  { value: "branch_manager", label: "مدير فرع" },
-  { value: "employee", label: "موظف" },
-];
+import { useRbacRoles } from "./use-rbac-roles";
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["admin-users"], "/admin/users");
   const { data: employeesData } = useApiQuery<any>(["employees-list-admin"], "/employees?limit=200");
-  // Live RBAC roles (incl. custom ones) drive every role dropdown so the page
-  // never falls out of sync with the role composer. Falls back to the static
-  // standard list until loaded / on error.
-  const { data: rbacRolesData } = useApiQuery<any>(["rbac-roles-options"], "/rbac/v2/roles");
-  const roleOptions = useMemo(() => {
-    const rows: any[] = rbacRolesData?.data ?? [];
-    if (rows.length === 0) return ROLE_OPTIONS;
-    return rows.map((r) => ({ value: r.role_key, label: r.label_ar || r.role_key }));
-  }, [rbacRolesData]);
+  // Live RBAC roles (incl. custom ones) drive every role dropdown via the
+  // shared hook, so this page and the /admin users tab stay in sync with the
+  // role composer and a role you build is assignable.
+  const { options: roleOptions } = useRbacRoles();
   const [showForm, setShowForm] = useState(false);
   const [createdUser, setCreatedUser] = useState<any>(null);
   const [resetUserId, setResetUserId] = useState<number | null>(null);
@@ -507,14 +482,13 @@ export default function AdminUsersPage() {
 
 function RoleAssignmentSection({ users }: { users: any[] }) {
   const { toast } = useToast();
-  // Source the assignable roles from RBAC v2 (the authoritative list that
-  // includes roles cloned in the composer) — not /admin/predefined-roles,
-  // which only sees legacy custom_roles and would hide v2-cloned roles.
-  const { data: rolesData } = useApiQuery<any>(["rbac-roles-assign"], "/rbac/v2/roles");
+  // Same authoritative RBAC v2 list as the rest of the page (custom roles
+  // included). Shared hook → React Query dedupes to one request.
+  const { roles } = useRbacRoles();
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [userRoles, setUserRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const predefinedRoles: any[] = (rolesData?.data ?? []).map((r: any) => ({
+  const predefinedRoles: any[] = roles.map((r) => ({
     roleKey: r.role_key, label: r.label_ar || r.role_key, level: r.level,
   }));
 
