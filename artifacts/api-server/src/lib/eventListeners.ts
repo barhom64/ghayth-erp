@@ -2383,5 +2383,46 @@ export function registerEventListeners() {
     await logEvent("recruitment.application.deleted", payload);
   });
 
+  // ── #1812 — umrah → transport bridge. When an umrah group is
+  //    created with mutamerCount > 0, notify the dispatcher that
+  //    transport bookings need to be materialized. The "النقل ليس
+  //    جزيرة" mandate: the system surfaces the integration
+  //    automatically instead of waiting for the operator to remember.
+  eventBus.on("umrah.group.created", async (payload) => {
+    await logEvent("umrah.group.created", payload);
+    if (!payload.companyId) return;
+    try {
+      const [group] = await rawQuery<{
+        id: number; mutamerCount: number | null; nuskGroupNumber: string | null;
+      }>(
+        `SELECT id, "mutamerCount", "nuskGroupNumber"
+           FROM umrah_groups WHERE id = $1 AND "companyId" = $2`,
+        [payload.entityId as number, payload.companyId as number],
+      );
+      if (!group) return;
+      const mutamerCount = group.mutamerCount ?? 0;
+      if (mutamerCount <= 0) return;
+      // Find the fleet dispatcher manager assignment to notify. Falls
+      // back to the branch manager if no fleet dispatcher exists.
+      const managerId = payload.branchId
+        ? await getManagerAssignmentId(payload.companyId as number, payload.branchId as number)
+        : null;
+      if (managerId) {
+        await createNotification({
+          companyId: payload.companyId as number,
+          assignmentId: managerId,
+          type: "fleet",
+          title: "مجموعة عمرة جديدة بحاجة لنقل",
+          body: `مجموعة ${group.nuskGroupNumber ?? `#${group.id}`} (${mutamerCount} معتمر) تحتاج إلى إنشاء حجوزات نقل. افتح /fleet/transport/integration للمتابعة.`,
+          actionUrl: "/fleet/transport/integration",
+          refType: "umrah_groups",
+          refId: group.id,
+        });
+      }
+    } catch (err) {
+      logger.warn({ err }, "umrah→transport bridge failed");
+    }
+  });
+
   logger.info("All event listeners registered successfully");
 }
