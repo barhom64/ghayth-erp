@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
-import { getAllNavigationPages } from "@/components/layout/sidebar-layout";
+import { useFilteredNavSections } from "@/components/layout/sidebar-layout";
 import {
   Search, ArrowRight, Users, Clock, Calendar, DollarSign, GraduationCap,
   Plus, UserPlus, ClipboardCheck, QrCode, Command, Keyboard,
@@ -122,11 +122,47 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
   const listRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const navPages = useMemo(() => getAllNavigationPages(), []);
+  // Permission-filtered navigation. The command palette MUST respect the
+  // current user's role/module/permission scope exactly like the sidebar
+  // and /services page do — otherwise Ctrl+K becomes a back door that
+  // lists (and navigates to) every admin/finance/governance page to every
+  // user, leaking feature existence and dead-ending on 403s. We consume
+  // the SAME `useFilteredNavSections` pipeline so there is one source of
+  // truth for "what can this user reach".
+  const sections = useFilteredNavSections();
 
-  const quickActions: CommandItem[] = useMemo(() => [
+  const navPages = useMemo(() => {
+    const out: { label: string; path: string; section: string; parent?: string }[] = [];
+    for (const section of sections) {
+      const walk = (items: typeof section.items, parentLabel?: string) => {
+        for (const item of items) {
+          if (item.children && item.children.length > 0) {
+            walk(item.children, parentLabel ? `${parentLabel} / ${item.label}` : item.label);
+          } else if (!item.path.startsWith("#")) {
+            out.push({ label: item.label, path: item.path, section: section.title, parent: parentLabel });
+          }
+        }
+      };
+      walk(section.items);
+    }
+    return out;
+  }, [sections]);
+
+  // Set of base paths the user can actually reach. A quick action /
+  // shortcut is only surfaced if its target lives under one of these
+  // accessible pages (e.g. /employees/create is allowed because the user
+  // can reach /employees). This keeps the hardcoded HR shortcuts honest
+  // against the user's real permissions.
+  const accessiblePaths = useMemo(() => navPages.map(p => p.path), [navPages]);
+  const isPathAllowed = useCallback((target: string | null): boolean => {
+    if (!target) return true; // non-navigating items (e.g. the help hint)
+    const base = target.split("?")[0].split("#")[0];
+    return accessiblePaths.some(p => base === p || base.startsWith(p + "/"));
+  }, [accessiblePaths]);
+
+  const quickActions: CommandItem[] = useMemo(() => ([
     {
-      id: "add-employee",
+      id: "add-employee", to: "/employees/create",
       label: "إضافة موظف جديد",
       icon: UserPlus,
       iconColor: "text-status-info-foreground bg-status-info-surface",
@@ -135,7 +171,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
       keywords: ["موظف", "تعيين", "جديد", "إضافة"],
     },
     {
-      id: "request-leave",
+      id: "request-leave", to: "/hr/leaves/create",
       label: "طلب إجازة",
       icon: Calendar,
       iconColor: "text-emerald-600 bg-emerald-50",
@@ -144,7 +180,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
       keywords: ["إجازة", "طلب", "غياب"],
     },
     {
-      id: "check-in",
+      id: "check-in", to: "/hr/attendance/qr-scanner",
       label: "تسجيل حضور بالرمز المصوّر",
       icon: QrCode,
       iconColor: "text-purple-600 bg-purple-50",
@@ -153,7 +189,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
       keywords: ["حضور", "رمز مصور", "تسجيل"],
     },
     {
-      id: "run-payroll",
+      id: "run-payroll", to: "/hr/payroll",
       label: "تشغيل مسير الرواتب",
       icon: DollarSign,
       iconColor: "text-orange-600 bg-orange-50",
@@ -162,7 +198,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
       keywords: ["رواتب", "مسير", "مرتبات"],
     },
     {
-      id: "new-request",
+      id: "new-request", to: "/requests",
       label: "تقديم طلب جديد",
       icon: Plus,
       iconColor: "text-indigo-600 bg-indigo-50",
@@ -171,7 +207,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
       keywords: ["طلب", "جديد"],
     },
     {
-      id: "new-training",
+      id: "new-training", to: "/hr/training",
       label: "إضافة برنامج تدريبي",
       icon: GraduationCap,
       iconColor: "text-teal-600 bg-teal-50",
@@ -180,7 +216,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
       keywords: ["تدريب", "برنامج"],
     },
     {
-      id: "approve-leaves",
+      id: "approve-leaves", to: "/hr/leaves",
       label: "اعتماد طلبات الإجازة",
       icon: ClipboardCheck,
       iconColor: "text-status-success-foreground bg-status-success-surface",
@@ -188,20 +224,23 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
       action: () => { navigate("/hr/leaves?tab=pending"); onClose(); },
       keywords: ["اعتماد", "موافقة", "إجازات"],
     },
-  ], [navigate]);
+  ] as (CommandItem & { to: string | null })[])
+    .filter(a => isPathAllowed(a.to))
+    .map(({ to: _to, ...item }) => item), [navigate, isPathAllowed]);
 
-  const shortcuts: CommandItem[] = useMemo(() => [
-    { id: "sh-employees", label: "الموظفين", subtitle: "Alt+E", icon: Users, iconColor: "text-blue-500 bg-status-info-surface", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/employees"); onClose(); }, keywords: ["اختصار", "موظفين"] },
-    { id: "sh-attendance", label: "الحضور والانصراف", subtitle: "Alt+A", icon: Clock, iconColor: "text-purple-500 bg-purple-50", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/hr/attendance"); onClose(); }, keywords: ["اختصار", "حضور"] },
-    { id: "sh-leaves", label: "الإجازات", subtitle: "Alt+L", icon: Calendar, iconColor: "text-emerald-500 bg-emerald-50", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/hr/leaves"); onClose(); }, keywords: ["اختصار", "إجازات"] },
-    { id: "sh-payroll", label: "الرواتب", subtitle: "Alt+P", icon: DollarSign, iconColor: "text-orange-500 bg-orange-50", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/hr/payroll"); onClose(); }, keywords: ["اختصار", "رواتب"] },
-    { id: "sh-help", label: "لوحة الأوامر", subtitle: "Ctrl+K", icon: Keyboard, iconColor: "text-muted-foreground bg-surface-subtle", category: "اختصارات لوحة المفاتيح", action: () => {}, keywords: ["اختصار", "مساعدة"] },
-  ], [navigate]);
+  const shortcuts: CommandItem[] = useMemo(() => ([
+    { id: "sh-employees", to: "/employees", label: "الموظفين", subtitle: "Alt+E", icon: Users, iconColor: "text-blue-500 bg-status-info-surface", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/employees"); onClose(); }, keywords: ["اختصار", "موظفين"] },
+    { id: "sh-attendance", to: "/hr/attendance", label: "الحضور والانصراف", subtitle: "Alt+A", icon: Clock, iconColor: "text-purple-500 bg-purple-50", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/hr/attendance"); onClose(); }, keywords: ["اختصار", "حضور"] },
+    { id: "sh-leaves", to: "/hr/leaves", label: "الإجازات", subtitle: "Alt+L", icon: Calendar, iconColor: "text-emerald-500 bg-emerald-50", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/hr/leaves"); onClose(); }, keywords: ["اختصار", "إجازات"] },
+    { id: "sh-payroll", to: "/hr/payroll", label: "الرواتب", subtitle: "Alt+P", icon: DollarSign, iconColor: "text-orange-500 bg-orange-50", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/hr/payroll"); onClose(); }, keywords: ["اختصار", "رواتب"] },
+    { id: "sh-help", to: null, label: "لوحة الأوامر", subtitle: "Ctrl+K", icon: Keyboard, iconColor: "text-muted-foreground bg-surface-subtle", category: "اختصارات لوحة المفاتيح", action: () => {}, keywords: ["اختصار", "مساعدة"] },
+  ] as (CommandItem & { to: string | null })[])
+    .filter(s => isPathAllowed(s.to))
+    .map(({ to: _to, ...item }) => item), [navigate, isPathAllowed]);
 
   const pageItems: CommandItem[] = useMemo(() => {
     const seen = new Set<string>();
     return navPages
-      .filter(p => !p.path.startsWith("#"))
       .filter(p => { if (seen.has(p.path)) return false; seen.add(p.path); return true; })
       .map(p => ({
         id: `page-${p.path}`,
