@@ -141,7 +141,6 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // on (companyId, sourceTable.id) — buildScopedWhere has no branch
   // cascade to add for a cross-domain bridge.
   "transport-integration.ts",
-  // fleet-rules-admin.ts: admin CRUD for fleet_expense_rules + transport_intake_rules.
   "fleet-rules-admin.ts",
   "umrah-entities.ts",
   "umrah.ts",
