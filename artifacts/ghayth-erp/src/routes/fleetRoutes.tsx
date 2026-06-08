@@ -40,6 +40,7 @@ const CargoCreate = lazy(() => import("@/pages/fleet/cargo-create"));
 const CargoDetail = lazy(() => import("@/pages/fleet/cargo-detail"));
 // #1733 Comment 9 — Booking + Dispatch SPA surface.
 const TransportBookings = lazy(() => import("@/pages/fleet/transport-bookings"));
+const TransportBookingCreate = lazy(() => import("@/pages/fleet/transport-booking-create"));
 const TransportBookingDetail = lazy(() => import("@/pages/fleet/transport-booking-detail"));
 const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
 // Unified driver self-service surface (#1354). Replaces /driver-portal/*
@@ -96,6 +97,8 @@ export const fleetRoutes = [
   //   intake → booking → lines → dispatch order → cargo manifest.
   // The dispatch board groups orders by driver with conflict detection.
   { path: "/fleet/transport/bookings", component: TransportBookings },
+  // /create must be listed BEFORE /:id so "create" isn't matched as an id.
+  { path: "/fleet/transport/bookings/create", component: TransportBookingCreate },
   { path: "/fleet/transport/bookings/:id", component: TransportBookingDetail },
   { path: "/fleet/transport/dispatch", component: TransportDispatch },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
