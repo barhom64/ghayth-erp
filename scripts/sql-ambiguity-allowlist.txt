@@ -80,3 +80,5 @@ routes/finance-reports.ts:je.postingDate
 routes/hr.ts:cd.title
 routes/hr.ts:cd.type
 routes/workspace.ts:ea.isActive
+
+# Re-trigger guard CI on a fresh head after refreshed-dump FP baseline (2026-06-08).
