@@ -125,6 +125,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // / serviceType / status / date window) — buildScopedWhere has no
   // branch cascade to add.
   "transport-pricing.ts",
+  // fleet-rules-admin.ts: #1733 follow-up — admin CRUD for the two rules
+  // engines (fleet_expense_rules + transport_intake_rules). All queries
+  // are simple list/get/update/delete scoped on (companyId, id), with
+  // optional filter columns (expenseSource / operationType / serviceType)
+  // — buildScopedWhere has no branch cascade to add for an admin table.
+  "fleet-rules-admin.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -209,9 +215,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 109,
+      total: 110,
       helperUsers: 36,
-      manualOnly: 70,
+      manualOnly: 71,
     });
   });
 });

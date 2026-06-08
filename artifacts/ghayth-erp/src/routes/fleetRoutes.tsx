@@ -44,6 +44,7 @@ const TransportBookingCreate = lazy(() => import("@/pages/fleet/transport-bookin
 const TransportBookingDetail = lazy(() => import("@/pages/fleet/transport-booking-detail"));
 const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
 const TransportPriceRules = lazy(() => import("@/pages/fleet/transport-price-rules"));
+const TransportRulesAdmin = lazy(() => import("@/pages/fleet/transport-rules-admin"));
 // Unified driver self-service surface (#1354). Replaces /driver-portal/*
 // — drivers log in to the regular ERP, get the `driver` role, and land
 // here as their dashboard (see dashboard.tsx role-based redirect).
@@ -103,6 +104,7 @@ export const fleetRoutes = [
   { path: "/fleet/transport/bookings/:id", component: TransportBookingDetail },
   { path: "/fleet/transport/dispatch", component: TransportDispatch },
   { path: "/fleet/transport/price-rules", component: TransportPriceRules },
+  { path: "/fleet/transport/rules", component: TransportRulesAdmin },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },
 ];
