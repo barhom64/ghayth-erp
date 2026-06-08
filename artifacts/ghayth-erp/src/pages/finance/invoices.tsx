@@ -28,6 +28,8 @@ import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function InvoicesPage() {
   const [, navigate] = useLocation();
@@ -55,6 +57,11 @@ export default function InvoicesPage() {
     dateField: "dueDate",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((i: any) => tagFilteredIds.has(i.id)) : preFiltered;
+  // Derive `outstanding` (total − paid) onto each row so the "المتبقّي"
+  // column can sort on it (DataTable sorts by row[key]) and the CSV export
+  // can reference it by key — both previously read a non-existent field.
+  const filteredWithBalance = (filtered || []).map((i: any) => ({ ...i, outstanding: Number(i.total ?? 0) - Number(i.paidAmount ?? 0) }));
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const previewFields: PreviewField[] = [
     { label: "رقم الفاتورة", key: "ref" },
@@ -99,16 +106,56 @@ export default function InvoicesPage() {
       render: (inv) => <span className="font-semibold">{formatCurrency(Number(inv.total))}</span>,
     },
     {
+      key: "vatAmount",
+      header: "الضريبة",
+      sortable: true,
+      render: (inv) =>
+        inv.vatAmount != null ? (
+          <span className="text-muted-foreground tabular-nums">{formatCurrency(Number(inv.vatAmount))}</span>
+        ) : (
+          <span className="text-xs text-gray-300">—</span>
+        ),
+    },
+    {
       key: "paidAmount",
       header: "المدفوع",
       sortable: true,
       render: (inv) => <span className="text-emerald-600">{formatCurrency(Number(inv.paidAmount || 0))}</span>,
     },
     {
+      key: "outstanding",
+      header: "المتبقّي",
+      sortable: true,
+      // Backend already returns total + paidAmount; the remaining balance
+      // is the single most useful AR number and was previously hidden.
+      render: (inv) => {
+        const remaining = Number(inv.total || 0) - Number(inv.paidAmount || 0);
+        return (
+          <span className={remaining > 0 ? "text-status-warning-foreground font-medium tabular-nums" : "text-emerald-600 tabular-nums"}>
+            {formatCurrency(remaining)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "issueDate",
+      header: "تاريخ الإصدار",
+      sortable: true,
+      render: (inv) => <span className="text-muted-foreground">{inv.issueDate ? formatDateAr(inv.issueDate) : "-"}</span>,
+    },
+    {
       key: "dueDate",
       header: "الاستحقاق",
       sortable: true,
       render: (inv) => <span className="text-muted-foreground">{inv.dueDate ? formatDateAr(inv.dueDate) : "-"}</span>,
+    },
+    {
+      key: "createdByName",
+      header: "المنشئ",
+      sortable: true,
+      // Resolved server-side from invoices.createdBy (an assignment id) via the
+      // employee_assignments → employees join — control data for the audit.
+      render: (inv) => <span className="text-muted-foreground text-xs">{inv.createdByName || "—"}</span>,
     },
     {
       key: "status",
@@ -190,6 +237,32 @@ export default function InvoicesPage() {
           <Link href="/finance/invoices/create">
             <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_finance_invoices"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: "قائمة الفواتير",
+                total: printRows.length,
+                totalRevenue: stats?.totalRevenue ?? 0,
+                paidThisMonth: stats?.paidThisMonth ?? 0,
+                pending: stats?.pendingAmount ?? 0,
+                overdue: stats?.overdueAmount ?? 0,
+              },
+              items: printRows.map((i: any) => ({
+                "رقم الفاتورة": i.invoiceNumber || i.ref || i.id,
+                "العميل": i.clientName || "—",
+                "تاريخ الإصدار": i.issueDate || "—",
+                "تاريخ الاستحقاق": i.dueDate || "—",
+                "الإجمالي": i.total ?? i.amount ?? 0,
+                "الضريبة": i.vatAmount ?? 0,
+                "المدفوع": i.paidAmount ?? 0,
+                "المتبقي": Number(i.total ?? 0) - Number(i.paidAmount ?? 0),
+                "الحالة": i.status || "—",
+              })),
+            })}
+          />
         </>
       }
     >
@@ -216,14 +289,20 @@ export default function InvoicesPage() {
         }}
         values={filters}
         onChange={setFilters}
-        onExportCSV={() => exportToCSV((filtered || []) as any[], [
-          { key: "ref", label: "رقم الفاتورة" },
-          { key: "clientName", label: "العميل" },
-          { key: "total", label: "الإجمالي" },
-          { key: "paidAmount", label: "المدفوع" },
-          { key: "dueDate", label: "الاستحقاق" },
-          { key: "status", label: "الحالة" },
-        ], "الفواتير")}
+        onExportCSV={() => exportToCSV(
+          filteredWithBalance as any[],
+          [
+            { key: "ref", label: "رقم الفاتورة" },
+            { key: "clientName", label: "العميل" },
+            { key: "issueDate", label: "تاريخ الإصدار" },
+            { key: "total", label: "الإجمالي" },
+            { key: "vatAmount", label: "الضريبة" },
+            { key: "paidAmount", label: "المدفوع" },
+            { key: "outstanding", label: "المتبقّي" },
+            { key: "dueDate", label: "الاستحقاق" },
+            { key: "createdByName", label: "المنشئ" },
+            { key: "status", label: "الحالة" },
+          ], "الفواتير")}
         resultCount={filtered?.length}
       />
       <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
@@ -240,6 +319,7 @@ export default function InvoicesPage() {
           { key: "ref", label: "رقم الفاتورة" },
           { key: "clientName", label: "العميل" },
           { key: "total", label: "الإجمالي" },
+          { key: "createdByName", label: "المنشئ" },
           { key: "status", label: "الحالة" },
         ]}
         csvFileName="الفواتير"
@@ -248,7 +328,8 @@ export default function InvoicesPage() {
 
       <DataTable
         columns={columns}
-        data={filtered}
+        onSortedDataChange={setPrintRows}
+        data={filteredWithBalance}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}

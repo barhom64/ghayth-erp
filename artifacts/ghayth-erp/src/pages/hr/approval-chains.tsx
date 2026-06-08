@@ -20,10 +20,13 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { APPROVAL_ROLES, APPROVAL_CHAIN_STATUS } from "@/lib/hr-type-maps";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS = Object.entries(APPROVAL_CHAIN_STATUS).map(([value, { label }]) => ({ value, label }));
 
 const CHAIN_TYPES: Record<string, string> = {
@@ -72,9 +75,6 @@ export default function ApprovalChainsPage() {
     { successMessage: "تم إنشاء سلسلة الموافقة", onSuccess: resetForm },
   );
 
-  if (stagesQ.isLoading || defsQ.isLoading) return <LoadingSpinner />;
-  if (stagesQ.isError || defsQ.isError) return <ErrorState />;
-
   const items = stagesQ.data?.data || [];
   const definitions = defsQ.data?.data || [];
 
@@ -83,6 +83,12 @@ export default function ApprovalChainsPage() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (stagesQ.isLoading || defsQ.isLoading) return <LoadingSpinner />;
+
+  if (stagesQ.isError || defsQ.isError) return <ErrorState />;
+
 
   const kpis = [
     { label: "تعريفات السلاسل", value: definitions.length, icon: Settings2, color: "text-purple-600 bg-purple-50" },
@@ -169,9 +175,27 @@ export default function ApprovalChainsPage() {
       subtitle="إعداد تعريفات مسارات الاعتماد ومتابعة مراحل الموافقة الجارية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <GuardedButton perm="hr:create" size="sm" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
-          <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "تعريف سلسلة جديدة"}
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_approval_chains"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "سلاسل الاعتماد", total: printRows.length },
+              items: printRows.map((c: any) => ({
+                "النوع": c.entityType || c.type || "—",
+                "ترتيب الخطوة": c.stageOrder ?? c.sequence ?? "—",
+                "اسم الخطوة": c.stageName || c.name || "—",
+                "نوع المعتمِد": c.approverType || "—",
+                "المعتمِد": c.approverName || "—",
+                "الحالة": c.status || "—",
+              })),
+            })}
+          />
+          <GuardedButton perm="hr:create" size="sm" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
+            <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "تعريف سلسلة جديدة"}
+          </GuardedButton>
+        </div>
       }
     >
       <HrTabsNav />
@@ -339,9 +363,25 @@ export default function ApprovalChainsPage() {
             values={filters}
             onChange={setFilters}
             resultCount={filtered.length}
+            onExportCSV={() =>
+              exportToCSV(
+                filtered || [],
+                [
+                  { key: "requestId", label: "رقم الطلب" },
+                  { key: "employeeName", label: "الموظف" },
+                  { key: "leaveTypeName", label: "نوع الإجازة" },
+                  { key: "stage", label: "المرحلة" },
+                  { key: "requiredRole", label: "الدور المطلوب" },
+                  { key: "decision", label: "القرار" },
+                  { key: "status", label: "الحالة" },
+                ],
+                "مراحل-الاعتماد",
+              )
+            }
           />
           <DataTable
             columns={columns}
+            onSortedDataChange={setPrintRows}
             data={filtered}
             noToolbar
             emptyMessage="لا توجد مراحل موافقة جارية"

@@ -11,6 +11,7 @@ export interface RequestScope {
   activeAssignmentId: number;
   allowedCompanies: number[];
   allowedBranches: number[];
+  allowedDepartments: number[];
   allowedAssignments: number[];
   role: string;
   isOwner: boolean;
@@ -106,8 +107,8 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
   // letting writes land on it. employee_assignments.branchId is
   // nullable for owners/general_managers, so the OR clause keeps those
   // rows in.
-  const allAssignments = await rawQuery<{ id: number; companyId: number; branchId: number | null }>(
-    `SELECT ea.id, ea."companyId", ea."branchId"
+  const allAssignments = await rawQuery<{ id: number; companyId: number; branchId: number | null; departmentId: number | null }>(
+    `SELECT ea.id, ea."companyId", ea."branchId", ea."departmentId"
        FROM employee_assignments ea
        LEFT JOIN branches b ON b.id = ea."branchId"
       WHERE ea."employeeId" = $1
@@ -123,6 +124,17 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
       allAssignments
         .map((a) => a.branchId)
         .filter((b): b is number => typeof b === "number"),
+    ),
+  ];
+  // Department-level scoping (org-as-security-boundary, additive). Derived from
+  // the same active assignments as branches; consumed only by routes that
+  // opt in via buildScopedWhere({ enforceDepartmentScope: true }). Owners/GMs
+  // are department-unbounded (empty set ⇒ no department predicate is emitted).
+  const allowedDepartments = [
+    ...new Set(
+      allAssignments
+        .map((a) => a.departmentId)
+        .filter((d): d is number => typeof d === "number"),
     ),
   ];
 
@@ -184,18 +196,20 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
     }
   }
 
-  // Validate the picked role against the user's actually-assigned roles
-  // in `user_roles` (the legacy table the header dropdown lists from).
-  // Owner is always included because `employee_assignments.role='owner'`
-  // is the implicit top-level role even when no `user_roles` row exists.
-  // Unknown keys are dropped silently so a tampered header can never
-  // grant a role the user doesn't have.
+  // Validate the picked role against the user's actually-assigned RBAC v2 roles
+  // (rbac_user_roles → rbac_roles) — the single roles system. Owner is always
+  // included because `employee_assignments.role='owner'` is the implicit
+  // top-level role even with no rbac_user_roles row. Unknown keys are dropped
+  // silently so a tampered header can never grant a role the user doesn't have.
   let selectedRoleKey: string | null = null;
   let effectiveRole = assignment.role;
   let effectiveIsOwner = assignment.role === "owner";
   if (requestedRoleKey) {
     const ownedRoleRows = await rawQuery<{ roleKey: string }>(
-      `SELECT "roleKey" FROM user_roles WHERE "userId" = $1 AND ("companyId" = $2 OR "companyId" IS NULL)`,
+      `SELECT r.role_key AS "roleKey"
+         FROM rbac_user_roles ur JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
       [payload.userId, assignment.companyId]
     ).catch(() => [] as { roleKey: string }[]);
     const ownedKeys = new Set<string>(ownedRoleRows.map((r) => r.roleKey));
@@ -219,6 +233,7 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
     activeAssignmentId,
     allowedCompanies,
     allowedBranches,
+    allowedDepartments,
     allowedAssignments: allAssignments.map((a) => a.id),
     role: effectiveRole,
     isOwner: effectiveIsOwner,

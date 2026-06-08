@@ -2,6 +2,8 @@ import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -76,6 +78,7 @@ export default function RecurringJournalsPage() {
     `/finance/recurring-journals${scopeSuffix}`,
   );
   const items: RecurringJournal[] = (data?.data || []) as RecurringJournal[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   // Toggle active flag — body-driven path so a single mutation hook
   // handles both enable and disable. The `active` flag is carried in
@@ -220,6 +223,23 @@ export default function RecurringJournalsPage() {
                 قيد دوري جديد
               </Link>
             </GuardedButton>
+            <PrintButton
+              entityType="report_finance_recurring_journals"
+              entityId="list"
+              size="icon"
+              payload={() => ({
+                entity: { title: "القيود الدورية", total: printRows.length },
+                items: printRows.map((r: any) => ({
+                  "الاسم": r.name || "—",
+                  "التكرار": r.frequency || "—",
+                  "تاريخ البدء": r.startDate || "—",
+                  "تاريخ النهاية": r.endDate || "—",
+                  "آخر تنفيذ": r.lastExecutedAt || "—",
+                  "تنفيذ تالٍ": r.nextRunAt || "—",
+                  "الحالة": r.status || "—",
+                })),
+              })}
+            />
           </>
         }
       >
@@ -256,6 +276,7 @@ export default function RecurringJournalsPage() {
 
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={items}
           isLoading={isLoading}
           isError={isError}

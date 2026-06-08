@@ -1,10 +1,20 @@
 import { eventBus, registerCrossDomainHandler, type EventPayload } from "./eventBus.js";
 import { pool, rawQuery, rawExecute } from "./rawdb.js";
 import { logger } from "./logger.js";
-import { createNotification, getManagerAssignmentId, createGuardedJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear, currentMonthPadded } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, createGuardedJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear, currentMonthPadded, createAuditLog } from "./businessHelpers.js";
 import { computeDiff } from "./auditDiff.js";
+import {
+  INBOX_RULES,
+  SLA_HOURS_BY_PRIORITY,
+  classifyInboxMessage,
+  liftPriorityForClassification,
+  type Priority,
+} from "./inboxClassifier.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
 import { registerObligation, markObligationMet } from "./obligationsEngine.js";
+import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
+import { sendMessage } from "./messageSender.js";
+import { pickBestMatch, composeAutoReplyBody } from "./inboxAutoReply.js";
 
 async function logEvent(event: string, payload: EventPayload) {
   try {
@@ -105,21 +115,39 @@ export function registerEventListeners() {
   eventBus.on("invoice.created", async (payload) => {
     await logEvent("invoice.created", payload);
     await logAudit("invoice.created", { ...payload, action: "create" });
-    if (payload.companyId && payload.branchId) {
-      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
-      if (managerId) {
-        await createNotification({
-          companyId: payload.companyId,
-          assignmentId: managerId,
-          type: "finance",
-          title: "فاتورة جديدة",
-          body: `تم إنشاء فاتورة #${payload.entityId}`,
-          priority: "normal",
-          refType: "invoice",
-          refId: payload.entityId as number,
-          actionUrl: `/finance/invoices/${payload.entityId}`,
-        });
-      }
+    if (payload.companyId && payload.entityId) {
+      const [inv] = await rawQuery<{
+        ref: string | null;
+        total: string | number | null;
+        clientId: number | null;
+        clientName: string | null;
+        branchId: number | null;
+      }>(
+        `SELECT i.ref, i.total, i."clientId", c."name" AS "clientName", i."branchId"
+         FROM invoices i LEFT JOIN clients c ON c.id = i."clientId"
+         WHERE i.id = $1 AND i."companyId" = $2 LIMIT 1`,
+        [payload.entityId as number, payload.companyId],
+      ).catch(() => [] as Array<{ ref: string | null; total: string | number | null; clientId: number | null; clientName: string | null; branchId: number | null }>);
+
+      const branchId = inv?.branchId ?? (payload.branchId as number | undefined) ?? null;
+      const managerId = branchId ? await getManagerAssignmentId(payload.companyId, branchId) : null;
+      const invoiceRef = inv?.ref ?? `${payload.entityId}`;
+      const customerName = inv?.clientName ?? "—";
+      const amount = inv?.total != null ? String(inv.total) : "0";
+
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "invoice.created",
+        templateVars: { invoiceRef, customerName, amount },
+        fallbackTitle: "فاتورة جديدة",
+        fallbackBody: `تم إنشاء فاتورة #${invoiceRef}`,
+        assignmentId: managerId ?? undefined,
+        recipientUser: inv?.clientId ? { type: "client", id: inv.clientId } : undefined,
+        priority: "normal",
+        refType: "invoice",
+        refId: payload.entityId as number,
+        actionUrl: `/finance/invoices/${payload.entityId}`,
+      });
     }
   });
 
@@ -135,6 +163,31 @@ export function registerEventListeners() {
     // Cross-module: mark financial obligation as fulfilled
     if (payload.companyId && payload.entityId) {
       await markObligationMet(payload.companyId, "invoices", payload.entityId as number, "payment").catch((e) => logger.error(e, "event listener background task failed"));
+
+      const [inv] = await rawQuery<{
+        ref: string | null;
+        total: string | number | null;
+        clientId: number | null;
+      }>(
+        `SELECT ref, total, "clientId" FROM invoices WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [payload.entityId as number, payload.companyId],
+      ).catch(() => [] as Array<{ ref: string | null; total: string | number | null; clientId: number | null }>);
+
+      const invoiceRef = inv?.ref ?? `${payload.entityId}`;
+      const amount = inv?.total != null ? String(inv.total) : "0";
+
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "invoice.paid",
+        templateVars: { invoiceRef, amount },
+        fallbackTitle: "تم سداد الفاتورة",
+        fallbackBody: `تم سداد الفاتورة #${invoiceRef}`,
+        recipientUser: inv?.clientId ? { type: "client", id: inv.clientId } : undefined,
+        priority: "normal",
+        refType: "invoice",
+        refId: payload.entityId as number,
+        actionUrl: `/finance/invoices/${payload.entityId}`,
+      });
     }
   });
 
@@ -143,19 +196,22 @@ export function registerEventListeners() {
     await logAudit("leave.requested", { ...payload, action: "create" });
     if (payload.companyId && payload.branchId) {
       const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
-      if (managerId) {
-        await createNotification({
-          companyId: payload.companyId,
-          assignmentId: managerId,
-          type: "hr",
-          title: "طلب إجازة جديد",
-          body: `طلب إجازة من ${payload.employeeName || "موظف"} - ${payload.leaveType || ""}`,
-          priority: "high",
-          refType: "leave_request",
-          refId: payload.entityId as number,
-          actionUrl: `/hr/leaves`,
-        });
-      }
+      const employeeName = String(payload.employeeName ?? "موظف");
+      const leaveType = String(payload.leaveType ?? "—");
+      const startDate = String(payload.startDate ?? "—");
+      const endDate = String(payload.endDate ?? "—");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "leave.request.created",
+        templateVars: { employeeName, leaveType, startDate, endDate },
+        fallbackTitle: "طلب إجازة جديد",
+        fallbackBody: `طلب إجازة من ${employeeName} - ${leaveType}`,
+        assignmentId: managerId ?? undefined,
+        priority: "high",
+        refType: "leave_request",
+        refId: payload.entityId as number,
+        actionUrl: `/hr/leaves`,
+      });
     }
   });
 
@@ -163,15 +219,20 @@ export function registerEventListeners() {
     await logEvent("leave.approved", payload);
     await logAudit("leave.approved", { ...payload, action: "approve" });
     if (payload.companyId && payload.assignmentId) {
-      await createNotification({
+      const leaveType = String(payload.leaveType ?? "—");
+      const startDate = String(payload.startDate ?? "—");
+      const endDate = String(payload.endDate ?? "—");
+      await notifyBusinessEvent({
         companyId: payload.companyId,
+        templateKey: "leave.request.approved",
+        templateVars: { leaveType, startDate, endDate },
+        fallbackTitle: "تمت الموافقة على إجازتك",
+        fallbackBody: "تمت الموافقة على طلب الإجازة الخاص بك",
         assignmentId: payload.assignmentId as number,
-        type: "hr",
-        title: "تمت الموافقة على إجازتك",
-        body: "تمت الموافقة على طلب الإجازة الخاص بك",
         priority: "normal",
         refType: "leave_request",
         refId: payload.entityId as number,
+        actionUrl: `/hr/leaves/${payload.entityId}`,
       });
     }
   });
@@ -180,15 +241,19 @@ export function registerEventListeners() {
     await logEvent("leave.rejected", payload);
     await logAudit("leave.rejected", { ...payload, action: "reject" });
     if (payload.companyId && payload.assignmentId) {
-      await createNotification({
+      const leaveType = String(payload.leaveType ?? "—");
+      const reason = String(payload.reason ?? "غير محدد");
+      await notifyBusinessEvent({
         companyId: payload.companyId,
+        templateKey: "leave.request.rejected",
+        templateVars: { leaveType, reason },
+        fallbackTitle: "تم رفض إجازتك",
+        fallbackBody: `تم رفض طلب الإجازة الخاص بك. السبب: ${reason}`,
         assignmentId: payload.assignmentId as number,
-        type: "hr",
-        title: "تم رفض إجازتك",
-        body: "تم رفض طلب الإجازة الخاص بك",
         priority: "normal",
         refType: "leave_request",
         refId: payload.entityId as number,
+        actionUrl: `/hr/leaves/${payload.entityId}`,
       });
     }
   });
@@ -214,6 +279,24 @@ export function registerEventListeners() {
   eventBus.on("purchase_request.created", async (payload) => {
     await logEvent("purchase_request.created", payload);
     await logAudit("purchase_request.created", { ...payload, action: "create" });
+    if (payload.companyId && payload.branchId) {
+      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+      const prNumber = String(payload.entityId ?? "—");
+      const requesterName = String(payload.requesterName ?? "—");
+      const amount = String(payload.amount ?? "0");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "purchase_request.created",
+        templateVars: { prNumber, requesterName, amount },
+        fallbackTitle: "طلب شراء",
+        fallbackBody: `طلب شراء جديد #${prNumber} من ${requesterName}`,
+        assignmentId: managerId ?? undefined,
+        priority: "normal",
+        refType: "purchase_request",
+        refId: payload.entityId as number,
+        actionUrl: `/finance/purchase-requests/${payload.entityId}`,
+      });
+    }
   });
 
   eventBus.on("purchase_request.approved", async (payload) => {
@@ -229,6 +312,23 @@ export function registerEventListeners() {
   eventBus.on("crm.deal.won", async (payload) => {
     await logEvent("crm.deal.won", payload);
     await logAudit("crm.deal.won", { ...payload, action: "update" });
+    if (payload.companyId && payload.branchId) {
+      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+      const opportunityName = String(payload.opportunityName ?? payload.title ?? "—");
+      const amount = String(payload.amount ?? payload.value ?? "0");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "opportunity.won",
+        templateVars: { opportunityName, amount },
+        fallbackTitle: "فرصة بيع مكتسبة",
+        fallbackBody: `تم كسب الفرصة ${opportunityName}`,
+        assignmentId: managerId ?? undefined,
+        priority: "high",
+        refType: "opportunity",
+        refId: payload.entityId as number,
+        actionUrl: `/crm/${payload.entityId}`,
+      });
+    }
   });
 
   eventBus.on("crm.deal.lost", async (payload) => {
@@ -240,12 +340,15 @@ export function registerEventListeners() {
     await logEvent("task.created", payload);
     await logAudit("task.created", { ...payload, action: "create" });
     if (payload.companyId && payload.assigneeAssignmentId) {
-      await createNotification({
+      const taskTitle = String(payload.taskTitle ?? "");
+      const dueDate = String(payload.dueDate ?? "—");
+      await notifyBusinessEvent({
         companyId: payload.companyId,
+        templateKey: "task.assigned",
+        templateVars: { taskTitle, dueDate },
+        fallbackTitle: "مهمة جديدة",
+        fallbackBody: `تم تعيين مهمة جديدة لك: ${taskTitle}`,
         assignmentId: payload.assigneeAssignmentId as number,
-        type: "task",
-        title: "مهمة جديدة",
-        body: `تم تعيين مهمة جديدة لك: ${payload.taskTitle || ""}`,
         priority: "normal",
         refType: "task",
         refId: payload.entityId as number,
@@ -262,11 +365,43 @@ export function registerEventListeners() {
   eventBus.on("support.ticket.created", async (payload) => {
     await logEvent("support.ticket.created", payload);
     await logAudit("support.ticket.created", { ...payload, action: "create" });
+    if (payload.companyId && payload.entityId) {
+      const ticketId = String(payload.entityId);
+      const subject = String(payload.subject ?? payload.title ?? "—");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "support.ticket.created",
+        templateVars: { ticketId, subject },
+        fallbackTitle: "تذكرة دعم جديدة",
+        fallbackBody: `تم فتح تذكرة #${ticketId} — ${subject}`,
+        priority: "normal",
+        refType: "support_ticket",
+        refId: payload.entityId as number,
+        actionUrl: `/support/${payload.entityId}`,
+      });
+    }
   });
 
   eventBus.on("support.ticket.resolved", async (payload) => {
     await logEvent("support.ticket.resolved", payload);
     await logAudit("support.ticket.resolved", { ...payload, action: "resolve", entity: "support_tickets" });
+    if (payload.companyId && payload.entityId) {
+      const ticketId = String(payload.entityId);
+      const subject = String(payload.subject ?? payload.title ?? "—");
+      const reporterUserId = (payload.reporterUserId ?? payload.userId) as number | undefined;
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "support.ticket.resolved",
+        templateVars: { ticketId, subject },
+        fallbackTitle: "تم حل التذكرة",
+        fallbackBody: `تم حل التذكرة #${ticketId}`,
+        recipientUser: reporterUserId ? { type: "user", id: reporterUserId } : undefined,
+        priority: "normal",
+        refType: "support_ticket",
+        refId: payload.entityId as number,
+        actionUrl: `/support/${payload.entityId}`,
+      });
+    }
   });
 
   // Phase C — Support domain audit. Every lifecycle transition on a
@@ -284,6 +419,22 @@ export function registerEventListeners() {
   eventBus.on("support.ticket.assigned", async (payload) => {
     await logEvent("support.ticket.assigned", payload);
     await logAudit("support.ticket.assigned", { ...payload, action: "assign", entity: "support_tickets" });
+    if (payload.companyId && payload.entityId && payload.assigneeAssignmentId) {
+      const ticketId = String(payload.entityId);
+      const subject = String(payload.subject ?? payload.title ?? "—");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "support.ticket.assigned",
+        templateVars: { ticketId, subject },
+        fallbackTitle: "تذكرة مُسندة لك",
+        fallbackBody: `تم إسناد التذكرة #${ticketId}`,
+        assignmentId: payload.assigneeAssignmentId as number,
+        priority: "normal",
+        refType: "support_ticket",
+        refId: payload.entityId as number,
+        actionUrl: `/support/${payload.entityId}`,
+      });
+    }
   });
   eventBus.on("support.ticket.deleted", async (payload) => {
     await logEvent("support.ticket.deleted", payload);
@@ -321,6 +472,47 @@ export function registerEventListeners() {
   eventBus.on("payroll.completed", async (payload) => {
     await logEvent("payroll.completed", payload);
     await logAudit("payroll.completed", { ...payload, action: "create" });
+    // Fan out a "payslip ready" notification to every employee in the
+    // run — each through their own channels (email/sms/whatsapp) in
+    // their preferred language, with their own net amount.
+    if (payload.companyId && payload.entityId) {
+      const lines = await rawQuery<{
+        employeeId: number | null;
+        netSalary: string | number | null;
+        period: string | null;
+        assignmentId: number | null;
+      }>(
+        `SELECT pl."employeeId", pl."netSalary", pr.period,
+                ea.id AS "assignmentId"
+         FROM payroll_lines pl
+         JOIN payroll_runs pr ON pr.id = pl."runId"
+         LEFT JOIN employee_assignments ea
+                ON ea."employeeId" = pl."employeeId"
+               AND ea."companyId" = pr."companyId"
+               AND ea.status = 'active'
+         WHERE pl."runId" = $1 AND pr."companyId" = $2 AND pl."deletedAt" IS NULL`,
+        [payload.entityId as number, payload.companyId],
+      ).catch(() => [] as Array<{ employeeId: number | null; netSalary: string | number | null; period: string | null; assignmentId: number | null }>);
+
+      for (const line of lines) {
+        if (!line.employeeId) continue;
+        const month = String(line.period ?? "—");
+        const amount = line.netSalary != null ? String(line.netSalary) : "0";
+        await notifyBusinessEvent({
+          companyId: payload.companyId,
+          templateKey: "payroll.ready",
+          templateVars: { month, amount },
+          fallbackTitle: "كشف الراتب جاهز",
+          fallbackBody: `كشف راتب شهر ${month} جاهز للمراجعة`,
+          assignmentId: line.assignmentId ?? undefined,
+          recipientUser: { type: "employee", id: line.employeeId },
+          priority: "normal",
+          refType: "payroll_run",
+          refId: payload.entityId as number,
+          actionUrl: `/my-payslip`,
+        });
+      }
+    }
   });
 
   eventBus.on("journal.entry.created", async (payload) => {
@@ -1321,58 +1513,230 @@ export function registerEventListeners() {
     }
   });
 
-  // N10 fix: inbox auto-classifier. Rule-based, deliberately simple:
-  // matches Arabic + English keywords in the subject and decides whether
-  // the message warrants an open `tasks` row so a human picks it up.
-  // For NLP-quality classification we'd plug in a model later; for now
-  // these rules close the gap where messages just sat in /communications/
-  // inbox with no signal to anyone.
+  // Inbox auto-classifier v2 — closes the gap where v1 read only the
+  // subject and ignored body, sender identity, and entity linkage.
   //
-  // Match the LONGER keywords first — "complaint" is a strict subset of
-  // "complaint received" but we want the more specific category to win.
+  // v2 changes:
+  //   1. Reads the full body from message_log (not the slim event
+  //      payload) so a "شكوى" buried in the body still matches.
+  //   2. Resolves the sender against clients/employees, links the
+  //      generated task with linkedEntityType=clients|employees|message_log.
+  //   3. VIP clients lift the matched priority one notch
+  //      (normal→high, high→urgent).
+  //   4. Sets a dueAt based on priority so the SLA worker
+  //      (workflowEngine.checkSlaStatus) has a deadline to enforce.
+  //   5. Skips silently when a duplicate task already exists for this
+  //      message id, so a retry-replay doesn't create twins.
   eventBus.on("inbox.message.received", async (payload) => {
     await logEvent("inbox.message.received", payload);
     if (!payload.companyId || !payload.entityId) return;
 
-    const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
-    const subject = String(details.subject ?? "").toLowerCase();
-    const fromAddress = String(details.fromAddress ?? "");
-    if (!subject.trim()) return;
+    // Hydrate the message row — the event payload was deliberately
+    // light, but classification quality wants the full body.
+    const [msg] = await rawQuery<{
+      subject: string | null; body: string | null;
+      fromAddress: string | null; channel: string;
+    }>(
+      `SELECT subject, body, "fromAddress", channel FROM message_log
+        WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+      [payload.entityId as number, payload.companyId],
+    ).catch(() => []);
+    if (!msg) return;
 
-    // Rule table — keyword → (taskType, priority, title prefix). Arabic
-    // matching is case-insensitive at the regex level even though
-    // toLowerCase is a no-op for Arabic characters.
-    const RULES: Array<{ patterns: RegExp[]; type: string; priority: string; titlePrefix: string }> = [
-      { patterns: [/شكوى/i, /complaint/i],            type: "complaint",  priority: "high",   titlePrefix: "شكوى من" },
-      { patterns: [/عاجل/i, /urgent/i, /asap/i],      type: "urgent",     priority: "urgent", titlePrefix: "عاجل من" },
-      { patterns: [/فاتورة/i, /invoice/i, /payment/i, /دفع/i], type: "billing",    priority: "normal", titlePrefix: "استفسار فاتورة" },
-      { patterns: [/طلب/i, /request/i, /apply/i],     type: "request",    priority: "normal", titlePrefix: "طلب من" },
-      { patterns: [/استفسار/i, /inquiry/i, /question/i], type: "inquiry", priority: "low",    titlePrefix: "استفسار من" },
-    ];
+    // Match against subject + first 600 chars of body. We cap the body
+    // window to keep regex cost predictable on large emails.
+    const haystack = `${msg.subject ?? ""}\n${(msg.body ?? "").slice(0, 600)}`.toLowerCase();
+    if (!haystack.trim()) return;
 
-    let matched: { type: string; priority: string; titlePrefix: string } | null = null;
-    for (const rule of RULES) {
-      if (rule.patterns.some(p => p.test(subject))) {
-        matched = rule;
-        break;
+    const fromAddress = msg.fromAddress ?? "";
+
+    const matched = classifyInboxMessage(haystack);
+    if (!matched) return;
+
+    // Idempotency: skip if we already opened a task for this message.
+    const [existing] = await rawQuery<{ id: number }>(
+      `SELECT id FROM tasks
+        WHERE "companyId" = $1 AND "linkedEntityType" = 'message_log' AND "linkedEntityId" = $2
+        LIMIT 1`,
+      [payload.companyId, payload.entityId as number],
+    ).catch(() => []);
+    if (existing) return;
+
+    // Sender resolution — last 9 digits of phone match clients; email
+    // matches clients then employees. The linked task gets the entity
+    // ref so /tasks shows it under the customer/staff record directly.
+    let linkedEntityType: "clients" | "employees" | "message_log" = "message_log";
+    let linkedEntityId: number = payload.entityId as number;
+    let senderName: string = fromAddress || "—";
+    let senderClassification: string | null = null;
+
+    if (fromAddress) {
+      // Phone match first (sms/whatsapp/pbx). digits-only fast path.
+      const digits = fromAddress.replace(/\D/g, "");
+      if (digits.length >= 9) {
+        const last9 = digits.slice(-9);
+        const [client] = await rawQuery<{ id: number; name: string; classification: string | null }>(
+          `SELECT id, name, classification FROM clients
+            WHERE "companyId" = $1
+              AND REPLACE(REPLACE(COALESCE(phone,''),'+',''),'-','') LIKE $2
+              AND "deletedAt" IS NULL LIMIT 1`,
+          [payload.companyId, `%${last9}`],
+        ).catch(() => []);
+        if (client) {
+          linkedEntityType = "clients"; linkedEntityId = client.id;
+          senderName = client.name; senderClassification = client.classification;
+        }
+      }
+      // Email match if phone match missed.
+      if (linkedEntityType === "message_log" && fromAddress.includes("@")) {
+        const [client] = await rawQuery<{ id: number; name: string; classification: string | null }>(
+          `SELECT id, name, classification FROM clients
+            WHERE "companyId" = $1 AND LOWER(COALESCE(email,'')) = LOWER($2)
+              AND "deletedAt" IS NULL LIMIT 1`,
+          [payload.companyId, fromAddress],
+        ).catch(() => []);
+        if (client) {
+          linkedEntityType = "clients"; linkedEntityId = client.id;
+          senderName = client.name; senderClassification = client.classification;
+        } else {
+          const [emp] = await rawQuery<{ id: number; name: string }>(
+            `SELECT id, name FROM employees
+              WHERE "companyId" = $1 AND (LOWER(COALESCE(email,'')) = LOWER($2)
+                                          OR LOWER(COALESCE("personalEmail",'')) = LOWER($2)
+                                          OR LOWER(COALESCE("internalEmail",'')) = LOWER($2))
+                AND "deletedAt" IS NULL LIMIT 1`,
+            [payload.companyId, fromAddress],
+          ).catch(() => []);
+          if (emp) { linkedEntityType = "employees"; linkedEntityId = emp.id; senderName = emp.name; }
+        }
       }
     }
-    if (!matched) return;
+
+    const priority: Priority = liftPriorityForClassification(matched.priority, senderClassification);
+    const slaHours = SLA_HOURS_BY_PRIORITY[priority];
+    const dueAt = new Date(Date.now() + slaHours * 3600 * 1000);
 
     try {
       await rawExecute(
-        `INSERT INTO tasks ("companyId", title, description, type, status, priority, "linkedEntityType", "linkedEntityId", "createdAt")
-         VALUES ($1, $2, $3, $4, 'pending', $5, 'message_log', $6, NOW())`,
+        `INSERT INTO tasks ("companyId", title, description, type, status, priority,
+                            "linkedEntityType", "linkedEntityId", "slaDeadline", "slaHours", "createdAt")
+         VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, NOW())`,
         [
           payload.companyId,
-          `${matched.titlePrefix} ${fromAddress || "—"}: ${String(details.subject ?? "").slice(0, 120)}`,
-          `رسالة واردة من ${fromAddress}\nالموضوع: ${details.subject}\n\nتم تصنيفها تلقائياً كـ ${matched.type}.`,
+          `${matched.titlePrefix} ${senderName}: ${(msg.subject ?? "").slice(0, 120)}`,
+          `رسالة واردة من ${fromAddress || "—"}\nالموضوع: ${msg.subject ?? "—"}\nالقناة: ${msg.channel}\n\nتم تصنيفها تلقائياً كـ ${matched.type}${senderClassification ? ` · العميل ${senderClassification}` : ""}.\nموعد الاستجابة: ${dueAt.toISOString()}\nرسالة #${payload.entityId}`,
           matched.type,
-          matched.priority,
-          payload.entityId,
-        ]
+          priority,
+          linkedEntityType,
+          linkedEntityId,
+          dueAt,
+          slaHours,
+        ],
       );
     } catch (e) { logger.error(e, "[EventListener] inbox auto-classifier task insert failed"); }
+  });
+
+  // PR-D — FAQ auto-reply. Independent listener that runs after the
+  // classifier above. If the inbound message's content matches a
+  // published kb_articles entry with high confidence (score >= 8),
+  // we send an auto-reply with the article so the customer gets an
+  // immediate answer instead of waiting for a human pick-up.
+  //
+  // Guards:
+  //   - skips when there's no clear FAQ match (silent confusion is
+  //     worse than no reply at all).
+  //   - only auto-replies on customer-facing channels (email/whatsapp
+  //     /sms) where the sender address is replyable; pbx/internal/in_app
+  //     are skipped.
+  //   - idempotent: tags the message_log row with relatedType='kb_auto_reply'
+  //     after sending so a replay doesn't double-reply.
+  eventBus.on("inbox.message.received", async (payload) => {
+    if (!payload.companyId || !payload.entityId) return;
+    try {
+      // Hydrate the inbound message.
+      const [msg] = await rawQuery<{
+        id: number; channel: string; subject: string | null;
+        body: string | null; fromAddress: string | null;
+        relatedType: string | null;
+      }>(
+        `SELECT id, channel, subject, body, "fromAddress", "relatedType"
+           FROM message_log WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [payload.entityId as number, payload.companyId],
+      );
+      if (!msg) return;
+      if (!msg.fromAddress) return;
+      if (msg.channel !== "email" && msg.channel !== "whatsapp" && msg.channel !== "sms") return;
+
+      // Idempotency check — relatedType is set by us after a successful auto-reply.
+      if (msg.relatedType === "kb_auto_reply") return;
+
+      // Look for an existing auto-reply log row for this message (covers
+      // a crash between sending and the relatedType update).
+      const [prior] = await rawQuery<{ id: number }>(
+        `SELECT id FROM message_log
+          WHERE "companyId" = $1
+            AND "relatedType" = 'kb_auto_reply'
+            AND "relatedId" = $2
+            AND direction = 'outbound'
+          LIMIT 1`,
+        [payload.companyId, msg.id],
+      ).catch(() => []);
+      if (prior) return;
+
+      type KbRow = { id: number; title: string; content: string | null; category: string | null; tags: string[] | null };
+      const articles: KbRow[] = await rawQuery<KbRow>(
+        `SELECT id, title, content, category, tags
+           FROM kb_articles
+          WHERE ("companyId" = $1 OR "companyId" IS NULL)
+            AND status = 'published'
+            AND "deletedAt" IS NULL`,
+        [payload.companyId],
+      ).catch(() => [] as KbRow[]);
+      if (articles.length === 0) return;
+
+      const haystack = `${msg.subject ?? ""}\n${msg.body ?? ""}`;
+      const match = pickBestMatch(articles, haystack);
+      if (!match) return;
+
+      const article = articles.find((a) => a.id === match.articleId);
+      if (!article) return;
+
+      const replyBody = composeAutoReplyBody(article, msg.channel);
+      const replySubject = msg.channel === "email" ? `Re: ${msg.subject ?? article.title}` : null;
+
+      await sendMessage({
+        channel: msg.channel,
+        recipient: msg.fromAddress,
+        subject: replySubject,
+        body: replyBody,
+        companyId: payload.companyId,
+        userId: null,
+        relatedType: "kb_auto_reply",
+        relatedId: msg.id,
+        templateKey: `kb.article.${article.id}`,
+        eventAction: "communications.faq.auto_replied",
+      }).catch((e) => logger.warn(e, "[EventListener] FAQ auto-reply send failed"));
+
+      // Mark the inbound message so a replay doesn't fire again.
+      await rawExecute(
+        `UPDATE message_log
+            SET "relatedType" = 'kb_auto_reply', "relatedId" = $1
+          WHERE id = $2 AND "companyId" = $3 AND "relatedType" IS NULL`,
+        [article.id, msg.id, payload.companyId],
+      ).catch((e) => logger.warn(e, "[EventListener] FAQ auto-reply tag update failed"));
+
+      // Visible audit so an operator can review every FAQ auto-reply.
+      void createAuditLog({
+        companyId: payload.companyId,
+        userId: 0,
+        action: "create",
+        entity: "kb_auto_reply",
+        entityId: msg.id,
+        after: { articleId: article.id, articleTitle: article.title, score: match.score, matchedTerms: match.matchedTerms },
+      }).catch((e) => logger.warn(e, "[audit] kb.auto_reply"));
+    } catch (e) {
+      logger.error(e, "[EventListener] FAQ auto-reply failed");
+    }
   });
 
   // M9 recovery: umrah AGENT invoice (commission billing) — checks for
@@ -1850,6 +2214,23 @@ export function registerEventListeners() {
   // ── HR — employee loans ──
   eventBus.on("hr.loan.created", async (payload) => {
     await logEvent("hr.loan.created", payload);
+    if (payload.companyId && payload.branchId) {
+      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+      const employeeName = String(payload.employeeName ?? "—");
+      const amount = String(payload.amount ?? "0");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "loan.request.created",
+        templateVars: { employeeName, amount },
+        fallbackTitle: "طلب قرض جديد",
+        fallbackBody: `طلب قرض من ${employeeName} بمبلغ ${amount} ريال`,
+        assignmentId: managerId ?? undefined,
+        priority: "normal",
+        refType: "employee_loan",
+        refId: payload.entityId as number,
+        actionUrl: `/hr/loans/${payload.entityId}`,
+      });
+    }
   });
   eventBus.on("hr.loan.approved", async (payload) => {
     await logEvent("hr.loan.approved", payload);
@@ -1893,6 +2274,24 @@ export function registerEventListeners() {
   // ── HR — overtime requests ──
   eventBus.on("hr.overtime.created", async (payload) => {
     await logEvent("hr.overtime.created", payload);
+    if (payload.companyId && payload.branchId) {
+      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+      const employeeName = String(payload.employeeName ?? "—");
+      const hours = String(payload.hours ?? payload.totalHours ?? "0");
+      const date = String(payload.date ?? "—");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "overtime.request.created",
+        templateVars: { employeeName, hours, date },
+        fallbackTitle: "طلب وقت إضافي",
+        fallbackBody: `طلب وقت إضافي من ${employeeName} (${hours} ساعة)`,
+        assignmentId: managerId ?? undefined,
+        priority: "normal",
+        refType: "overtime_request",
+        refId: payload.entityId as number,
+        actionUrl: `/hr/overtime/${payload.entityId}`,
+      });
+    }
   });
   eventBus.on("hr.overtime.approved", async (payload) => {
     await logEvent("hr.overtime.approved", payload);
@@ -1904,6 +2303,23 @@ export function registerEventListeners() {
   // ── HR — exit / end-of-service ──
   eventBus.on("hr.exit.created", async (payload) => {
     await logEvent("hr.exit.created", payload);
+    if (payload.companyId && payload.branchId) {
+      const managerId = await getManagerAssignmentId(payload.companyId, payload.branchId as number);
+      const employeeName = String(payload.employeeName ?? "—");
+      const lastDay = String(payload.lastDay ?? payload.lastWorkingDay ?? "—");
+      await notifyBusinessEvent({
+        companyId: payload.companyId,
+        templateKey: "exit.request.created",
+        templateVars: { employeeName, lastDay },
+        fallbackTitle: "طلب إخلاء طرف",
+        fallbackBody: `طلب إخلاء طرف من ${employeeName}`,
+        assignmentId: managerId ?? undefined,
+        priority: "high",
+        refType: "exit_request",
+        refId: payload.entityId as number,
+        actionUrl: `/hr/exit-requests/${payload.entityId}`,
+      });
+    }
   });
   eventBus.on("hr.exit.approved", async (payload) => {
     await logEvent("hr.exit.approved", payload);
@@ -1965,6 +2381,47 @@ export function registerEventListeners() {
   });
   eventBus.on("recruitment.application.deleted", async (payload) => {
     await logEvent("recruitment.application.deleted", payload);
+  });
+
+  // ── #1812 — umrah → transport bridge. When an umrah group is
+  //    created with mutamerCount > 0, notify the dispatcher that
+  //    transport bookings need to be materialized. The "النقل ليس
+  //    جزيرة" mandate: the system surfaces the integration
+  //    automatically instead of waiting for the operator to remember.
+  eventBus.on("umrah.group.created", async (payload) => {
+    await logEvent("umrah.group.created", payload);
+    if (!payload.companyId) return;
+    try {
+      const [group] = await rawQuery<{
+        id: number; mutamerCount: number | null; nuskGroupNumber: string | null;
+      }>(
+        `SELECT id, "mutamerCount", "nuskGroupNumber"
+           FROM umrah_groups WHERE id = $1 AND "companyId" = $2`,
+        [payload.entityId as number, payload.companyId as number],
+      );
+      if (!group) return;
+      const mutamerCount = group.mutamerCount ?? 0;
+      if (mutamerCount <= 0) return;
+      // Find the fleet dispatcher manager assignment to notify. Falls
+      // back to the branch manager if no fleet dispatcher exists.
+      const managerId = payload.branchId
+        ? await getManagerAssignmentId(payload.companyId as number, payload.branchId as number)
+        : null;
+      if (managerId) {
+        await createNotification({
+          companyId: payload.companyId as number,
+          assignmentId: managerId,
+          type: "fleet",
+          title: "مجموعة عمرة جديدة بحاجة لنقل",
+          body: `مجموعة ${group.nuskGroupNumber ?? `#${group.id}`} (${mutamerCount} معتمر) تحتاج إلى إنشاء حجوزات نقل. افتح /fleet/transport/integration للمتابعة.`,
+          actionUrl: "/fleet/transport/integration",
+          refType: "umrah_groups",
+          refId: group.id,
+        });
+      }
+    } catch (err) {
+      logger.warn({ err }, "umrah→transport bridge failed");
+    }
   });
 
   logger.info("All event listeners registered successfully");

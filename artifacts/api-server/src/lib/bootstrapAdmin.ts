@@ -1,6 +1,7 @@
 import { pool } from "./rawdb.js";
 import { hashPassword } from "./auth.js";
-import { currentYear, todayISO } from "./businessHelpers.js";
+import { todayISO } from "./businessHelpers.js";
+import { issueNumber } from "./numberingService.js";
 import { logger } from "./logger.js";
 import { config } from "./config.js";
 import type pg from "pg";
@@ -96,13 +97,21 @@ async function createUserIfNotExists(
     return false;
   }
 
-  // 1. Create employee record
-  const seqRes = await client.query(
-    `SELECT nextval('employee_number_seq') AS seq`,
-  );
-  const seq = Number(seqRes.rows[0].seq);
-  const yearStr = String(currentYear());
-  const empNumber = `EMP-${yearStr}-${String(seq).padStart(3, "0")}`;
+  // 1. Create employee record.
+  // The legacy `employee_number_seq` sequence was dropped (migration 218);
+  // employee codes are now issued through numberingService.issueNumber
+  // (scheme hr/employee_code, seeded by migrations 214/216 which run before
+  // this bootstrap). Mirrors the production path in routes/employees.ts.
+  const issued = await issueNumber({
+    companyId,
+    branchId,
+    moduleKey: "hr",
+    entityKey: "employee_code",
+    entityTable: "employees",
+    actorId: null,
+    expectedTiming: "on_draft",
+  });
+  const empNumber = issued.number;
 
   const empRes = await client.query(
     `INSERT INTO employees (name, phone, email, "empNumber", "nationalId", gender, nationality, status)
@@ -111,6 +120,12 @@ async function createUserIfNotExists(
     [user.name, user.phone, user.email, empNumber, user.nationalId, user.gender, user.nationality],
   );
   const employeeId = empRes.rows[0].id;
+
+  // Link the numbering assignment to the new employee row.
+  await client.query(
+    `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+    [employeeId, issued.assignmentId],
+  );
   logger.info({ name: user.name, employeeId, empNumber }, "Bootstrap created employee");
 
   // 2. Create employee_assignment
@@ -135,17 +150,97 @@ async function createUserIfNotExists(
   const userId = userRes.rows[0].id;
   logger.info({ userId, email: user.email }, "Bootstrap created user");
 
-  // 4. Create user_role
+  // 4. Assign the v2 role (rbac_user_roles → rbac_roles). #1791 — legacy
+  //    user_roles removed; ensure the role exists then bind the user to it.
   const rd = user.roleDefinition;
   await client.query(
-    `INSERT INTO user_roles ("userId", "roleKey", label, level, modules, "companyId", "createdAt")
-     VALUES ($1, $2, $3, $4, $5, $6, NOW())
-     ON CONFLICT ("userId", "roleKey", "companyId") DO NOTHING`,
-    [userId, rd.roleKey, rd.label, rd.level, JSON.stringify(rd.modules), companyId],
+    `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
+     VALUES ($1, $2, $3, $4, '#3b82f6', true)
+     ON CONFLICT ("companyId", role_key) DO NOTHING`,
+    [companyId, rd.roleKey, rd.label, rd.level],
   );
+  const { rows: roleRows } = await client.query<{ id: number }>(
+    `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = $2`,
+    [companyId, rd.roleKey],
+  );
+  if (roleRows[0]) {
+    await client.query(
+      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary)
+       VALUES ($1, $2, $3, true)
+       ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+      [userId, companyId, roleRows[0].id],
+    );
+  }
   logger.info({ roleKey: rd.roleKey, level: rd.level, email: user.email }, "Bootstrap assigned role to user");
 
   return true;
+}
+
+// Give the bootstrap admin a self-service "driver" (سائق) capability: a
+// legacy user_roles entry so "سائق" shows up in the role picker (الصفة), and a
+// fleet_drivers record bound to the admin's employee so /api/fleet/me resolves
+// and /me/driver works end-to-end. The admin keeps owner ("*") access, so the
+// fleet.driver.me authorize() check passes; the driver record is the only
+// missing piece. Idempotent — runs on every boot so existing (dev/prod) DBs and
+// fresh installs all converge to the same state.
+async function ensureAdminDriverCapability(
+  client: pg.PoolClient,
+  companyId: number,
+): Promise<void> {
+  const { rows: adminRows } = await client.query(
+    `SELECT id, "employeeId" FROM users WHERE email = $1 LIMIT 1`,
+    [ADMIN_EMAIL],
+  );
+  if (adminRows.length === 0) return;
+  const adminUserId: number = adminRows[0].id;
+  const adminEmployeeId: number | null = adminRows[0].employeeId;
+
+  // 1. Driver role in the picker. The role picker (الصفة) is fed by the login
+  //    `userRoles`, now sourced from rbac_user_roles → rbac_roles (#1791).
+  //    Selecting "driver" makes dashboard.tsx redirect the admin to /me/driver.
+  await client.query(
+    `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
+     VALUES ($1, 'driver', 'سائق', 10, '#0d9488', true)
+     ON CONFLICT ("companyId", role_key) DO NOTHING`,
+    [companyId],
+  );
+  const { rows: driverRoleRows } = await client.query<{ id: number }>(
+    `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = 'driver' LIMIT 1`,
+    [companyId],
+  );
+  if (driverRoleRows[0]) {
+    // is_primary=false so it never displaces the admin's owner primary role.
+    const { rowCount } = await client.query(
+      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary)
+       VALUES ($1, $2, $3, false)
+       ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+      [adminUserId, companyId, driverRoleRows[0].id],
+    );
+    if (rowCount && rowCount > 0) {
+      logger.info({ userId: adminUserId }, "Bootstrap granted admin the driver (سائق) role");
+    }
+  }
+
+  // 2. fleet_drivers record bound to the admin's employee. Driver self-service
+  //    (resolveDriverFromScope) looks up fleet_drivers by req.scope.employeeId
+  //    + companyId, so without this row /api/fleet/me returns 404.
+  if (adminEmployeeId != null) {
+    const { rows: existingDriver } = await client.query(
+      `SELECT id FROM fleet_drivers WHERE "employeeId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [adminEmployeeId, companyId],
+    );
+    if (existingDriver.length === 0) {
+      const licenseExpiry = new Date(Date.now() + 2 * 365 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      await client.query(
+        `INSERT INTO fleet_drivers ("companyId", "employeeId", name, phone, "licenseNumber", "licenseType", "licenseExpiry", status)
+         VALUES ($1, $2, $3, $4, $5, 'private', $6, 'available')`,
+        [companyId, adminEmployeeId, ADMIN_USER.name, ADMIN_USER.phone, "ADMIN-DRV-0001", licenseExpiry],
+      );
+      logger.info({ employeeId: adminEmployeeId }, "Bootstrap linked a fleet_drivers record to admin");
+    }
+  }
 }
 
 export async function bootstrapAdminUser(): Promise<void> {
@@ -176,6 +271,10 @@ export async function bootstrapAdminUser(): Promise<void> {
   try {
     const adminCreated = await createUserIfNotExists(client, ADMIN_USER, companyId, branchId);
     const fleetCreated = await createUserIfNotExists(client, FLEET_USER, companyId, branchId);
+
+    // Idempotently enable the driver (سائق) role for the admin (role picker +
+    // linked fleet_drivers record) — applies to existing and fresh DBs alike.
+    await ensureAdminDriverCapability(client, companyId);
 
     await client.query("COMMIT");
 

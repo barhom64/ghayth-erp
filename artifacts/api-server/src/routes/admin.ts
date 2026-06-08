@@ -6,6 +6,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, pool } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
+import { findSeparationOfDutiesConflict, getActiveRoleKeysForUser } from "../lib/policyEngine.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { logger } from "../lib/logger.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
@@ -152,7 +153,10 @@ async function assertAdmin(req: any): Promise<void> {
   }
   try {
     const rows = await rawQuery<{ level: number }>(
-      `SELECT MAX(level) AS level FROM user_roles WHERE "userId" = $1 AND "companyId" = $2`,
+      `SELECT MAX(r.level) AS level
+         FROM rbac_user_roles ur
+         JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2`,
       [scope.userId, scope.companyId]
     );
     if (rows.length > 0 && rows[0].level >= ADMIN_ROLE_LEVEL) return;
@@ -176,15 +180,29 @@ router.get("/users", authorize({ feature: "admin", action: "list" }), async (req
   try {
     await assertAdmin(req);
     const scope = req.scope!;
+    // Pre-aggregate failed-login counts once instead of running the
+    // scalar subquery per row. The original SELECT-list correlated
+    // subquery was N+1: postgres planned one execution PER returned
+    // user, so 500 users == 501 index lookups into security_log over
+    // a 7-day window. The CTE below scans the table once filtered to
+    // that same window and joins per-user counts back.
     const rows = await rawQuery(`
+      WITH failed_login_counts AS (
+        SELECT "userId", COUNT(*) AS "failedAttempts7d"
+        FROM security_log
+        WHERE reason = 'auth_failed'
+          AND "createdAt" > NOW() - INTERVAL '7 days'
+        GROUP BY "userId"
+      )
       SELECT DISTINCT u.id, u.email, u.role, u."isActive", u."lastLoginAt", u."createdAt", u."employeeId",
              e.name AS "employeeName", e."empNumber",
-             (SELECT COUNT(*) FROM security_log sl WHERE sl."userId" = u.id AND sl.reason = 'auth_failed' AND sl."createdAt" > NOW() - INTERVAL '7 days') AS "failedAttempts7d"
+             COALESCE(flc."failedAttempts7d", 0)::int AS "failedAttempts7d"
       FROM users u
       LEFT JOIN employees e ON e.id = u."employeeId"
       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
+      LEFT JOIN failed_login_counts flc ON flc."userId" = u.id
       WHERE ea."companyId" = $1
-         OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $1)
+         OR u.id IN (SELECT "userId" FROM rbac_user_roles WHERE "companyId" = $1)
       ORDER BY u."createdAt" DESC
       LIMIT 500
     `, [scope.companyId]);
@@ -215,21 +233,33 @@ router.post("/users", authorize({ feature: "admin", action: "update" }), async (
       );
       const userId = userRes.rows[0].id;
       const assignedRole = role || "employee";
-      const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === assignedRole) || { roleKey: assignedRole, label: assignedRole, modules: [], level: 10 };
-      const customRoleRes = await tx.query(
-        `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
+      // Resolve (or lazily seed) the v2 role for this company, then bind the
+      // user to it (#1791 — legacy user_roles/custom_roles removed; rbac_roles
+      // is the single source for role label/level).
+      let { rows: roleRows } = await tx.query<{ id: number }>(
+        `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = $2`,
         [scope.companyId, assignedRole]
       );
-      const customRoleDef = customRoleRes.rows[0];
-      const finalDef = customRoleDef
-        ? { roleKey: assignedRole, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
-        : roleDef;
-      await tx.query(
-        `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,NOW())
-         ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
-        [userId, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
-      );
+      if (!roleRows[0]) {
+        const def = PREDEFINED_ROLES.find((r) => r.roleKey === assignedRole);
+        await tx.query(
+          `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
+           VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("companyId", role_key) DO NOTHING`,
+          [scope.companyId, assignedRole, def?.label || assignedRole, def?.level ?? 10, "#3b82f6", !!def]
+        );
+        ({ rows: roleRows } = await tx.query<{ id: number }>(
+          `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = $2`,
+          [scope.companyId, assignedRole]
+        ));
+      }
+      if (roleRows[0]) {
+        await tx.query(
+          `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary)
+           VALUES ($1, $2, $3, true)
+           ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+          [userId, scope.companyId, roleRows[0].id]
+        );
+      }
       return userId;
     });
     const r = { insertId: newUserId };
@@ -287,7 +317,7 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
        WHERE u.id = $1 AND (
          ea."companyId" = $2
-         OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $2)
+         OR u.id IN (SELECT "userId" FROM rbac_user_roles WHERE "companyId" = $2)
        ) LIMIT 1`,
       [id, scope.companyId]
     );
@@ -314,21 +344,35 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
         await tx.query(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
       }
       if (role !== undefined) {
-        const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === role) || { roleKey: role, label: role, modules: [], level: 10 };
-        const { rows: customRows } = await tx.query(
-          `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
+        // Resolve/seed the v2 role, then make it the user's role for this
+        // company (#1791 — legacy user_roles/custom_roles removed).
+        let { rows: roleRows } = await tx.query<{ id: number }>(
+          `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = $2`,
           [scope.companyId, role]
         );
-        const customRoleDef = customRows[0] ?? null;
-        const finalDef = customRoleDef
-          ? { roleKey: role, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
-          : roleDef;
-        await tx.query(
-          `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
-           VALUES ($1,$2,$3,$4,$5,$6,NOW())
-           ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
-          [id, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
-        );
+        if (!roleRows[0]) {
+          const def = PREDEFINED_ROLES.find((r) => r.roleKey === role);
+          await tx.query(
+            `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
+             VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("companyId", role_key) DO NOTHING`,
+            [scope.companyId, role, def?.label || role, def?.level ?? 10, "#3b82f6", !!def]
+          );
+          ({ rows: roleRows } = await tx.query<{ id: number }>(
+            `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = $2`,
+            [scope.companyId, role]
+          ));
+        }
+        if (roleRows[0]) {
+          await tx.query(
+            `DELETE FROM rbac_user_roles WHERE "userId" = $1 AND "companyId" = $2`,
+            [id, scope.companyId]
+          );
+          await tx.query(
+            `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary)
+             VALUES ($1, $2, $3, true)`,
+            [id, scope.companyId, roleRows[0].id]
+          );
+        }
       }
     });
     createAuditLog({
@@ -360,14 +404,14 @@ router.delete("/users/:id", authorize({ feature: "admin", action: "update" }), a
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
        WHERE u.id = $1 AND (
          ea."companyId" = $2
-         OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $2)
+         OR u.id IN (SELECT "userId" FROM rbac_user_roles WHERE "companyId" = $2)
        ) LIMIT 1`,
       [id, scope.companyId]
     );
     if (!userBelongs) { throw new ForbiddenError("المستخدم لا ينتمي لشركتك"); }
     await withTransaction(async (tx) => {
       await tx.query(
-        `DELETE FROM user_roles WHERE "userId"=$1 AND "companyId"=$2`,
+        `DELETE FROM rbac_user_roles WHERE "userId"=$1 AND "companyId"=$2`,
         [id, scope.companyId]
       );
       await tx.query(
@@ -408,7 +452,7 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, authorize({ featu
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
        WHERE u.id = $1 AND (
          ea."companyId" = $2
-         OR u.id IN (SELECT "userId" FROM user_roles WHERE "companyId" = $2)
+         OR u.id IN (SELECT "userId" FROM rbac_user_roles WHERE "companyId" = $2)
        ) LIMIT 1`,
       [id, scope.companyId]
     );
@@ -450,56 +494,19 @@ router.get("/roles", authorize({ feature: "admin", action: "list" }), async (req
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const systemRoles = await rawQuery(`SELECT * FROM roles ORDER BY name LIMIT 100`, []);
-    const customRoles = await rawQuery(`SELECT * FROM custom_roles WHERE "companyId" = $1 ORDER BY label LIMIT 500`, [scope.companyId]);
-    const rows = [...systemRoles, ...customRoles];
+    const rows = await rawQuery(
+      `SELECT id, role_key AS "roleKey", label_ar AS label, level, color, is_system AS "isSystem"
+         FROM rbac_roles WHERE "companyId" = $1 AND is_active = TRUE AND is_template = FALSE
+        ORDER BY level DESC, label_ar LIMIT 500`,
+      [scope.companyId]
+    );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.post("/roles", authorize({ feature: "admin", action: "update" }), async (req, res) => {
-  try {
-    await assertAdmin(req);
-    const scope = req.scope!;
-    const { roleKey, label, level: roleLevel, modules: mods, permissions: rolePermissions } = zodParse(createCustomRoleSchema.safeParse(req.body ?? {}));
-    await withTransaction(async (tx) => {
-      await tx.query(
-        `INSERT INTO custom_roles ("companyId","roleKey",label,level,modules,"createdBy","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,NOW())
-         ON CONFLICT ("companyId","roleKey") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
-        [scope.companyId, roleKey, label, roleLevel, JSON.stringify(mods), scope.userId]
-      );
-      if (Array.isArray(rolePermissions) && rolePermissions.length > 0) {
-        await tx.query(
-          `DELETE FROM role_permissions WHERE role=$1 AND "companyId"=$2`,
-          [roleKey, scope.companyId]
-        );
-        for (const perm of rolePermissions) {
-          await tx.query(
-            `INSERT INTO role_permissions (role, permission, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-            [roleKey, perm, scope.companyId]
-          );
-        }
-      }
-    });
-    invalidatePermissionCache(roleKey, scope.companyId);
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "create", entity: "roles", entityId: 0,
-      after: { roleKey, label, level: roleLevel, modules: mods },
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "admin.role.created",
-      entity: "roles",
-      entityId: 0,
-      details: JSON.stringify({ roleKey, label, level: roleLevel }),
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2`, [scope.companyId, roleKey]);
-    res.status(201).json(row || { roleKey, label, level: roleLevel, modules: mods });
-  } catch (e: any) { logger.error(e, "Create role error"); handleRouteError(e, res, "خطأ غير متوقع"); }
-});
+// POST /roles (custom_roles create) removed in #1791 — custom roles are now
+// created/edited via the RBAC v2 editor (/api/admin/rbac/v2). createCustomRoleSchema
+// above is now unused (kept harmless; noUnusedLocals is off).
 
 const PREDEFINED_ROLES = [
   { roleKey: "owner", label: "مالك النظام", modules: ["home","hr","finance","fleet","property","operations","warehouse","governance","bi","requests","documents","reports","admin","comms","legal","crm","marketing","store","support","settings"], level: 100 },
@@ -515,6 +522,11 @@ const PREDEFINED_ROLES = [
   { roleKey: "crm_manager", label: "مدير المبيعات", modules: ["home","crm","marketing","requests","documents","comms"], level: 70 },
   { roleKey: "bi_manager", label: "مدير ذكاء الأعمال", modules: ["home","bi","reports","requests","documents","comms"], level: 70 },
   { roleKey: "branch_manager", label: "مدير فرع", modules: ["home","hr","finance","requests","documents","comms","support"], level: 60 },
+  // Self-service driver — sees only their assigned trips + cargo via
+  // /me/driver (fleet.trips.my, fleet.cargo.my, fleet.driver.me from
+  // the featureCatalog self-service floor). `home` keeps the basic
+  // notifications surface; `requests` lets them file leave/expense.
+  { roleKey: "driver", label: "سائق", modules: ["home","fleet","requests","documents","comms"], level: 10 },
   { roleKey: "employee", label: "موظف", modules: ["home","requests","documents","comms"], level: 10 },
 ];
 
@@ -523,7 +535,12 @@ router.get("/predefined-roles", authorize({ feature: "admin", action: "list" }),
     await assertAdmin(req);
     const scope = req.scope!;
     const customRows = await rawQuery<Record<string, unknown>>(
-      `SELECT "roleKey", label, level, modules FROM custom_roles WHERE "companyId"=$1 ORDER BY level DESC LIMIT 500`,
+      `SELECT r.role_key AS "roleKey", r.label_ar AS label, r.level,
+              COALESCE((SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
+                 FROM rbac_role_grants g WHERE g.role_id = r.id), '[]'::jsonb) AS modules
+         FROM rbac_roles r
+        WHERE r."companyId"=$1 AND r.is_active = TRUE AND r.is_template = FALSE AND r.is_system = FALSE
+        ORDER BY r.level DESC LIMIT 500`,
       [scope.companyId]
     ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
     const customRoles = customRows.map((r: Record<string, unknown>) => ({
@@ -553,7 +570,11 @@ router.get("/user-roles/:userId", authorize({ feature: "admin", action: "view" }
       throw new ForbiddenError("المستخدم لا ينتمي لشركتك");
     }
     const rows = await rawQuery(
-      `SELECT * FROM user_roles WHERE "userId"=$1 AND "companyId"=$2 ORDER BY level DESC LIMIT 500`,
+      `SELECT ur.id AS id, r.role_key AS "roleKey", r.label_ar AS label, r.level
+         FROM rbac_user_roles ur JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur."userId"=$1 AND ur."companyId"=$2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+        ORDER BY r.level DESC LIMIT 500`,
       [userId, scope.companyId]
     );
     res.json(maskFields(req, { data: rows }));
@@ -568,42 +589,55 @@ router.post("/user-roles", authorize({ feature: "admin", action: "update" }), as
     if (!await userBelongsToCompany(userId, scope.companyId)) {
       throw new ForbiddenError("المستخدم لا ينتمي لشركتك");
     }
-    let def: { roleKey: string; label: string; modules: string[]; level: number } | undefined = PREDEFINED_ROLES.find(r => r.roleKey === roleKey);
-    if (!def) {
-      const [customRole] = await rawQuery<Record<string, unknown>>(
-        `SELECT "roleKey", label, modules, level FROM custom_roles WHERE "roleKey"=$1 AND "companyId"=$2 LIMIT 1`,
-        [roleKey, scope.companyId]
-      ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
-      if (customRole) {
-        def = {
-          roleKey: customRole.roleKey,
-          label: customRole.label,
-          level: customRole.level,
-          modules: Array.isArray(customRole.modules) ? customRole.modules : (typeof customRole.modules === "string" ? JSON.parse(customRole.modules || "[]") : []),
-        };
-      }
+    // #1605 — Separation-of-Duties: reject granting a role that conflicts with a
+    // role the user already holds (rbac_user_roles + active employee_assignments).
+    const existingRoles = await getActiveRoleKeysForUser(userId, scope.companyId);
+    const sodConflict = findSeparationOfDutiesConflict(existingRoles, roleKey);
+    if (sodConflict) {
+      throw new ForbiddenError(
+        `فصل المهام (SoD): لا يمكن الجمع بين الدورين "${sodConflict.roleA}" و"${sodConflict.roleB}" لنفس المستخدم — ${sodConflict.reason}`,
+      );
     }
-    if (!def) { throw new ValidationError("دور غير معروف"); }
+    // Resolve the v2 role id; seed it from the predefined catalog if this company
+    // doesn't have it yet, so assignment works on a fresh tenant (#1791).
+    let [roleRow] = await rawQuery<{ id: number; label: string }>(
+      `SELECT id, label_ar AS label FROM rbac_roles WHERE "companyId"=$1 AND role_key=$2 LIMIT 1`,
+      [scope.companyId, roleKey]
+    );
+    if (!roleRow) {
+      const def = PREDEFINED_ROLES.find((r) => r.roleKey === roleKey);
+      if (!def) { throw new ValidationError("دور غير معروف"); }
+      await rawExecute(
+        `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
+         VALUES ($1,$2,$3,$4,'#3b82f6',true)
+         ON CONFLICT ("companyId", role_key) DO NOTHING`,
+        [scope.companyId, def.roleKey, def.label, def.level]
+      );
+      [roleRow] = await rawQuery<{ id: number; label: string }>(
+        `SELECT id, label_ar AS label FROM rbac_roles WHERE "companyId"=$1 AND role_key=$2 LIMIT 1`,
+        [scope.companyId, roleKey]
+      );
+    }
+    if (!roleRow) { throw new ValidationError("دور غير معروف"); }
     await rawExecute(
-      `INSERT INTO user_roles ("userId", "roleKey", label, modules, level, "companyId") VALUES ($1,$2,$3,$4,$5,$6)
-       ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, modules=EXCLUDED.modules, level=EXCLUDED.level`,
-      [userId, def.roleKey, def.label, JSON.stringify(def.modules), def.level, scope.companyId]
+      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary) VALUES ($1,$2,$3,false)
+       ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
+      [userId, scope.companyId, roleRow.id]
     );
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "roles", entityId: userId,
-      after: { roleKey: def.roleKey, label: def.label },
+      after: { roleKey, label: roleRow.label },
     }).catch((e) => logger.error(e, "admin background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "admin.user_role.assigned",
-      entity: "user_roles",
+      entity: "rbac_user_roles",
       entityId: userId,
-      details: JSON.stringify({ roleKey: def.roleKey, label: def.label }),
+      details: JSON.stringify({ roleKey, label: roleRow.label }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM user_roles WHERE "userId"=$1 AND "roleKey"=$2 AND "companyId"=$3`, [userId, def.roleKey, scope.companyId]);
-    res.status(201).json(row || { userId, roleKey: def.roleKey });
+    res.status(201).json({ userId, roleKey, label: roleRow.label });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -614,11 +648,11 @@ router.delete("/user-roles/:id", authorize({ feature: "admin", action: "update" 
     const id = parseId(req.params.id, "id");
     if (!id || isNaN(id)) { throw new ValidationError("معرف غير صالح"); }
     const [roleRecord] = await rawQuery(
-      `SELECT id FROM user_roles WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+      `SELECT id FROM rbac_user_roles WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
       [id, scope.companyId]
     );
     if (!roleRecord) { throw new ForbiddenError("غير مصرح: الدور لا ينتمي لشركتك"); }
-    const result = await rawExecute(`DELETE FROM user_roles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const result = await rawExecute(`DELETE FROM rbac_user_roles WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (result.affectedRows === 0) { throw new NotFoundError("الدور غير موجود"); }
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -1083,6 +1117,44 @@ router.patch("/violations/:id/resolve", authorize({ feature: "admin", action: "u
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
+// Bulk-resolve open audit violations — governance backlog cleanup (the "1307
+// findings" case). Optional filters narrow to a type/priority/department;
+// an empty body resolves ALL open violations for the company in one action.
+const bulkResolveViolationsSchema = z.object({
+  type: z.string().optional(),
+  priority: z.enum(["critical", "high", "medium", "low"]).optional(),
+  department: z.string().optional(),
+}).strict();
+
+router.patch("/violations/bulk-resolve", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    await assertAdmin(req);
+    const scope = req.scope!;
+    const f = zodParse(bulkResolveViolationsSchema.safeParse(req.body ?? {}));
+    const conds = [`"companyId" = $1`, `status = 'open'`];
+    const params: unknown[] = [scope.companyId];
+    if (f.type) { params.push(f.type); conds.push(`type = $${params.length}`); }
+    if (f.priority) { params.push(f.priority); conds.push(`priority = $${params.length}`); }
+    if (f.department) { params.push(f.department); conds.push(`department = $${params.length}`); }
+    params.push(scope.activeAssignmentId || scope.userId);
+    const { affectedRows } = await rawExecute(
+      `UPDATE audit_violations SET status='resolved', "resolvedBy"=$${params.length}, "resolvedAt"=NOW() WHERE ${conds.join(" AND ")}`,
+      params
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "bulk_resolve", entity: "audit_violations", entityId: scope.companyId,
+      after: { resolved: affectedRows ?? 0, filters: f },
+    }).catch((e) => logger.error(e, "admin background task failed"));
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "admin.violations.bulk_resolved", entity: "audit_violations", entityId: scope.companyId,
+      details: JSON.stringify({ count: affectedRows ?? 0, filters: f }),
+    }).catch((e) => logger.error(e, "admin background task failed"));
+    res.json({ ok: true, resolved: affectedRows ?? 0, message: `تم إغلاق ${affectedRows ?? 0} مخالفة` });
+  } catch (err) { handleRouteError(err, res, "admin"); }
+});
+
 router.get("/security-log", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
@@ -1148,115 +1220,11 @@ router.get("/security-log", authorize({ feature: "admin", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/role-permissions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
-  try {
-    await assertAdmin(req);
-    const scope = req.scope!;
-    const { role } = req.query as Record<string, string | undefined>;
-    const conditions = [`("companyId" IS NULL OR "companyId" = $1)`];
-    const params: unknown[] = [scope.companyId];
-    if (role) { params.push(role); conditions.push(`"role" = $${params.length}`); }
-    const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT id, role, permission, "companyId", "createdAt" FROM role_permissions WHERE ${conditions.join(" AND ")} ORDER BY role, permission LIMIT 500`,
-      params
-    );
-    res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (err) { handleRouteError(err, res, "admin"); }
-});
-
-router.post("/role-permissions", authorize({ feature: "admin", action: "update" }), async (req, res) => {
-  try {
-    await assertAdmin(req);
-    const scope = req.scope!;
-    const { role, permission } = zodParse(createRolePermissionSchema.safeParse(req.body));
-    const r = await rawExecute(
-      `INSERT INTO role_permissions (role, permission, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-      [role, permission, scope.companyId]
-    );
-    invalidatePermissionCache(role, scope.companyId);
-    if (r.insertId) {
-      createAuditLog({
-        companyId: scope.companyId, userId: scope.userId,
-        action: "create", entity: "role_permissions", entityId: r.insertId,
-        after: { role, permission },
-      }).catch((e) => logger.error(e, "admin background task failed"));
-      emitEvent({
-        companyId: scope.companyId,
-        userId: scope.userId,
-        action: "admin.role_permission.created",
-        entity: "role_permissions",
-        entityId: r.insertId,
-        details: JSON.stringify({ role, permission }),
-      }).catch((e) => logger.error(e, "admin background task failed"));
-    }
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId || 0, scope.companyId]);
-    res.status(201).json(row || { id: r.insertId, role, permission });
-  } catch (err) { handleRouteError(err, res, "admin"); }
-});
-
-router.put("/role-permissions/bulk", authorize({ feature: "admin", action: "update" }), async (req, res) => {
-  try {
-    await assertAdmin(req);
-    const scope = req.scope!;
-    const { role, permissions } = zodParse(bulkRolePermissionsSchema.safeParse(req.body));
-    await withTransaction(async (tx) => {
-      await tx.query(`DELETE FROM role_permissions WHERE role=$1 AND "companyId"=$2`, [role, scope.companyId]);
-      if (permissions.length > 0) {
-        const valuesSql: string[] = [];
-        const params: unknown[] = [role, scope.companyId];
-        for (const perm of permissions) {
-          params.push(perm);
-          valuesSql.push(`($1, $${params.length}, $2)`);
-        }
-        await tx.query(
-          `INSERT INTO role_permissions (role, permission, "companyId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
-          params
-        );
-      }
-    });
-    invalidatePermissionCache(role, scope.companyId);
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "update", entity: "role_permissions", entityId: 0,
-      after: { role, permissionCount: permissions.length },
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "admin.role_permissions.bulk_updated",
-      entity: "role_permissions",
-      entityId: 0,
-      details: JSON.stringify({ role, permissionCount: permissions.length }),
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    res.json({ success: true, role, count: permissions.length });
-  } catch (err) { handleRouteError(err, res, "admin"); }
-});
-
-router.delete("/role-permissions/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
-  try {
-    await assertAdmin(req);
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const result = await rawExecute(
-      `DELETE FROM role_permissions WHERE id=$1 AND "companyId"=$2`,
-      [id, scope.companyId]
-    );
-    if (result.affectedRows === 0) { throw new NotFoundError("الصلاحية غير موجودة أو غير مصرح بحذفها"); }
-    invalidatePermissionCache(undefined, scope.companyId);
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "delete", entity: "role_permissions", entityId: id,
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "admin.role_permission.deleted",
-      entity: "role_permissions",
-      entityId: id,
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    res.json({ message: "تم حذف الصلاحية" });
-  } catch (err) { handleRouteError(err, res, "admin"); }
-});
+// Legacy /role-permissions CRUD (GET / POST / PUT bulk / DELETE) removed in
+// #1791 — role permissions are RBAC v2 grants (rbac_role_grants) managed via the
+// /api/admin/rbac/v2 editor and enforced by authzEngine. createRolePermissionSchema,
+// bulkRolePermissionsSchema and invalidatePermissionCache are now unused here
+// (kept harmless; noUnusedLocals is off).
 
 
 // ─── Governance: Policy Audit ───────────────────────────────────────────
@@ -1411,7 +1379,9 @@ router.get("/governance/rbac-matrix", authorize({ feature: "admin", action: "lis
   try {
     const scope = req.scope!;
     const customPerms = await rawQuery<Record<string, unknown>>(
-      `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
+      `SELECT r.role_key AS role, g.feature_key AS permission
+         FROM rbac_roles r JOIN rbac_role_grants g ON g.role_id = r.id
+        WHERE r."companyId" = $1 LIMIT 1000`,
       [scope.companyId]
     );
     res.json(maskFields(req, {
@@ -1908,10 +1878,16 @@ const onboardSchema = z.object({
   branchId: z.coerce.number().int().positive().optional().nullable(),
   departmentId: z.coerce.number().int().positive().optional().nullable(),
   jobTitle: z.string().optional(),
+  // Picking a configured job title auto-provisions its default RBAC role +
+  // custody policy (job_titles.defaultRoleKey / opensCustody, seeded by
+  // migration 249) so activating a new employee is one choice, not a manual
+  // role hunt. Explicit `roles` below still override / extend it.
+  jobTitleId: z.coerce.number().int().positive().optional().nullable(),
   salary: z.coerce.number().optional(),
   // account
   password: z.string().min(8, "كلمة المرور 8 أحرف على الأقل").optional(),
-  // roles — one user, MULTIPLE roles, each with its own scope (#1413 core rule)
+  // roles — one user, MULTIPLE roles, each with its own scope (#1413 core rule).
+  // Optional: a job title with a defaultRoleKey can supply the role instead.
   roles: z
     .array(
       z.object({
@@ -1920,7 +1896,8 @@ const onboardSchema = z.object({
         departmentId: z.coerce.number().int().positive().optional().nullable(),
       }),
     )
-    .min(1, "يجب اختيار دور واحد على الأقل"),
+    .optional()
+    .default([]),
 });
 
 router.post("/onboard", authorize({ feature: "admin", action: "update" }), async (req, res) => {
@@ -1940,10 +1917,37 @@ router.post("/onboard", authorize({ feature: "admin", action: "update" }), async
       throw new ConflictError("البريد الإلكتروني مستخدم مسبقاً");
     }
 
+    // ── Job-title-driven activation (migration 249) ──
+    // A picked job title supplies its defaultRoleKey + opensCustody + display
+    // name, so a new employee is activated with the right role automatically.
+    // Explicit roles in the body still take precedence and are merged in.
+    const roleKeys = new Set(d.roles.map((r) => r.roleKey));
+    const wantedRoles = [...d.roles];
+    let jobTitleName = d.jobTitle;
+    let opensCustody = false;
+    if (d.jobTitleId) {
+      const [jt] = await rawQuery<{ name: string; defaultRoleKey: string | null; opensCustody: boolean }>(
+        `SELECT name, "defaultRoleKey", "opensCustody" FROM job_titles
+          WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
+        [d.jobTitleId, companyId],
+      );
+      if (!jt) throw new ValidationError(`المسمى الوظيفي غير موجود: ${d.jobTitleId}`);
+      if (!jobTitleName) jobTitleName = jt.name;
+      opensCustody = Boolean(jt.opensCustody);
+      // Auto-add the title's default role when the admin didn't already pick it.
+      if (jt.defaultRoleKey && !roleKeys.has(jt.defaultRoleKey)) {
+        wantedRoles.unshift({ roleKey: jt.defaultRoleKey, branchId: null, departmentId: null });
+        roleKeys.add(jt.defaultRoleKey);
+      }
+    }
+    if (wantedRoles.length === 0) {
+      throw new ValidationError("اختر دوراً واحداً على الأقل، أو مسمى وظيفياً له دور افتراضي");
+    }
+
     // Resolve EVERY role key to an rbac_roles.id up front so a bad key fails
     // the whole request instead of half-onboarding the person (#1413 §6).
     const resolvedRoles: { roleId: number; roleKey: string; branchId: number | null; departmentId: number | null }[] = [];
-    for (const r of d.roles) {
+    for (const r of wantedRoles) {
       const roleRow = await rawQuery<{ id: number }>(
         `SELECT id FROM rbac_roles WHERE role_key = $1 AND ("companyId" = $2 OR "companyId" IS NULL) ORDER BY "companyId" NULLS LAST LIMIT 1`,
         [r.roleKey, companyId],
@@ -1987,9 +1991,9 @@ router.post("/onboard", authorize({ feature: "admin", action: "update" }), async
       const employeeId = empRes.rows[0].id;
 
       await tx.query(
-        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle",role,salary,"hireDate","isPrimary",status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,'active')`,
-        [employeeId, companyId, defaultBranchId, d.departmentId ?? null, d.jobTitle || "موظف", primaryRole, d.salary ?? 0, todayISO()],
+        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,'active')`,
+        [employeeId, companyId, defaultBranchId, d.departmentId ?? null, jobTitleName || "موظف", d.jobTitleId ?? null, primaryRole, d.salary ?? 0, todayISO()],
       );
 
       const userRes = await tx.query(
@@ -2007,6 +2011,25 @@ router.post("/onboard", authorize({ feature: "admin", action: "update" }), async
            ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
           [userId, companyId, rr.roleId, rr.branchId, rr.departmentId, i === 0, scope.userId],
         );
+      }
+
+      // Job-title-driven custody account (mirrors employees.ts Step 8b). Soft —
+      // the employee is still activated if the chart account 1400 is missing.
+      if (opensCustody) {
+        const coa = await tx.query<{ id: number }>(
+          `SELECT id FROM chart_of_accounts
+            WHERE "companyId" = $1 AND code = '1400' AND "deletedAt" IS NULL LIMIT 1`,
+          [companyId],
+        );
+        if (coa.rows.length > 0) {
+          await tx.query(
+            `INSERT INTO subsidiary_accounts ("companyId","entityType","entityId","accountType","accountId","isActive")
+             VALUES ($1,'employee',$2,'custody',$3,true) ON CONFLICT DO NOTHING`,
+            [companyId, employeeId, coa.rows[0].id],
+          );
+        } else {
+          logger.warn({ companyId }, "[onboard] chart_of_accounts 1400 missing — custody sub-account skipped");
+        }
       }
       return { employeeId, userId };
     });

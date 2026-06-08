@@ -12,6 +12,7 @@ import {
   Clock, ArrowRight, Banknote, ReceiptText, FileText, Calendar,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { AllocationHealthCard } from "@/components/shared/allocation-health-card";
 
 /**
@@ -92,11 +93,8 @@ export default function CfoCockpitPage() {
   const loading =
     qTreasury.isLoading || qArAging.isLoading || qApAging.isLoading ||
     qPaymentPending.isLoading;
-  if (loading) return <LoadingSpinner />;
 
   const treasury = qTreasury.data;
-  const totalCash = Number(treasury?.totalCash ?? 0);
-  const bankAccounts = treasury?.cashAccounts ?? [];
 
   // AR aging — try buckets shape first, otherwise sum data rows
   const arBuckets: ArAgingBucket[] = useMemo(() => {
@@ -105,10 +103,6 @@ export default function CfoCockpitPage() {
     if (Array.isArray(d?.data) && d.data.length > 0 && d.data[0].bucket) return d.data;
     return [];
   }, [qArAging.data]);
-  const totalAr = SUM(arBuckets, "total");
-  const overdueAr = arBuckets
-    .filter((b) => b.bucket !== "0-30" && b.bucket !== "current")
-    .reduce((s, b) => s + Number(b.total ?? 0), 0);
 
   const apBuckets: ApAgingBucket[] = useMemo(() => {
     const d: any = qApAging.data;
@@ -116,7 +110,6 @@ export default function CfoCockpitPage() {
     if (Array.isArray(d?.data) && d.data.length > 0 && d.data[0].bucket) return d.data;
     return [];
   }, [qApAging.data]);
-  const totalAp = SUM(apBuckets, "total");
 
   const pendingPayables: PendingPayable[] = useMemo(() => {
     const d: any = qPaymentPending.data;
@@ -124,6 +117,24 @@ export default function CfoCockpitPage() {
     if (Array.isArray(d)) return d;
     return [];
   }, [qPaymentPending.data]);
+
+  const overdueInvoices = useMemo(() => {
+    const d: any = qOverdue.data;
+    return Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
+  }, [qOverdue.data]);
+
+  if (loading) return <LoadingSpinner />;
+
+  const totalCash = Number(treasury?.totalCash ?? 0);
+  const bankAccounts = treasury?.cashAccounts ?? [];
+
+  const totalAr = SUM(arBuckets, "total");
+  const overdueAr = arBuckets
+    .filter((b) => b.bucket !== "0-30" && b.bucket !== "current")
+    .reduce((s, b) => s + Number(b.total ?? 0), 0);
+
+  const totalAp = SUM(apBuckets, "total");
+
   const apThisWeek = pendingPayables
     .filter((p) => {
       if (!p.expectedDelivery) return false;
@@ -137,10 +148,6 @@ export default function CfoCockpitPage() {
 
   const pendingApprovals = qBudgetAppr.data?.data?.length ?? 0;
   const failuresCount = qFailures.data?.data?.length ?? 0;
-  const overdueInvoices = useMemo(() => {
-    const d: any = qOverdue.data;
-    return Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-  }, [qOverdue.data]);
   const overdueCriticalCount = overdueInvoices.filter((o: any) => Number(o.daysOverdue) >= 30).length;
 
   const netLiquidity = totalCash - apThisWeekAmount;
@@ -176,6 +183,22 @@ export default function CfoCockpitPage() {
               <FileText className="h-4 w-4 me-1" /> التقارير الكاملة
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_cfo_cockpit"
+            entityId="summary"
+            size="icon"
+            payload={{
+              entity: { title: "لوحة المدير المالي اليومية", total: 6 },
+              items: [
+                { "البند": "إجمالي النقد", "القيمة": Number(totalCash || 0) },
+                { "البند": "إجمالي الذمم المدينة", "القيمة": Number(totalAr || 0) },
+                { "البند": "ذمم مدينة متأخرة", "القيمة": Number(overdueAr || 0) },
+                { "البند": "إجمالي الذمم الدائنة", "القيمة": Number(totalAp || 0) },
+                { "البند": "دفعات معلقة", "القيمة": pendingPayables.length },
+                { "البند": "حسابات بنكية", "القيمة": bankAccounts.length },
+              ],
+            }}
+          />
         </div>
       }
     >

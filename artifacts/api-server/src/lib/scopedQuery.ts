@@ -1,7 +1,7 @@
 import { rawQuery } from "./rawdb.js";
 import type { RequestScope } from "../middlewares/authMiddleware.js";
 import type { Request } from "express";
-import { OWNER_GM_ROLES } from "./rbacCatalog.js";
+import { OWNER_GM_ROLES, ADMIN_ROLES, HR_ROLES, FINANCE_ROLES } from "./rbacCatalog.js";
 
 export function parseScopeFilters(req: Request): ScopeFilters {
   const scope = req.scope!;
@@ -11,13 +11,22 @@ export function parseScopeFilters(req: Request): ScopeFilters {
   const branchIds = req.query.branchIds
     ? String(req.query.branchIds).split(",").map(Number).filter((n) => scope.allowedBranches.includes(n))
     : [];
+  const departmentIds = req.query.departmentIds
+    ? String(req.query.departmentIds).split(",").map(Number).filter((n) => (scope.allowedDepartments ?? []).includes(n))
+    : [];
   const search = req.query.search ? String(req.query.search) : undefined;
-  return { companyIds: companyIds.length > 0 ? companyIds : undefined, branchIds: branchIds.length > 0 ? branchIds : undefined, search };
+  return {
+    companyIds: companyIds.length > 0 ? companyIds : undefined,
+    branchIds: branchIds.length > 0 ? branchIds : undefined,
+    departmentIds: departmentIds.length > 0 ? departmentIds : undefined,
+    search,
+  };
 }
 
 export interface ScopeFilters {
   companyIds?: number[];
   branchIds?: number[];
+  departmentIds?: number[];
   search?: string;
   searchColumns?: string[];
 }
@@ -39,12 +48,44 @@ export interface ScopedQueryOptions {
    */
   enforceBranchScope?: boolean;
   /**
+   * When true, rows whose branch column is NULL are treated as
+   * company-level (not branch-private) and remain visible even under
+   * an active branch predicate. Without this, `branchId = ANY($branches)`
+   * silently drops every NULL-branch row — so a finance document created
+   * without a branch vanishes for any branch-scoped user while the
+   * (unscoped) summary card still counts it. The two then disagree and
+   * the table looks empty. Default false to preserve existing behaviour;
+   * finance list endpoints opt in because their documents legitimately
+   * sit at company level when no branch was chosen.
+   */
+  includeNullBranch?: boolean;
+  /**
    * When true, completely disables branch filtering — even if the frontend
    * sent a `?branchIds=...` query param. Use this for tables that do not
    * have a `branchId` column (e.g. `clients`, `projects`, `crm_opportunities`,
    * `support_tickets`, `hr_leave_requests`, `recurring_invoices`).
    */
   disableBranchScope?: boolean;
+  /**
+   * SQL column expression for the department id (default `"departmentId"`).
+   * Pass an aliased form like `e."departmentId"` when the table is aliased.
+   */
+  departmentColumn?: string;
+  /**
+   * Opt-in department cascade (org-as-security-boundary). When true and the
+   * caller sent no explicit `departmentIds`, restricts results to the user's
+   * `scope.allowedDepartments` — unless they are owner/GM or have no department
+   * assignment (then no department predicate is applied). Off by default, so
+   * existing routes are unchanged until they explicitly opt in.
+   */
+  enforceDepartmentScope?: boolean;
+  /**
+   * Disables department filtering entirely (for tables with no
+   * `departmentId` column). Default behaviour already emits no department
+   * predicate unless `enforceDepartmentScope` is set or `departmentIds` is
+   * passed, so this is only needed to hard-guarantee no predicate.
+   */
+  disableDepartmentScope?: boolean;
   /**
    * Opt-in soft-delete filter. When set, appends an
    * `AND <softDeleteColumn> IS NULL` predicate to the generated WHERE so
@@ -58,6 +99,15 @@ export interface ScopedQueryOptions {
 }
 
 const BRANCH_SCOPE_EXEMPT_ROLES = new Set(OWNER_GM_ROLES);
+// Department scoping is role-aware ("حسب نظام الأدوار الوظيفية"): company-level
+// roles (owner/GM + HR/admin/finance managers) span all departments and are
+// NEVER restricted to a department, even if they happen to carry a department
+// assignment. Only lower-tier roles (e.g. a department/team head) get scoped to
+// the departments they are assigned to — and a manager assigned to several
+// departments sees ALL of them via the allowedDepartments set.
+const DEPT_SCOPE_EXEMPT_ROLES = new Set<string>([
+  ...OWNER_GM_ROLES, ...ADMIN_ROLES, ...HR_ROLES, ...FINANCE_ROLES,
+]);
 
 export function buildScopedWhere(
   scope: RequestScope,
@@ -106,13 +156,48 @@ export function buildScopedWhere(
       branchIds = scope.allowedBranches;
     }
 
+    // When includeNullBranch is set, NULL-branch (company-level) rows
+    // survive the predicate alongside the scoped branch ids.
+    const nullClause = options.includeNullBranch ? `${branchCol} IS NULL OR ` : "";
     if (branchIds.length === 1) {
-      conditions.push(`${branchCol} = $${paramIdx}`);
+      conditions.push(`(${nullClause}${branchCol} = $${paramIdx})`);
       params.push(branchIds[0]);
       paramIdx++;
     } else if (branchIds.length > 1) {
-      conditions.push(`${branchCol} = ANY($${paramIdx})`);
+      conditions.push(`(${nullClause}${branchCol} = ANY($${paramIdx}))`);
       params.push(branchIds);
+      paramIdx++;
+    }
+  }
+
+  // Department-level scoping — additive, opt-in, and never enabled by default.
+  // Mirrors the branch cascade: when a route opts in via enforceDepartmentScope
+  // and the user is neither owner/GM nor department-unbounded, restrict to the
+  // user's assigned departments. An explicit ?departmentIds filter narrows
+  // within the allowed set. Owners/GMs and users with no department assignment
+  // (empty allowedDepartments) get NO department predicate (full visibility).
+  if (!options.disableDepartmentScope) {
+    const deptCol = options.departmentColumn || '"departmentId"';
+    const allowedDepartments = scope.allowedDepartments ?? [];
+    let departmentIds: number[] = filters.departmentIds?.length
+      ? filters.departmentIds.filter((id) => allowedDepartments.includes(id))
+      : [];
+    if (
+      departmentIds.length === 0 &&
+      options.enforceDepartmentScope &&
+      !scope.isOwner &&
+      !DEPT_SCOPE_EXEMPT_ROLES.has(scope.role) &&
+      allowedDepartments.length > 0
+    ) {
+      departmentIds = allowedDepartments;
+    }
+    if (departmentIds.length === 1) {
+      conditions.push(`${deptCol} = $${paramIdx}`);
+      params.push(departmentIds[0]);
+      paramIdx++;
+    } else if (departmentIds.length > 1) {
+      conditions.push(`${deptCol} = ANY($${paramIdx})`);
+      params.push(departmentIds);
       paramIdx++;
     }
   }

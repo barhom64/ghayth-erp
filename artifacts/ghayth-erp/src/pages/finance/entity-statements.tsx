@@ -17,6 +17,7 @@ import {
   FileText,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DateRangePresets } from "@/components/shared/date-range-presets";
 import {
   ClientSelect,
   SupplierSelect,
@@ -25,6 +26,7 @@ import {
 } from "@/components/shared/entity-selects";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Finance / Entity Statements & Subsidiary Ledger.
@@ -105,24 +107,32 @@ export default function EntityStatementsPage() {
         <CardHeader>
           <CardTitle className="text-sm">الفترة</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground">من تاريخ</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="rounded-md border bg-background px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground">إلى تاريخ</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="rounded-md border bg-background px-3 py-2 text-sm"
-            />
+        <CardContent className="flex flex-col gap-3">
+          <DateRangePresets
+            value={{ from: startDate, to: endDate }}
+            onChange={(r) => { setStartDate(r.from); setEndDate(r.to); }}
+            testidPrefix="entity-statements-preset"
+            hideAllTime
+          />
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">من تاريخ</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="rounded-md border bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground">إلى تاريخ</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="rounded-md border bg-background px-3 py-2 text-sm"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -218,7 +228,7 @@ function CustomerStatementTab({ startDate, endDate }: { startDate: string; endDa
 
       {enabled && (
         <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()}>
-          <StatementBody data={data} />
+          <StatementBody data={data} kind="customer" period={{ from: startDate, to: endDate }} />
         </PageStateWrapper>
       )}
     </>
@@ -252,14 +262,14 @@ function VendorStatementTab({ startDate, endDate }: { startDate: string; endDate
 
       {enabled && (
         <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()}>
-          <StatementBody data={data} />
+          <StatementBody data={data} kind="vendor" period={{ from: startDate, to: endDate }} />
         </PageStateWrapper>
       )}
     </>
   );
 }
 
-function StatementBody({ data }: { data: StatementResponse | undefined }) {
+function StatementBody({ data, kind, period }: { data: StatementResponse | undefined; kind: "customer" | "vendor"; period: { from: string; to: string } }) {
   const rows = data?.rows ?? data?.data ?? [];
 
   const columns: DataTableColumn<StatementRow>[] = [
@@ -337,6 +347,38 @@ function StatementBody({ data }: { data: StatementResponse | undefined }) {
         <SummaryCard label="مجموع المدين" value={data.totalDebit} tone="info" />
         <SummaryCard label="مجموع الدائن" value={data.totalCredit} tone="info" />
         <SummaryCard label="رصيد ختامي" value={data.closingBalance} tone="warning" />
+      </div>
+
+      <div className="flex justify-end">
+        <PrintButton
+          entityType={kind === "customer" ? "report_customer_statement" : "report_vendor_statement"}
+          entityId="list"
+          size="icon"
+          label={kind === "customer" ? "طباعة كشف حساب العميل" : "طباعة كشف حساب المورد"}
+          payload={() => ({
+            entity: {
+              title: kind === "customer" ? `كشف حساب العميل — ${data.entity?.name ?? ""}` : `كشف حساب المورد — ${data.entity?.name ?? ""}`,
+              entityName: data.entity?.name || "—",
+              vatNumber: data.entity?.vatNumber || data.entity?.taxNumber || "—",
+              phone: data.entity?.phone || "—",
+              email: data.entity?.email || "—",
+              periodFrom: formatDateAr(period.from),
+              periodTo: formatDateAr(period.to),
+              openingBalance: data.openingBalance ?? 0,
+              totalDebit: data.totalDebit ?? 0,
+              totalCredit: data.totalCredit ?? 0,
+              closingBalance: data.closingBalance ?? 0,
+            },
+            items: rows.map((r: any) => ({
+              "التاريخ": r.date ? formatDateAr(r.date) : "—",
+              "المرجع": r.ref || "—",
+              "البيان": r.description || "—",
+              "مدين": Number(r.debit || 0) > 0 ? Number(r.debit) : "—",
+              "دائن": Number(r.credit || 0) > 0 ? Number(r.credit) : "—",
+              "الرصيد": r.runningBalance != null ? Number(r.runningBalance) : "—",
+            })),
+          })}
+        />
       </div>
 
       <DataTable
@@ -490,6 +532,35 @@ function SubsidiaryLedgerTab({ startDate, endDate }: { startDate: string; endDat
               <SummaryCard label="مجموع الدائن" value={data.totalCredit ?? 0} tone="info" />
             </div>
           )}
+          {data && ledgerRows.length > 0 && (
+            <div className="flex justify-end">
+              <PrintButton
+                entityType="report_subsidiary_ledger"
+                entityId="list"
+                size="icon"
+                label="طباعة الحساب الفرعي"
+                payload={() => ({
+                  entity: {
+                    title: `الحساب الفرعي — ${ENTITY_TYPES.find((t) => t.value === entityType)?.label ?? entityType}`,
+                    entityType,
+                    entityId,
+                    periodFrom: formatDateAr(startDate),
+                    periodTo: formatDateAr(endDate),
+                    totalDebit: data.totalDebit ?? 0,
+                    totalCredit: data.totalCredit ?? 0,
+                  },
+                  items: ledgerRows.map((r: any) => ({
+                    "التاريخ": r.date ? formatDateAr(r.date) : "—",
+                    "المرجع": r.ref || "—",
+                    "البيان": r.description || "—",
+                    "الحساب": r.accountCode || "—",
+                    "مدين": Number(r.debit || 0) > 0 ? Number(r.debit) : "—",
+                    "دائن": Number(r.credit || 0) > 0 ? Number(r.credit) : "—",
+                  })),
+                })}
+              />
+            </div>
+          )}
           <DataTable
             columns={columns}
             data={ledgerRows}
@@ -624,6 +695,31 @@ function CostCenterReportTab({ startDate, endDate }: { startDate: string; endDat
         </Card>
       )}
 
+      {rows.length > 0 && (
+        <div className="flex justify-end">
+          <PrintButton
+            entityType="report_cost_center"
+            entityId="list"
+            size="icon"
+            label="طباعة تقرير مراكز التكلفة"
+            payload={() => ({
+              entity: {
+                title: filterCC ? `تقرير مركز التكلفة — ${filterCC}` : "تقرير مراكز التكلفة",
+                periodFrom: formatDateAr(startDate),
+                periodTo: formatDateAr(endDate),
+                totalCenters: rows.length,
+              },
+              items: rows.map((r: any) => ({
+                "مركز التكلفة": r.costCenter || "—",
+                "عدد القيود": r.entryCount ?? 0,
+                "إجمالي المصروفات": Number(r.totalExpenses || 0),
+                "إجمالي الإيرادات": Number(r.totalRevenue || 0),
+                "صافي": Number(r.totalRevenue || 0) - Number(r.totalExpenses || 0),
+              })),
+            })}
+          />
+        </div>
+      )}
       <DataTable
         columns={columns}
         data={rows}

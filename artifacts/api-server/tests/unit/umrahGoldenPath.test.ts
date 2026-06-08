@@ -5,6 +5,13 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const UMRAH_ROUTE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah.ts"), "utf8");
 const UMRAH_ENT = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"), "utf8");
+// The penalty creation pipeline (overstayed → violated transition,
+// postPenaltyGL call, INSERT umrah_penalties) was extracted from the
+// `/run-penalty-engine` route into a dedicated engine module so the
+// new auto-generation cron can reuse the exact same code path. The
+// golden-path assertions below check the engine module too, since
+// "penalty engine contract" lives there now.
+const UMRAH_PENALTY_ENGINE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/umrahPenaltyEngine.ts"), "utf8");
 
 // ─── Umrah Golden Path Tests ───────────────────────────────────────────────
 // Lock in umrah domain lifecycle contracts: pilgrims, seasons, transport,
@@ -270,11 +277,10 @@ describe("Umrah auto-status engine", () => {
   });
 
   it("penalty engine marks pilgrim as violated", () => {
-    const idx = UMRAH_ROUTE.indexOf('"/run-penalty-engine"');
-    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
-    const section = UMRAH_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("violated");
-    expect(section).not.toContain("overstay_penalized");
+    // After the engine extraction the transition lives in the engine
+    // module, not the route. Either source counts as "contract intact".
+    expect(UMRAH_PENALTY_ENGINE).toContain("violated");
+    expect(UMRAH_PENALTY_ENGINE).not.toContain("overstay_penalized");
   });
 });
 
@@ -294,10 +300,9 @@ describe("Umrah GL integration", () => {
   });
 
   it("penalty engine creates GL entries", () => {
-    const idx = UMRAH_ROUTE.indexOf('"/run-penalty-engine"');
-    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
-    const section = UMRAH_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("postPenaltyGL");
+    // postPenaltyGL moved to the extracted engine. The route is a
+    // thin wrapper now; the engine carries the GL posting contract.
+    expect(UMRAH_PENALTY_ENGINE).toContain("postPenaltyGL");
   });
 
   it("penalty waiver creates GL reversal", () => {
@@ -399,11 +404,10 @@ describe("Umrah lifecycle engine adoption", () => {
   });
 
   it("penalty engine uses applyTransition for violation", () => {
-    const idx = UMRAH_ROUTE.indexOf('"/run-penalty-engine"');
-    const endIdx = UMRAH_ROUTE.indexOf("router.", idx + 10);
-    const section = UMRAH_ROUTE.slice(idx, endIdx);
-    expect(section).toContain("applyTransition");
-    expect(section).toContain('"umrah.pilgrim.violated"');
+    // applyTransition + "umrah.pilgrim.violated" event live in the
+    // engine module after extraction. Route delegates.
+    expect(UMRAH_PENALTY_ENGINE).toContain("applyTransition");
+    expect(UMRAH_PENALTY_ENGINE).toContain('"umrah.pilgrim.violated"');
   });
 
   it("agent PATCH validates status transitions", () => {

@@ -17,6 +17,7 @@
  */
 
 import { Router, type Request, type Response } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError, zodParse } from "../lib/errorHandler.js";
@@ -275,6 +276,31 @@ router.post(
           isThermal: body.paperSize === "THERMAL_80" || body.paperSize === "THERMAL_58",
           version: 1,
         } as never;
+      } else if (body.presetKey) {
+        // Preset-theme preview — the operator picked a built-in style
+        // (classic/modern/compact) without typing custom HTML. Resolve the
+        // branded theme so the preview reflects the actual cliché the seed
+        // path would serve, not just the hard-coded classic. Without this
+        // branch the modern/compact preview was identical to classic.
+        const { getBrandedThemeHtml } = await import("../lib/print/brandedThemes.js");
+        const { html, css } = getBrandedThemeHtml(body.entityType, body.presetKey);
+        overrideTemplate = {
+          id: -998,
+          name: `preset-${body.presetKey}`,
+          entityType: body.entityType,
+          branchId: null,
+          companyId: null,
+          paperSize: body.paperSize ?? "A4",
+          mode: "html",
+          presetKey: body.presetKey,
+          htmlContent: html,
+          layoutJson: null,
+          cssOverrides: css || null,
+          headerOverride: body.headerOverride ?? null,
+          footerOverride: body.footerOverride ?? null,
+          isThermal: body.paperSize === "THERMAL_80" || body.paperSize === "THERMAL_58",
+          version: 1,
+        } as never;
       }
       const result = await renderPrint(
         scope,
@@ -355,6 +381,21 @@ router.post("/templates", requirePermission("templates:write"), async (req: Requ
   try {
     const body = zodParse(templateCreateBody.safeParse(req.body));
     const scope = scopeFromReq(req);
+    // When the operator picks a built-in preset theme (classic/modern/
+    // compact) and doesn't supply custom HTML, materialise the branded
+    // theme HTML now and store it as mode=html. This way the saved row is
+    // self-contained — the renderer doesn't have to re-derive the theme,
+    // and the operator can later tweak the materialised HTML if they want.
+    let effMode = body.mode;
+    let effHtml = body.htmlContent ?? null;
+    let effCss = body.cssOverrides ?? null;
+    if (body.mode === "preset" && !body.htmlContent && body.presetKey) {
+      const { getBrandedThemeHtml } = await import("../lib/print/brandedThemes.js");
+      const { html, css } = getBrandedThemeHtml(body.entityType, body.presetKey);
+      effMode = "html";
+      effHtml = html;
+      effCss = effCss || css || null;
+    }
     const rows = await rawQuery<{ id: number }>(
       `INSERT INTO document_templates
        (name, description, category, "type", "entityType", "branchId", "companyId",
@@ -370,11 +411,11 @@ router.post("/templates", requirePermission("templates:write"), async (req: Requ
         body.branchId ?? null,
         scope.companyId,
         body.paperSize,
-        body.mode,
+        effMode,
         body.presetKey ?? null,
-        body.htmlContent ?? null,
+        effHtml,
         body.layoutJson ? JSON.stringify(body.layoutJson) : null,
-        body.cssOverrides ?? null,
+        effCss,
         body.headerOverride ? JSON.stringify(body.headerOverride) : null,
         body.footerOverride ? JSON.stringify(body.footerOverride) : null,
         body.isThermal ?? false,
@@ -503,6 +544,208 @@ router.delete(
         entityId: id,
       }).catch((e) => logger.error(e, "print template event failed"));
       res.json({ ok: true });
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  }
+);
+
+// ─── Upload routes — logo, template file, reset-to-default ──────────────────
+
+/**
+ * Multer config — in-memory, 2MB max for logos, 256KB for HTML.
+ * Files are converted to data URLs and stored on the template row /
+ * branch row directly, so no object-storage plumbing is required for
+ * the v1 of the editor. Production-grade S3 storage is a follow-up.
+ */
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+});
+
+const ALLOWED_LOGO_MIMES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/svg+xml",
+]);
+
+/**
+ * POST /api/print/uploads/logo
+ * Accepts a multipart file (field: "logo"). Returns { dataUrl } —
+ * a data: URL the caller can paste straight into the template editor's
+ * "override logo URL" field (or save on the branch).
+ */
+router.post(
+  "/uploads/logo",
+  requirePermission("templates:write"),
+  upload.single("logo"),
+  async (req: Request, res: Response) => {
+    try {
+      const file = (req as Request & { file?: Express.Multer.File }).file;
+      if (!file) {
+        throw new ValidationError("logo file is required (field: logo)");
+      }
+      if (!ALLOWED_LOGO_MIMES.has(file.mimetype)) {
+        throw new ValidationError(
+          `unsupported logo type ${file.mimetype}; use PNG/JPEG/WebP/SVG`,
+        );
+      }
+      // 2MB is enough for any letterhead logo. Data URL is base64-expanded
+      // so the wire format is ~33% bigger, which is fine for templates
+      // (rare-write reference) but would not be for end-user uploads.
+      const dataUrl = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+      res.json({
+        ok: true,
+        dataUrl,
+        size: file.size,
+        mimeType: file.mimetype,
+      });
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  }
+);
+
+/**
+ * POST /api/print/uploads/template
+ * Accepts a multipart .html file (field: "template") + form fields for
+ * `name`, `entityType`, `branchId` (optional), `paperSize`. Creates a
+ * `document_templates` row in mode="html" with the file's contents as
+ * htmlContent. Returns the created template row.
+ *
+ * This is the "I have a complete cliché — upload it" path. Operators
+ * who have a designed invoice template (typically exported from Word
+ * or Photoshop-to-HTML) get a one-click import rather than having to
+ * paste 2000 lines of HTML into a textarea.
+ */
+router.post(
+  "/uploads/template",
+  requirePermission("templates:write"),
+  upload.single("template"),
+  async (req: Request, res: Response) => {
+    try {
+      const file = (req as Request & { file?: Express.Multer.File }).file;
+      if (!file) {
+        throw new ValidationError("template file is required (field: template)");
+      }
+      // Accept .html / text/html only for the v1. ZIP unpacking (HTML + logo
+      // bundled together) is a follow-up — keeps the implementation small.
+      if (
+        !file.mimetype.startsWith("text/html") &&
+        !file.originalname.toLowerCase().endsWith(".html") &&
+        !file.originalname.toLowerCase().endsWith(".htm")
+      ) {
+        throw new ValidationError(
+          "only .html template files are supported in this version",
+        );
+      }
+      // 256KB cap for HTML — anything larger is suspicious (the largest
+      // bundled preset in BESPOKE_PRESETS is ~6KB).
+      if (file.size > 256 * 1024) {
+        throw new ValidationError(
+          "template HTML is too large (max 256KB)",
+        );
+      }
+      const html = file.buffer.toString("utf-8");
+      // Light sanity check — must contain at least one template token so we
+      // don't accept an obviously empty / placeholder file. Common token
+      // names listed at print-templates.tsx PRINT_TOKENS.
+      if (
+        !/\{\{[^}]+\}\}/.test(html) &&
+        !/<table|<div|<section/i.test(html)
+      ) {
+        throw new ValidationError(
+          "template HTML must contain template tokens like {{entity.ref}} or basic HTML structure",
+        );
+      }
+      // Form fields from the multipart body
+      const name = String(req.body?.name ?? file.originalname.replace(/\.html?$/i, ""));
+      const entityType = String(req.body?.entityType ?? "invoice");
+      const paperSize = String(req.body?.paperSize ?? "A4");
+      const branchId =
+        req.body?.branchId === undefined || req.body?.branchId === ""
+          ? null
+          : Number(req.body.branchId);
+      const isDefault = req.body?.isDefault === "true" || req.body?.isDefault === true;
+
+      const scope = scopeFromReq(req);
+      const inserted = await rawQuery<{ id: number }>(
+        `INSERT INTO document_templates
+           ("companyId", "branchId", name, "entityType", "paperSize",
+            mode, "htmlContent", "isDefault", "isActive", version)
+         VALUES ($1, $2, $3, $4, $5, 'html', $6, $7, true, 1)
+         RETURNING id`,
+        [scope.companyId, branchId, name, entityType, paperSize, html, isDefault],
+      );
+      res.json({
+        ok: true,
+        templateId: inserted[0]?.id,
+        name,
+        entityType,
+        size: file.size,
+      });
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  }
+);
+
+/**
+ * POST /api/print/templates/:id/reset
+ * Replaces a custom template's htmlContent with the seeded preset for
+ * the same entityType. This is the "I broke the template — restore the
+ * default" button.
+ */
+router.post(
+  "/templates/:id/reset",
+  requirePermission("templates:write"),
+  async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) throw new ValidationError("invalid template id");
+      const scope = scopeFromReq(req);
+      const [tpl] = await rawQuery<{ entityType: string }>(
+        `SELECT "entityType" FROM document_templates
+         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!tpl) throw new NotFoundError("template not found");
+      // Pull the seeded preset row (`companyId IS NULL`) — that's the
+      // shared "factory copy" of the template for the entity. If none is
+      // seeded, fall back to the universal "fragment" the resolver uses.
+      const [seeded] = await rawQuery<{ htmlContent: string | null; presetKey: string | null }>(
+        `SELECT "htmlContent", "presetKey"
+           FROM document_templates
+          WHERE "companyId" IS NULL
+            AND "entityType" = $1
+            AND "presetKey" = 'classic'
+            AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [tpl.entityType],
+      );
+      const restoreHtml =
+        seeded?.htmlContent ??
+        `<div class="print-doc">
+{{branch.letterhead}}
+<h2 style="text-align:center;margin:16px 0">{{entity.title}}</h2>
+{{entity.itemsTable}}
+{{system.verifyBlock}}
+{{branch.footer}}
+</div>`;
+      await rawExecute(
+        `UPDATE document_templates
+            SET "htmlContent" = $1,
+                mode = 'html',
+                "updatedAt" = NOW()
+          WHERE id = $2 AND "companyId" = $3`,
+        [restoreHtml, id, scope.companyId],
+      );
+      res.json({
+        ok: true,
+        restoredFromPreset: seeded?.presetKey ?? "universal",
+      });
     } catch (err) {
       return handleRouteError(err, res, "print");
     }

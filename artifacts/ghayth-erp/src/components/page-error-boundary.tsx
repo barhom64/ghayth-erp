@@ -51,6 +51,38 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  reloading: boolean;
+}
+
+/**
+ * Detect a stale-deploy chunk-load failure. When a new build is deployed the old
+ * hashed chunk files are purged, so a browser holding a stale index.html 404s on
+ * `React.lazy(() => import(...))` and the rejection bubbles to this boundary.
+ */
+function isChunkLoadError(err: Error | null): boolean {
+  if (!err) return false;
+  const msg = `${err.message || ""} ${(err as any).name || ""}`;
+  return /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|dynamically imported module|ChunkLoadError/i.test(
+    msg,
+  );
+}
+
+/**
+ * Force a one-time full reload to fetch the fresh index.html + chunk graph. The
+ * timestamp guard prevents a reload loop if a chunk is genuinely missing while
+ * still recovering on each later deploy. Returns true if a reload was triggered.
+ */
+function tryChunkReload(): boolean {
+  try {
+    const KEY = "erp:chunk-reload-at";
+    const last = Number(sessionStorage.getItem(KEY) || "0");
+    if (Date.now() - last < 10000) return false;
+    sessionStorage.setItem(KEY, String(Date.now()));
+    window.location.reload();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 interface ServerErrorShape {
@@ -118,14 +150,21 @@ function codeBadgeVariant(code?: string): "default" | "destructive" | "outline" 
 export class PageErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, reloading: false };
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return { hasError: true, error, reloading: isChunkLoadError(error) };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
+    if (isChunkLoadError(error)) {
+      // Stale-deploy: a lazy chunk 404'd after a new build. Reload once to pull
+      // the fresh assets instead of showing a dead-end error card.
+      if (tryChunkReload()) return;
+      // Already reloaded very recently → fall through to the manual error UI.
+      this.setState({ reloading: false });
+    }
     console.error("[PageErrorBoundary]", error, info);
     this.props.onError?.(error, info);
   }
@@ -135,12 +174,12 @@ export class PageErrorBoundary extends Component<Props, State> {
     // boundary clears itself so the children re-mount fresh. Route param
     // changes are the most common trigger.
     if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
-      this.setState({ hasError: false, error: null });
+      this.setState({ hasError: false, error: null, reloading: false });
     }
   }
 
   reset = (): void => {
-    this.setState({ hasError: false, error: null });
+    this.setState({ hasError: false, error: null, reloading: false });
   };
 
   render(): ReactNode {
@@ -148,18 +187,31 @@ export class PageErrorBoundary extends Component<Props, State> {
       return this.props.children;
     }
 
+    // Stale-deploy chunk error: a reload is in flight — show a minimal placeholder
+    // rather than the dead-end error card.
+    if (this.state.reloading) {
+      return (
+        <div className="p-6 text-center text-sm text-muted-foreground" dir="rtl">
+          جارٍ تحديث الصفحة لتحميل أحدث إصدار…
+        </div>
+      );
+    }
+
     if (this.props.fallback) {
       return this.props.fallback(this.state.error, this.reset);
     }
 
     const err = this.state.error;
+    const isChunk = isChunkLoadError(err);
     const serverShape = extractServerError(err);
     const code = serverShape?.code;
-    const title = codeToTitle(code);
-    const message = serverShape?.error ?? err.message ?? "حدث خطأ غير متوقع";
-    const field = serverShape?.field;
-    const fix = serverShape?.fix;
-    const canRetry = codeAllowsRetry(code);
+    const title = isChunk ? "صدر تحديث جديد للنظام" : codeToTitle(code);
+    const message = isChunk
+      ? "تم نشر إصدار محدّث. أعد تحميل الصفحة للحصول على آخر نسخة."
+      : serverShape?.error ?? err.message ?? "حدث خطأ غير متوقع";
+    const field = isChunk ? undefined : serverShape?.field;
+    const fix = isChunk ? undefined : serverShape?.fix;
+    const canRetry = isChunk || codeAllowsRetry(code);
     const isDev = typeof import.meta !== "undefined" && (import.meta as any).env?.DEV;
 
     return (
@@ -191,9 +243,13 @@ export class PageErrorBoundary extends Component<Props, State> {
 
             <div className="flex items-center gap-2 pt-2 border-t">
               {canRetry && (
-                <Button onClick={this.reset} size="sm" variant="default">
+                <Button
+                  onClick={isChunk ? () => window.location.reload() : this.reset}
+                  size="sm"
+                  variant="default"
+                >
                   <RefreshCw className="h-4 w-4 ms-1" />
-                  إعادة المحاولة
+                  {isChunk ? "إعادة تحميل" : "إعادة المحاولة"}
                 </Button>
               )}
               <Button

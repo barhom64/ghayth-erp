@@ -12,6 +12,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
+import { amountTaxSplit } from "@/lib/tax-math";
+import { allowedUsagesForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
+import { EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
+import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
+import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
@@ -32,19 +37,7 @@ interface TaxCodeOption {
   isActive: boolean;
 }
 
-function roundMoney(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function voucherTaxSplit(amount: number, rate: number, inclusive: boolean) {
-  if (!amount || !rate) return { net: amount || 0, vat: 0, gross: amount || 0 };
-  if (inclusive) {
-    const net = roundMoney(amount / (1 + rate / 100));
-    return { net, vat: roundMoney(amount - net), gross: amount };
-  }
-  const vat = roundMoney(amount * (rate / 100));
-  return { net: amount, vat, gross: roundMoney(amount + vat) };
-}
+const voucherTaxSplit = amountTaxSplit;
 
 const OPERATION_TYPES_RECEIPT = [
   { value: "receipt", label: "قبض إيراد عام" },
@@ -143,6 +136,8 @@ export default function VouchersCreate() {
   };
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_vouchers_create", INITIAL_FORM);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  // #1715 PR-4: master «ربط السند بـ» field shared with expenses.
+  const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const operationTypes = form.type === "receipt" ? OPERATION_TYPES_RECEIPT : OPERATION_TYPES_PAYMENT;
@@ -240,6 +235,9 @@ export default function VouchersCreate() {
         relatedEntityName: form.relatedEntityName || undefined,
         autoDescription: form.autoDescription,
         beneficiaryType: form.beneficiaryType || undefined,
+        lineAllocation: allocTarget.target !== "none"
+          ? buildAllocationPayload(allocTarget.allocation)
+          : undefined,
       });
       clearDraft();
       toast({ title: "تم إنشاء السند بنجاح" });
@@ -364,10 +362,27 @@ export default function VouchersCreate() {
             onChange={(v) => setField("sourceAccountCode", v)}
             label="الخزنة / البنك"
             placeholder="اختر الخزنة أو البنك..."
-            filter={(a: any) => a.code?.startsWith("11") || a.code?.startsWith("12")}
+            // #1715: narrow by accountUsage matching the chosen method
+            // (نقدي→صندوق، تحويل→بنك، شيك→بنك/شيكات). Unclassified accounts
+            // fall back to the legacy 11xx/12xx money heuristic. Backend
+            // enforces the same rule.
+            filter={(a: any) => {
+              const allowed = allowedUsagesForPaymentMethod(form.method);
+              if (!allowed) return isMoneyAccount(a);
+              return a.accountUsage
+                ? allowed.includes(a.accountUsage)
+                : isMoneyAccount(a);
+            }}
           />
         </div>
       </div>
+
+      <FinanceOperationContextPanel
+        value={allocTarget}
+        onChange={setAllocTarget}
+        title="ربط السند بـ"
+        description="اختر ما يُربط به السند، وستظهر الحقول المناسبة فقط. الربط يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً."
+      />
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">الطرف الآخر والمرجع</h3>

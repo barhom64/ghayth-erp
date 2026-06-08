@@ -39,14 +39,21 @@
 ALTER TABLE public.integrations
   DROP CONSTRAINT IF EXISTS integrations_type_check;
 
-ALTER TABLE public.integrations
-  ADD CONSTRAINT integrations_type_check_v2 CHECK (
-    type IN (
-      'email', 'sms', 'whatsapp', 'webhook',
-      'pbx', 'push', 'sms_otp', 'siem', 'zatca',
-      'stt', 'storage', 'object_storage'
-    )
-  );
+-- Idempotent: skip if the v2 constraint already exists (baseline dump may
+-- already carry it, in which case a bare ADD CONSTRAINT aborts the boot).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'integrations_type_check_v2' AND conrelid = 'public.integrations'::regclass) THEN
+    ALTER TABLE public.integrations
+      ADD CONSTRAINT integrations_type_check_v2 CHECK (
+        type IN (
+          'email', 'sms', 'whatsapp', 'webhook',
+          'pbx', 'push', 'sms_otp', 'siem', 'zatca',
+          'stt', 'storage', 'object_storage'
+        )
+      );
+  END IF;
+END $$;
 
 -- 2. Platform-wide secrets table.
 -- Some secrets are NOT per-tenant — VAPID push keys, the global SIEM

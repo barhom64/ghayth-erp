@@ -11,6 +11,8 @@ import { ShieldAlert, Plus, AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import {
   PageShell,
   DataTable,
@@ -18,6 +20,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   FormShell,
   FormTextField,
   FormTextareaField,
@@ -124,6 +127,7 @@ export default function RisksPage() {
     statusField: "status",
     extraFields: { riskLevel: "riskLevel" },
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -205,6 +209,28 @@ export default function RisksPage() {
         <>
           {criticalCount > 0 && <Badge className="bg-status-error-surface text-status-error-foreground">{criticalCount} حرج</Badge>}
           {highCount > 0 && <Badge className="bg-orange-100 text-orange-700">{highCount} عالٍ</Badge>}
+          <PrintButton
+            entityType="report_project_risks"
+            entityId={projectId || "all"}
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: "سجل مخاطر المشاريع",
+                total: printRows.length,
+                critical: criticalCount,
+                high: highCount,
+              },
+              items: printRows.map((r: any) => ({
+                "المخاطرة": r.title || r.name || "—",
+                "المشروع": r.projectName || r.projectId || "—",
+                "الفئة": r.category || "—",
+                "الخطورة": r.severity || "—",
+                "الاحتمالية": r.likelihood || "—",
+                "الحالة": r.status || "—",
+                "المُكلَّف": r.assignee || r.owner || "—",
+              })),
+            })}
+          />
           <GuardedButton perm="projects:create" onClick={() => setShowForm(!showForm)} size="sm" disabled={!projectId}>
             <Plus className="w-4 h-4 me-1" /> إضافة مخاطرة
           </GuardedButton>
@@ -270,11 +296,28 @@ export default function RisksPage() {
             }}
             values={filters}
             onChange={setFilters}
+            onExportCSV={() =>
+              exportToCSV(
+                filtered || [],
+                [
+                  { key: "title", label: "عنوان المخاطرة" },
+                  { key: "description", label: "التفاصيل" },
+                  { key: "riskLevel", label: "مستوى الخطورة" },
+                  { key: "probability", label: "الاحتمالية" },
+                  { key: "impact", label: "الأثر" },
+                  { key: "riskScore", label: "الدرجة" },
+                  { key: "mitigationPlan", label: "خطة التخفيف" },
+                  { key: "status", label: "الحالة" },
+                ],
+                "مخاطر-المشروع",
+              )
+            }
             resultCount={filtered.length}
           />
 
           <DataTable
             columns={columns}
+            onSortedDataChange={setPrintRows}
             data={filtered}
             noToolbar
             emptyMessage="لا توجد مخاطر مسجلة لهذا المشروع"

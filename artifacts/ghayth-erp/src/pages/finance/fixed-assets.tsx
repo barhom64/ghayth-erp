@@ -2,6 +2,8 @@ import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +39,10 @@ const assetSchema = z.object({
   usefulLifeYears: z.coerce.number().int().min(1).max(50),
   depreciationMethod: z.enum(["straight_line", "declining_balance"]),
   description: z.string().trim(),
+  // Asset Acquisition Center: optional credit (payment-source) account. When
+  // set, the backend posts a balanced acquisition entry (Dr asset / Cr source)
+  // so the purchase is capitalised instead of expensed.
+  paymentAccountCode: z.string().trim(),
 });
 type AssetForm = z.infer<typeof assetSchema>;
 
@@ -51,6 +57,7 @@ export default function FixedAssetsPage() {
 
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fixed-assets"], "/finance/fixed-assets");
   const assets = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(assets);
 
   const createMutation = useApiMutation<unknown, AssetForm>(
     "/finance/fixed-assets",
@@ -119,6 +126,29 @@ export default function FixedAssetsPage() {
           <GuardedButton perm="finance:create" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 me-1" />أصل جديد
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_fixed_assets"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: "الأصول الثابتة",
+                total: printRows.length,
+                totalCost,
+                totalBookValue,
+              },
+              items: printRows.map((a: any) => ({
+                "الكود": a.assetCode || a.code || "—",
+                "الاسم": a.name || "—",
+                "الفئة": a.category || "—",
+                "تاريخ الشراء": a.purchaseDate || "—",
+                "تكلفة الشراء": a.purchaseCost ?? 0,
+                "القيمة الدفترية": a.currentBookValue ?? 0,
+                "الإهلاك المتراكم": a.accumulatedDepreciation ?? 0,
+                "الحالة": a.status || "—",
+              })),
+            })}
+          />
         </>
       }
     >
@@ -157,6 +187,7 @@ export default function FixedAssetsPage() {
             </GuardedButton>
           ) },
         ] as DataTableColumn<any>[]}
+        onSortedDataChange={setPrintRows}
         data={assets}
         isLoading={isLoading}
         isError={isError}
@@ -186,6 +217,7 @@ export default function FixedAssetsPage() {
                 usefulLifeYears: 5,
                 depreciationMethod: "straight_line" as const,
                 description: "",
+                paymentAccountCode: "",
               }}
               submitLabel="حفظ الأصل"
               secondaryActions={
@@ -213,8 +245,16 @@ export default function FixedAssetsPage() {
                     { value: "declining_balance", label: "القسط المتناقص" },
                   ]}
                 />
+                <FormTextField
+                  name="paymentAccountCode"
+                  label="حساب مصدر الدفع (دائن) — اختياري"
+                  placeholder="مثال: 1010 نقدية / 1020 بنك / 2110 ذمم دائنة"
+                />
                 <FormTextareaField name="description" label="الوصف" className="col-span-2" rows={2} />
               </FormGrid>
+              <p className="text-xs text-muted-foreground mt-2">
+                عند إدخال حساب مصدر الدفع، يُرحَّل قيد اقتناء متوازن تلقائيًا (مدين: حساب الأصل ١٥٠٠ / دائن: مصدر الدفع) فتُرسمَل التكلفة بدل قيدها مصروفًا. اتركه فارغًا لتسجيل الأصل في السجل دون قيد.
+              </p>
             </FormShell>
           </CardContent>
         </Card>

@@ -33,8 +33,9 @@
  *   Then auto-migrate fills them back in.
  */
 
-import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
+import { rawQuery, withTransaction } from "../rawdb.js";
 import { FEATURE_CATALOG, type Scope } from "./featureCatalog.js";
+import type { PoolClient } from "pg";
 
 const ROLE_DEFAULT_SCOPE: Record<string, Scope> = {
   owner: "all",
@@ -50,6 +51,7 @@ const ROLE_DEFAULT_SCOPE: Record<string, Scope> = {
   crm_manager: "company",
   bi_manager: "company",
   branch_manager: "branch",
+  driver: "self",
   employee: "self",
 };
 
@@ -67,6 +69,7 @@ const ROLE_LABELS: Record<string, string> = {
   crm_manager: "مدير علاقات العملاء",
   bi_manager: "مدير التحليلات",
   branch_manager: "مدير الفرع",
+  driver: "سائق",
   employee: "موظف",
 };
 
@@ -75,7 +78,7 @@ const ROLE_LEVELS: Record<string, number> = {
   hr_manager: 70, finance_manager: 70, fleet_manager: 70, warehouse_manager: 70,
   property_manager: 70, projects_manager: 70, legal_manager: 70, support_manager: 70,
   crm_manager: 70, bi_manager: 70,
-  branch_manager: 60, employee: 10,
+  branch_manager: 60, driver: 10, employee: 10,
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -92,6 +95,7 @@ const ROLE_COLORS: Record<string, string> = {
   crm_manager: "#9333ea",
   bi_manager: "#0d9488",
   branch_manager: "#475569",
+  driver: "#0d9488",
   employee: "#64748b",
 };
 
@@ -146,23 +150,254 @@ interface SyncSummary {
   usersBound: number;
 }
 
+export interface RoleDef {
+  role: string;
+  permissions: string[];
+}
+
 /**
- * Top-level entry — called once at server boot from index.ts.
- * Idempotent: safe to re-run on every boot.
+ * In-memory default role definitions (#1791). Formerly seeded into the legacy
+ * `role_permissions` table by companyBootstrap and then translated to v2 by the
+ * boot sync. Now they ARE the single source: seeded straight into rbac_roles +
+ * rbac_role_grants. Kept in legacy "<module>:<action>" shorthand so the proven
+ * translateLegacy() / scope-clamp mapping below still applies unchanged.
  */
+export const DEFAULT_ROLE_DEFS: RoleDef[] = [
+  { role: "owner", permissions: ["*"] },
+  { role: "general_manager", permissions: ["dashboard:read", "employees:*", "finance:*", "hr:*", "fleet:*", "property:*", "warehouse:*", "store:*", "operations:*", "bi:*", "reports:*", "governance:*", "legal:*", "crm:*", "marketing:*", "support:*", "documents:*", "requests:*", "comms:*", "settings:read"] },
+  { role: "hr_manager", permissions: ["dashboard:read", "employees:*", "hr:*", "attendance:*", "leaves:*", "payroll:*", "documents:read", "requests:*", "comms:read"] },
+  { role: "finance_manager", permissions: ["dashboard:read", "finance:*", "invoices:*", "expenses:*", "reports:read", "documents:read", "requests:*", "comms:read"] },
+  { role: "fleet_manager", permissions: ["dashboard:read", "fleet:*", "documents:read", "requests:*", "comms:read"] },
+  { role: "property_manager", permissions: ["dashboard:read", "property:*", "documents:read", "requests:*", "comms:read"] },
+  { role: "projects_manager", permissions: ["dashboard:read", "operations:*", "documents:read", "requests:*", "comms:read"] },
+  { role: "warehouse_manager", permissions: ["dashboard:read", "warehouse:*", "store:*", "documents:read", "requests:*", "comms:read"] },
+  { role: "legal_manager", permissions: ["dashboard:read", "legal:*", "governance:*", "documents:read", "requests:*", "comms:read"] },
+  { role: "support_manager", permissions: ["dashboard:read", "support:*", "documents:read", "requests:*", "comms:read"] },
+  { role: "crm_manager", permissions: ["dashboard:read", "crm:*", "marketing:*", "documents:read", "requests:*", "comms:read"] },
+  { role: "bi_manager", permissions: ["dashboard:read", "bi:*", "reports:*", "documents:read", "requests:*", "comms:read"] },
+  { role: "branch_manager", permissions: ["dashboard:read", "employees:read", "attendance:*", "leaves:approve", "reports:read", "documents:read", "requests:*", "comms:read", "support:read"] },
+  // Self-service driver — fleet.* read for the dispatcher-board feeds their
+  // /me/driver consumes; the actual self-service capabilities come through the
+  // featureCatalog selfService floor, not this seed.
+  { role: "driver", permissions: ["dashboard:read", "profile:self", "attendance:self", "leaves:self", "fleet:read", "documents:read", "comms:read", "notifications:read"] },
+  { role: "employee", permissions: ["dashboard:read", "attendance:self", "leaves:self", "profile:self", "requests:self", "documents:read", "comms:read"] },
+];
+
+const SCOPE_RANK: Record<Scope, number> = {
+  self: 1, team: 2, department: 3, department_tree: 4,
+  branch: 5, branches: 6, company: 7, multi_company: 8, all: 9,
+};
+
+/**
+ * Seed rbac_roles + rbac_role_grants for one company from in-memory role
+ * definitions. Idempotent FIRST-RUN-ONLY (ON CONFLICT DO NOTHING) so admin
+ * customizations (labels, levels, scope/action tweaks) survive restarts.
+ * Returns the resolved role_key → role_id map for caller binding.
+ */
+export async function seedRolesAndGrantsV2(
+  client: PoolClient,
+  companyId: number,
+  roleDefs: RoleDef[] = DEFAULT_ROLE_DEFS,
+): Promise<{ rolesCreated: number; grantsCreated: number; roleIdByKey: Record<string, number> }> {
+  let rolesCreated = 0;
+  let grantsCreated = 0;
+  const roleIdByKey: Record<string, number> = {};
+
+  for (const def of roleDefs) {
+    const key = def.role;
+    const labelAr = ROLE_LABELS[key] || key;
+    const level = ROLE_LEVELS[key] ?? 30;
+    const color = ROLE_COLORS[key] || "#3b82f6";
+    const isSystem = key in ROLE_LABELS;
+
+    await client.query(
+      `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT ("companyId", role_key) DO NOTHING`,
+      [companyId, key, labelAr, level, color, isSystem]
+    );
+    const idRow = await client.query<{ id: number }>(
+      `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = $2`,
+      [companyId, key]
+    );
+    if (!idRow.rows[0]) continue;
+    const roleId = idRow.rows[0].id;
+    roleIdByKey[key] = roleId;
+    rolesCreated++;
+
+    const defaultScope: Scope = ROLE_DEFAULT_SCOPE[key] || "self";
+    const grantsByFeature = new Map<string, Set<string>>();
+    for (const perm of def.permissions) {
+      for (const t of translateLegacy(perm)) {
+        if (!grantsByFeature.has(t.featureKey)) grantsByFeature.set(t.featureKey, new Set());
+        grantsByFeature.get(t.featureKey)!.add(t.action);
+      }
+    }
+
+    for (const [featureKey, actions] of grantsByFeature) {
+      const actionsArray = Array.from(actions);
+      // Clamp scope to the feature's availableScopes so we never emit a grant
+      // for a scope the catalog doesn't allow (e.g. scope="company" on a
+      // self-only feature like hr.attendance.checkin).
+      const featureDef = FEATURE_CATALOG.find((f) => f.key === featureKey);
+      let scope: Scope = defaultScope;
+      if (featureDef && !featureDef.availableScopes.includes(scope)) {
+        const targetRank = SCOPE_RANK[defaultScope] || 0;
+        const fallback = (featureDef.availableScopes as Scope[])
+          .filter((s) => (SCOPE_RANK[s] || 0) <= targetRank)
+          .sort((a, b) => (SCOPE_RANK[b] || 0) - (SCOPE_RANK[a] || 0))[0];
+        scope = fallback || (featureDef.availableScopes[0] as Scope);
+      }
+      await client.query(
+        `INSERT INTO rbac_role_grants (role_id, feature_key, actions, scope)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (role_id, feature_key) DO NOTHING`,
+        [roleId, featureKey, actionsArray, scope]
+      );
+      grantsCreated++;
+    }
+  }
+
+  return { rolesCreated, grantsCreated, roleIdByKey };
+}
+
+/**
+ * Bind active employee_assignments to their v2 role (rbac_user_roles). Resolves
+ * role ids from the supplied map first, falling back to a per-key lookup for
+ * assignment roles not present in the seeded defaults.
+ */
+export async function bindUsersFromAssignments(
+  client: PoolClient,
+  companyId: number,
+  roleIdByKey: Record<string, number> = {},
+): Promise<number> {
+  let usersBound = 0;
+  const localMap: Record<string, number> = { ...roleIdByKey };
+
+  const assignments = await client.query<{ userId: number; role: string; branchId: number; departmentId: number | null }>(
+    `SELECT u.id AS "userId", ea.role, ea."branchId", ea."departmentId"
+       FROM employee_assignments ea
+       JOIN users u ON u."employeeId" = ea."employeeId"
+      WHERE ea."companyId" = $1 AND ea.status = 'active' AND ea.role IS NOT NULL`,
+    [companyId]
+  );
+
+  for (const a of assignments.rows) {
+    let roleId = localMap[a.role];
+    if (!roleId) {
+      const idRow = await client.query<{ id: number }>(
+        `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = $2`,
+        [companyId, a.role]
+      );
+      if (!idRow.rows[0]) continue;
+      roleId = idRow.rows[0].id;
+      localMap[a.role] = roleId;
+    }
+    await client.query(
+      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary)
+       VALUES ($1, $2, $3, $4, $5, true)
+       ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+      [a.userId, companyId, roleId, a.branchId, a.departmentId]
+    );
+    usersBound++;
+  }
+
+  return usersBound;
+}
+
+/**
+ * Safety-net backfill for the gap bindUsersFromAssignments leaves behind.
+ *
+ * That function only binds a user when their ACTIVE assignment has a
+ * non-null `role`. A user created before role-tracking — or one whose
+ * assignment.role is NULL while `users.role` is set — therefore ends up
+ * with NO rbac_user_roles row. Since checkAccess is pure RBAC v2 with no
+ * legacy fallback, such a user is locked out of every non-self-service
+ * feature even though their legacy role says they're an hr_manager, etc.
+ * ("الخدمات تظهر لكن لا تعمل" for existing/legacy accounts.)
+ *
+ * Here we bind any company-linked user who STILL has zero rbac_user_roles
+ * rows to the v2 role matching their `users.role`, scoped to their primary
+ * assignment's branch/department. The JOIN LATERAL also serves as the
+ * company-scoping link (we only touch users with an assignment in this
+ * company). Idempotent and additive-only: it never overrides an existing
+ * assignment — `NOT EXISTS (rbac_user_roles)` + ON CONFLICT DO NOTHING.
+ */
+export async function bindUsersFromUserRole(
+  client: PoolClient,
+  companyId: number,
+  roleIdByKey: Record<string, number> = {},
+): Promise<number> {
+  let usersBound = 0;
+  const localMap: Record<string, number> = { ...roleIdByKey };
+
+  const rows = await client.query<{ userId: number; role: string; branchId: number | null; departmentId: number | null }>(
+    `SELECT u.id AS "userId", u.role, ea."branchId", ea."departmentId"
+       FROM users u
+       JOIN LATERAL (
+         SELECT ea2."branchId", ea2."departmentId"
+           FROM employee_assignments ea2
+          WHERE ea2."employeeId" = u."employeeId" AND ea2."companyId" = $1
+          ORDER BY ea2."isPrimary" DESC NULLS LAST, ea2.id
+          LIMIT 1
+       ) ea ON true
+      WHERE u.role IS NOT NULL
+        AND u."employeeId" IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM rbac_user_roles ur
+           WHERE ur."userId" = u.id AND ur."companyId" = $1
+        )`,
+    [companyId]
+  );
+
+  for (const a of rows.rows) {
+    let roleId = localMap[a.role];
+    if (!roleId) {
+      const idRow = await client.query<{ id: number }>(
+        `SELECT id FROM rbac_roles WHERE role_key = $1 AND ("companyId" = $2 OR "companyId" IS NULL)
+          ORDER BY "companyId" NULLS LAST LIMIT 1`,
+        [a.role, companyId]
+      );
+      if (!idRow.rows[0]) continue;
+      roleId = idRow.rows[0].id;
+      localMap[a.role] = roleId;
+    }
+    await client.query(
+      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary)
+       VALUES ($1, $2, $3, $4, $5, true)
+       ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+      [a.userId, companyId, roleId, a.branchId, a.departmentId]
+    );
+    usersBound++;
+  }
+
+  return usersBound;
+}
 export async function syncLegacyToV2(): Promise<SyncSummary> {
   const summary: SyncSummary = { companies: 0, rolesCreated: 0, grantsCreated: 0, usersBound: 0 };
 
-  // Discover all companies with any legacy role_permissions entries.
   const companyRows = await rawQuery<{ companyId: number | null }>(
-    `SELECT DISTINCT "companyId" FROM role_permissions
-     UNION
-     SELECT DISTINCT id AS "companyId" FROM companies`
+    `SELECT id AS "companyId" FROM companies`
   ).catch(() => [] as { companyId: number | null }[]);
 
   for (const { companyId } of companyRows) {
     if (companyId == null) continue;
-    const result = await syncCompany(companyId);
+    const result = await withTransaction(async (client) => {
+      const seeded = await seedRolesAndGrantsV2(client, companyId, DEFAULT_ROLE_DEFS);
+      const usersBound = await bindUsersFromAssignments(client, companyId, seeded.roleIdByKey);
+      // Safety net for legacy/existing users whose assignment.role is NULL but
+      // who carry a users.role — without this they have zero rbac_user_roles
+      // and are denied everything (checkAccess has no legacy fallback).
+      const usersBoundByRole = await bindUsersFromUserRole(client, companyId, seeded.roleIdByKey);
+      // Bump cache version so the engine picks up new grants.
+      await client.query(
+        `INSERT INTO rbac_cache_version ("companyId", version, "updatedAt")
+         VALUES ($1, 1, NOW())
+         ON CONFLICT ("companyId") DO UPDATE SET version = rbac_cache_version.version + 1, "updatedAt" = NOW()`,
+        [companyId]
+      );
+      return { rolesCreated: seeded.rolesCreated, grantsCreated: seeded.grantsCreated, usersBound: usersBound + usersBoundByRole };
+    });
     summary.companies++;
     summary.rolesCreated += result.rolesCreated;
     summary.grantsCreated += result.grantsCreated;
@@ -170,151 +405,4 @@ export async function syncLegacyToV2(): Promise<SyncSummary> {
   }
 
   return summary;
-}
-
-interface CompanySync {
-  rolesCreated: number;
-  grantsCreated: number;
-  usersBound: number;
-}
-
-async function syncCompany(companyId: number): Promise<CompanySync> {
-  const out: CompanySync = { rolesCreated: 0, grantsCreated: 0, usersBound: 0 };
-
-  return withTransaction(async (client) => {
-    // 1. Discover all role keys used by this company (legacy table OR
-    //    company-scoped role_permissions OR custom_roles).
-    const roleKeysRes = await client.query<{ role_key: string }>(
-      `SELECT role AS role_key FROM role_permissions
-        WHERE "companyId" IS NULL OR "companyId" = $1
-        UNION
-       SELECT "roleKey" AS role_key FROM custom_roles WHERE "companyId" = $1
-        UNION
-       SELECT DISTINCT role AS role_key FROM employee_assignments WHERE "companyId" = $1 AND role IS NOT NULL`,
-      [companyId]
-    );
-    const roleKeys = Array.from(new Set(roleKeysRes.rows.map((r) => r.role_key))).filter(Boolean);
-
-    // 2. Create rbac_roles for each.
-    const roleIdByKey: Record<string, number> = {};
-    for (const key of roleKeys) {
-      const labelAr = ROLE_LABELS[key] || key;
-      const level = ROLE_LEVELS[key] ?? 30;
-      const color = ROLE_COLORS[key] || "#3b82f6";
-      const isSystem = key in ROLE_LABELS;
-
-      // Idempotent FIRST-RUN-ONLY semantic: once a role exists, the
-      // admin owns it. ON CONFLICT DO NOTHING prevents subsequent boots
-      // from clobbering admin customizations (custom label, level
-      // changes, color, is_active toggle).
-      // RETURNING id only fires on the actual insert path, so we read
-      // the id back via SELECT to support both first-time and repeat
-      // boots.
-      await client.query(
-        `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT ("companyId", role_key) DO NOTHING`,
-        [companyId, key, labelAr, level, color, isSystem]
-      );
-      const idRow = await client.query<{ id: number }>(
-        `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = $2`,
-        [companyId, key]
-      );
-      if (!idRow.rows[0]) continue;
-      const roleId = idRow.rows[0].id;
-      roleIdByKey[key] = roleId;
-      out.rolesCreated++;
-    }
-
-    // 3. For each role, translate legacy perms → v2 grants.
-    const legacyPerms = await client.query<{ role: string; permission: string }>(
-      `SELECT role, permission FROM role_permissions WHERE "companyId" IS NULL OR "companyId" = $1`,
-      [companyId]
-    );
-
-    // Group by role
-    const permsByRole = new Map<string, Set<string>>();
-    for (const r of legacyPerms.rows) {
-      if (!permsByRole.has(r.role)) permsByRole.set(r.role, new Set());
-      permsByRole.get(r.role)!.add(r.permission);
-    }
-
-    for (const [roleKey, perms] of permsByRole) {
-      const roleId = roleIdByKey[roleKey];
-      if (!roleId) continue;
-      const defaultScope: Scope = ROLE_DEFAULT_SCOPE[roleKey] || "self";
-
-      // Build (featureKey → set of actions)
-      const grantsByFeature = new Map<string, Set<string>>();
-      for (const perm of perms) {
-        for (const t of translateLegacy(perm)) {
-          if (!grantsByFeature.has(t.featureKey)) grantsByFeature.set(t.featureKey, new Set());
-          grantsByFeature.get(t.featureKey)!.add(t.action);
-        }
-      }
-
-      for (const [featureKey, actions] of grantsByFeature) {
-        const actionsArray = Array.from(actions);
-        // Clamp scope to feature's availableScopes — without this,
-        // auto-migrate would happily assign scope="company" to a feature
-        // whose catalog only allows ["self"] (e.g. hr.attendance.checkin),
-        // producing a bogus grant the engine would still try to evaluate.
-        const featureDef = FEATURE_CATALOG.find((f) => f.key === featureKey);
-        let scope: Scope = defaultScope;
-        if (featureDef && !featureDef.availableScopes.includes(scope)) {
-          // Pick the most permissive available scope ≤ defaultScope.
-          const SCOPE_RANK: Record<Scope, number> = {
-            self: 1, team: 2, department: 3, department_tree: 4,
-            branch: 5, branches: 6, company: 7, multi_company: 8, all: 9,
-          };
-          const targetRank = SCOPE_RANK[defaultScope] || 0;
-          const fallback = (featureDef.availableScopes as Scope[])
-            .filter((s) => (SCOPE_RANK[s] || 0) <= targetRank)
-            .sort((a, b) => (SCOPE_RANK[b] || 0) - (SCOPE_RANK[a] || 0))[0];
-          scope = fallback || (featureDef.availableScopes[0] as Scope);
-        }
-        // Idempotent FIRST-RUN-ONLY: once a grant exists, the admin
-        // owns it. Subsequent boots no-op so admin tweaks (added
-        // actions, scope changes, conditions) survive restarts.
-        await client.query(
-          `INSERT INTO rbac_role_grants (role_id, feature_key, actions, scope)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (role_id, feature_key) DO NOTHING`,
-          [roleId, featureKey, actionsArray, scope]
-        );
-        out.grantsCreated++;
-      }
-    }
-
-    // 4. Bind users to v2 roles based on employee_assignments.role.
-    const assignments = await client.query<{ employeeId: number; userId: number; role: string; branchId: number; departmentId: number | null }>(
-      `SELECT ea."employeeId", u.id AS "userId", ea.role, ea."branchId", ea."departmentId"
-         FROM employee_assignments ea
-         JOIN users u ON u."employeeId" = ea."employeeId"
-        WHERE ea."companyId" = $1 AND ea.status = 'active' AND ea.role IS NOT NULL`,
-      [companyId]
-    );
-
-    for (const a of assignments.rows) {
-      const roleId = roleIdByKey[a.role];
-      if (!roleId) continue;
-      await client.query(
-        `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary)
-         VALUES ($1, $2, $3, $4, $5, true)
-         ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
-        [a.userId, companyId, roleId, a.branchId, a.departmentId]
-      );
-      out.usersBound++;
-    }
-
-    // 5. Bump cache version so the engine picks up new grants.
-    await client.query(
-      `INSERT INTO rbac_cache_version ("companyId", version, "updatedAt")
-       VALUES ($1, 1, NOW())
-       ON CONFLICT ("companyId") DO UPDATE SET version = rbac_cache_version.version + 1, "updatedAt" = NOW()`,
-      [companyId]
-    );
-
-    return out;
-  });
 }

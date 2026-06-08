@@ -5631,7 +5631,12 @@ CREATE TABLE public.delegations (
     status character varying(20) DEFAULT 'active'::character varying,
     "startDate" date,
     "endDate" date,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    features jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "createdBy" integer,
+    source character varying(32) DEFAULT 'manual'::character varying NOT NULL,
+    "refType" character varying(64),
+    "refId" integer
 );
 
 
@@ -7058,6 +7063,8 @@ CREATE TABLE public.employees (
     "companyId" integer,
     "branchId" integer,
     attachments jsonb DEFAULT '[]'::jsonb,
+    "personalEmail" character varying(200),
+    "internalEmail" character varying(200),
     CONSTRAINT chk_employees_status CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('terminated'::character varying)::text, ('on_leave'::character varying)::text, ('suspended'::character varying)::text])))
 );
 
@@ -7909,8 +7916,109 @@ CREATE TABLE public.fleet_drivers (
     "lastLocationUpdate" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "licenseClass" text,
+    "driverServiceProfile" text
 );
+
+
+--
+-- Name: transport_price_rules; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Pricing engine (Issue Comment 3).
+
+CREATE TABLE public.transport_price_rules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "customerId" integer,
+    "transportServiceType" text NOT NULL,
+    "vehicleType" text,
+    "routeFrom" text,
+    "routeTo" text,
+    "cargoType" text,
+    "unitOfMeasure" text NOT NULL,
+    "unitPrice" numeric(18,4) NOT NULL,
+    "minimumCharge" numeric(18,2),
+    currency text DEFAULT 'SAR'::text NOT NULL,
+    "vatRate" numeric(5,2),
+    "validFrom" date NOT NULL,
+    "validTo" date,
+    priority integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_price_rules_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
+);
+
+CREATE SEQUENCE public.transport_price_rules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_price_rules_id_seq OWNED BY public.transport_price_rules.id;
+
+
+--
+-- Name: transport_invoice_links; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Multi-trip invoice merging (Issue Comment 3).
+
+CREATE TABLE public.transport_invoice_links (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "serviceLineId" integer NOT NULL,
+    "invoiceId" integer NOT NULL,
+    "invoiceLineId" integer,
+    "appliedPriceRuleId" integer,
+    "appliedUnitPrice" numeric(18,4),
+    "linkedBy" integer,
+    "linkedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.transport_invoice_links_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_invoice_links_id_seq OWNED BY public.transport_invoice_links.id;
+
+
+--
+-- Name: driver_eligibility_overrides; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Phase 2 — documented-exception log for unqualified-driver
+-- assignments. Mirror of vehicle_capacity_overrides.
+
+CREATE TABLE public.driver_eligibility_overrides (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "driverId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "driverLicenseClass" text,
+    "vehicleRequiredClass" text NOT NULL,
+    reason text NOT NULL,
+    "approvedBy" integer NOT NULL,
+    "approvedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: driver_eligibility_overrides_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.driver_eligibility_overrides_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: driver_eligibility_overrides_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.driver_eligibility_overrides_id_seq OWNED BY public.driver_eligibility_overrides.id;
 
 
 --
@@ -7950,7 +8058,15 @@ CREATE TABLE public.fleet_fuel_logs (
     "stationName" character varying(200),
     "createdAt" timestamp without time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
-    "tripId" integer
+    "tripId" integer,
+    "accountingTreatment" text,
+    rechargeable boolean DEFAULT false NOT NULL,
+    "billToCustomer" integer,
+    "customerBillableAmount" numeric(14,2),
+    "linkedExpenseId" integer,
+    "liabilityParty" text,
+    CONSTRAINT fleet_fuel_logs_acct_treatment_check CHECK (("accountingTreatment" IS NULL OR "accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text]))),
+    CONSTRAINT fleet_fuel_logs_liability_check CHECK (("liabilityParty" IS NULL OR "liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text])))
 );
 
 
@@ -8071,7 +8187,15 @@ CREATE TABLE public.fleet_maintenance (
     "performedBy" character varying(200),
     status character varying(20) DEFAULT 'completed'::character varying,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "accountingTreatment" text,
+    rechargeable boolean DEFAULT false NOT NULL,
+    "billToCustomer" integer,
+    "customerBillableAmount" numeric(14,2),
+    "linkedExpenseId" integer,
+    "liabilityParty" text,
+    CONSTRAINT fleet_maintenance_acct_treatment_check CHECK (("accountingTreatment" IS NULL OR "accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text]))),
+    CONSTRAINT fleet_maintenance_liability_check CHECK (("liabilityParty" IS NULL OR "liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text])))
 );
 
 
@@ -8355,8 +8479,88 @@ CREATE TABLE public.fleet_traffic_violations (
     "paidBy" integer,
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "accountingTreatment" text,
+    rechargeable boolean DEFAULT false NOT NULL,
+    "billToCustomer" integer,
+    "customerBillableAmount" numeric(14,2),
+    "linkedExpenseId" integer,
+    "liabilityParty" text,
+    CONSTRAINT fleet_traffic_violations_acct_treatment_check CHECK (("accountingTreatment" IS NULL OR "accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text]))),
+    CONSTRAINT fleet_traffic_violations_liability_check CHECK (("liabilityParty" IS NULL OR "liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text])))
 );
+
+
+--
+-- Name: fleet_expense_rules; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Comment 7 — expense classification rules engine.
+
+CREATE TABLE public.fleet_expense_rules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "ruleName" text NOT NULL,
+    "expenseSource" text NOT NULL,
+    "vehicleId" integer,
+    "vehicleType" text,
+    "stationName" text,
+    "maintenanceType" text,
+    "violationType" text,
+    "defaultAccountingTreatment" text,
+    "defaultRechargeable" boolean DEFAULT false NOT NULL,
+    "defaultLiabilityParty" text,
+    "defaultCostCenterId" integer,
+    "requiresApproval" boolean DEFAULT false NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT fleet_expense_rules_source_check CHECK (("expenseSource" = ANY (ARRAY['fuel_log'::text, 'maintenance'::text, 'traffic_violation'::text]))),
+    CONSTRAINT fleet_expense_rules_acct_check CHECK (("defaultAccountingTreatment" IS NULL OR "defaultAccountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text])))
+);
+
+CREATE SEQUENCE public.fleet_expense_rules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.fleet_expense_rules_id_seq OWNED BY public.fleet_expense_rules.id;
+
+
+--
+-- Name: transport_intake_rules; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Comment 5/6 — Intake Engine for TRIP/SERVICE capture (NOT expenses).
+
+CREATE TABLE public.transport_intake_rules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "ruleName" text NOT NULL,
+    "operationType" text NOT NULL,
+    "transportServiceType" text NOT NULL,
+    "customerId" integer,
+    "bookingSource" text,
+    "requiredVehicleType" text,
+    "requiredLicenseClass" text,
+    "defaultCostCenterId" integer,
+    "requiresAttachment" boolean DEFAULT false NOT NULL,
+    "requiresApproval" boolean DEFAULT false NOT NULL,
+    "createsBookingDraft" boolean DEFAULT false NOT NULL,
+    "createsBillingCandidate" boolean DEFAULT false NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_intake_rules_op_check CHECK (("operationType" = ANY (ARRAY['booking'::text, 'dispatch'::text, 'service_line'::text]))),
+    CONSTRAINT transport_intake_rules_service_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
+);
+
+CREATE SEQUENCE public.transport_intake_rules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_intake_rules_id_seq OWNED BY public.transport_intake_rules.id;
 
 
 --
@@ -8514,11 +8718,115 @@ CREATE TABLE public.fleet_tires (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
+    "axleNumber" integer,
+    side text,
+    "serialNumber" text,
+    "currentMileageKm" integer,
+    "expectedLifeKm" integer,
+    "removalReason" text,
     CONSTRAINT fleet_tires_position_check
       CHECK (("position"::text = ANY (ARRAY['front_left'::text, 'front_right'::text, 'rear_left'::text, 'rear_right'::text, 'spare'::text, 'extra'::text]))),
     CONSTRAINT fleet_tires_status_check
       CHECK ((status::text = ANY (ARRAY['active'::text, 'rotated'::text, 'replaced'::text, 'discarded'::text])))
 );
+
+
+--
+-- Name: vehicle_components; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Vehicle profile deep extension (Issue Comment 7).
+
+CREATE TABLE public.vehicle_components (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "componentType" text NOT NULL,
+    "componentSubtype" text,
+    "serialNumber" text,
+    manufacturer text,
+    model text,
+    "installationDate" date,
+    "installationMileageKm" integer,
+    "installationHours" numeric(10,1),
+    "expectedLifeKm" integer,
+    "expectedLifeHours" numeric(10,1),
+    "expectedLifeDays" integer,
+    "lastServiceDate" date,
+    "lastServiceMileageKm" integer,
+    "nextServiceDate" date,
+    "nextServiceMileageKm" integer,
+    status text DEFAULT 'active'::text NOT NULL,
+    "removalDate" date,
+    "removalReason" text,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT vehicle_components_type_check CHECK (("componentType" = ANY (ARRAY['engine'::text, 'transmission'::text, 'axle'::text, 'battery'::text, 'ac_unit'::text, 'cooling_unit'::text, 'hydraulic_system'::text, 'lift_gate'::text, 'crane'::text, 'box_or_bed'::text, 'trailer'::text, 'doors'::text, 'seats'::text, 'upholstery'::text, 'screens'::text, 'brakes'::text, 'suspension'::text, 'steering'::text, 'safety_system'::text, 'fuel_system'::text, 'electrical_system'::text, 'other'::text]))),
+    CONSTRAINT vehicle_components_status_check CHECK ((status = ANY (ARRAY['active'::text, 'serviceable'::text, 'needs_service'::text, 'replaced'::text, 'removed'::text, 'damaged'::text])))
+);
+
+CREATE SEQUENCE public.vehicle_components_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.vehicle_components_id_seq OWNED BY public.vehicle_components.id;
+
+
+--
+-- Name: vehicle_driver_assignments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_driver_assignments (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "vehicleId" integer NOT NULL,
+    "driverId" integer NOT NULL,
+    "assignmentType" text NOT NULL,
+    "startDate" date NOT NULL,
+    "endDate" date,
+    status text DEFAULT 'active'::text NOT NULL,
+    reason text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT vehicle_driver_assignments_type_check CHECK (("assignmentType" = ANY (ARRAY['primary'::text, 'backup'::text, 'temporary'::text]))),
+    CONSTRAINT vehicle_driver_assignments_status_check CHECK ((status = ANY (ARRAY['active'::text, 'ended'::text, 'cancelled'::text])))
+);
+
+CREATE SEQUENCE public.vehicle_driver_assignments_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.vehicle_driver_assignments_id_seq OWNED BY public.vehicle_driver_assignments.id;
+
+
+--
+-- Name: vehicle_maintenance_schedules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_maintenance_schedules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "vehicleId" integer,
+    "vehicleType" text,
+    "componentId" integer,
+    "scheduleName" text NOT NULL,
+    "intervalType" text NOT NULL,
+    "intervalValue" integer NOT NULL,
+    "lastTriggeredAt" timestamp with time zone,
+    "lastTriggeredKm" integer,
+    "lastTriggeredHours" numeric(10,1),
+    "nextDueDate" date,
+    "nextDueKm" integer,
+    "nextDueHours" numeric(10,1),
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT vehicle_maintenance_schedules_interval_check CHECK (("intervalType" = ANY (ARRAY['mileage'::text, 'hours'::text, 'days'::text])))
+);
+
+CREATE SEQUENCE public.vehicle_maintenance_schedules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.vehicle_maintenance_schedules_id_seq OWNED BY public.vehicle_maintenance_schedules.id;
 
 
 --
@@ -8577,8 +8885,71 @@ CREATE TABLE public.fleet_vehicles (
     "deletedAt" timestamp with time zone,
     "inspectionExpiry" date,
     "purchasePrice" numeric(14,2),
-    "purchaseDate" date
+    "purchaseDate" date,
+    "requiredLicenseClass" text,
+    "vehicleType" text,
+    "payloadKg" numeric(10,2),
+    "boxLengthCm" integer,
+    "boxWidthCm" integer,
+    "boxHeightCm" integer,
+    "axleCount" integer,
+    "tireCount" integer,
+    "tireSize" text,
+    "engineDisplacementCc" integer,
+    "transmissionType" text,
+    "seatCount" integer,
+    "hasAc" boolean,
+    "screenCount" integer,
+    "doorCount" integer,
+    "upholsteryType" text,
+    "safetyFeatures" jsonb,
+    "operatingHours" numeric(10,1),
+    "equipmentAttachments" jsonb
 );
+
+
+--
+-- Name: vehicle_capacity_overrides; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Blocker #2 — documented-exception log for over-capacity
+-- assignments. Required so an audit can ask "who let a 5-ton load
+-- onto a 3-ton truck and why".
+
+CREATE TABLE public.vehicle_capacity_overrides (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "vehicleId" integer NOT NULL,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "capacityType" text NOT NULL,
+    "vehicleCapacity" numeric(12,2) NOT NULL,
+    "requestedAmount" numeric(12,2) NOT NULL,
+    "exceededBy" numeric(12,2) NOT NULL,
+    reason text NOT NULL,
+    "approvedBy" integer NOT NULL,
+    "approvedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: vehicle_capacity_overrides_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.vehicle_capacity_overrides_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: vehicle_capacity_overrides_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.vehicle_capacity_overrides_id_seq OWNED BY public.vehicle_capacity_overrides.id;
 
 
 --
@@ -10716,7 +11087,9 @@ CREATE TABLE public.job_titles (
     "companyId" integer,
     "isActive" boolean DEFAULT true,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "defaultRoleKey" character varying(60),
+    "opensCustody" boolean DEFAULT false NOT NULL
 );
 
 
@@ -15971,7 +16344,7 @@ CREATE TABLE public.subsidiary_accounts (
     "isActive" boolean DEFAULT true NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT "subsidiary_accounts_entityType_check" CHECK ((("entityType")::text = ANY (ARRAY[('employee'::character varying)::text, ('client'::character varying)::text, ('vendor'::character varying)::text, ('project'::character varying)::text, ('property'::character varying)::text])))
+    CONSTRAINT "subsidiary_accounts_entityType_check" CHECK ((("entityType")::text = ANY (ARRAY[('employee'::character varying)::text, ('client'::character varying)::text, ('vendor'::character varying)::text, ('project'::character varying)::text, ('property'::character varying)::text, ('umrah_agent'::character varying)::text, ('umrah_sub_agent'::character varying)::text, ('umrah_season'::character varying)::text, ('property_unit'::character varying)::text])))
 );
 
 
@@ -17330,6 +17703,75 @@ ALTER SEQUENCE public.umrah_hotels_id_seq OWNED BY public.umrah_hotels.id;
 
 
 --
+-- Name: umrah_families; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 265_umrah_families.sql.
+--
+
+CREATE TABLE public.umrah_families (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "familyName" character varying(200) NOT NULL,
+    "headPilgrimId" integer,
+    "contactPhone" character varying(40),
+    "contactName" character varying(200),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+CREATE SEQUENCE public.umrah_families_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.umrah_families_id_seq OWNED BY public.umrah_families.id;
+
+
+--
+-- Name: umrah_refund_requests; Type: TABLE; Schema: public; Owner: -
+-- Source: migration 268_umrah_refund_workflow.sql.
+--
+
+CREATE TABLE public.umrah_refund_requests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "pilgrimId" integer,
+    "agentId" integer,
+    "salesInvoiceId" integer,
+    "nuskInvoiceId" integer,
+    "grossAmount" numeric(12,2) NOT NULL,
+    "mofaRetention" numeric(12,2) DEFAULT 0,
+    "netAmount" numeric(12,2) GENERATED ALWAYS AS (("grossAmount" - COALESCE("mofaRetention", (0)::numeric))) STORED,
+    currency character(3) DEFAULT 'SAR' NOT NULL,
+    status character varying(20) DEFAULT 'requested' NOT NULL,
+    reason text NOT NULL,
+    "rejectionReason" text,
+    "requestedBy" integer NOT NULL,
+    "requestedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "rejectedBy" integer,
+    "rejectedAt" timestamp with time zone,
+    "paidBy" integer,
+    "paidAt" timestamp with time zone,
+    "paymentReference" character varying(60),
+    "treasuryId" integer,
+    "creditMemoId" integer,
+    "settledAmount" numeric(12,2),
+    notes text,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_refund_amount_positive CHECK (("grossAmount" > (0)::numeric)),
+    CONSTRAINT umrah_refund_either_party_required CHECK ((("pilgrimId" IS NOT NULL) OR ("agentId" IS NOT NULL))),
+    CONSTRAINT umrah_refund_requests_status_check CHECK (((status)::text = ANY (ARRAY[('requested'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('paid'::character varying)::text, ('closed'::character varying)::text, ('cancelled'::character varying)::text])))
+);
+
+
+CREATE SEQUENCE public.umrah_refund_requests_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.umrah_refund_requests_id_seq OWNED BY public.umrah_refund_requests.id;
+
+
+--
 -- Name: umrah_room_blocks; Type: TABLE; Schema: public; Owner: -
 -- Source: migration 246_umrah_accommodations.sql.
 --
@@ -17444,6 +17886,12 @@ CREATE TABLE public.umrah_pilgrims (
     "overstayExemptReason" text,
     "overstayExemptBy" integer,
     "overstayExemptAt" timestamp with time zone,
+    "familyId" integer,
+    "visaStatus" character varying(20) DEFAULT 'not_requested' NOT NULL,
+    "visaRequestedAt" timestamp with time zone,
+    "visaIssuedAt" timestamp with time zone,
+    "visaRejectedAt" timestamp with time zone,
+    "visaRejectionReason" text,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('overstay_penalized'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('absconded'::character varying)::text, ('deceased'::character varying)::text, ('visa_rejected'::character varying)::text, ('visa_printed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -17780,7 +18228,12 @@ CREATE TABLE public.umrah_transport_pilgrims (
     "companyId" integer NOT NULL,
     "transportId" integer NOT NULL,
     "pilgrimId" integer NOT NULL,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "seatNumber" character varying(10),
+    "checkedInAt" timestamp with time zone,
+    "checkedInBy" integer,
+    "noShow" boolean DEFAULT false NOT NULL,
+    notes text
 );
 
 
@@ -19294,8 +19747,72 @@ CREATE TABLE public.cargo_manifests (
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'confirmed'::character varying, 'loading'::character varying, 'in_transit'::character varying, 'delivered'::character varying, 'closed'::character varying, 'cancelled'::character varying])::text[])))
+    "billingStatus" text DEFAULT 'not_billable'::text NOT NULL,
+    "transportServiceType" text DEFAULT 'cargo_load'::text NOT NULL,
+    CONSTRAINT cargo_manifests_billing_status_check CHECK (("billingStatus" = ANY (ARRAY['not_billable'::text, 'ready_for_accounting'::text, 'under_review'::text, 'invoiced'::text, 'excluded'::text]))),
+    CONSTRAINT cargo_manifests_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text]))),
+    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'requested'::character varying, 'approved'::character varying, 'assigned_to_driver'::character varying, 'driver_accepted'::character varying, 'trip_started'::character varying, 'arrived_pickup'::character varying, 'loaded'::character varying, 'in_transit'::character varying, 'arrived_delivery'::character varying, 'delivered'::character varying, 'completed'::character varying, 'ready_for_invoice'::character varying, 'financially_closed'::character varying, 'cancelled'::character varying])::text[])))
 );
+
+
+--
+-- Name: transport_service_lines; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Foundation — operational-to-billable bridge.
+
+CREATE TABLE public.transport_service_lines (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "customerId" integer,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "sourceRef" text,
+    "serviceType" text NOT NULL,
+    "serviceDate" date NOT NULL,
+    "tripId" integer,
+    "manifestId" integer,
+    "umrahTransportId" integer,
+    "vehicleId" integer,
+    "driverId" integer,
+    "routeFrom" text,
+    "routeTo" text,
+    "cargoType" text,
+    "passengerCount" integer,
+    quantity numeric(18,3) DEFAULT 0 NOT NULL,
+    "unitOfMeasure" text,
+    "unitPrice" numeric(18,4),
+    "lineTotal" numeric(18,2),
+    "billingStatus" text DEFAULT 'ready_for_accounting'::text NOT NULL,
+    "invoiceId" integer,
+    "invoiceLineId" integer,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT transport_service_lines_billing_status_check CHECK (("billingStatus" = ANY (ARRAY['ready_for_accounting'::text, 'under_review'::text, 'invoiced'::text, 'excluded'::text]))),
+    CONSTRAINT transport_service_lines_service_type_check CHECK (("serviceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
+);
+
+
+--
+-- Name: transport_service_lines_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_service_lines_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_service_lines_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_service_lines_id_seq OWNED BY public.transport_service_lines.id;
 
 
 --
@@ -19316,6 +19833,239 @@ CREATE SEQUENCE public.cargo_manifests_id_seq
 --
 
 ALTER SEQUENCE public.cargo_manifests_id_seq OWNED BY public.cargo_manifests.id;
+
+
+--
+-- Name: transport_billing_candidates; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 — Operational-to-finance handoff. Transport never posts JEs;
+-- it inserts a pending candidate row that the accountant materializes.
+
+CREATE TABLE public.transport_billing_candidates (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "sourceRef" text,
+    "customerId" integer,
+    "serviceType" text NOT NULL,
+    "serviceDate" date NOT NULL,
+    "routeFrom" text,
+    "routeTo" text,
+    "vehicleId" integer,
+    "driverId" integer,
+    quantity numeric(18,3) DEFAULT 0 NOT NULL,
+    "unitOfMeasure" text,
+    "operationalStatus" text NOT NULL,
+    "suggestedRevenue" numeric(18,2),
+    "suggestedCost" numeric(18,2),
+    attachments jsonb DEFAULT '[]'::jsonb NOT NULL,
+    notes text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    "materializedJournalEntryId" integer,
+    "materializedBy" integer,
+    "materializedAt" timestamp with time zone,
+    "rejectedBy" integer,
+    "rejectedAt" timestamp with time zone,
+    "rejectionReason" text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: transport_billing_candidates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_billing_candidates_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_billing_candidates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_billing_candidates_id_seq OWNED BY public.transport_billing_candidates.id;
+
+
+--
+-- Name: transport_locations; Type: TABLE; Schema: public; Owner: -
+--
+-- #1733 Booking + Dispatch layer (Issue Comment 9).
+
+CREATE TABLE public.transport_locations (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    code text,
+    name text NOT NULL,
+    "locationType" text,
+    city text,
+    address text,
+    latitude numeric(10,7),
+    longitude numeric(10,7),
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+CREATE SEQUENCE public.transport_locations_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_locations_id_seq OWNED BY public.transport_locations.id;
+
+
+--
+-- Name: transport_bookings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_bookings (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "bookingNumber" text NOT NULL,
+    "bookingSource" text DEFAULT 'manual_entry'::text NOT NULL,
+    "transportServiceType" text NOT NULL,
+    "customerId" integer,
+    "customerName" text,
+    "customerPhone" text,
+    "contractId" integer,
+    "fromLocationId" integer,
+    "toLocationId" integer,
+    "fromLocationText" text,
+    "toLocationText" text,
+    "routeType" text,
+    "requestedPickupDate" date,
+    "requestedPickupTime" time without time zone,
+    "requestedDeliveryDate" date,
+    "requestedDeliveryTime" time without time zone,
+    "cargoDescription" text,
+    "cargoQuantity" numeric(18,3),
+    "cargoUnit" text,
+    "cargoWeight" numeric(12,2),
+    "passengerCount" integer,
+    "umrahGroupId" integer,
+    "flightNumber" text,
+    "supervisorName" text,
+    "supervisorPhone" text,
+    "hotelName" text,
+    "hotelLocation" text,
+    "beneficiaryType" text,
+    "beneficiaryId" integer,
+    "projectId" integer,
+    "waqfId" integer,
+    "costCenterId" integer,
+    status text DEFAULT 'draft'::text NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_bookings_source_check CHECK (("bookingSource" = ANY (ARRAY['manual_entry'::text, 'customer_request'::text, 'umrah_group'::text, 'contract_schedule'::text, 'import_excel'::text, 'api_integration'::text, 'recurring_schedule'::text]))),
+    CONSTRAINT transport_bookings_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text]))),
+    CONSTRAINT transport_bookings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'submitted'::text, 'pending_approval'::text, 'approved'::text, 'scheduled'::text, 'dispatched'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text, 'rejected'::text]))),
+    CONSTRAINT transport_bookings_route_type_check CHECK (("routeType" IS NULL OR "routeType" = ANY (ARRAY['airport_to_makkah'::text, 'makkah_to_madinah'::text, 'madinah_to_airport'::text, 'makkah_local'::text, 'madinah_local'::text, 'ziyarah'::text, 'custom'::text])))
+);
+
+CREATE SEQUENCE public.transport_bookings_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_bookings_id_seq OWNED BY public.transport_bookings.id;
+
+
+--
+-- Name: transport_booking_lines; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_booking_lines (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "bookingId" integer NOT NULL,
+    "lineNumber" integer NOT NULL,
+    "requiredVehicleType" text,
+    "requiredCapacityKg" numeric(10,2),
+    "requiredSeatCount" integer,
+    "requiredLicenseClass" text,
+    "fromLocationId" integer,
+    "toLocationId" integer,
+    "scheduledPickupAt" timestamp with time zone,
+    "scheduledDeliveryAt" timestamp with time zone,
+    "lineDescription" text,
+    quantity numeric(18,3),
+    "unitOfMeasure" text,
+    "passengerCount" integer,
+    status text DEFAULT 'open'::text NOT NULL,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_booking_lines_status_check CHECK ((status = ANY (ARRAY['open'::text, 'dispatched'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text])))
+);
+
+CREATE SEQUENCE public.transport_booking_lines_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_booking_lines_id_seq OWNED BY public.transport_booking_lines.id;
+
+
+--
+-- Name: transport_dispatch_orders; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_dispatch_orders (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "bookingId" integer NOT NULL,
+    "bookingLineId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "driverId" integer NOT NULL,
+    "scheduledStartAt" timestamp with time zone NOT NULL,
+    "scheduledEndAt" timestamp with time zone NOT NULL,
+    "linkedManifestId" integer,
+    "linkedTripId" integer,
+    "linkedUmrahTransportId" integer,
+    status text DEFAULT 'pending'::text NOT NULL,
+    "declinedReason" text,
+    "dispatchedBy" integer,
+    "dispatchedAt" timestamp with time zone,
+    "acceptedAt" timestamp with time zone,
+    "startedAt" timestamp with time zone,
+    "completedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT transport_dispatch_orders_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'notified'::text, 'accepted'::text, 'declined'::text, 'executing'::text, 'completed'::text, 'closed'::text, 'cancelled'::text])))
+);
+
+CREATE SEQUENCE public.transport_dispatch_orders_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.transport_dispatch_orders_id_seq OWNED BY public.transport_dispatch_orders.id;
+
+
+--
+-- Name: vehicle_location_snapshots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_location_snapshots (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "driverId" integer,
+    "dispatchOrderId" integer,
+    latitude numeric(10,7) NOT NULL,
+    longitude numeric(10,7) NOT NULL,
+    "speedKmh" numeric(6,2),
+    heading numeric(5,2),
+    "capturedAt" timestamp with time zone NOT NULL,
+    source text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE SEQUENCE public.vehicle_location_snapshots_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.vehicle_location_snapshots_id_seq OWNED BY public.vehicle_location_snapshots.id;
 
 
 --

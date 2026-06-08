@@ -18,6 +18,8 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => void }) {
   const [showImpact, setShowImpact] = useState(false);
@@ -43,13 +45,13 @@ function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => vo
               <div className="mt-3 ms-10">
                 <ImpactPreviewButton
                   endpoint="/hr/impact-preview/leave"
-                  payload={{
+                  payload={() => ({
                     employeeId: request.employeeId,
                     leaveTypeId: request.leaveTypeId,
                     startDate: request.startDate,
                     endDate: request.endDate,
                     days: request.days,
-                  }}
+                  })}
                   label="معاينة الأثر قبل الاعتماد"
                 />
               </div>
@@ -89,6 +91,7 @@ export default function LeaveManagementPage() {
   const { data: typesData } = useApiQuery<any>(["leave-types"], "/hr/leave-types");
   const { data: statsData } = useApiQuery<any>(["leave-stats"], "/hr/leave-stats");
   const pendingRequests = asList(requestsData);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(pendingRequests);
   const balances = balanceData?.data || [];
   const types = typesData?.data || [];
   const stats = statsData || {};
@@ -116,6 +119,25 @@ export default function LeaveManagementPage() {
       title="إدارة الإجازات"
       subtitle="اعتماد طلبات الإجازات ومتابعة الأرصدة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الإجازات" }]}
+      actions={
+        <PrintButton
+          entityType="report_hr_leave_management"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "إدارة الإجازات — الطلبات المعلقة", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "الموظف": r.employeeName || "—",
+              "النوع": r.leaveTypeName || r.leaveType || "—",
+              "من": r.startDate || "—",
+              "إلى": r.endDate || "—",
+              "الأيام": r.days ?? "—",
+              "السبب": r.reason || "—",
+              "الحالة": r.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <HrTabsNav />
       <KpiGrid items={kpis} />
@@ -145,6 +167,7 @@ export default function LeaveManagementPage() {
               { key: "reserved", header: "المحجوز", sortable: true, render: (v) => <span className="text-status-warning-foreground">{v.reserved || 0}</span> },
               { key: "remaining", header: "المتبقي", sortable: true, render: (v) => <span className="font-bold text-status-success-foreground">{v.remaining ?? (Number(v.maxDays || v.annualDays || 0) - Number(v.used || 0))}</span> },
             ] as DataTableColumn<any>[]}
+            onSortedDataChange={setPrintRows}
             data={balances}
             noToolbar
             emptyMessage="لا توجد أرصدة"

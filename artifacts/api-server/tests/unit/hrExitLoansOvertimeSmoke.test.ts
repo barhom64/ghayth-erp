@@ -55,28 +55,31 @@ describe("Exit request creation", () => {
     expect(section).toContain("NOT IN ('rejected','cancelled')");
   });
 
-  it("calculates gratuity per Saudi labor law (Articles 84 & 85)", () => {
+  it("delegates gratuity to calcGratuity helper (Articles 84 + 85 + 80)", () => {
     const idx = EXIT_ROUTE.indexOf('router.post("/exit"');
     const section = EXIT_ROUTE.slice(idx, idx + 4000);
+    // The route no longer hand-rolls the formula; the law-driven logic
+    // lives in hrHelpers.calcGratuity (tested in
+    // saudiLaborLawCompliance.test.ts).
     expect(section).toContain("yearsOfService");
-    expect(section).toContain("first5");
-    expect(section).toContain("above5");
-    expect(section).toContain("(salary / 2) * first5 + salary * above5");
+    expect(section).toContain("calcGratuity(salary, yearsOfService, eosExitType)");
+    expect(section).toContain("eos.total");
   });
 
-  it("reduces gratuity for resignation per Article 85", () => {
+  it("classifies exit type for Article 85 vs 80 vs 84", () => {
     const idx = EXIT_ROUTE.indexOf('router.post("/exit"');
     const section = EXIT_ROUTE.slice(idx, idx + 4000);
-    expect(section).toContain('exitType === "resignation"');
-    expect(section).toContain("yearsOfService < 2");
-    expect(section).toContain("yearsOfService < 5");
-    expect(section).toContain("yearsOfService < 10");
+    expect(section).toContain('b.exitType === "resignation"');
+    expect(section).toContain('b.exitType === "just_cause"');
+    expect(section).toContain("eosExitType");
   });
 
-  it("calculates leave compensation from balance", () => {
+  it("calculates leave compensation from CURRENT balance table (hr_leave_balances)", () => {
     const idx = EXIT_ROUTE.indexOf('router.post("/exit"');
-    const section = EXIT_ROUTE.slice(idx, idx + 5000);
-    expect(section).toContain("leave_balances");
+    const section = EXIT_ROUTE.slice(idx, idx + 5500);
+    // The settlement uses hr_leave_balances (the live table) instead of
+    // the stale `leave_balances` legacy table.
+    expect(section).toContain("FROM hr_leave_balances");
     expect(section).toContain("leaveCompensation");
     expect(section).toContain("dailyRate");
   });
@@ -202,13 +205,19 @@ describe("Exit completion flow", () => {
 
   it("complete terminates the employee assignment", () => {
     const idx = EXIT_ROUTE.indexOf('"/exit/:id/complete"');
-    const section = EXIT_ROUTE.slice(idx, idx + 4000);
+    // Widened from 4000 → 7000 after INT-2 (outstanding-loan guard) and
+    // INT-1 (cancel pending leaves + release reserved days) blocks
+    // were inserted before the assignment-termination UPDATE.
+    const section = EXIT_ROUTE.slice(idx, idx + 7000);
     expect(section).toContain("UPDATE employee_assignments SET status = 'terminated'");
   });
 
   it("complete posts GL settlement via hrEngine", () => {
     const idx = EXIT_ROUTE.indexOf('"/exit/:id/complete"');
-    const section = EXIT_ROUTE.slice(idx, idx + 4500);
+    // Widened to 10_000 after INT-1 (cancel-leaves + release-reserved
+    // SQL inside onApply) added ~3KB between the handler and the
+    // hrEngine.postExitSettlementGL call.
+    const section = EXIT_ROUTE.slice(idx, idx + 10_000);
     expect(section).toContain("hrEngine.postExitSettlementGL");
   });
 });
@@ -238,9 +247,12 @@ describe("Loans route structure", () => {
 });
 
 describe("Loan creation", () => {
-  it("validates with Zod createLoanSchema", () => {
+  it("validates with Zod createLoanSchema (uses HR_MONEY_CAPS-based helper)", () => {
     expect(LOANS_ROUTE).toContain("createLoanSchema");
-    expect(LOANS_ROUTE).toContain("amount: z.coerce.number");
+    // After VAL-3/4 hardening, `amount` goes through positiveMoneyAmount()
+    // (capped) instead of raw z.coerce.number(). The helper enforces
+    // > 0 + ≤ HR_MONEY_CAPS.LOAN_MAX.
+    expect(LOANS_ROUTE).toContain('positiveMoneyAmount("المبلغ", HR_MONEY_CAPS.LOAN_MAX)');
     expect(LOANS_ROUTE).toContain("installmentCount: z.coerce.number");
   });
 

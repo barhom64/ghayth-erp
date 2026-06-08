@@ -14,6 +14,8 @@ import {
   PageShell,
 } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface OpeningBalance {
   id: number;
@@ -33,14 +35,17 @@ export default function OpeningBalancesPage() {
     ["opening-balances", scopeQueryString],
     `/finance/opening-balances${scopeSuffix}`
   );
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const items: OpeningBalance[] = (data?.data || []).map((r: any) => ({
     ...r,
     totalDebit: Number(r.totalDebit || 0),
     totalCredit: Number(r.totalCredit || 0),
   }));
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const totalBalanced = items.filter(
     (i) => Math.abs(Number(i.totalDebit) - Number(i.totalCredit)) < 0.01
@@ -117,6 +122,22 @@ export default function OpeningBalancesPage() {
               قيد أرصدة افتتاحية جديد
             </GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_finance_opening_balances"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "الأرصدة الافتتاحية", total: printRows.length },
+              items: printRows.map((r) => ({
+                "المرجع": r.ref,
+                "الوصف": r.description || "—",
+                "إجمالي المدين": Number(r.totalDebit || 0),
+                "إجمالي الدائن": Number(r.totalCredit || 0),
+                "متوازن": Math.abs(Number(r.totalDebit) - Number(r.totalCredit)) < 0.01 ? "نعم" : "لا",
+                "التاريخ": r.createdAt || "—",
+              })),
+            })}
+          />
         </>
       }
     >
@@ -149,6 +170,7 @@ export default function OpeningBalancesPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={items}
         isLoading={isLoading}
         isError={isError}

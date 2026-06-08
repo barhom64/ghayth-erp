@@ -18,6 +18,7 @@ import { Plus, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { z } from "zod";
 import {
@@ -107,9 +108,27 @@ export default function DepositsPage() {
       subtitle="إدارة ودائع ضمان المستأجرين"
       breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "ودائع الضمان" }]}
       actions={
-        <GuardedButton perm="properties:create" onClick={() => setShowForm(!showForm)} size="sm">
-          <Plus className="w-4 h-4 me-1" /> تسجيل وديعة
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_property_deposits"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "ودائع الضمان", total: deposits.length },
+              items: deposits.map((d: any) => ({
+                "العقد": d.contractRef || d.contractId || "—",
+                "المستأجر": d.tenantName || "—",
+                "المبلغ": d.amount ?? 0,
+                "تاريخ الإيداع": d.depositDate || "—",
+                "النوع": d.depositType || d.type || "—",
+                "الحالة": d.status || "—",
+              })),
+            }}
+          />
+          <GuardedButton perm="properties:create" onClick={() => setShowForm(!showForm)} size="sm">
+            <Plus className="w-4 h-4 me-1" /> تسجيل وديعة
+          </GuardedButton>
+        </div>
       }
     >
       <PropertyTabsNav />

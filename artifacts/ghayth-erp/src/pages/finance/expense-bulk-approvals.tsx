@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   CheckSquare, XSquare, Search, ExternalLink, CheckCircle2,
   AlertTriangle, Filter, Users, Receipt, BarChart3, ListChecks,
@@ -151,6 +152,22 @@ export default function ExpenseBulkApprovalsPage() {
               صندوق الاعتمادات
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_expense_bulk_approvals"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "الاعتماد الجماعي للمصاريف", total: filtered.length },
+              items: filtered.map((e: any) => ({
+                "المرجع": e.ref || e.id,
+                "البيان": e.description || "—",
+                "الفئة": e.category || "—",
+                "المبلغ": e.amount ?? 0,
+                "تاريخ الإنشاء": e.createdAt || "—",
+                "الحالة": e.status || "—",
+              })),
+            }}
+          />
         </div>
       }
     >

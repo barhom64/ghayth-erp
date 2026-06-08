@@ -37,7 +37,7 @@ import {
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
+import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
 import { resolveTransactionBranch, assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { z } from "zod";
 
@@ -130,6 +130,33 @@ const createCreditMemoSchema = z.object({
 // operator may not have settled on a justification yet when previewing.
 const previewCreditMemoSchema = createCreditMemoSchema.omit({ reason: true }).extend({
   reason: z.string().optional(),
+});
+
+// ZATCA invoice amendment — the only legal way to "edit" an approved
+// (issued) tax invoice in Saudi Arabia. Wraps three operations atomically:
+//   1. Credit memo against the original for the full amount.
+//   2. New invoice with a fresh sequential ref + the operator's overrides.
+//   3. Bidirectional link via amendedFromInvoiceId / amendedToInvoiceId.
+//
+// Body shape mirrors the create-invoice schema (so the frontend can
+// pre-populate the form from the original), but every field is optional
+// — omitted fields fall back to the original invoice's value. `reason`
+// is mandatory because ZATCA filings include it on the chain.
+const amendInvoiceSchema = z.object({
+  reason: z.string().min(1, "سبب التعديل مطلوب"),
+  // Optional overrides — when set, the new invoice carries this value;
+  // when omitted, the value carries over from the original. Same shape
+  // as createInvoiceSchema so the orchestrator can spread it through.
+  clientId: z.coerce.number().optional(),
+  lines: createInvoiceSchema.shape.lines.optional(),
+  dueDate: z.string().optional(),
+  date: z.string().optional(),
+  description: z.string().max(1000).optional(),
+  notes: z.string().optional(),
+  discountAmount: z.coerce.number().min(0).optional(),
+  discountPercent: z.coerce.number().min(0).max(100).optional(),
+  taxCode: z.string().optional(),
+  taxInclusive: z.boolean().optional(),
 });
 
 const createCustomerAdvanceSchema = z.object({
@@ -333,6 +360,7 @@ invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action:
       companyColumn: 'i."companyId"',
       branchColumn: 'i."branchId"',
       enforceBranchScope: true,
+      includeNullBranch: true,
       softDeleteColumn: 'i."deletedAt"',
     });
 
@@ -354,9 +382,12 @@ invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action:
               i.total, i."paidAmount", i."vatAmount", i.subtotal, i."vatRate",
               i."clientId", i.description, i."paymentTerms", i.notes,
               i."isTaxLinked", i."zatcaStatus",
-              c.name AS "clientName"
+              c.name AS "clientName",
+              e_cre.name AS "createdByName"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
+       LEFT JOIN employee_assignments ea_cre ON ea_cre.id = i."createdBy"
+       LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY i."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -1989,6 +2020,26 @@ invoicesRouter.patch("/invoices/:id", authorize({ feature: "finance.invoices", a
     );
     if (!existing) throw new NotFoundError("الفاتورة غير موجودة");
 
+    // ZATCA compliance: an approved/sent tax invoice cannot be edited
+    // in place. The Saudi tax authority requires the issuer to:
+    //   1. Issue a credit memo against the original (full reversal).
+    //   2. Issue a new invoice with a fresh sequential number reflecting
+    //      the corrected lines.
+    // The orchestrator at POST /invoices/:id/amend does both atomically.
+    // PATCH stays open for in-place edits on drafts only (the operator's
+    // working copy before issuance).
+    const issuedStatuses = ["approved", "sent", "partial", "paid", "overdue", "posted", "delivered", "ordered", "invoiced", "closed"];
+    if (issuedStatuses.includes(existing.status as string)) {
+      throw new ConflictError(
+        `لا يمكن تعديل فاتورة مُصدَرة (${existing.status}) مباشرةً — أنظمة هيئة الزكاة والضرائب تستوجب إصدار إشعار دائن للفاتورة الأصلية ثم فاتورة جديدة بترقيم متسلسل`,
+        {
+          field: "status",
+          fix: `استخدم POST /invoices/${id}/amend — سيُصدر النظام تلقائياً إشعاراً دائناً للفاتورة الأصلية ثم فاتورة جديدة مرتبطة بها`,
+          meta: { code: "ZATCA_AMEND_REQUIRED", amendEndpoint: `/api/finance/invoices/${id}/amend` },
+        }
+      );
+    }
+
     // State machine: lifecycle transitions (draft→sent, sent→paid,
     // paid→closed) must go through the dedicated endpoints. PATCH is
     // limited to allowlist edits.
@@ -2194,6 +2245,40 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
           );
         }
       }
+
+      // Audit finding F6: cancelling a revenue-recognised invoice that
+      // had product lines must reverse the COGS draw + restock lots,
+      // exactly like the credit-memo route does. Without this the
+      // inventory side stays drawn while the sale side is gone —
+      // stock report shows the goods out but the books show no sale.
+      // Same shape as the amend orchestrator fix in #1525.
+      if (wasRecognised && je && je.status !== "cancelled") {
+        const { planCogsReversal, applyStockReversals } = await import(
+          "../lib/inventory/cogsPosting.js"
+        );
+        const reversalPlan = await planCogsReversal(client as any, {
+          companyId: scope.companyId,
+          invoiceId: id,
+          ratio: 1.0,
+          memoId: 0,
+        });
+        if (reversalPlan.lineUpdates.length > 0) {
+          await applyStockReversals(
+            client as any, scope.companyId,
+            reversalPlan.stockMovements, scope.activeAssignmentId ?? 0,
+          );
+          for (const u of reversalPlan.lineUpdates) {
+            await client.query(
+              `UPDATE invoice_lines
+                  SET "cogsReversedAmount" = $1,
+                      "cogsReversedAt"     = NOW(),
+                      "cogsReversalJson"   = COALESCE("cogsReversalJson", '[]'::jsonb) || $2::jsonb
+                WHERE id = $3`,
+              [u.newReversedAmount, JSON.stringify([u.snapshot]), u.invoiceLineId],
+            );
+          }
+        }
+      }
     });
     rawExecute(
       `INSERT INTO event_logs ("companyId", "userId", action, entity, "entityId", details)
@@ -2289,6 +2374,36 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
                    WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
                   [net, scope.companyId, invRevenueCode, approvalPeriod]
                 );
+              }
+
+              // Audit finding F6: reject/return on a previously-approved
+              // product invoice must reverse the inventory + COGS draw,
+              // not just AR/VAT/revenue. Same shape as DELETE above and
+              // the amend orchestrator fix in #1525.
+              const { planCogsReversal, applyStockReversals } = await import(
+                "../lib/inventory/cogsPosting.js"
+              );
+              const reversalPlan = await planCogsReversal(client as any, {
+                companyId: scope.companyId,
+                invoiceId: id,
+                ratio: 1.0,
+                memoId: 0,
+              });
+              if (reversalPlan.lineUpdates.length > 0) {
+                await applyStockReversals(
+                  client as any, scope.companyId,
+                  reversalPlan.stockMovements, scope.activeAssignmentId ?? 0,
+                );
+                for (const u of reversalPlan.lineUpdates) {
+                  await client.query(
+                    `UPDATE invoice_lines
+                        SET "cogsReversedAmount" = $1,
+                            "cogsReversedAt"     = NOW(),
+                            "cogsReversalJson"   = COALESCE("cogsReversalJson", '[]'::jsonb) || $2::jsonb
+                      WHERE id = $3`,
+                    [u.newReversedAmount, JSON.stringify([u.snapshot]), u.invoiceLineId],
+                  );
+                }
               }
             } catch (e) { logger.error(e, "Failed to reverse invoice GL on rejection:"); }
           }
@@ -2861,6 +2976,432 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// POST /invoices/:id/amend — ZATCA-COMPLIANT INVOICE EDIT
+//
+// Per Saudi tax authority rules, an issued tax invoice is immutable.
+// "Editing" one means:
+//   1. Issue a credit memo against the original for the full amount.
+//      This reverses AR + VAT output and, when the original had COGS
+//      (product / inventory lines), reverses the inventory + COGS too.
+//   2. Issue a NEW invoice with a fresh sequential ref, carrying the
+//      operator's modifications. The new invoice posts independently:
+//      fresh AR DR, fresh VAT output CR, fresh COGS / inventory.
+//   3. Link the chain: original.amendedToInvoiceId → new.id and
+//      new.amendedFromInvoiceId → original.id. The detail page renders
+//      "this is an amendment of #N" banner on both sides.
+//
+// The orchestrator wraps all three in a single SQL transaction. If
+// either the credit memo or the new invoice creation fails, the whole
+// amend rolls back — no half-state where one is issued and the other
+// isn't. The frontend gets {originalId, creditMemoId, newInvoiceId,
+// newInvoiceRef} back so it can navigate the operator to the new doc.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(amendInvoiceSchema.safeParse(req.body ?? {}));
+
+    // Load the original invoice + its lines. We need every field that
+    // could carry over to the new invoice (clientId, branchId, dim
+    // payload on each line, tax settings, etc.) so omitted body fields
+    // fall back gracefully.
+    const [original] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!original) throw new NotFoundError("الفاتورة الأصلية غير موجودة");
+
+    // ZATCA correction only applies to ISSUED invoices. A draft hasn't
+    // entered the tax register yet — operator should edit it directly
+    // via PATCH instead.
+    const draftStatuses = ["draft", "rejected", "returned", "cancelled"];
+    if (draftStatuses.includes(original.status as string)) {
+      throw new ConflictError(
+        `الفاتورة في حالة "${original.status}" — التعديل المباشر متاح بدون إصدار إشعار دائن`,
+        { field: "status", fix: `استخدم PATCH /invoices/${id} للتعديل المباشر` }
+      );
+    }
+    // A previously amended invoice has already burned its slot in the
+    // chain. The operator should amend the NEW invoice it produced.
+    if (original.amendedToInvoiceId) {
+      throw new ConflictError(
+        `هذه الفاتورة تم تعديلها مسبقاً إلى الفاتورة #${original.amendedToInvoiceId} — قم بتعديل الفاتورة الجديدة بدلاً منها`,
+        { field: "amendedToInvoiceId", fix: `اذهب للفاتورة #${original.amendedToInvoiceId} وعدّلها`,
+          meta: { code: "ALREADY_AMENDED", chainTo: original.amendedToInvoiceId } }
+      );
+    }
+
+    const amendDate = b.date || todayISO();
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, amendDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تعديل فاتورة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "date", meta: { periodName: periodCheck.periodName } }
+      );
+    }
+
+    // STEP 1: Build the credit-memo payload. Full reversal of the
+    // original's total (vatIncluded: true since the original's stored
+    // total is gross). The reason flows through to the credit memo's
+    // own reason field for audit + ZATCA filings.
+    const originalTotal = roundTo2(Number(original.total));
+
+    // STEP 2: Build the new-invoice payload. Each field falls back to
+    // the original if not overridden in the body. Lines fall back to a
+    // SELECT of invoice_lines so the new invoice carries the same dim
+    // payload, account codes, and quantities by default.
+    const originalLines = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM invoice_lines WHERE "invoiceId"=$1 ORDER BY id ASC LIMIT 500`,
+      [id]
+    );
+    const newLines = b.lines && b.lines.length > 0
+      ? b.lines
+      : originalLines.map((l) => ({
+          description: l.description as string | undefined,
+          quantity: Number(l.quantity),
+          unitPrice: Number(l.unitPrice),
+          accountCode: l.accountCode as string | undefined,
+          accountId: l.accountId as number | undefined,
+          costCenterId: l.costCenterId as number | undefined,
+          activityType: l.activityType as string | undefined,
+          projectId: l.projectId as number | undefined,
+          vehicleId: l.vehicleId as number | undefined,
+          propertyId: l.propertyId as number | undefined,
+          unitId: l.unitId as number | undefined,
+          assetId: l.assetId as number | undefined,
+          employeeId: l.employeeId as number | undefined,
+          driverId: l.driverId as number | undefined,
+          contractId: l.contractId as number | undefined,
+          umrahSeasonId: l.umrahSeasonId as number | undefined,
+          umrahAgentId: l.umrahAgentId as number | undefined,
+          productId: l.productId as number | undefined,
+          taxCode: l.taxCode as string | undefined,
+        }));
+
+    const amendmentToken = requestIdempotencyToken(req);
+
+    // STEP 3: Both operations live inside the same outer transaction
+    // (financialEngine.postJournalEntry's internal withTransaction joins
+    // via SAVEPOINT, so the nested credit-memo and new-invoice GL posts
+    // commit/rollback together). If either step throws, the whole amend
+    // is undone — no half-state.
+    const result = await withTransaction(async (client) => {
+      // Lock the original to prevent concurrent amend or payment.
+      const lockRes = await client.query(
+        `SELECT id, status, "amendedToInvoiceId" FROM invoices
+         WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [id, scope.companyId]
+      );
+      const lockedOriginal = lockRes.rows[0];
+      if (!lockedOriginal) throw new NotFoundError("الفاتورة الأصلية اختفت أثناء التعديل");
+      if (lockedOriginal.amendedToInvoiceId) {
+        throw new ConflictError("الفاتورة تم تعديلها بين قراءة وإقفال — أعد التحميل");
+      }
+
+      // ── STEP 3a: Issue the credit memo. The full reversal must
+      // mirror the standalone POST /credit-memo route — that means
+      // not only the AR/VAT JE lines, but also: revenue counter
+      // decrement on clients.totalRevenue, budgets.used decrement on
+      // the revenue bucket, AND inventory/COGS reversal (DR Inventory
+      // / CR COGS + restock lots) for any product lines. Without the
+      // COGS reversal, an amended invoice would double-draw stock once
+      // the new invoice posts — user explicitly required this
+      // ("ومخزون اذا فيه مخزون").
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const { planCogsReversal, applyStockReversals } = await import(
+        "../lib/inventory/cogsPosting.js"
+      );
+      const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
+        financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4100"),
+        financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2300"),
+        financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
+      ]);
+      const originalVat = roundTo2(Number(original.vatAmount));
+      const originalNet = roundTo2(originalTotal - originalVat);
+      const memoIssued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: (original.branchId as number | null) ?? null,
+        moduleKey: "finance",
+        entityKey: "credit_memo",
+        entityTable: "credit_memos",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      const memoRef = memoIssued.number;
+      const memoInsRes = await client.query(
+        `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy",ref)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+        [scope.companyId, original.branchId, id, original.clientId, originalTotal, originalNet, originalVat,
+         `تعديل ZATCA: ${b.reason}`, amendDate, scope.activeAssignmentId, memoRef]
+      );
+      const memoId = memoInsRes.rows[0].id;
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [memoId, memoIssued.assignmentId]
+      );
+
+      // Bump paidAmount so the original's open balance becomes zero
+      // (the credit memo settles it). Status is overridden to 'amended'
+      // below — that's a terminal state distinct from 'paid', signalling
+      // the chain.
+      await client.query(
+        `UPDATE invoices SET "paidAmount" = COALESCE("paidAmount",0) + $1
+         WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [originalTotal, id, scope.companyId]
+      );
+
+      // Decrement the denormalised revenue counter the original
+      // invoice approval bumped, so it doesn't inflate forever.
+      if (original.clientId && originalNet > 0) {
+        await client.query(
+          `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) - $1
+           WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [originalNet, original.clientId, scope.companyId]
+        );
+      }
+
+      // Plan + apply COGS reversal for any product lines on the
+      // original. ratio = 1.0 (full reversal). Service-only invoices
+      // get an empty plan and skip the loop.
+      const cogsReversalPlan = await planCogsReversal(client as any, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        ratio: 1.0,
+        memoId,
+      });
+      if (cogsReversalPlan.lineUpdates.length > 0) {
+        await applyStockReversals(
+          client as any, scope.companyId,
+          cogsReversalPlan.stockMovements, scope.activeAssignmentId ?? 0,
+        );
+        for (const u of cogsReversalPlan.lineUpdates) {
+          await client.query(
+            `UPDATE invoice_lines
+                SET "cogsReversedAmount" = $1,
+                    "cogsReversedAt"     = NOW(),
+                    "cogsReversalJson"   = COALESCE("cogsReversalJson", '[]'::jsonb) || $2::jsonb
+              WHERE id = $3`,
+            [u.newReversedAmount, JSON.stringify([u.snapshot]), u.invoiceLineId],
+          );
+        }
+        await client.query(
+          `UPDATE credit_memos SET "cogsReversedTotal" = $1
+            WHERE id = $2 AND "companyId" = $3`,
+          [cogsReversalPlan.totalReversed, memoId, scope.companyId],
+        );
+      }
+
+      // Decrement the budget bucket that the original revenue line
+      // bumped at approval (matched by the approval-period and the
+      // revenue account).
+      if (originalNet > 0) {
+        const origJeRes = await client.query(
+          `SELECT "createdAt" FROM journal_entries
+            WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL
+            LIMIT 1`,
+          [scope.companyId, `JE-${original.ref}`]
+        );
+        const origJe = origJeRes.rows[0];
+        if (origJe && origJe.createdAt) {
+          const invRevenueCode = await financialEngine.resolveAccountCode(
+            scope.companyId, "invoice_revenue", "credit", "4000"
+          );
+          const approvalPeriod = String(origJe.createdAt).slice(0, 7);
+          await client.query(
+            `UPDATE budgets SET used = GREATEST(used - $1, 0)
+             WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+            [originalNet, scope.companyId, invRevenueCode, approvalPeriod]
+          );
+        }
+      }
+
+      const memoPost = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: (original.branchId as number | null) ?? scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `CM-${memoRef}`,
+        description: `إشعار دائن (تعديل ZATCA): ${b.reason} — فاتورة ${original.ref}`,
+        type: "credit_memo",
+        sourceType: "credit_memo",
+        sourceId: memoId,
+        sourceKey: `finance:credit_memo:${memoId}`,
+        lines: [
+          { accountCode: salesReturnsCode, debit: originalNet, credit: 0, clientId: original.clientId as number | undefined },
+          ...(originalVat > 0 ? [{ accountCode: vatPayableCode, debit: originalVat, credit: 0, clientId: original.clientId as number | undefined }] : []),
+          { accountCode: arCode, debit: 0, credit: originalTotal, clientId: original.clientId as number | undefined },
+          // COGS reversal lines (DR Inventory / CR COGS) — empty for service-only invoices.
+          ...cogsReversalPlan.journalLines,
+        ],
+        guardTable: "credit_memos",
+        guardId: memoId,
+      });
+
+      // Stamp the JE id back on the memo + on any return-type warehouse
+      // movements applied above, to close the FK invariant.
+      if (memoPost.journalId) {
+        await client.query(
+          `UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [memoPost.journalId, memoId, scope.companyId]
+        );
+        if (cogsReversalPlan.lineUpdates.length > 0) {
+          await client.query(
+            `UPDATE warehouse_movements
+                SET "journalEntryId" = $1
+              WHERE "companyId" = $2
+                AND reference = $3
+                AND type = 'return'
+                AND "journalEntryId" IS NULL`,
+            [memoPost.journalId, scope.companyId, `CM-${memoId}`],
+          );
+        }
+      }
+
+      // Mark the original as amended (terminal state distinct from
+      // 'paid' — chain link is set below once newInvoiceId exists).
+      await client.query(
+        `UPDATE invoices SET status = 'amended', "amendmentReason" = $1, "amendedAt" = NOW()
+         WHERE id = $2 AND "companyId" = $3`,
+        [b.reason, id, scope.companyId]
+      );
+
+      // ── STEP 3b: Issue the new invoice with a fresh ref + carried-
+      // over fields. Discount + tax-code + line dims come from the body
+      // overrides or fall back to original.
+      const newIssued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: (original.branchId as number | null) ?? null,
+        moduleKey: "finance",
+        entityKey: "sales_invoice",
+        entityTable: "invoices",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      const newRef = newIssued.number;
+      const newClientId = b.clientId ?? (original.clientId as number);
+      const newDueDate = b.dueDate ?? (original.dueDate as string | null);
+      const newDescription = b.description ?? `تعديل ZATCA للفاتورة ${original.ref} — ${b.reason}`;
+      const newNotes = b.notes ?? (original.notes as string | null);
+      const newDiscountAmount = b.discountAmount ?? Number(original.discountAmount ?? 0);
+      const newDiscountPercent = b.discountPercent ?? Number(original.discountPercent ?? 0);
+      const newTaxCode = b.taxCode ?? (original.taxCode as string | null);
+      const newTaxInclusive = b.taxInclusive ?? Boolean(original.taxInclusive);
+
+      // Compute subtotal + vat + total from the lines. The full create-
+      // invoice route does a fancy resolver pass with per-line tax
+      // codes; here we do a simpler header-rate computation that
+      // matches what the create flow defaults to. Operators wanting
+      // per-line tax overrides should hit the full create route or
+      // include taxCode on each line in the body.
+      const vatRate = await getCompanyVatRate(scope.companyId);
+      let subtotal = 0;
+      for (const l of newLines) {
+        const qty = Number(l.quantity || 1);
+        const price = Number(l.unitPrice || 0);
+        subtotal += qty * price;
+      }
+      subtotal = roundTo2(subtotal);
+      const afterDiscountSubtotal = roundTo2(
+        newDiscountPercent > 0
+          ? subtotal * (1 - newDiscountPercent / 100)
+          : Math.max(0, subtotal - newDiscountAmount)
+      );
+      const newVat = newTaxInclusive
+        ? roundTo2(afterDiscountSubtotal - extractBaseFromGross(afterDiscountSubtotal, vatRate))
+        : computeVat(afterDiscountSubtotal, vatRate);
+      const newTotal = newTaxInclusive
+        ? afterDiscountSubtotal
+        : roundTo2(afterDiscountSubtotal + newVat);
+
+      const newInvIns = await client.query(
+        `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,date,"discountAmount","discountPercent","taxCode","taxInclusive","amendedFromInvoiceId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+        [scope.companyId, original.branchId, newClientId, newRef, newDescription, afterDiscountSubtotal,
+         vatRate, newVat, newTotal, newDueDate, scope.activeAssignmentId, newNotes,
+         amendDate, newDiscountAmount, newDiscountPercent, newTaxCode, newTaxInclusive, id]
+      );
+      const newInvoiceId = newInvIns.rows[0].id;
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [newInvoiceId, newIssued.assignmentId]
+      );
+
+      // Copy invoice_lines to the new invoice with the carried-over dims.
+      for (const l of newLines) {
+        const qty = Number(l.quantity || 1);
+        const price = Number(l.unitPrice || 0);
+        const lineTotal = roundTo2(qty * price);
+        await client.query(
+          `INSERT INTO invoice_lines ("invoiceId",description,quantity,"unitPrice",total,"accountCode","accountId","costCenterId","activityType","projectId","vehicleId","propertyId","unitId","assetId","employeeId","driverId","contractId","umrahSeasonId","umrahAgentId","productId","taxCode")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+          [newInvoiceId, l.description ?? null, qty, price, lineTotal,
+           l.accountCode ?? null, l.accountId ?? null, l.costCenterId ?? null,
+           l.activityType ?? null, l.projectId ?? null, l.vehicleId ?? null,
+           l.propertyId ?? null, l.unitId ?? null, l.assetId ?? null,
+           l.employeeId ?? null, l.driverId ?? null, l.contractId ?? null,
+           l.umrahSeasonId ?? null, l.umrahAgentId ?? null, l.productId ?? null,
+           l.taxCode ?? null]
+        );
+      }
+
+      // ── STEP 3c: Close the chain — point the original at the new.
+      await client.query(
+        `UPDATE invoices SET "amendedToInvoiceId" = $1 WHERE id = $2 AND "companyId" = $3`,
+        [newInvoiceId, id, scope.companyId]
+      );
+
+      return { memoId, memoRef, creditJournalId: memoPost.journalId, newInvoiceId, newRef, newTotal, cogsReversalWarnings: cogsReversalPlan.warnings, cogsReversedTotal: cogsReversalPlan.totalReversed };
+    });
+
+    // Audit trail + event emission outside the transaction.
+    await createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "invoice.amend",
+      entity: "invoices",
+      entityId: id,
+      after: {
+        originalId: id,
+        originalRef: original.ref,
+        creditMemoId: result.memoId,
+        creditMemoRef: result.memoRef,
+        newInvoiceId: result.newInvoiceId,
+        newInvoiceRef: result.newRef,
+        reason: b.reason,
+        token: amendmentToken,
+      },
+    }).catch((e) => logger.error(e, "invoice.amend audit failed"));
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "invoice.amended",
+      entity: "invoices",
+      entityId: id,
+      details: JSON.stringify({ newInvoiceId: result.newInvoiceId, creditMemoId: result.memoId }),
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+
+    res.status(201).json({
+      message: "تم إصدار إشعار دائن للفاتورة الأصلية وفاتورة جديدة بنجاح",
+      originalInvoiceId: id,
+      originalInvoiceRef: original.ref,
+      creditMemoId: result.memoId,
+      creditMemoRef: result.memoRef,
+      creditJournalId: result.creditJournalId,
+      newInvoiceId: result.newInvoiceId,
+      newInvoiceRef: result.newRef,
+      newInvoiceTotal: result.newTotal,
+      cogsReversalWarnings: result.cogsReversalWarnings,
+      cogsReversedTotal: result.cogsReversedTotal,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Amend invoice error:");
+  }
+});
+
 // Debit-memo PREVIEW (audit follow-up to #1024).
 //
 // AR-side mirror of /credit-memo/preview. Lets the UI render the GL
@@ -3405,6 +3946,22 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
       });
       advRef = issuedAdv.number;
     }
+    // F2 (audit fix): post the GL inside the SAME withTransaction as the
+    // INSERT, with the journalId stamp also inside. The previous shape
+    // (INSERT in txn A, JE outside, DELETE compensator on JE failure)
+    // could leave the row stranded if the DELETE itself failed; worse,
+    // a crash between the JE commit and the rawExecute() journalId
+    // stamp left the FK NULL permanently. financialEngine's internal
+    // withTransaction joins this outer one reentrantly via SAVEPOINT
+    // (same pattern as credit-memo / debit-memo).
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [cashCode, advLiabCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "debit", "1100"),
+      financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2400"),
+    ]);
+
+    let journalId: number | null = null;
+    let advanceAlreadyExists = false;
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -3449,21 +4006,9 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
           [advanceId, issuedAdv.assignmentId]
         );
       }
-    });
 
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const [cashCode, advLiabCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "debit", "1100"),
-      financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2400"),
-    ]);
-
-    let journalId: number | null = null;
-    try {
       const advanceResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
-        // Lands on the resolved advanceBranchId, not scope.branchId — so
-        // a multi-branch user posts to the explicit branch they picked
-        // and the customer's per-branch AR aging stays accurate.
         branchId: advanceBranchId,
         createdBy: scope.activeAssignmentId,
         ref: advRef,
@@ -3479,16 +4024,16 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
         guardId: advanceId ?? 0,
       });
       journalId = advanceResult.journalId;
-      markIdempotencyReplay(req, res, advanceResult.alreadyExists);
+      advanceAlreadyExists = advanceResult.alreadyExists;
+
       if (journalId && advanceId) {
-        await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, advanceId, scope.companyId]);
+        await client.query(
+          `UPDATE customer_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [journalId, advanceId, scope.companyId],
+        );
       }
-    } catch (glErr) {
-      if (advanceId) {
-        await rawExecute(`DELETE FROM customer_advances WHERE id = $1 AND "companyId" = $2`, [advanceId, scope.companyId]);
-      }
-      throw glErr;
-    }
+    });
+    markIdempotencyReplay(req, res, advanceAlreadyExists);
 
     res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });
   } catch (err) {
@@ -3504,6 +4049,19 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
     const { invoiceId, amount } = zodParse(applyAdvanceSchema.safeParse(req.body ?? {}));
 
     const applyAmt = roundTo2(Number(amount));
+
+    // F4 (audit follow-up): gate the period up front so a closed-period
+    // attempt surfaces as a typed ConflictError instead of an opaque
+    // engine-internal throw. The engine still guards the JE post itself,
+    // but the txn would roll back with an engine message; operators
+    // expect a `ConflictError` with `meta.periodName`.
+    const applyPeriodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!applyPeriodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تطبيق دفعة مقدمة في فترة مُقفلة: ${applyPeriodCheck.periodName ?? ""}`,
+        { meta: { periodName: applyPeriodCheck.periodName } },
+      );
+    }
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [advLiabCode, arCode] = await Promise.all([

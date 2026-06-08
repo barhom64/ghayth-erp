@@ -1,6 +1,8 @@
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { formatDateAr } from "@/lib/formatters";
 import {
   DataTable,
@@ -9,6 +11,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
@@ -55,6 +58,7 @@ export default function LegalSessions() {
     searchFields: ["caseTitle", "location", "judge", "lawyerName"],
     statusField: "priority",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   return (
     <PageShell
@@ -62,9 +66,49 @@ export default function LegalSessions() {
       subtitle="جدول جلسات المحاكم والقضايا"
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الجلسات القادمة" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_legal_sessions"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "جدول جلسات المحاكم", total: printRows.length },
+            items: printRows.map((s: any) => ({
+              "القضية": s.caseTitle || s.caseId || "—",
+              "المحكمة": s.court || "—",
+              "تاريخ الجلسة": s.sessionDate || s.date || "—",
+              "الوقت": s.time || "—",
+              "النوع": s.sessionType || s.type || "—",
+              "الحالة": s.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <LegalTabsNav />
-      <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
+      <AdvancedFilters
+        config={{ searchPlaceholder: "بحث...", showDateRange: false }}
+        values={filters}
+        onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "caseTitle", label: "القضية" },
+              { key: "sessionDate", label: "تاريخ الجلسة" },
+              { key: "location", label: "الموقع / المحكمة" },
+              { key: "judge", label: "القاضي" },
+              { key: "lawyerName", label: "المحامي" },
+              { key: "priority", label: "الأولوية" },
+              { key: "result", label: "النتيجة" },
+              { key: "nextSessionDate", label: "الجلسة التالية" },
+              { key: "notes", label: "ملاحظات" },
+            ],
+            "جلسات-قانونية",
+          )
+        }
+        resultCount={filtered.length}
+      />
       <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} onRowClick={(s) => navigate(`/legal/sessions/${s.id}`)} />
     </PageShell>
   );

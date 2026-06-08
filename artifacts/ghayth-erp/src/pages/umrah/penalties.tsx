@@ -10,8 +10,11 @@ import {
   AdvancedFilters,
   useFilters,
   PageShell,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +33,10 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
+import {
+  UMRAH_PENALTY_STATUS_OPTIONS,
+  umrahPenaltyStatusLabel,
+} from "@/lib/umrah-penalty-status";
 
 export default function UmrahPenalties() {
   const [, navigate] = useLocation();
@@ -38,6 +45,7 @@ export default function UmrahPenalties() {
   const { toast } = useToast();
   const pageSize = 20;
   const items = resp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   // Deep-link filter pre-application — the compliance dashboard tile
   // navigates here with ?status=pending&seasonId=… so the audit officer
@@ -162,7 +170,7 @@ export default function UmrahPenalties() {
     { key: "type", header: "النوع", render: (p) => p.type === "overstay" ? "تجاوز مدة" : p.type },
     { key: "daysOverstayed", header: "أيام التأخر" },
     { key: "amount", header: "المبلغ (ريال)", render: (p) => <span className="font-bold text-status-error-foreground">{formatCurrency(Number(p.amount))}</span> },
-    { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
+    { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} domain="umrah_penalty" /> },
     {
       key: "actions" as any,
       header: "إجراءات",
@@ -222,6 +230,23 @@ export default function UmrahPenalties() {
           <GuardedButton perm="umrah:approve" variant="outline" onClick={runPenaltyEngine} className="gap-2" rateLimitAware>
             <Zap className="h-4 w-4" />تشغيل محرك الغرامات
           </GuardedButton>
+          <PrintButton
+            entityType="report_umrah_penalties"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "غرامات العمرة", total: printRows.length },
+              items: printRows.map((p: any) => ({
+                "النوع": p.type || "—",
+                "المعتمر": p.pilgrimName || p.mutamerName || "—",
+                "الوكيل": p.agentName || "—",
+                "الموسم": p.seasonName || "—",
+                "قيمة الغرامة": p.amount ?? 0,
+                "تاريخ الإصدار": p.detectedAt || p.createdAt || "—",
+                "الحالة": umrahPenaltyStatusLabel(p.status),
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -285,21 +310,38 @@ export default function UmrahPenalties() {
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالاسم أو الجواز أو الوكيل...",
-          statuses: [
-            { value: "pending", label: "معلقة" },
-            { value: "invoiced", label: "مفوترة" },
-            { value: "paid", label: "مدفوعة" },
-            { value: "waived", label: "معفاة" },
-            { value: "cancelled", label: "ملغية" },
-          ],
+          statuses: [...UMRAH_PENALTY_STATUS_OPTIONS],
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          // Pre-process the status column to its Arabic label so the
+          // operator opening the CSV in Excel sees "مفوترة" not "invoiced".
+          // exportToCSV doesn't accept a per-cell formatter — we
+          // materialise a translated `status` field on the row instead.
+          exportToCSV(
+            (filteredItems || []).map((p: any) => ({
+              ...p,
+              status: umrahPenaltyStatusLabel(p.status),
+            })),
+            [
+              { key: "pilgrimName", label: "اسم المعتمر" },
+              { key: "passport", label: "الجواز" },
+              { key: "agentName", label: "الوكيل" },
+              { key: "kind", label: "نوع الغرامة" },
+              { key: "amount", label: "المبلغ" },
+              { key: "status", label: "الحالة" },
+              { key: "createdAt", label: "تاريخ الإنشاء" },
+            ],
+            "غرامات-العمرة",
+          )
+        }
         resultCount={filteredItems.length}
       />
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filteredItems}
         isLoading={isLoading}
         isError={isError}

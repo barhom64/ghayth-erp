@@ -13,6 +13,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -29,6 +30,8 @@ import { Building2, User, Plus, FileText, AlertTriangle } from "lucide-react";
 import { EmployeeSelect } from "@/components/shared/entity-selects";
 import { useFormContext } from "react-hook-form";
 import { formatDateAr } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 /**
@@ -178,6 +181,7 @@ function CompanyDocsTab() {
   const [creating, setCreating] = useState(false);
 
   const filtered = applyFilters(rows, filters, { searchFields: ["title", "type"] });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<CompanyDocRow>(filtered);
 
   const expiringSoon = useMemo(
     () => rows.filter((r) => isExpiringSoon(r.expiryDate)).length,
@@ -255,21 +259,62 @@ function CompanyDocsTab() {
       )}
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <AdvancedFilters values={filters} onChange={setFilters} />
-        <GuardedButton
-          perm="hr.organization:create"
-          onClick={() => setCreating(true)}
-          className="gap-1.5"
-        >
-          <Plus className="h-4 w-4" />
-          وثيقة منشأة جديدة
-        </GuardedButton>
+        <AdvancedFilters
+          values={filters}
+          onChange={setFilters}
+          onExportCSV={() =>
+            exportToCSV(
+              filtered || [],
+              [
+                { key: "employeeName", label: "الموظف" },
+                { key: "documentType", label: "نوع الوثيقة" },
+                { key: "documentNumber", label: "الرقم" },
+                { key: "issueDate", label: "تاريخ الإصدار" },
+                { key: "expiryDate", label: "تاريخ الانتهاء" },
+                { key: "issuingAuthority", label: "جهة الإصدار" },
+                { key: "notes", label: "ملاحظات" },
+              ],
+              "وثائق-الموظفين",
+            )
+          }
+        />
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_company_documents"
+            entityId="list"
+            size="icon"
+            label="طباعة سجل وثائق المنشأة"
+            payload={() => ({
+              entity: {
+                title: "سجل وثائق المنشأة",
+                total: printRows.length,
+                expired,
+                expiringSoon,
+              },
+              items: printRows.map((r) => ({
+                "نوع الوثيقة": r.title || "—",
+                "الرقم / النوع الفرعي": r.type || "—",
+                "تاريخ الانتهاء": r.expiryDate ? formatDateAr(r.expiryDate) : "—",
+                "ملاحظات": r.notes || "—",
+              })),
+            })}
+          />
+          <GuardedButton
+            perm="hr.organization:create"
+            onClick={() => setCreating(true)}
+            className="gap-1.5"
+          >
+            <Plus className="h-4 w-4" />
+            وثيقة منشأة جديدة
+          </GuardedButton>
+        </div>
       </div>
 
       <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()}>
         <DataTable
           columns={columns}
           data={filtered}
+          onSortedDataChange={setPrintRows}
           rowKey={(r) => r.id}
           emptyMessage="لا توجد وثائق منشأة مسجلة — اضغط 'وثيقة منشأة جديدة' للبدء"
         />
@@ -385,6 +430,7 @@ function EmployeeDocsTab() {
   const filtered = applyFilters(rows, filters, {
     searchFields: ["employeeName", "type", "name", "number"],
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<EmployeeDocRow>(filtered);
 
   const expiringSoon = useMemo(
     () => rows.filter((r) => isExpiringSoon(r.expiryDate)).length,
@@ -461,6 +507,26 @@ function EmployeeDocsTab() {
           />
         </div>
         <AdvancedFilters values={filters} onChange={setFilters} />
+        <PrintButton
+          entityType="report_employee_documents"
+          entityId="list"
+          size="icon"
+          label="طباعة سجل وثائق الموظفين"
+          payload={() => ({
+            entity: {
+              title: "سجل وثائق الموظفين",
+              total: printRows.length,
+              expiringSoon,
+            },
+            items: printRows.map((r) => ({
+              "الموظف": r.employeeName || `#${r.employeeId}`,
+              "نوع الوثيقة": r.type || "—",
+              "الرقم": r.number || "—",
+              "تاريخ الإصدار": r.issueDate ? formatDateAr(r.issueDate) : "—",
+              "تاريخ الانتهاء": r.expiryDate ? formatDateAr(r.expiryDate) : "—",
+            })),
+          })}
+        />
         <GuardedButton
           perm="hr.employees:create"
           onClick={() => setCreating(true)}
@@ -475,6 +541,7 @@ function EmployeeDocsTab() {
         <DataTable
           columns={columns}
           data={filtered}
+          onSortedDataChange={setPrintRows}
           rowKey={(r) => r.id}
           emptyMessage="لا توجد وثائق — اضغط 'وثيقة موظف جديدة' للبدء"
         />

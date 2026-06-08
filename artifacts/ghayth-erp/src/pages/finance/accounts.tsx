@@ -35,7 +35,7 @@ const typeColors: Record<string, string> = {
   expense: "bg-orange-100 text-orange-700",
 };
 
-function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node: any; level?: number; highlightIds?: Set<number>; onEdit: (acc: any) => void; onDelete: (acc: any) => void }) {
+function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete, onAddChild }: { node: any; level?: number; highlightIds?: Set<number>; onEdit: (acc: any) => void; onDelete: (acc: any) => void; onAddChild: (acc: any) => void }) {
   const [expanded, setExpanded] = useState(highlightIds ? highlightIds.has(node.id) || level < 1 : level < 2);
   const hasChildren = node.children && node.children.length > 0;
   const isMatch = highlightIds?.has(node.id) && node._matched;
@@ -59,6 +59,7 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node
         <Link href={`/finance/ledger/${node.code}`} className="flex-1 min-w-0 truncate font-medium text-gray-900 hover:text-status-info-foreground cursor-pointer" title={node.name}>
           {node.name}
           {node.nameEn && <span className="text-muted-foreground text-xs ms-2 font-normal">{node.nameEn}</span>}
+          {node.branchId && <Badge className="bg-teal-100 text-teal-700 text-xs ms-2 font-normal">خاص بفرع</Badge>}
         </Link>
 
         <div className="w-20 flex-shrink-0 flex justify-center">
@@ -83,7 +84,10 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node
           {formatCurrency(Number(node.balance || node.currentBalance || 0))}
         </span>
 
-        <div className="w-16 flex-shrink-0 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="w-24 flex-shrink-0 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onAddChild(node)} className="p-1 rounded hover:bg-status-success-surface text-muted-foreground hover:text-status-success-foreground" title="إضافة حساب فرعي">
+            <Plus className="h-3.5 w-3.5" />
+          </button>
           <button onClick={() => onEdit(node)} className="p-1 rounded hover:bg-status-info-surface text-muted-foreground hover:text-status-info-foreground" title="تعديل">
             <Edit2 className="h-3.5 w-3.5" />
           </button>
@@ -93,7 +97,7 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node
         </div>
       </div>
       {expanded && hasChildren && node.children.map((child: any) => (
-        <AccountNode key={child.code} node={child} level={level + 1} highlightIds={highlightIds} onEdit={onEdit} onDelete={onDelete} />
+        <AccountNode key={child.id ?? child.code} node={child} level={level + 1} highlightIds={highlightIds} onEdit={onEdit} onDelete={onDelete} onAddChild={onAddChild} />
       ))}
     </div>
   );
@@ -244,6 +248,9 @@ export default function AccountsPage() {
       header: "إجراءات",
       render: (acc) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => handleAddChild(acc)} className="p-1 rounded hover:bg-status-success-surface text-muted-foreground hover:text-status-success-foreground" title="إضافة حساب فرعي">
+            <Plus className="h-3.5 w-3.5" />
+          </button>
           <button onClick={() => handleOpenEdit(acc)} className="p-1 rounded hover:bg-status-info-surface text-muted-foreground hover:text-status-info-foreground">
             <Edit2 className="h-3.5 w-3.5" />
           </button>
@@ -254,6 +261,12 @@ export default function AccountsPage() {
       ),
     },
   ];
+
+  // #1715: create a sub-account directly under a node — carries the parent
+  // code so the create form pre-fills the parent and suggests the next code.
+  const handleAddChild = (acc: any) => {
+    navigate(`/finance/accounts/create?parent=${encodeURIComponent(acc.code)}`);
+  };
 
   const handleOpenEdit = (acc: any) => {
     navigate(`/finance/accounts/${acc.id}/edit`);
@@ -403,7 +416,7 @@ export default function AccountsPage() {
                 <span className="w-28 text-start">الرصيد</span>
                 <span className="w-16" />
               </div>
-              <div>{tree.map((node: any) => <AccountNode key={node.code || node.id} node={node} level={0} highlightIds={highlightIds} onEdit={handleOpenEdit} onDelete={(n: any) => setDeleteAccount({ id: n.id, code: n.code, name: n.name })} />)}</div>
+              <div>{tree.map((node: any) => <AccountNode key={node.id ?? node.code} node={node} level={0} highlightIds={highlightIds} onEdit={handleOpenEdit} onDelete={(n: any) => setDeleteAccount({ id: n.id, code: n.code, name: n.name })} onAddChild={handleAddChild} />)}</div>
             </>
           ) : (
             <div className="p-3">

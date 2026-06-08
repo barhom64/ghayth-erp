@@ -11,10 +11,13 @@ import {
   useFilters,
   applyFilters,
   PageShell,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function InsurancePage() {
   const [, navigate] = useLocation();
@@ -25,6 +28,7 @@ export default function InsurancePage() {
   const [filters, setFilters] = useFilters();
 
   const filtered = applyFilters(items, filters, { searchFields: ["plateNumber", "provider", "policyNumber"] });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "vehiclePlate", header: "المركبة", sortable: true, className: "font-mono", render: (i) => i.plateNumber || "-" },
@@ -45,9 +49,29 @@ export default function InsurancePage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "التأمين" }]}
       loading={isLoading}
       actions={
-        <Link href="/fleet/insurance/create">
-          <GuardedButton perm="fleet:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة تأمين</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_insurance"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "تأمينات المركبات", total: printRows.length },
+              items: printRows.map((i: any) => ({
+                "المركبة": i.plateNumber || "—",
+                "شركة التأمين": i.provider || "—",
+                "رقم الوثيقة": i.policyNumber || "—",
+                "النوع": i.type || "—",
+                "من": i.startDate || "—",
+                "إلى": i.endDate || "—",
+                "القسط": i.premium ?? 0,
+                "الحالة": i.status || "—",
+              })),
+            })}
+          />
+          <Link href="/fleet/insurance/create">
+            <GuardedButton perm="fleet:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة تأمين</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <FleetTabsNav />
@@ -73,11 +97,30 @@ export default function InsurancePage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "plateNumber", label: "رقم اللوحة" },
+              { key: "vehicleName", label: "المركبة" },
+              { key: "insurer", label: "شركة التأمين" },
+              { key: "policyNumber", label: "رقم الوثيقة" },
+              { key: "startDate", label: "تاريخ البدء" },
+              { key: "endDate", label: "تاريخ الانتهاء" },
+              { key: "daysToExpiry", label: "أيام للانتهاء" },
+              { key: "premium", label: "القسط" },
+              { key: "coverageType", label: "نوع التغطية" },
+              { key: "status", label: "الحالة" },
+            ],
+            "وثائق-التأمين",
+          )
+        }
         resultCount={filtered.length}
       />
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

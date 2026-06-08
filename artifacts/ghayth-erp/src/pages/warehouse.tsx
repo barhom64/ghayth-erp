@@ -27,6 +27,8 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { useAppContext } from "@/contexts/app-context";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { withListFilters } from "@/lib/list-query";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const WAREHOUSE_PATH_TAB: Record<string, string> = {
   "/warehouse/movements": "movements",
@@ -96,6 +98,7 @@ function ProductsTab() {
   const total = productsResp?.total || products.length;
 
   const filtered = products;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/warehouse/products",
@@ -171,6 +174,25 @@ function ProductsTab() {
             resultCount={filtered.length}
           />
         </div>
+        <PrintButton
+          entityType="report_warehouse_products"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة المنتجات"
+          payload={() => ({
+            entity: { title: "قائمة منتجات المستودع", total: printRows.length, totalValue: stats?.totalValue ?? 0, lowStock: stats?.lowStock ?? 0 },
+            items: printRows.map((p: any) => ({
+              "رمز المنتج": p.sku || "—",
+              "المنتج": p.name || "—",
+              "التصنيف": p.categoryName || "—",
+              "المخزون": p.currentStock ?? 0,
+              "الحد الأدنى": p.minStock ?? 0,
+              "سعر التكلفة": Number(p.costPrice || 0),
+              "سعر البيع": Number(p.sellPrice || 0),
+              "الحالة": p.status || "—",
+            })),
+          })}
+        />
         {canManage && <Link href="/warehouse/create"><GuardedButton perm="warehouse:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة منتج</GuardedButton></Link>}
       </div>
 
@@ -180,6 +202,7 @@ function ProductsTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
@@ -217,6 +240,7 @@ function MovementsTab() {
   const total = movementsResp?.total || movements.length;
 
   const filtered = movements;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "productName", header: "المنتج", sortable: true, render: (m) => m.productName || "-" },
@@ -256,6 +280,22 @@ function MovementsTab() {
             resultCount={filtered.length}
           />
         </div>
+        <PrintButton
+          entityType="report_warehouse_movements"
+          entityId="list"
+          size="icon"
+          label="طباعة حركات المخزون"
+          payload={() => ({
+            entity: { title: "حركات المخزون", total: printRows.length },
+            items: printRows.map((m: any) => ({
+              "المنتج": m.productName || "—",
+              "النوع": m.type === 'in' ? 'إدخال' : m.type === 'out' ? 'إخراج' : m.type,
+              "الكمية": m.quantity ?? 0,
+              "المرجع": m.reference || "—",
+              "التاريخ": m.createdAt ? formatDateAr(m.createdAt) : "—",
+            })),
+          })}
+        />
         <TransferDialog onCreated={refetch} />
         <Link href="/warehouse/movements/create"><GuardedButton perm="warehouse:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة حركة</GuardedButton></Link>
       </div>
@@ -265,6 +305,7 @@ function MovementsTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
@@ -293,6 +334,7 @@ function CategoriesTab() {
   const categories = asList(categoriesResp);
 
   const filtered = categories;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "name", header: "الاسم", sortable: true, render: (c) => <span className="font-medium">{c.name}</span> },
@@ -319,6 +361,19 @@ function CategoriesTab() {
             resultCount={filtered.length}
           />
         </div>
+        <PrintButton
+          entityType="report_warehouse_categories"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة التصنيفات"
+          payload={() => ({
+            entity: { title: "تصنيفات المستودع", total: printRows.length },
+            items: printRows.map((c: any) => ({
+              "الاسم": c.name || "—",
+              "تاريخ الإنشاء": c.createdAt ? formatDateAr(c.createdAt) : "—",
+            })),
+          })}
+        />
         <Link href="/warehouse/categories/create"><GuardedButton perm="warehouse:create" className="gap-2"><Plus className="h-4 w-4" /> تصنيف جديد</GuardedButton></Link>
       </div>
       <Card>
@@ -326,6 +381,7 @@ function CategoriesTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
@@ -352,6 +408,7 @@ function SuppliersTab() {
   const suppliers = asList(suppliersResp);
 
   const filtered = suppliers;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "name", header: "المورد", sortable: true, render: (s) => <span className="font-medium">{s.name}</span> },
@@ -388,6 +445,22 @@ function SuppliersTab() {
             resultCount={filtered.length}
           />
         </div>
+        <PrintButton
+          entityType="report_warehouse_suppliers"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة الموردين"
+          payload={() => ({
+            entity: { title: "موردو المستودع", total: printRows.length },
+            items: printRows.map((s: any) => ({
+              "المورد": s.name || "—",
+              "جهة الاتصال": s.contactPerson || "—",
+              "الهاتف": s.phone || "—",
+              "التقييم": s.rating ?? "—",
+              "الحالة": s.status || "—",
+            })),
+          })}
+        />
         <Link href="/warehouse/suppliers/create"><GuardedButton perm="warehouse:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة مورد</GuardedButton></Link>
       </div>
       <Card>
@@ -395,6 +468,7 @@ function SuppliersTab() {
           <DataTable
             columns={columns}
             data={filtered}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

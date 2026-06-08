@@ -365,6 +365,18 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     "support:read", "support:create",
     "tasks:read", "tasks:write",
   ],
+
+  // Driver role — self-service over their own trips + cargo only.
+  // Replaces the standalone driver portal. Granted on the
+  // employee_assignment.role column; the SPA reads scope from
+  // /api/auth/me and renders /me/* shortcuts instead of the full
+  // dispatcher dashboard.
+  driver: [
+    "hr:self",
+    "fleet:read",
+    "notifications:read",
+    "documents:read", "documents:download",
+  ],
 };
 
 /** Returns the default permissions for a role, or an empty array if unknown. */

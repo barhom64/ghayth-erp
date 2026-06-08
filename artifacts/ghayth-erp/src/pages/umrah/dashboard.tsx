@@ -1,7 +1,8 @@
+import { Link } from "wouter";
 import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { formatDateAr, formatNumber } from "@/lib/formatters";
+import { formatUmrahDate, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,17 +13,24 @@ import {
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Users, Plane, AlertTriangle, UserPlus, Play, Zap, TrendingUp, TrendingDown, Wallet, ShieldAlert } from "lucide-react";
+import { Users, Plane, AlertTriangle, UserPlus, Play, Zap, TrendingUp, TrendingDown, Wallet, ShieldAlert, Upload, Sparkles, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function UmrahDashboard() {
   const { data: seasons, isLoading: seasonsLoading, isError: seasonsError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const activeSeason = (seasons?.data || []).find((s: any) => s.status === "open");
   const seasonId = activeSeason?.id;
+  // Don't fire the dashboard query when no active season is found —
+  // sending `seasonId=0` makes the backend respond with a 400 or a
+  // bogus empty-shape that the rest of the page reads as "loading
+  // forever" or "missing data". Passing path=null short-circuits the
+  // fetch entirely; the no-active-season branch below renders the
+  // empty-state CTA instead.
   const { data: dash, refetch, isLoading: dashLoading, isError: dashError } = useApiQuery<any>(
     ["umrah-dashboard", String(seasonId || "")],
-    `/umrah/dashboard?seasonId=${seasonId ?? 0}`
+    seasonId ? `/umrah/dashboard?seasonId=${seasonId}` : null,
   );
   const { toast } = useToast();
   const p = dash?.pilgrims || {};
@@ -70,12 +78,102 @@ export default function UmrahDashboard() {
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "لوحة التشغيل" }]}
       actions={
         <div className="flex gap-2">
+          <PrintButton
+            entityType="report_umrah_dashboard"
+            entityId="list"
+            size="icon"
+            label="طباعة لوحة تشغيل العمرة"
+            payload={() => ({
+              entity: {
+                title: activeSeason ? `لوحة تشغيل العمرة — ${activeSeason.title}` : "لوحة تشغيل العمرة",
+                activeSeason: activeSeason?.title ?? "—",
+                totalPilgrims: p.total ?? 0,
+                inSaudi: p.inSaudi ?? 0,
+                returned: p.returned ?? 0,
+                overstayed: p.overstayed ?? 0,
+                penaltiesOpen: pen.open ?? 0,
+                penaltiesTotalAmount: pen.totalAmount ?? 0,
+                salesInvoiced: salesFin.totalInvoiced ?? 0,
+                salesPaid: salesFin.totalPaid ?? 0,
+                nuskTotal: nuskFin.total ?? 0,
+                netPosition,
+                visaExpired,
+                visaCritical,
+                visaWarning,
+              },
+              items: [],
+            })}
+          />
           <GuardedButton perm="umrah:create" variant="outline" onClick={runDaily} className="gap-2"><Play className="h-4 w-4" />تحديث الحالات</GuardedButton>
           <GuardedButton perm="umrah:create" variant="outline" onClick={runPenalties} className="gap-2"><Zap className="h-4 w-4" />تشغيل الغرامات</GuardedButton>
         </div>
       }
     >
       <UmrahTabsNav />
+
+      {/* Quick Actions — أهم 4 إجراءات يومية للعامل، ظاهرة مباشرة
+          بدون ما يضطر يفتح tab. كانت كل وحدة مدفونة في مكان مختلف:
+          - إضافة معتمر: /umrah/pilgrims/create (مخفي)
+          - استيراد ملف: tab "الاستيراد"
+          - إنشاء فاتورة: tab "معالج المبيعات"
+          - تقرير امتثال: tab dropdown */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="umrah-quick-actions">
+        <Link href="/umrah/pilgrims/create" data-testid="quick-action-pilgrim-create">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-info-surface">
+                <UserPlus className="w-5 h-5 text-status-info-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">إضافة معتمر</p>
+                <p className="text-xs text-muted-foreground">تسجيل يدوي جديد</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/umrah/import" data-testid="quick-action-import">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-success-surface">
+                <Upload className="w-5 h-5 text-status-success-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">استيراد ملف</p>
+                <p className="text-xs text-muted-foreground">معالج Excel</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/umrah/sales-wizard" data-testid="quick-action-invoice">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-warning-surface">
+                <Sparkles className="w-5 h-5 text-status-warning-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">إنشاء فاتورة</p>
+                <p className="text-xs text-muted-foreground">معالج المبيعات</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/umrah/compliance" data-testid="quick-action-compliance">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer border-0 shadow-sm">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-error-surface">
+                <FileText className="w-5 h-5 text-status-error-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">لوحة الامتثال</p>
+                <p className="text-xs text-muted-foreground">المخاطر الحالية</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <Card className="border-0 shadow-sm">
@@ -246,7 +344,7 @@ export default function UmrahDashboard() {
                 { key: "fullName", header: "الاسم", render: (r) => <span className="font-medium">{r.fullName}</span> },
                 { key: "passportNumber", header: "الجواز" },
                 { key: "nationality", header: "الجنسية" },
-                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => formatDateAr(r.actualArrival) },
+                { key: "actualArrival", header: "تاريخ الوصول", render: (r) => formatUmrahDate(r.actualArrival) },
                 { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
               ] as DataTableColumn<any>[]}
               data={dash?.recentArrivals || []}

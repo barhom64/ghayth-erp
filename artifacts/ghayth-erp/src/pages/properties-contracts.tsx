@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Link, useSearch, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
@@ -269,6 +271,7 @@ export default function PropertiesContracts() {
     dateField: "startDate" as any,
   });
   const filtered = tagFilteredIds ? preFiltered.filter((c: any) => tagFilteredIds.has(c.id)) : preFiltered;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     { key: "ejarNumber", header: "رقم إيجار", sortable: true, className: "font-mono text-xs text-status-info-foreground", render: (c) => c.ejarNumber || "—" },
@@ -299,9 +302,28 @@ export default function PropertiesContracts() {
       subtitle="إدارة وتتبع جميع عقود الإيجار — متوافق مع إيجار"
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={
-        <Link href="/properties/contracts/create">
-          <GuardedButton perm="property:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة عقد</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_properties_contracts"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "عقود الإيجار", total: printRows.length },
+              items: printRows.map((c: any) => ({
+                "المرجع": c.ref || c.contractNumber || c.id,
+                "المستأجر": c.tenantName || "—",
+                "الوحدة": c.unitName || c.unitNumber || "—",
+                "تاريخ البدء": c.startDate || "—",
+                "تاريخ الانتهاء": c.endDate || "—",
+                "الإيجار": Number(c.rentAmount || c.amount || 0),
+                "الحالة": c.status || "—",
+              })),
+            })}
+          />
+          <Link href="/properties/contracts/create">
+            <GuardedButton perm="property:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة عقد</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <PropertyTabsNav />
@@ -337,7 +359,8 @@ export default function PropertiesContracts() {
         <CardContent className="p-0">
           <DataTable
             columns={columns}
-            data={filtered}
+            onSortedDataChange={setPrintRows}
+        data={filtered}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

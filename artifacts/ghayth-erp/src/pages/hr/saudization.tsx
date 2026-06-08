@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 const SECTOR_OPTIONS = [
   { value: "default", label: "افتراضي" },
   { value: "construction", label: "إنشاءات" },
@@ -195,6 +196,26 @@ export default function SaudizationPage() {
             <RefreshCw className={cn("h-4 w-4 ml-1", refreshMut.isPending && "animate-spin")} />
             تحديث اللقطة الآن
           </GuardedButton>
+          <PrintButton
+            entityType="report_hr_saudization"
+            entityId={sector}
+            size="icon"
+            payload={{
+              entity: {
+                title: `تقرير السعودة — ${sector}`,
+                sector,
+                saudizationPercent: current?.live?.saudizationPercent ?? "—",
+                bandColor: (current?.live as any)?.bandColor ?? "—",
+                period: current?.period ?? "—",
+              },
+              items: ((current?.live as any)?.byDepartment ?? []).map((d: any) => ({
+                "القسم": d.department || "—",
+                "إجمالي الموظفين": d.totalEmployees ?? 0,
+                "سعوديون": d.saudiCount ?? 0,
+                "نسبة السعودة (%)": d.saudizationPercent ?? "—",
+              })),
+            }}
+          />
         </div>
       }
     >

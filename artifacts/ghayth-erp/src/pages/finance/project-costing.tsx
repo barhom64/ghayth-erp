@@ -25,6 +25,7 @@ import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 // projectId stays a string until the submit handler casts to number.
 // amount uses z.coerce.number().positive() — was tracked as string
 // and Number()-coerced; schema now blocks 0 / negative submissions.
@@ -139,6 +140,25 @@ export default function ProjectCostingPage() {
             <Plus className="h-4 w-4 ml-2" />
             تسجيل تكلفة
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_project_costing"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "تكاليف المشاريع", total: list.length },
+              items: list.map((p) => ({
+                "المرجع": p.ref,
+                "الاسم": p.name,
+                "الميزانية": Number(p.budget || 0),
+                "التكلفة الفعلية": Number(p.actualCost || 0),
+                "المتبقي": Number(p.budgetRemaining || 0),
+                "% الاستهلاك": p.budget > 0 ? ((Number(p.actualCost) / Number(p.budget)) * 100).toFixed(1) : "—",
+                "البداية": p.startDate || "—",
+                "النهاية": p.endDate || "—",
+                "الحالة": p.status || "—",
+              })),
+            }}
+          />
         </div>
       }
     >

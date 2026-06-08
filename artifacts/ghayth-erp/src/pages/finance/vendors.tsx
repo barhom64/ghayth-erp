@@ -19,6 +19,8 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Vendors list — migrated in R.2 iter 2 to the unified template stack.
@@ -57,6 +59,7 @@ export default function VendorsPage() {
   const filtered = applyFilters(items, filters, {
     searchFields: ["name", "contactPerson", "category"],
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const categories = [...new Set((items || []).map((v: any) => v.category).filter(Boolean))];
 
@@ -141,6 +144,25 @@ export default function VendorsPage() {
               إضافة مورد
             </Link>
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_vendors"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قائمة الموردين", total: printRows.length },
+              items: printRows.map((v: any) => ({
+                "الاسم": v.name || "—",
+                "الرقم الضريبي": v.taxNumber || "—",
+                "السجل التجاري": v.commercialReg || "—",
+                "الهاتف": v.phone || "—",
+                "البريد": v.email || "—",
+                "المدينة": v.city || "—",
+                "شروط السداد": v.paymentTerms || "—",
+                "العملة": v.preferredCurrency || "—",
+                "الحالة": v.status || "—",
+              })),
+            })}
+          />
         </>
       }
     >
@@ -198,6 +220,7 @@ export default function VendorsPage() {
       >
         <DataTable
           columns={columns}
+          onSortedDataChange={setPrintRows}
           data={filtered}
           onRowClick={(v) => navigate(`/finance/vendors/${v.id}`)}
           pageSize={pageSize}

@@ -29,6 +29,8 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { withListFilters } from "@/lib/list-query";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const STAGE_LABELS: Record<string, string> = {
   lead: "عميل محتمل",
@@ -135,6 +137,7 @@ function OpportunitiesTab() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/crm/opportunities",
@@ -268,6 +271,29 @@ function OpportunitiesTab() {
         <Link href="/crm/create">
           <GuardedButton perm="crm:create" className="gap-2"><Plus className="h-4 w-4" /> فرصة جديدة</GuardedButton>
         </Link>
+        <PrintButton
+          entityType="report_crm_opportunities"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: {
+              title: "قائمة الفرص البيعية",
+              total: printRows.length,
+              open: stats?.openOpportunities ?? 0,
+              won: stats?.wonOpportunities ?? 0,
+              pipeline: stats?.pipelineValue ?? 0,
+            },
+            items: printRows.map((o: any) => ({
+              "العنوان": o.title || o.name || "—",
+              "العميل": o.clientName || "—",
+              "المرحلة": o.stage || "—",
+              "القيمة": o.expectedValue ?? o.amount ?? 0,
+              "الاحتمال (%)": o.probability ?? "—",
+              "تاريخ الإغلاق المتوقع": o.expectedCloseDate || o.closeDate || "—",
+              "المسؤول": o.ownerName || o.assignee || "—",
+            })),
+          })}
+        />
       </div>
 
       <BulkActionsBar
@@ -295,6 +321,7 @@ function OpportunitiesTab() {
         <CardContent>
           <DataTable
             columns={columns}
+            onSortedDataChange={setPrintRows}
             data={filtered}
             isLoading={isLoading}
             isError={isError}

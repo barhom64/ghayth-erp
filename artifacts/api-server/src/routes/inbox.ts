@@ -64,6 +64,9 @@ const sendSchema = z.object({
   body: z.string().min(1, "نص الرسالة مطلوب").max(20000),
   relatedType: z.string().max(60).optional().nullable(),
   relatedId: z.number().int().positive().optional().nullable(),
+  // ISO 8601 datetime. When set, the row lands in outbound_queue with
+  // scheduledAt > NOW() so the cron worker leaves it alone until then.
+  scheduledAt: z.string().datetime({ offset: true }).optional().nullable(),
 });
 
 router.post("/send", authorize({ feature: "communications", action: "create" }), async (req, res) => {
@@ -81,6 +84,17 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
     }
     if (body.channel === "email" && !body.subject) {
       throw new ValidationError("عنوان البريد مطلوب", { field: "subject" });
+    }
+    if (body.scheduledAt) {
+      const when = new Date(body.scheduledAt);
+      // Reject obviously-broken values + dates in the past (no point
+      // scheduling something that already happened).
+      if (Number.isNaN(when.getTime())) {
+        throw new ValidationError("صيغة وقت الجدولة غير صحيحة", { field: "scheduledAt" });
+      }
+      if (when.getTime() < Date.now() - 60_000) {
+        throw new ValidationError("وقت الجدولة في الماضي", { field: "scheduledAt" });
+      }
     }
 
     const result = await sendMessage({
@@ -194,6 +208,37 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
       folderCond = ` AND folder = $${params.length}`;
     }
 
+    // Entity filter: when the page is opened from a client/supplier/etc.
+    // detail page with ?relatedType=X&relatedId=Y, surface only messages
+    // linked to that entity. messageSender writes those columns on every
+    // outbound send (recipient.ts uses them); inbound emails get linked
+    // via matchSenderToEntity. Falls back to peer-address matching when
+    // an entity has registered phone/email addresses so legacy unlinked
+    // rows still show up.
+    let relatedCond = "";
+    const relatedType = (req.query.relatedType as string | undefined)?.trim();
+    const relatedId = Number(req.query.relatedId);
+    if (relatedType && Number.isFinite(relatedId) && relatedId > 0) {
+      params.push(relatedType, relatedId);
+      const tIdx = params.length - 1;
+      const iIdx = params.length;
+      // Resolve the entity's contact addresses so unlinked rows (e.g.
+      // imported emails before the entity existed) still surface.
+      let addrSubquery = "";
+      if (relatedType === "clients") {
+        addrSubquery = `SELECT phone FROM clients WHERE id = $${iIdx} AND "companyId" = $1 UNION SELECT email FROM clients WHERE id = $${iIdx} AND "companyId" = $1`;
+      } else if (relatedType === "suppliers") {
+        addrSubquery = `SELECT phone FROM suppliers WHERE id = $${iIdx} AND "companyId" = $1 UNION SELECT email FROM suppliers WHERE id = $${iIdx} AND "companyId" = $1`;
+      } else if (relatedType === "employees") {
+        addrSubquery = `SELECT phone FROM employees WHERE id = $${iIdx} AND "companyId" = $1 UNION SELECT email FROM employees WHERE id = $${iIdx} AND "companyId" = $1 UNION SELECT "personalEmail" FROM employees WHERE id = $${iIdx} AND "companyId" = $1 UNION SELECT "internalEmail" FROM employees WHERE id = $${iIdx} AND "companyId" = $1`;
+      }
+      if (addrSubquery) {
+        relatedCond = ` AND (("relatedType" = $${tIdx} AND "relatedId" = $${iIdx}) OR "fromAddress" IN (${addrSubquery}) OR "toAddress" IN (${addrSubquery}))`;
+      } else {
+        relatedCond = ` AND "relatedType" = $${tIdx} AND "relatedId" = $${iIdx}`;
+      }
+    }
+
     // Phase 4 contract step: read from v_message_log_all (the unified
     // view created in migration 221). Columns are aliased back to
     // fromNumber / toNumber so the frontend response shape is identical
@@ -220,7 +265,7 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
                 ) AS inbound_count
            FROM v_message_log_all
           WHERE "companyId" = $1 AND "deletedAt" IS NULL
-            ${channelCond}${folderCond}
+            ${channelCond}${folderCond}${relatedCond}
        )
        SELECT id, channel, direction, peer_addr AS peer, "fromNumber", "toNumber",
               subject, LEFT(body, 300) AS body_preview, status,
@@ -236,6 +281,78 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "inbox/threads/list");
+  }
+});
+
+// ─────────────────────── GET /search ──────────────────────────────────────
+
+/**
+ * Full-text search across the user's inbox. Hits subject + body
+ * + fromAddress + toAddress so a customer-name query like "أحمد"
+ * matches both a message titled "طلب من أحمد" and a thread from
+ * a sender whose name appears in the body.
+ *
+ * Returns messages (not threads) ordered by recency so the user
+ * sees the most recent match first. Tenant-scoped, soft-delete aware.
+ *
+ * Query params:
+ *   q        — search term (required, 2+ chars after trim)
+ *   channel  — optional filter (email/whatsapp/sms/pbx)
+ *   from     — optional ISO date lower bound (inclusive)
+ *   to       — optional ISO date upper bound (inclusive)
+ *   limit    — 1-100, default 50
+ */
+router.get("/search", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const cid = req.scope!.companyId;
+    const q = String(req.query.q ?? "").trim();
+    if (q.length < 2) {
+      res.json({ data: [], total: 0, query: q });
+      return;
+    }
+    const channel = (req.query.channel as string | undefined) ?? null;
+    const fromDate = (req.query.from as string | undefined) ?? null;
+    const toDate = (req.query.to as string | undefined) ?? null;
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 50)));
+
+    const params: unknown[] = [cid, `%${q}%`];
+    let channelCond = "";
+    if (channel && ["email", "whatsapp", "sms", "pbx"].includes(channel)) {
+      params.push(channel);
+      channelCond = ` AND channel = $${params.length}`;
+    }
+    let dateCond = "";
+    if (fromDate) {
+      params.push(fromDate);
+      dateCond += ` AND "createdAt" >= $${params.length}`;
+    }
+    if (toDate) {
+      params.push(toDate);
+      dateCond += ` AND "createdAt" <= $${params.length}`;
+    }
+    params.push(limit);
+
+    const rows = await rawQuery(
+      `SELECT id, channel, direction,
+              "fromAddress" AS "fromNumber",
+              "toAddress"   AS "toNumber",
+              subject,
+              LEFT(body, 300) AS body_preview,
+              status, folder, "isStarred",
+              "relatedType", "relatedId", "createdAt"
+         FROM v_message_log_all
+        WHERE "companyId" = $1
+          AND "deletedAt" IS NULL
+          AND (subject ILIKE $2 OR body ILIKE $2
+               OR "fromAddress" ILIKE $2 OR "toAddress" ILIKE $2)
+          ${channelCond}${dateCond}
+        ORDER BY "createdAt" DESC
+        LIMIT $${params.length}`,
+      params,
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length, query: q }));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/search");
   }
 });
 
@@ -500,6 +617,51 @@ router.post("/messages/:id/folder", authorize({ feature: "communications", actio
     res.json({ ok: true, folder: body.folder });
   } catch (err) {
     handleRouteError(err, res, "inbox/messages/folder");
+  }
+});
+
+/**
+ * POST /inbox/messages/bulk-folder — move many messages to a folder in
+ * one round trip. Used by the inbox UI's "select all → archive" / "→
+ * trash" affordance which would otherwise issue one PATCH per row.
+ *
+ * Body: { ids: number[]; folder: "inbox"|"sent"|"archive"|"trash"|"spam" }
+ *
+ * Caps at 500 ids per call so a runaway client can't lock the table.
+ * Returns the count actually updated (rows that matched tenant + id +
+ * not-deleted). All rows that match get one audit log entry summarizing
+ * the bulk action so the audit table doesn't balloon by 500x.
+ */
+const bulkFolderSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(500),
+  folder: z.enum(["inbox", "sent", "archive", "trash", "spam"]),
+});
+
+router.post("/messages/bulk-folder", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(bulkFolderSchema.safeParse(req.body));
+
+    const { affectedRows } = await rawExecute(
+      `UPDATE message_log
+          SET folder = $1
+        WHERE id = ANY($2::int[])
+          AND "companyId" = $3
+          AND "deletedAt" IS NULL`,
+      [body.folder, body.ids, scope.companyId],
+    );
+
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "message_log",
+      // 0 marks "bulk action" — actual ids are in the metadata.
+      entityId: 0,
+      after: { folder: body.folder, idsCount: body.ids.length, affected: affectedRows, ids: body.ids.slice(0, 50) },
+    }).catch((e) => logger.warn(e, "[audit] message.bulk_folder"));
+
+    res.json({ ok: true, folder: body.folder, affected: affectedRows });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/messages/bulk-folder");
   }
 });
 

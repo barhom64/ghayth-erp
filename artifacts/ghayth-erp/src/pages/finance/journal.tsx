@@ -32,6 +32,8 @@ import { useToast } from "@/hooks/use-toast";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Journal entries list — migrated in R.5 iter 5 to the unified template
@@ -80,13 +82,14 @@ export default function JournalPage() {
     },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref"],
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -210,6 +213,23 @@ export default function JournalPage() {
               قيد جديد
             </Link>
           </GuardedButton>
+          <PrintButton
+            entityType="report_finance_journal"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "القيود اليومية", total: printRows.length },
+              items: printRows.map((j: any) => ({
+                "المرجع": j.ref || j.id,
+                "التاريخ": j.date || j.createdAt || "—",
+                "البيان": j.description || "—",
+                "النوع": j.type || "—",
+                "إجمالي المدين": j.totalDebit ?? 0,
+                "إجمالي الدائن": j.totalCredit ?? 0,
+                "الحالة": j.status || "—",
+              })),
+            })}
+          />
         </>
       }
     >
@@ -261,6 +281,7 @@ export default function JournalPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         isLoading={isLoading}
         isError={isError}

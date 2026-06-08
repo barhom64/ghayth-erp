@@ -13,6 +13,7 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,6 +29,8 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { useAppContext } from "@/contexts/app-context";
 import { PENALTY_LEVELS } from "@/lib/hr-type-maps";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 
 // P02-M1 — `new Date(...).toISOString().slice(0, 10)` converts the
@@ -135,6 +138,7 @@ export default function AttendancePage() {
     }
     return true;
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const kpis = [
     { label: "الحضور", value: stats?.present ?? items.filter((i: any) => i.status === "present").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface", trend: "+٥٪" },
@@ -254,6 +258,23 @@ export default function AttendancePage() {
               تسجيل حضور
             </GuardedButton>
           </Link>
+          <PrintButton
+            entityType="report_hr_attendance"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "سجل الحضور والانصراف", total: printRows.length },
+              items: printRows.map((a: any) => ({
+                "الموظف": a.employeeName || "—",
+                "التاريخ": a.date || "—",
+                "الدخول": a.checkIn || "—",
+                "الخروج": a.checkOut || "—",
+                "ساعات العمل": a.workHours ?? "—",
+                "التأخر": a.lateMinutes ?? 0,
+                "الحالة": a.status || "—",
+              })),
+            })}
+          />
           <ExportButton
             endpoint="/export/excel/attendance"
             filename="attendance.xlsx"
@@ -287,6 +308,23 @@ export default function AttendancePage() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "date", label: "التاريخ" },
+              { key: "employeeName", label: "الموظف" },
+              { key: "branchName", label: "الفرع" },
+              { key: "checkIn", label: "وقت الحضور" },
+              { key: "checkOut", label: "وقت الانصراف" },
+              { key: "status", label: "الحالة" },
+              { key: "lateMinutes", label: "دقائق التأخر" },
+              { key: "overtimeMinutes", label: "دقائق العمل الإضافي" },
+              { key: "notes", label: "ملاحظات" },
+            ],
+            `الحضور-${month}`,
+          )
+        }
         resultCount={filtered?.length}
       />
 
@@ -317,6 +355,7 @@ export default function AttendancePage() {
           />
           <DataTable
             columns={columns}
+            onSortedDataChange={setPrintRows}
             data={filtered}
             isLoading={isLoading}
             isError={isError}

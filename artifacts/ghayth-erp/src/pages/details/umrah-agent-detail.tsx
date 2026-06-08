@@ -12,6 +12,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntitySubsidiaryAccounts } from "@/components/shared/entity-subsidiary-accounts";
 import { Button } from "@/components/ui/button";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,7 @@ import { Edit, Phone, Mail, MapPin, Users, Wallet, TrendingUp } from "lucide-rea
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
+import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -329,6 +331,19 @@ export default function UmrahAgentDetail() {
           probe `/umrah/agents/0/invoices`. */}
       {id && <AgentRecentInvoicesCard agentId={id} />}
 
+      {id && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-status-info-foreground" /> الحسابات الفرعية للوكيل
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EntitySubsidiaryAccounts entityType="umrah_agent" entityId={id} />
+          </CardContent>
+        </Card>
+      )}
+
       {id && <EntityComments entityType="umrah-agent" entityId={id} />}
       {id && <EntityTags entityType="umrah-agent" entityId={id} />}
       {id && <UmrahAttachmentsPanel entityType="agent" entityId={id} />}
@@ -373,6 +388,7 @@ export default function UmrahAgentDetail() {
                 entityType="umrah_agent"
                 entityId={id ?? 0}
                />
+              {id && <EntityPnlButton entityType="umrah_agent" entityId={id} />}
             </>
           }
         />

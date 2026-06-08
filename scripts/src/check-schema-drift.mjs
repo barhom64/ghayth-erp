@@ -576,6 +576,11 @@ function findTableReferences(sql) {
     "select", "lateral", "only", "rows", "values", "unnest",
     "generate_series", "jsonb_array_elements", "jsonb_to_recordset",
     "json_array_elements", "json_to_recordset",
+    // `ON CONFLICT (...) DO UPDATE SET ...` reads as "UPDATE SET ..." to
+    // the DML-verb regex above — the bareword after UPDATE is the SQL
+    // keyword `SET`, not a table name. Exclude common compound-statement
+    // sentinels so the scanner doesn't flag them as missing tables.
+    "set", "returning", "where",
   ]);
   const re =
     /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM|FROM|JOIN)\s+(?:ONLY\s+)?(?:"?([a-zA-Z_][a-zA-Z0-9_]*)"?\.)?("?)([a-zA-Z_][a-zA-Z0-9_]*)\3/gi;

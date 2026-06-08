@@ -583,7 +583,7 @@ router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance.accounti
 // ─────────────────────────────────────────────────────────────────────────────
 export async function createSubsidiaryAccountsForEntity(
   companyId: number,
-  entityType: "employee" | "client" | "vendor" | "vehicle" | "driver" | "property",
+  entityType: "employee" | "client" | "vendor" | "vehicle" | "driver" | "property" | "umrah_agent",
   entityId: number,
   entityName: string
 ): Promise<void> {
@@ -602,6 +602,42 @@ export async function createSubsidiaryAccountsForEntity(
     } else if (entityType === "vendor") {
       accountsToCreate.push(
         { accountType: "payable", parentCode: "2102", suffix: "ذمة" }
+      );
+    } else if (entityType === "driver") {
+      // Drivers receive cash advances for fuel + on-the-road
+      // repairs (custody). The driver-level custody account
+      // splits these from generic employee custody so fleet
+      // managers can report per-driver outstanding cash without
+      // pulling employee_assignments joins.
+      accountsToCreate.push(
+        { accountType: "custody", parentCode: "1131", suffix: "عهدة سائق" }
+      );
+    } else if (entityType === "vehicle") {
+      // Per-vehicle subsidiary accounts (#1594 — "نظام قوي قابل للتحكم"):
+      // each vehicle gets its OWN postable leaf under the standard fleet
+      // parents so fuel/maintenance/depreciation post per-plate and roll up
+      // to the parent for consolidated reporting. Editable later from the
+      // vehicle page via /finance/subsidiary-accounts. Parents that don't
+      // exist in a minimal COA are skipped gracefully (the loop `continue`s).
+      //   custody  → 1131 (fuel cards / tolls / deposits held on the plate)
+      //   fuel     → 5510 (الوقود)
+      //   maintenance → 5520 (صيانة وإصلاح المركبات)
+      //   depreciation → 5710 (إهلاك المركبات)
+      accountsToCreate.push(
+        { accountType: "custody", parentCode: "1113", suffix: "عهدة مركبة" },
+        { accountType: "fuel", parentCode: "5510", suffix: "وقود" },
+        { accountType: "maintenance", parentCode: "5520", suffix: "صيانة" },
+        { accountType: "depreciation", parentCode: "5710", suffix: "إهلاك" }
+      );
+    } else if (entityType === "umrah_agent") {
+      // Per-agent revenue routing (#1594): each umrah agent gets its own
+      // postable revenue leaf under the umrah/service revenue parent, so
+      // sales per agent roll up to the parent for consolidated reporting.
+      // resolveRevenueAccount() picks it up automatically via the
+      // umrah_agent → accountType='revenue' subsidiary lookup. Editable
+      // later from /finance/subsidiary-accounts.
+      accountsToCreate.push(
+        { accountType: "revenue", parentCode: "4130", suffix: "إيراد عمرة" }
       );
     }
 

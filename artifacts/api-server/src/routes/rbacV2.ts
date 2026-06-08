@@ -34,7 +34,9 @@ import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
 import { invalidateSodCache } from "../lib/rbac/sodEnforcement.js";
 import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
-import { handleRouteError, ValidationError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
+import { getPermissionLevelCatalog, expandLevel, scopeForTier, PERMISSION_LEVELS, SCOPE_TIERS } from "../lib/rbac/permissionLevels.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, parseId, zodParse } from "../lib/errorHandler.js";
+import { findSeparationOfDutiesConflict, getActiveRoleKeysForUser } from "../lib/policyEngine.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -80,17 +82,47 @@ router.get("/features", authorize({ feature: "admin", action: "list" }), async (
   }
 });
 
+// ─── Simplified Arabic permission-level catalog (non-technical UI) ──────────
+// Additive presentation layer over the 5-layer model: collapses the 14 actions
+// + 9 scopes into intuitive Arabic levels/tiers a non-technical owner toggles.
+// See lib/rbac/permissionLevels.ts. The UI renders this; expandLevel() maps a
+// chosen level back to the granular actions the engine enforces.
+router.get("/levels", authorize({ feature: "admin.roles", action: "list" }), async (_req, res) => {
+  try {
+    res.json(getPermissionLevelCatalog());
+  } catch (err) {
+    handleRouteError(err, res, "permission levels");
+  }
+});
+
 // ─── Roles (admin.roles feature) ────────────────────────────────────────────
 router.get("/roles", authorize({ feature: "admin.roles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Pre-aggregate member + grant counts via sibling CTEs instead
+    // of running TWO scalar subqueries per row. Original was 2×N+1:
+    // every role triggered fresh COUNTs on rbac_user_roles and
+    // rbac_role_grants. The CTEs collapse to one scan + hash
+    // aggregate each.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT r.id, r.role_key, r.label_ar, r.label_en, r.description, r.level,
+      `WITH member_counts AS (
+         SELECT role_id, COUNT(*) AS member_count
+         FROM rbac_user_roles
+         GROUP BY role_id
+       ),
+       grant_counts AS (
+         SELECT role_id, COUNT(*) AS grant_count
+         FROM rbac_role_grants
+         GROUP BY role_id
+       )
+       SELECT r.id, r.role_key, r.label_ar, r.label_en, r.description, r.level,
               r.parent_role_id, r.color, r.is_system, r.is_template, r.is_active,
               r."createdAt", r."updatedAt",
-              (SELECT COUNT(*) FROM rbac_user_roles ur WHERE ur.role_id = r.id) AS member_count,
-              (SELECT COUNT(*) FROM rbac_role_grants g WHERE g.role_id = r.id) AS grant_count
+              COALESCE(mc.member_count, 0) AS member_count,
+              COALESCE(gc.grant_count, 0) AS grant_count
          FROM rbac_roles r
+         LEFT JOIN member_counts mc ON mc.role_id = r.id
+         LEFT JOIN grant_counts gc ON gc.role_id = r.id
         WHERE r."companyId" = $1 OR (r.is_template AND r."companyId" IS NULL)
         ORDER BY r.level DESC, r.role_key`,
       [scope.companyId]
@@ -308,6 +340,67 @@ router.put("/roles/:id/grants", authorize({ feature: "admin.roles", action: "upd
     res.json({ updated: parsed.data.grants.length });
   } catch (err) {
     handleRouteError(err, res, "replace grants");
+  }
+});
+
+// ─── Simplified grants (Arabic level + scope tier → granular grants) ────────
+// The non-technical UI sends one { featureKey, level, scopeTier } per feature;
+// the server expands it to the engine's { actions, scope } — feature-aware
+// (never grants an action/scope the feature doesn't support, never broader than
+// the chosen tier). Replaces the role's grants like PUT /grants. level="none"
+// drops the feature.
+const LEVEL_KEYS = PERMISSION_LEVELS.map((l) => l.key) as [string, ...string[]];
+const TIER_KEYS = SCOPE_TIERS.map((t) => t.key) as [string, ...string[]];
+const simpleGrantsSchema = z.object({
+  grants: z.array(z.object({
+    featureKey: z.string().min(1),
+    level: z.enum(LEVEL_KEYS),
+    scopeTier: z.enum(TIER_KEYS),
+  })),
+});
+
+router.put("/roles/:id/grants/simple", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await assertRoleOwned(id, scope.companyId);
+    const parsed = simpleGrantsSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError("بيانات الصلاحيات المبسّطة غير صالحة");
+
+    // Expand each simple choice into a concrete grant, validated by the catalog.
+    const expanded: { featureKey: string; actions: string[]; scope: string }[] = [];
+    for (const g of parsed.data.grants) {
+      const feat = FEATURE_INDEX.get(g.featureKey);
+      if (!feat) throw new ValidationError(`الميزة "${g.featureKey}" غير معروفة`);
+      if (g.level === "none") continue; // no grant for this feature
+      // as-any-reason: justified-pragmatic - permissionLevels uses the same Action/Scope enums as the catalog
+      const actions = expandLevel(g.level as any, feat.availableActions as any);
+      if (actions.length === 0) continue;
+      const resolvedScope = scopeForTier(g.scopeTier as any, feat.availableScopes as any);
+      expanded.push({ featureKey: g.featureKey, actions, scope: resolvedScope });
+    }
+
+    await withTransaction(async (client) => {
+      const before = await client.query(`SELECT feature_key, actions, scope FROM rbac_role_grants WHERE role_id = $1`, [id]);
+      await client.query(`DELETE FROM rbac_role_grants WHERE role_id = $1`, [id]);
+      for (const g of expanded) {
+        await client.query(
+          `INSERT INTO rbac_role_grants (role_id, feature_key, actions, scope, conditions)
+           VALUES ($1, $2, $3, $4, NULL)`,
+          [id, g.featureKey, g.actions, g.scope]
+        );
+      }
+      await client.query(
+        `INSERT INTO rbac_role_history (role_id, "companyId", "changedBy", change_type, before_state, after_state)
+         VALUES ($1, $2, $3, 'grants.replace.simple', $4, $5)`,
+        [id, scope.companyId, scope.userId, JSON.stringify(before.rows), JSON.stringify(parsed.data.grants)]
+      );
+    });
+
+    await bumpCacheVersion(scope.companyId);
+    res.json({ updated: expanded.length });
+  } catch (err) {
+    handleRouteError(err, res, "replace grants (simple)");
   }
 });
 
@@ -610,13 +703,28 @@ router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "cre
 
 router.get("/templates", authorize({ feature: "admin.roles", action: "list" }), async (req, res) => {
   try {
+    // 3×N+1 → 3 GROUP BY CTEs. Templates are bounded to ~10-15 rows so
+    // the absolute speed-up is small, but the query plan is uniform
+    // across the rbacV2 list endpoints — keeps the codebase's N+1
+    // story coherent.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT id, role_key, label_ar, label_en, description, level, color,
-              (SELECT COUNT(*) FROM rbac_role_grants WHERE role_id = r.id) AS grant_count,
-              (SELECT COUNT(*) FROM rbac_field_policies WHERE role_id = r.id) AS field_count,
-              (SELECT COUNT(*) FROM rbac_approval_limits WHERE role_id = r.id) AS limit_count
-         FROM rbac_roles r WHERE is_template = TRUE
-         ORDER BY level DESC, role_key`
+      `WITH grant_counts AS (
+         SELECT role_id, COUNT(*)::int AS c FROM rbac_role_grants GROUP BY role_id
+       ), field_counts AS (
+         SELECT role_id, COUNT(*)::int AS c FROM rbac_field_policies GROUP BY role_id
+       ), limit_counts AS (
+         SELECT role_id, COUNT(*)::int AS c FROM rbac_approval_limits GROUP BY role_id
+       )
+       SELECT r.id, r.role_key, r.label_ar, r.label_en, r.description, r.level, r.color,
+              COALESCE(gc.c, 0) AS grant_count,
+              COALESCE(fc.c, 0) AS field_count,
+              COALESCE(lc.c, 0) AS limit_count
+         FROM rbac_roles r
+         LEFT JOIN grant_counts gc ON gc.role_id = r.id
+         LEFT JOIN field_counts fc ON fc.role_id = r.id
+         LEFT JOIN limit_counts lc ON lc.role_id = r.id
+        WHERE r.is_template = TRUE
+        ORDER BY r.level DESC, r.role_key`
     );
     res.json(maskFields(req, { templates: rows }));
   } catch (err) {
@@ -878,11 +986,23 @@ router.post("/users/:userId/roles", authorize({ feature: "admin.roles", action: 
 
     // Security: the role being assigned must be the caller's own company
     // role (or a global template) — never another tenant's role.
-    const [roleRow] = await rawQuery<{ id: number }>(
-      `SELECT id FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`,
+    const [roleRow] = await rawQuery<{ id: number; role_key: string }>(
+      `SELECT id, role_key FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`,
       [roleId, scope.companyId]
     );
     if (!roleRow) throw new NotFoundError("الدور غير موجود");
+
+    // #1605 — Separation-of-Duties block at the v2 grant path too. Reads the
+    // user's effective role keys across user_roles ∪ rbac_user_roles ∪ active
+    // employee_assignments so a role granted via the legacy admin path still
+    // blocks a conflicting v2 grant (and vice versa).
+    const existingRoles = await getActiveRoleKeysForUser(userId, scope.companyId);
+    const sodConflict = findSeparationOfDutiesConflict(existingRoles, roleRow.role_key);
+    if (sodConflict) {
+      throw new ForbiddenError(
+        `فصل المهام (SoD): لا يمكن الجمع بين الدورين "${sodConflict.roleA}" و"${sodConflict.roleB}" لنفس المستخدم — ${sodConflict.reason}`,
+      );
+    }
 
     await rawExecute(
       `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary, expires_at, "assignedBy")

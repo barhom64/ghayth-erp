@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { maskFields } from "../lib/rbac/authorize.js";
+import { checkAccess } from "../lib/rbac/authzEngine.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -18,10 +19,48 @@ interface PilgrimHit extends SearchHit { name: string; passportNumber: string | 
 interface ContractHit extends SearchHit { name: string | null; tenantPhone: string | null; status: string; unitNumber: string | null; buildingName: string | null; }
 interface BuildingHit extends SearchHit { name: string; city: string | null; status: string; totalUnits: string | number; }
 interface TenantHit extends SearchHit { name: string; phone: string | null; email: string | null; nationalId: string | null; }
+interface PartyHit extends SearchHit { name: string; phone: string | null; email: string | null; nationalId: string | null; roles: string | null; }
+interface LegalCaseHit extends SearchHit { name: string | null; caseNumber: string | null; status: string; }
+interface SupplierHit extends SearchHit { name: string; phone: string | null; status: string; }
+interface AgentHit extends SearchHit { name: string; phone: string | null; status: string; }
+interface DriverHit extends SearchHit { name: string; phone: string | null; status: string; }
 
-router.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+// Global search is cross-domain: a single endpoint that fans out across
+// employees, invoices, legal cases, tenants, vehicles, etc. The route gate
+// alone can't express "show only the domains this user may list", so each
+// entity query is gated INDIVIDUALLY against its own feature below. Without
+// this, any authenticated user who could reach the endpoint pulled back
+// employee passport numbers, invoice totals, legal cases and national IDs
+// far outside their role — a real cross-role data leak. We therefore do NOT
+// put a coarse single-feature `authorize` here; we rely on the global auth
+// layer (req.scope) + per-entity `checkAccess`, which fails closed (empty
+// results) for any domain the caller may not list.
+const FEATURE_BY_ENTITY: Record<string, string> = {
+  employees: "hr.employees",
+  clients: "crm.clients",
+  invoices: "finance.invoices",
+  projects: "projects",
+  tickets: "support.tickets",
+  units: "properties.units",
+  vehicles: "fleet.vehicles",
+  pilgrims: "umrah",
+  contracts: "properties.contracts",
+  buildings: "properties.buildings",
+  tenants: "properties.tenants",
+  parties: "settings",
+  legal_cases: "legal.cases",
+  suppliers: "finance.vendors",
+  umrah_agents: "umrah",
+  drivers: "fleet.vehicles",
+};
+
+router.get("/", async (req, res) => {
   try {
-    const scope = req.scope!;
+    const scope = req.scope;
+    if (!scope) {
+      res.status(401).json({ error: "غير مصرح", code: "AUTH_MISSING", fix: "يرجى تسجيل الدخول" });
+      return;
+    }
     const { q = "", type = "all" } = req.query as Record<string, string | undefined>;
     const query = String(q).trim();
 
@@ -34,9 +73,21 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
     const pattern = `%${escaped}%`;
     const entityType = String(type).toLowerCase();
 
-    const shouldSearch = (t: string) => entityType === "all" || entityType === t;
+    // Resolve list-access for every distinct feature once, then only run +
+    // return the entity queries the caller is actually permitted to list.
+    const featureKeys = Array.from(new Set(Object.values(FEATURE_BY_ENTITY)));
+    const featureAllowed = new Map<string, boolean>();
+    await Promise.all(
+      featureKeys.map(async (f) => {
+        const r = await checkAccess(scope, { feature: f, action: "list" });
+        featureAllowed.set(f, r.allowed);
+      })
+    );
+    const shouldSearch = (t: string) =>
+      (entityType === "all" || entityType === t) &&
+      featureAllowed.get(FEATURE_BY_ENTITY[t]) === true;
 
-    const [employees, clients, invoices, projects, tickets, units, vehicles, pilgrims, contracts, buildings, tenants] = await Promise.all([
+    const [employees, clients, invoices, projects, tickets, units, vehicles, pilgrims, contracts, buildings, tenants, parties, legalCases, suppliers, agents, drivers] = await Promise.all([
       shouldSearch("employees") ? rawQuery<EmployeeHit>(
         `SELECT e.id, e.name, e."empNumber", e.email, e.phone, e."passportNumber", ea."jobTitle",
                 'employee' AS type
@@ -140,7 +191,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("buildings") || shouldSearch("all") ? rawQuery<BuildingHit>(
+      shouldSearch("buildings") ? rawQuery<BuildingHit>(
         `SELECT b.id, b.name, b.city, b.type, b.status,
                 COUNT(u.id) AS "totalUnits",
                 'building' AS type
@@ -154,13 +205,78 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("tenants") || shouldSearch("all") ? rawQuery<TenantHit>(
+      shouldSearch("tenants") ? rawQuery<TenantHit>(
         `SELECT t.id, t.name, t.phone, t.email, t."nationalId",
                 'tenant' AS type
          FROM tenants t
          WHERE t."companyId" = $1
            AND t."deletedAt" IS NULL
            AND (t.name ILIKE $2 OR t.phone ILIKE $2 OR t."nationalId" ILIKE $2 OR t.email ILIKE $2)
+         LIMIT 10`,
+        [scope.companyId, pattern]
+      ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
+
+      // Unified-identity layer (Party model): one row per resolved human/org
+      // with all the roles they play, linking to the 360 view. Empty until the
+      // registry is populated (POST /parties/backfill), then "محمد" surfaces
+      // once instead of N times across the silo tables.
+      shouldSearch("parties") ? rawQuery<PartyHit>(
+        // Was N+1: correlated string_agg per party row over party_links.
+        // LIMIT 10 caps the surface but the per-row lookup still fires
+        // up to 10 times during search-as-you-type. Single GROUP BY CTE
+        // collapses the roles column to one scan.
+        `WITH party_roles AS (
+           SELECT "partyId", string_agg(DISTINCT role, ',') AS roles
+             FROM party_links
+            GROUP BY "partyId"
+         )
+         SELECT p.id, p."displayName" AS name, p.phone, p.email, p."nationalId",
+                pr.roles AS roles,
+                'party' AS type
+           FROM parties p
+           LEFT JOIN party_roles pr ON pr."partyId" = p.id
+          WHERE p."companyId" = $1
+            AND (p."displayName" ILIKE $2 OR p.phone ILIKE $2 OR p."nationalId" ILIKE $2 OR p.email ILIKE $2)
+          LIMIT 10`,
+        [scope.companyId, pattern]
+      ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
+
+      // القضايا
+      shouldSearch("legal_cases") ? rawQuery<LegalCaseHit>(
+        `SELECT id, title AS name, "caseNumber", status, 'legal_case' AS type
+         FROM legal_cases
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
+           AND (title ILIKE $2 OR "caseNumber" ILIKE $2)
+         LIMIT 10`,
+        [scope.companyId, pattern]
+      ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
+
+      // الموردون
+      shouldSearch("suppliers") ? rawQuery<SupplierHit>(
+        `SELECT id, name, phone, status, 'supplier' AS type
+         FROM suppliers
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
+           AND (name ILIKE $2 OR phone ILIKE $2)
+         LIMIT 10`,
+        [scope.companyId, pattern]
+      ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
+
+      // وكلاء العمرة
+      shouldSearch("umrah_agents") ? rawQuery<AgentHit>(
+        `SELECT id, name, phone, status, 'umrah_agent' AS type
+         FROM umrah_agents
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
+           AND (name ILIKE $2 OR phone ILIKE $2)
+         LIMIT 10`,
+        [scope.companyId, pattern]
+      ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
+
+      // السائقون
+      shouldSearch("drivers") ? rawQuery<DriverHit>(
+        `SELECT id, name, phone, status, 'driver' AS type
+         FROM fleet_drivers
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
+           AND (name ILIKE $2 OR phone ILIKE $2)
          LIMIT 10`,
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
@@ -179,6 +295,11 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         ...contracts.map((c) => ({ ...c, category: "عقود", link: `/properties/contracts?id=${c.id}` })),
         ...buildings.map((b) => ({ ...b, category: "مباني عقارية", link: `/properties/buildings/${b.id}` })),
         ...tenants.map((t) => ({ ...t, category: "مستأجرون", link: `/properties/tenants/${t.id}` })),
+        ...parties.map((p) => ({ ...p, category: "هوية موحّدة", link: `/parties/${p.id}/360` })),
+        ...legalCases.map((c) => ({ ...c, category: "قضايا", link: `/legal/cases/${c.id}` })),
+        ...suppliers.map((s) => ({ ...s, category: "موردون", link: `/finance/vendors/${s.id}` })),
+        ...agents.map((a) => ({ ...a, category: "وكلاء العمرة", link: `/umrah/agents/${a.id}` })),
+        ...drivers.map((d) => ({ ...d, category: "سائقون", link: `/fleet/drivers/${d.id}` })),
       ],
     }));
   } catch (err) {

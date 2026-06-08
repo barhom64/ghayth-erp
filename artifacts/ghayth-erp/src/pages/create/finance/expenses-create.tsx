@@ -14,10 +14,14 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
-import { AlertCircle, Paperclip, Link2 } from "lucide-react";
+import { amountTaxSplit } from "@/lib/tax-math";
+import { filterAccountsForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
+import { AlertCircle, Paperclip, Link2, Plus, Trash2, Split } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
+import { EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
+import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
 import { useAppContext } from "@/contexts/app-context";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
@@ -38,19 +42,7 @@ interface TaxCodeOption {
   isActive: boolean;
 }
 
-function roundMoney(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function expenseTaxSplit(amount: number, rate: number, inclusive: boolean) {
-  if (!amount || !rate) return { net: amount || 0, vat: 0, gross: amount || 0 };
-  if (inclusive) {
-    const net = roundMoney(amount / (1 + rate / 100));
-    return { net, vat: roundMoney(amount - net), gross: amount };
-  }
-  const vat = roundMoney(amount * (rate / 100));
-  return { net: amount, vat, gross: roundMoney(amount + vat) };
-}
+const expenseTaxSplit = amountTaxSplit;
 
 const TAX_TYPE_TO_CATEGORY: Record<string, string> = {
   standard: "standard",
@@ -213,17 +205,20 @@ export default function ExpensesCreate() {
   const { data: contractsData } = useApiQuery<{ data: any[] }>(["contracts-list"], "/properties/contracts");
   const { data: unitsData } = useApiQuery<{ data: any[] }>(["units-list"], "/properties/units");
   const { data: legalCasesData } = useApiQuery<{ data: any[] }>(["legal-cases-list"], "/legal/cases");
+  // #1715 — cost centers (departments) for the optional multi cost-center split.
+  const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
+  const costCenters = departmentsData?.data || [];
   const projects = projectsData?.data || [];
   const accounts = accountsData?.data || [];
   const expenseAccounts = accounts.filter((a: any) => a.type === "expense" || a.code?.startsWith("5"));
-  // خزائن وبنوك فقط (11xx = نقد، 12xx = بنوك) — لتفادي اختيار حسابات مدينة/ذمم عن طريق الخطأ
-  const sourceAccounts = accounts.filter((a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"));
+  // #1715: money accounts (any payable/receivable source) classified by
+  // accountUsage; unclassified fall back to the legacy 11xx/12xx
+  // heuristic so the picker is never empty during the classification
+  // window. The per-payment-method narrowing happens below, once `form`
+  // is available.
+  const moneyAccounts = accounts.filter((a: any) => isMoneyAccount(a));
 
   const expenseOptions: AutocompleteOption[] = expenseAccounts.map((a: any) => ({
-    value: a.code || String(a.id),
-    label: `${a.code} - ${a.name}`,
-  }));
-  const sourceOptions: AutocompleteOption[] = sourceAccounts.map((a: any) => ({
     value: a.code || String(a.id),
     label: `${a.code} - ${a.name}`,
   }));
@@ -269,12 +264,32 @@ export default function ExpensesCreate() {
   const { form, setForm, clearDraft, isDirty, hasDraft } = useAutoDraft("expense-create", defaultForm);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
+  // #1715: narrow the money-source picker to accounts whose usage matches
+  // the chosen payment method (نقدي→صناديق فقط، تحويل→بنوك فقط، …). The
+  // backend (financePostingPolicy) rejects any mismatch even if the UI is
+  // bypassed.
+  const sourceAccounts = filterAccountsForPaymentMethod(moneyAccounts, form.paymentMethod);
+  const sourceOptions: AutocompleteOption[] = sourceAccounts.map((a: any) => ({
+    value: a.code || String(a.id),
+    label: `${a.code} - ${a.name}`,
+  }));
+
   // Audit item #2 — per-line allocation overrides. Default state mirrors
   // the auto-derived fields (accountCode + costCenter + relatedEntity)
   // so the panel reflects what the backend will resolve before the
   // operator opens it. Any manual edit becomes an override that the
   // submit handler ships under `lineAllocation` and the backend logs.
   const [allocation, setAllocation] = useState<LineAllocation>({});
+  // #1715 PR-3: the master «ربط المصروف بـ» field. Its conditional fields
+  // feed the same `allocation` dim payload the backend already consumes.
+  const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
+  // #1715 — optional multi cost-center distribution. Each row pins a cost
+  // center (department id) and a percentage; the backend splits the expense
+  // DR into one balanced leg per row. Empty = single-line (legacy) behaviour.
+  const [ccDist, setCcDist] = useState<{ costCenterId: string; percentage: string }[]>([]);
+  const ccRows = ccDist.filter((r) => r.costCenterId && r.percentage);
+  const ccPctTotal = ccRows.reduce((s, r) => s + (Number(r.percentage) || 0), 0);
+  const ccBalanced = ccRows.length === 0 || Math.abs(ccPctTotal - 100) < 0.01;
   useEffect(() => {
     setAllocation((prev) => {
       if (prev.manualOverrideReason) return prev; // operator has pinned — don't clobber
@@ -333,7 +348,14 @@ export default function ExpensesCreate() {
     });
   };
 
-  const handleSubmit = async () => {
+  // ZATCA-style "Save & add another" — addresses the operator complaint
+  // that the system had two different expense forms (single + multi-line).
+  // One unified form: by default behaves like a single-line submit, but
+  // the secondary button stays on the page and resets ONLY the amount /
+  // description / account / allocation, preserving shared header fields
+  // (date, branch, payment method, source treasury). Operators get the
+  // multi-line workflow without a second form.
+  const handleSubmit = async (opts: { addAnother?: boolean } = {}) => {
     const firstError = validate({
       accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
       amount: form.amount ? null : "المبلغ مطلوب",
@@ -343,6 +365,10 @@ export default function ExpensesCreate() {
     });
     if (firstError) {
       toast({ variant: "destructive", title: firstError });
+      return;
+    }
+    if (ccRows.length > 0 && !ccBalanced) {
+      toast({ variant: "destructive", title: `مجموع نسب توزيع مراكز التكلفة يجب أن يساوي 100% (الحالي ${ccPctTotal}%)` });
       return;
     }
     try {
@@ -385,9 +411,50 @@ export default function ExpensesCreate() {
         lineAllocation: Object.values(allocation).some((v) => v != null && v !== "")
           ? buildAllocationPayload(allocation)
           : undefined,
+        // #1715 — multi cost-center distribution (percentage-based).
+        costCenterDistribution: ccRows.length > 0
+          ? ccRows.map((r) => ({ costCenterId: Number(r.costCenterId), percentage: Number(r.percentage) }))
+          : undefined,
+        // #1715 §5 — when the operator chose a maintenance allocation target,
+        // open + link a maintenance ticket. The fields are already collected
+        // by AllocationTargetSelect (odometer / maintenanceType / costBearer).
+        maintenanceTicket:
+          allocTarget.target === "vehicle_maintenance" || allocTarget.target === "property_maintenance"
+            ? {
+                create: true,
+                maintenanceType: allocTarget.maintenanceType || undefined,
+                odometer: allocTarget.odometer ? Number(allocTarget.odometer) : undefined,
+                costBearer: allocTarget.costBearer || undefined,
+              }
+            : undefined,
       });
       toast({ title: "تم إضافة المصروف بنجاح" });
       clearDraft();
+      if (opts.addAnother) {
+        // Reset only the line-specific fields so the operator can keep
+        // adding expenses against the same date / branch / source /
+        // payment method without re-typing them. Mirrors the multi-line
+        // form's UX in a single page.
+        setForm((f) => ({
+          ...f,
+          accountCode: "",
+          amount: "",
+          description: "",
+          vatRate: "",
+          taxCodeId: "",
+          taxInclusive: false,
+          reference: "",
+          projectId: "",
+          relatedEntityType: "",
+          relatedEntityId: "",
+          relatedEntityName: "",
+          attachmentUrl: "",
+        }));
+        setAllocation({});
+        setAllocTarget(EMPTY_ALLOCATION_TARGET);
+        setAttachments([]);
+        return;
+      }
       setLocation("/finance/expenses");
     } catch (err: any) {
       setApiError(err);
@@ -641,8 +708,15 @@ export default function ExpensesCreate() {
             disabled={form.autoDescription} />
         </div>
 
+        <FinanceOperationContextPanel
+          value={allocTarget}
+          onChange={(v) => { setAllocTarget(v); setAllocation((prev) => ({ ...prev, ...v.allocation })); }}
+          title="ربط المصروف بـ"
+          description="اختر ما يُربط به المصروف، وستظهر الحقول المناسبة فقط. الربط يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً."
+        />
+
         <div className="border rounded-lg p-4 mb-4 space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">التفاصيل المحاسبية للبند (Allocation)</h3>
+          <h3 className="font-semibold text-sm text-muted-foreground">تفاصيل محاسبية إضافية (اختياري)</h3>
           <p className="text-xs text-muted-foreground">
             القاعدة التلقائية ستوزّع المصروف بناءً على بند المصروفات + الجهة المرتبطة.
             افتح هذا القسم فقط إذا أردت تجاوز الحساب أو إضافة بُعد مفقود (مركبة / عقار / مشروع / عمرة).
@@ -654,6 +728,59 @@ export default function ExpensesCreate() {
             status={deriveAllocationStatus(allocation)}
             required={false}
           />
+        </div>
+
+        {/* #1715 — multi cost-center distribution. Optional; when used, the
+            expense DR is split into one balanced leg per cost center. */}
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Split className="h-4 w-4" />
+            <h3 className="font-semibold text-sm text-muted-foreground">توزيع على عدة مراكز تكلفة (اختياري)</h3>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            وزّع المصروف على أكثر من مركز تكلفة بالنسبة المئوية. عند الاستخدام يُقسَّم الطرف المدين تلقائيًا إلى سطر متوازن لكل مركز،
+            ويجب أن يساوي مجموع النسب 100%. اتركه فارغًا لتسجيل المصروف على مركز التكلفة الواحد أعلاه.
+          </p>
+          {ccDist.map((row, i) => (
+            <div key={i} className="flex items-end gap-2">
+              <div className="flex-1">
+                <FormFieldWrapper label="مركز التكلفة">
+                  <Select
+                    value={row.costCenterId}
+                    onValueChange={(v) => setCcDist((d) => d.map((r, j) => (j === i ? { ...r, costCenterId: v } : r)))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="اختر مركز التكلفة" /></SelectTrigger>
+                    <SelectContent>
+                      {costCenters.map((c: any) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormFieldWrapper>
+              </div>
+              <div className="w-28">
+                <NumberField
+                  label="النسبة %"
+                  value={row.percentage}
+                  onChange={(v) => setCcDist((d) => d.map((r, j) => (j === i ? { ...r, percentage: String(v) } : r)))}
+                  min={0} max={100} step={0.01} placeholder="0"
+                />
+              </div>
+              <Button type="button" variant="ghost" size="icon" onClick={() => setCcDist((d) => d.filter((_, j) => j !== i))}>
+                <Trash2 className="h-4 w-4 text-status-error" />
+              </Button>
+            </div>
+          ))}
+          <div className="flex items-center justify-between">
+            <Button type="button" variant="outline" size="sm" onClick={() => setCcDist((d) => [...d, { costCenterId: "", percentage: "" }])}>
+              <Plus className="h-4 w-4 me-1" /> إضافة مركز تكلفة
+            </Button>
+            {ccRows.length > 0 && (
+              <span className={`text-sm font-medium ${ccBalanced ? "text-status-success-foreground" : "text-status-error"}`}>
+                مجموع النسب: {ccPctTotal}% {ccBalanced ? "✓" : "(يجب أن يساوي 100%)"}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
@@ -817,6 +944,10 @@ export default function ExpensesCreate() {
               paymentMethod: form.paymentMethod,
               costCenter: form.costCenter,
               supplierId: form.relatedEntityType === "supplier" && form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
+              // #1715 (comment 9) — let the preview suggest the specialized
+              // posting account from the linked target + item kind.
+              targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
+              itemType: form.expenseType || undefined,
             }}
             label="معاينة أثر المصروف"
           />
@@ -871,7 +1002,10 @@ export default function ExpensesCreate() {
 
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/finance/expenses")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
+          <Button variant="secondary" onClick={() => handleSubmit({ addAnother: true })} disabled={createMut.isPending} rateLimitAware>
+            {createMut.isPending ? "جاري الحفظ..." : "حفظ وإضافة آخر"}
+          </Button>
+          <Button onClick={() => handleSubmit()} disabled={createMut.isPending} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ المصروف"}
           </Button>
         </div>

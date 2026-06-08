@@ -22,11 +22,14 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 export default function DriversPage() {
   const [, navigate] = useLocation();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["drivers"], "/fleet/drivers");
   const items: any[] = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const [previewDriver, setPreviewDriver] = useState<any>(null);
   const [portalForDriver, setPortalForDriver] = useState<any>(null);
   const [portalEmail, setPortalEmail] = useState("");
@@ -151,9 +154,29 @@ export default function DriversPage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "السائقين" }]}
       loading={isLoading}
       actions={
-        <Link href="/fleet/drivers/create">
-          <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة سائق</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_drivers"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "سائقو الأسطول", total: printRows.length },
+              items: printRows.map((d: any) => ({
+                "الاسم": d.name || "—",
+                "الهاتف": d.phone || "—",
+                "رقم الرخصة": d.licenseNumber || "—",
+                "نوع الرخصة": d.licenseType || "—",
+                "انتهاء الرخصة": d.licenseExpiry || "—",
+                "الرحلات": d.totalTrips ?? 0,
+                "التقييم": d.rating ?? "—",
+                "الحالة": d.status || "—",
+              })),
+            })}
+          />
+          <Link href="/fleet/drivers/create">
+            <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة سائق</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <FleetTabsNav />
@@ -186,6 +209,7 @@ export default function DriversPage() {
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={items}
         isLoading={isLoading}
         isError={isError}

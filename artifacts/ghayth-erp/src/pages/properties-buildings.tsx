@@ -10,9 +10,12 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Building2, Home, Plus, Eye, Pencil, TrendingUp, CheckCircle } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency } from "@/lib/formatters";
@@ -49,6 +52,7 @@ export default function PropertiesBuildings() {
     searchFields: ["name", "address", "city"],
     statusField: "type",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const totalUnits = buildings.reduce((sum: number, b: any) => sum + (b.totalUnits || 0), 0);
   const totalRented = buildings.reduce((sum: number, b: any) => sum + (b.rentedUnits || 0), 0);
@@ -204,13 +208,30 @@ export default function PropertiesBuildings() {
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       loading={isLoading}
       actions={
-        canManage ? (
-          <Link href="/properties/buildings/create">
-            <GuardedButton perm="property:create" size="sm" className="gap-1.5">
-              <Plus className="h-4 w-4" /> إضافة مبنى
-            </GuardedButton>
-          </Link>
-        ) : undefined
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_properties_buildings"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قائمة المباني", total: printRows.length },
+              items: printRows.map((b: any) => ({
+                "الاسم": b.name || "—",
+                "النوع": b.type || "—",
+                "المدينة": b.city || "—",
+                "العنوان": b.address || "—",
+                "عدد الوحدات": b.unitsCount ?? b.totalUnits ?? "—",
+              })),
+            })}
+          />
+          {canManage ? (
+            <Link href="/properties/buildings/create">
+              <GuardedButton perm="property:create" size="sm" className="gap-1.5">
+                <Plus className="h-4 w-4" /> إضافة مبنى
+              </GuardedButton>
+            </Link>
+          ) : null}
+        </div>
       }
     >
       <PropertyTabsNav />
@@ -223,11 +244,29 @@ export default function PropertiesBuildings() {
         }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "name", label: "اسم المبنى" },
+              { key: "type", label: "النوع" },
+              { key: "address", label: "العنوان" },
+              { key: "city", label: "المدينة" },
+              { key: "ownerName", label: "المالك" },
+              { key: "totalUnits", label: "إجمالي الوحدات" },
+              { key: "occupiedUnits", label: "المؤجرة" },
+              { key: "availableUnits", label: "المتاحة" },
+              { key: "monthlyRevenue", label: "الإيراد الشهري" },
+            ],
+            "قائمة-المباني",
+          )
+        }
         resultCount={filtered.length}
       />
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد مباني مسجلة"

@@ -29,6 +29,8 @@ import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useState } from "react";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS = Object.entries(LOAN_STATUS).map(([value, { label }]) => ({ value, label }));
 
 export default function LoansPage() {
@@ -80,6 +82,7 @@ export default function LoansPage() {
     statusField: "status",
     dateField: "createdAt",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const kpis = [
     {
@@ -270,12 +273,30 @@ export default function LoansPage() {
       subtitle="إدارة طلبات السلف والأقساط — مرتبطة بالرواتب تلقائياً"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Link href="/hr/loans/create">
-          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            طلب سلفة
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_loans"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "طلبات السلف", total: printRows.length },
+              items: printRows.map((l: any) => ({
+                "الموظف": l.employeeName || "—",
+                "النوع": l.loanType || l.type || "—",
+                "المبلغ": l.amount ?? 0,
+                "عدد الأقساط": l.installmentCount ?? "—",
+                "السبب": l.reason || "—",
+                "الحالة": l.status || "—",
+              })),
+            })}
+          />
+          <Link href="/hr/loans/create">
+            <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              طلب سلفة
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <HrTabsNav />
@@ -338,6 +359,7 @@ export default function LoansPage() {
       {/* Table */}
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         noToolbar
         emptyMessage="لا توجد سلف — قدّم طلب سلفة جديدة للبدء"

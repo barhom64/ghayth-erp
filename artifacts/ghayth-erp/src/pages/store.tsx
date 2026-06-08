@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { StoreTabsNav } from "@/components/shared/store-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 // Coerced numeric fields — the old form tracked them as strings and
 // Number()-coerced at submit. zod handles both checks (numeric + non-
@@ -68,6 +70,7 @@ function ProductsTab() {
     statusField: "status",
     dateField: "",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredProducts);
   const pageSize = 20;
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
@@ -127,6 +130,22 @@ function ProductsTab() {
             resultCount={filteredProducts.length}
           />
         </div>
+        <PrintButton
+          entityType="report_store_products"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة المنتجات"
+          payload={() => ({
+            entity: { title: "قائمة منتجات المتجر", total: printRows.length },
+            items: printRows.map((p: any) => ({
+              "المنتج": p.name || "—",
+              "رمز المنتج": p.sku || "—",
+              "السعر": Number(p.price || 0),
+              "الكمية": p.quantity ?? 0,
+              "الحالة": p.status || "—",
+            })),
+          })}
+        />
         <GuardedButton perm="store:create" size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة منتج</>}</GuardedButton>
       </div>
       {showForm && (
@@ -164,6 +183,7 @@ function ProductsTab() {
           <DataTable
             columns={columns}
             data={filteredProducts}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}
@@ -198,6 +218,7 @@ function OrdersTab() {
     statusField: "status",
     dateField: "",
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredOrders);
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/store/orders",
@@ -262,6 +283,22 @@ function OrdersTab() {
             resultCount={filteredOrders.length}
           />
         </div>
+        <PrintButton
+          entityType="report_store_orders"
+          entityId="list"
+          size="icon"
+          label="طباعة قائمة الطلبات"
+          payload={() => ({
+            entity: { title: "قائمة طلبات المتجر", total: printRows.length },
+            items: printRows.map((o: any) => ({
+              "رقم الطلب": o.orderNumber || `#${o.id}`,
+              "العميل": o.customerName || "—",
+              "المبلغ": Number(o.totalAmount || 0),
+              "التاريخ": o.createdAt ? formatDateAr(o.createdAt) : "—",
+              "الحالة": o.status || "—",
+            })),
+          })}
+        />
         <GuardedButton perm="store:create" size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />طلب جديد</>}</GuardedButton>
       </div>
       {showForm && (
@@ -297,6 +334,7 @@ function OrdersTab() {
           <DataTable
             columns={columns}
             data={filteredOrders}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

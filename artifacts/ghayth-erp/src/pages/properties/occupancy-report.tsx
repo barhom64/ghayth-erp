@@ -10,6 +10,8 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
@@ -26,10 +28,13 @@ const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#9ca3af"];
 export default function OccupancyReportPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["occupancy-report"], "/properties/occupancy-report");
 
+  const units = asList(data?.units || []);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(units);
+
   if (isLoading) return <LoadingSpinner />;
+
   if (isError) return <ErrorState />;
 
-  const units = asList(data?.units || []);
   const pieData = [
     { name: "مؤجرة", value: data?.occupied || 0 },
     { name: "متاحة", value: data?.available || 0 },
@@ -79,6 +84,29 @@ export default function OccupancyReportPage() {
       subtitle="نظرة شاملة على حالة الوحدات العقارية"
       breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "تقرير الإشغال العقاري" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_property_occupancy"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: {
+              title: "تقرير الإشغال العقاري",
+              total: printRows.length,
+              occupancyRate: data?.occupancyRate ?? 0,
+            },
+            items: printRows.map((u: any) => ({
+              "المبنى": u.buildingName || "—",
+              "الوحدة": u.unitNumber || "—",
+              "النوع": u.unitType || u.type || "—",
+              "المساحة (م²)": u.area ?? "—",
+              "حالة الإشغال": u.occupancyStatus || u.status || "—",
+              "المستأجر": u.tenantName || "—",
+              "الإيجار الشهري": u.monthlyRent ?? 0,
+            })),
+          })}
+        />
+      }
     >
       <PropertyTabsNav />
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -172,6 +200,7 @@ export default function OccupancyReportPage() {
         <CardContent className="p-0">
           <DataTable
             columns={unitColumns}
+            onSortedDataChange={setPrintRows}
             data={units}
             searchPlaceholder={null}
             noToolbar

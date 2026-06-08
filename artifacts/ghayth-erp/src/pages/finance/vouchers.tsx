@@ -108,6 +108,18 @@ export default function VouchersPage() {
       render: (v) => <span className="text-muted-foreground line-clamp-1 max-w-[220px]">{v.description || "-"}</span>,
     },
     {
+      key: "costCenter",
+      header: "مركز التكلفة",
+      sortable: true,
+      render: (v) => <span className="text-muted-foreground text-xs">{v.costCenter || "—"}</span>,
+    },
+    {
+      key: "createdByName",
+      header: "المنشئ",
+      sortable: true,
+      render: (v) => <span className="text-muted-foreground text-xs">{v.createdByName || "—"}</span>,
+    },
+    {
       key: "status",
       header: "الحالة",
       sortable: true,
@@ -180,6 +192,8 @@ export default function VouchersPage() {
           { key: "description", label: "الوصف" },
           { key: "operationType", label: "نوع العملية" },
           { key: "paymentMethod", label: "طريقة الدفع" },
+          { key: "costCenter", label: "مركز التكلفة" },
+          { key: "createdByName", label: "المنشئ" },
           { key: "date", label: "التاريخ" },
           { key: "status", label: "الحالة" },
         ], "السندات")}
@@ -227,7 +241,7 @@ export default function VouchersPage() {
                     entityType={v.type === "receipt" ? "receipt_voucher" : "payment_voucher"}
                     entityId={v.id}
                     formats={["a4", "thermal_80"]}
-                    label="طباعة"
+                    size="icon"
                   />
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">

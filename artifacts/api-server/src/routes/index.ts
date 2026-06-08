@@ -60,6 +60,7 @@ import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
 import searchRouter from "./search.js";
+import partiesRouter from "./parties.js";
 import activityLogRouter from "./activityLog.js";
 import approvalActionsRouter from "./approvalActions.js";
 import workflowsRouter from "./workflows.js";
@@ -73,6 +74,12 @@ import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
+import { transportBillingCandidatesRouter } from "./transport-billing-candidates.js";
+import { transportBookingsRouter } from "./transport-bookings.js";
+import { vehicleProfileRouter } from "./vehicle-profile.js";
+import { transportPricingRouter } from "./transport-pricing.js";
+import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
+import { transportPlanningRouter } from "./transport-planning.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -98,7 +105,6 @@ import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { rawQuery } from "../lib/rawdb.js";
 import clientPortalRouter from "./clientPortal.js";
-import driverPortalRouter from "./driverPortal.js";
 import publicDataRouter from "./publicData.js";
 import careersPortalRouter from "./careersPortal.js";
 import { exportRouter } from "./export.js";
@@ -121,6 +127,7 @@ import complianceRouter from "./hr-compliance.js";
 import digitalSignatureRouter from "./digital-signature.js";
 import { eventsRouter } from "./events.js";
 import { execDashboardRouter } from "./execDashboard.js";
+import assistantRouter from "./assistant.js";
 import { obligationsRouter } from "./obligations.js";
 import { calendarRouter } from "./calendar.js";
 import contractsRouter from "./hr-contracts.js";
@@ -164,12 +171,11 @@ router.use("/auth", authRouter);
 // middleware on the rest, so adding a router-wide IP limiter here would
 // double-cap authenticated portal users. Skip it.
 router.use("/portal", clientPortalRouter);
-// /driver-portal — same shape as /portal but for fleet drivers
-// (driver_portal_accounts table, JWT type='driver_portal'). The portal
-// is the only surface a non-employee driver has to see their trips
-// and self-mark availability. Same anonymous-login + JWT structure
-// → same skip-the-router-wide-cap reasoning.
-router.use("/driver-portal", driverPortalRouter);
+// /driver-portal retired (#1354). Driver self-service now lives at
+// /api/fleet/me/* under the regular ERP auth + RBAC plumbing — the
+// "driver" role on the user's employee_assignment unlocks the
+// fleet.trips.my / fleet.cargo.my / fleet.driver.me features that
+// power /me/driver in the SPA.
 // /careers mixes anonymous applicant flows with authenticated ones
 // behind a careers JWT. Same reasoning as /portal — don't add a
 // router-wide IP cap; portalLimiter inside careersPortal.ts handles the
@@ -360,6 +366,9 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), ven
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
+// #1733 — Transport-to-finance handoff queue. Lives under /finance because
+// only finance-side roles see it (transport NEVER materialises JEs).
+router.use("/finance", requireModule("finance"), requireGuards("financial"), transportBillingCandidatesRouter);
 // financeRouter (finance.ts monolith) removed in Phase 7.1 — the 13
 // singleton routes it still owned were migrated to finance-purchase.ts,
 // finance-vendors.ts, and finance-reports.ts during canonicalisation.
@@ -375,6 +384,22 @@ router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetTe
 // URLs stay /cargo/* at the top level (not /fleet/cargo/*) because
 // cargo is its own RBAC feature (fleet.cargo) and its own SPA tab.
 router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRouter);
+// #1733 Booking + Dispatch (Issue Comment 9). The routers carry their
+// own full paths (/transport/bookings, /transport/dispatch-orders,
+// /fleet/vehicles/:vehicleId/...) so they mount without a prefix.
+// Same fleet-module + financial guards.
+router.use(requireModule("fleet"), requireGuards("financial"), transportBookingsRouter);
+// #1733 Vehicle profile sub-resources (Issue Comment 7). URLs land at
+// /fleet/vehicles/:vehicleId/{components,driver-assignments,maintenance-schedules}.
+router.use(requireModule("fleet"), requireGuards("financial"), vehicleProfileRouter);
+// #1733 Pricing engine + invoice merging (Issue Comment 3). URLs land at
+// /transport/price-rules, /transport/service-lines, /transport/invoice-batches.
+router.use(requireModule("fleet"), requireGuards("financial"), transportPricingRouter);
+// #1733 follow-up — admin CRUD for the two rules engines created in
+// migration 269.
+router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRouter);
+// #1812 Planning engine.
+router.use(requireModule("fleet"), requireGuards("financial"), transportPlanningRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);
@@ -458,6 +483,9 @@ router.use("/rbac/v2", requireMinLevel(90), rbacV2Router);
 // align with /admin/* policy.
 router.use("/audit-logs", requireMinLevel(90), requirePermission("audit:read"), auditLogsRouter);
 router.use("/search", searchRouter);
+// Party / master-data identity registry (slice 1). Read-only 360 view +
+// resolve + operator-triggered backfill. See lib/partyService.ts.
+router.use("/parties", partiesRouter);
 router.use("/activity-log", requireMinLevel(70), activityLogRouter);
 router.use("/approval-actions", approvalActionsRouter);
 router.use("/workflows", workflowsRouter);
@@ -512,6 +540,9 @@ router.use("/digital-signature", requireMinLevel(70), digitalSignatureRouter);
 // Event-log access is audit-level; gate the mount at 70 (as /audit-logs).
 router.use("/events", requireMinLevel(70), eventsRouter);
 router.use("/exec-dashboard", requireMinLevel(70), execDashboardRouter);
+// Smart assistant — curated Arabic owner questions → vetted parameterized
+// queries (no NL→SQL). Exec-only (cross-domain data). See routes/assistant.ts.
+router.use("/assistant", requireMinLevel(70), assistantRouter);
 // Agent 7 — sidebar gates مركز الالتزامات (/obligations) at level 30
 // and التقويم الموحد (/calendar) at level 20. Mounts used to have no
 // floor; align them with the sidebar so direct-URL access matches the

@@ -14,6 +14,7 @@ import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { BulkCheckbox } from "@/components/shared/bulk-actions";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 /**
  * FIN-016 — Payment-run batch UI.
  *
@@ -166,6 +167,21 @@ export default function PaymentRunPage() {
               تسوية المورد
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_payment_run"
+            entityId="list"
+            size="icon"
+            payload={{
+              entity: { title: "دفعات الشراء المعلّقة", total: data?.data?.length ?? 0 },
+              items: (data?.data ?? []).map((p) => ({
+                "المرجع": p.ref,
+                "المورد": p.supplierName || "—",
+                "المبلغ": Number(p.totalAmount || 0),
+                "تاريخ الإنشاء": p.createdAt || "—",
+                "تاريخ الاستلام المتوقع": p.expectedDelivery || "—",
+              })),
+            }}
+          />
         </div>
       }
     >

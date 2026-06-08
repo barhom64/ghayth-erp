@@ -19,6 +19,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { PrintButton } from "@/components/shared/print-button";
 
 const workflowStepSchema = z.object({
   stepName: z.string().trim().min(1, "اسم الخطوة مطلوب"),
@@ -108,6 +109,12 @@ export function WorkflowDefinitionsTab() {
     { key: "autoApproveOnTimeout", header: "تلقائي", render: (r: any) => r.autoApproveOnTimeout ? "نعم" : "لا" },
   ];
 
+  // Replaces window.confirm(). The dialog owns the DELETE and
+  // surfaces 409 blockers inline (e.g. workflow has active instances).
+  const [deletingDef, setDeletingDef] = useState<{ id: number; label: string } | null>(null);
+  const [testTarget, setTestTarget] = useState<any | null>(null);
+  const [testRefId, setTestRefId] = useState("");
+
   if (isLoading) return <DataTable columns={slaColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
   if (isError) return <DataTable columns={slaColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
@@ -164,10 +171,6 @@ export function WorkflowDefinitionsTab() {
     }
   };
 
-  // Replaces window.confirm(). The dialog owns the DELETE and
-  // surfaces 409 blockers inline (e.g. workflow has active instances).
-  const [deletingDef, setDeletingDef] = useState<{ id: number; label: string } | null>(null);
-
   const handleSaveSla = async (values: SlaDefForm) => {
     try {
       await apiFetch("/workflows/sla-definitions", {
@@ -195,8 +198,6 @@ export function WorkflowDefinitionsTab() {
       toast({ variant: "destructive", title: "فشل الإرسال", description: e?.message });
     }
   };
-  const [testTarget, setTestTarget] = useState<any | null>(null);
-  const [testRefId, setTestRefId] = useState("");
   const handleTestSubmit = (definition: any) => {
     setTestRefId("");
     setTestTarget(definition);
@@ -225,6 +226,43 @@ export function WorkflowDefinitionsTab() {
           محرك الإجراءات الموحد
         </h3>
         <div className="flex gap-2">
+          <PrintButton
+            entityType="report_workflow_definitions"
+            entityId="list"
+            size="icon"
+            label="طباعة تعريفات سير العمل"
+            payload={() => ({
+              entity: {
+                title: "تعريفات سير العمل ومستوى الخدمة",
+                workflowsCount: defs.length,
+                slasCount: slas.length,
+              },
+              sections: [
+                {
+                  title: "تعريفات سير العمل",
+                  rows: defs.map((d: any) => ({
+                    "نوع الطلب": REQUEST_TYPES.find(t => t.value === d.requestType)?.label || d.requestType,
+                    "العنوان": d.requestTypeLabel || "—",
+                    "قابل للإرجاع": d.isReturnable ? "نعم" : "لا",
+                    "تصعيد": d.enableEscalation ? "نعم" : "لا",
+                    "المهلة الافتراضية (س)": d.defaultSlaHours ?? "—",
+                    "عدد الخطوات": Array.isArray(d.steps) ? d.steps.length : "—",
+                  })),
+                },
+                {
+                  title: "إعدادات المهل الزمنية (SLA)",
+                  rows: slas.map((r: any) => ({
+                    "النوع": REQUEST_TYPES.find(t => t.value === r.requestType)?.label || r.requestType,
+                    "تنبيه (س)": r.warningHours,
+                    "مهلة (س)": r.deadlineHours,
+                    "تصعيد (س)": r.escalationHours,
+                    "تصعيد إلى": ROLES.find(role => role.value === r.escalateTo)?.label || r.escalateTo,
+                    "تلقائي": r.autoApproveOnTimeout ? "نعم" : "لا",
+                  })),
+                },
+              ],
+            })}
+          />
           <Button size="sm" variant="outline" onClick={() => setShowSlaForm(!showSlaForm)}>
             <Clock className="h-4 w-4 me-1" />{showSlaForm ? "إخفاء" : "إعدادات مستوى الخدمة"}
           </Button>

@@ -19,7 +19,9 @@ import { Package, MapPin, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { CargoTimeline } from "@/components/shared/cargo-timeline";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 
 interface ManifestDetail {
@@ -56,15 +58,43 @@ interface CargoItem {
   notes: string | null;
 }
 
+// #1733 Blocker #3 — full 13-state operational lifecycle. The dispatcher
+// drives draft → requested → approved → assigned_to_driver; the driver
+// carries it through driver_accepted → trip_started → arrived_pickup →
+// loaded → in_transit → arrived_delivery → delivered (from the driver
+// console — see me-driver.tsx); the dispatcher closes with `completed`
+// then flips to `ready_for_invoice` to hand off to the accountant; the
+// accountant's materialize action sets `financially_closed`.
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "draft", label: "مسودة" },
-  { value: "confirmed", label: "مؤكدة" },
-  { value: "loading", label: "تحميل" },
+  { value: "requested", label: "طلب جديد" },
+  { value: "approved", label: "معتمدة" },
+  { value: "assigned_to_driver", label: "مسندة للسائق" },
+  { value: "driver_accepted", label: "قَبِلها السائق" },
+  { value: "trip_started", label: "بدأت الرحلة" },
+  { value: "arrived_pickup", label: "وصل لموقع التحميل" },
+  { value: "loaded", label: "تم التحميل" },
   { value: "in_transit", label: "في الطريق" },
-  { value: "delivered", label: "مسلّمة" },
-  { value: "closed", label: "مغلقة" },
+  { value: "arrived_delivery", label: "وصل لموقع التسليم" },
+  { value: "delivered", label: "تم التسليم" },
+  { value: "completed", label: "مكتملة (إغلاق تشغيلي)" },
+  // #1733 Foundation — dispatcher's "ready for accounting" gate. Until
+  // this transition fires, no JE or billing candidate is created.
+  { value: "ready_for_invoice", label: "جاهزة للمحاسبة" },
+  // Terminal post-invoice state — set by the accountant's materialize action.
+  { value: "financially_closed", label: "مُغلقة ماليًا" },
   { value: "cancelled", label: "ملغاة" },
 ];
+
+// #1733 Foundation — read-only finance badge. The accountant's actions
+// flip this; the operator can only mark `not_billable` (internal transfer).
+export const BILLING_STATUS_LABEL: Record<string, string> = {
+  not_billable: "غير مرسلة للمحاسبة",
+  ready_for_accounting: "جاهزة للمحاسبة",
+  under_review: "قيد مراجعة المحاسب",
+  invoiced: "مفوترة",
+  excluded: "مستبعدة ماليًا",
+};
 
 export default function CargoDetail() {
   const [, params] = useRoute("/fleet/cargo/:id");
@@ -167,6 +197,11 @@ export default function CargoDetail() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="cargo_manifest"
+            entityId={m.id}
+            label="طباعة البوليصة"
+          />
           <Select
             value={m.status}
             onValueChange={(v) => statusMut.mutate({ status: v })}
@@ -263,6 +298,14 @@ export default function CargoDetail() {
           />
         </CardContent>
       </Card>
+
+      {/* #1733 Comment 6 — operational timeline.
+          Consumes /cargo/manifests/:id/timeline (audit_logs + event_logs
+          + billing-candidate events). Renders chronological per-event
+          strip with Arabic labels + status-change badges. */}
+      <div className="mt-4">
+        <CargoTimeline manifestId={m.id} />
+      </div>
 
       {m.notes && (
         <Card className="mt-4">

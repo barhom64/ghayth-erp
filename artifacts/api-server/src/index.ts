@@ -6,6 +6,7 @@ import { startCronScheduler, stopCronScheduler } from "./lib/cronScheduler.js";
 import { startRuntimeTelemetry, stopRuntimeTelemetry } from "./lib/runtimeTelemetry.js";
 import { startAlertEvaluation, stopAlertEvaluation } from "./lib/alertRules.js";
 import { registerEventListeners } from "./lib/eventListeners.js";
+import { registerJourneyTracking } from "./lib/journeyTracking.js";
 import { registerRulesEngineListener } from "./lib/rulesEngine.js";
 import "./lib/engines/hrEngine.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
@@ -117,7 +118,8 @@ async function start() {
 
   registerEventListeners();
   registerRulesEngineListener();
-  logger.info("Event listeners and rules engine registered");
+  registerJourneyTracking();
+  logger.info("Event listeners, rules engine, and journey tracking registered");
 
   if (!isDev && !config.persistAllEvents) {
     logger.warn(

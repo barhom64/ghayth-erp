@@ -20,11 +20,14 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  exportToCSV,
   PageShell,
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 const POSITION_LABEL: Record<string, string> = {
   front_left: "أمامي يسار",
@@ -68,6 +71,7 @@ export default function TiresPage() {
   const createMut = useApiMutation("/fleet/tires", "POST");
 
   const filtered = applyFilters(tires, filters, { searchFields: ["plateNumber", "brand", "size"] });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -110,10 +114,29 @@ export default function TiresPage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "الإطارات" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="fleet.maintenance:create" onClick={() => setShowCreate((v) => !v)} data-testid="button-add-tire">
-          <Plus className="h-4 w-4 me-1" />
-          {showCreate ? "إلغاء" : "إضافة إطار"}
-        </GuardedButton>
+        <>
+          <GuardedButton perm="fleet.maintenance:create" onClick={() => setShowCreate((v) => !v)} data-testid="button-add-tire">
+            <Plus className="h-4 w-4 me-1" />
+            {showCreate ? "إلغاء" : "إضافة إطار"}
+          </GuardedButton>
+          <PrintButton
+            entityType="report_fleet_tires"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "إطارات الأسطول", total: printRows.length },
+              items: printRows.map((t: any) => ({
+                "المركبة": t.plateNumber || `#${t.vehicleId}`,
+                "الموقع": POSITION_LABEL[t.position] || t.position || "—",
+                "البراند": t.brand || "—",
+                "المقاس": t.size || "—",
+                "عند التركيب (كم)": t.installMileage ?? "—",
+                "تاريخ التركيب": t.installDate || "—",
+                "الحالة": STATUS_LABEL[t.status] || t.status || "—",
+              })),
+            })}
+          />
+        </>
       }
     >
       <FleetTabsNav />
@@ -215,11 +238,27 @@ export default function TiresPage() {
         config={{ searchPlaceholder: "ابحث بـ رقم اللوحة، البراند، المقاس..." }}
         values={filters}
         onChange={setFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            filtered || [],
+            [
+              { key: "plateNumber", label: "المركبة" },
+              { key: "position", label: "الموقع" },
+              { key: "brand", label: "البراند" },
+              { key: "size", label: "المقاس" },
+              { key: "installMileage", label: "عند التركيب (كم)" },
+              { key: "installDate", label: "تاريخ التركيب" },
+              { key: "status", label: "الحالة" },
+            ],
+            "إطارات-الأسطول",
+          )
+        }
         resultCount={filtered.length}
       />
 
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={filtered}
         rowKey={(t: any) => t.id}
         isLoading={isLoading}

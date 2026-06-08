@@ -20,6 +20,7 @@ import {
   FormTextareaField,
   FormSelectField,
   FormGrid,
+  exportToCSV,
 } from "@workspace/ui-core";
 import { Plus, FileText, FileSignature, Send, Pencil, Trash2 } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
@@ -217,6 +218,20 @@ export default function OfficialLettersPage() {
         }}
         values={advFilters}
         onChange={setAdvFilters}
+        onExportCSV={() =>
+          exportToCSV(
+            (filtered ?? []) as unknown as Record<string, any>[],
+            [
+              { key: "letterNumber", label: "رقم الخطاب" },
+              { key: "employeeName", label: "الموظف" },
+              { key: "type", label: "نوع الخطاب" },
+              { key: "subject", label: "الموضوع" },
+              { key: "status", label: "الحالة" },
+              { key: "createdAt", label: "تاريخ الإصدار" },
+            ],
+            "الخطابات-الرسمية",
+          )
+        }
       />
 
       {showForm && (

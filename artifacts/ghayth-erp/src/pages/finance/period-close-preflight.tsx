@@ -23,6 +23,7 @@ import {
   Loader2, Calendar, ShieldCheck, RefreshCw, ChevronRight,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Period close pre-flight. Fans out 10 readiness queries against
@@ -353,6 +354,20 @@ export default function PeriodClosePreflightPage() {
           <Button variant="outline" size="sm" onClick={refreshAll}>
             <RefreshCw className="h-4 w-4 me-1" /> تحديث
           </Button>
+          <PrintButton
+            entityType="report_finance_period_close_preflight"
+            entityId={selectedPeriodId ? String(selectedPeriodId) : "list"}
+            size="icon"
+            payload={{
+              entity: { title: "الفحص ما قبل إقفال الفترة", total: checks.length },
+              items: checks.map((c) => ({
+                "الفحص": c.def.label,
+                "الشدة": c.def.severity,
+                "العدد": c.count,
+                "الحالة": c.status === "pass" ? "ناجح" : c.status === "fail" ? "فاشل" : "جارٍ التحميل",
+              })),
+            }}
+          />
         </div>
       }
     >

@@ -3,6 +3,8 @@ import { formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Wrench } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface CapaItem {
@@ -38,6 +40,7 @@ const columns: DataTableColumn<CapaItem>[] = [
 export default function GovernanceCapa() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["governance-capa"], "/governance/capa");
   const rows = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -47,6 +50,24 @@ export default function GovernanceCapa() {
       title="الإجراءات التصحيحية والوقائية (CAPA)"
       subtitle="متابعة الإجراءات التصحيحية والوقائية لضمان الجودة والامتثال"
       breadcrumbs={[{ label: "الحوكمة" }, { label: "CAPA" }]}
+      actions={
+        <PrintButton
+          entityType="report_governance_capa"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "الإجراءات التصحيحية والوقائية", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "المرجع": r.ref || r.id,
+              "العنوان": r.title || r.description || "—",
+              "النوع": r.actionType || r.type || "—",
+              "المسؤول": r.assigneeName || "—",
+              "تاريخ الاستحقاق": r.dueDate || "—",
+              "الحالة": r.status || "—",
+            })),
+          })}
+        />
+      }
     >
       <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
     </PageShell>

@@ -11,6 +11,7 @@ import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { seedRolesAndGrantsV2 } from "../lib/rbac/autoMigrate.js";
 
 const router = Router();
 
@@ -60,6 +61,11 @@ interface RefreshTokenRow {
   isActive: boolean;
   employeeId: number;
   lockedUntil: string | null;
+  // Carried through from employees.companyId so the downstream
+  // employee_assignments lookup stays tenant-scoped — without it the
+  // assignment query falls back to employeeId alone, which the
+  // tenant-isolation guard flags as cross-tenant risk.
+  companyId: number;
 }
 
 interface AssignmentRefreshRow {
@@ -336,13 +342,19 @@ router.post("/bootstrap-tenant", registerLimiter, async (req, res) => {
       );
       newOwnerUserId = userRes.rows[0].id as number;
 
-      // 5. user_roles row makes the owner show up in the RBAC matrix.
-      await client.query(
-        `INSERT INTO user_roles ("userId", "companyId", role)
-         VALUES ($1, $2, 'owner')
-         ON CONFLICT DO NOTHING`,
-        [newOwnerUserId, newCompanyId]
-      );
+      // 5. Seed RBAC v2 roles/grants for the new company and bind the owner
+      //    so they appear in the role-switcher and RBAC matrix (#1791 —
+      //    legacy user_roles removed; login reads rbac_user_roles only).
+      const { roleIdByKey } = await seedRolesAndGrantsV2(client, newCompanyId);
+      const ownerRoleId = roleIdByKey["owner"];
+      if (ownerRoleId) {
+        await client.query(
+          `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", is_primary)
+           VALUES ($1, $2, $3, $4, true)
+           ON CONFLICT ("userId", "companyId", role_id) DO NOTHING`,
+          [newOwnerUserId, newCompanyId, ownerRoleId, newBranchId]
+        );
+      }
     });
 
     // Bootstrap helpers (CoA seed, leave types, numbering prefixes,
@@ -463,39 +475,27 @@ router.post("/login", loginLimiter, async (req, res) => {
 
     const primary = assignments[0];
 
-    // Union legacy `user_roles` with v2 `rbac_user_roles` so the
-    // frontend role-switcher shows every role an admin has been granted
-    // (migration 141 auto-assigns all v2 roles to owners/GMs for testing).
-    // V2 ids are negated to keep React keys unique against legacy ids.
+    // Role-switcher source: RBAC v2 (rbac_user_roles → rbac_roles) ONLY.
+    // (#1791 — legacy user_roles removed.)
     const userRoles = await rawQuery<UserRoleRow>(
-      `SELECT id, "roleKey", label, modules, level, source FROM (
-         SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source, FALSE AS is_primary
-           FROM user_roles WHERE "userId" = $1
-         UNION ALL
-         SELECT
-           -r.id AS id,
-           r.role_key AS "roleKey",
-           r.label_ar AS label,
-           COALESCE(
-             (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
-                FROM rbac_role_grants g WHERE g.role_id = r.id),
-             '[]'::jsonb
-           ) AS modules,
-           r.level,
-           2 AS source_order,
-           'v2' AS source,
-           COALESCE(ur.is_primary, FALSE) AS is_primary
-          FROM rbac_user_roles ur
-          JOIN rbac_roles r ON r.id = ur.role_id
-         WHERE ur."userId" = $1 AND ur."companyId" = $2
-           AND r.is_active = TRUE AND r.is_template = FALSE
-           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
-           AND NOT EXISTS (
-             SELECT 1 FROM user_roles ul
-              WHERE ul."userId" = $1 AND ul."roleKey" = r.role_key
-           )
-       ) combined
-       ORDER BY is_primary DESC, source_order, level DESC`,
+      `SELECT
+         r.id AS id,
+         r.role_key AS "roleKey",
+         r.label_ar AS label,
+         COALESCE(
+           (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
+              FROM rbac_role_grants g WHERE g.role_id = r.id),
+           '[]'::jsonb
+         ) AS modules,
+         r.level,
+         'v2' AS source,
+         COALESCE(ur.is_primary, FALSE) AS is_primary
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+       WHERE ur."userId" = $1 AND ur."companyId" = $2
+         AND r.is_active = TRUE AND r.is_template = FALSE
+         AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+       ORDER BY is_primary DESC, level DESC`,
       [user.id, primary.companyId]
     );
     const token = signToken({
@@ -534,9 +534,10 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
     }
 
     const [rt] = await rawQuery<RefreshTokenRow>(
-      `SELECT rt.*, u."isActive", u."employeeId", u."lockedUntil"
+      `SELECT rt.*, u."isActive", u."employeeId", u."lockedUntil", e."companyId"
        FROM refresh_tokens rt
        JOIN users u ON u.id = rt."userId"
+       JOIN employees e ON e.id = u."employeeId"
        WHERE rt.token = $1`,
       [refreshToken]
     );
@@ -561,11 +562,17 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
       throw new ForbiddenError("الحساب مقفل مؤقتاً");
     }
 
+    // Tenant scope: an employee record belongs to exactly one company.
+    // Constraining the assignment lookup by BOTH employeeId AND
+    // companyId enforces the invariant at query time — closes the
+    // cross-tenant risk the static guard flagged at this call site.
     const [primaryAssignment] = await rawQuery<AssignmentRefreshRow>(
       `SELECT ea.id, ea.role FROM employee_assignments ea
-       WHERE ea."employeeId" = $1 AND ea.status = 'active'
+       WHERE ea."employeeId" = $1
+         AND ea."companyId" = $2
+         AND ea.status = 'active'
        ORDER BY ea."isPrimary" DESC NULLS LAST LIMIT 1`,
-      [rt.employeeId]
+      [rt.employeeId, rt.companyId]
     );
 
     if (!primaryAssignment) {
@@ -736,36 +743,26 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
       throw new NotFoundError("المستخدم غير موجود");
     }
 
-    // Union legacy `user_roles` with v2 `rbac_user_roles`. See /login for rationale.
+    // Role-switcher source: RBAC v2 only. See /login. (#1791)
     const userRoles = await rawQuery<UserRoleRow>(
-      `SELECT id, "roleKey", label, modules, level, source FROM (
-         SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source, FALSE AS is_primary
-           FROM user_roles WHERE "userId" = $1
-         UNION ALL
-         SELECT
-           -r.id AS id,
-           r.role_key AS "roleKey",
-           r.label_ar AS label,
-           COALESCE(
-             (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
-                FROM rbac_role_grants g WHERE g.role_id = r.id),
-             '[]'::jsonb
-           ) AS modules,
-           r.level,
-           2 AS source_order,
-           'v2' AS source,
-           COALESCE(ur.is_primary, FALSE) AS is_primary
-          FROM rbac_user_roles ur
-          JOIN rbac_roles r ON r.id = ur.role_id
-         WHERE ur."userId" = $1 AND ur."companyId" = $2
-           AND r.is_active = TRUE AND r.is_template = FALSE
-           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
-           AND NOT EXISTS (
-             SELECT 1 FROM user_roles ul
-              WHERE ul."userId" = $1 AND ul."roleKey" = r.role_key
-           )
-       ) combined
-       ORDER BY is_primary DESC, source_order, level DESC`,
+      `SELECT
+         r.id AS id,
+         r.role_key AS "roleKey",
+         r.label_ar AS label,
+         COALESCE(
+           (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
+              FROM rbac_role_grants g WHERE g.role_id = r.id),
+           '[]'::jsonb
+         ) AS modules,
+         r.level,
+         'v2' AS source,
+         COALESCE(ur.is_primary, FALSE) AS is_primary
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+       WHERE ur."userId" = $1 AND ur."companyId" = $2
+         AND r.is_active = TRUE AND r.is_template = FALSE
+         AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+       ORDER BY is_primary DESC, level DESC`,
       [scope.userId, scope.companyId]
     );
 

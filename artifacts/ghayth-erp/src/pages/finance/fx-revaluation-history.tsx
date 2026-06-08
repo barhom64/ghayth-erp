@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { History, TrendingUp, TrendingDown, ExternalLink, RefreshCw } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface FxRevaluation {
   id: number;
@@ -33,13 +35,16 @@ export default function FxRevaluationHistoryPage() {
     `/finance/fx/revaluation`,
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const rows = data?.data ?? [];
   const filtered = currencyFilter
     ? rows.filter((r) => r.currency === currencyFilter)
     : rows;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError) return <ErrorState />;
+
 
   const currencies = Array.from(new Set(rows.map((r) => r.currency))).sort();
 
@@ -138,6 +143,22 @@ export default function FxRevaluationHistoryPage() {
               <RefreshCw className="h-4 w-4 me-1" /> تقييم جديد
             </Button>
           </Link>
+          <PrintButton
+            entityType="report_finance_fx_revaluation_history"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "سجل إعادة تقييم العملات", total: printRows.length },
+              items: printRows.map((r) => ({
+                "التاريخ": r.revaluationDate?.slice(0, 10) ?? "—",
+                "العملة": r.currency,
+                "السعر القديم": fmtRate(r.oldRate),
+                "السعر الجديد": fmtRate(r.newRate),
+                "صافي الأثر (SAR)": Number(r.totalImpact ?? 0),
+                "قيد JE": r.journalEntryId ?? "—",
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -237,6 +258,7 @@ export default function FxRevaluationHistoryPage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols}
+            onSortedDataChange={setPrintRows}
             data={filtered}
             pageSize={30}
             emptyMessage={

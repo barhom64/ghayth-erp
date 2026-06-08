@@ -15,6 +15,7 @@ import {
 } from "../lib/settings.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
 import { z } from "zod";
@@ -418,6 +419,14 @@ router.post("/branches", authorize({ feature: "settings", action: "update" }), a
       after: { name, nameEn, city, phone, companyId: targetCompanyId },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    // Auto-mint a top-level cost centre representing the branch so
+    // per-branch P&L works out of the box (one row, code BR-####).
+    // Fire-and-forget — the operator's branch create must succeed even
+    // if the CC insert hiccups; the resolver falls back to the seed CCs.
+    createCostCenterForEntity(
+      targetCompanyId, "branch", r.insertId, name,
+      { actorUserId: scope.userId },
+    ).catch((e) => logger.error(e, "branch cost-centre auto-create failed"));
     const [row] = await rawQuery<BranchRow>(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [r.insertId, targetCompanyId]);
     res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
@@ -541,6 +550,17 @@ router.post("/departments", authorizeAny(
       after: { name, nameEn, manager },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    // Department → CC nested under the current branch when one is in
+    // scope. Salaries / overheads can then be drilled by department.
+    // Code: BR-####-D####. Fire-and-forget — non-blocking.
+    createCostCenterForEntity(
+      scope.companyId, "department", r.insertId, name,
+      {
+        parentEntityType: scope.branchId ? "branch" : null,
+        parentEntityId: scope.branchId ?? null,
+        actorUserId: scope.userId,
+      },
+    ).catch((e) => logger.error(e, "department cost-centre auto-create failed"));
     const [row] = await rawQuery<DepartmentRow>(`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
@@ -748,53 +768,10 @@ router.put("/system-controls", authorize({ feature: "settings", action: "update"
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-// P02-CRIT1 — both endpoints used to ignore the caller's company
-// scope entirely. The GET listed `SELECT DISTINCT` across the global
-// user_roles table, so a `settings:read` user in company A could see
-// every roleKey/label/modules combination in use anywhere on the
-// platform. The PUT then ran `UPDATE … WHERE "roleKey"=$1` with no
-// scope clause, so saving the role-permissions form in company A
-// rewrote the modules JSON for every user with that roleKey across
-// every other company on the system — silent cross-tenant
-// permission rewrite. Migration 063 added the companyId column on
-// user_roles for exactly this reason; the rest of the codebase
-// (admin.ts:95, :167, :363, :195) already scopes inserts/deletes
-// the same way. These two routes were the last hold-outs.
-router.get("/role-modules", authorize({ feature: "settings", action: "view" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    // #685 PR-A6 — branch tracer-bullet: user_roles has NO branchId column (verified
-    // against information_schema 2026-05-20), so disableBranchScope:true preserves
-    // existing behavior exactly. See docs/audit/SCOPE_NORMALIZATION_RCA_685.md
-    // "Branch Scope Decision Matrix" for the schema-driven category mapping.
-    const { where, params } = buildScopedWhere(scope, {}, { disableBranchScope: true });
-    const roles = await rawQuery(
-      `SELECT DISTINCT "roleKey", label, modules, level FROM user_roles WHERE ${where} ORDER BY level DESC`,
-      params
-    );
-    res.json(maskFields(req, { data: roles }));
-  } catch (err) { handleRouteError(err, res, "settings"); }
-});
-
-router.put("/role-modules/:roleKey", authorize({ feature: "settings", action: "update" }), async (req, res) => {
-  try {
-    const body = zodParse(roleModulesSchema.safeParse(req.body));
-    const scope = req.scope!;
-    const { roleKey } = req.params;
-    const { modules } = body;
-    await rawExecute(
-      `UPDATE user_roles SET modules=$1 WHERE "roleKey"=$2 AND "companyId"=$3`,
-      [JSON.stringify(modules), roleKey, scope.companyId]
-    );
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
-      entity: "user_roles", entityId: 0,
-      after: { roleKey, modules },
-    }).catch((e) => logger.error(e, "settings background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "role_modules" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    res.json({ success: true });
-  } catch (err) { handleRouteError(err, res, "settings"); }
-});
+// /role-modules GET+PUT removed in #1791 — role→module visibility now derives
+// from RBAC v2 grants (rbac_role_grants), surfaced via /api/permissions/my and
+// edited in the RBAC v2 editor. roleModulesSchema above is now unused (kept
+// harmless; noUnusedLocals is off).
 
 router.get("/approval-config", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {

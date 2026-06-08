@@ -27,6 +27,15 @@ interface FormFieldWrapperProps {
   children: ReactNode;
   className?: string;
   htmlFor?: string;
+  /**
+   * Visually hide the label while keeping it for screen readers
+   * (`sr-only`). Use when the field lives in a table/grid whose
+   * COLUMN HEADER already names it — avoids the label appearing
+   * twice (once in the header, once above the cell). The label is
+   * still required (never empty) so a11y + the htmlFor association
+   * stay intact.
+   */
+  hideLabel?: boolean;
 }
 
 export function FormFieldWrapper({
@@ -37,14 +46,18 @@ export function FormFieldWrapper({
   children,
   className,
   htmlFor,
+  hideLabel,
 }: FormFieldWrapperProps) {
   return (
     <div className={cn("space-y-1", className)}>
-      <Label htmlFor={htmlFor} className="text-sm font-medium">
+      <Label
+        htmlFor={htmlFor}
+        className={cn("text-sm font-medium", hideLabel && "sr-only")}
+      >
         {label}
         {required && <span className="text-red-500 mr-1">*</span>}
       </Label>
-      <div className="mt-1">{children}</div>
+      <div className={cn(!hideLabel && "mt-1")}>{children}</div>
       {error ? (
         <p className="text-xs text-status-error-foreground mt-1">{error}</p>
       ) : hint ? (
@@ -73,6 +86,7 @@ interface TextFieldProps {
   className?: string;
   id?: string;
   autoComplete?: string;
+  hideLabel?: boolean;
 }
 
 export function TextField({
@@ -90,6 +104,7 @@ export function TextField({
   className,
   id,
   autoComplete,
+  hideLabel,
 }: TextFieldProps) {
   return (
     <FormFieldWrapper
@@ -99,6 +114,7 @@ export function TextField({
       hint={hint}
       className={className}
       htmlFor={id}
+      hideLabel={hideLabel}
     >
       <Input
         id={id}
@@ -169,6 +185,7 @@ interface NumberFieldProps {
   hint?: ReactNode;
   className?: string;
   id?: string;
+  hideLabel?: boolean;
 }
 
 export function NumberField({
@@ -185,6 +202,7 @@ export function NumberField({
   hint,
   className,
   id,
+  hideLabel,
 }: NumberFieldProps) {
   return (
     <FormFieldWrapper
@@ -194,6 +212,7 @@ export function NumberField({
       hint={hint}
       className={className}
       htmlFor={id}
+      hideLabel={hideLabel}
     >
       <Input
         id={id}

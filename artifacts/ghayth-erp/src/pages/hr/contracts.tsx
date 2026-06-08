@@ -26,6 +26,8 @@ import { MoreHorizontal, Plus, FileText } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 // ─── Arabic Maps ────────────────────────────────────────────────────
 
 const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -115,15 +117,18 @@ export default function ContractsPage() {
     { successMessage: "تم إنهاء العقد" },
   );
 
+  const contracts = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(contracts);
+
   if (isLoading) return <PageShell title="عقود الموظفين"
       breadcrumbs={[
         { href: "/hr", label: "الموارد البشرية" },
         { label: "عقود الموظفين" },
       ]}>
       <HrTabsNav /><LoadingSpinner /></PageShell>;
+
   if (isError) return <PageShell title="عقود الموظفين"><ErrorState onRetry={() => refetch()} /></PageShell>;
 
-  const contracts = data?.data || [];
 
   const columns: DataTableColumn<any>[] = [
     { key: "ref", header: "رقم العقد", sortable: true, searchable: true, render: (r: any) => <span className="font-mono text-sm">{r.ref}</span> },
@@ -154,16 +159,39 @@ export default function ContractsPage() {
       title="عقود الموظفين"
       subtitle="إدارة جميع عقود الموظفين"
       actions={
-        <Link href="/hr/contracts/create">
-          <GuardedButton perm="hr:create" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            عقد جديد
-          </GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_contracts"
+            entityId="list"
+            label="طباعة القائمة"
+            payload={() => ({
+              entity: {
+                title: "قائمة عقود الموظفين",
+                total: printRows.length,
+              },
+              items: printRows.map((c: any) => ({
+                "الموظف": c.employeeName || "—",
+                "رقم العقد": c.contractNumber || c.id,
+                "النوع": c.contractType || "—",
+                "تاريخ البدء": c.startDate || "—",
+                "تاريخ النهاية": c.endDate || "—",
+                "الراتب الأساسي": c.basicSalary ?? 0,
+                "الحالة": c.status || "—",
+              })),
+            })}
+          />
+          <Link href="/hr/contracts/create">
+            <GuardedButton perm="hr:create" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              عقد جديد
+            </GuardedButton>
+          </Link>
+        </div>
       }
     >
       <DataTable
         columns={columns}
+        onSortedDataChange={setPrintRows}
         data={contracts}
         isLoading={isLoading}
         isError={isError}

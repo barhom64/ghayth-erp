@@ -112,6 +112,33 @@ const createEmployeeSchema = z.object({
   // application. Creation still runs through this single pipeline — the id
   // only adds the application↔employee link, conversion event and audit.
   sourceApplicationId: z.coerce.number().int().positive().optional().nullable(),
+  // Integrated HR onboarding (migration 248). Split the previous single
+  // `email` into the three things HR actually needs:
+  //   - internalEmail → user-account login (e.g. ahmed@company.sa).
+  //     When set, this is the email that ends up on users.email.
+  //   - personalEmail → personal contact, stored separately on
+  //     employees.personalEmail. Never used for auth.
+  //   - email (legacy) → fallback. If only `email` is provided, it
+  //     plays both roles for backward compatibility.
+  internalEmail: z.string().email().optional().nullable(),
+  personalEmail: z.string().email().optional().nullable(),
+  // When true, the create transaction also opens a subsidiary custody
+  // account for this employee under chart_of_accounts (cash-advance
+  // sub-ledger). Drivers, sales reps, field engineers normally need
+  // this on day one so the finance team doesn't get a 23503 the first
+  // time it tries to post an advance.
+  createCustodyAccount: z.boolean().optional(),
+  // When the new employee is a driver, optionally bind a vehicle on
+  // creation. The transaction validates the vehicle is in the same
+  // company; the binding becomes a fleet_driver_vehicle row. Skipped
+  // silently if the table doesn't exist or role!=driver.
+  vehicleId: z.coerce.number().int().positive().optional().nullable(),
+  // When a PBX is connected, the create form offers an extension picker.
+  // `pbxExtensionId` binds an existing unassigned extension to this
+  // employee; `pbxExtensionNew` mints a brand-new extension number.
+  // Both are optional and silently skipped if no PBX / table is present.
+  pbxExtensionId: z.coerce.number().int().positive().optional().nullable(),
+  pbxExtensionNew: z.string().trim().max(20).optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -213,6 +240,12 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       branchColumn: 'ea."branchId"',
       extraConditions: [`ea.status = 'active'`],
       enforceBranchScope: true,
+      // Org-as-security-boundary: a department-level manager sees only the
+      // employees whose active assignment is in one of their departments
+      // (company-level roles are exempt — see DEPT_SCOPE_EXEMPT_ROLES). The
+      // department lives on the assignment, so we key off ea."departmentId".
+      enforceDepartmentScope: true,
+      departmentColumn: 'ea."departmentId"',
     });
 
     let paramIdx = nextParamIndex;
@@ -234,26 +267,45 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;
+    // Dedicated binding for the gov_counts CTE so we don't depend on
+    // any specific position inside the scoped where clause (which may
+    // pass `companyId` as an array via = ANY($1)). Single integer here.
+    params.push(scope.companyId);
+    const govCompanyIdx = paramIdx++;
 
+    // Pre-aggregate gov_integration_links once instead of running the
+    // scalar subquery per row. The original SELECT-list correlated
+    // subquery was N+1: postgres planned one execution PER returned
+    // row, so 500 employees == 501 index lookups. The CTE below scans
+    // gov_integration_links once and joins the per-employee counts.
     const employees = await rawQuery<EmployeeListRow>(
-      `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+      `WITH gov_counts AS (
+         SELECT "entityId", COUNT(*) AS "govLinkCount"
+         FROM gov_integration_links
+         WHERE "entityType" = 'employee' AND "companyId" = $${govCompanyIdx}
+         GROUP BY "entityId"
+       )
+       SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
               ea.id AS "activeAssignmentId",
               e."iqamaNumber", e."iqamaExpiry", e."iqamaStatus",
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
               ea.role, ea.salary, ea."branchId",
               b.name AS "branchName",
-              (SELECT COUNT(*) FROM gov_integration_links gl WHERE gl."entityType" = 'employee' AND gl."entityId" = e.id AND gl."companyId" = ea."companyId")::int AS "govLinkCount"
+              COALESCE(gc."govLinkCount", 0)::int AS "govLinkCount"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
        LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+       LEFT JOIN gov_counts gc ON gc."entityId" = e.id
        WHERE ${where} AND e."deletedAt" IS NULL
        ORDER BY e.name ASC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params
     );
 
-    const countParams = params.slice(0, params.length - 2);
+    // The list query appended 3 trailing params (limit, offset,
+    // govCompanyId); the count query doesn't need any of them.
+    const countParams = params.slice(0, params.length - 3);
     const [countRow] = await rawQuery<{ total: string | number }>(
       `SELECT COUNT(*) AS total
        FROM employees e
@@ -489,6 +541,15 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       preIssuedEmpNumber = preIssued.number;
     }
 
+    // Migration 248 — split the email field into 3 roles:
+    //  - internalEmail: user-account login (employees.internalEmail)
+    //  - personalEmail: contact (employees.personalEmail)
+    //  - email: legacy fallback (employees.email) for back-compat.
+    // The user account (Step 8) chooses internalEmail when present,
+    // else falls back to email.
+    const internalEmailIn = ((body as any).internalEmail as string | null | undefined) || null;
+    const personalEmailIn = ((body as any).personalEmail as string | null | undefined) || null;
+
     const result = await withTransaction(async (client) => {
       const finalEmpNumber = preIssuedEmpNumber!;
 
@@ -498,10 +559,11 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
          "iqamaNumber","iqamaExpiry","passportNumber","passportExpiry",
          "borderNumber","visaNumber","visaType","visaExpiry",
          "sponsorNumber","workPermitNumber","workPermitExpiry","iqamaStatus",
-         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone",attachments)
+         "bankName","bankAccount",iban,"emergencyContact","emergencyPhone",attachments,
+         "personalEmail","internalEmail")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active',
          $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-         $21,$22,$23,$24,$25,$26)
+         $21,$22,$23,$24,$25,$26,$27,$28)
          RETURNING id`,
         [name, phone || null, email || null, finalEmpNumber, nationalId || null, gender || null, nationality || null, dateOfBirth || null,
          iqamaNumber || null, iqamaExpiry || null, passportNumber || null, passportExpiry || null,
@@ -509,7 +571,8 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
          sponsorNumber || null, workPermitNumber || null, workPermitExpiry || null, iqamaStatus || 'active',
          bankName || null, bankAccount || null, iban || null, emergencyContact || null, emergencyPhone || null,
          // as-any-reason: justified-pragmatic - defensive read of optional attachments field on parsed body; behavior unchanged
-         (body as any).attachments ? JSON.stringify((body as any).attachments) : null]
+         (body as any).attachments ? JSON.stringify((body as any).attachments) : null,
+         personalEmailIn, internalEmailIn]
       );
       const empId = empRes.rows[0].id;
 
@@ -653,22 +716,177 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
 
       // ── Step 8: Auto-create user account ──
+      // Login email priority: explicit internalEmail > legacy email.
+      // Operators who set BOTH internalEmail + personalEmail want the
+      // user to log in with the internal one and keep the personal as
+      // a contact, not a credential.
+      const loginEmail = internalEmailIn || email || null;
       let userId: number | null = null;
+      let createdNewUser = false;
       let tempPassword: string | null = null;
-      if (email) {
-        const existingUser = await client.query(`SELECT id FROM users WHERE email=$1`, [email]);
+      if (loginEmail) {
+        const existingUser = await client.query(`SELECT id FROM users WHERE email=$1`, [loginEmail]);
         if (existingUser.rows.length === 0) {
           tempPassword = Math.random().toString(36).slice(-8) + "A1!";
           const hashedPw = await hashPassword(tempPassword);
           const userRes = await client.query(
             `INSERT INTO users (email, "passwordHash", role, "employeeId", "isActive") VALUES ($1,$2,$3,$4,true) RETURNING id`,
-            [email, hashedPw, role || "employee", empId]
+            [loginEmail, hashedPw, role || "employee", empId]
           );
           userId = userRes.rows[0].id;
+          createdNewUser = true;
         } else {
           userId = existingUser.rows[0].id;
           await client.query(`UPDATE users SET "employeeId"=$1 WHERE id=$2`, [empId, userId]);
         }
+      }
+
+      // ── Step 8a: Job-title-driven defaults ──
+      // When the picked job_title has defaultRoleKey set and the body
+      // didn't override `role`, prefer the job-title default. Same for
+      // opensCustody — flips on the auto-custody flag.
+      let opensCustody = Boolean((body as any).createCustodyAccount);
+      let defaultRoleKeyFromJob: string | null = null;
+      if (resolvedJobTitleId) {
+        const [jt] = await client.query<{ defaultRoleKey: string | null; opensCustody: boolean }>(
+          `SELECT "defaultRoleKey", "opensCustody" FROM job_titles WHERE id = $1`,
+          [resolvedJobTitleId]
+        ).then(r => r.rows as Array<{ defaultRoleKey: string | null; opensCustody: boolean }>);
+        defaultRoleKeyFromJob = jt?.defaultRoleKey ?? null;
+        if (jt?.defaultRoleKey && (!role || role === "employee")) {
+          // Re-apply the role only on the assignment we just inserted.
+          await client.query(
+            `UPDATE employee_assignments SET role = $1 WHERE id = $2`,
+            [jt.defaultRoleKey, assignmentId]
+          );
+        }
+        if (jt?.opensCustody) opensCustody = true;
+      }
+
+      // ── Step 8a-bis: Grant the RBAC v2 role (the real access) ──
+      // Historically the normal "create employee" flow only ever set the
+      // legacy `employee_assignments.role` / `users.role` strings and NEVER
+      // inserted an rbac_user_roles row. Since RBAC v2 (checkAccess) is the
+      // enforcement authority, that left freshly-created employees able to
+      // log in and SEE the modules their role implies (via the predefined
+      // fallback in /permissions/my) but blocked with 403 on every actual
+      // action — "الخدمات تظهر لكن غير فعّالة". HR then had to go to the
+      // separate /admin/user-onboarding screen to grant the role by hand.
+      //
+      // Now we close that gap atomically: resolve the effective role key
+      // (job-title defaultRoleKey wins when the body didn't override) to an
+      // rbac_roles row and bind it in rbac_user_roles — exactly what
+      // /admin/onboard does. Soft-skip (warn) when the key has no rbac role
+      // so employee creation never fails just because a role is unmapped.
+      if (createdNewUser && userId) {
+        const effectiveRoleKey =
+          (defaultRoleKeyFromJob && (!role || role === "employee"))
+            ? defaultRoleKeyFromJob
+            : (role || "employee");
+        const roleRow = await client.query<{ id: number }>(
+          `SELECT id FROM rbac_roles
+            WHERE role_key = $1 AND ("companyId" = $2 OR "companyId" IS NULL)
+            ORDER BY "companyId" NULLS LAST LIMIT 1`,
+          [effectiveRoleKey, effectiveCompanyId]
+        ).then(r => r.rows as Array<{ id: number }>);
+        if (roleRow.length > 0) {
+          await client.query(
+            `INSERT INTO rbac_user_roles ("userId","companyId",role_id,"branchId","departmentId",is_primary,"assignedBy","createdAt")
+             VALUES ($1,$2,$3,$4,$5,true,$6,NOW())
+             ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
+            [userId, effectiveCompanyId, roleRow[0].id, targetBranchId, resolvedDepartmentId, scope.userId]
+          );
+        } else {
+          logger.warn(
+            { roleKey: effectiveRoleKey, companyId: effectiveCompanyId, userId },
+            "[employees] no rbac_roles row for effective role key — RBAC role not auto-granted; assign manually via /admin/users"
+          );
+        }
+      }
+
+      // ── Step 8b: Open employee subsidiary custody account ──
+      // When opensCustody is true (either passed in or job-title-driven),
+      // INSERT a subsidiary_accounts row pointing the employee at the
+      // canonical custody chart account (1400 or whatever the company's
+      // accountingMappings resolves for "custody_account"). Finance then
+      // posts every later advance through this sub-account so the
+      // balance-sheet drill-down stays per-person, not pooled. Failure
+      // here is a soft warning — the employee record still exists.
+      if (opensCustody) {
+        try {
+          const [coaRow] = await client.query<{ id: number; code: string }>(
+            `SELECT id, code FROM chart_of_accounts
+              WHERE "companyId" = $1 AND code = '1400' AND "deletedAt" IS NULL
+              LIMIT 1`,
+            [effectiveCompanyId]
+          ).then(r => r.rows as Array<{ id: number; code: string }>);
+          if (coaRow) {
+            await client.query(
+              `INSERT INTO subsidiary_accounts
+                 ("companyId", "entityType", "entityId", "accountType", "accountId", "isActive")
+               VALUES ($1, 'employee', $2, 'custody', $3, true)
+               ON CONFLICT DO NOTHING`,
+              [effectiveCompanyId, empId, coaRow.id]
+            );
+          } else {
+            logger.warn({ companyId: effectiveCompanyId }, "[employees] chart_of_accounts 1400 missing — custody sub-account skipped");
+          }
+        } catch (e) {
+          logger.warn(e, "[employees] subsidiary custody account create failed");
+        }
+      }
+
+      // ── Step 8c: Driver-vehicle binding ──
+      // When the new employee is a driver and the operator chose a
+      // vehicle in the form, validate the vehicle belongs to the same
+      // company and create the assignment row. We use UPDATE
+      // fleet_vehicles SET "currentDriverId" = empId so the existing
+      // driver-detail screens pick it up without a new entity.
+      const wantsVehicle = ((body as any).vehicleId as number | null | undefined) ?? null;
+      const effectiveRole = role || "employee";
+      if (wantsVehicle && (effectiveRole === "driver" || effectiveRole === "fleet_driver")) {
+        try {
+          const [veh] = await client.query<{ id: number }>(
+            `SELECT id FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+            [Number(wantsVehicle), effectiveCompanyId]
+          ).then(r => r.rows as Array<{ id: number }>);
+          if (veh) {
+            // Match the existing fleet_drivers.linkedEmployeeId pattern
+            // (fleet route uses it for the trip-complete + violation
+            // flow) — INSERT or UPDATE the link via fleet_drivers.
+            await client.query(
+              `INSERT INTO fleet_drivers (name, phone, "companyId", "branchId", "linkedEmployeeId", status)
+               VALUES ($1, $2, $3, $4, $5, 'available')
+               ON CONFLICT DO NOTHING`,
+              [name, phone || null, effectiveCompanyId, targetBranchId, empId]
+            ).catch(() => undefined);
+          } else {
+            logger.warn({ vehicleId: wantsVehicle }, "[employees] vehicleId not in company — skipping driver binding");
+          }
+        } catch (e) {
+          logger.warn(e, "[employees] driver-vehicle binding failed");
+        }
+      }
+
+      // ── Step 8b: Bind PBX extension (real comms integration) ──
+      // Either link a chosen unassigned extension or mint a new one, so
+      // the employee is reachable on the connected PBX from day one.
+      const wantsExtensionId = ((body as any).pbxExtensionId as number | null | undefined) ?? null;
+      const wantsExtensionNew = ((body as any).pbxExtensionNew as string | null | undefined)?.trim() || null;
+      if (wantsExtensionId) {
+        await client.query(
+          `UPDATE pbx_extensions
+              SET "employeeId" = $1, "updatedAt" = NOW()
+            WHERE id = $2 AND "companyId" = $3 AND "employeeId" IS NULL`,
+          [empId, Number(wantsExtensionId), effectiveCompanyId]
+        ).catch((e) => logger.warn(e, "[employees] pbx extension bind failed"));
+      } else if (wantsExtensionNew) {
+        await client.query(
+          `INSERT INTO pbx_extensions ("companyId", extension, name, "employeeId", type, status)
+           VALUES ($1, $2, $3, $4, 'employee', 'active')
+           ON CONFLICT DO NOTHING`,
+          [effectiveCompanyId, wantsExtensionNew, name, empId]
+        ).catch((e) => logger.warn(e, "[employees] pbx extension create failed"));
       }
 
       // ── Step 9: Copy active company salary components to the new employee ──
@@ -902,6 +1120,125 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
+// Integrated HR — finance + accounts + vehicle linkage roll-up for the
+// employee detail page. Returns the subsidiary custody account (if
+// any), the current open-custody balance, the linked vehicle (if any),
+// the user-account email split, and the role / job_title policy.
+// Single round-trip so the detail page renders the "Finance Linkage"
+// card without 5 parallel queries.
+router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: "view", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+
+    const [emp] = await rawQuery<{
+      id: number;
+      personalEmail: string | null;
+      internalEmail: string | null;
+      email: string | null;
+    }>(
+      `SELECT id, "personalEmail", "internalEmail", email
+         FROM employees WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!emp) throw new NotFoundError("الموظف غير موجود");
+
+    const [subsidiaryAccount] = await rawQuery<{ accountCode: string; accountName: string }>(
+      `SELECT coa.code AS "accountCode", coa.name AS "accountName"
+         FROM subsidiary_accounts sa
+         JOIN chart_of_accounts coa ON coa.id = sa."accountId"
+        WHERE sa."companyId" = $1
+          AND sa."entityType" = 'employee'
+          AND sa."entityId" = $2
+          AND sa."accountType" = 'custody'
+          AND sa."isActive" = true
+          AND sa."deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, id]
+    ).catch(() => []);
+
+    // Outstanding custody = SUM(debit on CUSTODY-* JEs) - SUM(credit on
+    // CUSTODY-SETTLE-* JEs) filtered by the employee dimension on the
+    // journal_lines. Pattern mirrors finance-custodies.ts /summary.
+    const [custodyBal] = await rawQuery<{ outstanding: string; openCount: string }>(
+      `WITH advanced AS (
+         SELECT je.id, je.ref, COALESCE(SUM(jl.debit), 0) AS amount
+           FROM journal_entries je
+           JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+            AND je."balancesApplied" = true
+            AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+            AND jl."employeeId" = $2
+          GROUP BY je.id, je.ref
+       ),
+       settled AS (
+         SELECT je2.description AS "originalRef", COALESCE(SUM(jl2.credit), 0) AS settled_amount
+           FROM journal_entries je2
+           JOIN journal_lines jl2 ON jl2."journalId" = je2.id AND jl2.credit > 0
+          WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL
+            AND je2."balancesApplied" = true
+            AND je2.ref LIKE 'CUSTODY-SETTLE%'
+          GROUP BY je2.description
+       )
+       SELECT COALESCE(SUM(GREATEST(a.amount - COALESCE(s.settled_amount, 0), 0)), 0)::text AS outstanding,
+              COUNT(*) FILTER (WHERE a.amount > COALESCE(s.settled_amount, 0))::text AS "openCount"
+         FROM advanced a
+         LEFT JOIN settled s ON s."originalRef" = a.ref`,
+      [scope.companyId, id]
+    ).catch(() => [{ outstanding: "0", openCount: "0" }]);
+
+    // The vehicle ↔ driver link lives on fleet_vehicles.assignedDriverId
+    // (NOT fleet_drivers.currentVehicleId). Join through fleet_drivers
+    // whose employeeId == this employee.
+    const [vehicle] = await rawQuery<{ id: number; plateNumber: string; brand: string | null }>(
+      `SELECT v.id, v."plateNumber", v.brand
+         FROM fleet_drivers d
+         JOIN fleet_vehicles v
+           ON v."assignedDriverId" = d.id AND v."companyId" = d."companyId" AND v."deletedAt" IS NULL
+        WHERE d."companyId" = $1 AND d."employeeId" = $2 AND d."deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, id]
+    ).catch(() => []);
+
+    // User account state.
+    const loginEmail = emp.internalEmail || emp.email;
+    const [user] = loginEmail
+      ? await rawQuery<{ id: number; isActive: boolean; lastLoginAt: string | null }>(
+          `SELECT id, "isActive", "lastLoginAt" FROM users WHERE email = $1 LIMIT 1`,
+          [loginEmail]
+        ).catch(() => [])
+      : [];
+
+    // PBX extension bound to this employee (real comms integration —
+    // surfaced so the detail page can show reachability + click-to-call).
+    const [extension] = await rawQuery<{ id: number; extension: string; status: string }>(
+      `SELECT id, extension, status FROM pbx_extensions
+        WHERE "companyId" = $1 AND "employeeId" = $2 AND status = 'active'
+        ORDER BY id ASC LIMIT 1`,
+      [scope.companyId, id]
+    ).catch(() => []);
+
+    res.json({
+      employeeId: id,
+      emails: {
+        internal: emp.internalEmail,
+        personal: emp.personalEmail,
+        legacy: emp.email,
+        loginEmail,
+      },
+      userAccount: user ? { id: user.id, isActive: user.isActive, lastLoginAt: user.lastLoginAt } : null,
+      custody: {
+        subsidiaryAccountCode: subsidiaryAccount?.accountCode ?? null,
+        subsidiaryAccountName: subsidiaryAccount?.accountName ?? null,
+        outstandingAmount: Number(custodyBal?.outstanding ?? 0),
+        openCount: Number(custodyBal?.openCount ?? 0),
+      },
+      vehicle: vehicle ? { id: vehicle.id, plateNumber: vehicle.plateNumber, brand: vehicle.brand } : null,
+      pbxExtension: extension ? { id: extension.id, extension: extension.extension, status: extension.status } : null,
+    });
+  } catch (err) { handleRouteError(err, res, "employee finance summary"); }
+});
+
 router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -916,6 +1253,63 @@ router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" })
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) { logger.error(err, "job-titles query failed"); res.json({ data: [], total: 0 }); }
+});
+
+// Migration 248 — create / update job_titles so admins can wire the
+// defaultRoleKey + opensCustody policy through the UI. Gated by the
+// admin-equivalent setting feature so HR alone can't grant roles.
+const upsertJobTitleSchema = z.object({
+  name: z.string().min(1).max(100),
+  nameEn: z.string().max(100).optional(),
+  category: z.string().max(50).optional(),
+  defaultRoleKey: z.string().max(60).optional().nullable(),
+  opensCustody: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
+router.post("/job-titles", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(upsertJobTitleSchema.safeParse(req.body));
+    const { insertId } = await rawExecute(
+      `INSERT INTO job_titles (name, "nameEn", category, "companyId", "isActive", "defaultRoleKey", "opensCustody")
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [b.name, b.nameEn ?? null, b.category ?? 'general', scope.companyId, b.isActive ?? true, b.defaultRoleKey ?? null, b.opensCustody ?? false]
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "job_titles", entityId: insertId,
+      after: b,
+    }).catch(() => undefined);
+    res.status(201).json({ id: insertId, ok: true });
+  } catch (err) { handleRouteError(err, res, "create job_title"); }
+});
+
+router.patch("/job-titles/:id", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(upsertJobTitleSchema.partial().safeParse(req.body));
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    const set = (col: string, val: unknown) => { params.push(val); sets.push(`"${col}" = $${params.length}`); };
+    for (const k of ["name", "nameEn", "category", "defaultRoleKey", "opensCustody", "isActive"] as const) {
+      if ((b as any)[k] !== undefined) set(k, (b as any)[k]);
+    }
+    if (!sets.length) { res.json({ ok: true, updated: 0 }); return; }
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(id, scope.companyId);
+    await rawExecute(
+      `UPDATE job_titles SET ${sets.join(", ")}
+        WHERE id = $${params.length - 1} AND ("companyId" = $${params.length} OR "companyId" IS NULL)`,
+      params
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "job_titles", entityId: id, after: b,
+    }).catch(() => undefined);
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "update job_title"); }
 });
 
 router.get("/documents", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
@@ -987,7 +1381,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
       throw new NotFoundError("الموظف غير موجود");
     }
 
-    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime] = await Promise.all([
+    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles, contract, custodies, position] = await Promise.all([
       rawQuery<Record<string, unknown>>(
         `SELECT pt.id, pt.title, pt.status, pt.priority, pt."dueDate", p.name AS "projectName"
          FROM project_tasks pt
@@ -1052,9 +1446,108 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
          ORDER BY o."overtimeDate" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
       ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
+      // HR-001 / #1799 priority #1 — Employee 360 tab "الحساب والدخول".
+      // We surface the linked user account row so the profile can render
+      // "هل للموظف حساب دخول؟ آخر دخول؟ مقفول؟". Sensitive fields
+      // (passwordHash, twoFactorSecret, resetToken) are NEVER selected.
+      // Limit 1 because the dual model is one-user-per-employee (see
+      // docs/rbac/UNIFIED_USER_ROLE_MODEL.md). NULL → no account yet.
+      rawQuery<Record<string, unknown>>(
+        `SELECT u.id, u.email, u.role, u."isActive", u."lastLoginAt",
+                u."failedLoginAttempts", u."lockedUntil", u."createdAt"
+           FROM users u
+          WHERE u."employeeId" = $1
+          LIMIT 1`,
+        [id]
+      ).catch((e) => { logger.error(e, "employees user-account query failed"); return []; }),
+      // HR-001 / #1799 priority #2 — Employee 360 tab "الأدوار والصلاحيات".
+      // Multi-role list from rbac_user_roles joined back to rbac_roles
+      // so the profile can show every active role the employee holds,
+      // ordered with primary first, then by level descending.
+      // Scoped to the employee's company (assignment.companyId) so
+      // cross-company role grants don't bleed into the current view.
+      // Empty array when the employee has no user account or no rbac role.
+      rawQuery<Record<string, unknown>>(
+        `SELECT ur.id AS "userRoleId",
+                r.id AS "roleId", r.role_key AS "roleKey",
+                r.label_ar AS "labelAr", r.label_en AS "labelEn",
+                r.color, r.level, r.is_template AS "isTemplate",
+                ur.is_primary AS "isPrimary", ur.expires_at AS "expiresAt",
+                ur."createdAt" AS "assignedAt",
+                ur."branchId", ur."departmentId"
+           FROM rbac_user_roles ur
+           JOIN rbac_roles r ON r.id = ur.role_id
+          WHERE ur."companyId" = $2
+            AND ur."userId" = (SELECT id FROM users WHERE "employeeId" = $1 LIMIT 1)
+          ORDER BY ur.is_primary DESC NULLS LAST, r.level DESC NULLS LAST, r.role_key`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "employees roles query failed"); return []; }),
+      // HR-012 / #1799 priority #1 — Employee 360 tab «العقد».
+      // Loads the active employment contract joined to the type label
+      // + branch. Returns NULL when no contract row exists (rare, but
+      // pre-onboarding employees may not have one yet). Sensitive
+      // fields (salary breakdown) aren't returned here — they live on
+      // the `payroll` tab which has separate RBAC.
+      rawQuery<Record<string, unknown>>(
+        `SELECT c.id, c.ref, c."contractType", c."startDate", c."endDate",
+                c.status, c."approvalStatus", c."probationEndDate",
+                c."probationStatus", c."signedByEmployee",
+                c."employeeSignedAt", c."createdAt"
+           FROM employee_contracts c
+          WHERE c."employeeId" = $1 AND c."companyId" = $2
+            AND (c.status = 'active' OR c.status IS NULL)
+          ORDER BY c."startDate" DESC NULLS LAST, c.id DESC LIMIT 1`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "employees contract query failed"); return []; }),
+      // HR-012 / #1799 priority #1 — Employee 360 tab «العهد».
+      // Pulls every asset (laptop, phone, SIM, …) from the
+      // employee_assets bridge (#1799 #9, migration 276) — active
+      // first, then returned history. Bounded LIMIT 50 so a long-tenure
+      // employee's record doesn't blow the response.
+      rawQuery<Record<string, unknown>>(
+        `SELECT ea.id, ea."assetType", ea."assetKey", ea."assetLabel",
+                ea."serialNumber", ea."assignedAt", ea."returnedAt",
+                ea."conditionOnAssign", ea."conditionOnReturn", ea.notes
+           FROM employee_assets ea
+          WHERE ea."assignmentId" = $3 AND ea."companyId" = $2
+          ORDER BY ea."returnedAt" NULLS FIRST, ea."assignedAt" DESC
+          LIMIT 50`,
+        [id, scope.companyId, employee.assignmentId]
+      ).catch((e) => { logger.error(e, "employees custodies query failed"); return []; }),
+      // HR-012 / #1799 priority #1 — Employee 360 tab «المسميات».
+      // Resolves the assignment's position (admin role) to its label
+      // alongside the existing job_title (professional). Returns NULL
+      // when the assignment hasn't been categorized yet (legacy
+      // assignments pre §B migration 274). The position table is
+      // company-scoped (companyId IS NULL = system template), so we
+      // match by either.
+      employee.assignmentId ? rawQuery<Record<string, unknown>>(
+        `SELECT p.id, p."positionKey", p."labelAr", p."labelEn",
+                p.level, p.description
+           FROM employee_assignments ea
+           JOIN positions p ON p.id = ea."positionId"
+            AND (p."companyId" IS NULL OR p."companyId" = $2)
+          WHERE ea.id = $3 LIMIT 1`,
+        [id, scope.companyId, employee.assignmentId]
+      ).catch((e) => { logger.error(e, "employees position query failed"); return []; }) : Promise.resolve([]),
     ]);
 
-    res.json(maskFields(req, { ...employee, tasks, attendance, leaves, trainings, payroll, violations, loans, overtime }));
+    res.json(maskFields(req, {
+      ...employee,
+      tasks, attendance, leaves, trainings, payroll, violations, loans, overtime,
+      // HR-001 — Employee 360 expansion (#1799 priority #1):
+      // `userAccount` is a single object (or null when employee has no
+      // login). `roles` is always an array (empty when no rbac grants).
+      userAccount: Array.isArray(userAccount) && userAccount.length > 0 ? userAccount[0] : null,
+      roles: roles ?? [],
+      // HR-012 — second expansion. `contract` is single-row or null;
+      // `position` is the resolved admin position (single object or
+      // null); `custodies` is the asset list (active first, then
+      // returned).
+      contract: Array.isArray(contract) && contract.length > 0 ? contract[0] : null,
+      position: Array.isArray(position) && position.length > 0 ? position[0] : null,
+      custodies: custodies ?? [],
+    }));
   } catch (err) {
     handleRouteError(err, res, "Get employee error:");
   }

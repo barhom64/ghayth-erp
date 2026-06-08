@@ -1174,4 +1174,260 @@ router.get("/log/:id/referral-chain", authorize({ feature: "communications", act
   } catch (err) { handleRouteError(err, res, "Get referral chain error:"); }
 });
 
+/* ── Employee provisioning helpers ─────────────────────────────────
+ * These power the "real" integration on the employee-create form: when
+ * a mailbox / domain is connected, the form offers a domain dropdown +
+ * auto-suggested local part instead of free text; when a PBX is
+ * connected, it offers an extension picker instead of nothing.
+ *
+ * Both endpoints are tenant-scoped and read-only — the actual binding
+ * happens inside the employee-create transaction (routes/employees.ts).
+ */
+
+// GET /communications/provisioning/email-domains?name=أحمد علي
+// Returns the email domains the company can issue internal addresses on
+// (derived from connected mailbox_accounts + active email integrations)
+// plus a suggested local-part transliterated/slugified from the name.
+router.get("/provisioning/email-domains", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    // Domains from connected mailboxes (the real, authenticated inboxes).
+    const mailboxRows = await rawQuery<{ emailAddress: string }>(
+      `SELECT DISTINCT "emailAddress" FROM mailbox_accounts
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "emailAddress" LIKE '%@%'`,
+      [scope.companyId]
+    ).catch(() => [] as { emailAddress: string }[]);
+
+    // Domains from active email integrations (smtp/email `from` address).
+    const integrationRows = await rawQuery<{ config: unknown }>(
+      `SELECT config FROM integrations
+        WHERE "companyId" = $1 AND type IN ('email','smtp') AND status = 'active'`,
+      [scope.companyId]
+    ).catch(() => [] as { config: unknown }[]);
+
+    const domains = new Set<string>();
+    for (const m of mailboxRows) {
+      const at = m.emailAddress.lastIndexOf("@");
+      if (at > 0) domains.add(m.emailAddress.slice(at + 1).toLowerCase());
+    }
+    for (const row of integrationRows) {
+      const cfg = (row.config ?? {}) as { from?: string; fromEmail?: string; domain?: string };
+      const from = cfg.from ?? cfg.fromEmail ?? null;
+      if (from && from.includes("@")) domains.add(from.slice(from.lastIndexOf("@") + 1).toLowerCase());
+      else if (cfg.domain) domains.add(cfg.domain.toLowerCase());
+    }
+
+    // Slugify the name into a candidate local part. Arabic names get a
+    // best-effort transliteration; anything non-ascii falls back to the
+    // employee number being appended later by the form.
+    const name = String(req.query.name ?? "").trim();
+    const suggestion = slugifyLocalPart(name);
+
+    res.json({
+      data: {
+        domains: Array.from(domains).sort(),
+        suggestedLocalPart: suggestion,
+        // When no domains are connected the form keeps the free-text input.
+        hasConnectedDomains: domains.size > 0,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Email-domains provisioning error:"); }
+});
+
+// GET /communications/provisioning/extensions
+// Returns the PBX extensions available to assign to a new employee
+// (unassigned + active) plus the next free extension number to mint.
+router.get("/provisioning/extensions", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const hasPbx = await rawQuery<{ id: number }>(
+      `SELECT id FROM integrations WHERE "companyId" = $1 AND type = 'pbx' AND status = 'active' LIMIT 1`,
+      [scope.companyId]
+    ).catch(() => [] as { id: number }[]);
+
+    const available = await rawQuery<{ id: number; extension: string; name: string }>(
+      `SELECT id, extension, name FROM pbx_extensions
+        WHERE "companyId" = $1 AND status = 'active' AND "employeeId" IS NULL
+        ORDER BY extension ASC`,
+      [scope.companyId]
+    ).catch(() => [] as { id: number; extension: string; name: string }[]);
+
+    // Suggest the next numeric extension above the current max (3-digit
+    // floor of 100 to match common PBX dial plans).
+    const [maxRow] = await rawQuery<{ maxExt: string | null }>(
+      `SELECT MAX(extension) AS "maxExt" FROM pbx_extensions WHERE "companyId" = $1`,
+      [scope.companyId]
+    ).catch(() => [{ maxExt: null }]);
+    const maxNum = maxRow?.maxExt && /^\d+$/.test(maxRow.maxExt) ? parseInt(maxRow.maxExt, 10) : 99;
+    const nextExtension = String(Math.max(maxNum + 1, 100));
+
+    res.json({
+      data: {
+        pbxConnected: hasPbx.length > 0,
+        available,
+        nextExtension,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Extensions provisioning error:"); }
+});
+
+/**
+ * POST /communications/click-to-call
+ *
+ * Body: { target: string }  — either a PBX extension ("101") or a full
+ * phone number ("+966500000000"). When a `target` is an extension we
+ * resolve the bound employee to enrich the audit row.
+ *
+ * Two outcomes:
+ *   - PBX integration is active AND exposes a click-to-call endpoint
+ *     (config.clickToCallUrl) → call it (POST originate-style) and log
+ *     the attempt as an outbound pbx row in message_log + pbx_calls.
+ *   - No integration / no endpoint configured → return `mode: 'tel'`
+ *     with the dial string so the UI falls back to a `tel:` link. The
+ *     attempt is still logged so the operator sees who tried to call.
+ *
+ * Never throws on network errors — they're reported as `mode: 'tel'`
+ * with the failure reason so the user can still place the call manually.
+ */
+const clickToCallSchema = z.object({
+  target: z.string().trim().min(1).max(40),
+  relatedType: z.string().optional(),
+  relatedId: z.coerce.number().int().positive().optional(),
+});
+
+router.post("/click-to-call", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(clickToCallSchema.safeParse(req.body));
+
+    // Find the caller's own extension (if any) so the originate call
+    // can pair it with the target. The bare-extension case (3-4 digits)
+    // also looks up the bound employee for the audit row.
+    const [callerExt] = await rawQuery<{ extension: string }>(
+      `SELECT pe.extension
+         FROM pbx_extensions pe
+         JOIN users u ON u."employeeId" = pe."employeeId"
+        WHERE u.id = $1 AND pe."companyId" = $2 AND pe.status = 'active'
+        LIMIT 1`,
+      [scope.userId, scope.companyId],
+    ).catch(() => []);
+
+    let targetEmployeeId: number | null = null;
+    const looksLikeExtension = /^\d{2,6}$/.test(body.target);
+    if (looksLikeExtension) {
+      const [bound] = await rawQuery<{ employeeId: number | null }>(
+        `SELECT "employeeId" FROM pbx_extensions
+          WHERE "companyId" = $1 AND extension = $2 AND status = 'active'
+          LIMIT 1`,
+        [scope.companyId, body.target],
+      ).catch(() => []);
+      targetEmployeeId = bound?.employeeId ?? null;
+    }
+
+    const [pbxIntegration] = await rawQuery<{ config: unknown }>(
+      `SELECT config FROM integrations
+        WHERE "companyId" = $1 AND type = 'pbx' AND status = 'active'
+        ORDER BY id DESC LIMIT 1`,
+      [scope.companyId],
+    ).catch(() => []);
+    const pbxConfig = (pbxIntegration?.config ?? {}) as {
+      clickToCallUrl?: string;
+      apiKey?: string;
+    };
+
+    const callId = `click-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let mode: "pbx" | "tel" = "tel";
+    let detail = "no PBX integration with clickToCallUrl configured";
+    let originatedHttpStatus: number | null = null;
+
+    if (pbxConfig.clickToCallUrl) {
+      try {
+        const resp = await fetch(pbxConfig.clickToCallUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(pbxConfig.apiKey ? { Authorization: `Bearer ${pbxConfig.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            callerExtension: callerExt?.extension ?? null,
+            target: body.target,
+            callId,
+            companyId: scope.companyId,
+          }),
+        });
+        originatedHttpStatus = resp.status;
+        if (resp.ok) {
+          mode = "pbx";
+          detail = "originate accepted by PBX";
+        } else {
+          detail = `PBX originate returned ${resp.status}`;
+        }
+      } catch (e) {
+        detail = e instanceof Error ? `PBX originate failed: ${e.message}` : "PBX originate failed";
+      }
+    }
+
+    // Always log the attempt — the operator should see who tried what
+    // even when the backend gracefully fell back to a tel: link.
+    const { insertId: callPk } = await rawExecute(
+      `INSERT INTO pbx_calls
+         ("companyId", "callId", "callerNumber", "calledNumber", direction, duration, status, "createdAt")
+       VALUES ($1, $2, $3, $4, 'outbound', 0, $5, NOW())`,
+      [scope.companyId, callId, callerExt?.extension ?? `user:${scope.userId}`, body.target, mode === "pbx" ? "initiated" : "pending"],
+    );
+    assertInsert(callPk, "pbx_calls");
+
+    await rawExecute(
+      `INSERT INTO message_log
+         ("companyId", channel, direction, "fromAddress", "toAddress",
+          body, status, folder, "relatedType", "relatedId", "createdAt")
+       VALUES ($1, 'pbx', 'outbound', $2, $3, $4, 'logged', 'sent', $5, $6, NOW())`,
+      [
+        scope.companyId,
+        callerExt?.extension ?? `user:${scope.userId}`,
+        body.target,
+        `click-to-call · mode=${mode} · ${detail}`,
+        body.relatedType ?? (targetEmployeeId ? "employees" : null),
+        body.relatedId ?? targetEmployeeId,
+      ],
+    );
+
+    void emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "communications.call.click_to_call",
+      entity: "pbx_calls", entityId: callPk,
+      details: JSON.stringify({ mode, target: body.target, originatedHttpStatus }),
+    }).catch((e) => logger.warn(e, "[event] click_to_call"));
+
+    res.json({
+      data: {
+        mode,
+        callId,
+        detail,
+        // `tel:` URI for the UI to open as a hyperlink when mode='tel'.
+        // We don't strip non-digits — phone apps handle "+" and "*".
+        telUri: `tel:${body.target.replace(/[^0-9+*#]/g, "")}`,
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Click-to-call error:"); }
+});
+
+// Best-effort Arabic→latin local-part slug. Keeps ascii letters/digits,
+// maps common Arabic letters, collapses the rest to dots. Returns "" when
+// nothing usable remains (the form then falls back to the employee number).
+export function slugifyLocalPart(name: string): string {
+  if (!name) return "";
+  const map: Record<string, string> = {
+    "ا": "a", "أ": "a", "إ": "a", "آ": "a", "ب": "b", "ت": "t", "ث": "th",
+    "ج": "j", "ح": "h", "خ": "kh", "د": "d", "ذ": "th", "ر": "r", "ز": "z",
+    "س": "s", "ش": "sh", "ص": "s", "ض": "d", "ط": "t", "ظ": "z", "ع": "a",
+    "غ": "gh", "ف": "f", "ق": "q", "ك": "k", "ل": "l", "م": "m", "ن": "n",
+    "ه": "h", "و": "w", "ي": "y", "ى": "a", "ة": "h", "ء": "",
+  };
+  const latin = Array.from(name.toLowerCase())
+    .map((ch) => (/[a-z0-9]/.test(ch) ? ch : map[ch] ?? (ch === " " ? "." : "")))
+    .join("");
+  return latin.replace(/\.+/g, ".").replace(/^\.|\.$/g, "");
+}
+
 export default router;

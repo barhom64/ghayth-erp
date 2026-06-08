@@ -15,6 +15,8 @@ import { formatCurrency } from "@/lib/formatters";
 import { currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import { TrendingUp, AlertTriangle, CheckCircle2, BarChart3 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface VarianceLine {
   accountCode: string;
@@ -60,13 +62,16 @@ export default function BudgetVariancePage() {
     `/finance/budget/variance?period=${encodeURIComponent(period)}`,
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError || !data) return <ErrorState />;
-
-  const lines = data.lines ?? [];
+  const lines = data?.lines ?? [];
   const filtered = statusFilter
     ? lines.filter((l) => l.status === statusFilter)
     : lines;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isLoading) return <LoadingSpinner />;
+
+  if (isError || !data) return <ErrorState />;
+
 
   const overCount = lines.filter((l) => l.status === "over_budget").length;
   const nearCount = lines.filter((l) => l.status === "near_limit").length;
@@ -166,6 +171,25 @@ export default function BudgetVariancePage() {
             onChange={(e) => setPeriod(e.target.value)}
             className="h-8 w-36 text-xs font-mono"
           />
+          <PrintButton
+            entityType="report_finance_budget_variance"
+            entityId={period}
+            size="icon"
+            payload={() => ({
+              entity: { title: `انحراف الميزانية — ${period}`, total: printRows.length },
+              items: printRows.map((l) => ({
+                "الحساب": l.accountCode,
+                "الاسم": l.accountName || "—",
+                "النوع": l.accountType || "—",
+                "الميزانية": Number(l.budgetAmount || 0),
+                "الفعلي": Number(l.actualAmount || 0),
+                "الانحراف": Number(l.variance || 0),
+                "%": Number(l.variancePct || 0).toFixed(1),
+                "% الاستخدام": Number(l.utilizationPct || 0).toFixed(1),
+                "الحالة": STATUS_LABEL[l.status as keyof typeof STATUS_LABEL] || l.status,
+              })),
+            })}
+          />
         </div>
       }
     >
@@ -254,6 +278,7 @@ export default function BudgetVariancePage() {
         <CardContent className="p-0">
           <DataTable
             columns={cols} data={filtered}
+            onSortedDataChange={setPrintRows}
             pageSize={50}
             emptyMessage={
               statusFilter

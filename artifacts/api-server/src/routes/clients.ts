@@ -706,4 +706,78 @@ router.patch("/:id/portal-account", authorize({ feature: "crm.clients", action: 
   }
 });
 
+/**
+ * GET /clients/:id/contact-summary
+ *
+ * "When did we last touch this customer, and through which channel?"
+ * Returns the most recent message_log row for this client across every
+ * channel (inbound or outbound) + a tiny channel-by-channel breakdown,
+ * so the detail page can show "آخر تواصل" without the operator opening
+ * the inbox.
+ *
+ * Falls back to `null` when there's no history yet. Never throws on
+ * empty data — tenant-scoped, soft-delete-aware.
+ */
+router.get("/:id/contact-summary", authorize({ feature: "crm.clients", action: "view", resource: { table: "clients", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+
+    // The client's phone/email determine which rows in v_message_log_all
+    // are theirs — the unified surface uses fromAddress/toAddress, not
+    // entity ids. We match on either side (inbound vs outbound).
+    const [client] = await rawQuery<{ phone: string | null; email: string | null }>(
+      `SELECT phone, email FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [id, scope.companyId],
+    );
+    if (!client) throw new NotFoundError("العميل غير موجود");
+
+    const addresses: string[] = [];
+    if (client.phone) addresses.push(client.phone);
+    if (client.email) addresses.push(client.email);
+
+    if (addresses.length === 0) {
+      res.json({ data: { lastContact: null, channelCounts: [], totalCount: 0 } });
+      return;
+    }
+
+    type LastContactRow = {
+      id: number; channel: string; direction: string;
+      fromAddress: string | null; toAddress: string | null;
+      subject: string | null; createdAt: string;
+    };
+    const [lastContact] = await rawQuery<LastContactRow>(
+      `SELECT id, channel, direction, "fromAddress", "toAddress", subject, "createdAt"::text
+         FROM v_message_log_all
+        WHERE "companyId" = $1
+          AND ("fromAddress" = ANY($2) OR "toAddress" = ANY($2))
+          AND "deletedAt" IS NULL
+        ORDER BY "createdAt" DESC LIMIT 1`,
+      [scope.companyId, addresses],
+    ).catch(() => [] as LastContactRow[]);
+
+    const channelCounts: { channel: string; n: string }[] = await rawQuery<{ channel: string; n: string }>(
+      `SELECT channel, COUNT(*)::text AS n
+         FROM v_message_log_all
+        WHERE "companyId" = $1
+          AND ("fromAddress" = ANY($2) OR "toAddress" = ANY($2))
+          AND "deletedAt" IS NULL
+        GROUP BY channel
+        ORDER BY channel`,
+      [scope.companyId, addresses],
+    ).catch(() => [] as { channel: string; n: string }[]);
+
+    const totalCount = channelCounts.reduce((s, r) => s + Number(r.n || 0), 0);
+    res.json({
+      data: {
+        lastContact: lastContact ?? null,
+        channelCounts: channelCounts.map((r) => ({ channel: r.channel, count: Number(r.n) })),
+        totalCount,
+      },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Get client contact summary error:");
+  }
+});
+
 export default router;
