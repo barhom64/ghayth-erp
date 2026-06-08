@@ -24,6 +24,7 @@ import {
 } from "@workspace/ui-core";
 import { Banknote, DollarSign, Plus, X, Clock, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
+import { isMoneyAccount } from "@/lib/finance-account-usage";
 import { useAppContext } from "@/contexts/app-context";
 import { ApprovalActions } from "@workspace/workflow-kit";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -266,9 +267,7 @@ function CreateAdvanceForm({ onDone }: { onDone: () => void }) {
     ["accounts-list"],
     "/finance/accounts",
   );
-  const sourceAccounts = (accountsData?.data || []).filter(
-    (a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"),
-  );
+  const sourceAccounts = (accountsData?.data || []).filter((a: any) => isMoneyAccount(a));
 
   return (
     <Card>

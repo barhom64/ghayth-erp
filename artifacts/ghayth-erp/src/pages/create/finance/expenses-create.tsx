@@ -15,8 +15,8 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { amountTaxSplit } from "@/lib/tax-math";
-import { filterAccountsForPaymentMethod } from "@/lib/finance-account-usage";
-import { AlertCircle, Paperclip, Link2 } from "lucide-react";
+import { filterAccountsForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
+import { AlertCircle, Paperclip, Link2, Plus, Trash2, Split } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
@@ -204,6 +204,9 @@ export default function ExpensesCreate() {
   const { data: contractsData } = useApiQuery<{ data: any[] }>(["contracts-list"], "/properties/contracts");
   const { data: unitsData } = useApiQuery<{ data: any[] }>(["units-list"], "/properties/units");
   const { data: legalCasesData } = useApiQuery<{ data: any[] }>(["legal-cases-list"], "/legal/cases");
+  // #1715 — cost centers (departments) for the optional multi cost-center split.
+  const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
+  const costCenters = departmentsData?.data || [];
   const projects = projectsData?.data || [];
   const accounts = accountsData?.data || [];
   const expenseAccounts = accounts.filter((a: any) => a.type === "expense" || a.code?.startsWith("5"));
@@ -212,12 +215,7 @@ export default function ExpensesCreate() {
   // heuristic so the picker is never empty during the classification
   // window. The per-payment-method narrowing happens below, once `form`
   // is available.
-  const moneyAccounts = accounts.filter(
-    (a: any) =>
-      a.accountUsage
-        ? ["cash_box", "bank", "custody", "card", "cheque"].includes(a.accountUsage)
-        : a.code?.startsWith("11") || a.code?.startsWith("12"),
-  );
+  const moneyAccounts = accounts.filter((a: any) => isMoneyAccount(a));
 
   const expenseOptions: AutocompleteOption[] = expenseAccounts.map((a: any) => ({
     value: a.code || String(a.id),
@@ -284,6 +282,13 @@ export default function ExpensesCreate() {
   // #1715 PR-3: the master «ربط المصروف بـ» field. Its conditional fields
   // feed the same `allocation` dim payload the backend already consumes.
   const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
+  // #1715 — optional multi cost-center distribution. Each row pins a cost
+  // center (department id) and a percentage; the backend splits the expense
+  // DR into one balanced leg per row. Empty = single-line (legacy) behaviour.
+  const [ccDist, setCcDist] = useState<{ costCenterId: string; percentage: string }[]>([]);
+  const ccRows = ccDist.filter((r) => r.costCenterId && r.percentage);
+  const ccPctTotal = ccRows.reduce((s, r) => s + (Number(r.percentage) || 0), 0);
+  const ccBalanced = ccRows.length === 0 || Math.abs(ccPctTotal - 100) < 0.01;
   useEffect(() => {
     setAllocation((prev) => {
       if (prev.manualOverrideReason) return prev; // operator has pinned — don't clobber
@@ -361,6 +366,10 @@ export default function ExpensesCreate() {
       toast({ variant: "destructive", title: firstError });
       return;
     }
+    if (ccRows.length > 0 && !ccBalanced) {
+      toast({ variant: "destructive", title: `مجموع نسب توزيع مراكز التكلفة يجب أن يساوي 100% (الحالي ${ccPctTotal}%)` });
+      return;
+    }
     try {
       await createMut.mutateAsync({
         accountCode: form.accountCode || undefined,
@@ -400,6 +409,10 @@ export default function ExpensesCreate() {
         // Audit item #2 — ship operator overrides (if any field was pinned)
         lineAllocation: Object.values(allocation).some((v) => v != null && v !== "")
           ? buildAllocationPayload(allocation)
+          : undefined,
+        // #1715 — multi cost-center distribution (percentage-based).
+        costCenterDistribution: ccRows.length > 0
+          ? ccRows.map((r) => ({ costCenterId: Number(r.costCenterId), percentage: Number(r.percentage) }))
           : undefined,
       });
       toast({ title: "تم إضافة المصروف بنجاح" });
@@ -710,6 +723,59 @@ export default function ExpensesCreate() {
           />
         </div>
 
+        {/* #1715 — multi cost-center distribution. Optional; when used, the
+            expense DR is split into one balanced leg per cost center. */}
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Split className="h-4 w-4" />
+            <h3 className="font-semibold text-sm text-muted-foreground">توزيع على عدة مراكز تكلفة (اختياري)</h3>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            وزّع المصروف على أكثر من مركز تكلفة بالنسبة المئوية. عند الاستخدام يُقسَّم الطرف المدين تلقائيًا إلى سطر متوازن لكل مركز،
+            ويجب أن يساوي مجموع النسب 100%. اتركه فارغًا لتسجيل المصروف على مركز التكلفة الواحد أعلاه.
+          </p>
+          {ccDist.map((row, i) => (
+            <div key={i} className="flex items-end gap-2">
+              <div className="flex-1">
+                <FormFieldWrapper label="مركز التكلفة">
+                  <Select
+                    value={row.costCenterId}
+                    onValueChange={(v) => setCcDist((d) => d.map((r, j) => (j === i ? { ...r, costCenterId: v } : r)))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="اختر مركز التكلفة" /></SelectTrigger>
+                    <SelectContent>
+                      {costCenters.map((c: any) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormFieldWrapper>
+              </div>
+              <div className="w-28">
+                <NumberField
+                  label="النسبة %"
+                  value={row.percentage}
+                  onChange={(v) => setCcDist((d) => d.map((r, j) => (j === i ? { ...r, percentage: String(v) } : r)))}
+                  min={0} max={100} step={0.01} placeholder="0"
+                />
+              </div>
+              <Button type="button" variant="ghost" size="icon" onClick={() => setCcDist((d) => d.filter((_, j) => j !== i))}>
+                <Trash2 className="h-4 w-4 text-status-error" />
+              </Button>
+            </div>
+          ))}
+          <div className="flex items-center justify-between">
+            <Button type="button" variant="outline" size="sm" onClick={() => setCcDist((d) => [...d, { costCenterId: "", percentage: "" }])}>
+              <Plus className="h-4 w-4 me-1" /> إضافة مركز تكلفة
+            </Button>
+            {ccRows.length > 0 && (
+              <span className={`text-sm font-medium ${ccBalanced ? "text-status-success-foreground" : "text-status-error"}`}>
+                مجموع النسب: {ccPctTotal}% {ccBalanced ? "✓" : "(يجب أن يساوي 100%)"}
+              </span>
+            )}
+          </div>
+        </div>
+
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center gap-2">
             <Paperclip className="h-4 w-4" />
@@ -871,6 +937,10 @@ export default function ExpensesCreate() {
               paymentMethod: form.paymentMethod,
               costCenter: form.costCenter,
               supplierId: form.relatedEntityType === "supplier" && form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
+              // #1715 (comment 9) — let the preview suggest the specialized
+              // posting account from the linked target + item kind.
+              targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
+              itemType: form.expenseType || undefined,
             }}
             label="معاينة أثر المصروف"
           />

@@ -95,8 +95,12 @@ describe("#1733 — CARGO_TRANSITIONS forward-only walk + cancellation rules", (
     }
   });
 
-  it("`completed` and `cancelled` are terminal (empty target list)", () => {
-    expect(block).toMatch(/completed\s*:\s*\[\s*\]/);
+  it("`financially_closed` and `cancelled` are terminal (empty target list)", () => {
+    // #1733 Foundation rewires the chain so `completed` is no longer
+    // terminal — it now bridges into the finance gate
+    // (`completed → ready_for_invoice → financially_closed`). Only the
+    // post-invoice + cancelled states end the row.
+    expect(block).toMatch(/financially_closed\s*:\s*\[\s*\]/);
     expect(block).toMatch(/cancelled\s*:\s*\[\s*\]/);
   });
 

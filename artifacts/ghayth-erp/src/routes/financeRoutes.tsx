@@ -13,7 +13,9 @@ const MonthlyClosePack = lazy(() => import("@/pages/finance/monthly-close-pack")
 const DailyCloseChecklist = lazy(() => import("@/pages/finance/daily-close-checklist"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
 const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
+const FinanceIntakeCenter = lazy(() => import("@/pages/finance/finance-intake-center"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
+const AccountsUsageGaps = lazy(() => import("@/pages/finance/accounts-usage-gaps"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
@@ -39,6 +41,7 @@ const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuatio
 const NegativeStock = lazy(() => import("@/pages/finance/negative-stock"));
 const InventoryTurnover = lazy(() => import("@/pages/finance/inventory-turnover"));
 const GlIntegrityGaps = lazy(() => import("@/pages/finance/gl-integrity-gaps"));
+const OperationGaps = lazy(() => import("@/pages/finance/operation-gaps"));
 const GlAnomalyDetector = lazy(() => import("@/pages/finance/gl-anomaly-detector"));
 const UnmappedLines = lazy(() => import("@/pages/finance/unmapped-lines"));
 const WhtSummary = lazy(() => import("@/pages/finance/wht-summary"));
@@ -216,6 +219,8 @@ export const financeRoutes = [
   { path: "/finance/daily-close-checklist", component: DailyCloseChecklist },
   { path: "/finance/gl-health", component: GlHealthScore },
   { path: "/finance/approvals-inbox", component: ApprovalsInbox },
+  { path: "/finance/intake", component: FinanceIntakeCenter },
+  { path: "/finance/usage-gaps", component: AccountsUsageGaps },
   { path: "/finance/accounts", component: Accounts },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
@@ -232,6 +237,7 @@ export const financeRoutes = [
   { path: "/finance/wht-categories/:id/edit", component: WhtCategoriesEdit },
   // GL integrity gaps — period-close pre-flight (#1043).
   { path: "/finance/reports/gl-integrity-gaps", component: GlIntegrityGaps },
+  { path: "/finance/reports/operation-gaps", component: OperationGaps },
   { path: "/finance/gl-anomaly-detector", component: GlAnomalyDetector },
   { path: "/finance/reports/unmapped-lines", component: UnmappedLines },
   { path: "/finance/reports/wht-summary", component: WhtSummary },

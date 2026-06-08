@@ -39,6 +39,10 @@ const assetSchema = z.object({
   usefulLifeYears: z.coerce.number().int().min(1).max(50),
   depreciationMethod: z.enum(["straight_line", "declining_balance"]),
   description: z.string().trim(),
+  // Asset Acquisition Center: optional credit (payment-source) account. When
+  // set, the backend posts a balanced acquisition entry (Dr asset / Cr source)
+  // so the purchase is capitalised instead of expensed.
+  paymentAccountCode: z.string().trim(),
 });
 type AssetForm = z.infer<typeof assetSchema>;
 
@@ -213,6 +217,7 @@ export default function FixedAssetsPage() {
                 usefulLifeYears: 5,
                 depreciationMethod: "straight_line" as const,
                 description: "",
+                paymentAccountCode: "",
               }}
               submitLabel="حفظ الأصل"
               secondaryActions={
@@ -240,8 +245,16 @@ export default function FixedAssetsPage() {
                     { value: "declining_balance", label: "القسط المتناقص" },
                   ]}
                 />
+                <FormTextField
+                  name="paymentAccountCode"
+                  label="حساب مصدر الدفع (دائن) — اختياري"
+                  placeholder="مثال: 1010 نقدية / 1020 بنك / 2110 ذمم دائنة"
+                />
                 <FormTextareaField name="description" label="الوصف" className="col-span-2" rows={2} />
               </FormGrid>
+              <p className="text-xs text-muted-foreground mt-2">
+                عند إدخال حساب مصدر الدفع، يُرحَّل قيد اقتناء متوازن تلقائيًا (مدين: حساب الأصل ١٥٠٠ / دائن: مصدر الدفع) فتُرسمَل التكلفة بدل قيدها مصروفًا. اتركه فارغًا لتسجيل الأصل في السجل دون قيد.
+              </p>
             </FormShell>
           </CardContent>
         </Card>

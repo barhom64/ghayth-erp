@@ -722,6 +722,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // a contact, not a credential.
       const loginEmail = internalEmailIn || email || null;
       let userId: number | null = null;
+      let createdNewUser = false;
       let tempPassword: string | null = null;
       if (loginEmail) {
         const existingUser = await client.query(`SELECT id FROM users WHERE email=$1`, [loginEmail]);
@@ -733,6 +734,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
             [loginEmail, hashedPw, role || "employee", empId]
           );
           userId = userRes.rows[0].id;
+          createdNewUser = true;
         } else {
           userId = existingUser.rows[0].id;
           await client.query(`UPDATE users SET "employeeId"=$1 WHERE id=$2`, [empId, userId]);
@@ -744,11 +746,13 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // didn't override `role`, prefer the job-title default. Same for
       // opensCustody — flips on the auto-custody flag.
       let opensCustody = Boolean((body as any).createCustodyAccount);
+      let defaultRoleKeyFromJob: string | null = null;
       if (resolvedJobTitleId) {
         const [jt] = await client.query<{ defaultRoleKey: string | null; opensCustody: boolean }>(
           `SELECT "defaultRoleKey", "opensCustody" FROM job_titles WHERE id = $1`,
           [resolvedJobTitleId]
         ).then(r => r.rows as Array<{ defaultRoleKey: string | null; opensCustody: boolean }>);
+        defaultRoleKeyFromJob = jt?.defaultRoleKey ?? null;
         if (jt?.defaultRoleKey && (!role || role === "employee")) {
           // Re-apply the role only on the assignment we just inserted.
           await client.query(
@@ -757,6 +761,47 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
           );
         }
         if (jt?.opensCustody) opensCustody = true;
+      }
+
+      // ── Step 8a-bis: Grant the RBAC v2 role (the real access) ──
+      // Historically the normal "create employee" flow only ever set the
+      // legacy `employee_assignments.role` / `users.role` strings and NEVER
+      // inserted an rbac_user_roles row. Since RBAC v2 (checkAccess) is the
+      // enforcement authority, that left freshly-created employees able to
+      // log in and SEE the modules their role implies (via the predefined
+      // fallback in /permissions/my) but blocked with 403 on every actual
+      // action — "الخدمات تظهر لكن غير فعّالة". HR then had to go to the
+      // separate /admin/user-onboarding screen to grant the role by hand.
+      //
+      // Now we close that gap atomically: resolve the effective role key
+      // (job-title defaultRoleKey wins when the body didn't override) to an
+      // rbac_roles row and bind it in rbac_user_roles — exactly what
+      // /admin/onboard does. Soft-skip (warn) when the key has no rbac role
+      // so employee creation never fails just because a role is unmapped.
+      if (createdNewUser && userId) {
+        const effectiveRoleKey =
+          (defaultRoleKeyFromJob && (!role || role === "employee"))
+            ? defaultRoleKeyFromJob
+            : (role || "employee");
+        const roleRow = await client.query<{ id: number }>(
+          `SELECT id FROM rbac_roles
+            WHERE role_key = $1 AND ("companyId" = $2 OR "companyId" IS NULL)
+            ORDER BY "companyId" NULLS LAST LIMIT 1`,
+          [effectiveRoleKey, effectiveCompanyId]
+        ).then(r => r.rows as Array<{ id: number }>);
+        if (roleRow.length > 0) {
+          await client.query(
+            `INSERT INTO rbac_user_roles ("userId","companyId",role_id,"branchId","departmentId",is_primary,"assignedBy","createdAt")
+             VALUES ($1,$2,$3,$4,$5,true,$6,NOW())
+             ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
+            [userId, effectiveCompanyId, roleRow[0].id, targetBranchId, resolvedDepartmentId, scope.userId]
+          );
+        } else {
+          logger.warn(
+            { roleKey: effectiveRoleKey, companyId: effectiveCompanyId, userId },
+            "[employees] no rbac_roles row for effective role key — RBAC role not auto-granted; assign manually via /admin/users"
+          );
+        }
       }
 
       // ── Step 8b: Open employee subsidiary custody account ──
@@ -1336,7 +1381,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
       throw new NotFoundError("الموظف غير موجود");
     }
 
-    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime] = await Promise.all([
+    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles] = await Promise.all([
       rawQuery<Record<string, unknown>>(
         `SELECT pt.id, pt.title, pt.status, pt.priority, pt."dueDate", p.name AS "projectName"
          FROM project_tasks pt
@@ -1401,9 +1446,53 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
          ORDER BY o."overtimeDate" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
       ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
+      // HR-001 / #1799 priority #1 — Employee 360 tab "الحساب والدخول".
+      // We surface the linked user account row so the profile can render
+      // "هل للموظف حساب دخول؟ آخر دخول؟ مقفول؟". Sensitive fields
+      // (passwordHash, twoFactorSecret, resetToken) are NEVER selected.
+      // Limit 1 because the dual model is one-user-per-employee (see
+      // docs/rbac/UNIFIED_USER_ROLE_MODEL.md). NULL → no account yet.
+      rawQuery<Record<string, unknown>>(
+        `SELECT u.id, u.email, u.role, u."isActive", u."lastLoginAt",
+                u."failedLoginAttempts", u."lockedUntil", u."createdAt"
+           FROM users u
+          WHERE u."employeeId" = $1
+          LIMIT 1`,
+        [id]
+      ).catch((e) => { logger.error(e, "employees user-account query failed"); return []; }),
+      // HR-001 / #1799 priority #2 — Employee 360 tab "الأدوار والصلاحيات".
+      // Multi-role list from rbac_user_roles joined back to rbac_roles
+      // so the profile can show every active role the employee holds,
+      // ordered with primary first, then by level descending.
+      // Scoped to the employee's company (assignment.companyId) so
+      // cross-company role grants don't bleed into the current view.
+      // Empty array when the employee has no user account or no rbac role.
+      rawQuery<Record<string, unknown>>(
+        `SELECT ur.id AS "userRoleId",
+                r.id AS "roleId", r.role_key AS "roleKey",
+                r.label_ar AS "labelAr", r.label_en AS "labelEn",
+                r.color, r.level, r.is_template AS "isTemplate",
+                ur.is_primary AS "isPrimary", ur.expires_at AS "expiresAt",
+                ur."createdAt" AS "assignedAt",
+                ur."branchId", ur."departmentId"
+           FROM rbac_user_roles ur
+           JOIN rbac_roles r ON r.id = ur.role_id
+          WHERE ur."companyId" = $2
+            AND ur."userId" = (SELECT id FROM users WHERE "employeeId" = $1 LIMIT 1)
+          ORDER BY ur.is_primary DESC NULLS LAST, r.level DESC NULLS LAST, r.role_key`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "employees roles query failed"); return []; }),
     ]);
 
-    res.json(maskFields(req, { ...employee, tasks, attendance, leaves, trainings, payroll, violations, loans, overtime }));
+    res.json(maskFields(req, {
+      ...employee,
+      tasks, attendance, leaves, trainings, payroll, violations, loans, overtime,
+      // HR-001 — Employee 360 expansion (#1799 priority #1):
+      // `userAccount` is a single object (or null when employee has no
+      // login). `roles` is always an array (empty when no rbac grants).
+      userAccount: Array.isArray(userAccount) && userAccount.length > 0 ? userAccount[0] : null,
+      roles: roles ?? [],
+    }));
   } catch (err) {
     handleRouteError(err, res, "Get employee error:");
   }

@@ -71,6 +71,11 @@ const createFixedAssetSchema = z.object({
   assetAccountCode: z.string().default("1500"),
   depreciationAccountCode: z.string().default("6100"),
   accDepreciationAccountCode: z.string().default("1590"),
+  // Asset Acquisition Center: when a payment-source (credit) account is
+  // supplied, the create also posts a balanced acquisition entry
+  // (Dr asset account / Cr payment source) so the purchase is capitalised,
+  // not expensed. Omit it to only register the asset without a GL entry.
+  paymentAccountCode: z.string().optional().nullable(),
 });
 
 const updateFixedAssetSchema = z.object({
@@ -1007,21 +1012,52 @@ financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance.algo
     const purchaseCost = b.purchaseCost;
     const salvageValue = b.salvageValue;
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO fixed_assets (
+    const insertSql = `INSERT INTO fixed_assets (
          "companyId","branchId",code,name,description,category,
          "purchaseDate","purchaseCost","salvageValue","usefulLifeYears",
          "depreciationMethod","currentBookValue","accumulatedDepreciation",
          "assetAccountCode","depreciationAccountCode","accDepreciationAccountCode",status
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13,$14,$15,'active')`,
-      [scope.companyId, b.branchId ?? scope.branchId, b.code ?? null, b.name,
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13,$14,$15,'active')`;
+    const insertParams = [scope.companyId, b.branchId ?? scope.branchId, b.code ?? null, b.name,
        b.description ?? null, b.category ?? null, b.purchaseDate,
        purchaseCost, salvageValue, usefulYears,
        b.depreciationMethod, purchaseCost,
        b.assetAccountCode, b.depreciationAccountCode,
-       b.accDepreciationAccountCode]
-    );
-    assertInsert(insertId, "fixed_assets");
+       b.accDepreciationAccountCode];
+
+    let insertId = 0;
+    if (b.paymentAccountCode) {
+      // Asset Acquisition Center: capitalise the purchase rather than
+      // expensing it. The register row and the acquisition journal entry
+      // (Dr asset account / Cr payment source, balanced by construction)
+      // commit atomically so the GL and the asset register can never
+      // diverge — same withTransaction pattern as depreciate/dispose.
+      const paymentAcct = b.paymentAccountCode;
+      const { financialEngine } = await import("../lib/engines/index.js");
+      await withTransaction(async (client) => {
+        const ins = await client.query(`${insertSql} RETURNING id`, insertParams);
+        insertId = ins.rows[0].id as number;
+        await financialEngine.postJournalEntry({
+          companyId: scope.companyId,
+          branchId: b.branchId ?? scope.branchId,
+          createdBy: scope.activeAssignmentId,
+          ref: `ACQ-${b.code ?? insertId}`,
+          description: `اقتناء أصل ثابت: ${b.name}`,
+          type: "fixed_asset_acquisition",
+          sourceType: "fixed_asset_acquisition",
+          sourceId: insertId,
+          sourceKey: `finance:asset_acquisition:${insertId}`,
+          lines: [
+            { accountCode: b.assetAccountCode, debit: purchaseCost, credit: 0, description: `اقتناء ${b.name}`, assetId: insertId },
+            { accountCode: paymentAcct, debit: 0, credit: purchaseCost, description: `سداد اقتناء ${b.name}` },
+          ],
+        });
+      });
+      assertInsert(insertId, "fixed_assets");
+    } else {
+      const res = await rawExecute(insertSql, insertParams);
+      insertId = assertInsert(res.insertId, "fixed_assets");
+    }
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fixed_assets WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
     // #670 — fixed_assets create audit. Captures the immutable input
     // contract (cost, salvage, useful life, depreciation method,
@@ -1046,6 +1082,8 @@ financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance.algo
         assetAccountCode: b.assetAccountCode,
         depreciationAccountCode: b.depreciationAccountCode,
         accDepreciationAccountCode: b.accDepreciationAccountCode,
+        paymentAccountCode: b.paymentAccountCode ?? null,
+        acquisitionPosted: Boolean(b.paymentAccountCode),
       },
     }).catch((e) => logger.error(e, "finance-algorithms fixed_assets create audit failed"));
     res.status(201).json(row);
@@ -2771,7 +2809,7 @@ financeAlgorithmsRouter.get("/fx/revaluation", authorize({ feature: "finance.alg
     const scope = req.scope!;
     await ensureFxTables();
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM fx_revaluations WHERE "companyId"=$1 ORDER BY "revaluationDate" DESC LIMIT 120`,
+      `SELECT * FROM fx_revaluations WHERE "companyId"=$1 ORDER BY "postedAt" DESC NULLS LAST, id DESC LIMIT 120`,
       [scope.companyId]
     );
     res.json({ data: rows });

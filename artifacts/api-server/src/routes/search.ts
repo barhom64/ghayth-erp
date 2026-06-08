@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { maskFields } from "../lib/rbac/authorize.js";
+import { checkAccess } from "../lib/rbac/authzEngine.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -24,9 +25,42 @@ interface SupplierHit extends SearchHit { name: string; phone: string | null; st
 interface AgentHit extends SearchHit { name: string; phone: string | null; status: string; }
 interface DriverHit extends SearchHit { name: string; phone: string | null; status: string; }
 
-router.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+// Global search is cross-domain: a single endpoint that fans out across
+// employees, invoices, legal cases, tenants, vehicles, etc. The route gate
+// alone can't express "show only the domains this user may list", so each
+// entity query is gated INDIVIDUALLY against its own feature below. Without
+// this, any authenticated user who could reach the endpoint pulled back
+// employee passport numbers, invoice totals, legal cases and national IDs
+// far outside their role — a real cross-role data leak. We therefore do NOT
+// put a coarse single-feature `authorize` here; we rely on the global auth
+// layer (req.scope) + per-entity `checkAccess`, which fails closed (empty
+// results) for any domain the caller may not list.
+const FEATURE_BY_ENTITY: Record<string, string> = {
+  employees: "hr.employees",
+  clients: "crm.clients",
+  invoices: "finance.invoices",
+  projects: "projects",
+  tickets: "support.tickets",
+  units: "properties.units",
+  vehicles: "fleet.vehicles",
+  pilgrims: "umrah",
+  contracts: "properties.contracts",
+  buildings: "properties.buildings",
+  tenants: "properties.tenants",
+  parties: "settings",
+  legal_cases: "legal.cases",
+  suppliers: "finance.vendors",
+  umrah_agents: "umrah",
+  drivers: "fleet.vehicles",
+};
+
+router.get("/", async (req, res) => {
   try {
-    const scope = req.scope!;
+    const scope = req.scope;
+    if (!scope) {
+      res.status(401).json({ error: "غير مصرح", code: "AUTH_MISSING", fix: "يرجى تسجيل الدخول" });
+      return;
+    }
     const { q = "", type = "all" } = req.query as Record<string, string | undefined>;
     const query = String(q).trim();
 
@@ -39,7 +73,19 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
     const pattern = `%${escaped}%`;
     const entityType = String(type).toLowerCase();
 
-    const shouldSearch = (t: string) => entityType === "all" || entityType === t;
+    // Resolve list-access for every distinct feature once, then only run +
+    // return the entity queries the caller is actually permitted to list.
+    const featureKeys = Array.from(new Set(Object.values(FEATURE_BY_ENTITY)));
+    const featureAllowed = new Map<string, boolean>();
+    await Promise.all(
+      featureKeys.map(async (f) => {
+        const r = await checkAccess(scope, { feature: f, action: "list" });
+        featureAllowed.set(f, r.allowed);
+      })
+    );
+    const shouldSearch = (t: string) =>
+      (entityType === "all" || entityType === t) &&
+      featureAllowed.get(FEATURE_BY_ENTITY[t]) === true;
 
     const [employees, clients, invoices, projects, tickets, units, vehicles, pilgrims, contracts, buildings, tenants, parties, legalCases, suppliers, agents, drivers] = await Promise.all([
       shouldSearch("employees") ? rawQuery<EmployeeHit>(
@@ -145,7 +191,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("buildings") || shouldSearch("all") ? rawQuery<BuildingHit>(
+      shouldSearch("buildings") ? rawQuery<BuildingHit>(
         `SELECT b.id, b.name, b.city, b.type, b.status,
                 COUNT(u.id) AS "totalUnits",
                 'building' AS type
@@ -159,7 +205,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("tenants") || shouldSearch("all") ? rawQuery<TenantHit>(
+      shouldSearch("tenants") ? rawQuery<TenantHit>(
         `SELECT t.id, t.name, t.phone, t.email, t."nationalId",
                 'tenant' AS type
          FROM tenants t
@@ -174,7 +220,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
       // with all the roles they play, linking to the 360 view. Empty until the
       // registry is populated (POST /parties/backfill), then "محمد" surfaces
       // once instead of N times across the silo tables.
-      shouldSearch("parties") || shouldSearch("all") ? rawQuery<PartyHit>(
+      shouldSearch("parties") ? rawQuery<PartyHit>(
         // Was N+1: correlated string_agg per party row over party_links.
         // LIMIT 10 caps the surface but the per-row lookup still fires
         // up to 10 times during search-as-you-type. Single GROUP BY CTE
@@ -196,7 +242,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
       // القضايا
-      shouldSearch("legal_cases") || shouldSearch("all") ? rawQuery<LegalCaseHit>(
+      shouldSearch("legal_cases") ? rawQuery<LegalCaseHit>(
         `SELECT id, title AS name, "caseNumber", status, 'legal_case' AS type
          FROM legal_cases
          WHERE "companyId" = $1 AND "deletedAt" IS NULL
@@ -206,7 +252,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
       // الموردون
-      shouldSearch("suppliers") || shouldSearch("all") ? rawQuery<SupplierHit>(
+      shouldSearch("suppliers") ? rawQuery<SupplierHit>(
         `SELECT id, name, phone, status, 'supplier' AS type
          FROM suppliers
          WHERE "companyId" = $1 AND "deletedAt" IS NULL
@@ -216,7 +262,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
       // وكلاء العمرة
-      shouldSearch("umrah_agents") || shouldSearch("all") ? rawQuery<AgentHit>(
+      shouldSearch("umrah_agents") ? rawQuery<AgentHit>(
         `SELECT id, name, phone, status, 'umrah_agent' AS type
          FROM umrah_agents
          WHERE "companyId" = $1 AND "deletedAt" IS NULL
@@ -226,7 +272,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
       // السائقون
-      shouldSearch("drivers") || shouldSearch("all") ? rawQuery<DriverHit>(
+      shouldSearch("drivers") ? rawQuery<DriverHit>(
         `SELECT id, name, phone, status, 'driver' AS type
          FROM fleet_drivers
          WHERE "companyId" = $1 AND "deletedAt" IS NULL

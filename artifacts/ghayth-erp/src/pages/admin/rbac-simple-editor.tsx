@@ -10,8 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Shield, Search, Users, Copy } from "lucide-react";
+import { Save, Shield, Search, Users, Copy, Info, Eye } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
+import { moduleLabel } from "@/lib/module-labels";
+import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // مُركّب الأدوار — مستوى + نطاق عربي لكل ميزة (لمستخدم غير تقني)
@@ -70,6 +72,8 @@ export default function RbacSimpleEditor() {
   const [initialPicks, setInitialPicks] = useState<Record<string, { level: string; scopeTier: string }>>({});
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  // عرض الميزات الممنوحة فقط — لرؤية ما يملكه الدور فعلاً دون التمرير الطويل.
+  const [grantedOnly, setGrantedOnly] = useState(false);
   // نسخ وعدّل: نسخ دور قائم بكل منحه كنقطة انطلاق لدور جديد.
   const [cloning, setCloning] = useState(false);
   const [cloneKey, setCloneKey] = useState("");
@@ -141,19 +145,30 @@ export default function RbacSimpleEditor() {
       return next;
     });
 
-  // Visible features per module after applying the search filter.
+  const isGranted = (fk: string) => (picks[fk]?.level ?? "none") !== "none";
+
+  // Visible features per module after applying the search + "granted only"
+  // filters. Search matches the Arabic feature/module label too, not just
+  // the raw key.
   const visibleModules = useMemo(() => {
     const q = search.trim().toLowerCase();
     const out: [string, Feature[]][] = [];
     for (const [mod, feats] of Object.entries(modules)) {
-      const matched = q
-        ? feats.filter((f) => featLabel(f).toLowerCase().includes(q) || f.feature_key.toLowerCase().includes(q) || mod.toLowerCase().includes(q))
+      let matched = q
+        ? feats.filter((f) => featLabel(f).toLowerCase().includes(q) || f.feature_key.toLowerCase().includes(q) || mod.toLowerCase().includes(q) || moduleLabel(mod).toLowerCase().includes(q))
         : feats;
+      if (grantedOnly) matched = matched.filter((f) => isGranted(f.feature_key));
       if (matched.length > 0) out.push([mod, matched]);
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modules, search]);
+  }, [modules, search, grantedOnly, picks]);
+
+  // Total granted features across the role — a quick "size" of the role.
+  const grantedTotal = useMemo(
+    () => Object.values(picks).filter((v) => v.level !== "none").length,
+    [picks],
+  );
 
   const save = async () => {
     if (!roleId) return;
@@ -229,6 +244,17 @@ export default function RbacSimpleEditor() {
     >
       <PageStateWrapper isLoading={fLoad} error={fErr} onRetry={refetch}>
         <div className="space-y-4">
+          {/* What this page actually controls — RBAC v2 is the enforcement
+              authority, so a feature left at «بدون» neither shows nor works. */}
+          <div className="flex items-start gap-2 rounded-lg border border-status-info-surface bg-status-info-surface/30 p-3 text-xs text-status-info-foreground">
+            <Info className="h-4 w-4 mt-0.5 shrink-0" />
+            <p>
+              ما تمنحه هنا هو <strong>ما يستطيع حامل الدور تنفيذه فعلاً</strong> في النظام.
+              «المستوى» نوع العملية (عرض/إضافة/اعتماد/تحكّم) و«النطاق» حجم البيانات
+              (سجلّاته ← فريقه ← قسمه ← فرعه ← الشركة). الميزة بمستوى «بدون» لا تظهر ولا تعمل لهذا الدور.
+            </p>
+          </div>
+
           <Card>
             <CardContent className="p-4 flex flex-wrap items-center gap-3">
               <span className="text-sm font-medium">الدور:</span>
@@ -247,14 +273,21 @@ export default function RbacSimpleEditor() {
                   <Users className="h-3.5 w-3.5" /> يحمله {memberCount} مستخدم — أي تعديل يسري عليهم فورًا
                 </Badge>
               )}
+              {roleId && <Badge variant="outline">{grantedTotal} ميزة ممنوحة</Badge>}
               {isDirty && <Badge variant="destructive">تغييرات غير محفوظة: {dirtyKeys.length}</Badge>}
               <Link href="/admin" className="text-xs text-status-info-foreground hover:underline">
                 للتحكّم المتقدّم (حدود الاعتماد، فصل المهام، الشروط) ← المحرّر الطبقي
               </Link>
               {roleId && (
-                <div className="relative ms-auto w-full sm:w-64">
-                  <Search className="absolute start-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث في الميزات…" className="ps-8 h-9" />
+                <div className="flex items-center gap-3 ms-auto w-full sm:w-auto">
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap">
+                    <input type="checkbox" checked={grantedOnly} onChange={(e) => setGrantedOnly(e.target.checked)} />
+                    <Eye className="h-3.5 w-3.5" /> الممنوحة فقط
+                  </label>
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute start-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث في الميزات…" className="ps-8 h-9" />
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -282,8 +315,10 @@ export default function RbacSimpleEditor() {
             <Card key={mod}>
               <CardHeader className="py-3">
                 <CardTitle className="text-sm flex flex-wrap items-center gap-2">
-                  <Shield className="w-4 h-4" /> {mod}
-                  <span className="text-xs font-normal text-muted-foreground">({feats.length})</span>
+                  <Shield className="w-4 h-4" /> {moduleLabel(mod)}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({(modules[mod] ?? feats).filter((f) => isGranted(f.feature_key)).length}/{(modules[mod] ?? feats).length})
+                  </span>
                   {/* ضبط جماعي: عيّن كل ميزات هذا الموديول لمستوى واحد دفعة واحدة */}
                   <select
                     className="ms-auto border rounded-md px-2 py-1 text-xs bg-background font-normal"
@@ -300,9 +335,13 @@ export default function RbacSimpleEditor() {
                 <div className="divide-y">
                   {feats.map((f) => {
                     const pick = picks[f.feature_key] ?? { level: "none", scopeTier: "self" };
+                    const granted = pick.level !== "none";
                     return (
-                      <div key={f.feature_key} className="flex flex-wrap items-center justify-between gap-2 p-3">
-                        <span className="text-sm">{featLabel(f)}</span>
+                      <div key={f.feature_key} className={cn("flex flex-wrap items-center justify-between gap-2 p-3", granted && "bg-status-success-surface/30")}>
+                        <span className="text-sm flex items-center gap-2">
+                          <span className={cn("inline-block w-1.5 h-1.5 rounded-full", granted ? "bg-status-success-foreground" : "bg-border")} />
+                          {featLabel(f)}
+                        </span>
                         <div className="flex items-center gap-2">
                           <select
                             className="border rounded-md px-2 py-1 text-xs bg-background"
@@ -338,7 +377,7 @@ export default function RbacSimpleEditor() {
           {roleId && visibleModules.length === 0 && (
             <div className="text-center text-muted-foreground py-12">
               <Search className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              <p>لا ميزات تطابق «{search}»</p>
+              <p>{grantedOnly && !search.trim() ? "لا توجد ميزات ممنوحة لهذا الدور بعد" : `لا ميزات تطابق «${search}»`}</p>
             </div>
           )}
         </div>

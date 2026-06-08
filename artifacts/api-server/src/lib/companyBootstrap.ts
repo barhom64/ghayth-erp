@@ -1,6 +1,7 @@
 import { pool } from "./rawdb.js";
 import { logger } from "./logger.js";
 import type pg from "pg";
+import { seedRolesAndGrantsV2, bindUsersFromAssignments, DEFAULT_ROLE_DEFS } from "./rbac/autoMigrate.js";
 
 async function exec(client: pg.PoolClient, sql: string, params: unknown[] = []) {
   return client.query(sql, params);
@@ -433,38 +434,13 @@ async function createDefaultChartOfAccounts(client: pg.PoolClient, companyId: nu
 }
 
 async function createDefaultRoles(client: pg.PoolClient, companyId: number) {
-  const roles = [
-    { role: "owner", permissions: ["*"] },
-    { role: "general_manager", permissions: ["dashboard:read", "employees:*", "finance:*", "hr:*", "fleet:*", "property:*", "warehouse:*", "store:*", "operations:*", "bi:*", "reports:*", "governance:*", "legal:*", "crm:*", "marketing:*", "support:*", "documents:*", "requests:*", "comms:*", "settings:read"] },
-    { role: "hr_manager", permissions: ["dashboard:read", "employees:*", "hr:*", "attendance:*", "leaves:*", "payroll:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "finance_manager", permissions: ["dashboard:read", "finance:*", "invoices:*", "expenses:*", "reports:read", "documents:read", "requests:*", "comms:read"] },
-    { role: "fleet_manager", permissions: ["dashboard:read", "fleet:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "property_manager", permissions: ["dashboard:read", "property:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "projects_manager", permissions: ["dashboard:read", "operations:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "warehouse_manager", permissions: ["dashboard:read", "warehouse:*", "store:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "legal_manager", permissions: ["dashboard:read", "legal:*", "governance:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "support_manager", permissions: ["dashboard:read", "support:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "crm_manager", permissions: ["dashboard:read", "crm:*", "marketing:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "bi_manager", permissions: ["dashboard:read", "bi:*", "reports:*", "documents:read", "requests:*", "comms:read"] },
-    { role: "branch_manager", permissions: ["dashboard:read", "employees:read", "attendance:*", "leaves:approve", "reports:read", "documents:read", "requests:*", "comms:read", "support:read"] },
-    // Self-service driver — fleet.* read for the dispatcher-board feeds
-    // their /me/driver consumes; the actual self-service capabilities
-    // (start/complete trip, advance cargo) come through the featureCatalog
-    // selfService floor, not this legacy role_permissions seed.
-    { role: "driver", permissions: ["dashboard:read", "profile:self", "attendance:self", "leaves:self", "fleet:read", "documents:read", "comms:read", "notifications:read"] },
-    { role: "employee", permissions: ["dashboard:read", "attendance:self", "leaves:self", "profile:self", "requests:self", "documents:read", "comms:read"] },
-  ];
-  for (const r of roles) {
-    for (const perm of r.permissions) {
-      await exec(
-        client,
-        `INSERT INTO role_permissions (role, permission, "companyId")
-         VALUES ($1, $2, $3)
-         ON CONFLICT DO NOTHING`,
-        [r.role, perm, companyId]
-      );
-    }
-  }
+  // #1791 — seed RBAC v2 directly (rbac_roles + rbac_role_grants) from the
+  // shared default role definitions, then bind the company's active
+  // employee_assignments (including the creator's owner assignment minted just
+  // above) to their v2 role so login's role-switcher is populated immediately.
+  // No more legacy role_permissions writes.
+  const { roleIdByKey } = await seedRolesAndGrantsV2(client, companyId, DEFAULT_ROLE_DEFS);
+  await bindUsersFromAssignments(client, companyId, roleIdByKey);
 }
 
 async function createDefaultNumberingPrefixes(client: pg.PoolClient, companyId: number) {

@@ -3297,3 +3297,149 @@ reportsRouter.get(
     }
   },
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /finance/reports/operation-gaps — operation-level finance gap report
+// (#1715 §10). Scans posted journal entries + their legs/accounts and surfaces
+// the governance gaps the issue lists: payment-method↔account conflicts,
+// operations with no recognised money source, party/target accounts missing
+// their dimension, conflicting party fields, un-allocated costs, allocation
+// overrides, and postable accounts still missing accountUsage. Read-only.
+// Mirrors PAYMENT_METHOD_ALLOWED_USAGES in financeAccountClassifier.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/operation-gaps",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate } =
+        req.query as Record<string, string | undefined>;
+      // payment methods that bind to a money-source account usage
+      const PM_KNOWN = ["cash", "bank", "bank_transfer", "custody", "credit_card", "card", "check", "cheque"];
+
+      interface GapRow {
+        section: string;
+        entityId: number;
+        ref: string | null;
+        gap: string;
+        amount: number | null;
+        createdAt: string | null;
+      }
+
+      // Single pass over each entry's legs, aggregating the booleans every
+      // category below needs. LEFT JOIN coa so unclassified legs surface as
+      // has_unclassified rather than silently dropping the entry.
+      const params: unknown[] = [scope.companyId];
+      let dext = "";
+      if (startDate) { params.push(startDate); dext += ` AND je."date" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   dext += ` AND je."date" < ($${params.length}::date + 1)`; }
+      const jes = await rawQuery<{
+        entityId: number; ref: string | null; pm: string | null; createdAt: string | null;
+        ret: string | null; rei: number | null; cc: string | null; amount: number;
+        has_source: boolean | null; has_unclassified: boolean | null; has_party_acct: boolean | null;
+        has_cost_acct: boolean | null; has_costcenter: boolean | null; has_asset: boolean | null;
+        has_allowed_source: boolean | null;
+      }>(
+        `SELECT je.id AS "entityId", je.ref, je."paymentMethod" AS pm, je."date"::text AS "createdAt",
+                je."relatedEntityType" AS ret, je."relatedEntityId" AS rei, je."costCenter" AS cc,
+                COALESCE(SUM(jl.debit), 0)::float8 AS amount,
+                bool_or(coa."accountUsage" IN ('cash_box','bank','custody','card','cheque')) AS has_source,
+                bool_or(coa."accountUsage" IS NULL) AS has_unclassified,
+                bool_or(coa."accountUsage" IN ('receivable','payable')) AS has_party_acct,
+                bool_or(coa."accountUsage" IN ('operating_expense','cogs','payroll_expense')) AS has_cost_acct,
+                bool_or(jl."costCenterId" IS NOT NULL) AS has_costcenter,
+                bool_or(jl."assetId" IS NOT NULL) AS has_asset,
+                bool_or(CASE je."paymentMethod"
+                  WHEN 'cash' THEN coa."accountUsage" = 'cash_box'
+                  WHEN 'bank' THEN coa."accountUsage" = 'bank'
+                  WHEN 'bank_transfer' THEN coa."accountUsage" = 'bank'
+                  WHEN 'custody' THEN coa."accountUsage" = 'custody'
+                  WHEN 'credit_card' THEN coa."accountUsage" = 'card'
+                  WHEN 'card' THEN coa."accountUsage" = 'card'
+                  WHEN 'check' THEN coa."accountUsage" IN ('bank','cheque')
+                  WHEN 'cheque' THEN coa."accountUsage" IN ('bank','cheque')
+                  ELSE NULL END) AS has_allowed_source
+           FROM journal_entries je
+           JOIN journal_lines jl ON jl."journalId" = je.id
+           LEFT JOIN chart_of_accounts coa ON coa.id = jl."accountId"
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL ${dext}
+          GROUP BY je.id
+          ORDER BY je."date" DESC NULLS LAST, je.id DESC
+          LIMIT 5000`,
+        params,
+      );
+
+      const mk = (gap: string, r: typeof jes[number]): GapRow => ({
+        section: "journal_entry", entityId: r.entityId, ref: r.ref, gap, amount: r.amount, createdAt: r.createdAt,
+      });
+      const pmConflict: GapRow[] = [], noSource: GapRow[] = [], noParty: GapRow[] = [],
+        conflicting: GapRow[] = [], noTarget: GapRow[] = [];
+      for (const r of jes) {
+        const pmKnown = !!r.pm && PM_KNOWN.includes(r.pm);
+        // a classified money-source leg exists, but none matches the method
+        if (pmKnown && r.has_source && r.has_allowed_source !== true)
+          pmConflict.push(mk(`طريقة الدفع (${r.pm}) لا تطابق تصنيف حساب المصدر`, r));
+        // money moved by a method, but no cash/bank/custody/… leg at all
+        if (pmKnown && !r.has_source && !r.has_unclassified)
+          noSource.push(mk(`طريقة دفع (${r.pm}) بلا حساب مصدر نقدي/بنكي/عهدة`, r));
+        // touches a receivable/payable account but no party linked
+        if (r.has_party_acct && !r.ret)
+          noParty.push(mk("قيد على ذمم مدينة/دائنة بلا طرف مرتبط", r));
+        // relatedEntityType ⊕ relatedEntityId
+        if ((r.ret && !r.rei) || (!r.ret && r.rei))
+          conflicting.push(mk("حقول الطرف متعارضة (نوع بلا معرّف أو العكس)", r));
+        // a cost leg with no allocation target whatsoever
+        if (r.has_cost_acct && !r.has_costcenter && !r.has_asset && !r.cc && !r.rei)
+          noTarget.push(mk("مصروف/تكلفة بلا مركز تكلفة أو ربط بكيان", r));
+      }
+
+      // allocation overrides (audit trail) within the window
+      const oparams: unknown[] = [scope.companyId];
+      let oext = "";
+      if (startDate) { oparams.push(startDate); oext += ` AND "createdAt" >= $${oparams.length}`; }
+      if (endDate)   { oparams.push(endDate);   oext += ` AND "createdAt" < ($${oparams.length}::date + 1)`; }
+      const overrides = await rawQuery<GapRow>(
+        `SELECT id AS "entityId", "documentType" AS ref,
+                COALESCE("overrideReason", 'تجاوز بلا سبب مسجّل')::text AS gap,
+                NULL::float8 AS amount, "createdAt"::text AS "createdAt"
+           FROM allocation_override_log
+          WHERE "companyId" = $1 ${oext}
+          ORDER BY "createdAt" DESC LIMIT 500`,
+        oparams,
+      );
+
+      // postable accounts still missing accountUsage (highest-risk usage gap)
+      const accGaps = await rawQuery<GapRow>(
+        `SELECT id AS "entityId", code AS ref, name AS gap, NULL::float8 AS amount, "createdAt"::text AS "createdAt"
+           FROM chart_of_accounts
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL
+            AND "accountUsage" IS NULL AND "allowPosting" = true
+          ORDER BY code LIMIT 500`,
+        [scope.companyId],
+      );
+
+      const sections = [
+        { source: "payment_method_account_conflict", rows: pmConflict.slice(0, 500) },
+        { source: "missing_money_source", rows: noSource.slice(0, 500) },
+        { source: "party_account_without_party", rows: noParty.slice(0, 500) },
+        { source: "conflicting_party_fields", rows: conflicting.slice(0, 500) },
+        { source: "cost_without_target", rows: noTarget.slice(0, 500) },
+        { source: "allocation_overrides", rows: overrides },
+        { source: "postable_accounts_missing_usage", rows: accGaps },
+      ];
+      const totalGaps = sections.reduce((s, x) => s + x.rows.length, 0);
+      res.json(maskFields(req, {
+        filters: { startDate, endDate },
+        summary: {
+          totalGaps,
+          bySection: sections.map((s) => ({ source: s.source, count: s.rows.length })),
+          isClean: totalGaps === 0,
+        },
+        sections,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Operation gaps report error:");
+    }
+  },
+);

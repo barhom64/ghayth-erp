@@ -9,6 +9,7 @@ const Trips = lazy(() => import("@/pages/fleet/trips"));
 const TripsCreate = lazy(() => import("@/pages/create/fleet/trips-create"));
 const TripDetail = lazy(() => import("@/pages/fleet/trip-detail"));
 const FleetMaintenance = lazy(() => import("@/pages/fleet/maintenance"));
+const MaintenanceTicketImpact = lazy(() => import("@/pages/fleet/maintenance-ticket-impact"));
 const MaintenanceCreate = lazy(() => import("@/pages/create/fleet/maintenance-create"));
 const MaintenanceDetail = lazy(() => import("@/pages/details/maintenance-detail"));
 const Fuel = lazy(() => import("@/pages/fleet/fuel"));
@@ -38,6 +39,14 @@ const TelematicsScorecard = lazy(() => import("@/pages/fleet/telematics/scorecar
 const CargoList = lazy(() => import("@/pages/fleet/cargo"));
 const CargoCreate = lazy(() => import("@/pages/fleet/cargo-create"));
 const CargoDetail = lazy(() => import("@/pages/fleet/cargo-detail"));
+// #1733 Comment 9 — Booking + Dispatch SPA surface.
+const TransportBookings = lazy(() => import("@/pages/fleet/transport-bookings"));
+const TransportBookingCreate = lazy(() => import("@/pages/fleet/transport-booking-create"));
+const TransportBookingDetail = lazy(() => import("@/pages/fleet/transport-booking-detail"));
+const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
+// #1812 Planning engine — ops dashboard + driver in-app navigation.
+const TransportOpsDashboard = lazy(() => import("@/pages/fleet/transport-ops-dashboard"));
+const MeDriverNavigation = lazy(() => import("@/pages/fleet/me-driver-navigation"));
 // Unified driver self-service surface (#1354). Replaces /driver-portal/*
 // — drivers log in to the regular ERP, get the `driver` role, and land
 // here as their dashboard (see dashboard.tsx role-based redirect).
@@ -53,6 +62,7 @@ export const fleetRoutes = [
   { path: "/fleet/trips/create", component: TripsCreate },
   { path: "/fleet/trips/:id", component: TripDetail },
   { path: "/fleet/maintenance", component: FleetMaintenance },
+  { path: "/fleet/maintenance-impact", component: MaintenanceTicketImpact },
   { path: "/fleet/maintenance/create", component: MaintenanceCreate },
   { path: "/fleet/maintenance/:id", component: MaintenanceDetail },
   { path: "/fleet/fuel", component: Fuel },
@@ -88,6 +98,17 @@ export const fleetRoutes = [
   { path: "/fleet/cargo", component: CargoList },
   { path: "/fleet/cargo/create", component: CargoCreate },
   { path: "/fleet/cargo/:id", component: CargoDetail },
+  // #1733 Booking + Dispatch (Comment 9). Pre-trip pipeline:
+  //   intake → booking → lines → dispatch order → cargo manifest.
+  // The dispatch board groups orders by driver with conflict detection.
+  { path: "/fleet/transport/bookings", component: TransportBookings },
+  // /create must be listed BEFORE /:id so "create" isn't matched as an id.
+  { path: "/fleet/transport/bookings/create", component: TransportBookingCreate },
+  { path: "/fleet/transport/bookings/:id", component: TransportBookingDetail },
+  { path: "/fleet/transport/dispatch", component: TransportDispatch },
+  // #1812 ops dashboard + driver navigation surfaces.
+  { path: "/fleet/transport/ops-dashboard", component: TransportOpsDashboard },
+  { path: "/me/driver/navigation", component: MeDriverNavigation },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },
 ];

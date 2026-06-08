@@ -49,9 +49,13 @@ describe("System Governor guard structure", () => {
     expect(source).toContain(
       '{ guard: postingFailuresGuard, scope: "financial" }'
     );
-    expect(source).toContain(
-      '{ guard: auditViolationsGuard, scope: "financial" }'
-    );
+  });
+
+  it("audit-violations guard is advisory-only — NOT registered as a blanket blocker", () => {
+    // Governance findings must not hard-block all financial mutations (the
+    // "1307 critical violations" lockout). It stays a function but is no
+    // longer in the GUARD_REGISTRY.
+    expect(source).not.toContain('{ guard: auditViolationsGuard, scope: "financial" }');
   });
 });
 
@@ -95,10 +99,17 @@ describe("Guard business rules", () => {
     expect(source).toContain("result.cnt >= 25");
   });
 
-  it("audit violations guard blocks on 10+ critical violations with role bypass", () => {
-    expect(source).toContain("result.cnt >= 10");
-    expect(source).toContain("'critical'");
-    expect(source).toContain('context?.role === "owner"');
+  it("audit violations guard is advisory (always allows — findings live in the dashboard)", () => {
+    expect(source).toContain("guardName: \"audit_violations\"");
+    // no longer hard-blocks at a threshold
+    expect(source).not.toContain("result.cnt >= 10");
+  });
+
+  it("guard denial is role-aware with a concise fix (understands the صفة)", () => {
+    expect(source).toContain("export function buildGuardDenial");
+    expect(source).toContain("isManagerRole");
+    expect(source).toContain("denial.fix");
+    expect(source).toContain("fix: denial.fix");
   });
 });
 
