@@ -35,6 +35,7 @@ import {
   generateStatement,
   listUninvoicedGroups,
 } from "../lib/umrahInvoicingEngine.js";
+import { postNuskJournalEntries } from "../lib/umrahImportEngine.js";
 import {
   calculateCommissionForPlan,
   simulateCommission,
@@ -1189,6 +1190,7 @@ const updateNuskInvoiceSchema = z.object({
   additionalServices: z.coerce.number().optional(),
   netCost: z.coerce.number().optional(),
   totalAmount: z.coerce.number().optional(),
+  refundAmount: z.coerce.number().optional(),
   nuskStatus: z.enum(["pending", "paid", "in_progress", "expired", "refunded", "cancelled"]).optional(),
   issueDate: z.string().optional(),
   expiryDate: z.string().optional(),
@@ -1204,17 +1206,40 @@ router.post("/nusk-invoices", authorize({ feature: "umrah", action: "create" }),
       [b.nuskInvoiceNumber, scope.companyId]
     );
     if (dup) throw new ConflictError("رقم فاتورة نسك مكرر");
-    const rows = await rawQuery(
-      `INSERT INTO umrah_nusk_invoices ("companyId","branchId","nuskInvoiceNumber","agentId","subAgentId","groupId","mutamerCount",
-       "groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate","createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
-      [scope.companyId, scope.branchId || null, b.nuskInvoiceNumber, b.agentId, b.subAgentId || null, b.groupId || null, b.mutamerCount,
-       b.groundServices, b.visaFees, b.insuranceFees, b.transportTotal, b.hotelTotal, b.additionalServices, b.netCost, b.totalAmount, b.nuskStatus,
-       b.issueDate || null, b.expiryDate || null, scope.userId]
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_nusk_invoices", entityId: rows[0]?.id, after: { nuskInvoiceNumber: b.nuskInvoiceNumber } }).catch((e) => logger.error(e, "nusk bg"));
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.created", entity: "umrah_nusk_invoices", entityId: rows[0]?.id }).catch((e) => logger.error(e, "nusk bg"));
-    res.status(201).json(rows[0]);
+    // Single transaction: invoice row + AP journal entry must land
+    // together. The legacy code wrote the row only — so the NUSK
+    // obligation (DR 5201 cost / CR 2101 AP) never posted, the
+    // trial balance under-reported AP, and the reconciliation desk
+    // couldn't match the NUSK supplier ledger. Mirrors what
+    // confirmVouchersImport() does on every imported voucher.
+    const created = await withTransaction(async (client) => {
+      const res = await client.query(
+        `INSERT INTO umrah_nusk_invoices ("companyId","branchId","nuskInvoiceNumber","agentId","subAgentId","groupId","mutamerCount",
+         "groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate","createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+        [scope.companyId, scope.branchId || null, b.nuskInvoiceNumber, b.agentId, b.subAgentId || null, b.groupId || null, b.mutamerCount,
+         b.groundServices, b.visaFees, b.insuranceFees, b.transportTotal, b.hotelTotal, b.additionalServices, b.netCost, b.totalAmount, b.nuskStatus,
+         b.issueDate || null, b.expiryDate || null, scope.userId]
+      );
+      const row = res.rows[0];
+      await postNuskJournalEntries(
+        client,
+        { companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, seasonId: 0 },
+        {
+          nuskId: row.id,
+          nuskInvoiceNumber: b.nuskInvoiceNumber,
+          totalAmount: Number(b.totalAmount ?? 0),
+          refundAmount: 0,
+          nuskStatus: String(b.nuskStatus ?? "pending").toLowerCase(),
+          existingApJeId: null,
+          existingRefundJeId: null,
+        },
+      );
+      return row;
+    });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_nusk_invoices", entityId: created?.id, after: { nuskInvoiceNumber: b.nuskInvoiceNumber } }).catch((e) => logger.error(e, "nusk bg"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.created", entity: "umrah_nusk_invoices", entityId: created?.id }).catch((e) => logger.error(e, "nusk bg"));
+    res.status(201).json(created);
   } catch (err) { handleRouteError(err, res, "Create nusk invoice"); }
 });
 
@@ -1223,32 +1248,67 @@ router.patch("/nusk-invoices/:id", authorize({ feature: "umrah", action: "update
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateNuskInvoiceSchema.safeParse(req.body));
-    const [existing] = await rawQuery<{ id: number; nuskStatus: string }>(
-      `SELECT * FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    const [existing] = await rawQuery<{
+      id: number; nuskStatus: string; nuskInvoiceNumber: string;
+      totalAmount: number | string | null; refundAmount: number | string | null;
+      purchaseInvoiceId: number | null; journalEntryId: number | null;
+    }>(
+      `SELECT id, "nuskStatus", "nuskInvoiceNumber", "totalAmount", "refundAmount",
+              "purchaseInvoiceId", "journalEntryId"
+       FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) { res.status(404).json({ error: "فاتورة نسك غير موجودة" }); return; }
     if (existing.nuskStatus === "paid" && b.nuskStatus !== "refunded") {
       throw new ConflictError("لا يمكن تعديل فاتورة نسك مدفوعة");
     }
-    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate"] as const;
-    const params: unknown[] = [];
-    const sets: string[] = [];
-    for (const key of fields) {
-      // as-any-reason: justified-pragmatic - dynamic key access on Zod-parsed body whose generic does not expose indexer; key is bound to const whitelist `fields` (12 hardcoded columns)
-      if ((b as any)[key] !== undefined) { params.push((b as any)[key]); sets.push(`"${key}"=$${params.length}`); }
-    }
-    if (sets.length === 0) { res.json(existing); return; }
-    params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
-    sets.push(`"updatedAt"=NOW()`);
-    params.push(id); params.push(scope.companyId);
-    const [row] = await rawQuery(
-      `UPDATE umrah_nusk_invoices SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
-      params
-    );
+    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","refundAmount","nuskStatus","issueDate","expiryDate"] as const;
+    // Single transaction: UPDATE row + (idempotent) re-evaluation
+    // of the AP / refund-reversal journal entries. The legacy code
+    // updated the row only — so transitioning a nusk invoice to
+    // 'refunded' never posted the DR-AP / CR-cost reversal, the
+    // trial balance over-reported AP, and finance had to manually
+    // book the entry every refund. postNuskJournalEntries is
+    // idempotent via sourceKey + existing-id guards: it backfills
+    // legacy AP-less rows on first update AND posts the reversal
+    // the first time status flips to 'refunded'. Mirrors the
+    // confirmVouchersImport() update path.
+    const updated = await withTransaction(async (client) => {
+      const params: unknown[] = [];
+      const sets: string[] = [];
+      for (const key of fields) {
+        // as-any-reason: justified-pragmatic - dynamic key access on Zod-parsed body whose generic does not expose indexer; key is bound to const whitelist (13 hardcoded columns)
+        if ((b as any)[key] !== undefined) { params.push((b as any)[key]); sets.push(`"${key}"=$${params.length}`); }
+      }
+      let row = existing;
+      if (sets.length > 0) {
+        params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
+        sets.push(`"updatedAt"=NOW()`);
+        params.push(id); params.push(scope.companyId);
+        const upd = await client.query(
+          `UPDATE umrah_nusk_invoices SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
+          params
+        );
+        row = upd.rows[0];
+      }
+      await postNuskJournalEntries(
+        client,
+        { companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, seasonId: 0 },
+        {
+          nuskId: row.id,
+          nuskInvoiceNumber: String(row.nuskInvoiceNumber),
+          totalAmount: Number(b.totalAmount ?? row.totalAmount ?? 0),
+          refundAmount: Number(b.refundAmount ?? row.refundAmount ?? 0),
+          nuskStatus: String(b.nuskStatus ?? row.nuskStatus ?? "pending").toLowerCase(),
+          existingApJeId: row.purchaseInvoiceId ?? null,
+          existingRefundJeId: row.journalEntryId ?? null,
+        },
+      );
+      return row;
+    });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_nusk_invoices", entityId: id, after: b }).catch((e) => logger.error(e, "nusk bg"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.updated", entity: "umrah_nusk_invoices", entityId: id }).catch((e) => logger.error(e, "nusk bg"));
-    res.json(row);
+    res.json(updated);
   } catch (err) { handleRouteError(err, res, "Update nusk invoice"); }
 });
 

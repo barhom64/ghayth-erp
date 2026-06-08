@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -119,12 +121,44 @@ interface WeeklyData {
 }
 
 export default function TransportOpsDashboard() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const [date, setDate] = useState<string>(todayLocal());
   const [tab, setTab] = useState<"daily" | "weekly">("daily");
+  const [planningAll, setPlanningAll] = useState(false);
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: OpsDashboard }>(
     ["transport-ops-dashboard", date],
     `/transport/ops-dashboard?date=${date}`,
   );
+
+  const planAllUnassigned = async () => {
+    if (!data?.data?.unassigned?.length) return;
+    const ids = data.data.unassigned.map((b) => b.id);
+    if (!confirm(`تخطيط ${ids.length} حجزاً غير مسند تلقائياً (سيقترح النظام مركبة وسائق لكل حجز)؟`)) return;
+    setPlanningAll(true);
+    try {
+      const res = await apiFetch<{ data: { summary: {
+        total: number; planned: number; needsAttention: number;
+        noCandidate: number; noLine: number; skipped: number;
+      } } }>("/transport/integration/plan-bookings", {
+        method: "POST",
+        body: JSON.stringify({ bookingIds: ids }),
+      });
+      const s = res?.data?.summary;
+      toast({
+        title: `تم تخطيط ${s?.planned ?? 0} من ${s?.total ?? 0} حجوزات`,
+        description: s && s.needsAttention > 0
+          ? `${s.needsAttention} يحتاج تدخلاً يدوياً — افتح لوحة التوزيع.`
+          : undefined,
+      });
+      qc.invalidateQueries({ queryKey: ["transport-ops-dashboard", date] });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر التخطيط", description: message });
+    } finally {
+      setPlanningAll(false);
+    }
+  };
   const weekly = useApiQuery<{ data: WeeklyData }>(
     ["transport-ops-weekly", date],
     tab === "weekly" ? `/transport/ops-weekly?startDate=${date}` : null,
@@ -409,6 +443,19 @@ export default function TransportOpsDashboard() {
             <CardTitle className="text-sm flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-status-warning-foreground" />
               حجوزات غير مسندة
+              {dash.unassigned.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={planAllUnassigned}
+                  disabled={planningAll}
+                  className="h-7 text-xs"
+                  rateLimitAware
+                >
+                  <Wand2 className="h-3 w-3 me-1" />
+                  {planningAll ? "جارٍ التخطيط…" : "خطّط الكل"}
+                </Button>
+              )}
               <span className="ms-auto text-xs font-normal text-muted-foreground">
                 {dash.unassigned.length}
               </span>

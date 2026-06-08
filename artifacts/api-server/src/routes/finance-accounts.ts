@@ -58,6 +58,15 @@ const updateAccountSchema = z.object({
   name: z.string().min(1).optional(),
   type: z.string().refine((v) => (ACCOUNT_TYPES as readonly string[]).includes(v), { message: "نوع الحساب غير صالح" }).optional(),
   parentCode: z.string().optional().nullable(),
+  // #1715 (owner: «وحد نماذج الحسابات») — the edit form is now the SAME form as
+  // create, so the PATCH accepts the same editable metadata. `code` stays
+  // immutable and branch SCOPE is create-only (not movable here).
+  nameEn: z.string().optional().nullable(),
+  nature: z.string().refine((v) => (ACCOUNT_NATURES as readonly string[]).includes(v), { message: "طبيعة الحساب غير صالحة" }).optional(),
+  accountUsage: z.string().optional().nullable(),
+  childrenUsagePolicy: z.string().optional().nullable(),
+  allowPosting: z.boolean().optional(),
+  isAnalytical: z.boolean().optional(),
 });
 
 const journalLineSchema = z.object({
@@ -637,6 +646,12 @@ accountsRouter.patch("/accounts/:id", authorize({ feature: "finance.accounts", a
     addField("name", b.name);
     addField("type", b.type);
     addField("parentCode", b.parentCode);
+    addField("nameEn", b.nameEn);
+    addField("nature", b.nature);
+    addField("accountUsage", b.accountUsage);
+    addField("childrenUsagePolicy", b.childrenUsagePolicy);
+    addField("allowPosting", b.allowPosting);
+    addField("isAnalytical", b.isAnalytical);
     if (fields.length === 0) {
       throw new ValidationError("لا توجد بيانات للتحديث", {
         field: "body",
