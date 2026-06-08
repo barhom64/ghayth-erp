@@ -396,6 +396,7 @@ export const allNavSections: NavSection[] = [
         { label: "ترتيب الجهات", path: "/finance/entity-ranking", icon: BarChart3 },
         { label: "الجهات الخاملة", path: "/finance/dormant-entities", icon: Clock },
         { label: "GL Integrity Gaps", path: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
+        { label: "فجوات العمليات المالية", path: "/finance/reports/operation-gaps", icon: AlertTriangle },
         { label: "Unmapped Lines", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
         { label: "Posting Activity", path: "/finance/journal/activity", icon: Activity },
         { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
