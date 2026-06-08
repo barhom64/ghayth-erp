@@ -937,6 +937,10 @@ export default function ExpensesCreate() {
               paymentMethod: form.paymentMethod,
               costCenter: form.costCenter,
               supplierId: form.relatedEntityType === "supplier" && form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
+              // #1715 (comment 9) — let the preview suggest the specialized
+              // posting account from the linked target + item kind.
+              targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
+              itemType: form.expenseType || undefined,
             }}
             label="معاينة أثر المصروف"
           />
