@@ -104,6 +104,10 @@ export const allNavSections: NavSection[] = [
     items: [
       { label: "طلباتي", path: "/my-requests", icon: ClipboardCheck, children: [
         { label: "كل طلباتي", path: "/my-requests", icon: ClipboardCheck },
+        // HR-010 / #1799 priority #4 — صفحة كتالوج خدمات HR الموحّدة:
+        // بدل أن يبحث الموظف عن كل طلب في صفحة مختلفة، يفتح صفحة
+        // واحدة فيها كل ما يمكن طلبه من HR كبطاقات منظّمة بالفئة.
+        { label: "كتالوج خدمات HR", path: "/hr/services", icon: ClipboardCheck },
         { label: "طلب إجازة", path: "/hr/leaves/create", icon: Calendar },
       ]},
       { label: "معلوماتي", path: "/my-attendance", icon: User, children: [

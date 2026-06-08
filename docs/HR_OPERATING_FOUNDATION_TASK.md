@@ -403,7 +403,7 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 | 1 | سجل الموظف الرئيسي الموحد | 🟡 9/14 tabs | توسعة `employee-detail.tsx` لـ 14 تبويب — embed بدل routes |
 | 2 | ربط الموظف بالأدوار والصلاحيات | 🟢 موجود لكن غير مرئي في ملف الموظف | إضافة تبويب "الأدوار والصلاحيات" يقرأ من `rbac_user_roles` + يعرض effective permissions |
 | 3 | نموذج "ماذا يظهر لمن ومتى" | 🟡 RBAC scope يفي بالغرض | UI viewer للـ Effective Permissions per user (RBAC-004) |
-| 4 | كتالوج خدمات HR | 🟡 موجود مبعثر في القائمة | بناء صفحة "خدمات HR" تجمع الخدمات (طلب إجازة، طلب OT، عذر، قرض، ...) كـ catalog |
+| 4 | كتالوج خدمات HR | 🟢 **مكتمل** (HR-010) — صفحة `/hr/services` بـ 8 خدمات في 4 categories. | بناء صفحة "خدمات HR" ✅ |
 | 5 | محرك الطلبات وسلاسل الاعتماد | 🟢 موجود | توحيد UI inbox واحد بدل تشتيت |
 | 6 | الحضور حسب طبيعة العمل | 🟢 **مكتمل من جانب الـ engine + كل callsites السيرفر** (HR-002 → HR-004). بقي: UI لإدارة الفئات والـ overrides من شاشة الإعدادات. | جداول + engine ✅ — check-in ✅ — check-out ✅ — autoViolation cron ✅ — UI لاحقًا |
 | 7 | التتبع حسب السياسة | 🟡 **الأساس + ingestion مبني** (HR-005): `field_tracking_points` + `POST field-ping` (مع enforcement لتردد الفئة) + `GET field-track` (breadcrumb + live). بقي: ربط الواجهة + تقرير المسار/التوقفات. | إنشاء `field_tracking_points` ✅ + ingestion API ✅ + policy frequency ✅ — UI wiring لاحقًا |
@@ -428,7 +428,8 @@ attendancePolicyEngine.resolve(employee, attendance_event) ⇒ {
 | #1831 | **الأولوية #10 — Employee Scoring Engine**. راجع HR-006 سابقاً. 27/27 smoke tests خضراء. | 2026-06-08 |
 | HR-007 | **الأولوية #10 §G — Risk/Promotion/Burnout Signals**. Migration 273 + `lib/employeeSignalsEngine.ts` بـ 3 detection engines. UPSERT idempotent مع acknowledgement reset عند escalation الـ severity فقط. 32/32 smoke tests خضراء. | 2026-06-08 |
 | #1836 | **§B (نموذج المؤسسة التشغيلي) — الدفعة الأساسية**. راجع HR-008 سابقاً (5 جداول + 3 أعمدة + 9 system positions). 18/18 smoke tests. | 2026-06-08 |
-| HR-009 | **§B (إكمال) + #10 (cron)**. Migration 275 يُنشئ: (1) `supervision_lines` — matrix reporting مع 4 lineTypes (administrative/project/functional/dotted)، CHECK يرفض self-supervision، UNIQUE يسمح بنفس supervisor-supervisee في scopes مختلفة، indexes جزئية على endDate IS NULL. (2) `approval_authorities` — per-person approval limits مع `maxAmount NUMERIC(14,2)` nullable (NULL = unlimited)، `reason TEXT NOT NULL` (auditable override)، `requiresDualControl`، expiry support، UNIQUE (assignment, feature, action, currency). + ربط cron الـ scoring: handler عام `runEmployeeScoringPeriod` يستهلك engines من #1831 + #1833، تسجيلان جديدان: `weekly_employee_scoring` (الاثنين 03:00) و `monthly_employee_scoring` (1st @ 04:00). per-row try/catch فلا تفشل دفعة كاملة. UPSERT idempotent. 22/22 smoke tests خضراء. | 2026-06-08 |
+| #1837 | **§B إكمال + #10 cron**. supervision_lines + approval_authorities + scoring cron entries. 22/22 smoke tests. | 2026-06-08 |
+| HR-010 | **الأولوية #4 — HR Services Catalog**. صفحة جديدة `/hr/services` تعرض كل خدمات HR (8 خدمات: leave/overtime/excuse/loan/letter/transfer/training/exit) مجمّعة بـ 4 categories (time-off/compensation/career/compliance). كل بطاقة router-link إلى الـ create-form الموجود ⇒ لا formspread ولا تكرار validation. مسجّلة في `routes/hrRoutes.tsx` + `navigation.registry.ts` تحت «بوابة الموظف → طلباتي». 16/16 smoke tests خضراء. | 2026-06-08 |
 
 ---
 
