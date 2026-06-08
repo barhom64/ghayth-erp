@@ -1151,7 +1151,21 @@ export async function confirmVouchersImport(
 // Idempotency: caller passes the row's existingApJeId / existingRefundJeId;
 //   we skip posting when they are already set. createGuardedJournalEntry
 //   itself also dedupes via sourceKey, so a re-run is always safe.
-async function postNuskJournalEntries(
+/**
+ * Posts AP + (optional) refund-reversal journal entries for a NUSK
+ * invoice. Idempotent via the createGuardedJournalEntry sourceKey,
+ * so it's safe to call on:
+ *   - the row's first creation (existingApJeId = null),
+ *   - any later update that flips status to/from refunded,
+ *   - a backfill pass over historical rows where the JE was lost.
+ *
+ * Exported so the entities route's manual /nusk-invoices CREATE
+ * path can post the AP JE on first insert instead of writing the
+ * invoice row in isolation — without this call the NUSK obligation
+ * never lands in the trial balance and finance can't see what the
+ * company owes the NUSK vendor.
+ */
+export async function postNuskJournalEntries(
   client: pg.PoolClient,
   scope: ImportScope,
   params: {
