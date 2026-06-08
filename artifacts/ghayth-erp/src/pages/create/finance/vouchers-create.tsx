@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { PAYMENT_METHOD_OPTIONS as PAYMENT_METHODS, VOUCHER_OPERATIONS } from "@/lib/finance-type-maps";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -59,12 +60,7 @@ const OPERATION_TYPES_PAYMENT = [
   { value: "maintenance", label: "دفع صيانة" },
 ];
 
-const PAYMENT_METHODS = [
-  { value: "cash", label: "نقدي" },
-  { value: "bank_transfer", label: "تحويل بنكي" },
-  { value: "check", label: "شيك" },
-  { value: "credit_card", label: "بطاقة ائتمان" },
-];
+
 
 const HIGH_VALUE_THRESHOLD = 5000;
 
@@ -72,23 +68,12 @@ function generateDescription(params: { type: string; operationType: string; paye
   const { type, operationType, payee, amount } = params;
   const payeeLabel = payee ? ` / ${payee}` : "";
   const amountLabel = amount ? ` / ${formatCurrency(Number(amount))}` : "";
-  const opMap: Record<string, string> = {
-    rent: `تحصيل إيجار${payeeLabel}${amountLabel}`,
-    invoice_payment: `سداد فاتورة عميل${payeeLabel}${amountLabel}`,
-    deposit: `إيداع ضمان${payeeLabel}${amountLabel}`,
-    refund: `استرداد مبلغ${payeeLabel}${amountLabel}`,
-    receipt: `سند قبض${payeeLabel}${amountLabel}`,
-    vendor_invoice: `سداد فاتورة مورد${payeeLabel}${amountLabel}`,
-    salary: `صرف راتب${payeeLabel}`,
-    advance: `صرف سلفة موظف${payeeLabel}${amountLabel}`,
-    legal_fee: `أتعاب قانونية${payeeLabel}${amountLabel}`,
-    purchase: `مشتريات${payeeLabel}${amountLabel}`,
-    custody: `صرف عهدة${payeeLabel}${amountLabel}`,
-    insurance: `سداد تأمين${payeeLabel}${amountLabel}`,
-    maintenance: `دفع صيانة${payeeLabel}${amountLabel}`,
-    payment: `سند صرف${payeeLabel}${amountLabel}`,
-  };
-  return opMap[operationType] || (type === "receipt" ? `سند قبض${payeeLabel}` : `سند صرف${payeeLabel}`);
+  // #1715 (module review) — derive the base label from the shared
+  // VOUCHER_OPERATIONS map instead of a local opMap copy; append the suffix here.
+  const base = VOUCHER_OPERATIONS[operationType];
+  return base
+    ? `${base}${payeeLabel}${amountLabel}`
+    : (type === "receipt" ? `سند قبض${payeeLabel}` : `سند صرف${payeeLabel}`);
 }
 
 export default function VouchersCreate() {
