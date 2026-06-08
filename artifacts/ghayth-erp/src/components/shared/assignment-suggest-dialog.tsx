@@ -41,13 +41,38 @@ export interface SuggestionCandidate {
   estimatedDistanceKm: number | null;
 }
 
-interface Props {
+interface BookingSource {
+  kind: "booking";
   bookingId: number;
+}
+interface LegSource {
+  kind: "leg";
+  itineraryId: number;
+  legId: number;
+}
+type SuggestSource = BookingSource | LegSource;
+
+interface Props {
+  /** Either { kind:"booking", bookingId } or { kind:"leg", itineraryId, legId }. */
+  source?: SuggestSource;
+  /** @deprecated — use `source` instead. Kept for back-compat with
+   *  the booking-detail call site that predates the leg variant. */
+  bookingId?: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   scheduledStartAt?: string;
   scheduledEndAt?: string;
-  onSelect?: (candidate: SuggestionCandidate) => void;
+  /** Called after the candidate is selected. If `autoCreate` is true
+   *  AND the engine returns a usable window, the dispatch order is
+   *  already created by the time this fires (with the new id passed).
+   *  Otherwise the caller is responsible for creating the dispatch. */
+  onSelect?: (candidate: SuggestionCandidate, dispatchOrderId?: number) => void;
+  /** When true, picking a candidate POSTs to the bulk-plan endpoint
+   *  for this single booking and creates the dispatch order
+   *  inline. Default: true for bookings, FALSE for legs (legs route
+   *  through PATCH itinerary leg to set assignedVehicleId/DriverId
+   *  directly — no dispatch order yet). */
+  autoCreate?: boolean;
 }
 
 const SCORE_BAND = (s: number) =>
@@ -67,12 +92,27 @@ const SCORE_LABEL: Record<keyof SuggestionCandidate["scores"], string> = {
 };
 
 export function AssignmentSuggestDialog({
-  bookingId, open, onOpenChange, scheduledStartAt, scheduledEndAt, onSelect,
+  source, bookingId: legacyBookingId,
+  open, onOpenChange, scheduledStartAt, scheduledEndAt,
+  onSelect, autoCreate,
 }: Props) {
   const { toast } = useToast();
   const [candidates, setCandidates] = useState<SuggestionCandidate[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const effectiveSource: SuggestSource = source ??
+    (legacyBookingId != null
+      ? { kind: "booking", bookingId: legacyBookingId }
+      : { kind: "booking", bookingId: 0 });
+  // Default autoCreate: true for booking source, false for leg.
+  const effectiveAutoCreate =
+    autoCreate ?? (effectiveSource.kind === "booking");
+
+  const suggestUrl =
+    effectiveSource.kind === "booking"
+      ? `/transport/bookings/${effectiveSource.bookingId}/suggest-assignment`
+      : `/transport/itineraries/${effectiveSource.itineraryId}/legs/${effectiveSource.legId}/suggest-assignment`;
 
   const run = async () => {
     setLoading(true);
@@ -83,7 +123,7 @@ export function AssignmentSuggestDialog({
       if (scheduledStartAt) body.scheduledStartAt = scheduledStartAt;
       if (scheduledEndAt) body.scheduledEndAt = scheduledEndAt;
       const res = await apiFetch<{ data: SuggestionCandidate[] }>(
-        `/transport/bookings/${bookingId}/suggest-assignment`,
+        suggestUrl,
         { method: "POST", body: JSON.stringify(body) },
       );
       setCandidates(res?.data ?? []);
@@ -105,16 +145,84 @@ export function AssignmentSuggestDialog({
     setError(null);
   }
 
-  const pick = (c: SuggestionCandidate) => {
+  const [creating, setCreating] = useState(false);
+
+  const pick = async (c: SuggestionCandidate) => {
     if (c.blockers.length > 0) {
       toast({
         variant: "destructive",
         title: "هذا الاقتراح يحتوي على عوائق صارمة",
         description: "وثّق سبب الاستثناء في شاشة الإسناد إذا أردت المتابعة.",
       });
+      onSelect?.(c);
+      onOpenChange(false);
+      return;
     }
-    onSelect?.(c);
-    onOpenChange(false);
+    if (!effectiveAutoCreate) {
+      onSelect?.(c);
+      onOpenChange(false);
+      return;
+    }
+
+    // Leg path — PATCH the leg's assignedVehicleId/DriverId. No dispatch
+    // order is created (the leg becomes a booking line at a later
+    // materialization step).
+    if (effectiveSource.kind === "leg") {
+      setCreating(true);
+      try {
+        await apiFetch(
+          `/transport/itineraries/${effectiveSource.itineraryId}/legs/${effectiveSource.legId}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              assignedVehicleId: c.vehicleId,
+              assignedDriverId: c.driverId,
+              status: "assigned",
+            }),
+          },
+        );
+        toast({ title: `تم إسناد المرحلة (المركبة #${c.vehicleId}, السائق #${c.driverId})` });
+        onSelect?.(c);
+        onOpenChange(false);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast({ variant: "destructive", title: "تعذّر الإسناد", description: message });
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
+
+    // Booking path — fire the bulk-plan endpoint with this single
+    // booking so the dispatch order is materialized atomically.
+    setCreating(true);
+    try {
+      const res = await apiFetch<{ data: { results: Array<{
+        bookingId: number; outcome: string; dispatchOrderId?: number;
+        reason?: string;
+      }> } }>(
+        "/transport/integration/plan-bookings",
+        { method: "POST", body: JSON.stringify({ bookingIds: [effectiveSource.bookingId] }) },
+      );
+      const r = res?.data?.results?.[0];
+      if (r?.outcome === "planned") {
+        toast({ title: `تم إنشاء أمر التوزيع #${r.dispatchOrderId}` });
+        onSelect?.(c, r.dispatchOrderId);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "تعذّر الإنشاء التلقائي",
+          description: r?.reason ?? `الناتج: ${r?.outcome ?? "غير معروف"}`,
+        });
+        onSelect?.(c);
+      }
+      onOpenChange(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "فشل الاتصال", description: message });
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -146,12 +254,6 @@ export function AssignmentSuggestDialog({
               تأكد من إعدادات الأسطول والسائقين أولاً.
             </div>
           )}
-          {/* #1812 — when ALL candidates have HARD blockers (score 0),
-              the previous UX showed them ranked but didn't tell the
-              operator WHY everything failed. This aggregator surfaces
-              the dominant blocker reasons so they can fix the root
-              cause (e.g. "all drivers need rest" vs "no vehicle has
-              capacity"). */}
           {candidates && candidates.length > 0 && candidates.every((c) => c.blockers.length > 0) && (
             <Card className="border-rose-300 bg-rose-50">
               <CardContent className="p-3 text-sm space-y-2">
@@ -162,8 +264,6 @@ export function AssignmentSuggestDialog({
                 {(() => {
                   const counts = new Map<string, number>();
                   for (const c of candidates) for (const b of c.blockers) {
-                    // Bucket by the leading phrase to dedupe minor
-                    // variations (e.g. specific values inside the message).
                     const key = b.replace(/\d+(\.\d+)?/g, "N").slice(0, 80);
                     counts.set(key, (counts.get(key) ?? 0) + 1);
                   }
@@ -260,8 +360,18 @@ export function AssignmentSuggestDialog({
                 )}
 
                 <div className="mt-2 flex justify-end">
-                  <Button size="sm" variant={c.blockers.length > 0 ? "outline" : "default"} onClick={() => pick(c)} rateLimitAware>
-                    {c.blockers.length > 0 ? "اعتمد رغم العوائق" : "اعتمد هذا الاقتراح"}
+                  <Button
+                    size="sm"
+                    variant={c.blockers.length > 0 ? "outline" : "default"}
+                    onClick={() => pick(c)}
+                    disabled={creating}
+                    rateLimitAware
+                  >
+                    {creating ? "جارٍ الإنشاء…" :
+                     c.blockers.length > 0 ? "اعتمد رغم العوائق" :
+                     effectiveAutoCreate && effectiveSource.kind === "leg" ? "اعتمد + إسناد المرحلة" :
+                     effectiveAutoCreate ? "اعتمد + أنشئ أمر التوزيع" :
+                     "اعتمد هذا الاقتراح"}
                   </Button>
                 </div>
               </CardContent>
