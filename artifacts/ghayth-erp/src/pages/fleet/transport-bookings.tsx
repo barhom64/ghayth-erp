@@ -159,6 +159,11 @@ export default function TransportBookingsList() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "حجوزات النقل" }]}
       actions={
         <div className="flex items-center gap-2">
+          <Link href="/fleet/transport/ops-dashboard">
+            <Button variant="outline" size="sm">
+              <Calendar className="h-4 w-4 me-1" />لوحة تشغيل اليوم
+            </Button>
+          </Link>
           <Link href="/fleet/transport/dispatch">
             <Button variant="outline" size="sm">
               <Calendar className="h-4 w-4 me-1" />لوحة التوزيع
