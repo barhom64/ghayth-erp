@@ -44,9 +44,27 @@ describe("#1812 — bulk planning endpoint", () => {
   });
 
   it("rejects candidates with HARD blockers + below minScore threshold (default 60)", () => {
-    expect(ROUTER).toMatch(/top\.blockers\.length > 0/);
-    expect(ROUTER).toMatch(/top\.score < minScore/);
+    expect(ROUTER).toMatch(/c\.blockers\.length > 0\)\s*continue/);
+    expect(ROUTER).toMatch(/c\.score < minScore\)\s*continue/);
     expect(ROUTER).toMatch(/b\.minScore \?\? 60/);
+  });
+
+  it("cross-batch dedup: skips claimed (vehicle | driver) windows from earlier bookings in same batch", () => {
+    expect(ROUTER).toContain("claimedVehicleWindows");
+    expect(ROUTER).toContain("claimedDriverWindows");
+    expect(ROUTER).toMatch(/vehicleClaimed|overlaps\(/);
+    // After a successful pick, the claim is recorded for subsequent
+    // bookings in the same batch.
+    expect(ROUTER).toMatch(/claimedVehicleWindows\.push/);
+    expect(ROUTER).toMatch(/claimedDriverWindows\.push/);
+  });
+
+  it("requests 10 candidates to have alternates when the top is already claimed", () => {
+    expect(ROUTER).toMatch(/limit: 10/);
+  });
+
+  it("surfaces a distinct reason when all candidates are batch-claimed", () => {
+    expect(ROUTER).toMatch(/كل المرشحين المؤهلين محجوزون لحجز آخر في نفس الدفعة/);
   });
 
   it("flips the booking_line status to dispatched on success", () => {
