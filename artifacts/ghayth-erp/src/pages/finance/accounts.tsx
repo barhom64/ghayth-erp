@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { ACCOUNT_TYPES } from "@/lib/finance-type-maps";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, apiPatch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,9 +25,7 @@ import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
-const typeMap: Record<string, string> = {
-  asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات"
-};
+const typeMap = ACCOUNT_TYPES;
 const typeColors: Record<string, string> = {
   asset: "bg-status-info-surface text-status-info-foreground",
   liability: "bg-status-error-surface text-status-error-foreground",
