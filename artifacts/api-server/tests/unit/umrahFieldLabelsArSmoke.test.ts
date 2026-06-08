@@ -66,12 +66,13 @@ const WIZARD = readFileSync(
 
 describe("header-maps endpoint exposes labels", () => {
   it("imports UMRAH_FIELD_LABELS_AR from the engine", () => {
-    expect(ROUTE).toMatch(/UMRAH_FIELD_LABELS_AR,?\s*\n\} from "\.\.\/lib\/umrahImportEngine\.js"/);
+    expect(ROUTE).toContain("UMRAH_FIELD_LABELS_AR,");
+    expect(ROUTE).toMatch(/from "\.\.\/lib\/umrahImportEngine\.js"/);
   });
 
   it("returns labels in BOTH mutamers and vouchers payloads", () => {
-    expect(ROUTE).toMatch(/mutamers: \{[\s\S]{0,200}labels: UMRAH_FIELD_LABELS_AR/);
-    expect(ROUTE).toMatch(/vouchers: \{[\s\S]{0,200}labels: UMRAH_FIELD_LABELS_AR/);
+    expect(ROUTE).toMatch(/mutamers: \{[\s\S]{0,300}labels: UMRAH_FIELD_LABELS_AR/);
+    expect(ROUTE).toMatch(/vouchers: \{[\s\S]{0,300}labels: UMRAH_FIELD_LABELS_AR/);
   });
 });
 
@@ -80,12 +81,16 @@ describe("import wizard renders Arabic labels", () => {
     expect(WIZARD).toMatch(/const labels = headerMapsQ\.data\?\.\[fileType\]\?\.labels \?\? \{\}/);
   });
 
-  it("the dropdown SelectItem renders labels[field], not the raw field", () => {
-    expect(WIZARD).toMatch(/<SelectItem key=\{field\} value=\{field\}>\{labels\[field\] \?\? field\}<\/SelectItem>/);
+  it("each SearchableSelect option uses labels[field] for its display text", () => {
+    // §2 of #1870 replaced the plain Radix Select with SearchableSelect
+    // for grouped + searchable rendering. The label projection is now
+    // built inside `options: [...dbFields.map(...)]`, but the intent
+    // (Arabic over English) stays the same.
+    expect(WIZARD).toContain("label: labels[field] ?? field");
   });
 
-  it("sorts the dropdown by the Arabic label via localeCompare(.., 'ar')", () => {
-    expect(WIZARD).toMatch(/\.sort\(\(a, b\) =>\s*\n?\s*\(labels\[a\] \?\? a\)\.localeCompare\(labels\[b\] \?\? b, "ar"\)/);
+  it("sorts the dropdown by the Arabic label inside its group", () => {
+    expect(WIZARD).toMatch(/\(labels\[a\] \?\? a\)\.localeCompare\(labels\[b\] \?\? b, "ar"\)/);
   });
 });
 

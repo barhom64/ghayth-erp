@@ -22,6 +22,14 @@ export interface SelectOption {
   value: string;
   label: string;
   sublabel?: string;
+  /**
+   * Optional group header. When at least one option carries a group,
+   * the dropdown renders one CommandGroup per distinct group (with
+   * the group string as the heading) instead of a single flat list.
+   * Falls back to "أخرى" / "Other" for options without a group when
+   * mixed grouping is used.
+   */
+  group?: string;
 }
 
 interface SearchableSelectProps {
@@ -75,33 +83,39 @@ export function SearchableSelect({
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
+          <CommandList className="max-h-[60vh]">
             <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  value={option.label}
-                  onSelect={() => {
-                    onValueChange(option.value === value ? "" : option.value);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "me-2 h-4 w-4",
-                      value === option.value ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  <div className="flex flex-col">
-                    <span>{option.label}</span>
-                    {option.sublabel && (
-                      <span className="text-xs text-muted-foreground">{option.sublabel}</span>
-                    )}
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {(() => {
+              // Group if any option specifies a group. Without this
+              // the import wizard's column-mapping dropdown was a
+              // flat ~50-item list that overflowed the page (issue
+              // #1870 §2). Grouped rendering keeps the dropdown
+              // compact + scannable; the CommandInput still filters
+              // across all groups together.
+              const hasGroups = options.some((o) => o.group);
+              if (!hasGroups) {
+                return (
+                  <CommandGroup>
+                    {options.map(renderOption)}
+                  </CommandGroup>
+                );
+              }
+              const order: string[] = [];
+              const byGroup: Record<string, SelectOption[]> = {};
+              for (const opt of options) {
+                const g = opt.group ?? "أخرى";
+                if (!byGroup[g]) {
+                  byGroup[g] = [];
+                  order.push(g);
+                }
+                byGroup[g].push(opt);
+              }
+              return order.map((g) => (
+                <CommandGroup key={g} heading={g}>
+                  {byGroup[g].map(renderOption)}
+                </CommandGroup>
+              ));
+            })()}
             {onCreateNew && (
               <>
                 <CommandSeparator />
@@ -124,6 +138,32 @@ export function SearchableSelect({
       </PopoverContent>
     </Popover>
   );
+
+  function renderOption(option: SelectOption) {
+    return (
+      <CommandItem
+        key={option.value}
+        value={option.label}
+        onSelect={() => {
+          onValueChange(option.value === value ? "" : option.value);
+          setOpen(false);
+        }}
+      >
+        <Check
+          className={cn(
+            "me-2 h-4 w-4",
+            value === option.value ? "opacity-100" : "opacity-0"
+          )}
+        />
+        <div className="flex flex-col">
+          <span>{option.label}</span>
+          {option.sublabel && (
+            <span className="text-xs text-muted-foreground">{option.sublabel}</span>
+          )}
+        </div>
+      </CommandItem>
+    );
+  }
 }
 
 interface SearchableSelectFieldProps extends SearchableSelectProps {
