@@ -16,7 +16,8 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { amountTaxSplit } from "@/lib/tax-math";
 import { filterAccountsForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
-import { AlertCircle, Paperclip, Link2, Plus, Trash2, Split } from "lucide-react";
+import { AlertCircle, Paperclip, Link2, Plus, Trash2, Split, Lock, ChevronDown } from "lucide-react";
+import { usePermission } from "@/components/shared/permission-gate";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
@@ -27,7 +28,7 @@ import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
-import { ImpactPreviewButton } from "@/components/shared/impact-preview";
+import { LiveImpactPreview } from "@/components/shared/impact-preview";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -283,6 +284,12 @@ export default function ExpensesCreate() {
   // #1715 PR-3: the master «ربط المصروف بـ» field. Its conditional fields
   // feed the same `allocation` dim payload the backend already consumes.
   const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
+  // #1715 (owner feedback) — the manual GL override is an ADVANCED escape
+  // hatch, not a normal path: only finance approvers see it, it's collapsed by
+  // default, and any override must carry a documented reason. Smart routing
+  // (the operation context + impact preview) is the default for everyone else.
+  const canManualOverride = usePermission("finance:approve");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   // #1715 — optional multi cost-center distribution. Each row pins a cost
   // center (department id) and a percentage; the backend splits the expense
   // DR into one balanced leg per row. Empty = single-line (legacy) behaviour.
@@ -716,20 +723,60 @@ export default function ExpensesCreate() {
           description="اختر ما يُربط به المصروف، وستظهر الحقول المناسبة فقط. الربط يُنتج الأبعاد المحاسبية ومركز التكلفة تلقائياً."
         />
 
-        <div className="border rounded-lg p-4 mb-4 space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">تفاصيل محاسبية إضافية (اختياري)</h3>
-          <p className="text-xs text-muted-foreground">
-            القاعدة التلقائية ستوزّع المصروف بناءً على بند المصروفات + الجهة المرتبطة.
-            افتح هذا القسم فقط إذا أردت تجاوز الحساب أو إضافة بُعد مفقود (مركبة / عقار / مشروع / عمرة).
-            أي تجاوز يدوي يجب أن يُرفَق بسبب نصّي وسيُسجَّل في تقرير "Manual Overrides".
-          </p>
-          <LineAllocationPanel
-            value={allocation}
-            onChange={setAllocation}
-            status={deriveAllocationStatus(allocation)}
-            required={false}
-          />
-        </div>
+        {/* #1715 (owner feedback) — «التوجيه المحاسبي المتوقّع» live under the
+            operation: suggested debit/credit account, cost-center budget,
+            linked entity, operational effect, and future task — auto-updates. */}
+        {form.amount && Number(form.amount) > 0 && (
+          <div className="mb-4">
+            <LiveImpactPreview
+              endpoint="/finance/expenses/impact-preview"
+              enabled={Boolean(form.amount && Number(form.amount) > 0)}
+              payload={{
+                amount: Number(form.amount),
+                expenseType: form.expenseType,
+                paymentMethod: form.paymentMethod,
+                costCenter: form.costCenter,
+                supplierId: form.relatedEntityType === "supplier" && form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
+                targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
+                itemType: form.expenseType || undefined,
+              }}
+            />
+          </div>
+        )}
+
+        {/* #1715 (owner feedback) — ADVANCED manual override. Hidden entirely
+            for non-approvers (smart routing is their only path); collapsed by
+            default for approvers; any override requires a documented reason
+            (logged to «Manual Overrides»). It is NOT a substitute for the
+            smart operation context above. */}
+        {canManualOverride && (
+          <div className="border border-dashed rounded-lg p-4 mb-4 space-y-3">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((v) => !v)}
+              className="flex items-center justify-between w-full text-sm font-semibold text-muted-foreground"
+            >
+              <span className="flex items-center gap-2">
+                <Lock className="h-4 w-4" /> التفاصيل اليدوية المتقدمة (تجاوز يدوي — يتطلب صلاحية وسبب)
+              </span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
+            </button>
+            {advancedOpen && (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  التوجيه الذكي أعلاه يحدّد الحساب والأبعاد تلقائياً. لا تفتح هذا القسم إلا لتجاوز
+                  الحساب أو إضافة بُعد مفقود، ويجب إرفاق سبب نصّي — سيُسجَّل في تقرير «Manual Overrides».
+                </p>
+                <LineAllocationPanel
+                  value={allocation}
+                  onChange={setAllocation}
+                  status={deriveAllocationStatus(allocation)}
+                  required={false}
+                />
+              </>
+            )}
+          </div>
+        )}
 
         {/* #1715 — multi cost-center distribution. Optional; when used, the
             expense DR is split into one balanced leg per cost center. */}
@@ -935,24 +982,6 @@ export default function ExpensesCreate() {
         )}
 
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
-
-        {form.amount && Number(form.amount) > 0 && (
-          <ImpactPreviewButton
-            endpoint="/finance/expenses/impact-preview"
-            payload={{
-              amount: Number(form.amount),
-              expenseType: form.expenseType,
-              paymentMethod: form.paymentMethod,
-              costCenter: form.costCenter,
-              supplierId: form.relatedEntityType === "supplier" && form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
-              // #1715 (comment 9) — let the preview suggest the specialized
-              // posting account from the linked target + item kind.
-              targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
-              itemType: form.expenseType || undefined,
-            }}
-            label="معاينة أثر المصروف"
-          />
-        )}
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center justify-between">
