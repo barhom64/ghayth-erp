@@ -844,7 +844,7 @@ async function loadAttendance(companyId: number, id: string) {
             a."checkOut" AS "checkOutTime",
             CONCAT(a."checkInLat",  ',', a."checkInLon")  AS "checkInLocation",
             CONCAT(a."checkOutLat", ',', a."checkOutLon") AS "checkOutLocation",
-            a."lateMinutes", a."earlyMinutes",
+            a."lateMinutes", a."earlyLeaveMinutes" AS "earlyMinutes",
             EXTRACT(EPOCH FROM (a."checkOut" - a."checkIn"))/3600 AS "workedHours",
             a.status, a.notes,
             ea.id AS "assignmentId",
@@ -897,7 +897,7 @@ async function loadFleetMaintenance(companyId: number, id: string) {
             v."plateNumber", d.name AS "driverName"
      FROM fleet_maintenance fm
      LEFT JOIN fleet_vehicles v ON v.id = fm."vehicleId"
-     LEFT JOIN fleet_drivers d ON d.id = v."currentDriverId"
+     LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId"
      WHERE fm.id = $1 AND fm."companyId" = $2 LIMIT 1`,
     [id, companyId]
   );
@@ -1513,10 +1513,8 @@ async function loadSupportTicket(companyId: number, id: string) {
   const [row] = await rawQuery<Record<string, unknown>>(
     `SELECT st.*,
             st.id::text AS "ticketNumber",
-            er.name AS "reporterName",
             ag.name AS "assigneeName"
      FROM support_tickets st
-     LEFT JOIN users er ON er.id = st."reporterId"
      LEFT JOIN users ag ON ag.id = st."assigneeId"
      WHERE st.id = $1 AND st."companyId" = $2 LIMIT 1`,
     [id, companyId],
@@ -1557,7 +1555,7 @@ async function loadSalaryAdvance(companyId: number, id: string) {
 async function loadTrainingProgram(companyId: number, id: string) {
   const [row] = await rawQuery<Record<string, unknown>>(
     `SELECT tp.*,
-            tp."totalHours", tp."startDate", tp."endDate"
+            tp.duration AS "totalHours", tp."startDate", tp."endDate"
      FROM training_programs tp
      WHERE tp.id = $1 AND tp."companyId" = $2 LIMIT 1`,
     [id, companyId],
@@ -1627,8 +1625,7 @@ async function loadBudgetCard(companyId: number, id: string) {
 async function loadShiftCard(companyId: number, id: string) {
   const [row] = await rawQuery<Record<string, unknown>>(
     `SELECT s.*,
-            s."totalHours",
-            s."lateGraceMinutes",
+            s."gracePeriod" AS "lateGraceMinutes",
             br.name AS "branchName"
      FROM shifts s
      LEFT JOIN branches br ON br.id = s."branchId"
