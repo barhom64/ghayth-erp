@@ -1,0 +1,914 @@
+import { useMemo, useState } from "react";
+import { Link } from "wouter";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { PageShell } from "@workspace/ui-core";
+import { ArrowLeft, Plus, Pencil, Trash2, Fuel, Wrench, AlertTriangle, Clipboard } from "lucide-react";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { LoadingSpinner } from "@/components/shared/loading-error-states";
+import { useToast } from "@/hooks/use-toast";
+
+// #1733 follow-up — admin SPA for the two rules engines created in
+// migration 269 (PR #1796). Both engines previously had no admin surface
+// so rules could only be inserted via SQL. This page closes that gap.
+//
+//   Tab 1 — Expense rules (fleet_expense_rules):
+//     Defaults the 3-bucket accounting treatment + liability + recharge
+//     on fuel logs / maintenance work-orders / traffic violations.
+//
+//   Tab 2 — Intake rules (transport_intake_rules):
+//     Drives required-vehicle / required-license / cost-center defaults
+//     on booking, dispatch, and service-line intake. (Comment 6 explicitly
+//     walked back expenses from intake — intake is OPERATIONS only.)
+
+const EXPENSE_SOURCES = [
+  { value: "fuel_log", label: "وقود", icon: Fuel },
+  { value: "maintenance", label: "صيانة", icon: Wrench },
+  { value: "traffic_violation", label: "مخالفة مرورية", icon: AlertTriangle },
+] as const;
+
+const ACCOUNTING_TREATMENTS = [
+  { value: "direct_expense", label: "مصروف مباشر" },
+  { value: "capitalized_asset_improvement", label: "تحسين أصل (رأسمالي)" },
+  { value: "deferred_expense", label: "مصروف مؤجَّل" },
+] as const;
+
+const LIABILITY_PARTIES = [
+  { value: "company", label: "الشركة" },
+  { value: "driver", label: "السائق" },
+  { value: "customer", label: "العميل" },
+  { value: "third_party", label: "طرف ثالث" },
+  { value: "insurance", label: "التأمين" },
+  { value: "unknown", label: "غير معروف" },
+] as const;
+
+const OPERATION_TYPES = [
+  { value: "booking", label: "حجز" },
+  { value: "dispatch", label: "أمر توزيع" },
+  { value: "service_line", label: "بند خدمة" },
+] as const;
+
+const SERVICE_TYPES = [
+  { value: "cargo_load", label: "نقل حمولة" },
+  { value: "passenger_umrah", label: "نقل معتمرين" },
+  { value: "passenger_general", label: "نقل ركاب" },
+  { value: "equipment_rental", label: "تأجير معدة" },
+  { value: "internal_transfer", label: "نقل داخلي" },
+  { value: "other", label: "أخرى" },
+] as const;
+
+interface ExpenseRule {
+  id: number;
+  ruleName: string;
+  expenseSource: string;
+  vehicleId: number | null;
+  vehicleType: string | null;
+  stationName: string | null;
+  maintenanceType: string | null;
+  violationType: string | null;
+  defaultAccountingTreatment: string | null;
+  defaultRechargeable: boolean;
+  defaultLiabilityParty: string | null;
+  defaultCostCenterId: number | null;
+  requiresApproval: boolean;
+  priority: number;
+  notes: string | null;
+  isActive: boolean;
+}
+
+interface IntakeRule {
+  id: number;
+  ruleName: string;
+  operationType: string;
+  transportServiceType: string;
+  customerId: number | null;
+  bookingSource: string | null;
+  requiredVehicleType: string | null;
+  requiredLicenseClass: string | null;
+  defaultCostCenterId: number | null;
+  requiresAttachment: boolean;
+  requiresApproval: boolean;
+  createsBookingDraft: boolean;
+  createsBillingCandidate: boolean;
+  priority: number;
+  notes: string | null;
+  isActive: boolean;
+}
+
+function expenseSourceLabel(v: string): string {
+  return EXPENSE_SOURCES.find((s) => s.value === v)?.label ?? v;
+}
+
+function treatmentLabel(v: string | null): string {
+  if (!v) return "—";
+  return ACCOUNTING_TREATMENTS.find((t) => t.value === v)?.label ?? v;
+}
+
+function liabilityLabel(v: string | null): string {
+  if (!v) return "—";
+  return LIABILITY_PARTIES.find((l) => l.value === v)?.label ?? v;
+}
+
+function opTypeLabel(v: string): string {
+  return OPERATION_TYPES.find((o) => o.value === v)?.label ?? v;
+}
+
+function serviceLabel(v: string): string {
+  return SERVICE_TYPES.find((s) => s.value === v)?.label ?? v;
+}
+
+// ──────────────────────── Expense rules sub-page ─────────────────────
+
+interface ExpenseFormState {
+  id?: number;
+  ruleName: string;
+  expenseSource: string;
+  vehicleId: string;
+  vehicleType: string;
+  stationName: string;
+  maintenanceType: string;
+  violationType: string;
+  defaultAccountingTreatment: string;
+  defaultRechargeable: boolean;
+  defaultLiabilityParty: string;
+  defaultCostCenterId: string;
+  requiresApproval: boolean;
+  priority: string;
+  notes: string;
+  isActive: boolean;
+}
+
+const EMPTY_EXPENSE: ExpenseFormState = {
+  ruleName: "",
+  expenseSource: "fuel_log",
+  vehicleId: "",
+  vehicleType: "",
+  stationName: "",
+  maintenanceType: "",
+  violationType: "",
+  defaultAccountingTreatment: "direct_expense",
+  defaultRechargeable: false,
+  defaultLiabilityParty: "",
+  defaultCostCenterId: "",
+  requiresApproval: false,
+  priority: "0",
+  notes: "",
+  isActive: true,
+};
+
+function ExpenseRulesPanel() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<ExpenseFormState>(EMPTY_EXPENSE);
+  const [submitting, setSubmitting] = useState(false);
+
+  const qs = sourceFilter === "all" ? "" : `?source=${sourceFilter}`;
+  const { data, isLoading, refetch } = useApiQuery<{ data: ExpenseRule[] }>(
+    ["fleet-expense-rules", sourceFilter],
+    `/fleet/expense-rules${qs}`,
+  );
+  const rules = data?.data ?? [];
+  const visible = useMemo(
+    () => rules.slice().sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return a.id - b.id;
+    }),
+    [rules],
+  );
+
+  const openCreate = () => { setForm(EMPTY_EXPENSE); setDialogOpen(true); };
+  const openEdit = (r: ExpenseRule) => {
+    setForm({
+      id: r.id,
+      ruleName: r.ruleName,
+      expenseSource: r.expenseSource,
+      vehicleId: r.vehicleId != null ? String(r.vehicleId) : "",
+      vehicleType: r.vehicleType ?? "",
+      stationName: r.stationName ?? "",
+      maintenanceType: r.maintenanceType ?? "",
+      violationType: r.violationType ?? "",
+      defaultAccountingTreatment: r.defaultAccountingTreatment ?? "",
+      defaultRechargeable: r.defaultRechargeable,
+      defaultLiabilityParty: r.defaultLiabilityParty ?? "",
+      defaultCostCenterId: r.defaultCostCenterId != null ? String(r.defaultCostCenterId) : "",
+      requiresApproval: r.requiresApproval,
+      priority: String(r.priority ?? 0),
+      notes: r.notes ?? "",
+      isActive: r.isActive,
+    });
+    setDialogOpen(true);
+  };
+
+  const save = async () => {
+    if (!form.ruleName.trim()) {
+      toast({ variant: "destructive", title: "اسم القاعدة مطلوب" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const body: Record<string, unknown> = {
+        ruleName: form.ruleName.trim(),
+        expenseSource: form.expenseSource,
+        defaultRechargeable: form.defaultRechargeable,
+        requiresApproval: form.requiresApproval,
+        priority: Number(form.priority || "0"),
+      };
+      if (form.vehicleId) body.vehicleId = Number(form.vehicleId);
+      if (form.vehicleType.trim()) body.vehicleType = form.vehicleType.trim();
+      if (form.stationName.trim()) body.stationName = form.stationName.trim();
+      if (form.maintenanceType.trim()) body.maintenanceType = form.maintenanceType.trim();
+      if (form.violationType.trim()) body.violationType = form.violationType.trim();
+      if (form.defaultAccountingTreatment) body.defaultAccountingTreatment = form.defaultAccountingTreatment;
+      if (form.defaultLiabilityParty) body.defaultLiabilityParty = form.defaultLiabilityParty;
+      if (form.defaultCostCenterId) body.defaultCostCenterId = Number(form.defaultCostCenterId);
+      if (form.notes.trim()) body.notes = form.notes.trim();
+      if (form.id != null) body.isActive = form.isActive;
+
+      if (form.id != null) {
+        await apiFetch(`/fleet/expense-rules/${form.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        toast({ title: "تم تحديث القاعدة" });
+      } else {
+        await apiFetch("/fleet/expense-rules", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        toast({ title: "تم إنشاء القاعدة" });
+      }
+      qc.invalidateQueries({ queryKey: ["fleet-expense-rules", sourceFilter] });
+      setDialogOpen(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر الحفظ", description: message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const remove = async (r: ExpenseRule) => {
+    if (!confirm(`حذف القاعدة "${r.ruleName}"؟`)) return;
+    try {
+      await apiFetch(`/fleet/expense-rules/${r.id}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      qc.invalidateQueries({ queryKey: ["fleet-expense-rules", sourceFilter] });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر الحذف", description: message });
+    }
+  };
+
+  const toggleActive = async (r: ExpenseRule) => {
+    try {
+      await apiFetch(`/fleet/expense-rules/${r.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: !r.isActive }),
+      });
+      qc.invalidateQueries({ queryKey: ["fleet-expense-rules", sourceFilter] });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر التحديث", description: message });
+    }
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+
+  return (
+    <>
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <Label className="text-xs text-muted-foreground">المصدر</Label>
+            <Select value={sourceFilter} onValueChange={setSourceFilter}>
+              <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل المصادر</SelectItem>
+                {EXPENSE_SOURCES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
+            <Button size="sm" onClick={openCreate} className="ms-auto" rateLimitAware>
+              <Plus className="h-4 w-4 me-1" />قاعدة جديدة
+            </Button>
+          </div>
+
+          {visible.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              لا توجد قواعد تصنيف نفقات. أنشئ قواعد لتطبيق الافتراضات تلقائياً على
+              سجلات الوقود والصيانة والمخالفات.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-subtle text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-start">الاسم</th>
+                    <th className="px-3 py-2 text-start">المصدر</th>
+                    <th className="px-3 py-2 text-start">معايير المطابقة</th>
+                    <th className="px-3 py-2 text-start">المعالجة</th>
+                    <th className="px-3 py-2 text-start">إعادة تحميل</th>
+                    <th className="px-3 py-2 text-start">المسؤولية</th>
+                    <th className="px-3 py-2 text-start">الأولوية</th>
+                    <th className="px-3 py-2 text-start">الحالة</th>
+                    <th className="px-3 py-2 text-start" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((r) => (
+                    <tr key={r.id} className="border-t hover:bg-surface-subtle">
+                      <td className="px-3 py-2 font-medium">{r.ruleName}</td>
+                      <td className="px-3 py-2">{expenseSourceLabel(r.expenseSource)}</td>
+                      <td className="px-3 py-2 text-xs space-y-0.5">
+                        {r.vehicleId != null && <div>المركبة #{r.vehicleId}</div>}
+                        {r.vehicleType && <div>النوع: {r.vehicleType}</div>}
+                        {r.stationName && <div>المحطة: {r.stationName}</div>}
+                        {r.maintenanceType && <div>صيانة: {r.maintenanceType}</div>}
+                        {r.violationType && <div>مخالفة: {r.violationType}</div>}
+                        {!r.vehicleId && !r.vehicleType && !r.stationName && !r.maintenanceType && !r.violationType && (
+                          <span className="text-muted-foreground">قاعدة عامة</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">{treatmentLabel(r.defaultAccountingTreatment)}</td>
+                      <td className="px-3 py-2">
+                        {r.defaultRechargeable ? (
+                          <Badge className="bg-purple-50 text-purple-700">نعم</Badge>
+                        ) : <span className="text-muted-foreground text-xs">—</span>}
+                      </td>
+                      <td className="px-3 py-2">{liabilityLabel(r.defaultLiabilityParty)}</td>
+                      <td className="px-3 py-2 font-mono">{r.priority}</td>
+                      <td className="px-3 py-2">
+                        <Switch checked={r.isActive} onCheckedChange={() => toggleActive(r)} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => remove(r)} className="text-rose-600">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              {form.id != null ? "تعديل قاعدة تصنيف" : "قاعدة تصنيف نفقات جديدة"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="md:col-span-2">
+                <Label>اسم القاعدة *</Label>
+                <Input value={form.ruleName}
+                  onChange={(e) => setForm({ ...form, ruleName: e.target.value })} />
+              </div>
+              <div>
+                <Label>المصدر *</Label>
+                <Select value={form.expenseSource}
+                  onValueChange={(v) => setForm({ ...form, expenseSource: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {EXPENSE_SOURCES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>المركبة (id — اختياري)</Label>
+                <Input type="number" value={form.vehicleId}
+                  onChange={(e) => setForm({ ...form, vehicleId: e.target.value })} />
+              </div>
+              <div>
+                <Label>نوع المركبة</Label>
+                <Input value={form.vehicleType}
+                  onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}
+                  placeholder="truck / van / bus …" />
+              </div>
+              {form.expenseSource === "fuel_log" && (
+                <div>
+                  <Label>اسم المحطة</Label>
+                  <Input value={form.stationName}
+                    onChange={(e) => setForm({ ...form, stationName: e.target.value })} />
+                </div>
+              )}
+              {form.expenseSource === "maintenance" && (
+                <div>
+                  <Label>نوع الصيانة</Label>
+                  <Input value={form.maintenanceType}
+                    onChange={(e) => setForm({ ...form, maintenanceType: e.target.value })} />
+                </div>
+              )}
+              {form.expenseSource === "traffic_violation" && (
+                <div>
+                  <Label>نوع المخالفة</Label>
+                  <Input value={form.violationType}
+                    onChange={(e) => setForm({ ...form, violationType: e.target.value })} />
+                </div>
+              )}
+              <div>
+                <Label>معالجة محاسبية افتراضية</Label>
+                <Select value={form.defaultAccountingTreatment || "__none__"}
+                  onValueChange={(v) => setForm({ ...form, defaultAccountingTreatment: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— بدون افتراض —</SelectItem>
+                    {ACCOUNTING_TREATMENTS.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>طرف المسؤولية الافتراضي</Label>
+                <Select value={form.defaultLiabilityParty || "__none__"}
+                  onValueChange={(v) => setForm({ ...form, defaultLiabilityParty: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— بدون افتراض —</SelectItem>
+                    {LIABILITY_PARTIES.map((l) => (
+                      <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>مركز التكلفة الافتراضي (id)</Label>
+                <Input type="number" value={form.defaultCostCenterId}
+                  onChange={(e) => setForm({ ...form, defaultCostCenterId: e.target.value })} />
+              </div>
+              <div>
+                <Label>الأولوية</Label>
+                <Input type="number" value={form.priority}
+                  onChange={(e) => setForm({ ...form, priority: e.target.value })} />
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.defaultRechargeable}
+                  onCheckedChange={(v) => setForm({ ...form, defaultRechargeable: v })} />
+                <Label className="cursor-pointer">إعادة تحميل على العميل افتراضياً</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.requiresApproval}
+                  onCheckedChange={(v) => setForm({ ...form, requiresApproval: v })} />
+                <Label className="cursor-pointer">تتطلب اعتماداً</Label>
+              </div>
+              <div className="md:col-span-2">
+                <Label>ملاحظات</Label>
+                <Textarea value={form.notes} rows={2}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
+            <Button onClick={save} disabled={submitting} rateLimitAware>
+              {submitting ? "جارٍ الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ──────────────────────── Intake rules sub-page ──────────────────────
+
+interface IntakeFormState {
+  id?: number;
+  ruleName: string;
+  operationType: string;
+  transportServiceType: string;
+  customerId: string;
+  bookingSource: string;
+  requiredVehicleType: string;
+  requiredLicenseClass: string;
+  defaultCostCenterId: string;
+  requiresAttachment: boolean;
+  requiresApproval: boolean;
+  createsBookingDraft: boolean;
+  createsBillingCandidate: boolean;
+  priority: string;
+  notes: string;
+  isActive: boolean;
+}
+
+const EMPTY_INTAKE: IntakeFormState = {
+  ruleName: "",
+  operationType: "booking",
+  transportServiceType: "cargo_load",
+  customerId: "",
+  bookingSource: "",
+  requiredVehicleType: "",
+  requiredLicenseClass: "",
+  defaultCostCenterId: "",
+  requiresAttachment: false,
+  requiresApproval: false,
+  createsBookingDraft: false,
+  createsBillingCandidate: false,
+  priority: "0",
+  notes: "",
+  isActive: true,
+};
+
+function IntakeRulesPanel() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [opFilter, setOpFilter] = useState<string>("all");
+  const [serviceFilter, setServiceFilter] = useState<string>("all");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<IntakeFormState>(EMPTY_INTAKE);
+  const [submitting, setSubmitting] = useState(false);
+
+  const qsParts: string[] = [];
+  if (opFilter !== "all") qsParts.push(`operationType=${opFilter}`);
+  if (serviceFilter !== "all") qsParts.push(`serviceType=${serviceFilter}`);
+  const qs = qsParts.length ? `?${qsParts.join("&")}` : "";
+
+  const { data, isLoading, refetch } = useApiQuery<{ data: IntakeRule[] }>(
+    ["transport-intake-rules", opFilter, serviceFilter],
+    `/transport/intake-rules${qs}`,
+  );
+  const rules = data?.data ?? [];
+  const visible = useMemo(
+    () => rules.slice().sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return a.id - b.id;
+    }),
+    [rules],
+  );
+
+  const queryKey = ["transport-intake-rules", opFilter, serviceFilter];
+
+  const openCreate = () => { setForm(EMPTY_INTAKE); setDialogOpen(true); };
+  const openEdit = (r: IntakeRule) => {
+    setForm({
+      id: r.id,
+      ruleName: r.ruleName,
+      operationType: r.operationType,
+      transportServiceType: r.transportServiceType,
+      customerId: r.customerId != null ? String(r.customerId) : "",
+      bookingSource: r.bookingSource ?? "",
+      requiredVehicleType: r.requiredVehicleType ?? "",
+      requiredLicenseClass: r.requiredLicenseClass ?? "",
+      defaultCostCenterId: r.defaultCostCenterId != null ? String(r.defaultCostCenterId) : "",
+      requiresAttachment: r.requiresAttachment,
+      requiresApproval: r.requiresApproval,
+      createsBookingDraft: r.createsBookingDraft,
+      createsBillingCandidate: r.createsBillingCandidate,
+      priority: String(r.priority ?? 0),
+      notes: r.notes ?? "",
+      isActive: r.isActive,
+    });
+    setDialogOpen(true);
+  };
+
+  const save = async () => {
+    if (!form.ruleName.trim()) {
+      toast({ variant: "destructive", title: "اسم القاعدة مطلوب" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const body: Record<string, unknown> = {
+        ruleName: form.ruleName.trim(),
+        operationType: form.operationType,
+        transportServiceType: form.transportServiceType,
+        requiresAttachment: form.requiresAttachment,
+        requiresApproval: form.requiresApproval,
+        createsBookingDraft: form.createsBookingDraft,
+        createsBillingCandidate: form.createsBillingCandidate,
+        priority: Number(form.priority || "0"),
+      };
+      if (form.customerId) body.customerId = Number(form.customerId);
+      if (form.bookingSource.trim()) body.bookingSource = form.bookingSource.trim();
+      if (form.requiredVehicleType.trim()) body.requiredVehicleType = form.requiredVehicleType.trim();
+      if (form.requiredLicenseClass.trim()) body.requiredLicenseClass = form.requiredLicenseClass.trim();
+      if (form.defaultCostCenterId) body.defaultCostCenterId = Number(form.defaultCostCenterId);
+      if (form.notes.trim()) body.notes = form.notes.trim();
+      if (form.id != null) body.isActive = form.isActive;
+
+      if (form.id != null) {
+        await apiFetch(`/transport/intake-rules/${form.id}`, {
+          method: "PATCH", body: JSON.stringify(body),
+        });
+        toast({ title: "تم تحديث القاعدة" });
+      } else {
+        await apiFetch("/transport/intake-rules", {
+          method: "POST", body: JSON.stringify(body),
+        });
+        toast({ title: "تم إنشاء القاعدة" });
+      }
+      qc.invalidateQueries({ queryKey });
+      setDialogOpen(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر الحفظ", description: message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const remove = async (r: IntakeRule) => {
+    if (!confirm(`حذف القاعدة "${r.ruleName}"؟`)) return;
+    try {
+      await apiFetch(`/transport/intake-rules/${r.id}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      qc.invalidateQueries({ queryKey });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر الحذف", description: message });
+    }
+  };
+
+  const toggleActive = async (r: IntakeRule) => {
+    try {
+      await apiFetch(`/transport/intake-rules/${r.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: !r.isActive }),
+      });
+      qc.invalidateQueries({ queryKey });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر التحديث", description: message });
+    }
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+
+  return (
+    <>
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <Label className="text-xs text-muted-foreground">العملية</Label>
+            <Select value={opFilter} onValueChange={setOpFilter}>
+              <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل العمليات</SelectItem>
+                {OPERATION_TYPES.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Label className="text-xs text-muted-foreground">نوع الخدمة</Label>
+            <Select value={serviceFilter} onValueChange={setServiceFilter}>
+              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل الأنواع</SelectItem>
+                {SERVICE_TYPES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
+            <Button size="sm" onClick={openCreate} className="ms-auto" rateLimitAware>
+              <Plus className="h-4 w-4 me-1" />قاعدة جديدة
+            </Button>
+          </div>
+
+          {visible.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              لا توجد قواعد استقبال. أنشئ قواعد لتطبيق متطلبات التوثيق + المركبة +
+              مركز التكلفة الافتراضية على شاشات الإدخال.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-subtle text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-start">الاسم</th>
+                    <th className="px-3 py-2 text-start">العملية</th>
+                    <th className="px-3 py-2 text-start">نوع الخدمة</th>
+                    <th className="px-3 py-2 text-start">معايير المطابقة</th>
+                    <th className="px-3 py-2 text-start">الافتراضات</th>
+                    <th className="px-3 py-2 text-start">الأولوية</th>
+                    <th className="px-3 py-2 text-start">الحالة</th>
+                    <th className="px-3 py-2 text-start" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((r) => (
+                    <tr key={r.id} className="border-t hover:bg-surface-subtle">
+                      <td className="px-3 py-2 font-medium">{r.ruleName}</td>
+                      <td className="px-3 py-2">{opTypeLabel(r.operationType)}</td>
+                      <td className="px-3 py-2">{serviceLabel(r.transportServiceType)}</td>
+                      <td className="px-3 py-2 text-xs space-y-0.5">
+                        {r.customerId != null && <div>العميل #{r.customerId}</div>}
+                        {r.bookingSource && <div>المصدر: {r.bookingSource}</div>}
+                        {!r.customerId && !r.bookingSource && (
+                          <span className="text-muted-foreground">قاعدة عامة</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs space-y-0.5">
+                        {r.requiredVehicleType && <div>مركبة: {r.requiredVehicleType}</div>}
+                        {r.requiredLicenseClass && <div>رخصة: {r.requiredLicenseClass}</div>}
+                        {r.defaultCostCenterId != null && <div>مركز تكلفة #{r.defaultCostCenterId}</div>}
+                        {r.requiresAttachment && <Badge variant="outline" className="text-[10px]">مرفق إلزامي</Badge>}
+                        {r.requiresApproval && <Badge variant="outline" className="text-[10px]">اعتماد</Badge>}
+                        {r.createsBookingDraft && <Badge variant="outline" className="text-[10px]">يفتح مسودة حجز</Badge>}
+                        {r.createsBillingCandidate && <Badge variant="outline" className="text-[10px] bg-purple-50">يولّد أثراً محاسبياً</Badge>}
+                      </td>
+                      <td className="px-3 py-2 font-mono">{r.priority}</td>
+                      <td className="px-3 py-2">
+                        <Switch checked={r.isActive} onCheckedChange={() => toggleActive(r)} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => remove(r)} className="text-rose-600">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              {form.id != null ? "تعديل قاعدة استقبال" : "قاعدة استقبال جديدة"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="md:col-span-2">
+                <Label>اسم القاعدة *</Label>
+                <Input value={form.ruleName}
+                  onChange={(e) => setForm({ ...form, ruleName: e.target.value })} />
+              </div>
+              <div>
+                <Label>نوع العملية *</Label>
+                <Select value={form.operationType}
+                  onValueChange={(v) => setForm({ ...form, operationType: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {OPERATION_TYPES.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>نوع الخدمة *</Label>
+                <Select value={form.transportServiceType}
+                  onValueChange={(v) => setForm({ ...form, transportServiceType: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SERVICE_TYPES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>العميل (id — اختياري)</Label>
+                <Input type="number" value={form.customerId}
+                  onChange={(e) => setForm({ ...form, customerId: e.target.value })} />
+              </div>
+              <div>
+                <Label>مصدر الحجز</Label>
+                <Input value={form.bookingSource}
+                  onChange={(e) => setForm({ ...form, bookingSource: e.target.value })}
+                  placeholder="manual_entry / customer_request / …" />
+              </div>
+              <div>
+                <Label>نوع المركبة المطلوب</Label>
+                <Input value={form.requiredVehicleType}
+                  onChange={(e) => setForm({ ...form, requiredVehicleType: e.target.value })} />
+              </div>
+              <div>
+                <Label>صنف الرخصة المطلوب</Label>
+                <Input value={form.requiredLicenseClass}
+                  onChange={(e) => setForm({ ...form, requiredLicenseClass: e.target.value })} />
+              </div>
+              <div>
+                <Label>مركز التكلفة الافتراضي (id)</Label>
+                <Input type="number" value={form.defaultCostCenterId}
+                  onChange={(e) => setForm({ ...form, defaultCostCenterId: e.target.value })} />
+              </div>
+              <div>
+                <Label>الأولوية</Label>
+                <Input type="number" value={form.priority}
+                  onChange={(e) => setForm({ ...form, priority: e.target.value })} />
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.requiresAttachment}
+                  onCheckedChange={(v) => setForm({ ...form, requiresAttachment: v })} />
+                <Label className="cursor-pointer">يتطلب مرفقاً</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.requiresApproval}
+                  onCheckedChange={(v) => setForm({ ...form, requiresApproval: v })} />
+                <Label className="cursor-pointer">يتطلب اعتماداً</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.createsBookingDraft}
+                  onCheckedChange={(v) => setForm({ ...form, createsBookingDraft: v })} />
+                <Label className="cursor-pointer">يفتح مسودة حجز تلقائياً</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.createsBillingCandidate}
+                  onCheckedChange={(v) => setForm({ ...form, createsBillingCandidate: v })} />
+                <Label className="cursor-pointer">يولّد أثراً محاسبياً (بعد الإغلاق)</Label>
+              </div>
+              <div className="md:col-span-2">
+                <Label>ملاحظات</Label>
+                <Textarea value={form.notes} rows={2}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
+            <Button onClick={save} disabled={submitting} rateLimitAware>
+              {submitting ? "جارٍ الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ────────────────────────────── Page shell ───────────────────────────
+
+export default function TransportRulesAdmin() {
+  const [tab, setTab] = useState<"expense" | "intake">("expense");
+  return (
+    <PageShell
+      title="قواعد العمليات والنفقات"
+      subtitle="إدارة محرّكَي القواعد: تصنيف النفقات الافتراضي + متطلبات استقبال العمليات"
+      breadcrumbs={[
+        { href: "/fleet", label: "الأسطول" },
+        { href: "/fleet/transport/bookings", label: "حجوزات النقل" },
+        { label: "قواعد العمليات والنفقات" },
+      ]}
+      actions={
+        <Link href="/fleet/transport/bookings">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="h-4 w-4 me-1" />العودة
+          </Button>
+        </Link>
+      }
+    >
+      <FleetTabsNav />
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "expense" | "intake")} className="mt-4">
+        <TabsList>
+          <TabsTrigger value="expense">
+            <Wrench className="h-4 w-4 me-1" />تصنيف النفقات
+          </TabsTrigger>
+          <TabsTrigger value="intake">
+            <Clipboard className="h-4 w-4 me-1" />استقبال العمليات
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="expense" className="mt-3">
+          <ExpenseRulesPanel />
+        </TabsContent>
+        <TabsContent value="intake" className="mt-3">
+          <IntakeRulesPanel />
+        </TabsContent>
+      </Tabs>
+    </PageShell>
+  );
+}

@@ -21,6 +21,7 @@
 // the legacy form payloads into this shape so no caller breaks.
 
 import type { AccountUsage } from "./financeAccountClassifier.js";
+import { ValidationError } from "./errorHandler.js";
 
 export type FinanceOperationType =
   | "expense" | "receipt" | "payment" | "invoice" | "vendor_invoice"
@@ -76,7 +77,42 @@ export interface FinanceOperationContext {
   overrideReason?: string | null;
 }
 
-// ── Validation: runs the posting policy on the money account vs method ──
+// Each allocation target must carry its own key dimension — selecting
+// «ربط بمركبة» with no vehicleId is a conflicting/incomplete context (#1715
+// §4 "منع الحقول المتعارضة", §10 gap "عمليات بلا target رغم أنها صيانة…").
+// transport_trip has no dimension field yet, so it is intentionally absent.
+const REQUIRED_DIM_FOR_TARGET: Partial<
+  Record<AllocationTarget, { key: keyof OperationDimensions; label: string }>
+> = {
+  vehicle: { key: "vehicleId", label: "مركبة" },
+  vehicle_maintenance: { key: "vehicleId", label: "مركبة" },
+  property: { key: "propertyId", label: "عقار" },
+  property_maintenance: { key: "propertyId", label: "عقار" },
+  unit: { key: "unitId", label: "وحدة" },
+  contract: { key: "contractId", label: "عقد" },
+  project: { key: "projectId", label: "مشروع" },
+  umrah_season: { key: "umrahSeasonId", label: "موسم عمرة" },
+  umrah_agent: { key: "umrahAgentId", label: "وكيل عمرة" },
+  supplier: { key: "vendorId", label: "مورد" },
+  customer: { key: "clientId", label: "عميل" },
+  employee: { key: "employeeId", label: "موظف" },
+  fixed_asset: { key: "assetId", label: "أصل ثابت" },
+};
+
+// A transfer moves money between liquidity accounts; its source must be a
+// payment-source usage, never an expense / fixed asset / receivable / payable
+// (#1715 §6 "لا يسمح بالتحويل من حساب مصروف أو أصل ثابت أو ذمم").
+const FORBIDDEN_TRANSFER_SOURCE_USAGES: AccountUsage[] = [
+  "operating_expense", "cogs", "payroll_expense", "fixed_asset", "receivable", "payable",
+];
+
+/**
+ * Assert a finance operation context is internally consistent and legal:
+ *   1. money source/destination account matches the payment method,
+ *   2. the chosen allocation target carries its key dimension, and
+ *   3. a transfer's source is a real liquidity account.
+ * Throws ValidationError (422) with an Arabic message on any conflict.
+ */
 export async function assertOperationValid(ctx: FinanceOperationContext): Promise<void> {
   const { assertPaymentSourceAllowed } = await import("./financePostingPolicy.js");
   const moneyCode = ctx.moneySource?.accountCode ?? ctx.moneyDestination?.accountCode;
@@ -86,6 +122,34 @@ export async function assertOperationValid(ctx: FinanceOperationContext): Promis
       accountCode: moneyCode,
       paymentMethod: ctx.paymentMethod,
     });
+  }
+
+  // (2) allocation target ↔ dimension consistency
+  const need = ctx.allocationTarget !== "none" ? REQUIRED_DIM_FOR_TARGET[ctx.allocationTarget] : undefined;
+  if (need && ctx.dimensions[need.key] == null) {
+    throw new ValidationError(
+      `الربط بـ«${need.label}» يتطلب تحديد ${need.label} — الحقل ناقص أو متعارض`,
+      {
+        field: "allocationTarget",
+        fix: `اختر ${need.label} أو غيّر نوع الربط`,
+        meta: { allocationTarget: ctx.allocationTarget, missingDimension: need.key },
+      },
+    );
+  }
+
+  // (3) transfer source must be a liquidity account (when its usage is known)
+  if (ctx.operationType === "transfer") {
+    const srcUsage = ctx.moneySource?.usage;
+    if (srcUsage && FORBIDDEN_TRANSFER_SOURCE_USAGES.includes(srcUsage)) {
+      throw new ValidationError(
+        "لا يسمح بالتحويل من حساب مصروف أو أصل ثابت أو ذمم — اختر صندوقاً أو بنكاً أو عهدة كمصدر",
+        {
+          field: "sourceAccountCode",
+          fix: "اختر حساب صندوق/بنك/عهدة صالحاً كمصدر للتحويل",
+          meta: { sourceUsage: srcUsage },
+        },
+      );
+    }
   }
 }
 
