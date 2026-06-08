@@ -125,10 +125,7 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // / serviceType / status / date window) — buildScopedWhere has no
   // branch cascade to add.
   "transport-pricing.ts",
-  // transport-planning.ts: #1812 planning engine — assignment suggestion,
-  // ops dashboard, itineraries, driver navigation sessions. All queries
-  // are scoped on (companyId, id/dispatchOrderId/…) — buildScopedWhere
-  // has no branch cascade to add.
+  "fleet-rules-admin.ts",
   "transport-planning.ts",
   // transport-integration.ts: #1812 governing comment — pulls bookings
   // from umrah groups + iCalendar feed. Pure cross-domain reads scoped
@@ -219,9 +216,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 111,
+      total: 112,
       helperUsers: 36,
-      manualOnly: 72,
+      manualOnly: 73,
     });
   });
 });

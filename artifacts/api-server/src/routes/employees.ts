@@ -722,6 +722,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // a contact, not a credential.
       const loginEmail = internalEmailIn || email || null;
       let userId: number | null = null;
+      let createdNewUser = false;
       let tempPassword: string | null = null;
       if (loginEmail) {
         const existingUser = await client.query(`SELECT id FROM users WHERE email=$1`, [loginEmail]);
@@ -733,6 +734,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
             [loginEmail, hashedPw, role || "employee", empId]
           );
           userId = userRes.rows[0].id;
+          createdNewUser = true;
         } else {
           userId = existingUser.rows[0].id;
           await client.query(`UPDATE users SET "employeeId"=$1 WHERE id=$2`, [empId, userId]);
@@ -744,11 +746,13 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // didn't override `role`, prefer the job-title default. Same for
       // opensCustody — flips on the auto-custody flag.
       let opensCustody = Boolean((body as any).createCustodyAccount);
+      let defaultRoleKeyFromJob: string | null = null;
       if (resolvedJobTitleId) {
         const [jt] = await client.query<{ defaultRoleKey: string | null; opensCustody: boolean }>(
           `SELECT "defaultRoleKey", "opensCustody" FROM job_titles WHERE id = $1`,
           [resolvedJobTitleId]
         ).then(r => r.rows as Array<{ defaultRoleKey: string | null; opensCustody: boolean }>);
+        defaultRoleKeyFromJob = jt?.defaultRoleKey ?? null;
         if (jt?.defaultRoleKey && (!role || role === "employee")) {
           // Re-apply the role only on the assignment we just inserted.
           await client.query(
@@ -757,6 +761,47 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
           );
         }
         if (jt?.opensCustody) opensCustody = true;
+      }
+
+      // ── Step 8a-bis: Grant the RBAC v2 role (the real access) ──
+      // Historically the normal "create employee" flow only ever set the
+      // legacy `employee_assignments.role` / `users.role` strings and NEVER
+      // inserted an rbac_user_roles row. Since RBAC v2 (checkAccess) is the
+      // enforcement authority, that left freshly-created employees able to
+      // log in and SEE the modules their role implies (via the predefined
+      // fallback in /permissions/my) but blocked with 403 on every actual
+      // action — "الخدمات تظهر لكن غير فعّالة". HR then had to go to the
+      // separate /admin/user-onboarding screen to grant the role by hand.
+      //
+      // Now we close that gap atomically: resolve the effective role key
+      // (job-title defaultRoleKey wins when the body didn't override) to an
+      // rbac_roles row and bind it in rbac_user_roles — exactly what
+      // /admin/onboard does. Soft-skip (warn) when the key has no rbac role
+      // so employee creation never fails just because a role is unmapped.
+      if (createdNewUser && userId) {
+        const effectiveRoleKey =
+          (defaultRoleKeyFromJob && (!role || role === "employee"))
+            ? defaultRoleKeyFromJob
+            : (role || "employee");
+        const roleRow = await client.query<{ id: number }>(
+          `SELECT id FROM rbac_roles
+            WHERE role_key = $1 AND ("companyId" = $2 OR "companyId" IS NULL)
+            ORDER BY "companyId" NULLS LAST LIMIT 1`,
+          [effectiveRoleKey, effectiveCompanyId]
+        ).then(r => r.rows as Array<{ id: number }>);
+        if (roleRow.length > 0) {
+          await client.query(
+            `INSERT INTO rbac_user_roles ("userId","companyId",role_id,"branchId","departmentId",is_primary,"assignedBy","createdAt")
+             VALUES ($1,$2,$3,$4,$5,true,$6,NOW())
+             ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
+            [userId, effectiveCompanyId, roleRow[0].id, targetBranchId, resolvedDepartmentId, scope.userId]
+          );
+        } else {
+          logger.warn(
+            { roleKey: effectiveRoleKey, companyId: effectiveCompanyId, userId },
+            "[employees] no rbac_roles row for effective role key — RBAC role not auto-granted; assign manually via /admin/users"
+          );
+        }
       }
 
       // ── Step 8b: Open employee subsidiary custody account ──

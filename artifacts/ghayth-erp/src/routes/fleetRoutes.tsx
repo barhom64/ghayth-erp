@@ -44,7 +44,8 @@ const TransportBookings = lazy(() => import("@/pages/fleet/transport-bookings"))
 const TransportBookingCreate = lazy(() => import("@/pages/fleet/transport-booking-create"));
 const TransportBookingDetail = lazy(() => import("@/pages/fleet/transport-booking-detail"));
 const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
-// #1812 Planning engine — ops dashboard + driver in-app navigation.
+const TransportPriceRules = lazy(() => import("@/pages/fleet/transport-price-rules"));
+const TransportRulesAdmin = lazy(() => import("@/pages/fleet/transport-rules-admin"));
 const TransportOpsDashboard = lazy(() => import("@/pages/fleet/transport-ops-dashboard"));
 const MeDriverNavigation = lazy(() => import("@/pages/fleet/me-driver-navigation"));
 // #1812 integration bridges — linked sources view.
@@ -111,7 +112,8 @@ export const fleetRoutes = [
   { path: "/fleet/transport/bookings/create", component: TransportBookingCreate },
   { path: "/fleet/transport/bookings/:id", component: TransportBookingDetail },
   { path: "/fleet/transport/dispatch", component: TransportDispatch },
-  // #1812 ops dashboard + driver navigation surfaces.
+  { path: "/fleet/transport/price-rules", component: TransportPriceRules },
+  { path: "/fleet/transport/rules", component: TransportRulesAdmin },
   { path: "/fleet/transport/ops-dashboard", component: TransportOpsDashboard },
   { path: "/fleet/transport/integration", component: TransportIntegration },
   { path: "/fleet/transport/itineraries", component: TransportItineraries },
