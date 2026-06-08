@@ -521,6 +521,33 @@ export default function InvoiceDetailPage() {
               { key: "lineTotal", header: "الإجمالي", sortable: true, render: (r) => formatCurrency(Number(r.lineTotal)) },
               { key: "vatAmount", header: "الضريبة", sortable: true, render: (r) => <span className="text-muted-foreground">{formatCurrency(Number(r.vatAmount || 0))}</span> },
               { key: "lineGross", header: "الصافي", sortable: true, render: (r) => <span className="font-bold">{formatCurrency(Number(r.lineGross || r.lineTotal))}</span> },
+              {
+                key: "account",
+                header: "الحساب",
+                // invoice_lines already stores accountCode / accountId per line
+                // (set by the allocation-rules engine on post). Surfacing it
+                // here tells the accountant exactly which line booked to which
+                // revenue account — and flags any still-unmapped line.
+                render: (r) =>
+                  r.accountCode || r.accountId ? (
+                    <span className="font-mono text-xs text-status-info-foreground">{r.accountCode || `#${r.accountId}`}</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-status-warning-foreground">
+                      <span className="h-1.5 w-1.5 rounded-full bg-status-warning-foreground" />
+                      غير مُوجَّه
+                    </span>
+                  ),
+              },
+              {
+                key: "costCenter",
+                header: "مركز التكلفة",
+                render: (r) =>
+                  r.costCenterId ? (
+                    <span className="font-mono text-xs text-muted-foreground">#{r.costCenterId}</span>
+                  ) : (
+                    <span className="text-xs text-gray-300">—</span>
+                  ),
+              },
             ] satisfies DataTableColumn<any>[]}
             data={lines}
             pageSize={0}
