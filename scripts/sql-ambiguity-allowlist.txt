@@ -22,3 +22,38 @@
 # time this guard shipped (verified by a route-wide static scan plus a
 # runtime sweep of the evaluation / dashboard / action-center surfaces).
 # ──────────────────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────────────
+# Baseline: hardened generic-tolerant rawQuery extractor
+# ──────────────────────────────────────────────────────────────────────
+# The shared lib/raw-query-bodies.mjs extractor now scans typed
+# rawQuery<T>(`…`) calls the old narrow matcher skipped. The entries below
+# are bare columns inside JOIN/EXISTS that the static scanner cannot prove
+# unambiguous (most are EXISTS-subquery refs bound to a single relation —
+# false positives the scanner can't resolve). Captured as a baseline so
+# the guard can be enforced in CI; new ambiguous refs outside this list
+# still fail. Qualify + remove the matching line when a query is touched.
+routes/cargo.ts:action
+routes/cargo.ts:companyId
+routes/cargo.ts:createdAt
+routes/cargo.ts:details
+routes/cargo.ts:entity
+routes/cargo.ts:entityId
+routes/cargo.ts:userId
+routes/finance-accounts.ts:code
+routes/finance-accounts.ts:companyId
+routes/finance-accounts.ts:deletedAt
+routes/finance-accounts.ts:parentCode
+routes/finance-accounts.ts:type
+routes/finance-algorithms.ts:supplierId
+routes/finance-algorithms.ts:totalAmount
+routes/finance-cost-centers.ts:companyId
+routes/finance-cost-centers.ts:createdAt
+routes/finance-cost-centers.ts:id
+routes/finance-cost-centers.ts:parentId
+routes/finance-cost-centers.ts:status
+routes/finance-custodies.ts:employeeId
+routes/finance-reports.ts:activityType
+routes/finance-reports.ts:createdAt
+routes/hr-saudi-compliance.ts:employeeId
+routes/hr.ts:status
