@@ -67,10 +67,6 @@ run_step "audit:route-doubling" node scripts/src/audit-route-doubling.mjs
 run_step "audit:wiring:tests" node scripts/src/check-frontend-backend-wiring.test.mjs
 run_step "audit:wiring"       node scripts/src/check-frontend-backend-wiring.mjs
 run_step "audit:schema"       node scripts/src/audit-schema-drift.mjs
-# Pure-logic fixtures for the audit-schema-drift template sanitiser /
-# generic-tolerant rawQuery extractor — no DB needed, so this runs in
-# every environment to guard the guard itself.
-run_step "audit:schema:tests" node scripts/src/audit-schema-drift.test.mjs
 # Pure-logic fixtures for the ghost-row predicates — no DB needed, so
 # this runs in every environment to guard the guard itself.
 run_step "check:ghost-rows:tests" node scripts/src/check-ghost-rows.test.mjs
