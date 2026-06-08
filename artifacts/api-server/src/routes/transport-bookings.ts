@@ -160,20 +160,41 @@ const createBookingSchema = z.object({
   isFlexibleTime: z.boolean().optional(),
   priority: z.coerce.number().int().optional(),
   notes: z.string().max(2000).optional(),
+  // #1812 multi-leg — accept N legs in one create payload.
+  // The server-side INSERT happens atomically in withTransaction;
+  // if any leg fails validation, the booking header is rolled back.
+  // z.lazy avoids the forward-reference TDZ at module load time —
+  // bookingLineSchema is declared below.
+  lines: z.lazy(() => z.array(nestedBookingLineSchema).max(20)).optional(),
 });
 
 const updateBookingSchema = createBookingSchema.partial().extend({
   status: z.enum(BOOKING_STATUSES).optional(),
 });
 
+// #1812 multi-leg booking — line-level vocab extends the booking
+// header's. Lines without a lineNumber are auto-numbered server-side
+// when posted as part of the create-booking `lines: []` array.
 const bookingLineSchema = z.object({
-  lineNumber: z.coerce.number().int().positive(),
+  lineNumber: z.coerce.number().int().positive().optional(),
   requiredVehicleType: z.string().max(32).optional(),
   requiredCapacityKg: z.coerce.number().optional(),
   requiredSeatCount: z.coerce.number().int().optional(),
   requiredLicenseClass: z.string().max(32).optional(),
   fromLocationId: z.coerce.number().int().positive().optional(),
   toLocationId: z.coerce.number().int().positive().optional(),
+  // #1812 multi-leg — freeform + kind + geo on each leg.
+  fromLocationText: z.string().max(255).optional(),
+  toLocationText: z.string().max(255).optional(),
+  fromLocationKind: z.string().max(32).optional(),
+  toLocationKind: z.string().max(32).optional(),
+  fromLat: z.coerce.number().min(-90).max(90).optional(),
+  fromLng: z.coerce.number().min(-180).max(180).optional(),
+  fromPlaceId: z.string().max(255).optional(),
+  toLat: z.coerce.number().min(-90).max(90).optional(),
+  toLng: z.coerce.number().min(-180).max(180).optional(),
+  toPlaceId: z.string().max(255).optional(),
+  legRouteType: z.enum(ROUTE_TYPES).optional(),
   scheduledPickupAt: z.string().optional(),
   scheduledDeliveryAt: z.string().optional(),
   lineDescription: z.string().max(1000).optional(),
@@ -182,6 +203,11 @@ const bookingLineSchema = z.object({
   passengerCount: z.coerce.number().int().optional(),
   notes: z.string().max(1000).optional(),
 });
+
+// The bookingLine variant used when nested under create-booking's
+// `lines: []` array — lineNumber stays optional so the operator can
+// just append legs and the server auto-numbers them.
+const nestedBookingLineSchema = bookingLineSchema;
 
 const dispatchOrderSchema = z.object({
   bookingLineId: z.coerce.number().int().positive(),
@@ -342,7 +368,10 @@ transportBookingsRouter.post(
     try {
       const scope = req.scope!;
       const b = zodParse(createBookingSchema.safeParse(req.body));
-      const { insertId } = await rawExecute(
+      // #1812 multi-leg — wrap booking header + lines in one transaction
+      // so a leg-validation failure rolls back the orphan header.
+      const { insertId, legsInserted } = await withTransaction(async () => {
+        const headerInsert = await rawExecute(
         `INSERT INTO transport_bookings
            ("companyId", "branchId", "bookingNumber", "bookingSource", "transportServiceType",
             "customerId", "customerName", "customerPhone", "contractId",
@@ -387,14 +416,63 @@ transportBookingsRouter.post(
           b.priority ?? 0,
           b.notes ?? null, scope.userId,
         ],
-      );
-      assertInsert(insertId, "transport_bookings");
+        );
+        assertInsert(headerInsert.insertId, "transport_bookings");
+        const bookingId = headerInsert.insertId;
+
+        // #1812 multi-leg — atomically insert the lines payload if present.
+        // Server auto-numbers any leg that didn't supply lineNumber so the
+        // operator can just push legs onto an array without bookkeeping.
+        let inserted = 0;
+        if (b.lines && b.lines.length > 0) {
+          for (let i = 0; i < b.lines.length; i++) {
+            const leg = b.lines[i];
+            const lineNumber = leg.lineNumber ?? i + 1;
+            await rawExecute(
+              `INSERT INTO transport_booking_lines
+                 ("companyId", "bookingId", "lineNumber", "requiredVehicleType",
+                  "requiredCapacityKg", "requiredSeatCount", "requiredLicenseClass",
+                  "fromLocationId", "toLocationId",
+                  "fromLocationText", "toLocationText",
+                  "fromLocationKind", "toLocationKind",
+                  "fromLat", "fromLng", "fromPlaceId",
+                  "toLat", "toLng", "toPlaceId",
+                  "legRouteType",
+                  "scheduledPickupAt", "scheduledDeliveryAt",
+                  "lineDescription", quantity, "unitOfMeasure", "passengerCount", notes)
+               VALUES ($1,$2,$3,$4, $5,$6,$7, $8,$9, $10,$11, $12,$13,
+                       $14,$15,$16, $17,$18,$19, $20, $21,$22,
+                       $23,$24,$25,$26,$27)`,
+              [
+                scope.companyId, bookingId, lineNumber, leg.requiredVehicleType ?? null,
+                leg.requiredCapacityKg ?? null, leg.requiredSeatCount ?? null, leg.requiredLicenseClass ?? null,
+                leg.fromLocationId ?? null, leg.toLocationId ?? null,
+                leg.fromLocationText ?? null, leg.toLocationText ?? null,
+                leg.fromLocationKind ?? null, leg.toLocationKind ?? null,
+                leg.fromLat ?? null, leg.fromLng ?? null, leg.fromPlaceId ?? null,
+                leg.toLat ?? null, leg.toLng ?? null, leg.toPlaceId ?? null,
+                leg.legRouteType ?? null,
+                leg.scheduledPickupAt ?? null, leg.scheduledDeliveryAt ?? null,
+                leg.lineDescription ?? null, leg.quantity ?? null,
+                leg.unitOfMeasure ?? null, leg.passengerCount ?? null, leg.notes ?? null,
+              ],
+            );
+            inserted++;
+          }
+        }
+        return { insertId: bookingId, legsInserted: inserted };
+      });
+
       emitEvent({
         companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
         action: "fleet.booking.created", entity: "transport_bookings", entityId: insertId,
-        details: JSON.stringify({ bookingNumber: b.bookingNumber, serviceType: b.transportServiceType }),
+        details: JSON.stringify({
+          bookingNumber: b.bookingNumber,
+          serviceType: b.transportServiceType,
+          legsCount: legsInserted,
+        }),
       }).catch((e) => logger.error(e, "booking event failed"));
-      res.status(201).json({ data: { id: insertId } });
+      res.status(201).json({ data: { id: insertId, legsInserted } });
     } catch (err) {
       handleRouteError(err, res, "Create transport booking error:");
     }
