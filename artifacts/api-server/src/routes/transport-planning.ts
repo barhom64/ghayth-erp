@@ -48,6 +48,7 @@ import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
 import { suggestAssignments, suggestForLeg } from "../lib/fleet/assignmentSuggestionEngine.js";
+import { diagnoseEmptySuggest } from "../lib/fleet/suggestDiagnostics.js";
 
 export const transportPlanningRouter = Router();
 transportPlanningRouter.use(authMiddleware);
@@ -101,6 +102,24 @@ transportPlanningRouter.patch(
   },
 );
 
+// #1812 — maps-provider health check. Admin UI calls this immediately
+// after the operator pastes a new API key to give live feedback
+// ("ok" / "invalid_key" / "quota_exceeded" / "network_error" /
+// "missing" / "not_supported") so they know whether to fix the key.
+transportPlanningRouter.post(
+  "/transport/planning-settings/health-check",
+  authorize({ feature: "fleet.bookings", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const status = await MapsService.healthCheck(scope.companyId);
+      res.json({ data: { status } });
+    } catch (err) {
+      handleRouteError(err, res, "Maps provider health-check error:");
+    }
+  },
+);
+
 // ─── Suggest-assignment + estimate-route ─────────────────────────────
 
 const suggestSchema = z.object({
@@ -127,7 +146,19 @@ transportPlanningRouter.post(
         scheduledEndAt: b.scheduledEndAt,
         limit: b.limit,
       });
-      res.json({ data: candidates });
+      // #1812 gap #5 — when the engine returns 0, surface a structured
+      // diagnostic so the SPA can explain WHY (no vehicles vs no
+      // active drivers vs no window vs all busy) instead of the
+      // generic "no candidates" copy.
+      let diagnostics = null;
+      if (candidates.length === 0) {
+        diagnostics = await diagnoseEmptySuggest({
+          companyId: scope.companyId,
+          scheduledStartAt: b.scheduledStartAt,
+          scheduledEndAt: b.scheduledEndAt,
+        });
+      }
+      res.json({ data: candidates, diagnostics });
     } catch (err) {
       handleRouteError(err, res, "Suggest assignment error:");
     }
