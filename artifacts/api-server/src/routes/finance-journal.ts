@@ -859,7 +859,12 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
         }
       }
 
-      const posted = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${idempotencyToken}`, lines: journalLines });
+      // #1715 correctness review (L1) — honour the entered date as the posting
+      // date so a backdated expense lands in the right period + carries the
+      // right JE date (invoices/memos already thread their date; expense was an
+      // outlier defaulting to today). The engine's period gate then validates
+      // the entered date.
+      const posted = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${idempotencyToken}`, lines: journalLines, postingDate: expenseDate ? toDateISO(expenseDate) : undefined });
 
       await rawExecute(
         `UPDATE journal_entries SET "costCenter" = $1, "departmentId" = $2, "relatedEntityType" = $3, "relatedEntityId" = $4, "paymentMethod" = $5, reference = $6, "isPaid" = $7, "attachmentUrl" = $8, "attachmentType" = $9, "expenseType" = $10, "operationType" = $11, "projectId" = $12, "taxCategory" = $13, "govSyncEnabled" = $14, "govIntegrationId" = $15, "govEntityType" = $16, "govEntityId" = $17 WHERE id = $18 AND "companyId" = $19 AND "deletedAt" IS NULL`,
@@ -1589,7 +1594,9 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // withTransaction joins this outer one reentrantly via SAVEPOINT
     // (rawdb.ts:108).
     const { journalId, alreadyExists } = await withTransaction(async (client) => {
-      const posted = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines, deferBalances: true });
+      // #1715 correctness review (L1) — honour the entered voucher date as the
+      // posting date (was defaulting to today, unlike invoices/memos).
+      const posted = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines, deferBalances: true, postingDate: voucherDate ? toDateISO(voucherDate) : undefined });
 
       await rawExecute(
         `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,

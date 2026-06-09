@@ -1,12 +1,10 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Autocomplete } from "@/components/ui/autocomplete";
 import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
@@ -16,7 +14,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, NumberField } from "@/components/shared/form-field-wrapper";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
-import { BranchSelect } from "@/components/shared/entity-selects";
+import { BranchSelect, PostingAccountSelect } from "@/components/shared/entity-selects";
 import { roundMoney, formatCurrency , todayLocal } from "@/lib/formatters";
 
 interface JournalLine {
@@ -43,8 +41,6 @@ export default function JournalCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/finance/journal", "POST", [["journal"]]);
-  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-posting"], "/finance/accounts?postingOnly=true");
-  const accounts = accountsData?.data || [];
   const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
   const departments = departmentsData?.data || [];
   const { data: projectsData } = useApiQuery<{ data: any[] }>(["projects-list"], "/projects");
@@ -59,8 +55,6 @@ export default function JournalCreate() {
     { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" },
   ]);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
 
   const updateLine = (idx: number, field: keyof JournalLine, value: string) => {
     const updated = [...lines];
@@ -153,12 +147,10 @@ export default function JournalCreate() {
             {lines.map((line, idx) => (
               <div key={idx} className="space-y-1">
                 <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2">
-                  <Autocomplete
+                  <PostingAccountSelect
                     value={line.accountCode}
-                    onChange={(v) => updateLine(idx, "accountCode", String(v))}
-                    options={accounts.map((a: any) => ({ value: String(a.code || a.id), label: `${a.code} - ${a.name}` }))}
-                    placeholder="ابحث عن حساب..."
-                    emptyMessage="لا يوجد حسابات"
+                    onChange={(v) => updateLine(idx, "accountCode", v)}
+                    label="" allowCreate={false}
                   />
                   <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="وصف البند" />
                   <NumberField label="مدين" hideLabel value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />

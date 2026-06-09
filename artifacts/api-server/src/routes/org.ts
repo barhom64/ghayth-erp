@@ -743,11 +743,12 @@ router.get("/teams/:teamId/members", authorize(ADMIN), async (req, res) => {
               ea."jobTitle"
          FROM employee_team_memberships m
          JOIN employee_assignments ea ON ea.id = m."assignmentId"
+                                     AND ea."companyId" = $2
          JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
         WHERE m."teamId" = $1
           AND (m."endDate" IS NULL OR m."endDate" >= CURRENT_DATE)
         ORDER BY m.role DESC, e.name`,
-      [teamId],
+      [teamId, companyId],
     );
     res.json({ data: rows, total: rows.length });
   } catch (e) { handleRouteError(e, res, "تعذّر جلب أعضاء الفريق"); }
@@ -819,13 +820,14 @@ router.get("/committees/:committeeId/members", authorize(ADMIN), async (req, res
               ea."jobTitle"
          FROM employee_committee_memberships m
          JOIN employee_assignments ea ON ea.id = m."assignmentId"
+                                     AND ea."companyId" = $2
          JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
         WHERE m."committeeId" = $1
           AND (m."endDate" IS NULL OR m."endDate" >= CURRENT_DATE)
         ORDER BY
           CASE m.role WHEN 'chair' THEN 0 WHEN 'secretary' THEN 1 ELSE 2 END,
           e.name`,
-      [committeeId],
+      [committeeId, companyId],
     );
     res.json({ data: rows, total: rows.length });
   } catch (e) { handleRouteError(e, res, "تعذّر جلب أعضاء اللجنة"); }
@@ -899,11 +901,12 @@ router.get("/projects/:projectId/contributors", authorize(ADMIN), async (req, re
               ea."jobTitle"
          FROM employee_project_assignments m
          JOIN employee_assignments ea ON ea.id = m."assignmentId"
+                                     AND ea."companyId" = $2
          JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
         WHERE m."projectId" = $1
           AND (m."endDate" IS NULL OR m."endDate" >= CURRENT_DATE)
         ORDER BY m."allocationPercent" DESC, e.name`,
-      [projectId],
+      [projectId, companyId],
     );
     // Compute allocation utilisation (sum should typically = 100).
     const totalAlloc = rows.reduce((acc, r: any) => acc + Number(r.allocationPercent || 0), 0);
