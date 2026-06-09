@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PAYMENT_METHOD_OPTIONS_WITH_CUSTODY as PAYMENT_METHODS } from "@/lib/finance-type-maps";
+import { PAYMENT_METHOD_OPTIONS_WITH_CUSTODY as PAYMENT_METHODS, INVOICE_TYPE_CODES, TAX_CATEGORY_CODES, type TaxCodeOption } from "@/lib/finance-type-maps";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -34,16 +34,6 @@ import { LiveImpactPreview } from "@/components/shared/impact-preview";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
-interface TaxCodeOption {
-  id: number;
-  code: string;
-  name: string;
-  rate: number | string;
-  taxType: "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
-  zatcaCategoryCode: string | null;
-  isInclusiveDefault: boolean;
-  isActive: boolean;
-}
 
 const expenseTaxSplit = amountTaxSplit;
 
@@ -100,19 +90,6 @@ const TAX_CATEGORIES = [
 ];
 
 const ATTACHMENT_REQUIRED_TYPES = ["vendor_invoice", "purchase", "custody_settlement", "advance_claim", "legal_fee"];
-
-const INVOICE_TYPE_CODES = [
-  { value: "388", label: "فاتورة ضريبية (388)" },
-  { value: "381", label: "إشعار دائن (381)" },
-  { value: "383", label: "إشعار مدين (383)" },
-];
-
-const TAX_CATEGORY_CODES = [
-  { value: "S", label: "خاضع للضريبة (S)" },
-  { value: "Z", label: "نسبة صفرية (Z)" },
-  { value: "E", label: "معفى (E)" },
-  { value: "O", label: "خارج نطاق الضريبة (O)" },
-];
 
 function generateAutoDescription(params: {
   operationType: string;
@@ -381,7 +358,15 @@ export default function ExpensesCreate() {
       await createMut.mutateAsync({
         accountCode: form.accountCode || undefined,
         sourceAccountCode: form.sourceAccountCode || undefined,
-        amount: Number(form.amount),
+        // #1715 review — post the NET amount. The backend treats `amount` as net
+        // and adds VAT on top; when «شامل الضريبة» is on, form.amount is the GROSS
+        // the operator typed, so sending it raw posted gross+VAT (more than the
+        // on-screen preview). taxSplit.net == form.amount when NOT inclusive, so
+        // this only changes the inclusive case.
+        amount: Number(taxSplit.net),
+        // #1715 review — the «الحالة» selector was rendered but never sent, so the
+        // operator's draft/pending/posted choice was silently dropped.
+        status: form.status,
         description: [
           form.description,
           lineItem.itemName
