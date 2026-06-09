@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { AlertTriangle, Shield, Clock, Receipt } from "lucide-react";
+import { AlertTriangle, Shield, Clock, Receipt, FileWarning, BookX } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
 // لوحة الامتثال — يجمع 4 أرقام كانت موزعة على صفحات مختلفة (المستثنون،
@@ -26,6 +26,10 @@ interface ComplianceResp {
   currentlyOverstaying: number;
   unpaidPenaltiesCount: number;
   unpaidPenaltiesTotal: number;
+  // §8 of #1870 — operational audit signals so the dashboard answers
+  // "what's silently broken right now?" not just "who's overstaying?".
+  failedImportRows30d?: number;
+  missingNuskApJournals?: number;
 }
 
 interface SeasonOpt { id: number; title: string }
@@ -101,6 +105,35 @@ export default function UmrahComplianceDashboard() {
           ? formatCurrency(Number(data.unpaidPenaltiesTotal))
           : null,
       },
+      // §8 of #1870 — operational audit signals.
+      {
+        key: "failed-imports",
+        label: "صفوف استيراد مرفوضة (30 يوم)",
+        value: data?.failedImportRows30d ?? 0,
+        icon: FileWarning,
+        tone: (data?.failedImportRows30d ?? 0) > 0
+          ? "text-status-warning-foreground bg-status-warning-surface"
+          : "text-status-neutral-foreground bg-status-neutral-surface",
+        // Drill into the wizard's batch history; the operator can
+        // open the failing batch from there to see the per-row
+        // rejection reasons + download the rejected-rows CSV.
+        href: `/umrah/import`,
+        testid: "compliance-tile-failed-imports",
+      },
+      {
+        key: "missing-nusk-ap",
+        label: "فواتير نُسك بدون قيد ذمم",
+        value: data?.missingNuskApJournals ?? 0,
+        icon: BookX,
+        tone: (data?.missingNuskApJournals ?? 0) > 0
+          ? "text-status-error-foreground bg-status-error-surface"
+          : "text-status-neutral-foreground bg-status-neutral-surface",
+        // Drill into the nusk-invoices list; any PATCH to a row
+        // there will idempotently post the missing AP JE via
+        // postNuskJournalEntries (PR #1867).
+        href: `/umrah/nusk-invoices`,
+        testid: "compliance-tile-missing-nusk-ap",
+      },
     ];
   }, [data, seasonFilter]);
 
@@ -111,7 +144,9 @@ export default function UmrahComplianceDashboard() {
     (data?.exempt ?? 0) +
     (data?.visaExpiringIn7d ?? 0) +
     (data?.currentlyOverstaying ?? 0) +
-    (data?.unpaidPenaltiesCount ?? 0);
+    (data?.unpaidPenaltiesCount ?? 0) +
+    (data?.failedImportRows30d ?? 0) +
+    (data?.missingNuskApJournals ?? 0);
 
   return (
     <PageShell
