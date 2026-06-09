@@ -4989,4 +4989,86 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
   } catch (err) { handleRouteError(err, res, "Commissions summary"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// §6 Finance Hygiene — Untraced Finance (Charter #1870)
+//
+// Operator's 5-minute daily check: which finance-impacting rows are
+// missing their GL/AP linkage? Four buckets:
+//   • salesInvoices.untrackedPosting → status NOT IN draft/cancelled AND journalEntryId IS NULL
+//   • payments.untrackedPosting       → sarAmount > 0 AND journalEntryId IS NULL
+//   • nuskInvoices.untrackedAP        → nuskStatus <> cancelled AND totalAmount > 0 AND purchaseInvoiceId IS NULL
+//   • penalties.untrackedPosting      → status IN applied/paid AND journalEntryId IS NULL
+//
+// Returns count + sum(amount) per bucket — the operator drills via
+// list pages with the right filter. All tenant-scoped. Five parallel
+// reads (Promise.all) — cheap, runs on demand from the dashboard.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/finance-hygiene", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+
+    const [sales, payments, nusk, penalties] = await Promise.all([
+      rawQuery<Record<string, unknown>>(
+        `SELECT COUNT(*)::int AS "count",
+                COALESCE(SUM(total), 0) AS "amount"
+           FROM umrah_sales_invoices
+          WHERE "companyId" = $1
+            AND "deletedAt" IS NULL
+            AND status NOT IN ('draft','cancelled')
+            AND "journalEntryId" IS NULL`,
+        [scope.companyId],
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT COUNT(*)::int AS "count",
+                COALESCE(SUM("sarAmount"), 0) AS "amount"
+           FROM umrah_payments
+          WHERE "companyId" = $1
+            AND "deletedAt" IS NULL
+            AND "sarAmount" > 0
+            AND "journalEntryId" IS NULL`,
+        [scope.companyId],
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT COUNT(*)::int AS "count",
+                COALESCE(SUM("totalAmount"), 0) AS "amount"
+           FROM umrah_nusk_invoices
+          WHERE "companyId" = $1
+            AND "deletedAt" IS NULL
+            AND "nuskStatus" <> 'cancelled'
+            AND "totalAmount" > 0
+            AND "purchaseInvoiceId" IS NULL`,
+        [scope.companyId],
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT COUNT(*)::int AS "count",
+                COALESCE(SUM(amount), 0) AS "amount"
+           FROM umrah_penalties
+          WHERE "companyId" = $1
+            AND "deletedAt" IS NULL
+            AND status IN ('invoiced','paid')
+            AND "journalEntryId" IS NULL`,
+        [scope.companyId],
+      ),
+    ]);
+
+    const buckets = {
+      salesInvoices: { count: Number(sales[0]?.count ?? 0), amount: Number(sales[0]?.amount ?? 0) },
+      payments:      { count: Number(payments[0]?.count ?? 0), amount: Number(payments[0]?.amount ?? 0) },
+      nuskInvoices:  { count: Number(nusk[0]?.count ?? 0), amount: Number(nusk[0]?.amount ?? 0) },
+      penalties:     { count: Number(penalties[0]?.count ?? 0), amount: Number(penalties[0]?.amount ?? 0) },
+    };
+    const totalItems = buckets.salesInvoices.count + buckets.payments.count
+                     + buckets.nuskInvoices.count + buckets.penalties.count;
+    const totalAmountAtRisk = buckets.salesInvoices.amount + buckets.payments.amount
+                            + buckets.nuskInvoices.amount + buckets.penalties.amount;
+
+    res.json(maskFields(req, {
+      buckets,
+      totalItems,
+      totalAmountAtRisk,
+      isClean: totalItems === 0,
+    }));
+  } catch (err) { handleRouteError(err, res, "Umrah finance hygiene"); }
+});
+
 export default router;
