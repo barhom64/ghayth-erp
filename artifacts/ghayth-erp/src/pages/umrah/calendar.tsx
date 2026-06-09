@@ -29,7 +29,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, RefreshCw } from "lucide-react";
 
 type CalendarLayer =
   | "pilgrim_arrival"
@@ -109,6 +109,10 @@ export default function UmrahCalendar() {
   const [cursor, setCursor] = useState<Date>(() => new Date());
   const [view, setView] = useState<ViewMode>("month");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  // §4 Phase 3 — auto-refresh state. Off by default so the calendar
+  // doesn't burn bandwidth on quiet days. Operator toggles ON when
+  // running the daily ops desk (arrivals/departures rolling in).
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [enabledLayers, setEnabledLayers] = useState<Set<CalendarLayer>>(
     new Set([
       "pilgrim_arrival", "pilgrim_departure", "visa_expiring",
@@ -142,7 +146,14 @@ export default function UmrahCalendar() {
   const eventsQ = useApiQuery<CalendarResp>(
     ["umrah-calendar", from, to, layersQs],
     `/umrah/calendar/events?from=${from}&to=${to}&layers=${layersQs}`,
-    enabledLayers.size > 0,
+    {
+      enabled: enabledLayers.size > 0,
+      // §4 Phase 3 — 60-second poll when autoRefresh is on. Matches the
+      // operational rhythm (arrivals refresh ~minute via the nusk feed)
+      // without being noisy enough to spike server load when 5 operators
+      // have the page open. Set to false to disable.
+      refetchInterval: autoRefresh ? 60_000 : false,
+    },
   );
 
   // Bucket events by date for cheap per-day lookup. Also keep the
@@ -243,6 +254,22 @@ export default function UmrahCalendar() {
                 data-testid="calendar-view-year"
               >
                 سنوي
+              </Button>
+            </div>
+            {/* §4 Phase 3 — auto-refresh toggle. Polls /calendar/events
+                every 60s when ON so the daily ops desk sees new
+                arrivals/penalties/nusk events without manual reload.
+                Off by default — saves bandwidth on quiet days. */}
+            <div className="flex items-center gap-1 ms-2 border-s ps-2">
+              <Button
+                variant={autoRefresh ? "default" : "outline"}
+                size="sm"
+                onClick={() => setAutoRefresh((v) => !v)}
+                data-testid="calendar-auto-refresh-toggle"
+                title={autoRefresh ? "تحديث تلقائي كل دقيقة — اضغط للإيقاف" : "اضغط لتفعيل التحديث التلقائي"}
+              >
+                <RefreshCw className={`h-4 w-4 me-1 ${autoRefresh && eventsQ.isFetching ? "animate-spin" : ""}`} />
+                {autoRefresh ? "تحديث تلقائي · 60ث" : "تحديث تلقائي"}
               </Button>
             </div>
           </div>
