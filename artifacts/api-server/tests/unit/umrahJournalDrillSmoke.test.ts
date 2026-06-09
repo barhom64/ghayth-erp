@@ -26,6 +26,10 @@ const INVOICE_PAGE = readFileSync(
   join(import.meta.dirname!, "../../../ghayth-erp/src/pages/details/umrah-invoice-detail.tsx"),
   "utf8",
 );
+const PENALTY_PAGE = readFileSync(
+  join(import.meta.dirname!, "../../../ghayth-erp/src/pages/details/umrah-penalty-detail.tsx"),
+  "utf8",
+);
 
 const HANDLER = (() => {
   const m = ROUTE.match(/router\.get\("\/journal\/:sourceType\/:sourceId"[\s\S]*?(?=\nrouter\.(?:get|post|patch|put|delete)\(|\nexport default)/);
@@ -157,5 +161,13 @@ describe("Invoice detail page — drill card wired", () => {
     expect(INVOICE_PAGE).toContain('import { UmrahJournalDrillCard } from "@/components/shared/umrah-journal-drill-card"');
     expect(INVOICE_PAGE).toContain('sourceType="umrah_agent_invoices"');
     expect(INVOICE_PAGE).toContain("sourceId={id}");
+  });
+});
+
+describe("Penalty detail page — drill card wired", () => {
+  it("imports the card + renders it with sourceType=umrah_penalties", () => {
+    expect(PENALTY_PAGE).toContain('import { UmrahJournalDrillCard } from "@/components/shared/umrah-journal-drill-card"');
+    expect(PENALTY_PAGE).toContain('sourceType="umrah_penalties"');
+    expect(PENALTY_PAGE).toContain("sourceId={id}");
   });
 });
