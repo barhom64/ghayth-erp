@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, ApiError, buildErrorToast } from "@/lib/api";
@@ -34,6 +34,137 @@ const OPERATIONS = [
   { key: "onboarding_tasks", label: "إنشاء مهام التأهيل", icon: Briefcase },
   { key: "notification", label: "إرسال إشعار للإدارة", icon: AlertCircle },
 ];
+
+// IGOC-003 — wizard step navigation overlay for the (intentionally one-form)
+// employee creation flow. The server-side transaction is atomic and creates
+// 18 things in one call; we keep that as-is and add a guided step indicator
+// so the admin sees logical phases (personal data → job/contract → accounts
+// → attachments) + per-step completion status. Click a step to scroll to it.
+// IntersectionObserver auto-highlights the active step as the user scrolls.
+interface WizardStep {
+  key: string;
+  label: string;
+  icon: typeof User;
+  // Predicate returns true when the step's REQUIRED fields are filled.
+  // Used to render a checkmark (✓) on the step indicator. Optional fields
+  // never affect completion — only required fields do.
+  isComplete: (f: Record<string, string>, fieldErrors: Record<string, string | null>) => boolean;
+}
+
+const WIZARD_STEPS: WizardStep[] = [
+  {
+    key: "personal",
+    label: "البيانات الشخصية",
+    icon: User,
+    isComplete: (f) => Boolean(f.name && f.nationalId && f.nationality && f.phone),
+  },
+  {
+    key: "job",
+    label: "الوظيفة والعقد",
+    icon: Briefcase,
+    isComplete: (f) => Boolean(f.contractType && f.salary && Number(f.salary) > 0),
+  },
+  {
+    key: "accounts",
+    label: "الحسابات والربط المالي",
+    icon: CreditCard,
+    isComplete: (_f) => true, // optional section — show ✓ always
+  },
+  {
+    key: "attachments",
+    label: "المرفقات والإقامة",
+    icon: FileText,
+    isComplete: (_f) => true, // optional section — show ✓ always
+  },
+];
+
+function WizardStepNav({
+  form,
+  fieldErrors,
+}: {
+  form: Record<string, string>;
+  fieldErrors: Record<string, string | null>;
+}) {
+  const [activeKey, setActiveKey] = useState<string>("personal");
+
+  // Track which step is in view via IntersectionObserver. Highlight the
+  // FIRST visible one so scrolling top-down lights up steps in order.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveKey(visible[0].target.id.replace(/^wizard-step-/, ""));
+      },
+      { rootMargin: "-20% 0px -60% 0px", threshold: 0 },
+    );
+    for (const s of WIZARD_STEPS) {
+      const el = document.getElementById(`wizard-step-${s.key}`);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  const scrollTo = (key: string) => {
+    const el = document.getElementById(`wizard-step-${key}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Optimistic — IntersectionObserver will confirm shortly.
+      setActiveKey(key);
+    }
+  };
+
+  const completedCount = useMemo(
+    () => WIZARD_STEPS.filter((s) => s.isComplete(form, fieldErrors)).length,
+    [form, fieldErrors],
+  );
+
+  return (
+    <Card className="mb-4 sticky top-0 z-10 shadow-sm">
+      <CardContent className="p-3">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-muted-foreground">
+            خطوة {WIZARD_STEPS.findIndex((s) => s.key === activeKey) + 1} من {WIZARD_STEPS.length}
+            {" — "}
+            <span className="font-medium">{completedCount}/{WIZARD_STEPS.length} مكتمل</span>
+          </p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {WIZARD_STEPS.map((step, idx) => {
+            const Icon = step.icon;
+            const isActive = step.key === activeKey;
+            const isDone = step.isComplete(form, fieldErrors);
+            return (
+              <button
+                key={step.key}
+                type="button"
+                onClick={() => scrollTo(step.key)}
+                className={`text-right p-2 rounded border transition-colors ${
+                  isActive
+                    ? "bg-primary/10 border-primary text-primary"
+                    : isDone
+                    ? "bg-status-success-surface border-status-success-surface text-status-success-foreground"
+                    : "bg-surface-subtle border-transparent text-muted-foreground hover:bg-surface-subtle/70"
+                }`}
+              >
+                <div className="flex items-center gap-2 text-xs">
+                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+                    isActive ? "bg-primary text-white" : isDone ? "bg-status-success-foreground text-white" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {isDone && !isActive ? "✓" : idx + 1}
+                  </span>
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="truncate font-medium">{step.label}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function EmployeesCreate() {
   const [, setLocation] = useLocation();
@@ -327,10 +458,14 @@ export default function EmployeesCreate() {
           <span>يتم إنشاء هذا الموظف من طلب التوظيف رقم #{sourceApplicationId} — أكمل البيانات المطلوبة ثم احفظ.</span>
         </div>
       )}
+      {/* IGOC-003 — wizard step nav. Sticky overlay; doesn't change the
+          underlying form structure (the server-side transaction stays
+          atomic). Clicks scroll to the section; scroll auto-highlights. */}
+      <WizardStepNav form={form as unknown as Record<string, string>} fieldErrors={fieldErrors} />
       <div className="mb-4">
         <CreationDateField />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div id="wizard-step-personal" className="grid grid-cols-1 md:grid-cols-2 gap-4 scroll-mt-24">
         <TextField label="الاسم الرباعي" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} error={fieldErrors.name} className="md:col-span-2" />
         <TextField label="رقم الهوية / الإقامة" required dir="ltr" value={form.nationalId} onChange={(v) => setForm((f) => ({ ...f, nationalId: v }))} placeholder="مثال: 1234567890" error={fieldErrors.nationalId} />
         <FormFieldWrapper label="الجنسية" required error={fieldErrors.nationality}>
@@ -505,6 +640,7 @@ export default function EmployeesCreate() {
             </SelectContent>
           </Select>
         </FormFieldWrapper>
+        <div id="wizard-step-job" className="md:col-span-2 scroll-mt-24" />
         <FormFieldWrapper label="نوع العقد" error={fieldErrors.contractType}>
           <Select value={form.contractType} onValueChange={(v) => setForm((f) => ({ ...f, contractType: v }))}>
             <SelectTrigger className={fieldErrorClass(fieldErrors.contractType)}><SelectValue /></SelectTrigger>
@@ -520,7 +656,7 @@ export default function EmployeesCreate() {
         <FormFieldWrapper label="تاريخ التعيين"><DatePicker value={form.hireDate} onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))} /></FormFieldWrapper>
 
         {/* Integrated HR — accounts + finance binding section. */}
-        <div className="md:col-span-2 border-t pt-4 mt-2">
+        <div id="wizard-step-accounts" className="md:col-span-2 border-t pt-4 mt-2 scroll-mt-24">
           <h3 className="text-sm font-semibold text-muted-foreground mb-1">حسابات الموظف والربط المالي</h3>
           <p className="text-xs text-muted-foreground mb-3">
             أدخل بريد المستخدم الداخلي لتسجيل الدخول. البريد الشخصي للتواصل فقط ولا يُستخدم لتسجيل الدخول.
@@ -635,7 +771,7 @@ export default function EmployeesCreate() {
           </FormFieldWrapper>
         )}
 
-        <div className="md:col-span-2 border-t pt-4 mt-2">
+        <div id="wizard-step-attachments" className="md:col-span-2 border-t pt-4 mt-2 scroll-mt-24">
           <h3 className="text-sm font-semibold text-muted-foreground mb-3">بيانات الإقامة والجواز</h3>
         </div>
         <TextField label="رقم الإقامة" dir="ltr" value={form.iqamaNumber} onChange={(v) => setForm((f) => ({ ...f, iqamaNumber: v }))} />
