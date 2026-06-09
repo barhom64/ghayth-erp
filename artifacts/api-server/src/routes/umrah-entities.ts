@@ -46,6 +46,7 @@ import {
   createTransportRequestFromUmrah,
   listTransportRequestsForGroup,
 } from "../lib/umrahTransportContract.js";
+import { getDashboardSuggestions } from "../lib/umrahAssistantEngine.js";
 import { logger } from "../lib/logger.js";
 import { renderPrint } from "../lib/print/printService.js";
 
@@ -4697,6 +4698,21 @@ router.get("/journal/:sourceType/:sourceId", authorize({ feature: "umrah", actio
       isBalanced: Math.abs(totals.debit - totals.credit) < 0.01,
     }));
   } catch (err) { handleRouteError(err, res, "Umrah journal drill-through"); }
+});
+
+// §9 of #1870 — Assistant Suggestions.
+// Returns up-to-six ranked suggestions for the operator's dashboard.
+// Cheap (six COUNTs, parallel); the FE caches with react-query so
+// repeated tab visits are zero-cost.
+router.get("/assistant/suggestions", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
+    const suggestions = await getDashboardSuggestions({
+      companyId: scope.companyId, branchId: scope.branchId, seasonId,
+    });
+    res.json({ data: suggestions });
+  } catch (err) { handleRouteError(err, res, "Assistant suggestions"); }
 });
 
 export default router;
