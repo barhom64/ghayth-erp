@@ -411,11 +411,19 @@ export async function createAuditLog(params: {
   // Optional/back-compatible — callers that pass scope.selectedRoleKey get it
   // persisted; older callers omit it and the column stays NULL.
   activeRoleKey?: string | null;
+  // IGOC-001 (migration 284): three additional context fields. All
+  // nullable, all back-compatible.
+  activeDepartmentId?: number | null;
+  resolvedScope?: string | null;
+  impersonationSourceUser?: number | null;
 }) {
   try {
     await rawExecute(
-      `INSERT INTO audit_logs ("companyId","branchId","userId",action,entity,"entityId","before","after",reason,"active_role_key")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      `INSERT INTO audit_logs (
+         "companyId","branchId","userId",action,entity,"entityId",
+         "before","after",reason,
+         "active_role_key","active_department_id","resolved_scope","impersonation_source_user"
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [
         params.companyId,
         params.branchId ?? null,
@@ -427,6 +435,9 @@ export async function createAuditLog(params: {
         params.after ? JSON.stringify(params.after) : null,
         params.reason ?? null,
         params.activeRoleKey ?? null,
+        params.activeDepartmentId ?? null,
+        params.resolvedScope ?? null,
+        params.impersonationSourceUser ?? null,
       ]
     );
   } catch (err) {

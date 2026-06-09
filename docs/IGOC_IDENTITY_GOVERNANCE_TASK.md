@@ -48,7 +48,7 @@
 
 | ID | المهمة | تكلفة تقديرية | يُغلق |
 |---|---|---|---|
-| **IGOC-001** | **Audit context completeness** — migration يُضيف active_department + resolved_scope + impersonation_source_user + middleware يملؤها على كل action | ١-٢ يوم | #14 + كل تدقيق مستقبلي يصبح أعمق |
+| **IGOC-001** | ✅ **مُنفّذ** — migration 284 + extended createAuditLog + logAudit listener + RequestScope type + authMiddleware يملأ activeDepartmentId + impersonationSourceUser + authorize() ينشر resolvedScope. 24/24 smoke tests خضراء. | — | #14 ✅ مُغلق |
 | **IGOC-002** | **Print/Export/Scheduled-Reports authorization** — إضافة authorize() check + scope filter + audit log على endpoints التصدير والطباعة | ٢-٣ أيام | #13 — يسد bypass حقيقي |
 | **IGOC-003** | **Wizard UI redesign** — تحويل `employees-create.tsx` من single-form إلى step-by-step wizard مرئي بـ progress bar + back/next + per-step validation | ٣-٤ أيام | #12 — UX، لا backend |
 | **IGOC-004** | **Dynamic sidebar — real filter (not CSS-hide)** — تعديل `sidebar-layout.tsx` ليُفلتر items قبل render بدلًا من إخفائها بـ display:none | يوم واحد | #11 — تحسين أمني + أداء |
