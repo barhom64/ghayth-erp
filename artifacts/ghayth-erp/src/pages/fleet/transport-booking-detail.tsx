@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AssignmentSuggestDialog } from "@/components/shared/assignment-suggest-dialog";
+import { BookingSourceContextPanel } from "@/components/shared/booking-source-context-panel";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -57,6 +58,12 @@ interface BookingDetail {
   createdAt: string;
   lines: BookingLine[];
   dispatchOrders: DispatchOrder[];
+  // #1812 source-context (from loadSourceContext on backend).
+  // Null when the booking is manual_entry or the FK didn't resolve.
+  sourceContext: {
+    source: string;
+    entity: Record<string, unknown>;
+  } | null;
 }
 
 interface BookingLine {
@@ -322,6 +329,12 @@ export default function TransportBookingDetail() {
         </div>
       }
     >
+      {/* #1812 source-context panel — full upstream entity summary
+          (umrah group dates/supervisor, customer phone, contract dates).
+          Renders only when the backend sourceContext resolver returned
+          a non-null payload — the FK-based banner below remains as a
+          quick links strip even when this panel renders. */}
+      <BookingSourceContextPanel sourceContext={(b as unknown as { sourceContext: any }).sourceContext} />
       {/* #1812 linked-source banner — proves the booking isn't an
           island. Surfaces the source entity (umrah group, contract,
           project, waqf) and lets the operator jump back to it. */}
