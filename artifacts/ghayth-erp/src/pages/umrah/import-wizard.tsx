@@ -149,7 +149,13 @@ export default function UmrahImportWizard() {
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<PreviewSummary | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [confirmResult, setConfirmResult] = useState<{ batchId?: string | number } | null>(null);
+  const [confirmResult, setConfirmResult] = useState<{
+    batchId?: string | number;
+    newCount?: number;
+    updatedCount?: number;
+    skippedCount?: number;
+    errorCount?: number;
+  } | null>(null);
   const [linkingSubAgent, setLinkingSubAgent] = useState<{ nuskCode: string; name: string } | null>(null);
   const [linkClientId, setLinkClientId] = useState("");
   const [linking, setLinking] = useState(false);
@@ -385,8 +391,30 @@ export default function UmrahImportWizard() {
         ? await apiFetch("/umrah/import/mutamers", { method: "POST", body: JSON.stringify(body) })
         : await apiFetch("/umrah/import/vouchers", { method: "POST", body: JSON.stringify(body) });
       const data = res?.data ?? res;
-      setConfirmResult({ batchId: data?.batchId ?? data?.id });
-      toast({ title: "تم تنفيذ الاستيراد بنجاح" });
+      const newCount = Number(data?.newCount ?? 0);
+      const updatedCount = Number(data?.updatedCount ?? 0);
+      const skippedCount = Number(data?.skippedCount ?? 0);
+      const errorCount = Number(data?.errorCount ?? 0);
+      setConfirmResult({
+        batchId: data?.batchId ?? data?.id,
+        newCount,
+        updatedCount,
+        skippedCount,
+        errorCount,
+      });
+      const imported = newCount + updatedCount;
+      if (imported === 0) {
+        toast({
+          variant: "destructive",
+          title: "لم يُستورد أي سجل",
+          description: `تم تخطّي ${formatNumber(skippedCount)} وتعذّر ${formatNumber(errorCount)}. تأكّد من اختيار نوع الملف الصحيح (معتمرون أو بوشرات) ومن مطابقة الأعمدة.`,
+        });
+      } else {
+        toast({
+          title: "تم تنفيذ الاستيراد",
+          description: `جديد: ${formatNumber(newCount)} · محدّث: ${formatNumber(updatedCount)}${skippedCount ? ` · متخطّى: ${formatNumber(skippedCount)}` : ""}${errorCount ? ` · أخطاء: ${formatNumber(errorCount)}` : ""}`,
+        });
+      }
     } catch (err: any) {
       toast({ variant: "destructive", title: err?.message ?? "تعذّر تنفيذ الاستيراد" });
     } finally {
@@ -1003,12 +1031,33 @@ export default function UmrahImportWizard() {
           )}
 
           {/* Success block */}
-          {confirmResult && (
-            <Card className="border-emerald-300 bg-emerald-50">
+          {confirmResult && (() => {
+            const newC = confirmResult.newCount ?? 0;
+            const updC = confirmResult.updatedCount ?? 0;
+            const skC = confirmResult.skippedCount ?? 0;
+            const erC = confirmResult.errorCount ?? 0;
+            const nothing = newC + updC === 0;
+            return (
+            <Card className={nothing ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}>
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-                  <h3 className="font-bold text-emerald-800">تم تنفيذ الاستيراد بنجاح</h3>
+                  {nothing
+                    ? <AlertTriangle className="h-6 w-6 text-amber-600" />
+                    : <CheckCircle2 className="h-6 w-6 text-emerald-600" />}
+                  <h3 className={`font-bold ${nothing ? "text-amber-800" : "text-emerald-800"}`}>
+                    {nothing ? "لم يُستورد أي سجل" : "تم تنفيذ الاستيراد بنجاح"}
+                  </h3>
+                </div>
+                {nothing && (
+                  <p className="text-sm text-amber-700">
+                    تأكّد من اختيار نوع الملف الصحيح في الأعلى (معتمرون أو بوشرات) ومن مطابقة الأعمدة، ثم أعد المحاولة.
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                  <span className="text-emerald-700">جديد: {formatNumber(newC)}</span>
+                  <span className="text-status-info-foreground">محدّث: {formatNumber(updC)}</span>
+                  <span className="text-muted-foreground">متخطّى: {formatNumber(skC)}</span>
+                  <span className="text-status-error-foreground">أخطاء: {formatNumber(erC)}</span>
                 </div>
                 {confirmResult.batchId && (
                   <div className="flex items-center gap-3 text-sm">
@@ -1028,7 +1077,8 @@ export default function UmrahImportWizard() {
                 </div>
               </CardContent>
             </Card>
-          )}
+            );
+          })()}
         </div>
       )}
 
