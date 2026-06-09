@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { ACCOUNT_TYPES } from "@/lib/finance-type-maps";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -111,7 +112,7 @@ export default function FinancialReportsPage() {
   );
 }
 
-const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
+const typeMap = ACCOUNT_TYPES;
 
 function TrialBalanceNode({ node, level = 0 }: { node: any; level?: number }) {
   const [expanded, setExpanded] = useState(level < 1);

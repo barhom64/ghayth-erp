@@ -1,4 +1,5 @@
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { ACCOUNT_TYPES } from "@/lib/finance-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,9 +18,7 @@ import { useToast } from "@/hooks/use-toast";
  * /finance/accounts/usage-gaps endpoint.
  */
 
-const TYPE_LABELS: Record<string, string> = {
-  asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات",
-};
+const TYPE_LABELS = ACCOUNT_TYPES;
 
 interface GapAccount {
   id: number;

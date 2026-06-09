@@ -1,4 +1,5 @@
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { ACCOUNT_TYPES } from "@/lib/finance-type-maps";
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,7 +20,7 @@ import { exportRowsToCsv } from "@/lib/unified-export";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
-const typeMap: Record<string, string> = { asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
+const typeMap = ACCOUNT_TYPES;
 
 // GAP_MATRIX item #7 — routed through unified export helper so the
 // download appears in /reports/print-log with entity=report_ledger.
