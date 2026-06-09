@@ -14,6 +14,7 @@ import { ArrowLeft, Plus, Users, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
+import { MultiLegBookingEditor, type BookingLeg, legsToApiPayload } from "@/components/shared/multi-leg-booking-editor";
 import { LocationKindPicker } from "@/components/shared/location-kind-picker";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
@@ -63,6 +64,7 @@ export default function TransportBookingCreate() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [fromLocationText, setFromLocationText] = useState("");
   const [toLocationText, setToLocationText] = useState("");
+  // #1812 location-kind + inline geo on booking header (from #1888).
   const [fromLocationKind, setFromLocationKind] = useState<string | undefined>();
   const [toLocationKind, setToLocationKind] = useState<string | undefined>();
   const [fromLat, setFromLat] = useState("");
@@ -70,6 +72,8 @@ export default function TransportBookingCreate() {
   const [toLat, setToLat] = useState("");
   const [toLng, setToLng] = useState("");
   const [showGeoFields, setShowGeoFields] = useState(false);
+  // #1812 multi-leg booking — user's #1 explicit gap.
+  const [legs, setLegs] = useState<BookingLeg[]>([]);
   const [requestedPickupDate, setRequestedPickupDate] = useState("");
   const [requestedPickupTime, setRequestedPickupTime] = useState("");
   const [requestedDeliveryDate, setRequestedDeliveryDate] = useState("");
@@ -131,6 +135,7 @@ export default function TransportBookingCreate() {
         fromLng: fromLng ? Number(fromLng) : undefined,
         toLat: toLat ? Number(toLat) : undefined,
         toLng: toLng ? Number(toLng) : undefined,
+        lines: legs.length > 0 ? legsToApiPayload(legs) : undefined,
         requestedPickupDate: requestedPickupDate || undefined,
         requestedPickupTime: requestedPickupTime || undefined,
         requestedDeliveryDate: requestedDeliveryDate || undefined,
@@ -341,6 +346,24 @@ export default function TransportBookingCreate() {
                 <Input id="deliveryTime" type="time" value={requestedDeliveryTime} onChange={(e) => setRequestedDeliveryTime(e.target.value)} />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* #1812 multi-leg booking — user's #1 explicit gap. Each leg
+            maps to a transport_booking_lines row; the editor submits
+            the whole array atomically. */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">
+              مقاطع المسار (Multi-leg)
+            </CardTitle>
+            <p className="text-xs text-muted-foreground pt-1">
+              للرحلات متعددة المقاطع (مثل: مطار → فندق → الحرم → المدينة → فندق → مطار).
+              المقاطع اختيارية — اتركها فارغة للرحلة البسيطة.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <MultiLegBookingEditor legs={legs} onChange={setLegs} />
           </CardContent>
         </Card>
 
