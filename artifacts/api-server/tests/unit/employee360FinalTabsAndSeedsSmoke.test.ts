@@ -58,8 +58,10 @@ describe("Employee 360 — 14 tabs final", () => {
 
 describe("Employee 360 — backend data wiring", () => {
   it("Promise.all destructures contract + custodies + position", () => {
+    // Tolerant of later additions to the destructure (HR-014 added
+    // latestScore + activeSignals at the end). Check the prefix only.
     expect(ROUTE_SRC).toMatch(
-      /const \[tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles, contract, custodies, position\] = await Promise\.all/,
+      /const \[tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles, contract, custodies, position[,\s][^\]]*\] = await Promise\.all/,
     );
   });
 
