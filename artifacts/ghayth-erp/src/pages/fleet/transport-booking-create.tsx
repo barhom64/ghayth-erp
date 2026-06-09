@@ -69,18 +69,6 @@ export default function TransportBookingCreate() {
   const [contractId, setContractId] = useState<string>("");
   const [projectId, setProjectId] = useState<string>("");
   const [recurringTemplateId, setRecurringTemplateId] = useState<string>("");
-
-  const applyPrefill = (p: BookingSourcePrefill) => {
-    setBookingSource(p.bookingSource);
-    if (p.customerId) setCustomerId(String(p.customerId));
-    if (p.customerName) setCustomerName(p.customerName);
-    if (p.customerPhone) setCustomerPhone(p.customerPhone);
-    if (p.contractId) setContractId(String(p.contractId));
-    if (p.projectId) setProjectId(String(p.projectId));
-    if (p.umrahGroupId) setUmrahGroupId(String(p.umrahGroupId));
-    if (p.passengerCount != null) setPassengerCount(String(p.passengerCount));
-    if (p.recurringTemplateId) setRecurringTemplateId(String(p.recurringTemplateId));
-  };
   const [customerPhone, setCustomerPhone] = useState("");
   const [fromLocationText, setFromLocationText] = useState("");
   const [toLocationText, setToLocationText] = useState("");
@@ -125,6 +113,20 @@ export default function TransportBookingCreate() {
   const [fixedAppointmentTime, setFixedAppointmentTime] = useState("");
   const [isFlexibleTime, setIsFlexibleTime] = useState(false);
   const [priority, setPriority] = useState<string>("0");
+
+  // #1812 source-driven booking — applyPrefill is defined AFTER all
+  // useState hooks so JS hoisting doesn't break the setter references.
+  const applyPrefill = (p: BookingSourcePrefill) => {
+    setBookingSource(p.bookingSource);
+    if (p.customerId) setCustomerId(String(p.customerId));
+    if (p.customerName) setCustomerName(p.customerName);
+    if (p.customerPhone) setCustomerPhone(p.customerPhone);
+    if (p.contractId) setContractId(String(p.contractId));
+    if (p.projectId) setProjectId(String(p.projectId));
+    if (p.umrahGroupId) setUmrahGroupId(String(p.umrahGroupId));
+    if (p.passengerCount != null) setPassengerCount(String(p.passengerCount));
+    if (p.recurringTemplateId) setRecurringTemplateId(String(p.recurringTemplateId));
+  };
 
   const isCargo = transportServiceType === "cargo_load";
   const isUmrah = transportServiceType === "passenger_umrah";
