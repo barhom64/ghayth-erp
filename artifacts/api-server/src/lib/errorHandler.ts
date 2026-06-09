@@ -97,6 +97,17 @@ export class IntegrationError extends TypedError {
   public readonly code = "INTEGRATION_ERROR";
 }
 
+/**
+ * 429 — the caller has hit a rate/abuse limit (e.g. account lockout after too
+ * many failed logins). Lets login flows throw a single typed error instead of
+ * writing `res.status(429)` inline, so the web and mobile handlers can share
+ * one credential-verification helper without duplicating the lockout logic.
+ */
+export class TooManyRequestsError extends TypedError {
+  public readonly status = 429;
+  public readonly code = "TOO_MANY_REQUESTS";
+}
+
 /** Parse a route param as a positive integer ID; throws ValidationError on NaN / ≤ 0. */
 export function parseId(val: string | string[] | undefined, label = "id"): number {
   const raw = Array.isArray(val) ? val[0] : val;

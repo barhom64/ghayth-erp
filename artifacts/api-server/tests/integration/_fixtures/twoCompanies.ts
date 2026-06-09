@@ -101,8 +101,8 @@ async function seedCompany(name: string): Promise<{
     [companyId, `${name} HQ`]
   );
   const [{ id: employeeId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO employees (name, email) VALUES ($1, $2) RETURNING id`,
-    [`Owner of ${name}`, `owner-${companyId}@test.local`]
+    `INSERT INTO employees (name, "companyId", email, status) VALUES ($1, $2, $3, 'active') RETURNING id`,
+    [`Owner of ${name}`, companyId, `owner-${companyId}@test.local`]
   );
   const [{ id: assignmentId }] = await rawQuery<{ id: number }>(
     `INSERT INTO employee_assignments
