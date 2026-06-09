@@ -45,6 +45,7 @@ const OPERATION_LABELS: Record<string, string> = {
 };
 
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
+import { mapJournalStatus, DOCUMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, POSTING_STATUS_LABELS } from "@/lib/finance/status-model";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
@@ -406,11 +407,21 @@ export default function ExpensesPage() {
                       <span className="block font-medium">{e.relatedEntityType} #{e.relatedEntityId}</span>
                     </div>
                   )}
+                  {/* #1945 — الحالة على ثلاثة محاور منفصلة (مستند/دفع/ترحيل)،
+                      مشتقّة من نموذج الحالة المركزي بدل الخلط في حقل واحد. */}
+                  <div>
+                    <span className="text-muted-foreground">حالة المستند:</span>
+                    <span className="block font-medium">{DOCUMENT_STATUS_LABELS[mapJournalStatus(e.status).documentStatus]}</span>
+                  </div>
                   <div>
                     <span className="text-muted-foreground">حالة الدفع:</span>
                     <span className={`block font-medium ${e.isPaid ? "text-status-success-foreground" : "text-orange-600"}`}>
-                      {e.isPaid ? "مدفوع" : "غير مدفوع"}
+                      {PAYMENT_STATUS_LABELS[e.isPaid ? "paid" : "unpaid"]}
                     </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">حالة الترحيل:</span>
+                    <span className="block font-medium">{POSTING_STATUS_LABELS[mapJournalStatus(e.status).postingStatus]}</span>
                   </div>
                   {e.attachmentUrl && (
                     <div>
