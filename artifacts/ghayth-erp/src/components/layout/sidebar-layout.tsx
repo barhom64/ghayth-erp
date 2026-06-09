@@ -871,7 +871,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                     style={{ color: currentRoleColor }}
                   >
                     <Shield className="h-3.5 w-3.5" />
-                    <span className="hidden lg:inline-block text-xs font-medium">
+                    <span className="hidden sm:inline-block max-w-[130px] truncate text-xs font-medium">
                       {jobTitle || selectedRoleLabel}
                     </span>
                     <ChevronDown className="h-3 w-3 opacity-50" />
@@ -909,14 +909,14 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {companies.length > 1 && (
+              {companies.length > 1 ? (
                 <>
                   <div className="w-px h-5 bg-gray-200" />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="gap-1.5 px-2 h-8 text-emerald-700 hover:bg-white">
                         <Building className="h-3.5 w-3.5 text-emerald-600" />
-                        <span className="hidden lg:inline-block text-xs font-medium">
+                        <span className="hidden sm:inline-block max-w-[150px] truncate text-xs font-medium">
                           {selectedCompanyIds.length === 0
                             ? "جميع الشركات"
                             : selectedCompanyIds.length === 1
@@ -980,7 +980,20 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
-              )}
+              ) : companies.length === 1 ? (
+                <>
+                  <div className="w-px h-5 bg-gray-200" />
+                  <div
+                    className="flex items-center gap-1.5 px-2 h-8 text-emerald-700"
+                    title={companies[0]?.name || "الشركة"}
+                  >
+                    <Building className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="hidden sm:inline-block max-w-[150px] truncate text-xs font-medium">
+                      {companies[0]?.name || "الشركة"}
+                    </span>
+                  </div>
+                </>
+              ) : null}
 
               <div className="w-px h-5 bg-gray-200" />
 
@@ -988,7 +1001,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="gap-1.5 px-2 h-8 text-status-info-foreground hover:bg-white">
                     <Building2 className="h-3.5 w-3.5 text-status-info-foreground" />
-                    <span className="hidden lg:inline-block text-xs font-medium">
+                    <span className="hidden sm:inline-block max-w-[130px] truncate text-xs font-medium">
                       {selectedBranchIds.length === 0
                         ? "جميع الفروع"
                         : selectedBranchIds.length === 1

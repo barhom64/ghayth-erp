@@ -66,6 +66,27 @@ const TRANSPORT_SERVICE_TYPES = [
   "equipment_rental", "internal_transfer", "other",
 ] as const;
 
+// #1812 Comment 4663005810 — explicit cargo vs passenger family.
+// The booking row carries a `tripFamily` column (migration 284) so
+// every downstream surface (UI rendering, assignment engine filter,
+// reports, cargo operational metadata) can branch cleanly.
+const TRIP_FAMILIES = ["passenger", "cargo"] as const;
+
+function deriveTripFamily(
+  serviceType: typeof TRANSPORT_SERVICE_TYPES[number],
+  passengerCount?: number | null,
+  cargoWeight?: number | null,
+): typeof TRIP_FAMILIES[number] {
+  // Unambiguous mappings.
+  if (serviceType === "cargo_load") return "cargo";
+  if (serviceType === "passenger_umrah" || serviceType === "passenger_general") return "passenger";
+  // equipment_rental / internal_transfer / other: tip by data.
+  if ((passengerCount ?? 0) > 0) return "passenger";
+  if ((cargoWeight ?? 0) > 0) return "cargo";
+  // Default: equipment_rental tilts passenger (driver+1), the rest tilt cargo.
+  return serviceType === "equipment_rental" ? "passenger" : "cargo";
+}
+
 const BOOKING_STATUSES = [
   "draft", "submitted", "pending_approval", "approved",
   "scheduled", "dispatched", "in_progress", "completed",
@@ -517,7 +538,7 @@ transportBookingsRouter.post(
             "pickupWindowStart", "pickupWindowEnd",
             "dropoffWindowStart", "dropoffWindowEnd",
             "fixedAppointmentTime", "isFlexibleTime", priority,
-            notes, "createdBy")
+            notes, "createdBy", "tripFamily")
          VALUES ($1,$2,$3,$4,$5, $6,$7,$8,$9, $10,$11,$12,$13,$14,
                  $15,$16, $17,$18,$19,$20,$21,$22,
                  $23,$24,$25,$26,
@@ -528,7 +549,7 @@ transportBookingsRouter.post(
                  $48,$49,
                  $50,$51,
                  $52,$53,$54,
-                 $55,$56)`,
+                 $55,$56, $57)`,
         [
           scope.companyId, scope.branchId ?? null, b.bookingNumber,
           b.bookingSource ?? "manual_entry", b.transportServiceType,
@@ -551,6 +572,8 @@ transportBookingsRouter.post(
           b.fixedAppointmentTime ?? null, b.isFlexibleTime ?? false,
           b.priority ?? 0,
           b.notes ?? null, scope.userId,
+          // #1812 Comment 4663005810 — explicit tripFamily column.
+          deriveTripFamily(b.transportServiceType, b.passengerCount, b.cargoWeight),
         ],
         );
         assertInsert(headerInsert.insertId, "transport_bookings");
