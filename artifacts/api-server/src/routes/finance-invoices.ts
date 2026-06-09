@@ -1164,10 +1164,30 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           }
         }
 
+        // #1715 correctness review (M4) — prorate a header discount across the
+        // dimension-tagged revenue buckets. The buckets sum GROSS line totals
+        // (postedNet), but the invoice recognises NET revenue (totalNet); the
+        // old code dumped the whole discount onto the generic account below, so
+        // per-dimension revenue was overstated and the generic account absorbed
+        // the entire discount. Scaling every bucket by totalNet/postedNet spreads
+        // the discount proportionally; the tiny rounding residual still falls on
+        // the generic fallback. Only fires when there's a real divergence (a
+        // discount), so the no-discount path is unchanged. Σ revenue is
+        // preserved, so the JE still balances against the AR debit.
+        if (postedNet > 0.005 && Math.abs(totalNet - postedNet) >= 0.005) {
+          const ratio = totalNet / postedNet;
+          let scaledSum = 0;
+          for (const b of buckets.values()) {
+            b.amount = roundTo2(b.amount * ratio);
+            scaledSum = roundTo2(scaledSum + b.amount);
+          }
+          postedNet = scaledSum;
+        }
+
         // If the sum of line totals diverges from invoice.total-vat (e.g.
-        // legacy invoice with header-level total and no lines), let the
-        // remainder fall on the generic account so the entry still
-        // balances against the AR debit.
+        // legacy invoice with header-level total and no lines, or the rounding
+        // residual from the proration above), let the remainder fall on the
+        // generic account so the entry still balances against the AR debit.
         const diff = roundTo2(totalNet - postedNet);
         if (Math.abs(diff) >= 0.005) {
           // Bucket key has 14 dimension slots after `acct` — keep them

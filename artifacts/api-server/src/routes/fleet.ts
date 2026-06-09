@@ -2131,8 +2131,8 @@ router.post("/trips/:id/waypoints", authorize({ feature: "fleet.trips", action: 
       throw new ValidationError("إحداثيات النقطة مطلوبة", { field: "lat", fix: "أرسل lat و lon (أو latitude و longitude) في جسم الطلب" });
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_gps_tracking ("vehicleId","driverId",latitude,longitude,speed,"recordedAt","companyId") VALUES ($1,$2,$3,$4,$5,NOW(),$6)`,
-      [trip.vehicleId, trip.driverId, lat, lon, b.speed || 0, scope.companyId]
+      `INSERT INTO fleet_gps_tracking ("vehicleId","driverId",latitude,longitude,speed,"recordedAt") VALUES ($1,$2,$3,$4,$5,NOW())`,
+      [trip.vehicleId, trip.driverId, lat, lon, b.speed || 0]
     );
     assertInsert(insertId, "fleet_gps_tracking");
     emitEvent({
