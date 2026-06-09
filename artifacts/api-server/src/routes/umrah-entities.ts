@@ -3118,7 +3118,21 @@ router.get("/reports/compliance", authorize({ feature: "umrah", action: "list" }
       seasonPenP = ` AND pen."seasonId" = $${params.length}`;
     }
 
-    const [exemptRow, visaRow, overstayRow, penaltyRow] = await Promise.all([
+    // Batch-related signals scope on uploadedAt — no per-row seasonId.
+    // The seasonId filter applies to the BATCH's seasonId field. Build
+    // a separate params array because the per-pilgrim queries share
+    // the same companyId + seasonId slots.
+    const batchParams: unknown[] = [scope.companyId];
+    let batchSeasonP = "";
+    if (seasonId) {
+      batchParams.push(Number(seasonId));
+      batchSeasonP = ` AND b."seasonId" = $${batchParams.length}`;
+    }
+
+    const [
+      exemptRow, visaRow, overstayRow, penaltyRow,
+      failedRow, missingApRow,
+    ] = await Promise.all([
       // Currently exempt (PR #1482-1484 flag)
       rawQuery<{ c: string }>(
         `SELECT COUNT(*)::text AS c
@@ -3157,6 +3171,31 @@ router.get("/reports/compliance", authorize({ feature: "umrah", action: "list" }
             AND pen.status NOT IN ('paid', 'waived')${seasonPenP}`,
         params,
       ),
+      // §8 audit: rows the engine rejected outright during recent
+      // imports. Window matches the wizard's batch-history list.
+      rawQuery<{ c: string }>(
+        `SELECT COALESCE(SUM(COALESCE(b."errorCount",0)),0)::text AS c
+           FROM umrah_import_batches b
+          WHERE b."companyId" = $1 AND b."deletedAt" IS NULL
+            AND b."createdAt" >= NOW() - INTERVAL '30 days'${batchSeasonP}`,
+        batchParams,
+      ),
+      // §8 audit: nusk invoices missing their AP journal entry
+      // (DR 5201 / CR 2101). PR #1867 wired the JE on create + every
+      // PATCH; legacy rows from before #1867 still need a manual
+      // touch to backfill. `purchaseInvoiceId` is the FK that
+      // postNuskJournalEntries sets after posting. The
+      // unlinkedImportRows signal lives in a follow-up PR because
+      // it depends on the migration 279 counters from PR #1878.
+      rawQuery<{ c: string }>(
+        `SELECT COUNT(*)::text AS c
+           FROM umrah_nusk_invoices n
+          WHERE n."companyId" = $1 AND n."deletedAt" IS NULL
+            AND n."purchaseInvoiceId" IS NULL
+            AND COALESCE(n."totalAmount",0) > 0
+            AND n."nuskStatus" <> 'cancelled'`,
+        [scope.companyId],
+      ),
     ]);
 
     res.json(maskFields(req, {
@@ -3165,6 +3204,8 @@ router.get("/reports/compliance", authorize({ feature: "umrah", action: "list" }
       currentlyOverstaying: Number(overstayRow[0]?.c ?? "0"),
       unpaidPenaltiesCount: Number(penaltyRow[0]?.c ?? "0"),
       unpaidPenaltiesTotal: Number(penaltyRow[0]?.total ?? "0"),
+      failedImportRows30d: Number(failedRow[0]?.c ?? "0"),
+      missingNuskApJournals: Number(missingApRow[0]?.c ?? "0"),
     }));
   } catch (err) { handleRouteError(err, res, "Compliance dashboard"); }
 });
