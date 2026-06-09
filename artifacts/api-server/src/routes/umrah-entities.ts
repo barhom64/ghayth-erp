@@ -4856,4 +4856,137 @@ router.get("/reports/violations-summary", authorize({ feature: "umrah", action: 
   } catch (err) { handleRouteError(err, res, "Violations summary"); }
 });
 
+// §11 partial → full conversion — commissions summary report (#1870).
+// /umrah/commission-calculations is the per-row list; this endpoint
+// is the REPORT: payroll-style rollup with KPI tiles + 3 breakdowns
+// (by status / by month / by employee) + a recent table for context.
+router.get("/reports/commissions-summary", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const seasonId    = req.query.seasonId    ? Number(req.query.seasonId)    : null;
+    const employeeId  = req.query.employeeId  ? Number(req.query.employeeId)  : null;
+    const yearParam   = req.query.year        ? Number(req.query.year)        : null;
+    const statusParam = req.query.status      ? String(req.query.status)      : null;
+
+    // Year + employee + status filter via cc.* columns. seasonId
+    // chains through employee_commission_plans (the calculations
+    // table doesn't carry seasonId itself).
+    const params: unknown[] = [scope.companyId];
+    let where = `cc."companyId" = $1 AND cc."deletedAt" IS NULL`;
+    if (yearParam) {
+      params.push(yearParam);
+      where += ` AND cc.year = $${params.length}`;
+    }
+    if (employeeId) {
+      params.push(employeeId);
+      where += ` AND cc."employeeId" = $${params.length}`;
+    }
+    if (statusParam) {
+      params.push(statusParam);
+      where += ` AND cc.status = $${params.length}`;
+    }
+    if (seasonId) {
+      params.push(seasonId);
+      where += ` AND EXISTS (
+        SELECT 1 FROM employee_commission_plans cp
+         WHERE cp.id = cc."planId"
+           AND cp."companyId" = cc."companyId"
+           AND cp."seasonId" = $${params.length}
+      )`;
+    }
+
+    const [kpiRow, byStatus, byMonth, byEmployee, recent] = await Promise.all([
+      rawQuery<{
+        total: string; calculatedAmount: string; paidAmount: string;
+        pendingAmount: string; employeesCount: string;
+      }>(
+        `SELECT COUNT(*)::text AS total,
+                COALESCE(SUM(cc."finalAmount"), 0)::text AS "calculatedAmount",
+                COALESCE(SUM(CASE WHEN cc.status = 'paid' THEN cc."finalAmount" ELSE 0 END), 0)::text AS "paidAmount",
+                COALESCE(SUM(CASE WHEN cc.status NOT IN ('paid') THEN cc."finalAmount" ELSE 0 END), 0)::text AS "pendingAmount",
+                COUNT(DISTINCT cc."employeeId")::text AS "employeesCount"
+           FROM employee_commission_calculations cc
+          WHERE ${where}`,
+        params,
+      ),
+      rawQuery<{ status: string; c: string; total: string }>(
+        `SELECT cc.status, COUNT(*)::text AS c,
+                COALESCE(SUM(cc."finalAmount"), 0)::text AS total
+           FROM employee_commission_calculations cc
+          WHERE ${where}
+          GROUP BY cc.status
+          ORDER BY COUNT(*) DESC`,
+        params,
+      ),
+      rawQuery<{ year: number; month: number; c: string; total: string }>(
+        `SELECT cc.year, cc.month, COUNT(*)::text AS c,
+                COALESCE(SUM(cc."finalAmount"), 0)::text AS total
+           FROM employee_commission_calculations cc
+          WHERE ${where}
+          GROUP BY cc.year, cc.month
+          ORDER BY cc.year DESC, cc.month DESC
+          LIMIT 12`,
+        params,
+      ),
+      rawQuery<{
+        employeeId: number; employeeName: string | null;
+        c: string; total: string;
+      }>(
+        `SELECT cc."employeeId",
+                e."fullName" AS "employeeName",
+                COUNT(*)::text AS c,
+                COALESCE(SUM(cc."finalAmount"), 0)::text AS total
+           FROM employee_commission_calculations cc
+           LEFT JOIN employees e ON e.id = cc."employeeId"
+                                AND e."companyId" = cc."companyId"
+                                AND e."deletedAt" IS NULL
+          WHERE ${where}
+          GROUP BY cc."employeeId", e."fullName"
+          ORDER BY SUM(cc."finalAmount") DESC NULLS LAST
+          LIMIT 50`,
+        params,
+      ),
+      rawQuery<{
+        id: number; planId: number; planName: string | null;
+        employeeId: number; employeeName: string | null;
+        month: number; year: number; status: string;
+        finalAmount: string | number; commissionAmount: string | number;
+        totalMutamers: number; conditionMet: boolean;
+        createdAt: string;
+      }>(
+        `SELECT cc.id, cc."planId", cp."planName",
+                cc."employeeId", e."fullName" AS "employeeName",
+                cc.month, cc.year, cc.status,
+                cc."finalAmount", cc."commissionAmount",
+                cc."totalMutamers", cc."conditionMet",
+                cc."createdAt"::text AS "createdAt"
+           FROM employee_commission_calculations cc
+           LEFT JOIN employee_commission_plans cp
+                  ON cp.id = cc."planId" AND cp."companyId" = cc."companyId" AND cp."deletedAt" IS NULL
+           LEFT JOIN employees e
+                  ON e.id = cc."employeeId" AND e."companyId" = cc."companyId" AND e."deletedAt" IS NULL
+          WHERE ${where}
+          ORDER BY cc.year DESC, cc.month DESC, cc."finalAmount" DESC
+          LIMIT 100`,
+        params,
+      ),
+    ]);
+
+    const k = kpiRow[0] ?? { total: "0", calculatedAmount: "0", paidAmount: "0", pendingAmount: "0", employeesCount: "0" };
+    res.json(maskFields(req, {
+      kpis: {
+        total: Number(k.total),
+        calculatedAmount: Number(k.calculatedAmount),
+        paidAmount: Number(k.paidAmount),
+        pendingAmount: Number(k.pendingAmount),
+        employeesCount: Number(k.employeesCount),
+      },
+      byStatus:   byStatus.map((r) => ({ status: r.status, count: Number(r.c), total: Number(r.total) })),
+      byMonth:    byMonth.map((r) => ({ year: r.year, month: r.month, count: Number(r.c), total: Number(r.total) })),
+      byEmployee: byEmployee.map((r) => ({ employeeId: r.employeeId, employeeName: r.employeeName, count: Number(r.c), total: Number(r.total) })),
+      recent,
+    }));
+  } catch (err) { handleRouteError(err, res, "Commissions summary"); }
+});
+
 export default router;
