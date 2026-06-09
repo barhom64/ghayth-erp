@@ -61,6 +61,8 @@
 
 > **رحلة المشتريات (المرحلة 3.2) — 3 أعطال حقيقية اكتُشِفت في مراجعة المسارات الكتابية وأُصلِحت:** (1) أمر الشراء كان يُدرَج بحالة `'pending'` التي يرفضها `chk_purchase_orders_status` وليست حالة بداية صالحة في دورة الحياة → صُحّحت إلى `'pending_approval'`؛ (2) `purchase_orders` + 4 جداول دورة حياة (`fleet_maintenance`/`fleet_traffic_violations`/`payroll_runs`/`umrah_penalties`) تفتقد `updatedAt` فينهار أي انتقال حالة (نفس فئة عطل `fleet_trips`/migration 252) → migration 279؛ (3) حساب GRNI لم يكن يُحلّ (fallback 2115 غير موجود) → migration 280 يزرع ربط `purchase_grni` قابل للتحكم → 2111. النتيجة: `verify-purchase-journey.sh` **8/8**، قيد GRN متوازن.
 
+> **كاشف وقائي دائم — `check:insert-columns`:** يسدّ الثغرة الجذرية في `audit-schema-drift` (يفحص الأعمدة **عالميًا** فيمرّ خطأ لكل جدول مثل `invoice_lines.total`). الأداة الجديدة (`scripts/src/check-insert-columns.mjs`) تقرأ خريطة الأعمدة **لكل جدول** من `information_schema` الحيّ وتقارن قوائم أعمدة `INSERT` — وقد كشفت زيادةً على أعطال التعديل/المشتريات مزيدًا من المرشّحين (`fleet_drivers.iqamaNumber…`, `transport_booking_lines.*`) للفرز. ملاحظة أمانة: دقّتها تتطلّب قاعدة **على رأس الترحيلات**، ولأن guard CI يُشغّل فحوص القاعدة فقط عند توفّر `DATABASE_URL`، فهي **تشخيصية** (advisory؛ `--strict` يفشل) تُوصَل بمسار يوفّر قاعدة محدّثة (e2e) للإنفاذ.
+
 ## 5) ما لم يُنفَّذ ولماذا (مؤجَّل بسببه)
 
 - **رفع Excel (xlsx):** رفع CSV مُنجَز؛ Excel يحتاج مكتبة `xlsx` — مؤجَّل لتجنّب اعتمادية جديدة الآن (CSV يغطّي الحالة الشائعة).
