@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { AlertTriangle, Shield, Clock, Receipt, FileWarning, BookX } from "lucide-react";
+import { AlertTriangle, Shield, Clock, Receipt, FileWarning, BookX, UserX } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 
 // لوحة الامتثال — يجمع 4 أرقام كانت موزعة على صفحات مختلفة (المستثنون،
@@ -30,6 +30,10 @@ interface ComplianceResp {
   // "what's silently broken right now?" not just "who's overstaying?".
   failedImportRows30d?: number;
   missingNuskApJournals?: number;
+  // §3 extension — pilgrims with ANY NULL FK (agent/group/sub-agent).
+  // Catches legacy orphans from the pre-#1867 doImport era. Optional
+  // for rolling-deploy safety with older API instances.
+  orphanPilgrims?: number;
 }
 
 interface SeasonOpt { id: number; title: string }
@@ -134,6 +138,20 @@ export default function UmrahComplianceDashboard() {
         href: `/umrah/nusk-invoices`,
         testid: "compliance-tile-missing-nusk-ap",
       },
+      // §3 extension — legacy orphans (#1870 review point 3.ب).
+      // Drills into the global recovery screen; survives even when
+      // the row has no umrah_import_changes audit lineage.
+      {
+        key: "orphan",
+        label: "معتمرون يتامى (بلا ربط)",
+        value: (data?.orphanPilgrims ?? 0),
+        icon: UserX,
+        tone: (data?.orphanPilgrims ?? 0) > 0
+          ? "text-status-warning-foreground bg-status-warning-surface"
+          : "text-status-neutral-foreground bg-status-neutral-surface",
+        href: `/umrah/orphan-pilgrims`,
+        testid: "compliance-tile-orphan",
+      },
     ];
   }, [data, seasonFilter]);
 
@@ -146,7 +164,8 @@ export default function UmrahComplianceDashboard() {
     (data?.currentlyOverstaying ?? 0) +
     (data?.unpaidPenaltiesCount ?? 0) +
     (data?.failedImportRows30d ?? 0) +
-    (data?.missingNuskApJournals ?? 0);
+    (data?.missingNuskApJournals ?? 0) +
+    (data?.orphanPilgrims ?? 0);
 
   return (
     <PageShell
