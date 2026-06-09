@@ -557,7 +557,7 @@ export async function planCogsReversal(
             "cogsAmount"::float8         AS "cogsAmount",
             "cogsReversedAmount"::float8 AS "cogsReversedAmount",
             "cogsAllocationJson"         AS "cogsAllocationJson",
-            "costCenterId", "projectId", "employeeId", "branchId"
+            "costCenterId", "projectId", "employeeId"
        FROM invoice_lines
       WHERE "invoiceId" = $1
         AND COALESCE("cogsAmount", 0) > COALESCE("cogsReversedAmount", 0)
