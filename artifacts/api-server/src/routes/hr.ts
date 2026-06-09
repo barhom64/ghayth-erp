@@ -7951,6 +7951,92 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
 
+// Distinct company-document categories actually present (settings-backed list
+// for the filter dropdown + the admin-editable canonical list). Returns both
+// `data` (used for filtering) and `configured` (canonical) so the frontend can
+// fall back to its constant list when the tenant has none yet.
+router.get("/company-document-categories", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<{ documentType: string | null }>(
+      `SELECT DISTINCT "documentType" FROM company_documents
+       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status != 'deleted'
+         AND "documentType" IS NOT NULL AND "documentType" <> ''
+       ORDER BY "documentType" ASC`,
+      [scope.companyId]
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as { documentType: string | null }[]; });
+    const list = rows.map((r) => r.documentType).filter((v): v is string => !!v);
+    res.json({ data: list, configured: list });
+  } catch (err) { handleRouteError(err, res, "Company document categories error:"); }
+});
+
+router.delete("/company-documents/:id", authorize({ feature: "hr.organization", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) { res.status(400).json({ error: "معرّف غير صالح" }); return; }
+    const updated = await rawQuery<{ id: number }>(
+      `UPDATE company_documents SET status='deleted', "deletedAt"=NOW(), "updatedAt"=NOW()
+       WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING id`,
+      [id, scope.companyId]
+    );
+    if (!updated.length) { res.status(404).json({ error: "الوثيقة غير موجودة" }); return; }
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "company_documents", entityId: id,
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json({ ok: true, message: "تم حذف الوثيقة" });
+  } catch (err) { handleRouteError(err, res, "Company documents error:"); }
+});
+
+router.patch("/company-documents/:id", authorize({ feature: "hr.organization", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) { res.status(400).json({ error: "معرّف غير صالح" }); return; }
+    // as-any-reason: justified-pragmatic - partial().safeParse inferred type is widened so field access does not need per-field generics; behavior unchanged
+    const b = zodParse(companyDocumentSchema.partial().safeParse(req.body)) as any;
+    const COLS = ["documentType", "documentNumber", "issueDate", "expiryDate", "issuingAuthority", "reminderDays", "notes"] as const;
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    for (const col of COLS) {
+      if (b[col] !== undefined) { sets.push(`"${col}"=$${idx++}`); params.push(b[col]); }
+    }
+    if (!sets.length) { res.status(400).json({ error: "لا توجد حقول للتحديث" }); return; }
+    sets.push(`"updatedAt"=NOW()`);
+    params.push(id, scope.companyId);
+    const updated = await rawQuery<Record<string, unknown>>(
+      `UPDATE company_documents SET ${sets.join(", ")}
+       WHERE id=$${idx++} AND "companyId"=$${idx++} AND "deletedAt" IS NULL RETURNING *`,
+      params
+    );
+    if (!updated.length) { res.status(404).json({ error: "الوثيقة غير موجودة" }); return; }
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "company_documents", entityId: id, after: b,
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json(updated[0]);
+  } catch (err) { handleRouteError(err, res, "Company documents error:"); }
+});
+
+// Distinct employee document-types actually present (settings-backed list for
+// the type dropdown). `employee_documents.type` is the column; this table has
+// no deletedAt, so the soft-delete predicate is status != 'deleted'.
+router.get("/employee-document-types", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<{ type: string | null }>(
+      `SELECT DISTINCT type FROM employee_documents
+       WHERE "companyId"=$1 AND status != 'deleted' AND type IS NOT NULL AND type <> ''
+       ORDER BY type ASC`,
+      [scope.companyId]
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as { type: string | null }[]; });
+    const list = rows.map((r) => r.type).filter((v): v is string => !!v);
+    res.json({ data: list, configured: list });
+  } catch (err) { handleRouteError(err, res, "Employee document types error:"); }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // EMPLOYEE DOCUMENTS — وثائق الموظف الإضافية (رخصة قيادة، شهادات، إلخ)
 // ─────────────────────────────────────────────────────────────────────────────
