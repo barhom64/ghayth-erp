@@ -85,9 +85,13 @@ describe("API — GET /umrah/calendar/events", () => {
     expect(ROUTE).toMatch(/!\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(fromStr\) \|\| !\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(toStr\)/);
   });
 
-  it("caps the window at 90 days to keep queries cheap", () => {
-    expect(ROUTE).toMatch(/if \(days > 90\)/);
-    expect(ROUTE).toMatch(/نافذة التقويم محدودة بـ 90 يوماً/);
+  it("caps the window at 366 days (raised from 90 for Phase-2 yearly view)", () => {
+    // Phase 1 capped at 90 days for the monthly view. Phase 2's
+    // yearly view needs a single round-trip per year, so 366 days.
+    // 366 × 8 layers stays in the single-digit second budget on a
+    // typical season.
+    expect(ROUTE).toMatch(/if \(days > 366\)/);
+    expect(ROUTE).toMatch(/نافذة التقويم محدودة بـ 366 يوماً/);
   });
 
   it("whitelists the layers query param against CalendarLayer", () => {
