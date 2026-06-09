@@ -1108,6 +1108,26 @@ router.post("/reprint-requests", requirePermission("print:reprint:create"), asyn
   try {
     const body = zodParse(reprintBody.safeParse(req.body));
     const scope = scopeFromReq(req);
+    // IGOC-002: tenant-isolate the reprint target. The endpoint accepts
+    // arbitrary entityType + entityId — without an ownership check, an
+    // attacker could request reprints for documents belonging to other
+    // companies (entity numbers are sequential and guessable for many
+    // domains: invoices, vouchers, contracts).
+    //
+    // The cleanest gate: a reprint request only makes sense if THIS
+    // company has printed this entity before. The print_jobs table is
+    // the canonical record of "we've printed this" — checking it as a
+    // prerequisite also matches user intent (you reprint things you
+    // printed, you /render new things). 404 hides cross-tenant ids.
+    const [proof] = await rawQuery<{ id: number }>(
+      `SELECT id FROM print_jobs
+        WHERE "companyId" = $1 AND "entityType" = $2 AND "entityId" = $3
+        LIMIT 1`,
+      [scope.companyId, body.entityType, body.entityId],
+    );
+    if (!proof) {
+      throw new NotFoundError("لا يوجد سجل طباعة سابق لهذا المستند في شركتك");
+    }
     const rows = await rawQuery<{ id: number }>(
       `INSERT INTO print_reprint_requests
        ("companyId","branchId","entityType","entityId","requestedBy","reason","status")
@@ -1234,6 +1254,24 @@ router.get(
       if (!/^[a-z][a-z0-9_]*$/.test(entityType) || !/^[A-Za-z0-9_\-./]+$/.test(entityId)) {
         throw new ValidationError("invalid entity reference");
       }
+      // IGOC-002: same pattern as /reprint-requests — gate archive views
+      // on "we've printed this in your company". Otherwise an attacker
+      // could probe entity ids to enumerate competitor print history.
+      // (listEntityPrints already filters by companyId so the archive
+      // never RETURNS cross-tenant rows; this gate makes the 200 vs 404
+      // boundary symmetric — same response shape regardless of whether
+      // the id exists in another tenant.)
+      const [proof] = await rawQuery<{ id: number }>(
+        `SELECT id FROM print_jobs
+          WHERE "companyId" = $1 AND "entityType" = $2 AND "entityId" = $3
+          LIMIT 1`,
+        [scope.companyId, entityType, entityId],
+      );
+      if (!proof) {
+        // Return empty list rather than 404 — archive lookups are often
+        // speculative ("did we print this?"). Empty == not in our archive.
+        return res.json({ items: [] });
+      }
       const { listEntityPrints } = await import("../lib/print/archive.js");
       const items = await listEntityPrints(scope.companyId, entityType, entityId);
       res.json({ items });
@@ -1313,8 +1351,19 @@ router.get(
   requirePermission("print_jobs:read"),
   async (req: Request, res: Response) => {
     try {
+      const scope = scopeFromReq(req);
       const id = String(req.params.id ?? "");
       if (!/^[a-z0-9.\-]+$/i.test(id)) throw new ValidationError("invalid queue id");
+      // IGOC-002: tenant-isolate queue lookups. Without this check, an
+      // attacker could enumerate queue IDs to inspect print jobs from
+      // other companies' tenants. Verify the queue id corresponds to a
+      // print_jobs row in the caller's company BEFORE hitting the queue
+      // backend — a 404 for cross-tenant ids hides their existence.
+      const [ownership] = await rawQuery<{ id: number }>(
+        `SELECT id FROM print_jobs WHERE "jobId"::text = $1 AND "companyId" = $2 LIMIT 1`,
+        [id, scope.companyId],
+      );
+      if (!ownership) return res.status(404).json({ error: "not_found" });
       const { getBackend } = await import("../lib/print/queue.js");
       const job = await getBackend().getJob(id);
       if (!job) return res.status(404).json({ error: "not_found" });

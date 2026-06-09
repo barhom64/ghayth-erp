@@ -213,6 +213,13 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
           // performed under. A user may hold several roles; selectedRoleKey is
           // the active one for this request. See RBAC_AUDIT_CONTEXT_SPEC.md.
           activeRoleKey: scope.selectedRoleKey ?? null,
+          // IGOC-001 (migration 284): three additional context fields. Each
+          // is set on req.scope by authMiddleware/authzEngine when known;
+          // when not (system actions, unauthenticated, legacy paths) they
+          // remain null and the column stays null.
+          activeDepartmentId: (scope as any).activeDepartmentId ?? null,
+          resolvedScope: (scope as any).resolvedScope ?? null,
+          impersonationSourceUser: (scope as any).impersonationSourceUser ?? null,
           entity,
           entityId: entityId ? Number(entityId) : undefined,
           action,

@@ -52,9 +52,19 @@ async function logAudit(event: string, payload: EventPayload) {
     // performed under, supplied by auditMiddleware from scope.selectedRoleKey.
     const activeRoleKey = (payload.activeRoleKey as string) ?? null;
 
+    // IGOC-001 (migration 284): three additional context fields. All
+    // back-compatible — when the emitter didn't pass them, the columns
+    // stay null and existing audit rows are unaffected.
+    const activeDepartmentId = (payload.activeDepartmentId as number) ?? null;
+    const resolvedScope = (payload.resolvedScope as string) ?? null;
+    const impersonationSourceUser = (payload.impersonationSourceUser as number) ?? null;
+
     await pool.query(
-      `INSERT INTO audit_logs ("companyId","branchId","userId",action,entity,"entityId","before","after","changes","reason","scope","active_role_key")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      `INSERT INTO audit_logs (
+         "companyId","branchId","userId",action,entity,"entityId",
+         "before","after","changes","reason","scope",
+         "active_role_key","active_department_id","resolved_scope","impersonation_source_user"
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [
         payload.companyId ?? null,
         payload.branchId ?? null,
@@ -68,6 +78,9 @@ async function logAudit(event: string, payload: EventPayload) {
         reason,
         scope,
         activeRoleKey,
+        activeDepartmentId,
+        resolvedScope,
+        impersonationSourceUser,
       ]
     );
   } catch (err) {
