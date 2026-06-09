@@ -1,0 +1,231 @@
+// finance/scenario-model.ts
+//
+// #1715 / #1945 — THE central finance scenario model (single source of truth).
+//
+// The owner's directive: every finance screen must be driven by progressive
+// selection — operation type → domain → scenario → only-the-relevant fields →
+// suggested account → cost-centre → operational effect → future task — and NOT
+// by hand-patched field lists. This registry is that source of truth.
+//
+// Today the same knowledge is scattered across three places that must agree:
+//   • AllocationTargetSelect  — which fields render per "target".
+//   • deriveSpecializedAccount (api-server) — the GL account purpose per target.
+//   • deriveOperationalEffectHint (api-server) — the operational effect + future
+//     task per target.
+// This module consolidates that into ONE typed registry. The renderer, the
+// account/cost-centre resolvers and the impact preview all read from it, so a
+// scenario is declared once and every layer stays in sync.
+//
+// ROADMAP (see docs/finance/FINANCE_SCENARIO_MODEL.md):
+//   Phase 1 (this file)  — the registry + resolvers (fields / account / cost
+//                          centre / effect / future task) + docs.
+//   Phase 2              — AllocationTargetSelect renders from the registry.
+//   Phase 3              — the backend deriveSpecializedAccount /
+//                          deriveOperationalEffectHint read the SAME purpose +
+//                          effect keys (they already use these strings).
+//   Phase 4              — vouchers / receipts / invoices / intake reuse the
+//                          model; remove the legacy "الجهة المرتبطة" + raw
+//                          account/cost-centre fields.
+
+export type FinanceDomain =
+  | "general"
+  | "vehicle"
+  | "property"
+  | "umrah"
+  | "project"
+  | "inventory"
+  | "fixed_asset"
+  | "document"
+  | "employee"
+  | "supplier_customer";
+
+export const DOMAIN_LABELS: Record<FinanceDomain, string> = {
+  general: "عام",
+  vehicle: "مركبة / أسطول",
+  property: "عقار / وحدة",
+  umrah: "عمرة",
+  project: "مشروع",
+  inventory: "مخزون",
+  fixed_asset: "أصل ثابت",
+  document: "وثيقة / ترخيص",
+  employee: "موظف / عهدة",
+  supplier_customer: "مورد / عميل",
+};
+
+/** A field the renderer should show for a scenario (only the relevant ones). */
+export interface ScenarioFieldSpec {
+  /** Canonical key the form binds to (maps onto the allocation/effect payload). */
+  key: string;
+  label: string;
+  /** Drives which control the renderer picks. */
+  kind:
+    | "vehicle" | "driver" | "property" | "unit" | "contract" | "tenant"
+    | "umrah_season" | "umrah_agent" | "umrah_group" | "project" | "supplier"
+    | "warehouse" | "product" | "asset"
+    | "number" | "money" | "text" | "date" | "select" | "attachment";
+  required?: boolean;
+  /** For kind === "select". */
+  options?: { value: string; label: string }[];
+  hint?: string;
+}
+
+/** The operational side-effect a scenario produces when it posts. */
+export type ScenarioEffect =
+  | "maintenance_ticket"
+  | "fuel_log"
+  | "asset_creation"
+  | "document_record"
+  | "tenant_claim"
+  | "stock_movement"
+  | null;
+
+export interface FinanceScenario {
+  id: string;
+  domain: FinanceDomain;
+  label: string;
+  /** Only these fields render for the scenario. */
+  fields: ScenarioFieldSpec[];
+  /** GL purpose key → financialEngine.resolveAccountCode (matches the backend). */
+  accountPurpose: string;
+  /** True when the spend is capitalised (asset/inventory), not a P&L expense. */
+  capitalize?: boolean;
+  /** Which entity supplies the cost centre (null = branch/general). */
+  costCenterSource: FinanceDomain | null;
+  /** Operational effect fired in the JE transaction. */
+  effect: ScenarioEffect;
+  /** Human description of the future task the scenario schedules, if any. */
+  futureTask?: string | null;
+}
+
+// ── shared field fragments ──────────────────────────────────────────────────
+const VEHICLE = { key: "vehicleId", label: "المركبة", kind: "vehicle", required: true } as const;
+const ODOMETER = { key: "odometer", label: "قراءة العداد", kind: "number" } as const;
+const ATTACH = { key: "attachment", label: "المرفق", kind: "attachment" } as const;
+
+export const FINANCE_SCENARIOS: Record<string, FinanceScenario> = {
+  // ── vehicle ───────────────────────────────────────────────────────────────
+  vehicle_fuel: {
+    id: "vehicle_fuel", domain: "vehicle", label: "وقود",
+    fields: [
+      VEHICLE, { key: "driverId", label: "السائق", kind: "driver" }, ODOMETER,
+      { key: "liters", label: "عدد اللترات", kind: "number" },
+      { key: "costPerLiter", label: "سعر اللتر", kind: "money" },
+      { key: "stationName", label: "المحطة / المورد", kind: "text" }, ATTACH,
+    ],
+    accountPurpose: "vehicle_fuel_expense", costCenterSource: "vehicle",
+    effect: "fuel_log", futureTask: "احتساب كفاءة الوقود + تنبيه عند استهلاك غير منطقي",
+  },
+  vehicle_maintenance: {
+    id: "vehicle_maintenance", domain: "vehicle", label: "صيانة (دورية/طارئة)",
+    fields: [
+      VEHICLE, ODOMETER, { key: "driverId", label: "السائق وقت البلاغ", kind: "driver" },
+      { key: "maintenanceType", label: "نوع الصيانة", kind: "select",
+        options: ["دورية", "إصلاح", "طارئة", "وقائية", "حادث"].map((v) => ({ value: v, label: v })) },
+      { key: "performedBy", label: "الورشة / المورد", kind: "text" },
+      { key: "costBearer", label: "مَن يتحمّل", kind: "select",
+        options: ["company", "driver", "customer", "third_party", "insurance"].map((v) => ({ value: v, label: v })) },
+      ATTACH,
+    ],
+    accountPurpose: "vehicle_maintenance_expense", costCenterSource: "vehicle",
+    effect: "maintenance_ticket", futureTask: "تذكير الصيانة الوقائية القادم من جدول المركبة",
+  },
+  vehicle_tires: {
+    id: "vehicle_tires", domain: "vehicle", label: "كفرات",
+    fields: [VEHICLE, ODOMETER, { key: "tireCount", label: "عدد الكفرات", kind: "number" },
+      { key: "tireSize", label: "المقاس", kind: "text" }, ATTACH],
+    accountPurpose: "vehicle_maintenance_expense", costCenterSource: "vehicle",
+    effect: "maintenance_ticket", futureTask: "مهمة فحص/استبدال حسب الممشى",
+  },
+  vehicle_purchase: {
+    id: "vehicle_purchase", domain: "vehicle", label: "شراء مركبة",
+    fields: [
+      { key: "supplierId", label: "المورد", kind: "supplier" },
+      { key: "assetName", label: "اسم الأصل", kind: "text", required: true },
+      { key: "usefulLifeYears", label: "العمر الإنتاجي (سنوات)", kind: "number" }, ATTACH,
+    ],
+    accountPurpose: "fixed_asset_purchase", capitalize: true, costCenterSource: "vehicle",
+    effect: "asset_creation", futureTask: "يبدأ الإهلاك الشهري + مهام تأمين/فحص/استمارة",
+  },
+  // ── property ────────────────────────────────────────────────────────────
+  property_maintenance: {
+    id: "property_maintenance", domain: "property", label: "صيانة عقار/وحدة",
+    fields: [
+      { key: "propertyId", label: "العقار", kind: "property", required: true },
+      { key: "unitId", label: "الوحدة", kind: "unit" },
+      { key: "contractId", label: "العقد النشط", kind: "contract" },
+      { key: "maintenanceType", label: "نوع الصيانة", kind: "text" },
+      { key: "performedBy", label: "الفني / المورد", kind: "text" },
+      { key: "costBearer", label: "مَن يتحمّل", kind: "select",
+        options: [{ value: "owner", label: "المالك" }, { value: "tenant", label: "المستأجر" }] },
+      ATTACH,
+    ],
+    accountPurpose: "property_maintenance_expense", costCenterSource: "property",
+    effect: "maintenance_ticket", futureTask: "مطالبة المستأجر عند تحمّله التكلفة",
+  },
+  // ── umrah ───────────────────────────────────────────────────────────────
+  umrah_cost: {
+    id: "umrah_cost", domain: "umrah", label: "تكلفة عمرة (سكن/نقل/إعاشة/خدمة)",
+    fields: [
+      { key: "umrahSeasonId", label: "الموسم", kind: "umrah_season", required: true },
+      { key: "umrahAgentId", label: "الوكيل", kind: "umrah_agent" },
+      { key: "umrahGroupId", label: "المجموعة", kind: "umrah_group" }, ATTACH,
+    ],
+    accountPurpose: "umrah_cost", costCenterSource: "umrah", effect: null,
+  },
+  // ── project ─────────────────────────────────────────────────────────────
+  project_cost: {
+    id: "project_cost", domain: "project", label: "تكلفة مشروع (مواد/مقاول/عمالة/معدات)",
+    fields: [{ key: "projectId", label: "المشروع", kind: "project", required: true }, ATTACH],
+    accountPurpose: "project_cost", costCenterSource: "project", effect: null,
+  },
+  // ── inventory ───────────────────────────────────────────────────────────
+  inventory_purchase: {
+    id: "inventory_purchase", domain: "inventory", label: "شراء مخزون",
+    fields: [
+      { key: "supplierId", label: "المورد", kind: "supplier" },
+      { key: "warehouseId", label: "المستودع", kind: "warehouse" },
+      { key: "productId", label: "الصنف", kind: "product" },
+      { key: "quantity", label: "الكمية", kind: "number" }, ATTACH,
+    ],
+    accountPurpose: "inventory_receipt", capitalize: true, costCenterSource: null,
+    effect: "stock_movement",
+  },
+  // ── fixed asset ─────────────────────────────────────────────────────────
+  asset_purchase: {
+    id: "asset_purchase", domain: "fixed_asset", label: "شراء أصل",
+    fields: [
+      { key: "supplierId", label: "المورد", kind: "supplier" },
+      { key: "assetName", label: "اسم الأصل", kind: "text", required: true },
+      { key: "usefulLifeYears", label: "العمر الإنتاجي (سنوات)", kind: "number" }, ATTACH,
+    ],
+    accountPurpose: "fixed_asset_purchase", capitalize: true, costCenterSource: "fixed_asset",
+    effect: "asset_creation", futureTask: "يبدأ الإهلاك الشهري تلقائيًا",
+  },
+  // ── document / licence ──────────────────────────────────────────────────
+  document_renewal: {
+    id: "document_renewal", domain: "document", label: "وثيقة / ترخيص / تجديد",
+    fields: [
+      { key: "documentType", label: "نوع الوثيقة", kind: "text", required: true },
+      { key: "documentNumber", label: "رقم الوثيقة", kind: "text" },
+      { key: "expiryDate", label: "تاريخ الانتهاء", kind: "date" }, ATTACH,
+    ],
+    accountPurpose: "general_expense", costCenterSource: null,
+    effect: "document_record", futureTask: "مهمة تجديد + تنبيه قبل الانتهاء (بلا قيد الآن)",
+  },
+  // ── general ─────────────────────────────────────────────────────────────
+  general_expense: {
+    id: "general_expense", domain: "general", label: "مصروف عام",
+    fields: [ATTACH],
+    accountPurpose: "general_expense", costCenterSource: null, effect: null,
+  },
+};
+
+/** Scenarios available for a domain — the renderer shows ONLY these. */
+export function scenariosForDomain(domain: FinanceDomain): FinanceScenario[] {
+  return Object.values(FINANCE_SCENARIOS).filter((s) => s.domain === domain);
+}
+
+/** The single resolver the renderer + preview call once a scenario is chosen. */
+export function resolveScenario(scenarioId: string): FinanceScenario | null {
+  return FINANCE_SCENARIOS[scenarioId] ?? null;
+}
