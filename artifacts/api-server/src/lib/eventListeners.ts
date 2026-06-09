@@ -1619,8 +1619,8 @@ export function registerEventListeners() {
     try {
       await rawExecute(
         `INSERT INTO tasks ("companyId", title, description, type, status, priority,
-                            "linkedEntityType", "linkedEntityId", "slaDeadline", "slaHours", "createdAt")
-         VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, NOW())`,
+                            "linkedEntityType", "linkedEntityId", "slaDeadline", "createdAt")
+         VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, NOW())`,
         [
           payload.companyId,
           `${matched.titlePrefix} ${senderName}: ${(msg.subject ?? "").slice(0, 120)}`,
@@ -1630,7 +1630,6 @@ export function registerEventListeners() {
           linkedEntityType,
           linkedEntityId,
           dueAt,
-          slaHours,
         ],
       );
     } catch (e) { logger.error(e, "[EventListener] inbox auto-classifier task insert failed"); }

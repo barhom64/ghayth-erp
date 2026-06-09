@@ -2751,11 +2751,13 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       journalEntryId = posted.journalId;
 
       for (const cur of currencies) {
-        const curImpact = details.filter((d: any) => d.currency === cur).reduce((s: number, d: any) => s + d.diff, 0);
+        const curImpact = roundTo2(details.filter((d: any) => d.currency === cur).reduce((s: number, d: any) => s + d.diff, 0));
         const { rows: revRows } = await client.query(
-          `INSERT INTO fx_revaluations ("companyId","currency","revaluationDate","journalEntryId","totalImpact","createdBy")
-           VALUES ($1,$2,$3::date,$4,$5,$6) RETURNING id`,
-          [scope.companyId, cur, periodEnd, journalEntryId, roundTo2(curImpact), scope.activeAssignmentId]
+          `INSERT INTO fx_revaluations ("companyId","period","journalEntryId","totalGain","totalLoss",details,"postedBy","postedAt")
+           VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,NOW()) RETURNING id`,
+          [scope.companyId, period, journalEntryId,
+           curImpact > 0 ? curImpact : 0, curImpact < 0 ? -curImpact : 0,
+           JSON.stringify({ currency: cur, periodEnd, impact: curImpact }), scope.activeAssignmentId]
         );
         if (revRows[0]?.id) revalIds.push(revRows[0].id as number);
       }

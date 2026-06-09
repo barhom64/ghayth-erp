@@ -76,6 +76,11 @@ run_step "check:sql-ambiguity:tests" node scripts/src/check-sql-ambiguity.test.m
 if [ -n "${DATABASE_URL:-}" ]; then
   run_step "check:schema-drift" node scripts/src/check-schema-drift.mjs
   run_step "check:ghost-rows"   node scripts/src/check-ghost-rows.mjs
+  # NOTE: check:insert-columns is intentionally NOT run here. It needs the DB at
+  # migration HEAD, but this CI provisions Postgres from the db/schema.sql dump
+  # (pre-server-boot), so post-dump migration columns read as false positives.
+  # It is a manual diagnostic (pnpm check:insert-columns) until a head-of-main
+  # DB lane exists.
   # Bare column shared across 2+ joined relations → Postgres
   # "column reference … is ambiguous" 500. Needs the live schema to know
   # which columns collide. See scripts/src/check-sql-ambiguity.mjs.

@@ -79,3 +79,30 @@ export const FISCAL_PERIOD_STATUS: Record<string, { label: string; color: string
   closed: { label: "مُغلقة",    color: "bg-gray-100 text-muted-foreground border-border" },
   future: { label: "مستقبلية",  color: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
 };
+
+// #1715 review — shared tax/invoice constants + the TaxCodeOption shape, which
+// were copy-pasted across expenses-create / vouchers-create / invoices-create.
+export const INVOICE_TYPE_CODES: { value: string; label: string }[] = [
+  { value: "388", label: "فاتورة ضريبية (388)" },
+  { value: "381", label: "إشعار دائن (381)" },
+  { value: "383", label: "إشعار مدين (383)" },
+];
+
+export const TAX_CATEGORY_CODES: { value: string; label: string }[] = [
+  { value: "S", label: "خاضع للضريبة (S)" },
+  { value: "Z", label: "نسبة صفرية (Z)" },
+  { value: "E", label: "معفى (E)" },
+  { value: "O", label: "خارج نطاق الضريبة (O)" },
+];
+
+export interface TaxCodeOption {
+  id: number;
+  code: string;
+  name: string;
+  rate: number | string;
+  taxType: "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
+  // expense form carries the ZATCA category; voucher doesn't — optional here.
+  zatcaCategoryCode?: string | null;
+  isInclusiveDefault: boolean;
+  isActive: boolean;
+}
