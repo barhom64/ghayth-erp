@@ -4279,4 +4279,137 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
   } catch (err) { handleRouteError(err, res, "Calendar events"); }
 });
 
+// §11 stub conversion — group + agent profitability (#1870).
+// One endpoint, two dimensions. Returns one row per
+// group/agent with revenue (umrah_sales_invoices) minus cost
+// (umrah_nusk_invoices) = net profit. Operator drills by
+// season + sort to find the best/worst performer.
+router.get("/reports/profitability", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const dimension = String(req.query.dimension ?? "group");
+    if (!["group", "agent"].includes(dimension)) {
+      throw new ValidationError("البُعد المطلوب: group أو agent", { field: "dimension" });
+    }
+    const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
+
+    const params: unknown[] = [scope.companyId];
+    let salesSeasonClause = "";
+    let nuskSeasonClause = "";
+    if (seasonId) {
+      params.push(seasonId);
+      salesSeasonClause = ` AND inv."seasonId" = $${params.length}`;
+      // umrah_nusk_invoices has no seasonId on it — scope through
+      // the linked group instead.
+      nuskSeasonClause = ` AND g."seasonId" = $${params.length}`;
+    }
+
+    let rows: any[] = [];
+    if (dimension === "group") {
+      // Revenue per group: sum of sales-invoice line items that
+      // reference each group. Cost per group: sum of nusk invoices
+      // tied to the group. LEFT JOINs so a group with zero of
+      // either side still surfaces (it tells the operator they
+      // forgot to invoice / receive a nusk).
+      rows = await rawQuery(
+        `SELECT g.id AS "groupId",
+                g.name,
+                g."nuskGroupNumber",
+                COALESCE(rev.revenue, 0)::numeric(14,2) AS revenue,
+                COALESCE(cost.cost, 0)::numeric(14,2) AS cost,
+                (COALESCE(rev.revenue, 0) - COALESCE(cost.cost, 0))::numeric(14,2) AS "netProfit",
+                CASE WHEN COALESCE(rev.revenue, 0) > 0
+                     THEN ROUND(((COALESCE(rev.revenue, 0) - COALESCE(cost.cost, 0))
+                                 / COALESCE(rev.revenue, 0)) * 100, 2)
+                     ELSE NULL
+                END AS "marginPercent",
+                COALESCE(g."mutamerCount", 0) AS "mutamerCount"
+           FROM umrah_groups g
+           LEFT JOIN LATERAL (
+             SELECT COALESCE(SUM(item."lineTotal"), 0) AS revenue
+               FROM umrah_sales_invoice_items item
+               JOIN umrah_sales_invoices inv ON inv.id = item."invoiceId"
+                AND inv."companyId" = g."companyId"
+                AND inv.status <> 'cancelled'
+                AND inv."deletedAt" IS NULL${salesSeasonClause}
+              WHERE item."groupId" = g.id
+           ) rev ON true
+           LEFT JOIN LATERAL (
+             SELECT COALESCE(SUM(n."totalAmount"), 0) AS cost
+               FROM umrah_nusk_invoices n
+              WHERE n."companyId" = g."companyId"
+                AND n."groupId" = g.id
+                AND n."nuskStatus" <> 'cancelled'
+                AND n."deletedAt" IS NULL
+           ) cost ON true
+          WHERE g."companyId" = $1 AND g."deletedAt" IS NULL${nuskSeasonClause}
+          ORDER BY "netProfit" DESC NULLS LAST, g.id
+          LIMIT 500`,
+        params,
+      );
+    } else {
+      // agent dimension — aggregate the same revenue/cost up via
+      // groups.agentId. Agent rows with no groups still show with
+      // zeros so the operator notices.
+      rows = await rawQuery(
+        `SELECT a.id AS "agentId",
+                a.name,
+                COALESCE(agg.revenue, 0)::numeric(14,2) AS revenue,
+                COALESCE(agg.cost, 0)::numeric(14,2) AS cost,
+                (COALESCE(agg.revenue, 0) - COALESCE(agg.cost, 0))::numeric(14,2) AS "netProfit",
+                CASE WHEN COALESCE(agg.revenue, 0) > 0
+                     THEN ROUND(((COALESCE(agg.revenue, 0) - COALESCE(agg.cost, 0))
+                                 / COALESCE(agg.revenue, 0)) * 100, 2)
+                     ELSE NULL
+                END AS "marginPercent",
+                COALESCE(agg."groupCount", 0)::int AS "groupCount"
+           FROM umrah_agents a
+           LEFT JOIN LATERAL (
+             SELECT COUNT(*)::int AS "groupCount",
+                    COALESCE(SUM(rev.revenue), 0) AS revenue,
+                    COALESCE(SUM(cost.cost), 0) AS cost
+               FROM umrah_groups g
+               LEFT JOIN LATERAL (
+                 SELECT COALESCE(SUM(item."lineTotal"), 0) AS revenue
+                   FROM umrah_sales_invoice_items item
+                   JOIN umrah_sales_invoices inv ON inv.id = item."invoiceId"
+                    AND inv."companyId" = g."companyId"
+                    AND inv.status <> 'cancelled'
+                    AND inv."deletedAt" IS NULL${salesSeasonClause}
+                  WHERE item."groupId" = g.id
+               ) rev ON true
+               LEFT JOIN LATERAL (
+                 SELECT COALESCE(SUM(n."totalAmount"), 0) AS cost
+                   FROM umrah_nusk_invoices n
+                  WHERE n."companyId" = g."companyId"
+                    AND n."groupId" = g.id
+                    AND n."nuskStatus" <> 'cancelled'
+                    AND n."deletedAt" IS NULL
+               ) cost ON true
+              WHERE g."agentId" = a.id
+                AND g."companyId" = a."companyId"
+                AND g."deletedAt" IS NULL${nuskSeasonClause}
+           ) agg ON true
+          WHERE a."companyId" = $1 AND a."deletedAt" IS NULL
+          ORDER BY "netProfit" DESC NULLS LAST, a.id
+          LIMIT 500`,
+        params,
+      );
+    }
+
+    // Headline totals — bookkeeper sees aggregate margin at a glance.
+    const totals = rows.reduce(
+      (acc, r) => {
+        acc.revenue += Number(r.revenue) || 0;
+        acc.cost += Number(r.cost) || 0;
+        acc.netProfit += Number(r.netProfit) || 0;
+        return acc;
+      },
+      { revenue: 0, cost: 0, netProfit: 0 },
+    );
+
+    res.json(maskFields(req, { data: rows, dimension, totals }));
+  } catch (err) { handleRouteError(err, res, "Profitability report"); }
+});
+
 export default router;
