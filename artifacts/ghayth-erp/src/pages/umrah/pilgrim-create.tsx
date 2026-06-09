@@ -20,12 +20,15 @@ const pilgrimSchema = z.object({
   fullName: z.string().min(1, "الاسم الكامل مطلوب"),
   passportNumber: z.string().min(1, "رقم الجواز مطلوب"),
   visaNumber: z.string().optional(),
+  nuskNumber: z.string().optional(),
   nationality: z.string().optional(),
   gender: z.string().optional(),
   dateOfBirth: z.string().optional(),
   phone: z.string().optional(),
   seasonId: z.string().optional(),
   agentId: z.string().optional(),
+  subAgentId: z.string().optional(),
+  groupId: z.string().optional(),
   packageId: z.string().optional(),
   arrivalDate: z.string().optional(),
   departureDate: z.string().optional(),
@@ -39,12 +42,15 @@ const EMPTY: PilgrimForm = {
   fullName: "",
   passportNumber: "",
   visaNumber: "",
+  nuskNumber: "",
   nationality: "",
   gender: "",
   dateOfBirth: "",
   phone: "",
   seasonId: "",
   agentId: "",
+  subAgentId: "",
+  groupId: "",
   packageId: "",
   arrivalDate: "",
   departureDate: "",
@@ -64,6 +70,8 @@ export default function PilgrimCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
+  const { data: subAgents } = useApiQuery<any>(["umrah-sub-agents"], "/umrah/sub-agents");
+  const { data: groups } = useApiQuery<any>(["umrah-groups"], "/umrah/groups");
   const { data: packages } = useApiQuery<any>(["umrah-packages"], "/umrah/packages");
 
   return (
@@ -88,6 +96,9 @@ export default function PilgrimCreate() {
                     ...values,
                     seasonId: values.seasonId ? Number(values.seasonId) : undefined,
                     agentId: values.agentId ? Number(values.agentId) : undefined,
+                    subAgentId: values.subAgentId ? Number(values.subAgentId) : undefined,
+                    groupId: values.groupId ? Number(values.groupId) : undefined,
+                    nuskNumber: values.nuskNumber || undefined,
                     packageId: values.packageId ? Number(values.packageId) : undefined,
                     ...(attachments.length > 0 ? { attachments } : {}),
                   }),
@@ -102,6 +113,7 @@ export default function PilgrimCreate() {
             <FormGrid cols={3}>
               <FormTextField name="fullName" label="الاسم الكامل" required />
               <FormTextField name="passportNumber" label="رقم الجواز" required />
+              <FormTextField name="nuskNumber" label="رقم المعتمر (نسك)" />
               <FormTextField name="visaNumber" label="رقم التأشيرة" />
               <FormTextField name="nationality" label="الجنسية" />
               <FormSelectField name="gender" label="الجنس" options={GENDER_OPTIONS} placeholder="اختر" />
@@ -118,6 +130,18 @@ export default function PilgrimCreate() {
                 label="الوكيل"
                 options={(agents?.data || []).map((a: any) => ({ value: String(a.id), label: a.name }))}
                 placeholder="اختر الوكيل"
+              />
+              <FormSelectField
+                name="subAgentId"
+                label="المكتب (الوكيل الفرعي)"
+                options={(subAgents?.data || []).map((s: any) => ({ value: String(s.id), label: s.name }))}
+                placeholder="اختر المكتب"
+              />
+              <FormSelectField
+                name="groupId"
+                label="المجموعة"
+                options={(groups?.data || []).map((g: any) => ({ value: String(g.id), label: g.name || g.title || `#${g.id}` }))}
+                placeholder="اختر المجموعة"
               />
               <FormSelectField
                 name="packageId"

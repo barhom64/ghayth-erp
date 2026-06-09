@@ -17,10 +17,11 @@ import {
 import { PageShell } from "@workspace/ui-core";
 import {
   ArrowLeft, Plus, Pencil, Trash2, Calendar, MapPin, Truck,
-  Clock,
+  Clock, Wand2,
 } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
+import { AssignmentSuggestDialog } from "@/components/shared/assignment-suggest-dialog";
 
 // #1812 — itinerary detail with leg editor. The dispatcher sequences
 // chained trips here, assigns vehicle + driver per leg, and the
@@ -145,6 +146,7 @@ export default function TransportItineraryDetail() {
   const id = params?.id;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<LegFormState>(EMPTY_LEG);
+  const [suggestLegId, setSuggestLegId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: ItineraryDetail }>(
@@ -323,6 +325,13 @@ export default function TransportItineraryDetail() {
                     </Badge>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost" size="sm"
+                      onClick={() => setSuggestLegId(leg.id)}
+                      title="اقترح المركبة والسائق"
+                    >
+                      <Wand2 className="h-3.5 w-3.5" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => openEditLeg(leg)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
@@ -489,6 +498,15 @@ export default function TransportItineraryDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {suggestLegId != null && it.id && (
+        <AssignmentSuggestDialog
+          source={{ kind: "leg", itineraryId: it.id, legId: suggestLegId }}
+          open={suggestLegId != null}
+          onOpenChange={(o) => { if (!o) setSuggestLegId(null); }}
+          onSelect={() => { qc.invalidateQueries({ queryKey }); setSuggestLegId(null); }}
+        />
+      )}
     </PageShell>
   );
 }

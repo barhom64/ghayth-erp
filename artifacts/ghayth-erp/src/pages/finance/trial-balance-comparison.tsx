@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ACCOUNT_TYPES } from "@/lib/finance-type-maps";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
@@ -58,13 +59,7 @@ interface CompareRow {
   variancePct: number;
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  asset: "أصول",
-  liability: "خصوم",
-  equity: "حقوق ملكية",
-  revenue: "إيرادات",
-  expense: "مصروفات",
-};
+const TYPE_LABEL = ACCOUNT_TYPES;
 
 const TYPE_COLOR: Record<string, string> = {
   asset: "bg-blue-100 text-blue-800",
