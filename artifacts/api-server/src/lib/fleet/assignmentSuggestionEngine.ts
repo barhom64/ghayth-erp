@@ -28,6 +28,15 @@
  *                     same_class, which outrank equivalent, which outrank
  *                     upgrades (only allowed when allowUpgrade or the
  *                     policy explicitly opts in).
+ *   • driverReputation — composite reputation (0.4·onTime + 0.4·completion +
+ *                     0.2·startRate) over the last 90 days, multiplied by
+ *                     1.2 when the booking type matches the driver's
+ *                     auto-classified specialty (umrah / cargo / passenger),
+ *                     0.7 when it contradicts. Answers the user's "best
+ *                     driver for umrah / cargo / passenger" wish and
+ *                     surfaces chronic latecomers further down the list.
+ *                     New drivers (no started trips) get a neutral 50 so
+ *                     they're not penalised on hire day.
  *
  * Returns 0..N candidates. The dispatcher picks one + presses "Assign";
  * the regular create-dispatch-order endpoint then re-runs the HARD
@@ -37,6 +46,7 @@
 
 import { rawQuery } from "../rawdb.js";
 import { MapsService, loadPlanningSettings } from "./mapsService.js";
+import { computeDriverIntelligence } from "./driverIntelligence.js";
 
 export interface SuggestionRequest {
   companyId: number;
@@ -68,6 +78,7 @@ export interface SuggestionResult {
     license: number;
     distance: number;
     agreement: number;
+    driverReputation: number;
   };
   /** Arabic explanation strings — direct user-facing. */
   reasons: string[];
@@ -394,6 +405,27 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
   const cargoKg    = booking.cargoWeight ? Number(booking.cargoWeight) : 0;
   const isCargo    = booking.transportServiceType === "cargo_load";
   const isPax      = booking.transportServiceType.startsWith("passenger_");
+  const isUmrah    = booking.transportServiceType === "passenger_umrah";
+
+  // 6a) Driver intelligence — batched per candidate so the engine
+  // rewards consistently-on-time / completion-strong drivers and
+  // the user's specialty wishes ("سائق ممتاز للعمرة / للحمولات") get
+  // turned into ranking weight. New drivers (no started trips) get
+  // a neutral 50 so they're not penalised on hire day.
+  const intelligenceByDriver = new Map<number, { reputationScore: number; specialty: string }>();
+  await Promise.all(drivers.map(async (d) => {
+    try {
+      const stats = await computeDriverIntelligence({
+        companyId: req.companyId, driverId: d.id, windowDays: 90,
+      });
+      intelligenceByDriver.set(d.id, {
+        reputationScore: stats.reputationScore,
+        specialty: stats.specialty,
+      });
+    } catch {
+      intelligenceByDriver.set(d.id, { reputationScore: 0, specialty: "new" });
+    }
+  }));
 
   for (const v of vehicles) {
     // Hard filter: exact-required vehicle.
@@ -554,15 +586,47 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
         }
       }
 
+      // ─ driver reputation (weight 10) ────────────────────────────
+      // Composite of recent on-time + completion + start rates with
+      // a specialty multiplier so the user's "best driver for umrah /
+      // cargo" wish becomes ranking weight.
+      const intel = intelligenceByDriver.get(d.id);
+      const isNewDriver = !intel || intel.specialty === "new";
+      let driverReputationScore = isNewDriver ? 50 : intel!.reputationScore;
+      if (intel && !isNewDriver) {
+        if (isUmrah && intel.specialty === "umrah") {
+          driverReputationScore = Math.min(100, Math.round(driverReputationScore * 1.2));
+          reasons.push("متخصّص في رحلات العمرة");
+        } else if (isCargo && intel.specialty === "cargo") {
+          driverReputationScore = Math.min(100, Math.round(driverReputationScore * 1.2));
+          reasons.push("متخصّص في نقل الحمولات");
+        } else if (isPax && !isUmrah && intel.specialty === "passenger") {
+          driverReputationScore = Math.min(100, Math.round(driverReputationScore * 1.2));
+          reasons.push("متخصّص في نقل الركاب");
+        } else if (
+          (isUmrah && intel.specialty === "cargo") ||
+          (isCargo && intel.specialty === "umrah")
+        ) {
+          driverReputationScore = Math.round(driverReputationScore * 0.7);
+          reasons.push("تخصص السائق مختلف عن نوع الرحلة");
+        }
+        if (intel.reputationScore >= 80) {
+          reasons.push(`سمعة تشغيلية ممتازة (${intel.reputationScore})`);
+        } else if (intel.reputationScore < 40) {
+          reasons.push(`سمعة تشغيلية منخفضة (${intel.reputationScore})`);
+        }
+      }
+
       // ─ Aggregate ─────────────────────────────────────────────────
       const finalScore = Math.round(
-        capacityScore     * 0.20 +
-        availabilityScore * 0.10 +
-        conflictScore     * 0.25 +
-        restScore         * 0.15 +
-        licenseScore      * 0.10 +
-        distanceScore     * 0.10 +
-        agreementScore    * 0.10,
+        capacityScore         * 0.18 +
+        availabilityScore     * 0.08 +
+        conflictScore         * 0.25 +
+        restScore             * 0.13 +
+        licenseScore          * 0.10 +
+        distanceScore         * 0.08 +
+        agreementScore        * 0.08 +
+        driverReputationScore * 0.10,
       );
 
       // Drop candidates with HARD blockers UNLESS the dispatcher
@@ -584,6 +648,7 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
           license: licenseScore,
           distance: distanceScore,
           agreement: agreementScore,
+          driverReputation: driverReputationScore,
         },
         reasons,
         blockers,

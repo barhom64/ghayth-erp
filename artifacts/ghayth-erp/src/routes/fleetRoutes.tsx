@@ -49,6 +49,8 @@ const TransportPriceRules = lazy(() => import("@/pages/fleet/transport-price-rul
 const TransportRulesAdmin = lazy(() => import("@/pages/fleet/transport-rules-admin"));
 // #1812 Planning engine — ops dashboard + driver in-app navigation.
 const TransportOpsDashboard = lazy(() => import("@/pages/fleet/transport-ops-dashboard"));
+// #1812 follow-up — Driver Intelligence leaderboard.
+const TransportDriverIntelligence = lazy(() => import("@/pages/fleet/transport-driver-intelligence"));
 const MeDriverNavigation = lazy(() => import("@/pages/fleet/me-driver-navigation"));
 // #1812 integration bridges — linked sources view.
 const TransportIntegration = lazy(() => import("@/pages/fleet/transport-integration"));
@@ -120,6 +122,7 @@ export const fleetRoutes = [
   { path: "/fleet/transport/rules", component: TransportRulesAdmin },
   // #1812 ops dashboard + driver navigation surfaces.
   { path: "/fleet/transport/ops-dashboard", component: TransportOpsDashboard },
+  { path: "/fleet/transport/driver-intelligence", component: TransportDriverIntelligence },
   { path: "/fleet/transport/integration", component: TransportIntegration },
   { path: "/fleet/transport/itineraries", component: TransportItineraries },
   { path: "/fleet/transport/itineraries/:id", component: TransportItineraryDetail },

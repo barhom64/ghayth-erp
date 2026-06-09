@@ -82,6 +82,7 @@ import { transportPlanningRouter } from "./transport-planning.js";
 import { transportIntegrationRouter } from "./transport-integration.js";
 import { transportRoutePatternsRouter } from "./transport-route-patterns.js";
 import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
+import { fleetDriverIntelligenceRouter } from "./fleet-driver-intelligence.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
@@ -415,6 +416,8 @@ router.use(requireModule("fleet"), requireGuards("financial"), transportIntegrat
 // #1812 Comment 4663005810 — cargo recurring route patterns.
 router.use(requireModule("fleet"), requireGuards("financial"), transportRoutePatternsRouter);
 router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRouter);
+// #1812 follow-up — Driver Intelligence (per-driver + fleet leaderboard).
+router.use(requireModule("fleet"), requireGuards("financial"), fleetDriverIntelligenceRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);
