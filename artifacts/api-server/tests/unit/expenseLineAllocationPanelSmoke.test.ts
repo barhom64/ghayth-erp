@@ -104,9 +104,15 @@ describe("expenses-create form wires the panel", () => {
   it("pre-populates allocation from existing form fields without clobbering operator pins", () => {
     expect(FORM).toContain("if (prev.manualOverrideReason) return prev");
     expect(FORM).toContain("accountCode: form.accountCode || undefined");
-    expect(FORM).toMatch(/form\.relatedEntityType === "vehicle"/);
-    expect(FORM).toMatch(/form\.relatedEntityType === "property"/);
-    expect(FORM).toMatch(/form\.relatedEntityType === "contract"/);
+  });
+
+  it("derives the linked entity from the scenario, not a legacy duplicate picker (#1945)", () => {
+    // #1945 — the old «الجهة المرتبطة» picker (form.relatedEntityType) was
+    // removed; the linked entity now comes solely from the operation-context
+    // scenario via the shared deriveRelatedEntity helper.
+    expect(FORM).toContain("deriveRelatedEntity(allocTarget.target");
+    expect(FORM).not.toMatch(/form\.relatedEntityType === "vehicle"/);
+    expect(FORM).not.toMatch(/form\.relatedEntityType === "property"/);
   });
 
   it("only ships lineAllocation when something is pinned", () => {

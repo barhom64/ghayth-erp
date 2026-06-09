@@ -272,15 +272,17 @@ function injectScope(path: string, scopeQs: string): string {
 export function useApiQuery<T = any>(
   key: string[],
   path: string | null,
-  options?: boolean | { enabled?: boolean; skipScope?: boolean },
+  options?: boolean | { enabled?: boolean; skipScope?: boolean; refetchInterval?: number | false },
 ) {
   let isEnabled: boolean;
   let skipScope = false;
+  let refetchInterval: number | false = false;
   if (typeof options === "boolean") {
     isEnabled = options;
   } else if (options && typeof options === "object") {
     isEnabled = options.enabled !== false;
     skipScope = options.skipScope === true;
+    refetchInterval = options.refetchInterval ?? false;
   } else {
     isEnabled = true;
   }
@@ -294,6 +296,10 @@ export function useApiQuery<T = any>(
     queryKey: scopeQs ? [...key, scopeQs] : key,
     queryFn: () => apiFetch<T>(finalPath!),
     enabled: isEnabled,
+    // Optional polling interval — opt-in via the options.refetchInterval
+    // field. Used by §4 calendar / live-status pages so the operator
+    // sees new events without manual reload. Default false = no polling.
+    refetchInterval,
     // Don't retry rate-limited responses — retrying immediately would
     // just trigger the limiter again and spam the user with toasts.
     retry: (failureCount, error) => {

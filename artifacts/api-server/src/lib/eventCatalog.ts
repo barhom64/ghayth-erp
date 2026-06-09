@@ -558,6 +558,107 @@ export const EVENT_CATALOG: EventDefinition[] = [
     consumers: ["legalEngine", "execDashboard"],
     sideEffects: ["notification", "audit"],
   },
+  // ─── §10 of #1870 — canonical Events Catalog for the Umrah Leader
+  //     Path. The issue lists 17 required events; entries already
+  //     present elsewhere in this file are NOT duplicated. These are
+  //     the missing entries + the two synonyms re-declared with the
+  //     spec-mandated names so future code can pick the canonical
+  //     form. Each carries the operator-facing Arabic label, the
+  //     hook point comment, and an explicit payload schema.
+  {
+    name: "umrah.import.previewed",
+    label: "معاينة استيراد عمرة",
+    domain: "umrah",
+    description: "تُصدر عند تشغيل /import/preview قبل التأكيد — تخبر لوحة الرقابة بنشاط استيراد محتمل",
+    payload: { fileType: "string", rowCount: "number", newAgentsToCreate: "number", rowsWithoutAgent: "number" },
+    consumers: ["auditTrail", "operationsDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.import.confirmed",
+    label: "تأكيد استيراد عمرة",
+    domain: "umrah",
+    description: "تُصدر بعد نجاح confirmMutamersImport أو confirmVouchersImport — الأثر الفعلي على البيانات",
+    payload: { batchId: "number", fileType: "string", newCount: "number", updatedCount: "number", errorCount: "number" },
+    consumers: ["auditTrail", "operationsDashboard", "complianceMonitor"],
+    sideEffects: ["audit"],
+    critical: true,
+  },
+  {
+    name: "umrah.import.unlinked_rows_detected",
+    label: "اكتشاف صفوف غير مربوطة في استيراد",
+    domain: "umrah",
+    description: "تُصدر عند انتهاء confirmMutamersImport إذا لم تحلّ FKs لبعض الصفوف — يستدعي مشغل صفحة الاسترداد",
+    payload: { batchId: "number", unlinkedAgentCount: "number", unlinkedGroupCount: "number", unlinkedSubAgentCount: "number" },
+    consumers: ["auditTrail", "operationsDashboard"],
+    sideEffects: ["notification", "audit"],
+  },
+  {
+    name: "umrah.import.unlinked_rows_linked",
+    label: "ربط صفوف يدوياً بعد الاستيراد",
+    domain: "umrah",
+    description: "تُصدر بعد POST /import/batches/:id/unlinked/link — يكمل دورة الاسترداد",
+    payload: { batchId: "number", dimension: "string", linkedCount: "number" },
+    consumers: ["auditTrail"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.pilgrim.overstay_risk",
+    label: "خطر تجاوز إقامة معتمر",
+    domain: "umrah",
+    description: "تُصدر استباقياً قبل التجاوز الفعلي — قبل 3 أيام من نهاية المدة أو من انتهاء التأشيرة",
+    payload: { pilgrimId: "number", daysRemaining: "number", reason: "string" },
+    consumers: ["auditTrail", "notifications", "operationsDashboard"],
+    sideEffects: ["notification", "audit"],
+  },
+  {
+    name: "umrah.group.ready_for_transport",
+    label: "مجموعة جاهزة للنقل",
+    domain: "umrah",
+    description: "تُصدر عند اكتمال شروط المجموعة (كل المعتمرين وصلوا، تأشيرات نشطة، موعد المغادرة قريب) — تطلق طلب النقل",
+    payload: { groupId: "number", pilgrimCount: "number", departureDate: "string" },
+    consumers: ["transportEngine", "operationsDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.transport.requested",
+    label: "طلب نقل من العمرة",
+    domain: "umrah",
+    description: "تُصدر عند طلب رحلة نقل من مسار العمرة — الاسم القانوني (تحلّ محل umrah.transport.created تدريجياً)",
+    payload: { transportRequestId: "number", groupId: "number", pilgrimCount: "number", dateTime: "string" },
+    consumers: ["fleetEngine", "operationsDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.sales_invoice.created",
+    label: "إصدار فاتورة بيع عمرة",
+    domain: "umrah",
+    description: "تُصدر عند توليد فاتورة بيع — الاسم القانوني (تحلّ محل umrah.invoice.generated تدريجياً)",
+    payload: { invoiceId: "number", subAgentId: "number", total: "number" },
+    consumers: ["financeEngine", "operationsDashboard"],
+    sideEffects: ["gl_post", "audit"],
+    critical: true,
+  },
+  {
+    name: "umrah.commission.approved",
+    label: "اعتماد عمولة",
+    domain: "umrah",
+    description: "تُصدر عند اعتماد عمولة محتسبة — يفتح الباب للترحيل للمالية",
+    payload: { commissionId: "number", planId: "number", amount: "number", approverId: "number" },
+    consumers: ["financeEngine", "auditTrail"],
+    sideEffects: ["audit"],
+    critical: true,
+  },
+  {
+    name: "umrah.commission.posted",
+    label: "ترحيل عمولة للمالية",
+    domain: "umrah",
+    description: "تُصدر بعد إنشاء القيد المالي للعمولة المعتمدة (DR مصروف عمولة / CR مستحقات)",
+    payload: { commissionId: "number", journalEntryId: "number", amount: "number" },
+    consumers: ["financeEngine", "auditTrail"],
+    sideEffects: ["gl_post", "audit"],
+    critical: true,
+  },
   // ── Events fired by PRs #303 / #305 / #312 — backfilled here so the
   //    automation rule builder (rulesEngine.ts) lists them as triggers
   //    and the audit dashboard renders the Arabic label.
@@ -1272,7 +1373,10 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "umrah.commission_plan.created", label: "إنشاء commission_plan", domain: "umrah", description: "تُصدر عند إنشاء commission_plan", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "umrah.commission_plan.updated", label: "تحديث commission_plan", domain: "umrah", description: "تُصدر عند تحديث commission_plan", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.import.completed", label: "إتمام import", domain: "umrah", description: "تُصدر عند إتمام import", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
-  { name: "umrah.import.previewed", label: "معاينة import", domain: "umrah", description: "تُصدر عند معاينة import", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  // umrah.import.previewed is declared earlier in the §10 block with
+  // a richer Arabic label + the operator-facing payload schema. The
+  // auto-generated boilerplate entry that used to sit here would have
+  // shadowed it as a duplicate.
   { name: "umrah.invoice.gl_posted", label: "gl_posted فاتورة", domain: "umrah", description: "تُصدر عند gl_posted فاتورة", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.invoice.updated", label: "تحديث فاتورة", domain: "umrah", description: "تُصدر عند تحديث فاتورة", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.mutamers.imported", label: "استيراد mutamers", domain: "umrah", description: "تُصدر عند استيراد mutamers", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },

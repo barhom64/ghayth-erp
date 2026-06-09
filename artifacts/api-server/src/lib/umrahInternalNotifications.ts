@@ -13,7 +13,7 @@
 // is the AGENCY-INTERNAL flow.
 
 import { rawQuery } from "./rawdb.js";
-import { createNotification, getManagerAssignmentId } from "./businessHelpers.js";
+import { createNotification, emitEvent, getManagerAssignmentId } from "./businessHelpers.js";
 import { logger } from "./logger.js";
 
 export interface InternalNotifyContext {
@@ -64,6 +64,21 @@ export async function notifyInternalVisaExpiring(
   ctx: InternalNotifyContext,
   daysRemaining: number,
 ): Promise<number> {
+  // §10 of #1870 — overstay-risk is the predictive companion event
+  // to umrah.pilgrim.overstayed. Listeners (dashboard, automation
+  // rules) want to react BEFORE the actual overstay so they can
+  // queue a follow-up call to the agent. Fires regardless of
+  // recipient count so the event stream stays usable even when
+  // the manager hierarchy isn't seeded.
+  emitEvent({
+    companyId: ctx.companyId,
+    userId: 0,
+    action: "umrah.pilgrim.overstay_risk",
+    entity: "umrah_pilgrims",
+    entityId: ctx.pilgrimId,
+    after: { daysRemaining, reason: "visa_expiring" },
+  }).catch((e) => logger.error(e, "[umrah internal notify] overstay_risk emit failed"));
+
   const recipients = await resolveInternalRecipients(ctx);
   if (recipients.length === 0) return 0;
   const title = daysRemaining <= 0

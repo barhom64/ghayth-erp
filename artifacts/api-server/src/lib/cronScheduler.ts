@@ -2034,7 +2034,7 @@ async function yearlyLeaveBalanceRenewal(): Promise<string> {
   let renewed = 0;
   for (const company of companies) {
     const balances = await rawQuery<Record<string, unknown>>(
-      `SELECT DISTINCT lb."employeeId", lb."leaveTypeId", lt.annual
+      `SELECT DISTINCT lb."employeeId", lb."assignmentId", lb."leaveTypeId", lt.annual
        FROM hr_leave_balances lb
        JOIN hr_leave_types lt ON lt.id = lb."leaveTypeId"
        WHERE lb."companyId" = $1 AND lb.year = $2 - 1`,
@@ -2042,10 +2042,10 @@ async function yearlyLeaveBalanceRenewal(): Promise<string> {
     );
     for (const b of balances) {
       await rawExecute(
-        `INSERT INTO hr_leave_balances ("companyId", "employeeId", "leaveTypeId", year, entitled, used, reserved)
-         VALUES ($1, $2, $3, $4, $5, 0, 0)
+        `INSERT INTO hr_leave_balances ("companyId", "employeeId", "assignmentId", "leaveTypeId", year, entitled, used, reserved)
+         VALUES ($1, $2, $3, $4, $5, $6, 0, 0)
          ON CONFLICT DO NOTHING`,
-        [company.id, b.employeeId, b.leaveTypeId, year, b.annual || 21]
+        [company.id, b.employeeId, b.assignmentId, b.leaveTypeId, year, b.annual || 21]
       ).catch((e) => logger.error(e, "[cronScheduler] leave balance renewal insert failed"));
       renewed++;
     }

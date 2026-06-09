@@ -644,6 +644,10 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   }, { table: "umrah_sales_invoices", id: invoiceId });
 
   emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: invoiceId, details: JSON.stringify({ ref, total, subAgentId, groupCount: groups.length, pilgrimCount: totalPilgrims }) }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
+  // §10 of #1870 — canonical event. Alongside the legacy
+  // `umrah.invoice.generated`; the catalog documents this as the
+  // spec-mandated name (disambiguates from finance.invoice.created).
+  emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.sales_invoice.created", entity: "umrah_sales_invoices", entityId: invoiceId, after: { ref, total, subAgentId, groupCount: groups.length, pilgrimCount: totalPilgrims } }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
 
   // E-invoice clearance (ZATCA + future jurisdictions). Goes through
   // the vendor-neutral provider registry. The default `mock` provider

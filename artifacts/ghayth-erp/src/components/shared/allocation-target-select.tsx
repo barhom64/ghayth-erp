@@ -7,6 +7,7 @@ import {
   EmployeeSelect, DriverSelect,
 } from "@/components/shared/entity-selects";
 import type { LineAllocation } from "@/components/shared/line-allocation-panel";
+import type { FinanceTarget } from "@/lib/finance/scenario-model";
 import { useApiQuery } from "@/lib/api";
 
 /**
@@ -23,22 +24,9 @@ import { useApiQuery } from "@/lib/api";
  * Targets mirror docs/finance/FINANCE_ALLOCATION_TARGETS.md.
  */
 
-export type AllocationTarget =
-  | "none"
-  | "vehicle"
-  | "vehicle_maintenance"
-  | "property"
-  | "property_maintenance"
-  | "unit"
-  | "contract"
-  | "project"
-  | "umrah_season"
-  | "umrah_agent"
-  | "transport_trip"
-  | "supplier"
-  | "customer"
-  | "employee"
-  | "fixed_asset";
+// The canonical target union lives in the central scenario model so the
+// renderer, the effect/account hints and the backend all agree on one list.
+export type AllocationTarget = FinanceTarget;
 
 export interface AllocationTargetValue {
   target: AllocationTarget;
