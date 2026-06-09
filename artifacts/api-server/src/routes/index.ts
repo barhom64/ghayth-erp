@@ -68,6 +68,7 @@ import impactPreviewRouter from "./impactPreview.js";
 import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
+import meInsightsRouter from "./meInsights.js";
 import actionCenterRouter from "./actionCenter.js";
 import workspaceRouter from "./workspace.js";
 import accountingEngineRouter from "./accounting-engine.js";
@@ -506,6 +507,13 @@ router.use("/approval-actions", approvalActionsRouter);
 router.use("/workflows", workflowsRouter);
 router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
+// IGOC-006 — /me/proactive-insights aggregates 9 role-adaptive categories
+// (my docs/iqama, my pending requests, team approvals, company iqama/journals/
+// invoices/obligations, critical notifications). Same surface for every role,
+// different CONTENT — gates inside the handler filter by scope.role. The
+// underlying queries are already scope-protected (companyId / assignmentId /
+// employeeId), so no extra requireMinLevel floor is needed.
+router.use("/me", meInsightsRouter);
 // Agent 7 — sidebar gates مراكز التحكم → مركز القرارات (/action-center)
 // at level 20. Floor the mount to match so a level-10 pre-onboarding
 // account can't reach the action queue via direct URL.
