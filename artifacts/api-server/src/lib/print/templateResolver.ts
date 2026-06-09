@@ -294,6 +294,7 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   overtime_request: () => buildOvertimeRequestPreset(),
   exit_request: () => buildExitRequestPreset(),
   fleet_trip: () => buildFleetTripPreset(),
+  transport_booking_confirmation: () => buildTransportBookingConfirmationPreset(),
   // Batch-3 bespoke presets — ops + HR + safety + tasks.
   maintenance_request: () => buildMaintenanceRequestPreset(),
   fuel: () => buildFuelLogPreset(),
@@ -1645,6 +1646,65 @@ function buildCargoManifestPreset(): PrintTemplate {
   <div>الشاحن<br/>____________________</div>
   <div>السائق<br/>____________________</div>
   <div>المستلم<br/>____________________</div>
+</div>`,
+  });
+}
+
+// #1812 — booking confirmation (user's gap #10). Customer-facing
+// document with QR for pickup/scan verification. The loader
+// (loadTransportBookingConfirmation) prerenders legsHtml + dispatchHtml
+// + qrDataUrl so the preset stays declarative.
+function buildTransportBookingConfirmationPreset(): PrintTemplate {
+  return makePreset({
+    id: -110, presetKey: "transport_booking_confirmation_classic",
+    entityType: "transport_booking_confirmation",
+    name: "تأكيد حجز نقل",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">تأكيد حجز نقل</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم الحجز: <span dir="ltr" style="font-family:monospace">{{entity.bookingNumber}}</span></div>
+
+{{#if entity.qrDataUrl}}
+<div style="float:left;margin:0 0 12px 12px;text-align:center">
+  <img src="{{entity.qrDataUrl}}" alt="QR" style="width:120px;height:120px;border:1px solid #e2e8f0;padding:4px" />
+  <div style="font-size:10px;color:#475569;margin-top:4px">امسح للتحقق</div>
+</div>
+{{/if}}
+
+<div class="meta-grid">
+  <div><strong>العميل:</strong> {{entity.customerName}}</div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.customerPhone}}</span></div>
+  <div><strong>نوع الخدمة:</strong> {{entity.transportServiceType}}</div>
+  <div><strong>المصدر:</strong> {{entity.bookingSource}}</div>
+  <div><strong>عدد الركاب:</strong> {{entity.passengerCount}}</div>
+  <div><strong>مجموعة عمرة:</strong> {{entity.umrahGroupId}}</div>
+  <div><strong>تاريخ التحميل:</strong> {{entity.requestedPickupDate}} {{entity.requestedPickupTime}}</div>
+  <div><strong>تاريخ التسليم:</strong> {{entity.requestedDeliveryDate}} {{entity.requestedDeliveryTime}}</div>
+</div>
+
+{{#if entity.flightNumber}}
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">بيانات العمرة</div>
+  <div><strong>رقم الرحلة:</strong> <span dir="ltr">{{entity.flightNumber}}</span></div>
+  <div><strong>الفندق:</strong> {{entity.hotelName}}</div>
+  <div><strong>المشرف:</strong> {{entity.supervisorName}} <span dir="ltr">({{entity.supervisorPhone}})</span></div>
+</div>
+{{/if}}
+
+<h3 style="margin-top:14px">مقاطع المسار</h3>
+{{{entity.legsHtml}}}
+
+<h3 style="margin-top:14px">المركبات والسائقون المُسنَدون</h3>
+{{{entity.dispatchHtml}}}
+
+{{#if entity.notes}}
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>
+{{/if}}
+
+<div style="margin-top:24px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:10px;color:#64748b;text-align:center">
+  رمز التحقق: <span style="font-family:monospace">{{entity.qrPayload}}</span>
 </div>`,
   });
 }
@@ -3580,6 +3640,7 @@ export const ARABIC_TITLES: Record<string, string> = {
   umrah_runsheet: "كشف اليوم — عمرة", umrah_agent: "وكيل عمرة",
   umrah_group: "مجموعة عمرة", umrah_agent_invoice: "فاتورة وكيل عمرة",
   fleet_driver: "سائق أسطول", cargo_manifest: "بوليصة شحن", manifest: "بوليصة",
+  transport_booking_confirmation: "تأكيد حجز نقل",
   umrah_sub_agent: "وكيل عمرة فرعي", umrah_pilgrim: "معتمر",
   umrah_package: "باقة عمرة", umrah_season: "موسم عمرة",
   umrah_transport: "نقل عمرة", umrah_penalty: "عقوبة عمرة",
