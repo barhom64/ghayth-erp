@@ -4690,4 +4690,156 @@ router.get("/journal/:sourceType/:sourceId", authorize({ feature: "umrah", actio
   } catch (err) { handleRouteError(err, res, "Umrah journal drill-through"); }
 });
 
+// تقرير ملخّص فواتير العملاء (sales invoices summary) — §11 من شرائع الإصلاح
+// (Issue #1870). يجاوب على سؤال إبراهيم:
+//   «أصدرنا كم فاتورة بيع هذا الموسم؟ المُحصَّل؟ الرصيد؟ من المتأخّر؟»
+//
+// لمحه ٥ تجميعات بالتوازي (Promise.all) — ما نضرب الـ RTT × ٥:
+//   1) kpiRow         → KPIs على رأس الصفحة (إجمالي / مبالغ / مدفوع / متبقي / معتمرون / متأخّرون)
+//   2) byStatus       → توزيع الحالات (draft/approved/sent/partially_paid/paid/overdue/cancelled)
+//   3) byMonth        → آخر ١٢ شهر (YYYY-MM على invoiceDate — يكشف موسمية البيع)
+//   4) bySubAgent     → ٥٠ وكيل فرعي الأعلى من حيث الفواتير + المبالغ + المدفوع
+//   5) recent         → آخر ١٠٠ فاتورة للجدول السفلي (drill-through)
+//
+// كل التجميعات تحت companyId + deletedAt IS NULL. الفلاتر:
+//   seasonId / subAgentId / clientId / status / from / to (YYYY-MM-DD على invoiceDate)
+//
+// نوصل إلى umrah_sub_agents (للاسم) + clients (للاسم) عبر LEFT JOIN — ما نسقط
+// السطور لو الـ FK NULL (clientId اختياري على umrah_sales_invoices).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/sales-invoices-summary", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, subAgentId, clientId, status, from, to } = req.query as Record<string, string | undefined>;
+
+    // Validate optional date filters — YYYY-MM-DD. We pin a regex so a
+    // typo doesn't blow into a SQL error message users can't action.
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    if (from && !dateRe.test(from)) throw new ValidationError("from يجب أن يكون YYYY-MM-DD", { field: "from" });
+    if (to   && !dateRe.test(to))   throw new ValidationError("to يجب أن يكون YYYY-MM-DD",   { field: "to" });
+
+    const baseParams: unknown[] = [scope.companyId];
+    let whereClause = `inv."companyId" = $1 AND inv."deletedAt" IS NULL`;
+    if (seasonId)   { baseParams.push(Number(seasonId));   whereClause += ` AND inv."seasonId"   = $${baseParams.length}`; }
+    if (subAgentId) { baseParams.push(Number(subAgentId)); whereClause += ` AND inv."subAgentId" = $${baseParams.length}`; }
+    if (clientId)   { baseParams.push(Number(clientId));   whereClause += ` AND inv."clientId"   = $${baseParams.length}`; }
+    if (status)     { baseParams.push(status);             whereClause += ` AND inv.status       = $${baseParams.length}`; }
+    if (from)       { baseParams.push(from);               whereClause += ` AND inv."invoiceDate" >= $${baseParams.length}`; }
+    if (to)         { baseParams.push(to);                 whereClause += ` AND inv."invoiceDate" <= $${baseParams.length}`; }
+
+    // overdueCount = approved/sent/partially_paid AND dueDate < today AND
+    // outstanding > 0. We don't lean on status='overdue' alone because
+    // many sites don't run a scheduler to flip the status — the dueDate
+    // check is the source of truth for "متأخّر".
+    const [kpiRowArr, byStatus, byMonth, bySubAgent, recent] = await Promise.all([
+      rawQuery<Record<string, unknown>>(
+        `SELECT COUNT(*)::int                                       AS "total",
+                COALESCE(SUM(inv.total), 0)                         AS "totalAmount",
+                COALESCE(SUM(inv."paidAmount"), 0)                  AS "paidAmount",
+                COALESCE(SUM(inv.total - COALESCE(inv."paidAmount", 0))
+                         FILTER (WHERE inv.status <> 'cancelled'), 0) AS "outstandingAmount",
+                COALESCE(SUM(inv."pilgrimCount"), 0)::int           AS "pilgrimsCount",
+                COUNT(*) FILTER (
+                  WHERE inv.status IN ('approved','sent','partially_paid','overdue')
+                    AND inv."dueDate" IS NOT NULL
+                    AND inv."dueDate" < CURRENT_DATE
+                    AND (inv.total - COALESCE(inv."paidAmount", 0)) > 0
+                )::int                                              AS "overdueCount",
+                COUNT(DISTINCT inv."subAgentId")::int               AS "subAgentsCount"
+           FROM umrah_sales_invoices inv
+          WHERE ${whereClause}`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT inv.status                          AS "status",
+                COUNT(*)::int                       AS "count",
+                COALESCE(SUM(inv.total), 0)         AS "totalAmount",
+                COALESCE(SUM(inv."paidAmount"), 0)  AS "paidAmount"
+           FROM umrah_sales_invoices inv
+          WHERE ${whereClause}
+          GROUP BY inv.status
+          ORDER BY COUNT(*) DESC`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        // YYYY-MM bucket on invoiceDate. NULL issueDate excluded so the
+        // chart doesn't get a "null" bucket spike. LIMIT 12 = trailing
+        // year window (operator scrolls a chart, not a 5-year tail).
+        `SELECT TO_CHAR(inv."invoiceDate", 'YYYY-MM') AS "month",
+                COUNT(*)::int                         AS "count",
+                COALESCE(SUM(inv.total), 0)           AS "totalAmount",
+                COALESCE(SUM(inv."paidAmount"), 0)    AS "paidAmount"
+           FROM umrah_sales_invoices inv
+          WHERE ${whereClause}
+            AND inv."invoiceDate" IS NOT NULL
+          GROUP BY 1
+          ORDER BY 1 DESC
+          LIMIT 12`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT inv."subAgentId"                    AS "subAgentId",
+                sa.name                              AS "subAgentName",
+                sa."nuskCode"                        AS "subAgentNuskCode",
+                COUNT(*)::int                        AS "count",
+                COALESCE(SUM(inv.total), 0)          AS "totalAmount",
+                COALESCE(SUM(inv."paidAmount"), 0)   AS "paidAmount",
+                COALESCE(SUM(inv.total - COALESCE(inv."paidAmount", 0))
+                         FILTER (WHERE inv.status <> 'cancelled'), 0) AS "outstandingAmount"
+           FROM umrah_sales_invoices inv
+      LEFT JOIN umrah_sub_agents sa
+             ON sa.id = inv."subAgentId"
+            AND sa."companyId" = inv."companyId"
+            AND sa."deletedAt" IS NULL
+          WHERE ${whereClause}
+          GROUP BY inv."subAgentId", sa.name, sa."nuskCode"
+          ORDER BY COALESCE(SUM(inv.total), 0) DESC
+          LIMIT 50`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT inv.id, inv.ref, inv."invoiceDate", inv."dueDate", inv.status,
+                inv."subAgentId", sa.name AS "subAgentName", sa."nuskCode" AS "subAgentNuskCode",
+                inv."clientId", c.name AS "clientName",
+                inv."seasonId", se.title AS "seasonTitle",
+                inv.total, inv."paidAmount",
+                (inv.total - COALESCE(inv."paidAmount", 0))::numeric(12,2) AS "outstanding",
+                inv."pilgrimCount",
+                inv."journalEntryId",
+                inv."createdAt"
+           FROM umrah_sales_invoices inv
+      LEFT JOIN umrah_sub_agents sa
+             ON sa.id = inv."subAgentId"
+            AND sa."companyId" = inv."companyId"
+            AND sa."deletedAt" IS NULL
+      LEFT JOIN clients c
+             ON c.id = inv."clientId"
+            AND c."companyId" = inv."companyId"
+            AND c."deletedAt" IS NULL
+      LEFT JOIN umrah_seasons se
+             ON se.id = inv."seasonId"
+            AND se."companyId" = inv."companyId"
+            AND se."deletedAt" IS NULL
+          WHERE ${whereClause}
+          ORDER BY inv."invoiceDate" DESC NULLS LAST, inv.id DESC
+          LIMIT 100`,
+        baseParams,
+      ),
+    ]);
+
+    const kpiRow = kpiRowArr[0] ?? {
+      total: 0, totalAmount: 0, paidAmount: 0, outstandingAmount: 0,
+      pilgrimsCount: 0, overdueCount: 0, subAgentsCount: 0,
+    };
+
+    res.json(maskFields(req, {
+      kpis: kpiRow,
+      byStatus,
+      byMonth,
+      bySubAgent,
+      recent,
+    }));
+  } catch (err) { handleRouteError(err, res, "Sales invoices summary report"); }
+});
+
 export default router;

@@ -109,6 +109,16 @@ const REPORTS: ReportTile[] = [
     tone: "text-status-warning-foreground bg-status-warning-surface",
     category: "مالية",
   },
+  {
+    // §11 من شرائع #1870 — ملخّص فواتير العملاء (sales invoices summary).
+    // KPIs + توزيع (الحالة/الشهر/الوكيل الفرعي) + آخر ١٠٠ فاتورة.
+    href: "/umrah/reports/sales-invoices-summary",
+    title: "ملخّص فواتير العملاء",
+    description: "إجمالي المُفوتر + المُحصَّل + الرصيد + المتأخّرون + التوزيع حسب الحالة والشهر والوكيل الفرعي",
+    icon: FileText,
+    tone: "text-status-success-foreground bg-status-success-surface",
+    category: "مالية",
+  },
 ];
 
 export default function UmrahReportsHub() {
