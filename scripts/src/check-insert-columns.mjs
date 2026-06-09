@@ -21,12 +21,13 @@
 //   `INSERT INTO <table> ( <cols> )`, and reports columns missing from that
 //   table.
 //
-// Wired into guard.sh (with --strict) inside the DATABASE_URL block, exactly
-//   like check:ghost-rows / check:schema-drift: it enforces wherever a live DB
-//   is available (the local pre-commit hook, any DB-equipped lane) and is a
-//   no-op where DATABASE_URL is unset (a stale/absent DB must not break the
-//   build). Accuracy depends on a FULLY-MIGRATED database — a DB behind HEAD
-//   would report columns a newer migration adds as false positives.
+// IMPORTANT — accuracy depends on a FULLY-MIGRATED database (migration HEAD). A
+//   DB behind HEAD reports columns that a newer migration adds as FALSE
+//   positives — which is why this is NOT wired into guard.sh: that CI
+//   provisions Postgres from the db/schema.sql dump (pre-server-boot), so it
+//   sits at the dump baseline, not HEAD. Run it manually against a head-of-main
+//   DB (e.g. after `db/bootstrap.sh` + a server boot that applies all
+//   migrations) to triage. It found + fixed 14 real per-table column bugs.
 //
 // EXIT: advisory by default (0). `--strict` exits 1 if any violation is found.
 //
