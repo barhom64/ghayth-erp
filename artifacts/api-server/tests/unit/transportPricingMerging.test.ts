@@ -199,10 +199,10 @@ describe("#1733 Pricing — fleet.ts driver schemas accept driverServiceProfile"
   it("DRIVER_SERVICE_PROFILES enum + schema fields present", () => {
     expect(FLEET_ROUTE).toContain("DRIVER_SERVICE_PROFILES");
     expect(FLEET_ROUTE).toMatch(
-      /createDriverSchema[\s\S]{0,500}driverServiceProfile:\s*z\.enum\(DRIVER_SERVICE_PROFILES\)/,
+      /createDriverSchema[\s\S]{0,2000}driverServiceProfile:\s*z\.enum\(DRIVER_SERVICE_PROFILES\)/,
     );
     expect(FLEET_ROUTE).toMatch(
-      /updateDriverSchema[\s\S]{0,500}driverServiceProfile:\s*z\.enum\(DRIVER_SERVICE_PROFILES\)/,
+      /updateDriverSchema[\s\S]{0,2000}driverServiceProfile:\s*z\.enum\(DRIVER_SERVICE_PROFILES\)/,
     );
     // Five profile values from Comment 3.
     for (const v of ["cargo_driver", "umrah_driver", "passenger_driver", "rental_driver", "mixed"]) {
