@@ -245,6 +245,12 @@ const EnvSchema = z.object({
   // Per-dependency probe timeout for /readyz. A probe exceeding this is
   // classified `unavailable` rather than hanging the readiness check.
   HEALTH_PROBE_TIMEOUT_MS: intEnv(2_000),
+
+  // #1812 — Google Maps API key fallback. Per-company key in
+  // transport_planning_settings.mapProviderApiKey takes precedence;
+  // this env var is the fallback for single-tenant deployments where
+  // every company shares one billing account.
+  GOOGLE_MAPS_API_KEY: z.string().optional().catch(undefined),
 });
 
 type RawEnv = z.infer<typeof EnvSchema>;
@@ -433,6 +439,8 @@ export interface AppConfig {
     readonly readyzCacheMs: number;
     readonly healthProbeTimeoutMs: number;
   };
+  /** #1812 maps provider fallback key (per-company key in DB takes precedence). */
+  readonly googleMapsApiKey: string | null;
 }
 
 /** Split a comma-separated env value into a clean, de-duplicated list. */
@@ -621,6 +629,7 @@ function buildConfig(env: RawEnv): AppConfig {
       readyzCacheMs: env.READYZ_CACHE_MS,
       healthProbeTimeoutMs: env.HEALTH_PROBE_TIMEOUT_MS,
     },
+    googleMapsApiKey: env.GOOGLE_MAPS_API_KEY ?? null,
   };
 }
 
