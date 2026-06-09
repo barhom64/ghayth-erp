@@ -82,13 +82,6 @@ const EXPENSE_TYPES = [
 
 
 
-const TAX_CATEGORIES = [
-  { value: "", label: "بدون تصنيف" },
-  { value: "exempt", label: "معفى" },
-  { value: "zero_rated", label: "نسبة صفرية" },
-  { value: "standard", label: "النسبة الأساسية (15%)" },
-  { value: "reduced", label: "نسبة مخفضة (5%)" },
-];
 
 const ATTACHMENT_REQUIRED_TYPES = ["vendor_invoice", "purchase", "custody_settlement", "advance_claim", "legal_fee"];
 
@@ -122,41 +115,33 @@ function generateAutoDescription(params: {
   return typeMap[operationType] || `عملية مالية${entityLabel}${amountLabel}`;
 }
 
-function getRelatedEntityLabel(entityType: string, entityId: string, data: {
-  employees: any[];
-  vehicles: any[];
-  suppliers: any[];
-  contracts: any[];
-  units: any[];
-  legalCases: any[];
-}): string {
-  if (!entityId) return "";
-  const id = entityId;
-  if (entityType === "employee") {
-    const emp = data.employees.find((e: any) => String(e.id) === id);
-    return emp ? `${emp.name} - ${emp.jobTitle || ""}` : "";
+// #1945 — the linked entity is derived from the «ربط العملية بـ» scenario
+// (allocTarget), the single source. The legacy duplicate «الجهة المرتبطة»
+// pair was removed; this maps the scenario's allocation dims onto the
+// relatedEntityType/Id the backend persists, plus the context-card kind.
+function deriveRelatedFromTarget(t: AllocationTargetValue): {
+  type: "" | "employee" | "vehicle" | "supplier" | "contract" | "property";
+  id: string;
+} {
+  const a = t.allocation;
+  switch (t.target) {
+    case "vehicle":
+    case "vehicle_maintenance":
+    case "transport_trip":
+      return { type: a.vehicleId ? "vehicle" : "", id: a.vehicleId ?? "" };
+    case "supplier":
+      return { type: a.vendorId ? "supplier" : "", id: a.vendorId ?? "" };
+    case "employee":
+      return { type: a.employeeId ? "employee" : "", id: a.employeeId ?? "" };
+    case "property":
+    case "property_maintenance":
+    case "unit":
+      return { type: a.unitId ? "property" : "", id: a.unitId ?? "" };
+    case "contract":
+      return { type: a.contractId ? "contract" : "", id: a.contractId ?? "" };
+    default:
+      return { type: "", id: "" };
   }
-  if (entityType === "vehicle") {
-    const v = data.vehicles.find((v: any) => String(v.id) === id);
-    return v ? `${v.plateNumber} - ${v.make} ${v.model}` : "";
-  }
-  if (entityType === "supplier") {
-    const s = data.suppliers.find((s: any) => String(s.id) === id);
-    return s ? s.name : "";
-  }
-  if (entityType === "contract") {
-    const c = data.contracts.find((c: any) => String(c.id) === id);
-    return c ? `${c.tenantName} - عقد #${c.id}` : "";
-  }
-  if (entityType === "property") {
-    const u = data.units.find((u: any) => String(u.id) === id);
-    return u ? `${u.unitNumber || u.name} - ${u.type || "وحدة"}` : "";
-  }
-  if (entityType === "legal_case") {
-    const c = data.legalCases.find((c: any) => String(c.id) === id);
-    return c ? `${c.title || c.caseNumber || `قضية #${c.id}`}` : "";
-  }
-  return "";
 }
 
 export default function ExpensesCreate() {
@@ -179,7 +164,6 @@ export default function ExpensesCreate() {
   const { data: projectsData } = useApiQuery<{ data: any[] }>(["projects-list"], "/projects");
   const { data: contractsData } = useApiQuery<{ data: any[] }>(["contracts-list"], "/properties/contracts");
   const { data: unitsData } = useApiQuery<{ data: any[] }>(["units-list"], "/properties/units");
-  const { data: legalCasesData } = useApiQuery<{ data: any[] }>(["legal-cases-list"], "/legal/cases");
   // #1715 — cost centers (departments) for the optional multi cost-center split.
   const { data: departmentsData } = useApiQuery<{ data: any[] }>(["departments-list"], "/settings/departments");
   const costCenters = departmentsData?.data || [];
@@ -218,9 +202,6 @@ export default function ExpensesCreate() {
     departmentId: "",
     projectId: "",
     taxCategory: "",
-    relatedEntityType: "",
-    relatedEntityId: "",
-    relatedEntityName: "",
     attachmentUrl: "",
     attachmentType: "invoice",
     autoDescription: false,
@@ -256,6 +237,18 @@ export default function ExpensesCreate() {
   // #1715 PR-3: the master «ربط المصروف بـ» field. Its conditional fields
   // feed the same `allocation` dim payload the backend already consumes.
   const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
+  // #1945 — the single linked-entity source: derived from the scenario panel.
+  const derivedRelated = deriveRelatedFromTarget(allocTarget);
+  const derivedRelatedName = (() => {
+    const { type, id } = derivedRelated;
+    if (!id) return "";
+    if (type === "vehicle") { const v = (vehiclesData?.data || []).find((x: any) => String(x.id) === id); return v ? `${v.plateNumber} - ${v.make} ${v.model}` : ""; }
+    if (type === "supplier") { const s = (suppliersData?.data || []).find((x: any) => String(x.id) === id); return s ? s.name : ""; }
+    if (type === "employee") { const e = (employeesData?.data || []).find((x: any) => String(x.id) === id); return e ? `${e.name} - ${e.jobTitle || ""}` : ""; }
+    if (type === "property") { const u = (unitsData?.data || []).find((x: any) => String(x.id) === id); return u ? `${u.unitNumber || u.name} - ${u.type || "وحدة"}` : ""; }
+    if (type === "contract") { const c = (contractsData?.data || []).find((x: any) => String(x.id) === id); return c ? `${c.tenantName} - عقد #${c.id}` : ""; }
+    return "";
+  })();
   // #1715 (owner feedback) — the manual GL override is an ADVANCED escape
   // hatch, not a normal path: only finance approvers see it, it's collapsed by
   // default, and any override must carry a documented reason. Smart routing
@@ -272,19 +265,15 @@ export default function ExpensesCreate() {
   const ccRows = ccDist.filter((r) => r.costCenterId && r.percentage);
   const ccPctTotal = ccRows.reduce((s, r) => s + (Number(r.percentage) || 0), 0);
   const ccBalanced = ccRows.length === 0 || Math.abs(ccPctTotal - 100) < 0.01;
+  // Keep the account / project dims in sync WITHOUT clobbering the dimensions
+  // the «ربط العملية بـ» panel (allocTarget) already merged in. The linked
+  // entity now comes solely from the scenario panel — no legacy duplicate.
   useEffect(() => {
     setAllocation((prev) => {
       if (prev.manualOverrideReason) return prev; // operator has pinned — don't clobber
-      const next: LineAllocation = {
-        accountCode: form.accountCode || undefined,
-        projectId: form.projectId || undefined,
-        vehicleId: form.relatedEntityType === "vehicle" && form.relatedEntityId ? form.relatedEntityId : undefined,
-        propertyId: form.relatedEntityType === "property" && form.relatedEntityId ? form.relatedEntityId : undefined,
-        contractId: form.relatedEntityType === "contract" && form.relatedEntityId ? form.relatedEntityId : undefined,
-      };
-      return next;
+      return { ...prev, accountCode: form.accountCode || undefined, projectId: form.projectId || undefined };
     });
-  }, [form.accountCode, form.projectId, form.relatedEntityType, form.relatedEntityId]);
+  }, [form.accountCode, form.projectId]);
 
   const attachmentRequired = ATTACHMENT_REQUIRED_TYPES.includes(form.operationType) ||
     (form.operationType === "payment" && Number(form.amount) >= 5000);
@@ -293,14 +282,14 @@ export default function ExpensesCreate() {
     if (form.autoDescription) {
       const autoDesc = generateAutoDescription({
         operationType: form.operationType,
-        relatedEntityName: form.relatedEntityName,
+        relatedEntityName: derivedRelatedName,
         period: form.period,
         amount: Number(form.amount) || undefined,
         expenseType: form.expenseType,
       });
       setForm(prev => ({ ...prev, description: autoDesc }));
     }
-  }, [form.operationType, form.relatedEntityName, form.period, form.amount, form.autoDescription, form.expenseType]);
+  }, [form.operationType, derivedRelatedName, form.period, form.amount, form.autoDescription, form.expenseType]);
 
   if (accountsLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -310,8 +299,6 @@ export default function ExpensesCreate() {
     : null;
   const effectiveRate = selectedTaxCode ? Number(selectedTaxCode.rate) : Number(form.vatRate) || 0;
   const taxSplit = expenseTaxSplit(Number(form.amount) || 0, effectiveRate, form.taxInclusive);
-  const vatAmount = taxSplit.vat;
-  const totalWithVat = taxSplit.gross;
 
   const handleTaxCodeChange = (val: string) => {
     if (val === "_none") {
@@ -384,9 +371,9 @@ export default function ExpensesCreate() {
         departmentId: form.departmentId ? Number(form.departmentId) : undefined,
         projectId: form.projectId ? Number(form.projectId) : undefined,
         taxCategory: form.taxCategory || undefined,
-        relatedEntityType: form.relatedEntityType || undefined,
-        relatedEntityId: form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
-        relatedEntityName: form.relatedEntityName || undefined,
+        relatedEntityType: derivedRelated.type || undefined,
+        relatedEntityId: derivedRelated.id ? Number(derivedRelated.id) : undefined,
+        relatedEntityName: derivedRelatedName || undefined,
         attachmentUrl: form.attachmentUrl || undefined,
         attachmentType: form.attachmentType || undefined,
         autoDescription: form.autoDescription,
@@ -427,9 +414,6 @@ export default function ExpensesCreate() {
           taxInclusive: false,
           reference: "",
           projectId: "",
-          relatedEntityType: "",
-          relatedEntityId: "",
-          relatedEntityName: "",
           attachmentUrl: "",
         }));
         setAllocation({});
@@ -443,22 +427,6 @@ export default function ExpensesCreate() {
       toast({ variant: "destructive", title: "خطأ في الحفظ", description: err?.message || "حدث خطأ أثناء إضافة المصروف" });
     }
   };
-
-  const journalPreviewLines = (() => {
-    if (!form.accountCode || !form.amount) return [];
-    const base = Number(form.amount) || 0;
-    const vat = vatAmount;
-    const total = base + vat;
-    const sourceAcct = form.sourceAccountCode || "1100";
-    const lines: { account: string; debit: number; credit: number }[] = [
-      { account: form.accountCode, debit: base, credit: 0 },
-    ];
-    if (vat > 0) {
-      lines.push({ account: "1400 (ض.م.م مدخلات)", debit: vat, credit: 0 });
-    }
-    lines.push({ account: sourceAcct || "1100", debit: 0, credit: total });
-    return lines;
-  })();
 
   return (
     <CreatePageLayout title="إضافة مصروف جديد" backPath="/finance/expenses" isDirty={isDirty}>
@@ -529,7 +497,7 @@ export default function ExpensesCreate() {
                 expenseType: form.expenseType,
                 paymentMethod: form.paymentMethod,
                 costCenter: form.costCenter,
-                supplierId: form.relatedEntityType === "supplier" && form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
+                supplierId: derivedRelated.type === "supplier" && derivedRelated.id ? Number(derivedRelated.id) : undefined,
                 targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
                 itemType: form.expenseType || undefined,
               }}
@@ -587,7 +555,7 @@ export default function ExpensesCreate() {
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">المبالغ والضريبة</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <NumberField label="المبلغ (ريال)" required value={form.amount}
               onChange={(v) => setForm({ ...form, amount: v })} min={0} step={0.01} placeholder="0.00" />
             <FormFieldWrapper label="رمز الضريبة">
@@ -616,14 +584,8 @@ export default function ExpensesCreate() {
                 </Label>
               </div>
             </FormFieldWrapper>
-            <FormFieldWrapper label="التصنيف الضريبي">
-              <Select value={form.taxCategory || "_none"} onValueChange={(v) => setForm({ ...form, taxCategory: v === "_none" ? "" : v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TAX_CATEGORIES.map(t => <SelectItem key={t.value || "_none"} value={t.value || "_none"}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </FormFieldWrapper>
+            {/* #1945 — «التصنيف الضريبي» اليدوي أُزيل: يُشتق تلقائيًا من رمز
+                الضريبة المختار (TAX_TYPE_TO_CATEGORY) فلا يتكرر مع رمز الضريبة. */}
           </div>
           {effectiveRate > 0 && Number(form.amount) > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -646,7 +608,7 @@ export default function ExpensesCreate() {
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">الجهة المرتبطة ومركز التكلفة</h3>
+          <h3 className="font-semibold text-sm text-muted-foreground">مركز التكلفة والمرجع</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <BranchSelect
               value={form.branchId}
@@ -673,70 +635,21 @@ export default function ExpensesCreate() {
               }}
               label="المشروع المرتبط"
             />
-            <FormFieldWrapper label="نوع الجهة المرتبطة">
-              <Select value={form.relatedEntityType || "_none"} onValueChange={(v) => setForm({ ...form, relatedEntityType: v === "_none" ? "" : v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">بدون ربط</SelectItem>
-                  <SelectItem value="employee">موظف</SelectItem>
-                  <SelectItem value="vehicle">مركبة</SelectItem>
-                  <SelectItem value="supplier">مورد</SelectItem>
-                  <SelectItem value="contract">عقد</SelectItem>
-                  <SelectItem value="property">عقار</SelectItem>
-                  <SelectItem value="legal_case">قضية قانونية</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormFieldWrapper>
-            {form.relatedEntityType && (
-              <FormFieldWrapper label="الجهة المرتبطة">
-                <Select value={form.relatedEntityId || "_none"} onValueChange={(v) => {
-                  const val = v === "_none" ? "" : v;
-                  const label = val ? getRelatedEntityLabel(form.relatedEntityType, val, {
-                    employees: employeesData?.data || [],
-                    vehicles: vehiclesData?.data || [],
-                    suppliers: suppliersData?.data || [],
-                    contracts: contractsData?.data || [],
-                    units: unitsData?.data || [],
-                    legalCases: legalCasesData?.data || [],
-                  }) : "";
-                  setForm({ ...form, relatedEntityId: val, relatedEntityName: label });
-                }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">— اختر —</SelectItem>
-                    {form.relatedEntityType === "employee" && (employeesData?.data || []).map((emp: any) => (
-                      <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} - {emp.jobTitle || ""}</SelectItem>
-                    ))}
-                    {form.relatedEntityType === "vehicle" && (vehiclesData?.data || []).map((v: any) => (
-                      <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
-                    ))}
-                    {form.relatedEntityType === "supplier" && (suppliersData?.data || []).map((s: any) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                    ))}
-                    {form.relatedEntityType === "contract" && (contractsData?.data || []).map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.tenantName} - عقد #{c.id}</SelectItem>
-                    ))}
-                    {form.relatedEntityType === "property" && (unitsData?.data || []).map((u: any) => (
-                      <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber || u.name} - {u.type || "وحدة"}</SelectItem>
-                    ))}
-                    {form.relatedEntityType === "legal_case" && (legalCasesData?.data || []).map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.title || c.caseNumber || `قضية #${c.id}`}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormFieldWrapper>
-            )}
-            {form.relatedEntityType && form.relatedEntityId && (
-              <div className="md:col-span-3">
-                {form.relatedEntityType === "employee" && <EmployeeContextCard employeeId={form.relatedEntityId} />}
-                {form.relatedEntityType === "vehicle" && <VehicleContextCard vehicleId={form.relatedEntityId} section="maintenance" />}
-                {form.relatedEntityType === "supplier" && <SupplierContextCard supplierId={form.relatedEntityId} />}
-                {form.relatedEntityType === "property" && <PropertyUnitContextCard unitId={form.relatedEntityId} section="payment" />}
-              </div>
-            )}
             <TextField label="رقم المرجع / الفاتورة" value={form.reference} onChange={(v) => setForm({ ...form, reference: v })}
               placeholder="رقم الفاتورة أو أمر الشراء" />
           </div>
+          {/* #1945 — the linked entity (الجهة المرتبطة) is no longer a separate
+              duplicate picker; it is whatever «ربط المصروف بـ» chose. We only
+              show the entity's context card here so the operator still gets the
+              live context, driven by the single scenario source. */}
+          {derivedRelated.id && (
+            <div>
+              {derivedRelated.type === "employee" && <EmployeeContextCard employeeId={derivedRelated.id} />}
+              {derivedRelated.type === "vehicle" && <VehicleContextCard vehicleId={derivedRelated.id} section="maintenance" />}
+              {derivedRelated.type === "supplier" && <SupplierContextCard supplierId={derivedRelated.id} />}
+              {derivedRelated.type === "property" && <PropertyUnitContextCard unitId={derivedRelated.id} section="payment" />}
+            </div>
+          )}
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
@@ -985,35 +898,9 @@ export default function ExpensesCreate() {
           </div>
         )}
 
-        {journalPreviewLines.length > 0 && (
-          <div className="border rounded-lg p-4 mb-4 space-y-3">
-            <h3 className="font-semibold text-sm text-muted-foreground">القيد اليومي المتوقع</h3>
-            <table className="w-full text-sm border">
-              <thead>
-                <tr className="bg-surface-subtle border-b">
-                  <th className="p-2 text-start">الحساب</th>
-                  <th className="p-2 text-start">مدين</th>
-                  <th className="p-2 text-start">دائن</th>
-                </tr>
-              </thead>
-              <tbody>
-                {journalPreviewLines.map((line, idx) => (
-                  <tr key={idx} className="border-b">
-                    <td className="p-2 font-mono text-xs">{line.account}</td>
-                    <td className="p-2 text-status-error-foreground">{line.debit > 0 ? formatCurrency(line.debit) : ""}</td>
-                    <td className="p-2 text-status-success-foreground">{line.credit > 0 ? formatCurrency(line.credit) : ""}</td>
-                  </tr>
-                ))}
-                <tr className="bg-surface-subtle font-semibold">
-                  <td className="p-2">الإجمالي</td>
-                  <td className="p-2 text-status-error-foreground">{formatCurrency(journalPreviewLines.reduce((s, l) => s + l.debit, 0))}</td>
-                  <td className="p-2 text-status-success-foreground">{formatCurrency(journalPreviewLines.reduce((s, l) => s + l.credit, 0))}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-
+        {/* #1945 — the old «القيد اليومي المتوقع» table hard-coded 1100/1400
+            and never matched what posts. The real, server-resolved entry is
+            shown by «التوجيه المحاسبي المتوقّع» (LiveImpactPreview) above. */}
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center justify-between">
