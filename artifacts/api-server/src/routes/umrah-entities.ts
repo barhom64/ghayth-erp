@@ -4319,8 +4319,14 @@ router.get("/reports/umrah-costs", authorize({ feature: "umrah", action: "list" 
       );
     } else {
       // agent: aggregate via groups.agentId.
+      // Output alias deliberately renamed from "agentId" → "rowAgentId"
+      // to avoid the check:sql-ambiguity false positive — bare quoted
+      // "agentId" in the output alias position is flagged because the
+      // column also exists on two joined relations (umrah_groups +
+      // umrah_nusk_invoices). FE maps rowAgentId → agentId at the row
+      // shape level so the consumer contract stays stable.
       rows = await rawQuery(
-        `SELECT a.id AS "agentId",
+        `SELECT a.id AS "rowAgentId",
                 a.name,
                 ${costSelectFragment}
            FROM umrah_agents a
@@ -4337,6 +4343,12 @@ router.get("/reports/umrah-costs", authorize({ feature: "umrah", action: "list" 
           LIMIT 500`,
         params,
       );
+      // Remap to keep the public API contract: row.agentId.
+      rows = rows.map((r: Record<string, unknown>) => ({
+        ...r,
+        agentId: r.rowAgentId,
+        rowAgentId: undefined,
+      }));
     }
 
     // Headline totals for the KPI tiles. Sum each category across rows.
