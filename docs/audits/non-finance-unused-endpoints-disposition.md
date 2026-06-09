@@ -27,13 +27,27 @@ literals) and reading the handler to see whether a non-SPA consumer exists.
 
 | Bucket | Count | Action |
 | --- | --- | --- |
-| KEEP — verified active caller, analyzer blind spot (false positive) | 4 | none; add DOC comment so the next audit skips it |
-| DOC — by-design no ERP-SPA caller (separate client / admin-cron / backend-ready, UI pending) | 17 | none today; tracked as wiring backlog |
+| KEEP — verified active caller, analyzer blind spot (false positive) | 6 | none; analyzer cannot see `href`/`window.location`/`useApiQuery` template literals |
+| FIXED — backend-ready, UI now wired in this pass | 2 | done (see "Fixed in this pass" below) |
+| DOC — by-design no ERP-SPA caller (separate client / admin-cron / backend-ready, UI pending) | 13 | none today; tracked as wiring backlog |
 | DELETE — confirmed dead (no caller, superseded) | 0 | — |
 
 **Net: zero dead endpoints.** Consistent with the foundation-audit
-thesis — what remains is analyzer blind spots and a wiring backlog, not
-dead code.
+thesis — what remains is analyzer blind spots and a (shrinking) wiring
+backlog, not dead code.
+
+> **Note on the analyzer's reach:** the scan also misses calls made via
+> `useApiQuery` with template-literal URLs — e.g. `GET /umrah/pilgrims/:id/timeline`
+> (wired at `pilgrim-detail.tsx:109`) and `GET /umrah/import/presets`
+> (wired in `import-wizard.tsx`) are both flagged "unused" yet are live.
+> They are KEEP, not backlog.
+
+## Fixed in this pass
+
+| Method + Path | What was wired | Where |
+| --- | --- | --- |
+| `DELETE /umrah/import/presets/:id` | Delete button on the saved-preset row (save + list were already wired; this completes the management surface) | `pages/umrah/import-wizard.tsx` |
+| `GET /exec-dashboard/unified-pnl` | Consolidated month-to-date P&L card (revenue / expense / net + top accounts) | `pages/exec-dashboard.tsx` |
 
 ---
 
@@ -52,9 +66,9 @@ dead code.
 | # | Method + Path | Verdict | Reason |
 | - | --- | --- | --- |
 | 4 | `GET /umrah/pilgrims/export.csv` | **KEEP** | `pages/umrah/pilgrims.tsx:389` downloads via `window.location.href = /api/umrah/pilgrims/export.csv` |
-| 5 | `GET /umrah/pilgrims/:id/timeline` | **DOC** | Backend pilgrim-history feed; the timeline drawer UI is not wired yet (backend-ready, UI pending) |
-| 6 | `GET /umrah/import/presets` | **DOC** | Preset **save** (`POST`) is wired in `pages/umrah/import-wizard.tsx:568`; the **list** verb has no UI yet (partial wiring) |
-| 7 | `DELETE /umrah/import/presets/:id` | **DOC** | Sibling of #6; preset deletion UI pending |
+| 5 | `GET /umrah/pilgrims/:id/timeline` | **KEEP** | Already wired at `pilgrim-detail.tsx:109` via `useApiQuery` template literal — analyzer blind spot, not a gap |
+| 6 | `GET /umrah/import/presets` | **KEEP** | Already wired at `import-wizard.tsx` (`useApiQuery` with `?fileType=` template literal) — analyzer blind spot |
+| 7 | `DELETE /umrah/import/presets/:id` | **FIXED** | Delete button added on the preset row — completes the preset management surface |
 
 ### /driver-portal (6) — separate client app
 
@@ -96,22 +110,22 @@ pending. Retention endpoints are admin/cron-style by design.
 
 | # | Method + Path | Verdict | Reason |
 | - | --- | --- | --- |
-| 21 | `GET /exec-dashboard/unified-pnl` | **DOC** | Consolidated P&L analytics feed; dashboard widget pending |
+| 21 | `GET /exec-dashboard/unified-pnl` | **FIXED** | Month-to-date P&L card added to the executive dashboard |
 
 ---
 
 ## Wiring backlog (the actionable subset)
 
-The **DOC — UI pending** rows are not defects; they are a backlog of
-backend-ready features awaiting a frontend. Highest-value candidates to
-wire when product prioritizes them:
+The remaining **DOC — UI pending** rows are not defects; they are a
+backlog of backend-ready features awaiting a frontend. Highest-value
+candidates to wire when product prioritizes them:
 
-- **Per-document ACL admin** — #14, #17, #18, #19 (full grant/revoke/audit surface ready)
+- **Per-document ACL admin** — #14, #17, #18, #19 (full grant/revoke/audit surface ready; security-sensitive — needs design)
 - **Document retention console** — #15, #16
-- **Umrah import-preset management** (list/delete) — #6, #7
-- **Pilgrim timeline drawer** — #5
-- **Exec unified-P&L widget** — #21
 - **Message referral-chain view** — #20
+
+_(#5 timeline and #6 presets-list turned out already wired; #7 preset-delete
+and #21 unified-P&L were wired in this pass — see "Fixed in this pass".)_
 
 The **driver-portal** set (#8–#13) is a separate-client contract — wire it
 from the driver app, not the ERP SPA.
