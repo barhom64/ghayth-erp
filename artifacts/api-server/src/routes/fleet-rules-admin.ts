@@ -31,7 +31,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 
@@ -123,6 +123,11 @@ fleetRulesAdminRouter.post(
         action: "create", entity: "fleet_expense_rules", entityId: insertId,
         after: { ...b },
       }).catch((e) => logger.error(e, "expense rule audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "fleet.expense_rule.created", entity: "fleet_expense_rules", entityId: insertId,
+        details: JSON.stringify({ ruleName: b.ruleName, expenseSource: b.expenseSource }),
+      }).catch((e) => logger.error(e, "expense rule event failed"));
       res.status(201).json({ data: { id: insertId } });
     } catch (err) {
       handleRouteError(err, res, "Create expense rule error:");
@@ -173,6 +178,11 @@ fleetRulesAdminRouter.patch(
         action: "update", entity: "fleet_expense_rules", entityId: id,
         after: { ...b },
       }).catch((e) => logger.error(e, "expense rule audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "fleet.expense_rule.updated", entity: "fleet_expense_rules", entityId: id,
+        details: JSON.stringify({ fields: Object.keys(b) }),
+      }).catch((e) => logger.error(e, "expense rule event failed"));
       res.json({ data: { id } });
     } catch (err) {
       handleRouteError(err, res, "Update expense rule error:");
@@ -198,6 +208,10 @@ fleetRulesAdminRouter.delete(
         companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
         action: "delete", entity: "fleet_expense_rules", entityId: id,
       }).catch((e) => logger.error(e, "expense rule audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "fleet.expense_rule.deleted", entity: "fleet_expense_rules", entityId: id,
+      }).catch((e) => logger.error(e, "expense rule event failed"));
       res.json({ ok: true });
     } catch (err) {
       handleRouteError(err, res, "Delete expense rule error:");
@@ -291,6 +305,11 @@ fleetRulesAdminRouter.post(
         action: "create", entity: "transport_intake_rules", entityId: insertId,
         after: { ...b },
       }).catch((e) => logger.error(e, "intake rule audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "transport.intake_rule.created", entity: "transport_intake_rules", entityId: insertId,
+        details: JSON.stringify({ ruleName: b.ruleName, operationType: b.operationType }),
+      }).catch((e) => logger.error(e, "intake rule event failed"));
       res.status(201).json({ data: { id: insertId } });
     } catch (err) {
       handleRouteError(err, res, "Create intake rule error:");
@@ -342,6 +361,11 @@ fleetRulesAdminRouter.patch(
         action: "update", entity: "transport_intake_rules", entityId: id,
         after: { ...b },
       }).catch((e) => logger.error(e, "intake rule audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "transport.intake_rule.updated", entity: "transport_intake_rules", entityId: id,
+        details: JSON.stringify({ fields: Object.keys(b) }),
+      }).catch((e) => logger.error(e, "intake rule event failed"));
       res.json({ data: { id } });
     } catch (err) {
       handleRouteError(err, res, "Update intake rule error:");
@@ -367,6 +391,10 @@ fleetRulesAdminRouter.delete(
         companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
         action: "delete", entity: "transport_intake_rules", entityId: id,
       }).catch((e) => logger.error(e, "intake rule audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "transport.intake_rule.deleted", entity: "transport_intake_rules", entityId: id,
+      }).catch((e) => logger.error(e, "intake rule event failed"));
       res.json({ ok: true });
     } catch (err) {
       handleRouteError(err, res, "Delete intake rule error:");

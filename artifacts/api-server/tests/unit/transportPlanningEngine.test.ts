@@ -312,7 +312,9 @@ describe("#1812 — driver in-app navigation SPA", () => {
 describe("#1812 — suggest-assignment dialog component", () => {
   it("file exists + consumes the suggest-assignment endpoint", () => {
     expect(existsSync(join(spaSrc, "components/shared/assignment-suggest-dialog.tsx"))).toBe(true);
-    expect(SUGGEST_DIALOG).toMatch(/\/transport\/bookings\/\$\{bookingId\}\/suggest-assignment/);
+    // After PR #1839 + leg-source refactor, the URL is constructed via
+    // effectiveSource.bookingId — still routes to /transport/bookings/:id.
+    expect(SUGGEST_DIALOG).toMatch(/\/transport\/bookings\/\$\{(effectiveSource\.bookingId|bookingId)\}\/suggest-assignment/);
   });
 
   it("renders score breakdown for all 7 factors", () => {
