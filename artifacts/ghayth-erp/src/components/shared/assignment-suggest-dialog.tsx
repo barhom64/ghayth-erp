@@ -98,6 +98,14 @@ export function AssignmentSuggestDialog({
 }: Props) {
   const { toast } = useToast();
   const [candidates, setCandidates] = useState<SuggestionCandidate[] | null>(null);
+  // #1812 gap #5 — structured diagnostics from the server when
+  // candidates is empty (no vehicles / no drivers / no window / all busy).
+  const [diagnostics, setDiagnostics] = useState<{
+    reason: string;
+    axis: string;
+    counts: { totalVehicles: number; dispatchableVehicles: number; totalDrivers: number; activeDrivers: number };
+    hints: string[];
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,15 +126,25 @@ export function AssignmentSuggestDialog({
     setLoading(true);
     setError(null);
     setCandidates(null);
+    setDiagnostics(null);
     try {
       const body: Record<string, unknown> = {};
       if (scheduledStartAt) body.scheduledStartAt = scheduledStartAt;
       if (scheduledEndAt) body.scheduledEndAt = scheduledEndAt;
-      const res = await apiFetch<{ data: SuggestionCandidate[] }>(
+      const res = await apiFetch<{
+        data: SuggestionCandidate[];
+        diagnostics?: {
+          reason: string;
+          axis: string;
+          counts: { totalVehicles: number; dispatchableVehicles: number; totalDrivers: number; activeDrivers: number };
+          hints: string[];
+        } | null;
+      }>(
         suggestUrl,
         { method: "POST", body: JSON.stringify(body) },
       );
       setCandidates(res?.data ?? []);
+      setDiagnostics(res?.diagnostics ?? null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -142,6 +160,7 @@ export function AssignmentSuggestDialog({
   if (!open && candidates != null) {
     // Reset between opens so re-clicking re-fetches.
     setCandidates(null);
+    setDiagnostics(null);
     setError(null);
   }
 
@@ -249,10 +268,57 @@ export function AssignmentSuggestDialog({
             </Card>
           )}
           {candidates && candidates.length === 0 && !loading && !error && (
-            <div className="text-center py-8 text-sm text-muted-foreground">
-              لا توجد مركبات أو سائقون في الشركة، أو الحجز ليس له نافذة زمنية محددة.
-              تأكد من إعدادات الأسطول والسائقين أولاً.
-            </div>
+            <>
+              {diagnostics ? (
+                /* #1812 gap #5 — structured diagnostic from the server.
+                   Explains WHY the engine returned 0 candidates and
+                   gives the operator concrete fix steps. */
+                <Card className="border-status-warning-foreground/40 bg-status-warning-surface/30">
+                  <CardContent className="p-4 space-y-3 text-sm">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="h-5 w-5 text-status-warning-foreground shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <div className="font-semibold text-status-warning-foreground mb-1">
+                          لم يجد المحرك أي تركيبة قابلة للإسناد
+                        </div>
+                        <div className="text-foreground">{diagnostics.reason}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <div className="bg-white p-2 rounded border">
+                        <div className="text-muted-foreground">إجمالي المركبات</div>
+                        <div className="font-mono text-lg">{diagnostics.counts.totalVehicles}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded border">
+                        <div className="text-muted-foreground">المركبات الجاهزة</div>
+                        <div className="font-mono text-lg">{diagnostics.counts.dispatchableVehicles}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded border">
+                        <div className="text-muted-foreground">إجمالي السائقين</div>
+                        <div className="font-mono text-lg">{diagnostics.counts.totalDrivers}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded border">
+                        <div className="text-muted-foreground">السائقون الفعّالون</div>
+                        <div className="font-mono text-lg">{diagnostics.counts.activeDrivers}</div>
+                      </div>
+                    </div>
+                    {diagnostics.hints.length > 0 && (
+                      <div className="bg-white p-3 rounded border">
+                        <div className="text-xs font-semibold mb-1">خطوات الإصلاح المقترحة:</div>
+                        <ul className="text-xs space-y-1 list-disc list-inside text-muted-foreground">
+                          {diagnostics.hints.map((h, i) => <li key={i}>{h}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                  لا توجد مركبات أو سائقون في الشركة، أو الحجز ليس له نافذة زمنية محددة.
+                  تأكد من إعدادات الأسطول والسائقين أولاً.
+                </div>
+              )}
+            </>
           )}
           {candidates && candidates.length > 0 && candidates.every((c) => c.blockers.length > 0) && (
             <Card className="border-rose-300 bg-rose-50">

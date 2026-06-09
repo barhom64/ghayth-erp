@@ -48,6 +48,7 @@ import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
 import { suggestAssignments, suggestForLeg } from "../lib/fleet/assignmentSuggestionEngine.js";
+import { diagnoseEmptySuggest } from "../lib/fleet/suggestDiagnostics.js";
 
 export const transportPlanningRouter = Router();
 transportPlanningRouter.use(authMiddleware);
@@ -127,7 +128,19 @@ transportPlanningRouter.post(
         scheduledEndAt: b.scheduledEndAt,
         limit: b.limit,
       });
-      res.json({ data: candidates });
+      // #1812 gap #5 — when the engine returns 0, surface a structured
+      // diagnostic so the SPA can explain WHY (no vehicles vs no
+      // active drivers vs no window vs all busy) instead of the
+      // generic "no candidates" copy.
+      let diagnostics = null;
+      if (candidates.length === 0) {
+        diagnostics = await diagnoseEmptySuggest({
+          companyId: scope.companyId,
+          scheduledStartAt: b.scheduledStartAt,
+          scheduledEndAt: b.scheduledEndAt,
+        });
+      }
+      res.json({ data: candidates, diagnostics });
     } catch (err) {
       handleRouteError(err, res, "Suggest assignment error:");
     }
