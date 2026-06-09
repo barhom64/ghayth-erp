@@ -85,11 +85,12 @@ export default function MyAttendance() {
     `/my-space/attendance?month=${month}`
   );
 
+  const records: any[] = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(records);
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const records: any[] = data?.data ?? [];
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(records);
   const monthly = data?.monthly;
 
   const presentDays = monthly?.presentDays ?? records.filter((r: any) => r.status === "present" || r.checkIn).length;
