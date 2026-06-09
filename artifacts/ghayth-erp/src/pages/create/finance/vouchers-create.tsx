@@ -17,6 +17,7 @@ import { amountTaxSplit } from "@/lib/tax-math";
 import { allowedUsagesForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
 import { EMPTY_ALLOCATION_TARGET, buildOperationalEffectsPayload, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
 import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
+import { deriveRelatedEntity } from "@/lib/finance/scenario-model";
 import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -25,7 +26,7 @@ import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect, EmployeeSelect, ClientSelect, SupplierSelect } from "@/components/shared/entity-selects";
+import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect } from "@/components/shared/entity-selects";
 import { Switch } from "@/components/ui/switch";
 
 
@@ -107,9 +108,6 @@ export default function VouchersCreate() {
     branchId: "",
     departmentId: "",
     costCenter: "",
-    relatedEntityType: "",
-    relatedEntityId: "",
-    relatedEntityName: "",
     autoDescription: true,
     beneficiaryType: "",
   };
@@ -117,6 +115,19 @@ export default function VouchersCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   // #1715 PR-4: master «ربط السند بـ» field shared with expenses.
   const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
+  // #1945 — the linked party is derived from the scenario panel (single source);
+  // the legacy duplicate «نوع الجهة» picker was removed.
+  const derivedRelated = deriveRelatedEntity(allocTarget.target, allocTarget.allocation);
+  const derivedRelatedName = (() => {
+    const { type, id } = derivedRelated;
+    if (!id) return "";
+    if (type === "employee") { const e = (employeesData?.data || []).find((x: any) => String(x.id) === id); return e ? `${e.name} - ${e.jobTitle || ""}` : ""; }
+    if (type === "supplier") { const s = (suppliersData?.data || []).find((x: any) => String(x.id) === id); return s ? s.name : ""; }
+    if (type === "customer") { const c = (clientsData?.data || []).find((x: any) => String(x.id) === id); return c ? c.name : ""; }
+    if (type === "contract") { const c = (contractsData?.data || []).find((x: any) => String(x.id) === id); return c ? `${c.tenantName} - عقد #${c.id}` : ""; }
+    if (type === "property") { const u = (unitsData?.data || []).find((x: any) => String(x.id) === id); return u ? `${u.unitNumber || u.name} - ${u.type || "وحدة"}` : ""; }
+    return "";
+  })();
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const operationTypes = form.type === "receipt" ? OPERATION_TYPES_RECEIPT : OPERATION_TYPES_PAYMENT;
@@ -133,12 +144,12 @@ export default function VouchersCreate() {
       const desc = generateDescription({
         type: form.type,
         operationType: form.operationType,
-        payee: form.payee || form.relatedEntityName,
+        payee: form.payee || derivedRelatedName,
         amount: Number(form.amount) || undefined,
       });
       setForm(prev => ({ ...prev, description: desc }));
     }
-  }, [form.autoDescription, form.operationType, form.payee, form.relatedEntityName, form.amount, form.type]);
+  }, [form.autoDescription, form.operationType, form.payee, derivedRelatedName, form.amount, form.type]);
 
 
   const selectedTaxCode = form.taxCodeId
@@ -198,9 +209,9 @@ export default function VouchersCreate() {
     branchId: form.branchId ? Number(form.branchId) : undefined,
     departmentId: form.departmentId ? Number(form.departmentId) : undefined,
     costCenter: form.costCenter || undefined,
-    relatedEntityType: form.relatedEntityType || undefined,
-    relatedEntityId: form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
-    relatedEntityName: form.relatedEntityName || undefined,
+    relatedEntityType: derivedRelated.type || undefined,
+    relatedEntityId: derivedRelated.id ? Number(derivedRelated.id) : undefined,
+    relatedEntityName: derivedRelatedName || undefined,
     autoDescription: form.autoDescription,
     beneficiaryType: form.beneficiaryType || undefined,
     lineAllocation: allocTarget.target !== "none"
@@ -399,99 +410,6 @@ export default function VouchersCreate() {
         <h3 className="font-semibold text-sm text-muted-foreground">الطرف الآخر والمرجع</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <TextField label={form.type === "receipt" ? "اسم الدافع" : "اسم المستفيد"} value={form.payee} onChange={(v) => setField("payee", v)} placeholder="الاسم" />
-          <FormFieldWrapper label="نوع الجهة">
-            <Select value={form.relatedEntityType || "_none"} onValueChange={(v) => setField("relatedEntityType", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">بدون ربط</SelectItem>
-                <SelectItem value="employee">موظف</SelectItem>
-                <SelectItem value="supplier">مورد</SelectItem>
-                <SelectItem value="customer">عميل</SelectItem>
-                <SelectItem value="contract">عقد</SelectItem>
-                <SelectItem value="property">عقار</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          {form.relatedEntityType === "employee" && (
-            <EmployeeSelect
-              value={form.relatedEntityId}
-              onChange={(val) => {
-                const emp = (employeesData?.data || []).find((e: any) => String(e.id) === val);
-                const label = emp ? `${emp.name} - ${emp.jobTitle || ""}` : "";
-                setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
-              }}
-              label="الجهة المرتبطة"
-              allowCreate={false}
-            />
-          )}
-          {form.relatedEntityType === "supplier" && (
-            <SupplierSelect
-              value={form.relatedEntityId}
-              onChange={(val) => {
-                const s = (suppliersData?.data || []).find((s: any) => String(s.id) === val);
-                const label = s ? s.name : "";
-                setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
-              }}
-              label="الجهة المرتبطة"
-              allowCreate={false}
-            />
-          )}
-          {form.relatedEntityType === "customer" && (
-            <ClientSelect
-              value={form.relatedEntityId}
-              onChange={(val) => {
-                const c = (clientsData?.data || []).find((c: any) => String(c.id) === val);
-                const label = c ? c.name : "";
-                setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
-              }}
-              label="الجهة المرتبطة"
-              allowCreate={false}
-            />
-          )}
-          {form.relatedEntityType === "contract" && (
-            <FormFieldWrapper label="الجهة المرتبطة">
-              <Select value={form.relatedEntityId || "_none"} onValueChange={(v) => {
-                const val = v === "_none" ? "" : v;
-                const c = val ? (contractsData?.data || []).find((c: any) => String(c.id) === val) : null;
-                const label = c ? `${c.tenantName} - عقد #${c.id}` : "";
-                setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
-              }}>
-                <SelectTrigger><SelectValue placeholder="— اختر —" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">— اختر —</SelectItem>
-                  {(contractsData?.data || []).map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.tenantName} - عقد #{c.id}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormFieldWrapper>
-          )}
-          {form.relatedEntityType === "property" && (
-            <FormFieldWrapper label="الجهة المرتبطة">
-              <Select value={form.relatedEntityId || "_none"} onValueChange={(v) => {
-                const val = v === "_none" ? "" : v;
-                const u = val ? (unitsData?.data || []).find((u: any) => String(u.id) === val) : null;
-                const label = u ? `${u.unitNumber || u.name} - ${u.type || "وحدة"}` : "";
-                setForm(prev => ({ ...prev, relatedEntityId: val, relatedEntityName: label }));
-              }}>
-                <SelectTrigger><SelectValue placeholder="— اختر —" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">— اختر —</SelectItem>
-                  {(unitsData?.data || []).map((u: any) => (
-                    <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber || u.name} - {u.type || "وحدة"}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormFieldWrapper>
-          )}
-          {form.relatedEntityType && form.relatedEntityId && (
-            <div className="md:col-span-3">
-              {form.relatedEntityType === "employee" && <EmployeeContextCard employeeId={form.relatedEntityId} />}
-              {form.relatedEntityType === "supplier" && <SupplierContextCard supplierId={form.relatedEntityId} />}
-              {form.relatedEntityType === "customer" && <ClientContextCard clientId={form.relatedEntityId} section="invoice" />}
-              {form.relatedEntityType === "property" && <PropertyUnitContextCard unitId={form.relatedEntityId} section="payment" />}
-            </div>
-          )}
           <TextField label="رقم المرجع" value={form.reference} onChange={(v) => setField("reference", v)} placeholder="رقم الفاتورة / العقد / الشيك" />
           {form.operationType === "invoice_payment" && (
             <NumberField label="رقم الفاتورة" value={form.invoiceId} onChange={(v) => setField("invoiceId", v)} placeholder="رقم الفاتورة" />
@@ -517,6 +435,16 @@ export default function VouchersCreate() {
             label="مركز التكلفة"
           />
         </div>
+        {/* #1945 — the linked party is whatever «ربط السند بـ» chose; we only
+            show its live context card, driven by the single scenario source. */}
+        {derivedRelated.id && (
+          <div>
+            {derivedRelated.type === "employee" && <EmployeeContextCard employeeId={derivedRelated.id} />}
+            {derivedRelated.type === "supplier" && <SupplierContextCard supplierId={derivedRelated.id} />}
+            {derivedRelated.type === "customer" && <ClientContextCard clientId={derivedRelated.id} section="invoice" />}
+            {derivedRelated.type === "property" && <PropertyUnitContextCard unitId={derivedRelated.id} section="payment" />}
+          </div>
+        )}
       </div>
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
