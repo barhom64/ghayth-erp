@@ -4734,4 +4734,126 @@ router.get("/reports/catalog", authorize({ feature: "umrah", action: "list" }), 
   } catch (err) { handleRouteError(err, res, "Reports catalog"); }
 });
 
+// §11 partial → full conversion — violations summary report (#1870).
+// The Charter: "تقرير التخلف والمخالفات — المخالفات المسجَّلة مع الوكيل،
+// المعتمر، الغرامة". Aggregates umrah_violations into KPI counts +
+// per-dimension breakdowns. /umrah/violations stays as the list/edit
+// page; this endpoint feeds the dedicated report screen with rollups
+// + a flat list of recent rows for context.
+router.get("/reports/violations-summary", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
+    const agentId  = req.query.agentId  ? Number(req.query.agentId)  : null;
+    const fromStr  = req.query.from     ? String(req.query.from)     : null;
+    const toStr    = req.query.to       ? String(req.query.to)       : null;
+
+    const params: unknown[] = [scope.companyId];
+    let where = `v."companyId" = $1 AND v."deletedAt" IS NULL`;
+    if (seasonId) {
+      params.push(seasonId);
+      // umrah_violations has no seasonId — chain via pilgrim or group.
+      where += ` AND EXISTS (
+        SELECT 1 FROM umrah_pilgrims p
+         WHERE p.id = v."mutamerId"
+           AND p."companyId" = v."companyId"
+           AND p."seasonId" = $${params.length}
+      )`;
+    }
+    if (agentId) {
+      params.push(agentId);
+      where += ` AND v."agentId" = $${params.length}`;
+    }
+    if (fromStr && /^\d{4}-\d{2}-\d{2}$/.test(fromStr)) {
+      params.push(fromStr);
+      where += ` AND v."detectedAt"::date >= $${params.length}::date`;
+    }
+    if (toStr && /^\d{4}-\d{2}-\d{2}$/.test(toStr)) {
+      params.push(toStr);
+      where += ` AND v."detectedAt"::date <= $${params.length}::date`;
+    }
+
+    // Four parallel aggregations: KPI tiles + status breakdown +
+    // type breakdown + recent rows. Each is cheap; no GROUP BY
+    // joins so the planner picks index scans on the WHERE.
+    const [kpiRow, byStatus, byType, byMonth, recent] = await Promise.all([
+      rawQuery<{
+        total: string; openCount: string; closedCount: string;
+        totalPenalty: string; pendingPenalty: string;
+      }>(
+        `SELECT COUNT(*)::text AS total,
+                SUM(CASE WHEN v.status IN ('detected','open','invoiced','disputed') THEN 1 ELSE 0 END)::text AS "openCount",
+                SUM(CASE WHEN v.status IN ('paid','closed') THEN 1 ELSE 0 END)::text AS "closedCount",
+                COALESCE(SUM(v."penaltyAmount"), 0)::text AS "totalPenalty",
+                COALESCE(SUM(CASE WHEN v.status NOT IN ('paid','closed') THEN v."penaltyAmount" ELSE 0 END), 0)::text AS "pendingPenalty"
+           FROM umrah_violations v
+          WHERE ${where}`,
+        params,
+      ),
+      rawQuery<{ status: string; c: string; total: string }>(
+        `SELECT v.status, COUNT(*)::text AS c,
+                COALESCE(SUM(v."penaltyAmount"), 0)::text AS total
+           FROM umrah_violations v
+          WHERE ${where}
+          GROUP BY v.status
+          ORDER BY COUNT(*) DESC`,
+        params,
+      ),
+      rawQuery<{ type: string; c: string; total: string }>(
+        `SELECT v.type, COUNT(*)::text AS c,
+                COALESCE(SUM(v."penaltyAmount"), 0)::text AS total
+           FROM umrah_violations v
+          WHERE ${where}
+          GROUP BY v.type
+          ORDER BY COUNT(*) DESC`,
+        params,
+      ),
+      rawQuery<{ month: string; c: string; total: string }>(
+        `SELECT TO_CHAR(v."detectedAt", 'YYYY-MM') AS month,
+                COUNT(*)::text AS c,
+                COALESCE(SUM(v."penaltyAmount"), 0)::text AS total
+           FROM umrah_violations v
+          WHERE ${where}
+          GROUP BY TO_CHAR(v."detectedAt", 'YYYY-MM')
+          ORDER BY month DESC
+          LIMIT 12`,
+        params,
+      ),
+      rawQuery<{
+        id: number; type: string; status: string;
+        penaltyAmount: string | number; detectedAt: string;
+        description: string | null;
+        mutamerId: number | null; mutamerName: string | null;
+        agentId: number | null; agentName: string | null;
+      }>(
+        `SELECT v.id, v.type, v.status, v."penaltyAmount", v."detectedAt"::text AS "detectedAt", v.description,
+                v."mutamerId", p."fullName" AS "mutamerName",
+                v."agentId", a.name AS "agentName"
+           FROM umrah_violations v
+           LEFT JOIN umrah_pilgrims p ON p.id = v."mutamerId" AND p."companyId" = v."companyId" AND p."deletedAt" IS NULL
+           LEFT JOIN umrah_agents a   ON a.id = v."agentId"   AND a."companyId" = v."companyId" AND a."deletedAt" IS NULL
+          WHERE ${where}
+          ORDER BY v."detectedAt" DESC, v.id DESC
+          LIMIT 100`,
+        params,
+      ),
+    ]);
+
+    const k = kpiRow[0] ?? { total: "0", openCount: "0", closedCount: "0", totalPenalty: "0", pendingPenalty: "0" };
+    res.json(maskFields(req, {
+      kpis: {
+        total: Number(k.total),
+        openCount: Number(k.openCount),
+        closedCount: Number(k.closedCount),
+        totalPenalty: Number(k.totalPenalty),
+        pendingPenalty: Number(k.pendingPenalty),
+      },
+      byStatus: byStatus.map((r) => ({ status: r.status, count: Number(r.c), total: Number(r.total) })),
+      byType:   byType.map((r) => ({ type: r.type, count: Number(r.c), total: Number(r.total) })),
+      byMonth:  byMonth.map((r) => ({ month: r.month, count: Number(r.c), total: Number(r.total) })),
+      recent,
+    }));
+  } catch (err) { handleRouteError(err, res, "Violations summary"); }
+});
+
 export default router;
