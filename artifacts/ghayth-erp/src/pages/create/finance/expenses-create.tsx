@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { PAYMENT_METHOD_OPTIONS_WITH_CUSTODY as PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -88,13 +89,7 @@ const EXPENSE_TYPES = [
   { value: "other", label: "أخرى" },
 ];
 
-const PAYMENT_METHODS = [
-  { value: "cash", label: "نقدي" },
-  { value: "bank_transfer", label: "تحويل بنكي" },
-  { value: "check", label: "شيك" },
-  { value: "credit_card", label: "بطاقة ائتمان" },
-  { value: "custody", label: "من العهدة" },
-];
+
 
 const TAX_CATEGORIES = [
   { value: "", label: "بدون تصنيف" },
