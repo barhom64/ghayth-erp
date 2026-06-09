@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Users, Plane, Wallet, AlertTriangle, Shield, Calendar } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
+import { UmrahGroupCostBreakdownCard } from "@/components/shared/umrah-group-cost-breakdown-card";
 
 // Pilgrim status → Arabic label. Mirrors the constant on the agent
 // detail page (kept in sync via the smoke test pin on both pages).
@@ -486,6 +487,11 @@ export default function UmrahGroupDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* §6 cost-breakdown — per-category NUSK cost split + invoice list +
+          margin alert. Fetched lazily so the group detail page itself
+          stays snappy if there are no NUSK invoices yet. */}
+      {id && <UmrahGroupCostBreakdownCard groupId={id} />}
     </div>
   );
 
