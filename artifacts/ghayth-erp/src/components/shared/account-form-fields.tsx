@@ -5,6 +5,7 @@ import { Autocomplete } from "@/components/ui/autocomplete";
 import { Switch } from "@/components/ui/switch";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ACCOUNT_USAGE_LABELS_AR } from "@/lib/finance-account-usage";
+import { ACCOUNT_TYPES } from "@/lib/finance-type-maps";
 
 /**
  * Unified chart-of-accounts form (#1715 owner: «وحد نماذج الحسابات ورتبها»).
@@ -21,9 +22,8 @@ import { ACCOUNT_USAGE_LABELS_AR } from "@/lib/finance-account-usage";
  *   يقبل الترحيل / حساب تحليلي.
  */
 
-export const TYPE_LABELS: Record<string, string> = {
-  asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات",
-};
+// Re-exported from the shared map (single source — #1715 module review).
+export const TYPE_LABELS = ACCOUNT_TYPES;
 export const NATURE_LABELS: Record<string, string> = { debit: "مدين", credit: "دائن" };
 export const CHILDREN_USAGE_POLICY_LABELS: Record<string, string> = {
   inherit_locked: "إلزام تصنيف الأب (الأبناء يرثون ولا يُغيَّر)",

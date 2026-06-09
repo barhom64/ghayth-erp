@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PAYMENT_METHOD_OPTIONS as PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, getErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -16,12 +17,7 @@ import { EMPTY_ALLOCATION_TARGET, type AllocationTargetValue } from "@/component
 import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { todayLocal, formatCurrency } from "@/lib/formatters";
 
-const PAYMENT_METHODS = [
-  { value: "cash", label: "نقدي" },
-  { value: "bank_transfer", label: "تحويل بنكي" },
-  { value: "check", label: "شيك" },
-  { value: "credit_card", label: "بطاقة ائتمان" },
-];
+
 
 export default function CustomerAdvancesCreate() {
   const [, setLocation] = useLocation();
