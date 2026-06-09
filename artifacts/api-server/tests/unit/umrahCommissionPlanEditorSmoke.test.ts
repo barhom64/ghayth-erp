@@ -156,9 +156,14 @@ describe("editor — Bug 3: simulator works in BOTH create and edit modes", () =
     expect(EDITOR).toMatch(/`\/umrah\/commission-plans\/\$\{planRowId\}\/simulate`/);
   });
 
-  it("today's month/year is computed locally (operator skips a setup step)", () => {
-    expect(EDITOR).toMatch(/const month = now\.getMonth\(\) \+ 1/);
-    expect(EDITOR).toMatch(/const year = now\.getFullYear\(\)/);
+  it("today's month/year is computed via Riyadh helpers (check:finance-period-drift)", () => {
+    // The simulator schedules a JE in the user's month/year. Without
+    // the Riyadh-time helpers, a UTC-side clock that's 3h behind shifts
+    // the calculation month by a day at month boundaries — the
+    // finance-period-drift guard rejects raw new Date().getMonth() here.
+    expect(EDITOR).toMatch(/const month = Number\(currentMonthPaddedRiyadh\(\)\)/);
+    expect(EDITOR).toMatch(/const year = currentYearRiyadh\(\)/);
+    expect(EDITOR).toMatch(/import \{[\s\S]{0,200}currentMonthPaddedRiyadh[\s\S]{0,100}currentYearRiyadh/);
   });
 
   it("create-mode hint banner replaces the legacy 'save first' warning", () => {
