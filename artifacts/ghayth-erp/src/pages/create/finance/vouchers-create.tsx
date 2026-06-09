@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { PAYMENT_METHOD_OPTIONS as PAYMENT_METHODS, VOUCHER_OPERATIONS } from "@/lib/finance-type-maps";
+import { PAYMENT_METHOD_OPTIONS as PAYMENT_METHODS, VOUCHER_OPERATIONS, type TaxCodeOption } from "@/lib/finance-type-maps";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -28,15 +28,6 @@ import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/fo
 import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect, EmployeeSelect, ClientSelect, SupplierSelect } from "@/components/shared/entity-selects";
 import { Switch } from "@/components/ui/switch";
 
-interface TaxCodeOption {
-  id: number;
-  code: string;
-  name: string;
-  rate: number | string;
-  taxType: "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
-  isInclusiveDefault: boolean;
-  isActive: boolean;
-}
 
 const voucherTaxSplit = amountTaxSplit;
 
