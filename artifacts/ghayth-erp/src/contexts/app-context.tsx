@@ -60,7 +60,7 @@ export const roleKeyColors: Record<string, string> = {
   employee: "#95A5A6",
 };
 
-const ALL_HR_SUBS = ["employees", "attendance", "leaves", "payroll", "performance", "training", "organization", "recruitment", "violations", "shifts"];
+const ALL_HR_SUBS = ["employees", "attendance", "leaves", "payroll", "performance", "training", "organization", "recruitment", "violations", "shifts", "services"];
 
 const roleKeySubPages: Record<string, Record<string, string[]>> = {
   owner: { hr: [...ALL_HR_SUBS] },
