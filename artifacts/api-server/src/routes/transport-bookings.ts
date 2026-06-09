@@ -66,6 +66,27 @@ const TRANSPORT_SERVICE_TYPES = [
   "equipment_rental", "internal_transfer", "other",
 ] as const;
 
+// #1812 Comment 4663005810 — explicit cargo vs passenger family.
+// The booking row carries a `tripFamily` column (migration 284) so
+// every downstream surface (UI rendering, assignment engine filter,
+// reports, cargo operational metadata) can branch cleanly.
+const TRIP_FAMILIES = ["passenger", "cargo"] as const;
+
+function deriveTripFamily(
+  serviceType: typeof TRANSPORT_SERVICE_TYPES[number],
+  passengerCount?: number | null,
+  cargoWeight?: number | null,
+): typeof TRIP_FAMILIES[number] {
+  // Unambiguous mappings.
+  if (serviceType === "cargo_load") return "cargo";
+  if (serviceType === "passenger_umrah" || serviceType === "passenger_general") return "passenger";
+  // equipment_rental / internal_transfer / other: tip by data.
+  if ((passengerCount ?? 0) > 0) return "passenger";
+  if ((cargoWeight ?? 0) > 0) return "cargo";
+  // Default: equipment_rental tilts passenger (driver+1), the rest tilt cargo.
+  return serviceType === "equipment_rental" ? "passenger" : "cargo";
+}
+
 const BOOKING_STATUSES = [
   "draft", "submitted", "pending_approval", "approved",
   "scheduled", "dispatched", "in_progress", "completed",
@@ -88,6 +109,11 @@ const BOOKING_TRANSITIONS: Record<typeof BOOKING_STATUSES[number], string[]> = {
 const ROUTE_TYPES = [
   "airport_to_makkah", "makkah_to_madinah", "madinah_to_airport",
   "makkah_local", "madinah_local", "ziyarah", "custom",
+] as const;
+
+const LOCATION_KINDS = [
+  "airport", "gate", "hotel", "mazar", "warehouse",
+  "project", "customer_site", "depot", "mosque", "other",
 ] as const;
 
 const DISPATCH_STATUSES = [
@@ -119,6 +145,14 @@ const createBookingSchema = z.object({
   toLocationId: z.coerce.number().int().positive().optional(),
   fromLocationText: z.string().max(255).optional(),
   toLocationText: z.string().max(255).optional(),
+  fromLocationKind: z.enum(LOCATION_KINDS).optional(),
+  toLocationKind: z.enum(LOCATION_KINDS).optional(),
+  fromLat: z.coerce.number().min(-90).max(90).optional(),
+  fromLng: z.coerce.number().min(-180).max(180).optional(),
+  fromPlaceId: z.string().max(255).optional(),
+  toLat: z.coerce.number().min(-90).max(90).optional(),
+  toLng: z.coerce.number().min(-180).max(180).optional(),
+  toPlaceId: z.string().max(255).optional(),
   routeType: z.enum(ROUTE_TYPES).optional(),
   requestedPickupDate: z.string().optional(),
   requestedPickupTime: z.string().optional(),
@@ -160,20 +194,41 @@ const createBookingSchema = z.object({
   isFlexibleTime: z.boolean().optional(),
   priority: z.coerce.number().int().optional(),
   notes: z.string().max(2000).optional(),
+  // #1812 multi-leg — accept N legs in one create payload.
+  // The server-side INSERT happens atomically in withTransaction;
+  // if any leg fails validation, the booking header is rolled back.
+  // z.lazy avoids the forward-reference TDZ at module load time —
+  // bookingLineSchema is declared below.
+  lines: z.lazy(() => z.array(nestedBookingLineSchema).max(20)).optional(),
 });
 
 const updateBookingSchema = createBookingSchema.partial().extend({
   status: z.enum(BOOKING_STATUSES).optional(),
 });
 
+// #1812 multi-leg booking — line-level vocab extends the booking
+// header's. Lines without a lineNumber are auto-numbered server-side
+// when posted as part of the create-booking `lines: []` array.
 const bookingLineSchema = z.object({
-  lineNumber: z.coerce.number().int().positive(),
+  lineNumber: z.coerce.number().int().positive().optional(),
   requiredVehicleType: z.string().max(32).optional(),
   requiredCapacityKg: z.coerce.number().optional(),
   requiredSeatCount: z.coerce.number().int().optional(),
   requiredLicenseClass: z.string().max(32).optional(),
   fromLocationId: z.coerce.number().int().positive().optional(),
   toLocationId: z.coerce.number().int().positive().optional(),
+  // #1812 multi-leg — freeform + kind + geo on each leg.
+  fromLocationText: z.string().max(255).optional(),
+  toLocationText: z.string().max(255).optional(),
+  fromLocationKind: z.string().max(32).optional(),
+  toLocationKind: z.string().max(32).optional(),
+  fromLat: z.coerce.number().min(-90).max(90).optional(),
+  fromLng: z.coerce.number().min(-180).max(180).optional(),
+  fromPlaceId: z.string().max(255).optional(),
+  toLat: z.coerce.number().min(-90).max(90).optional(),
+  toLng: z.coerce.number().min(-180).max(180).optional(),
+  toPlaceId: z.string().max(255).optional(),
+  legRouteType: z.enum(ROUTE_TYPES).optional(),
   scheduledPickupAt: z.string().optional(),
   scheduledDeliveryAt: z.string().optional(),
   lineDescription: z.string().max(1000).optional(),
@@ -182,6 +237,11 @@ const bookingLineSchema = z.object({
   passengerCount: z.coerce.number().int().optional(),
   notes: z.string().max(1000).optional(),
 });
+
+// The bookingLine variant used when nested under create-booking's
+// `lines: []` array — lineNumber stays optional so the operator can
+// just append legs and the server auto-numbers them.
+const nestedBookingLineSchema = bookingLineSchema;
 
 const dispatchOrderSchema = z.object({
   bookingLineId: z.coerce.number().int().positive(),
@@ -222,7 +282,7 @@ const dispatchOrderRescheduleSchema = z.object({
 const createLocationSchema = z.object({
   code: z.string().max(32).optional(),
   name: z.string().min(1).max(255),
-  locationType: z.string().max(32).optional(),
+  locationType: z.enum(LOCATION_KINDS).optional(),
   city: z.string().max(128).optional(),
   address: z.string().max(500).optional(),
   latitude: z.coerce.number().optional(),
@@ -328,9 +388,125 @@ transportBookingsRouter.get(
           ORDER BY d."scheduledStartAt" ASC`,
         [id],
       );
-      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders } }));
+      // #1812 source context (operational review feedback: "النظام لا
+      // يستفيد بما يكفي من العمرة / CRM / العقود / المشاريع / الأوقاف /
+      // التقويم"). Resolve the upstream entity referenced by the
+      // bookingSource so the SPA can show contextual data without
+      // forcing the operator to click through other modules.
+      const sourceContext = await loadSourceContext(scope.companyId, booking);
+      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, sourceContext } }));
     } catch (err) {
       handleRouteError(err, res, "Get transport booking error:");
+    }
+  },
+);
+
+/**
+ * #1812 source-context resolver. Returns null when the booking is a
+ * manual_entry, otherwise pulls a compact summary of the upstream
+ * entity (umrah group / customer / contract / project).
+ *
+ * Defensive: each query is wrapped in catch(() => null) so a missing
+ * source row never breaks the booking detail page. The SPA renders
+ * the panel only when sourceContext !== null.
+ */
+async function loadSourceContext(
+  companyId: number,
+  booking: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const source = booking.bookingSource as string | undefined;
+  if (!source || source === "manual_entry") return null;
+
+  if (source === "umrah_group" && booking.umrahGroupId) {
+    const [g] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, name, "nuskGroupNumber" AS "groupNumber",
+              "mutamerCount", "programDuration",
+              "arrivalDate", "departureDate", "supervisorName" AS "umrahSupervisor"
+         FROM umrah_groups
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [booking.umrahGroupId, companyId],
+    ).catch(() => [null]);
+    return g ? { source: "umrah_group", entity: g } : null;
+  }
+
+  if (booking.customerId) {
+    const [c] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, name, phone, email, "customerType"
+         FROM clients
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [booking.customerId, companyId],
+    ).catch(() => [null]);
+    if (c) return { source, entity: c };
+  }
+
+  if (source === "contract_schedule" && booking.contractId) {
+    const [k] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "contractNumber", "startDate", "endDate", status
+         FROM contracts
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [booking.contractId, companyId],
+    ).catch(() => [null]);
+    if (k) return { source: "contract_schedule", entity: k };
+  }
+
+  if (booking.projectId) {
+    const [p] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, name, code, status FROM projects
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [booking.projectId, companyId],
+    ).catch(() => [null]);
+    if (p) return { source, entity: p };
+  }
+
+  return null;
+}
+
+// #1812 — booking confirmation document (user's gap #10).
+// Returns the booking + lines + dispatch + a QR data-URL the SPA can
+// drop into a printable confirmation page. The QR encodes a deeplink
+// payload so a scan can be reconciled against the live booking.
+transportBookingsRouter.get(
+  "/transport/bookings/:id/confirmation",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const [booking] = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!booking) throw new NotFoundError("الحجز غير موجود");
+      const lines = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM transport_booking_lines WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
+        [id],
+      );
+      const dispatchOrders = await rawQuery<Record<string, unknown>>(
+        `SELECT d.*, v."plateNumber" AS "vehiclePlate", dr.name AS "driverName", dr.phone AS "driverPhone"
+           FROM transport_dispatch_orders d
+           LEFT JOIN fleet_vehicles v ON v.id = d."vehicleId" AND v."companyId" = d."companyId"
+           LEFT JOIN fleet_drivers dr ON dr.id = d."driverId" AND dr."companyId" = d."companyId"
+          WHERE d."bookingId" = $1
+          ORDER BY d."scheduledStartAt" ASC`,
+        [id],
+      );
+      const qrPayload = `GHAYTH|TRANSPORT_BOOKING|${booking.bookingNumber}|${id}|${scope.companyId}`;
+      let qrDataUrl: string | null = null;
+      try {
+        // qrcode is already a project dep (ZATCA invoicing uses it).
+        const QRCode = (await import("qrcode")).default;
+        qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 200, margin: 1 });
+      } catch (err) {
+        logger.warn({ err }, "[transport-bookings] QR generation failed (decorative)");
+      }
+      res.json(maskFields(req, {
+        data: { ...booking, lines, dispatchOrders, qrDataUrl, qrPayload },
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Get transport booking confirmation error:");
     }
   },
 );
@@ -342,11 +518,16 @@ transportBookingsRouter.post(
     try {
       const scope = req.scope!;
       const b = zodParse(createBookingSchema.safeParse(req.body));
-      const { insertId } = await rawExecute(
+      // #1812 multi-leg — wrap booking header + lines in one transaction
+      // so a leg-validation failure rolls back the orphan header.
+      const { insertId, legsInserted } = await withTransaction(async () => {
+        const headerInsert = await rawExecute(
         `INSERT INTO transport_bookings
            ("companyId", "branchId", "bookingNumber", "bookingSource", "transportServiceType",
             "customerId", "customerName", "customerPhone", "contractId",
             "fromLocationId", "toLocationId", "fromLocationText", "toLocationText", "routeType",
+            "fromLocationKind", "toLocationKind",
+            "fromLat", "fromLng", "fromPlaceId", "toLat", "toLng", "toPlaceId",
             "requestedPickupDate", "requestedPickupTime", "requestedDeliveryDate", "requestedDeliveryTime",
             "cargoDescription", "cargoQuantity", "cargoUnit", "cargoWeight",
             "passengerCount", "umrahGroupId", "flightNumber", "supervisorName", "supervisorPhone",
@@ -357,21 +538,26 @@ transportBookingsRouter.post(
             "pickupWindowStart", "pickupWindowEnd",
             "dropoffWindowStart", "dropoffWindowEnd",
             "fixedAppointmentTime", "isFlexibleTime", priority,
-            notes, "createdBy")
-         VALUES ($1,$2,$3,$4,$5, $6,$7,$8,$9, $10,$11,$12,$13,$14, $15,$16,$17,$18,
-                 $19,$20,$21,$22, $23,$24,$25,$26,$27, $28,$29,
-                 $30,$31,$32,$33,$34,
-                 $35,$36,$37,
-                 $38,$39,
-                 $40,$41,
-                 $42,$43,
-                 $44,$45,$46,
-                 $47,$48)`,
+            notes, "createdBy", "tripFamily")
+         VALUES ($1,$2,$3,$4,$5, $6,$7,$8,$9, $10,$11,$12,$13,$14,
+                 $15,$16, $17,$18,$19,$20,$21,$22,
+                 $23,$24,$25,$26,
+                 $27,$28,$29,$30, $31,$32,$33,$34,$35, $36,$37,
+                 $38,$39,$40,$41,$42,
+                 $43,$44,$45,
+                 $46,$47,
+                 $48,$49,
+                 $50,$51,
+                 $52,$53,$54,
+                 $55,$56, $57)`,
         [
           scope.companyId, scope.branchId ?? null, b.bookingNumber,
           b.bookingSource ?? "manual_entry", b.transportServiceType,
           b.customerId ?? null, b.customerName ?? null, b.customerPhone ?? null, b.contractId ?? null,
           b.fromLocationId ?? null, b.toLocationId ?? null, b.fromLocationText ?? null, b.toLocationText ?? null, b.routeType ?? null,
+          b.fromLocationKind ?? null, b.toLocationKind ?? null,
+          b.fromLat ?? null, b.fromLng ?? null, b.fromPlaceId ?? null,
+          b.toLat ?? null, b.toLng ?? null, b.toPlaceId ?? null,
           b.requestedPickupDate ?? null, b.requestedPickupTime ?? null, b.requestedDeliveryDate ?? null, b.requestedDeliveryTime ?? null,
           b.cargoDescription ?? null, b.cargoQuantity ?? null, b.cargoUnit ?? null, b.cargoWeight ?? null,
           b.passengerCount ?? null, b.umrahGroupId ?? null, b.flightNumber ?? null, b.supervisorName ?? null, b.supervisorPhone ?? null,
@@ -386,15 +572,66 @@ transportBookingsRouter.post(
           b.fixedAppointmentTime ?? null, b.isFlexibleTime ?? false,
           b.priority ?? 0,
           b.notes ?? null, scope.userId,
+          // #1812 Comment 4663005810 — explicit tripFamily column.
+          deriveTripFamily(b.transportServiceType, b.passengerCount, b.cargoWeight),
         ],
-      );
-      assertInsert(insertId, "transport_bookings");
+        );
+        assertInsert(headerInsert.insertId, "transport_bookings");
+        const bookingId = headerInsert.insertId;
+
+        // #1812 multi-leg — atomically insert the lines payload if present.
+        // Server auto-numbers any leg that didn't supply lineNumber so the
+        // operator can just push legs onto an array without bookkeeping.
+        let inserted = 0;
+        if (b.lines && b.lines.length > 0) {
+          for (let i = 0; i < b.lines.length; i++) {
+            const leg = b.lines[i];
+            const lineNumber = leg.lineNumber ?? i + 1;
+            await rawExecute(
+              `INSERT INTO transport_booking_lines
+                 ("companyId", "bookingId", "lineNumber", "requiredVehicleType",
+                  "requiredCapacityKg", "requiredSeatCount", "requiredLicenseClass",
+                  "fromLocationId", "toLocationId",
+                  "fromLocationText", "toLocationText",
+                  "fromLocationKind", "toLocationKind",
+                  "fromLat", "fromLng", "fromPlaceId",
+                  "toLat", "toLng", "toPlaceId",
+                  "legRouteType",
+                  "scheduledPickupAt", "scheduledDeliveryAt",
+                  "lineDescription", quantity, "unitOfMeasure", "passengerCount", notes)
+               VALUES ($1,$2,$3,$4, $5,$6,$7, $8,$9, $10,$11, $12,$13,
+                       $14,$15,$16, $17,$18,$19, $20, $21,$22,
+                       $23,$24,$25,$26,$27)`,
+              [
+                scope.companyId, bookingId, lineNumber, leg.requiredVehicleType ?? null,
+                leg.requiredCapacityKg ?? null, leg.requiredSeatCount ?? null, leg.requiredLicenseClass ?? null,
+                leg.fromLocationId ?? null, leg.toLocationId ?? null,
+                leg.fromLocationText ?? null, leg.toLocationText ?? null,
+                leg.fromLocationKind ?? null, leg.toLocationKind ?? null,
+                leg.fromLat ?? null, leg.fromLng ?? null, leg.fromPlaceId ?? null,
+                leg.toLat ?? null, leg.toLng ?? null, leg.toPlaceId ?? null,
+                leg.legRouteType ?? null,
+                leg.scheduledPickupAt ?? null, leg.scheduledDeliveryAt ?? null,
+                leg.lineDescription ?? null, leg.quantity ?? null,
+                leg.unitOfMeasure ?? null, leg.passengerCount ?? null, leg.notes ?? null,
+              ],
+            );
+            inserted++;
+          }
+        }
+        return { insertId: bookingId, legsInserted: inserted };
+      });
+
       emitEvent({
         companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
         action: "fleet.booking.created", entity: "transport_bookings", entityId: insertId,
-        details: JSON.stringify({ bookingNumber: b.bookingNumber, serviceType: b.transportServiceType }),
+        details: JSON.stringify({
+          bookingNumber: b.bookingNumber,
+          serviceType: b.transportServiceType,
+          legsCount: legsInserted,
+        }),
       }).catch((e) => logger.error(e, "booking event failed"));
-      res.status(201).json({ data: { id: insertId } });
+      res.status(201).json({ data: { id: insertId, legsInserted } });
     } catch (err) {
       handleRouteError(err, res, "Create transport booking error:");
     }

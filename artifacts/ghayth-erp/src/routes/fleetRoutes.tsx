@@ -46,6 +46,9 @@ const TransportBookingDetail = lazy(() => import("@/pages/fleet/transport-bookin
 const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
 const TransportPriceRules = lazy(() => import("@/pages/fleet/transport-price-rules"));
 const TransportRulesAdmin = lazy(() => import("@/pages/fleet/transport-rules-admin"));
+// #1812 Comment 4663005810 — cargo recurring route patterns.
+const TransportRoutePatterns = lazy(() => import("@/pages/fleet/transport-route-patterns"));
+const TransportRoutePatternsCreate = lazy(() => import("@/pages/fleet/transport-route-patterns-create"));
 // #1812 Planning engine — ops dashboard + driver in-app navigation.
 const TransportOpsDashboard = lazy(() => import("@/pages/fleet/transport-ops-dashboard"));
 const MeDriverNavigation = lazy(() => import("@/pages/fleet/me-driver-navigation"));
@@ -115,6 +118,10 @@ export const fleetRoutes = [
   { path: "/fleet/transport/dispatch", component: TransportDispatch },
   { path: "/fleet/transport/price-rules", component: TransportPriceRules },
   { path: "/fleet/transport/rules", component: TransportRulesAdmin },
+  // #1812 Comment 4663005810 — cargo recurring patterns. /create must
+  // come before /:id so "create" isn't matched as an id.
+  { path: "/fleet/transport/route-patterns/create", component: TransportRoutePatternsCreate },
+  { path: "/fleet/transport/route-patterns", component: TransportRoutePatterns },
   // #1812 ops dashboard + driver navigation surfaces.
   { path: "/fleet/transport/ops-dashboard", component: TransportOpsDashboard },
   { path: "/fleet/transport/integration", component: TransportIntegration },
