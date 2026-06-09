@@ -35,6 +35,10 @@
 
 import { rawQuery, rawExecute } from "../rawdb.js";
 import { logger } from "../logger.js";
+import { config } from "../config.js";
+import {
+  googleEstimateRoute, googleGeocode, googleReverseGeocode, googleHealthCheck,
+} from "./mapsGoogleProvider.js";
 
 export type MapProvider = "manual_only" | "google_maps" | "mapbox" | "here_maps";
 
@@ -262,20 +266,43 @@ export const MapsService = {
     const cached = await readCache(req, provider);
     if (cached) return cached;
 
-    // For now, every provider falls back to manual_only because we
-    // haven't wired the external SDKs yet. The provider name is
-    // recorded faithfully in the cache row so once a real
-    // implementation lands it can be queried separately.
+    // Resolve the effective API key — prefer per-company setting,
+    // fall back to env var for single-tenant deployments.
+    const apiKey = settings.mapProviderApiKey || config.googleMapsApiKey;
+
+    // #1812 — try the real provider when configured. If it returns
+    // null (timeout, bad key, quota) fall back to manual_only and
+    // flag the result `isApproximate: true` so the SPA can show
+    // "تقدير تقريبي" instead of misleading exact numbers.
+    if (provider === "google_maps" && apiKey) {
+      const real = await googleEstimateRoute({
+        apiKey,
+        originLat: req.originLat,
+        originLng: req.originLng,
+        destinationLat: req.destinationLat,
+        destinationLng: req.destinationLng,
+      });
+      if (real) {
+        await writeCache(req, "google_maps", real, settings.estimateCacheTtlMinutes);
+        return {
+          ...real,
+          provider: "google_maps",
+          isCached: false,
+          isApproximate: false,
+        };
+      }
+      // Fall-through to manual on Google failure (already logged in provider).
+    }
+
+    // mapbox + here_maps still stubbed — fall back to manual.
     const effectiveProvider: MapProvider =
-      provider === "manual_only" || !settings.mapProviderApiKey
+      provider === "manual_only" || !apiKey || provider === "mapbox" || provider === "here_maps"
         ? "manual_only"
         : provider;
     const isApproximate = effectiveProvider === "manual_only";
 
     const calc = manualEstimate(req, settings);
-
     await writeCache(req, effectiveProvider, calc, settings.estimateCacheTtlMinutes);
-
     return {
       ...calc,
       provider: effectiveProvider,
@@ -310,16 +337,51 @@ export const MapsService = {
   },
 
   /**
-   * Geocoding — placeholder. Until a provider is wired, returns null
-   * so callers know to fall back to the user-typed address text. The
-   * shape is in place so adding provider impls later is purely
-   * additive.
+   * Geocoding — address → lat/lng + placeId. Routes through the
+   * configured provider, returns null on any failure so callers
+   * fall back to the user-typed address text.
    */
-  async geocode(_companyId: number, _address: string): Promise<{ lat: number; lng: number } | null> {
+  async geocode(
+    companyId: number, address: string,
+  ): Promise<{ lat: number; lng: number; formattedAddress?: string; placeId?: string } | null> {
+    const settings = await loadPlanningSettings(companyId);
+    const apiKey = settings.mapProviderApiKey || config.googleMapsApiKey;
+    if (settings.mapProvider === "google_maps" && apiKey) {
+      return googleGeocode({ apiKey, address });
+    }
     return null;
   },
 
-  async reverseGeocode(_companyId: number, _lat: number, _lng: number): Promise<string | null> {
+  async reverseGeocode(companyId: number, lat: number, lng: number): Promise<string | null> {
+    const settings = await loadPlanningSettings(companyId);
+    const apiKey = settings.mapProviderApiKey || config.googleMapsApiKey;
+    if (settings.mapProvider === "google_maps" && apiKey) {
+      return googleReverseGeocode({ apiKey, lat, lng });
+    }
     return null;
+  },
+
+  /**
+   * Health check for the active provider — verifies the API key
+   * actually works against the provider's API. Used by the admin
+   * planning-settings UI to give immediate feedback when the operator
+   * pastes a new key. Returns:
+   *   - "ok"             — key works, billing enabled
+   *   - "invalid_key"    — key rejected
+   *   - "quota_exceeded" — billing not enabled OR daily quota hit
+   *   - "network_error"  — couldn't reach provider
+   *   - "missing"        — no key supplied
+   *   - "not_supported"  — provider doesn't have a health check yet
+   */
+  async healthCheck(companyId: number): Promise<
+    "ok" | "invalid_key" | "quota_exceeded" | "network_error" | "missing" | "not_supported"
+  > {
+    const settings = await loadPlanningSettings(companyId);
+    const apiKey = settings.mapProviderApiKey || config.googleMapsApiKey;
+    if (settings.mapProvider === "manual_only") return "not_supported";
+    if (settings.mapProvider === "google_maps") {
+      return googleHealthCheck(apiKey);
+    }
+    return "not_supported";
   },
 };
