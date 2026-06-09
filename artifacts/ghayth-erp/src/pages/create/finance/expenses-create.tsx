@@ -381,7 +381,15 @@ export default function ExpensesCreate() {
       await createMut.mutateAsync({
         accountCode: form.accountCode || undefined,
         sourceAccountCode: form.sourceAccountCode || undefined,
-        amount: Number(form.amount),
+        // #1715 review — post the NET amount. The backend treats `amount` as net
+        // and adds VAT on top; when «شامل الضريبة» is on, form.amount is the GROSS
+        // the operator typed, so sending it raw posted gross+VAT (more than the
+        // on-screen preview). taxSplit.net == form.amount when NOT inclusive, so
+        // this only changes the inclusive case.
+        amount: Number(taxSplit.net),
+        // #1715 review — the «الحالة» selector was rendered but never sent, so the
+        // operator's draft/pending/posted choice was silently dropped.
+        status: form.status,
         description: [
           form.description,
           lineItem.itemName
