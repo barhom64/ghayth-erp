@@ -367,12 +367,81 @@ transportBookingsRouter.get(
           ORDER BY d."scheduledStartAt" ASC`,
         [id],
       );
-      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders } }));
+      // #1812 source context (operational review feedback: "النظام لا
+      // يستفيد بما يكفي من العمرة / CRM / العقود / المشاريع / الأوقاف /
+      // التقويم"). Resolve the upstream entity referenced by the
+      // bookingSource so the SPA can show contextual data without
+      // forcing the operator to click through other modules.
+      const sourceContext = await loadSourceContext(scope.companyId, booking);
+      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, sourceContext } }));
     } catch (err) {
       handleRouteError(err, res, "Get transport booking error:");
     }
   },
 );
+
+/**
+ * #1812 source-context resolver. Returns null when the booking is a
+ * manual_entry, otherwise pulls a compact summary of the upstream
+ * entity (umrah group / customer / contract / project).
+ *
+ * Defensive: each query is wrapped in catch(() => null) so a missing
+ * source row never breaks the booking detail page. The SPA renders
+ * the panel only when sourceContext !== null.
+ */
+async function loadSourceContext(
+  companyId: number,
+  booking: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const source = booking.bookingSource as string | undefined;
+  if (!source || source === "manual_entry") return null;
+
+  if (source === "umrah_group" && booking.umrahGroupId) {
+    const [g] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, name, "nuskGroupNumber" AS "groupNumber",
+              "mutamerCount", "programDuration",
+              "arrivalDate", "departureDate", "supervisorName" AS "umrahSupervisor"
+         FROM umrah_groups
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [booking.umrahGroupId, companyId],
+    ).catch(() => [null]);
+    return g ? { source: "umrah_group", entity: g } : null;
+  }
+
+  if (booking.customerId) {
+    const [c] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, name, phone, email, "customerType"
+         FROM clients
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [booking.customerId, companyId],
+    ).catch(() => [null]);
+    if (c) return { source, entity: c };
+  }
+
+  if (source === "contract_schedule" && booking.contractId) {
+    const [k] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "contractNumber", "startDate", "endDate", status
+         FROM contracts
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [booking.contractId, companyId],
+    ).catch(() => [null]);
+    if (k) return { source: "contract_schedule", entity: k };
+  }
+
+  if (booking.projectId) {
+    const [p] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, name, code, status FROM projects
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [booking.projectId, companyId],
+    ).catch(() => [null]);
+    if (p) return { source, entity: p };
+  }
+
+  return null;
+}
 
 // #1812 — booking confirmation document (user's gap #10).
 // Returns the booking + lines + dispatch + a QR data-URL the SPA can
