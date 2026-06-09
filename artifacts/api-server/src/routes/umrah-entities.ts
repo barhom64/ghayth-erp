@@ -41,6 +41,10 @@ import {
   simulateCommission,
   calculateAllForCompany,
 } from "../lib/umrahCommissionEngine.js";
+import {
+  createTransportRequestFromUmrah,
+  listTransportRequestsForGroup,
+} from "../lib/umrahTransportContract.js";
 import { logger } from "../lib/logger.js";
 import { renderPrint } from "../lib/print/printService.js";
 
@@ -935,6 +939,65 @@ router.delete("/groups/:id", authorize({ feature: "umrah", action: "delete" }), 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.group.deleted", entity: "umrah_groups", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah groups bg"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete group"); }
+});
+
+// ============================================================================
+// SERVICE CONTRACT — umrah → transport (§7 of #1870)
+// ============================================================================
+//
+// Thin HTTP layer over `lib/umrahTransportContract.ts`. The engine
+// library owns the schema knowledge + event emission; these routes
+// just adapt the request/response shape.
+
+const transportRequestSchema = z.object({
+  seasonId: z.coerce.number().int().positive().optional(),
+  pilgrimsCount: z.coerce.number().int().nonnegative().optional(),
+  dateTime: z.string().optional(),
+  fromLocation: z.string().trim().min(1, "نقطة الانطلاق مطلوبة"),
+  toLocation: z.string().trim().min(1, "الوجهة مطلوبة"),
+  routeType: z.enum([
+    "airport_to_makkah", "makkah_to_madinah", "madinah_to_airport",
+    "makkah_local", "madinah_local", "ziyarah", "custom",
+  ]).optional(),
+  requiredVehicleType: z.string().trim().optional(),
+  flightNumber: z.string().trim().optional(),
+  notes: z.string().trim().optional(),
+});
+
+router.post("/groups/:id/transport-requests", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const groupId = parseId(req.params.id, "id");
+    const b = zodParse(transportRequestSchema.safeParse(req.body));
+    const result = await createTransportRequestFromUmrah(
+      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      {
+        groupId,
+        seasonId: b.seasonId ?? null,
+        pilgrimsCount: b.pilgrimsCount ?? null,
+        dateTime: b.dateTime ?? null,
+        fromLocation: b.fromLocation,
+        toLocation: b.toLocation,
+        routeType: b.routeType ?? null,
+        requiredVehicleType: b.requiredVehicleType ?? null,
+        flightNumber: b.flightNumber ?? null,
+        notes: b.notes ?? null,
+      },
+    );
+    res.status(201).json(result);
+  } catch (err) { handleRouteError(err, res, "Create transport request"); }
+});
+
+router.get("/groups/:id/transport-requests", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const groupId = parseId(req.params.id, "id");
+    const rows = await listTransportRequestsForGroup(
+      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      groupId,
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) { handleRouteError(err, res, "List transport requests"); }
 });
 
 // ============================================================================
