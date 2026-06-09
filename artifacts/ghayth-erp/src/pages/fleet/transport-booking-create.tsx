@@ -18,6 +18,7 @@ import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
 import { BookingSourceSelector, type BookingSourcePrefill } from "@/components/shared/booking-source-selector";
 import { LocationKindPicker } from "@/components/shared/location-kind-picker";
 import { MultiLegBookingEditor, type BookingLeg, legsToApiPayload } from "@/components/shared/multi-leg-booking-editor";
+import { UmrahContextQuestionnaire } from "@/components/shared/umrah-context-questionnaire";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
@@ -302,6 +303,29 @@ export default function TransportBookingCreate() {
             </div>
           </CardContent>
         </Card>
+
+        {/* #1812 umrah context (user's gap #2). Activates ONLY when the
+            service type is passenger_umrah. Walks the operator through
+            the 4 discovery questions (group / flight / hotel / supervisor)
+            and links each "yes" answer to the matching picker/field. */}
+        <UmrahContextQuestionnaire
+          active={isUmrah}
+          umrahGroupId={umrahGroupId}
+          flightNumber={flightNumber}
+          hotelName={hotelName}
+          supervisorName={supervisorName}
+          supervisorPhone={supervisorPhone}
+          routeType={routeType}
+          setUmrahGroupId={setUmrahGroupId}
+          setPassengerCount={setPassengerCount}
+          setCustomerName={setCustomerName}
+          setFlightNumber={setFlightNumber}
+          setHotelName={setHotelName}
+          setSupervisorName={setSupervisorName}
+          setSupervisorPhone={setSupervisorPhone}
+          setRouteType={setRouteType}
+          setBookingSource={setBookingSource}
+        />
 
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">المسار والتوقيت</CardTitle></CardHeader>
