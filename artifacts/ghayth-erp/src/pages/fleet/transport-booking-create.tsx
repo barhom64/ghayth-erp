@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
 import { BookingSourceSelector, type BookingSourcePrefill } from "@/components/shared/booking-source-selector";
+import { LocationKindPicker } from "@/components/shared/location-kind-picker";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
@@ -67,21 +68,16 @@ export default function TransportBookingCreate() {
   const [contractId, setContractId] = useState<string>("");
   const [projectId, setProjectId] = useState<string>("");
   const [recurringTemplateId, setRecurringTemplateId] = useState<string>("");
-
-  const applyPrefill = (p: BookingSourcePrefill) => {
-    setBookingSource(p.bookingSource);
-    if (p.customerId) setCustomerId(String(p.customerId));
-    if (p.customerName) setCustomerName(p.customerName);
-    if (p.customerPhone) setCustomerPhone(p.customerPhone);
-    if (p.contractId) setContractId(String(p.contractId));
-    if (p.projectId) setProjectId(String(p.projectId));
-    if (p.umrahGroupId) setUmrahGroupId(String(p.umrahGroupId));
-    if (p.passengerCount != null) setPassengerCount(String(p.passengerCount));
-    if (p.recurringTemplateId) setRecurringTemplateId(String(p.recurringTemplateId));
-  };
   const [customerPhone, setCustomerPhone] = useState("");
   const [fromLocationText, setFromLocationText] = useState("");
   const [toLocationText, setToLocationText] = useState("");
+  const [fromLocationKind, setFromLocationKind] = useState<string | undefined>();
+  const [toLocationKind, setToLocationKind] = useState<string | undefined>();
+  const [fromLat, setFromLat] = useState("");
+  const [fromLng, setFromLng] = useState("");
+  const [toLat, setToLat] = useState("");
+  const [toLng, setToLng] = useState("");
+  const [showGeoFields, setShowGeoFields] = useState(false);
   const [requestedPickupDate, setRequestedPickupDate] = useState("");
   const [requestedPickupTime, setRequestedPickupTime] = useState("");
   const [requestedDeliveryDate, setRequestedDeliveryDate] = useState("");
@@ -117,6 +113,20 @@ export default function TransportBookingCreate() {
   const [isFlexibleTime, setIsFlexibleTime] = useState(false);
   const [priority, setPriority] = useState<string>("0");
 
+  // #1812 source-driven booking — applyPrefill is defined AFTER all
+  // useState hooks so JS hoisting doesn't break the setter references.
+  const applyPrefill = (p: BookingSourcePrefill) => {
+    setBookingSource(p.bookingSource);
+    if (p.customerId) setCustomerId(String(p.customerId));
+    if (p.customerName) setCustomerName(p.customerName);
+    if (p.customerPhone) setCustomerPhone(p.customerPhone);
+    if (p.contractId) setContractId(String(p.contractId));
+    if (p.projectId) setProjectId(String(p.projectId));
+    if (p.umrahGroupId) setUmrahGroupId(String(p.umrahGroupId));
+    if (p.passengerCount != null) setPassengerCount(String(p.passengerCount));
+    if (p.recurringTemplateId) setRecurringTemplateId(String(p.recurringTemplateId));
+  };
+
   const isCargo = transportServiceType === "cargo_load";
   const isUmrah = transportServiceType === "passenger_umrah";
   const isPassenger = transportServiceType.startsWith("passenger_");
@@ -142,6 +152,12 @@ export default function TransportBookingCreate() {
         customerPhone: customerPhone.trim() || undefined,
         fromLocationText: fromLocationText.trim() || undefined,
         toLocationText: toLocationText.trim() || undefined,
+        fromLocationKind: fromLocationKind || undefined,
+        toLocationKind: toLocationKind || undefined,
+        fromLat: fromLat ? Number(fromLat) : undefined,
+        fromLng: fromLng ? Number(fromLng) : undefined,
+        toLat: toLat ? Number(toLat) : undefined,
+        toLng: toLng ? Number(toLng) : undefined,
         requestedPickupDate: requestedPickupDate || undefined,
         requestedPickupTime: requestedPickupTime || undefined,
         requestedDeliveryDate: requestedDeliveryDate || undefined,
@@ -284,13 +300,62 @@ export default function TransportBookingCreate() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">المسار والتوقيت</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="from">من</Label>
               <Input id="from" value={fromLocationText} onChange={(e) => setFromLocationText(e.target.value)} placeholder="موقع التحميل" />
+              <LocationKindPicker
+                id="fromKind"
+                value={fromLocationKind}
+                onChange={setFromLocationKind}
+                placeholder="نوع موقع التحميل"
+              />
+              {showGeoFields && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number" step="0.0000001" value={fromLat}
+                    onChange={(e) => setFromLat(e.target.value)}
+                    placeholder="خط العرض"
+                  />
+                  <Input
+                    type="number" step="0.0000001" value={fromLng}
+                    onChange={(e) => setFromLng(e.target.value)}
+                    placeholder="خط الطول"
+                  />
+                </div>
+              )}
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="to">إلى</Label>
               <Input id="to" value={toLocationText} onChange={(e) => setToLocationText(e.target.value)} placeholder="موقع التسليم" />
+              <LocationKindPicker
+                id="toKind"
+                value={toLocationKind}
+                onChange={setToLocationKind}
+                placeholder="نوع موقع التسليم"
+              />
+              {showGeoFields && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number" step="0.0000001" value={toLat}
+                    onChange={(e) => setToLat(e.target.value)}
+                    placeholder="خط العرض"
+                  />
+                  <Input
+                    type="number" step="0.0000001" value={toLng}
+                    onChange={(e) => setToLng(e.target.value)}
+                    placeholder="خط الطول"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="md:col-span-2">
+              <button
+                type="button"
+                className="text-xs text-status-info-foreground hover:underline"
+                onClick={() => setShowGeoFields((s) => !s)}
+              >
+                {showGeoFields ? "إخفاء إحداثيات GPS" : "أضف إحداثيات GPS (اختياري)"}
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
