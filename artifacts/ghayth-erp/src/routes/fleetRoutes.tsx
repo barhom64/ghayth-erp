@@ -43,6 +43,7 @@ const CargoDetail = lazy(() => import("@/pages/fleet/cargo-detail"));
 const TransportBookings = lazy(() => import("@/pages/fleet/transport-bookings"));
 const TransportBookingCreate = lazy(() => import("@/pages/fleet/transport-booking-create"));
 const TransportBookingDetail = lazy(() => import("@/pages/fleet/transport-booking-detail"));
+const TransportBookingConfirmation = lazy(() => import("@/pages/fleet/transport-booking-confirmation"));
 const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
 const TransportPriceRules = lazy(() => import("@/pages/fleet/transport-price-rules"));
 const TransportRulesAdmin = lazy(() => import("@/pages/fleet/transport-rules-admin"));
@@ -111,6 +112,8 @@ export const fleetRoutes = [
   { path: "/fleet/transport/bookings", component: TransportBookings },
   // /create must be listed BEFORE /:id so "create" isn't matched as an id.
   { path: "/fleet/transport/bookings/create", component: TransportBookingCreate },
+  // /confirmation must come before /:id so "confirmation" isn't matched as an id.
+  { path: "/fleet/transport/bookings/:id/confirmation", component: TransportBookingConfirmation },
   { path: "/fleet/transport/bookings/:id", component: TransportBookingDetail },
   { path: "/fleet/transport/dispatch", component: TransportDispatch },
   { path: "/fleet/transport/price-rules", component: TransportPriceRules },
