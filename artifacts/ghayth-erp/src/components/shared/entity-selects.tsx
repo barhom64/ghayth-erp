@@ -405,6 +405,46 @@ export const AccountSelect = buildEntitySelect({
   getSublabel: (r) => r?.type || "",
 });
 
+// #1715 (module review) — shared variants so the JE + tax/WHT forms stop
+// hand-rolling account dropdowns:
+//   PostingAccountSelect — postable accounts only (manual-journal lines), by code.
+//   AccountIdSelect      — emits the account ID (FK), for forms that store accountId.
+export const PostingAccountSelect = buildEntitySelect({
+  queryKey: "accounts-posting",
+  endpoint: "/finance/accounts?postingOnly=true",
+  defaultLabel: "الحساب",
+  defaultPlaceholder: "اختر الحساب",
+  searchPlaceholder: "ابحث عن حساب (اسم أو رقم)...",
+  createTitle: "إضافة حساب جديد",
+  createLabel: "+ حساب جديد",
+  createApiPath: "/finance/accounts",
+  createFields: [
+    { key: "code", label: "رقم الحساب", required: true },
+    { key: "name", label: "اسم الحساب", required: true },
+  ],
+  getValueField: "code",
+  getName: (r) => r?.name ? `${r.code} - ${r.name}` : r?.code || `#${r?.id}`,
+  getSublabel: (r) => r?.type || "",
+});
+
+export const AccountIdSelect = buildEntitySelect({
+  queryKey: "chart-of-accounts",
+  endpoint: "/finance/accounts?limit=500",
+  defaultLabel: "الحساب",
+  defaultPlaceholder: "اختر الحساب",
+  searchPlaceholder: "ابحث عن حساب (اسم أو رقم)...",
+  createTitle: "إضافة حساب جديد",
+  createLabel: "+ حساب جديد",
+  createApiPath: "/finance/accounts",
+  createFields: [
+    { key: "code", label: "رقم الحساب", required: true },
+    { key: "name", label: "اسم الحساب", required: true },
+  ],
+  getValueField: "id",
+  getName: (r) => r?.name ? `${r.code} - ${r.name}` : r?.code || `#${r?.id}`,
+  getSublabel: (r) => r?.type || "",
+});
+
 export const VehicleSelect = buildEntitySelect({
   queryKey: "fleet-list",
   // Must hit the real vehicles list/create route. `/fleet` has no root GET,
