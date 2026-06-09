@@ -7932,7 +7932,7 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
     const b = zodParse(companyDocumentSchema.safeParse(req.body)) as any;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO company_documents ("companyId",title,type,"expiryDate",notes)
+      `INSERT INTO company_documents ("companyId","documentType","documentNumber","expiryDate",notes)
        VALUES ($1,$2,$3,$4,$5)`,
       [scope.companyId, b.documentType || b.title, b.documentNumber || b.type || null,
        b.expiryDate || null, b.notes || null]

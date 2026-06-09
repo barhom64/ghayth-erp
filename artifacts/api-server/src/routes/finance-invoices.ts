@@ -1164,10 +1164,30 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           }
         }
 
+        // #1715 correctness review (M4) — prorate a header discount across the
+        // dimension-tagged revenue buckets. The buckets sum GROSS line totals
+        // (postedNet), but the invoice recognises NET revenue (totalNet); the
+        // old code dumped the whole discount onto the generic account below, so
+        // per-dimension revenue was overstated and the generic account absorbed
+        // the entire discount. Scaling every bucket by totalNet/postedNet spreads
+        // the discount proportionally; the tiny rounding residual still falls on
+        // the generic fallback. Only fires when there's a real divergence (a
+        // discount), so the no-discount path is unchanged. Σ revenue is
+        // preserved, so the JE still balances against the AR debit.
+        if (postedNet > 0.005 && Math.abs(totalNet - postedNet) >= 0.005) {
+          const ratio = totalNet / postedNet;
+          let scaledSum = 0;
+          for (const b of buckets.values()) {
+            b.amount = roundTo2(b.amount * ratio);
+            scaledSum = roundTo2(scaledSum + b.amount);
+          }
+          postedNet = scaledSum;
+        }
+
         // If the sum of line totals diverges from invoice.total-vat (e.g.
-        // legacy invoice with header-level total and no lines), let the
-        // remainder fall on the generic account so the entry still
-        // balances against the AR debit.
+        // legacy invoice with header-level total and no lines, or the rounding
+        // residual from the proration above), let the remainder fall on the
+        // generic account so the entry still balances against the AR debit.
         const diff = roundTo2(totalNet - postedNet);
         if (Math.abs(diff) >= 0.005) {
           // Bucket key has 14 dimension slots after `acct` — keep them
@@ -2001,7 +2021,12 @@ invoicesRouter.get("/invoices/:id", authorize({ feature: "finance.invoices", act
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     const lines = await rawQuery<Record<string, unknown>>(`SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id LIMIT 500`, [id]);
     const [payments, journalEntries] = await Promise.all([
-      rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl."accountCode" = '1100' AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
+      // #1715 correctness review (M3) — identify the payment by its PAY-<ref>
+      // JE and sum its single DEBIT leg (the cash/bank inflow = paymentAmount).
+      // The old `accountCode = '1100'` filter dropped bank/other-cash payments
+      // entirely (DR 1110 or a tenant-mapped account); the payment JE has
+      // exactly one debit leg, so SUM(debit) is the amount for ANY cash account.
+      rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
       rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND (je.ref LIKE $2 OR je.ref LIKE $3) ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `JE-${invoice.ref}%`, `PAY-${invoice.ref}%`]),
     ]);
     res.json(maskFields(req, { ...invoice, lines, payments, journalEntries }));
@@ -2312,6 +2337,18 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
+    // #1715 correctness review (H1) — approval MUST post the revenue/AR/VAT JE.
+    // This status-only path posted NO GL, stranding the invoice as "approved"
+    // with no ledger impact (and POST /invoices/:id/post then only flips
+    // approved→posted, so the JE never appeared). The GL-posting approval lives
+    // at POST /invoices/:id/approve — route approvals there. This function keeps
+    // serving reject/return (which correctly post the GL reversal).
+    if (newStatus === "approved") {
+      throw new ConflictError(
+        "اعتماد الفاتورة يجب أن يمرّ عبر مسار الترحيل المحاسبي",
+        { field: "status", fix: "استخدم POST /finance/invoices/:id/approve لاعتماد الفاتورة مع ترحيل القيد (إيراد/ذمم/ضريبة)" }
+      );
+    }
     const { notes } = zodParse(invoiceApprovalActionSchema.safeParse(req.body ?? {}));
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(
@@ -3970,7 +4007,12 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     // (same pattern as credit-memo / debit-memo).
     const { financialEngine } = await import("../lib/engines/index.js");
     const [cashCode, advLiabCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "debit", "1100"),
+      // A customer advance is customer money coming IN — resolve the cash/bank
+      // account the SAME way the customer-payment route does (invoice_payment_cash),
+      // not the payroll-payout purpose. The old "payroll_bank_payout" key has no
+      // debit-side mapping, so it fell through to the non-postable header 1100 and
+      // the advance failed to post on tenants whose 1100 isn't a posting account.
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
       financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2400"),
     ]);
 

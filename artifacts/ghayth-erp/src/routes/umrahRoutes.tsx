@@ -67,6 +67,8 @@ const UmrahReportsHub = lazy(() => import("@/pages/umrah/reports/index"));
 const UmrahAgentBalancesReport = lazy(() => import("@/pages/umrah/reports/agent-balances"));
 const UmrahSubAgentBalancesReport = lazy(() => import("@/pages/umrah/reports/subagent-balances"));
 const UmrahPilgrimMovementsReport = lazy(() => import("@/pages/umrah/reports/pilgrim-movements"));
+const UmrahGroupProfitabilityReport = lazy(() => import("@/pages/umrah/reports/profitability"));
+const UmrahAgentProfitabilityReport = lazy(() => import("@/pages/umrah/reports/agent-profitability"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -113,6 +115,8 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/reports/agent-balances", component: UmrahAgentBalancesReport, module: "operations" },
   { path: "/umrah/reports/subagent-balances", component: UmrahSubAgentBalancesReport, module: "operations" },
   { path: "/umrah/reports/pilgrim-movements", component: UmrahPilgrimMovementsReport, module: "operations" },
+  { path: "/umrah/reports/group-profitability", component: UmrahGroupProfitabilityReport, module: "operations" },
+  { path: "/umrah/reports/agent-profitability", component: UmrahAgentProfitabilityReport, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },
