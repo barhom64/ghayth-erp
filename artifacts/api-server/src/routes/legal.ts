@@ -1099,11 +1099,11 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
       if (sessionDate > new Date()) {
         await rawExecute(
           `INSERT INTO tasks (
-             title, description, status, priority, "scheduledDate",
+             type, title, description, status, priority, "scheduledDate",
              "linkedEntityType", "linkedEntityId",
              "companyId", "branchId"
            )
-           VALUES ($1,$2,'open',$3,$4,'legal_sessions',$5,$6,$7)`,
+           VALUES ('follow_up',$1,$2,'open',$3,$4,'legal_sessions',$5,$6,$7)`,
           [
             `جلسة قضائية: ${legalCase.title}`,
             `جلسة بتاريخ ${b.sessionDate} — ${b.location || legalCase.court || ''}${b.judge ? ` — القاضي ${b.judge}` : ''}`,
