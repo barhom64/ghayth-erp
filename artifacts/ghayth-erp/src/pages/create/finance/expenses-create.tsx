@@ -25,6 +25,7 @@ import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, Employ
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { EMPTY_ALLOCATION_TARGET, buildOperationalEffectsPayload, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
 import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
+import { DOCUMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, POSTING_STATUS_LABELS } from "@/lib/finance/status-model";
 import { useAppContext } from "@/contexts/app-context";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
@@ -222,9 +223,7 @@ export default function ExpensesCreate() {
     relatedEntityName: "",
     attachmentUrl: "",
     attachmentType: "invoice",
-    isPaid: true,
     autoDescription: false,
-    status: "draft",
     isTaxLinked: false,
     invoiceTypeCode: "388",
     taxCategoryCode: "S",
@@ -364,9 +363,6 @@ export default function ExpensesCreate() {
         // on-screen preview). taxSplit.net == form.amount when NOT inclusive, so
         // this only changes the inclusive case.
         amount: Number(taxSplit.net),
-        // #1715 review — the «الحالة» selector was rendered but never sent, so the
-        // operator's draft/pending/posted choice was silently dropped.
-        status: form.status,
         description: [
           form.description,
           lineItem.itemName
@@ -393,7 +389,6 @@ export default function ExpensesCreate() {
         relatedEntityName: form.relatedEntityName || undefined,
         attachmentUrl: form.attachmentUrl || undefined,
         attachmentType: form.attachmentType || undefined,
-        isPaid: form.isPaid,
         autoDescription: form.autoDescription,
         isTaxLinked: form.isTaxLinked,
         invoiceTypeCode: form.isTaxLinked ? form.invoiceTypeCode : undefined,
@@ -895,23 +890,28 @@ export default function ExpensesCreate() {
           </div>
         </div>
 
+        {/* #1945 — الحالة/الدفع/الترحيل مفصولة وغير قابلة للعبث اليدوي.
+            «تم الدفع» و«الحالة» القديمتان كانتا بلا أثر فعلي (القيد يُرحَّل
+            ويخرج المال بصرف النظر عنهما، و«في انتظار الموافقة» كانت تُرفض من
+            الخادم)، فأُزيلتا. الحالة الحقيقية تُحسم على الخادم بعد الحفظ حسب
+            سياسة الاعتماد، وتُعرض هنا بشفافية على ثلاثة محاور منفصلة. */}
         <div className="border rounded-lg p-4 mb-4 space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">الحالة</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormFieldWrapper label="الحالة">
-              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">مسودة</SelectItem>
-                  <SelectItem value="pending">في انتظار الموافقة</SelectItem>
-                  <SelectItem value="posted">مرحّل</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormFieldWrapper>
-            <div className="flex items-center gap-3 mt-6">
-              <Checkbox id="isPaid" checked={form.isPaid}
-                onCheckedChange={(v) => setForm({ ...form, isPaid: v === true })} />
-              <label htmlFor="isPaid" className="text-sm cursor-pointer">تم الدفع</label>
+          <h3 className="font-semibold text-sm text-muted-foreground">الحالة والدفع والترحيل</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground mb-1">حالة المستند</div>
+              <div className="font-medium">{DOCUMENT_STATUS_LABELS.draft} ← {DOCUMENT_STATUS_LABELS.approved}</div>
+              <p className="text-xs text-muted-foreground mt-1">تُحسم بعد الحفظ: تُعتمد فورًا إن لم تتجاوز حدّ الاعتماد، وإلا تُرسَل للاعتماد.</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground mb-1">حالة الدفع</div>
+              <div className="font-medium">{form.sourceAccountCode ? PAYMENT_STATUS_LABELS.paid : PAYMENT_STATUS_LABELS.unpaid}</div>
+              <p className="text-xs text-muted-foreground mt-1">{form.sourceAccountCode ? "يخرج المال من «مصدر الصرف» المحدّد." : "اختر «مصدر الصرف» لينتج أثر خروج المال."}</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground mb-1">حالة الترحيل</div>
+              <div className="font-medium">{POSTING_STATUS_LABELS.posted}</div>
+              <p className="text-xs text-muted-foreground mt-1">يُرحَّل القيد فور الحفظ (أو بعد الاعتماد إن لزم).</p>
             </div>
           </div>
         </div>
