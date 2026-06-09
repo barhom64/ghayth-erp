@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PAYMENT_METHOD_OPTIONS_WITH_CUSTODY as PAYMENT_METHODS } from "@/lib/finance-type-maps";
+import { PAYMENT_METHOD_OPTIONS_WITH_CUSTODY as PAYMENT_METHODS, INVOICE_TYPE_CODES, TAX_CATEGORY_CODES, type TaxCodeOption } from "@/lib/finance-type-maps";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -34,16 +34,6 @@ import { LiveImpactPreview } from "@/components/shared/impact-preview";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
-interface TaxCodeOption {
-  id: number;
-  code: string;
-  name: string;
-  rate: number | string;
-  taxType: "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
-  zatcaCategoryCode: string | null;
-  isInclusiveDefault: boolean;
-  isActive: boolean;
-}
 
 const expenseTaxSplit = amountTaxSplit;
 
@@ -100,19 +90,6 @@ const TAX_CATEGORIES = [
 ];
 
 const ATTACHMENT_REQUIRED_TYPES = ["vendor_invoice", "purchase", "custody_settlement", "advance_claim", "legal_fee"];
-
-const INVOICE_TYPE_CODES = [
-  { value: "388", label: "فاتورة ضريبية (388)" },
-  { value: "381", label: "إشعار دائن (381)" },
-  { value: "383", label: "إشعار مدين (383)" },
-];
-
-const TAX_CATEGORY_CODES = [
-  { value: "S", label: "خاضع للضريبة (S)" },
-  { value: "Z", label: "نسبة صفرية (Z)" },
-  { value: "E", label: "معفى (E)" },
-  { value: "O", label: "خارج نطاق الضريبة (O)" },
-];
 
 function generateAutoDescription(params: {
   operationType: string;

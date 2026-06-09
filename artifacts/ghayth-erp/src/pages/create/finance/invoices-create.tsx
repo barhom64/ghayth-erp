@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { INVOICE_TYPE_CODES, TAX_CATEGORY_CODES } from "@/lib/finance-type-maps";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -30,19 +31,6 @@ interface TaxCode {
   isInclusiveDefault?: boolean;
   isActive: boolean;
 }
-
-const INVOICE_TYPE_CODES = [
-  { value: "388", label: "فاتورة ضريبية (388)" },
-  { value: "381", label: "إشعار دائن (381)" },
-  { value: "383", label: "إشعار مدين (383)" },
-];
-
-const TAX_CATEGORY_CODES = [
-  { value: "S", label: "خاضع للضريبة (S)" },
-  { value: "Z", label: "نسبة صفرية (Z)" },
-  { value: "E", label: "معفى (E)" },
-  { value: "O", label: "خارج نطاق الضريبة (O)" },
-];
 
 const PAYMENT_TERMS_OPTIONS = [
   { value: "", label: "اختر شروط الدفع" },
