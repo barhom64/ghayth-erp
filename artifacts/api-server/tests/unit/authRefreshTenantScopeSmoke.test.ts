@@ -18,14 +18,19 @@ import { join } from "node:path";
  * `companyId`. Static tenant-isolation guard at
  * tests/integration/tenantIsolation.test.ts now passes — the
  * employee_assignments call site is companyId-aware.
+ *
+ * NOTE: the refresh rotation logic (and this tenant-scoped query)
+ * was lifted verbatim out of `routes/auth.ts` into the shared
+ * `lib/authSession.ts` (`rotateUserSession`) so web + mobile refresh
+ * share one source of truth. This guard now greps that file.
  */
 
 const AUTH = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/auth.ts"),
+  join(import.meta.dirname!, "../../src/lib/authSession.ts"),
   "utf8",
 );
 
-describe("auth.ts /refresh — tenant-scoped assignment lookup", () => {
+describe("authSession.ts rotateUserSession — tenant-scoped assignment lookup", () => {
   it("RefreshTokenRow carries companyId so the assignment lookup can scope by it", () => {
     expect(AUTH).toMatch(/interface RefreshTokenRow \{[\s\S]+?companyId: number;[\s\S]+?\}/);
   });

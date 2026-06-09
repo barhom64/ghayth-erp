@@ -10,6 +10,7 @@ const UmrahPenalties = lazy(() => import("@/pages/umrah/penalties"));
 const UmrahPayments = lazy(() => import("@/pages/umrah/payments"));
 const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
 const UmrahImportWizard = lazy(() => import("@/pages/umrah/import-wizard"));
+const UmrahImportUnlinked = lazy(() => import("@/pages/umrah/import-unlinked"));
 const PilgrimCreate = lazy(() => import("@/pages/umrah/pilgrim-create"));
 const PilgrimDetail = lazy(() => import("@/pages/umrah/pilgrim-detail"));
 const UmrahPackages = lazy(() => import("@/pages/umrah/packages"));
@@ -103,6 +104,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/violations/create", component: UmrahViolationCreate, module: "operations" },
   { path: "/umrah/violations/:id", component: UmrahViolationDetail, module: "operations" },
   { path: "/umrah/import", component: UmrahImportWizard, module: "operations" },
+  { path: "/umrah/import/:batchId/unlinked", component: UmrahImportUnlinked, module: "operations" },
   { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
   { path: "/umrah/exempt-pilgrims", component: UmrahExemptPilgrims, module: "operations" },
   { path: "/umrah/compliance", component: UmrahCompliance, module: "operations" },

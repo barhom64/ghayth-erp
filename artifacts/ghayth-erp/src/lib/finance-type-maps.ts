@@ -13,6 +13,20 @@ export const PAYMENT_METHODS: Record<string, string> = {
   custody: "من العهدة",
 };
 
+// #1715 (module review) — ordered option lists so the create forms stop
+// re-declaring (and drifting) their own PAYMENT_METHODS arrays. The base set is
+// shared by vouchers + customer-advances; expenses adds «من العهدة».
+export const PAYMENT_METHOD_OPTIONS: { value: string; label: string }[] = [
+  { value: "cash", label: PAYMENT_METHODS.cash },
+  { value: "bank_transfer", label: PAYMENT_METHODS.bank_transfer },
+  { value: "check", label: PAYMENT_METHODS.check },
+  { value: "credit_card", label: PAYMENT_METHODS.credit_card },
+];
+export const PAYMENT_METHOD_OPTIONS_WITH_CUSTODY: { value: string; label: string }[] = [
+  ...PAYMENT_METHOD_OPTIONS,
+  { value: "custody", label: PAYMENT_METHODS.custody },
+];
+
 // ── أنواع عمليات السندات ────────────────────────────────────────────
 export const VOUCHER_OPERATIONS: Record<string, string> = {
   receipt: "قبض إيراد",
@@ -46,9 +60,12 @@ export const DEPRECIATION_METHODS: Record<string, string> = {
 };
 
 // ── أنواع الحسابات ──────────────────────────────────────────────────
+// #1715 (module review) — single source of truth for account-type labels.
+// Standardised on «خصوم» (the term used by every screen) so the 7 inline
+// copies that re-declared this map can all import it instead of drifting.
 export const ACCOUNT_TYPES: Record<string, string> = {
   asset: "أصول",
-  liability: "التزامات",
+  liability: "خصوم",
   equity: "حقوق ملكية",
   revenue: "إيرادات",
   expense: "مصروفات",

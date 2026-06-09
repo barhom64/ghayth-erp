@@ -12,33 +12,13 @@ import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { seedRolesAndGrantsV2 } from "../lib/rbac/autoMigrate.js";
+import {
+  authenticateUserByPassword,
+  createUserSession,
+  rotateUserSession,
+} from "../lib/authSession.js";
 
 const router = Router();
-
-interface UserLoginRow {
-  id: number;
-  passwordHash: string;
-  isActive: boolean;
-  employeeId: number;
-  failedLoginAttempts: number;
-  lockedUntil: string | null;
-}
-
-interface FailedAttemptsRow {
-  failedLoginAttempts: number;
-}
-
-interface AssignmentLoginRow {
-  id: number;
-  companyId: number;
-  branchId: number | null;
-  role: string;
-  status: string;
-  jobTitleId: number | null;
-  jobTitle: string | null;
-  companyName: string | null;
-  branchName: string | null;
-}
 
 interface UserRoleRow {
   id: number;
@@ -47,30 +27,6 @@ interface UserRoleRow {
   modules: unknown;
   level: number;
   source: "legacy" | "v2";
-}
-
-interface RefreshTokenRow {
-  id: number;
-  token: string;
-  userId: number;
-  expiresAt: string;
-  revokedAt: string | null;
-  userAgent: string | null;
-  ipAddress: string | null;
-  createdAt: string;
-  isActive: boolean;
-  employeeId: number;
-  lockedUntil: string | null;
-  // Carried through from employees.companyId so the downstream
-  // employee_assignments lookup stays tenant-scoped — without it the
-  // assignment query falls back to employeeId alone, which the
-  // tenant-isolation guard flags as cross-tenant risk.
-  companyId: number;
-}
-
-interface AssignmentRefreshRow {
-  id: number;
-  role: string;
 }
 
 interface EmployeeMeRow {
@@ -167,8 +123,6 @@ const changePasswordSchema = z.object({
 // authMiddleware.
 
 const REFRESH_TOKEN_TTL_DAYS = 7;
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_MINUTES = 15;
 
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -392,134 +346,27 @@ router.post("/login", loginLimiter, async (req, res) => {
     }
     const { email, password } = parsed.data;
 
-    const [user] = await rawQuery<UserLoginRow>(
-      `SELECT u.id, u."passwordHash", u."isActive", u."employeeId",
-              u."failedLoginAttempts", u."lockedUntil"
-       FROM users u WHERE u.email = $1`,
-      [email]
-    );
+    // Credential check + lockout + assignments/roles load are shared with
+    // the mobile flow via authenticateUserByPassword (single source of
+    // truth — see lib/authSession.ts).
+    const auth = await authenticateUserByPassword(email, password);
+    const { primary, assignments, userRoles } = auth;
 
-    if (!user) {
-      throw new ForbiddenError("بيانات الدخول غير صحيحة");
-    }
-
-    if (!user.isActive) {
-      throw new ForbiddenError("الحساب موقوف");
-    }
-
-    if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
-      res.status(429).json({ error: "الحساب مقفل مؤقتاً بسبب محاولات دخول فاشلة متكررة. يرجى المحاولة لاحقاً" });
-      return;
-    }
-
-    const valid = await verifyPassword(password, user.passwordHash);
-    if (!valid) {
-      // Atomic increment to prevent race conditions (C10)
-      const [updated] = await rawQuery<FailedAttemptsRow>(
-        `UPDATE users SET "failedLoginAttempts" = "failedLoginAttempts" + 1 WHERE id = $1 RETURNING "failedLoginAttempts"`,
-        [user.id]
-      );
-      const attempts = updated.failedLoginAttempts;
-      if (attempts >= MAX_FAILED_ATTEMPTS) {
-        const lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
-        try {
-          await rawExecute(
-            `UPDATE users SET "lockedUntil"=$1 WHERE id=$2`,
-            [lockedUntil.toISOString(), user.id]
-          );
-        } catch (lockErr) {
-          logger.error({ err: lockErr, userId: user.id }, "Failed to persist account lockout");
-        }
-        logger.warn({ userId: user.id }, "Account locked due to too many failed login attempts");
-        createAuditLog({
-          companyId: 0, userId: user.id,
-          action: "login_failed", entity: "users", entityId: user.id,
-          after: { email, reason: "account_locked", attempts },
-        }).catch((e) => logger.error(e, "auth background task failed"));
-        res.status(429).json({ error: `تم قفل الحساب لمدة ${LOCKOUT_MINUTES} دقيقة بسبب تكرار محاولات الدخول الفاشلة` });
-      } else {
-        createAuditLog({
-          companyId: 0, userId: user.id,
-          action: "login_failed", entity: "users", entityId: user.id,
-          after: { email, reason: "invalid_password", attempts },
-        }).catch((e) => logger.error(e, "auth background task failed"));
-        throw new ForbiddenError("بيانات الدخول غير صحيحة");
-      }
-      return;
-    }
-
-    try {
-      await rawExecute(
-        `UPDATE users SET "lastLoginAt"=NOW(), "failedLoginAttempts"=0, "lockedUntil"=NULL WHERE id=$1`,
-        [user.id]
-      );
-    } catch (resetErr) {
-      logger.error({ err: resetErr, userId: user.id }, "Failed to reset login state after successful auth");
-    }
-
-    const assignments = await rawQuery<AssignmentLoginRow>(
-      `SELECT ea.id, ea."companyId", ea."branchId", ea.role, ea.status,
-              ea."jobTitleId", COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
-              c.name AS "companyName", b.name AS "branchName"
-       FROM employee_assignments ea
-       LEFT JOIN companies c ON c.id = ea."companyId"
-       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
-       LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
-       WHERE ea."employeeId" = $1 AND ea.status = 'active'`,
-      [user.employeeId]
-    );
-
-    if (!assignments.length) {
-      throw new ForbiddenError("لا يوجد تعيين نشط لهذا المستخدم");
-    }
-
-    const primary = assignments[0];
-
-    // Role-switcher source: RBAC v2 (rbac_user_roles → rbac_roles) ONLY.
-    // (#1791 — legacy user_roles removed.)
-    const userRoles = await rawQuery<UserRoleRow>(
-      `SELECT
-         r.id AS id,
-         r.role_key AS "roleKey",
-         r.label_ar AS label,
-         COALESCE(
-           (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
-              FROM rbac_role_grants g WHERE g.role_id = r.id),
-           '[]'::jsonb
-         ) AS modules,
-         r.level,
-         'v2' AS source,
-         COALESCE(ur.is_primary, FALSE) AS is_primary
-        FROM rbac_user_roles ur
-        JOIN rbac_roles r ON r.id = ur.role_id
-       WHERE ur."userId" = $1 AND ur."companyId" = $2
-         AND r.is_active = TRUE AND r.is_template = FALSE
-         AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
-       ORDER BY is_primary DESC, level DESC`,
-      [user.id, primary.companyId]
-    );
-    const token = signToken({
-      userId: user.id,
+    const ipAddress = req.ip ?? null;
+    const session = await createUserSession({
+      userId: auth.userId,
       assignmentId: primary.id,
       role: primary.role,
+      userAgent: req.headers["user-agent"] ?? null,
+      ipAddress,
     });
 
-    const refreshToken = signRefreshToken();
-    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
-    const userAgent = req.headers["user-agent"] ?? null;
-    const ipAddress = req.ip ?? null;
-
-    await rawExecute(
-      `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress")
-       VALUES ($1, $2, $3, $4, $5)`,
-      [refreshToken, user.id, expiresAt.toISOString(), userAgent, ipAddress]
-    );
-
-    setAccessTokenCookie(res, token);
-    setRefreshTokenCookie(res, refreshToken);
+    // Web transport: tokens live in HttpOnly cookies, never the body.
+    setAccessTokenCookie(res, session.accessToken);
+    setRefreshTokenCookie(res, session.refreshToken);
     setCsrfCookie(res);
 
-    emitEvent({ companyId: primary.companyId, branchId: primary.branchId ?? undefined, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, ip: ipAddress || "unknown", details: JSON.stringify({ email, assignmentId: primary.id }) }).catch((e) => logger.error(e, "auth background task failed"));
+    emitEvent({ companyId: primary.companyId, branchId: primary.branchId ?? undefined, userId: auth.userId, action: "auth.login.success", entity: "users", entityId: auth.userId, ip: ipAddress || "unknown", details: JSON.stringify({ email, assignmentId: primary.id }) }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ assignments, userRoles });
   } catch (err) {
     handleRouteError(err, res, "Login error:");
@@ -533,107 +380,100 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
       throw new ValidationError("رمز التحديث مطلوب");
     }
 
-    const [rt] = await rawQuery<RefreshTokenRow>(
-      `SELECT rt.*, u."isActive", u."employeeId", u."lockedUntil", e."companyId"
-       FROM refresh_tokens rt
-       JOIN users u ON u.id = rt."userId"
-       JOIN employees e ON e.id = u."employeeId"
-       WHERE rt.token = $1`,
-      [refreshToken]
-    );
-
-    if (!rt) {
-      throw new ForbiddenError("رمز التحديث غير صالح");
-    }
-
-    if (rt.revokedAt) {
-      throw new ForbiddenError("رمز التحديث ملغي");
-    }
-
-    if (new Date(rt.expiresAt) < new Date()) {
-      throw new ForbiddenError("انتهت صلاحية رمز التحديث");
-    }
-
-    if (!rt.isActive) {
-      throw new ForbiddenError("الحساب موقوف");
-    }
-
-    if (rt.lockedUntil && new Date(rt.lockedUntil) > new Date()) {
-      throw new ForbiddenError("الحساب مقفل مؤقتاً");
-    }
-
-    // Tenant scope: an employee record belongs to exactly one company.
-    // Constraining the assignment lookup by BOTH employeeId AND
-    // companyId enforces the invariant at query time — closes the
-    // cross-tenant risk the static guard flagged at this call site.
-    const [primaryAssignment] = await rawQuery<AssignmentRefreshRow>(
-      `SELECT ea.id, ea.role FROM employee_assignments ea
-       WHERE ea."employeeId" = $1
-         AND ea."companyId" = $2
-         AND ea.status = 'active'
-       ORDER BY ea."isPrimary" DESC NULLS LAST LIMIT 1`,
-      [rt.employeeId, rt.companyId]
-    );
-
-    if (!primaryAssignment) {
-      throw new ForbiddenError("لا يوجد تعيين نشط");
-    }
-
-    const newToken = signToken({
-      userId: rt.userId,
-      assignmentId: primaryAssignment.id,
-      role: primaryAssignment.role,
+    // Validation + rotation (reuse detection) shared with the mobile flow
+    // via rotateUserSession — see lib/authSession.ts.
+    const session = await rotateUserSession(refreshToken, {
+      userAgent: req.headers["user-agent"] ?? null,
+      ipAddress: req.ip ?? null,
     });
 
-    setAccessTokenCookie(res, newToken);
-
-    const newRefreshToken = signRefreshToken();
-    const newExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
-    // RD4-01 — refresh-token rotation MUST be atomic, and a second use of
-    // an already-rotated token MUST burn the session. Previously we ran:
-    //   SELECT … (returns valid)
-    //   UPDATE … WHERE revokedAt IS NULL   ← idempotent, returns "ok" even on a no-op
-    //   INSERT new token
-    // Two refresh requests arriving with the same valid token both passed
-    // the SELECT, and both INSERTs succeeded — i.e. one leaked refresh
-    // token could be parlayed into two parallel sessions. The fix is the
-    // standard OAuth "refresh-token reuse detection" pattern: revoke
-    // atomically with RETURNING, and if the revoke is a no-op (someone
-    // else rotated this token already) treat it as theft → revoke every
-    // outstanding refresh token for that user.
-    await withTransaction(async (client) => {
-      const { rows: revoked } = await client.query(
-        `UPDATE refresh_tokens SET "revokedAt" = NOW()
-           WHERE id = $1 AND "revokedAt" IS NULL
-         RETURNING id`,
-        [rt.id]
-      );
-      if (revoked.length === 0) {
-        // Reuse detected — the token's already been rotated. Kill every
-        // session for this user; the legitimate browser will be forced to
-        // log in again, but that's the price of containing a stolen
-        // token. Also log it so it's auditable.
-        await client.query(
-          `UPDATE refresh_tokens SET "revokedAt" = NOW()
-             WHERE "userId" = $1 AND "revokedAt" IS NULL`,
-          [rt.userId]
-        );
-        logger.warn({ userId: rt.userId, tokenId: rt.id }, "[auth] refresh-token reuse detected — revoking all sessions");
-        throw new ForbiddenError("رمز التحديث ملغي");
-      }
-      await client.query(
-        `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress") VALUES ($1, $2, $3, $4, $5)`,
-        [newRefreshToken, rt.userId, newExpiresAt.toISOString(), req.headers["user-agent"] ?? null, req.ip ?? null]
-      );
-    });
-    setRefreshTokenCookie(res, newRefreshToken);
+    setAccessTokenCookie(res, session.accessToken);
+    setRefreshTokenCookie(res, session.refreshToken);
     setCsrfCookie(res);
 
-    emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch((e) => logger.error(e, "auth background task failed"));
-    createAuditLog({ companyId: 0, userId: rt.userId, action: "update", entity: "users", entityId: rt.userId, after: { reason: "token_refresh" } }).catch((e) => logger.error(e, "auth background task failed"));
+    emitEvent({ companyId: 0, userId: session.userId, action: "auth.refresh", entity: "users", entityId: session.userId }).catch((e) => logger.error(e, "auth background task failed"));
+    createAuditLog({ companyId: 0, userId: session.userId, action: "update", entity: "users", entityId: session.userId, after: { reason: "token_refresh" } }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Refresh token error:");
+  }
+});
+
+// ─── Mobile (Bearer-token) auth ──────────────────────────────────────
+// Native apps (Expo) have no cookie jar scoped to `/api`, so the mobile
+// flow returns the SAME access + refresh tokens in the JSON body instead
+// of Set-Cookie. The access token is the identical signToken() JWT used by
+// the cookie flow, so authMiddleware (already Bearer-aware) + buildScope
+// reconstruct identical RBAC / allowedModules / feature-flag scope — the
+// mobile client inherits web's permissions with ZERO changes to the
+// authorization layer. Lockout, reuse-detection, and assignment loading
+// are shared verbatim with the web handlers (lib/authSession.ts).
+//
+// Session lifecycle: access token expires in `accessTokenExpiresIn`
+// seconds (15m); when a protected call returns 401, the client posts its
+// stored refresh token to `/api/auth/mobile/refresh` to obtain a new pair
+// (refresh tokens are rotated; reuse burns the whole session). To sign
+// out, the client posts `{ refreshToken }` to the existing
+// `/api/auth/logout` with its Bearer header.
+router.post("/mobile/login", loginLimiter, async (req, res) => {
+  try {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    }
+    const { email, password } = parsed.data;
+
+    const auth = await authenticateUserByPassword(email, password);
+    const { primary, assignments, userRoles } = auth;
+
+    const ipAddress = req.ip ?? null;
+    const session = await createUserSession({
+      userId: auth.userId,
+      assignmentId: primary.id,
+      role: primary.role,
+      userAgent: req.headers["user-agent"] ?? null,
+      ipAddress,
+    });
+
+    // Mobile transport: tokens in the body, NO Set-Cookie.
+    emitEvent({ companyId: primary.companyId, branchId: primary.branchId ?? undefined, userId: auth.userId, action: "auth.login.success", entity: "users", entityId: auth.userId, ip: ipAddress || "unknown", details: JSON.stringify({ email, assignmentId: primary.id, channel: "mobile" }) }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({
+      tokenType: session.tokenType,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      accessTokenExpiresIn: session.accessTokenExpiresIn,
+      refreshTokenExpiresIn: session.refreshTokenExpiresIn,
+      assignments,
+      userRoles,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Mobile login error:");
+  }
+});
+
+router.post("/mobile/refresh", refreshLimiter, async (req, res) => {
+  try {
+    const refreshToken = req.body?.refreshToken;
+    if (!refreshToken || typeof refreshToken !== "string") {
+      throw new ValidationError("رمز التحديث مطلوب");
+    }
+
+    const session = await rotateUserSession(refreshToken, {
+      userAgent: req.headers["user-agent"] ?? null,
+      ipAddress: req.ip ?? null,
+    });
+
+    emitEvent({ companyId: 0, userId: session.userId, action: "auth.refresh", entity: "users", entityId: session.userId }).catch((e) => logger.error(e, "auth background task failed"));
+    createAuditLog({ companyId: 0, userId: session.userId, action: "update", entity: "users", entityId: session.userId, after: { reason: "token_refresh", channel: "mobile" } }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({
+      tokenType: session.tokenType,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      accessTokenExpiresIn: session.accessTokenExpiresIn,
+      refreshTokenExpiresIn: session.refreshTokenExpiresIn,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Mobile refresh error:");
   }
 });
 

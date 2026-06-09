@@ -1,9 +1,8 @@
 import { useLocation } from "wouter";
-import { useApiMutation, useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { useApiMutation } from "@/lib/api";
+import { AccountSelect } from "@/components/shared/entity-selects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -18,15 +17,11 @@ export default function BudgetCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/finance/budget", "POST", [["budget"]]);
-  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
-  const accounts = accountsData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
 
   const handleSubmit = async () => {
     let periodError: string | null = null;
@@ -71,14 +66,9 @@ export default function BudgetCreate() {
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormFieldWrapper label="الحساب" required error={fieldErrors.accountCode}>
-          <Select value={form.accountCode} onValueChange={(v) => setForm((f) => ({ ...f, accountCode: v }))}>
-            <SelectTrigger><SelectValue placeholder="اختر الحساب" /></SelectTrigger>
-            <SelectContent>
-              {accounts.map((a: any) => (
-                <SelectItem key={a.code || a.id} value={String(a.code || a.id)}>{a.code} - {a.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* #1715 (module review) — shared AccountSelect instead of a bespoke
+              dropdown + local /finance/accounts query. */}
+          <AccountSelect value={form.accountCode} onChange={(v) => setForm((f) => ({ ...f, accountCode: v }))} label="" allowCreate={false} />
         </FormFieldWrapper>
         <FormFieldWrapper label="الفترة" required error={fieldErrors.period}>
           <Input type="month" value={form.period} onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))} />
