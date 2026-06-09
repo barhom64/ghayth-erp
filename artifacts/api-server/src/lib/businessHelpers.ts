@@ -736,21 +736,38 @@ export async function createGuardedJournalEntry(
   try {
     return await createJournalEntry(params);
   } catch (err) {
+    // CRITICAL: this failure handler runs INSIDE the caller's transaction
+    // (rawExecute joins the ambient tx via AsyncLocalStorage). A statement
+    // that errors here — e.g. a source table that has no `glStatus` column
+    // (only `warehouse_movements` does) — would put Postgres into the
+    // "current transaction is aborted" (25P02) state. A JS try/catch CANNOT
+    // undo that abort: every subsequent statement on the connection fails,
+    // so a single guarded JE failure would silently roll back an entire
+    // batch import (the Umrah voucher import "success but 0 saved" bug).
+    // Each side-effect therefore runs in its own SAVEPOINT (reentrant
+    // withTransaction) so a failure rolls back at the DB level and leaves
+    // the outer transaction usable.
     try {
-      const safeTable = guard.table.replace(/[^a-zA-Z0-9_]/g, "");
-      await rawExecute(
-        `UPDATE "${safeTable}" SET "glStatus" = 'failed', "updatedAt" = NOW() WHERE id = $1`,
-        [guard.id]
-      );
+      await withTransaction(async () => {
+        const safeTable = guard.table.replace(/[^a-zA-Z0-9_]/g, "");
+        await rawExecute(
+          `UPDATE "${safeTable}" SET "glStatus" = 'failed', "updatedAt" = NOW() WHERE id = $1`,
+          [guard.id]
+        );
+      });
     } catch (e) { logger.warn(e, "glStatus column may not exist on source table"); }
 
-    await rawExecute(
-      `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,"createdAt")
-       VALUES ($1,$2,$3,$4,NOW())
-       ON CONFLICT DO NOTHING`,
-      [params.companyId, params.sourceType ?? guard.table, params.sourceId ?? guard.id,
-       err instanceof Error ? err.message : String(err)]
-    );
+    try {
+      await withTransaction(async () => {
+        await rawExecute(
+          `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,"createdAt")
+           VALUES ($1,$2,$3,$4,NOW())
+           ON CONFLICT DO NOTHING`,
+          [params.companyId, params.sourceType ?? guard.table, params.sourceId ?? guard.id,
+           err instanceof Error ? err.message : String(err)]
+        );
+      });
+    } catch (e) { logger.warn(e, "[FinancialPostingGuard] failed to record posting failure"); }
 
     logger.error(err, `[FinancialPostingGuard] GL failed for ${guard.table}#${guard.id}:`);
     throw err;
@@ -1413,4 +1430,36 @@ export async function getAccountCodeFromMapping(
     : (mapping.creditCode || mapping.creditAccountCode);
   if (explicitCode) return explicitCode;
   return await resolveByIntent(companyId, operationType, fallbackCode);
+}
+
+/**
+ * Validate a set of resolved account codes BEFORE a batch of postings runs.
+ * Fails the whole run with a single clear error instead of producing one
+ * posting-failure row per item when a mapping points at a missing/disabled/
+ * non-postable account. Mirrors the per-line validation in createJournalEntry.
+ */
+export async function preflightAccountCodes(
+  companyId: number,
+  codes: string[],
+): Promise<void> {
+  const uniqueCodes = [...new Set(codes.filter(Boolean))];
+  if (uniqueCodes.length === 0) return;
+  const placeholders = uniqueCodes.map((_, i) => `$${i + 2}`).join(",");
+  const accountRows = await rawQuery<{ code: string; allowPosting: boolean; isActive: boolean }>(
+    `SELECT code, "allowPosting", "isActive" FROM chart_of_accounts WHERE "companyId" = $1 AND code IN (${placeholders}) AND "deletedAt" IS NULL`,
+    [companyId, ...uniqueCodes]
+  );
+  const accountMap = new Map(accountRows.map((a) => [a.code, a]));
+  for (const code of uniqueCodes) {
+    const acc = accountMap.get(code);
+    if (!acc) {
+      throw new ValidationError(`الحساب "${code}" غير موجود في شجرة الحسابات`, { field: "accountCode", fix: "اختر حساباً موجوداً من شجرة الحسابات" });
+    }
+    if (acc.allowPosting === false) {
+      throw new ValidationError(`لا يمكن الترحيل على الحساب "${code}" — هذا حساب تجميعي (رئيسي). استخدم حساباً فرعياً يقبل الحركة`, { field: "accountCode", fix: "اختر حساباً فرعياً (تفصيلياً) يقبل الحركة" });
+    }
+    if (acc.isActive === false) {
+      throw new ValidationError(`لا يمكن الترحيل على الحساب "${code}" — الحساب معطّل (غير نشط)`, { field: "accountCode", fix: "فعّل الحساب أو اختر حساباً نشطاً" });
+    }
+  }
 }
