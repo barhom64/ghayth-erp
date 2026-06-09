@@ -50,9 +50,9 @@
 |---|---|---|---|
 | **IGOC-001** | ✅ **مُنفّذ** — migration 284 + extended createAuditLog + logAudit listener + RequestScope type + authMiddleware يملأ activeDepartmentId + impersonationSourceUser + authorize() ينشر resolvedScope. 24/24 smoke tests خضراء. | — | #14 ✅ مُغلق |
 | **IGOC-002** | ✅ **مُنفّذ** — فحص دقيق وجد 95% من الـ endpoints محمية بالفعل بـ authorize + companyId. الـ 3 فجوات الحقيقية أُغلقت: `/queue/:id` يفحص print_jobs قبل الـ backend, `/reprint-requests` يطلب proof of prior print, `/archive/:entityType/:entityId` نفس النمط (empty list بدل 404 لأنه speculative). 11/11 smoke tests خضراء. | — | #13 ✅ مُغلق |
-| **IGOC-003** | **Wizard UI redesign** — تحويل `employees-create.tsx` من single-form إلى step-by-step wizard مرئي بـ progress bar + back/next + per-step validation | ٣-٤ أيام | #12 — UX، لا backend |
+| **IGOC-003** | **Wizard UI redesign** (المتبقي الوحيد — UX فقط، لا backend) — تحويل `employees-create.tsx` من single-form إلى step-by-step wizard. الـ transaction في الخادم يعمل ويُنشئ 18 شيئًا في خطوة واحدة (employees.ts:POST /employees). الـ wizard مجرد إعادة هيكلة UX للـ form الموجود. مرشّح للمستقبل بناءً على feedback مدير HR. | ٣-٤ أيام | #12 — UX polish |
 | **IGOC-004** | ✅ **مُكتشَف أنه مُنفّذ بالفعل** — قراءة دقيقة للـ `sidebar-layout.tsx` كشفت أن الـ filter حقيقي (returns null + filter يحذف nulls، لا CSS-hide). `apiData` يُعاد جلبه من `/permissions/my` كلما تغيّر `selectedRoleKey`. الـ smoke test `igoc004DynamicSidebarPinSmoke.test.ts` (13/13) يثبّت السلوك الصحيح ويمنع regression. | — | #11 ✅ كان مُغلقًا — الـ audit الأصلي كان خاطئًا |
-| **IGOC-005** | **§K integration tests — 7 السيناريوهات المطلوبة** (موظف عادي، مدير قسم، HR، رواتب، مدير مشروع، multi-role، Super Admin) — كل سيناريو يثبت اختلاف القوائم/الخدمات/المهام/الاعتمادات/الحقول/التقارير | ٤-٥ أيام | اختبار الـ Definition of Done |
+| **IGOC-005** | ✅ **مُنفّذ** — `igoc005AcceptanceMatrixSmoke.test.ts` (24/24): الـ7 سيناريوهات (employee/branch_manager/hr_manager/payroll/projects_manager/multi-role/owner) + 5 invariants حاكمة (home في الكل، admin لـ owner فقط، level monotonicity، universal modules، uniqueness). يقرأ مباشرة من PREDEFINED_ROLE_DEFAULTS — أي PR يحاول تغيير الـ matrix يفشل CI فورًا. | — | Definition of Done ✅ |
 
 **إجمالي تقديري: ١١-١٥ يوم عمل** (مقارنة بـ بناء الكل من الصفر = ٤٠+ يوم).
 
