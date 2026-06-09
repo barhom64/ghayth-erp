@@ -17,9 +17,9 @@ import {
 import {
   User, Phone, Mail, Briefcase, Calendar, Building, CreditCard,
   ListTodo, Clock, BookOpen, DollarSign, AlertTriangle, Printer,
-  FileText, TrendingUp, Award, Activity, CheckCircle2,
+  FileText, TrendingUp, TrendingDown, Minus, Award, Activity, CheckCircle2,
   XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, Check, X,
-  KeyRound, ShieldCheck, Lock, Star, FileSignature, Package
+  KeyRound, ShieldCheck, Lock, Star, FileSignature, Package, Sparkles, Flame
 } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -279,6 +279,144 @@ function LeaveBalanceSummary({ employeeId }: { employeeId: string }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// HR-014 — Performance / Signals widget for the overview tab.
+// Reads `latestScore` (latest monthly row from employee_scores) and
+// `activeSignals` (unacknowledged rows from employee_signals within the
+// last 90 days). When `latestScore` is null and `activeSignals` is empty
+// the widget surfaces an empty state explaining when the engines run
+// (Mon 03:00 weekly + 1st of month 04:00) so HR doesn't think the page
+// is broken on day-1 for a new hire.
+// ════════════════════════════════════════════════════════════════════════════
+function PerformanceWidget({ latestScore, activeSignals }: {
+  latestScore: { compositeScore: number; trend: number; periodKey: string;
+                 disciplineScore: number; activityScore: number;
+                 productivityScore: number; qualityScore: number;
+                 managerScore: number; developmentScore: number;
+                 rationale?: Record<string, string>; computedAt: string } | null;
+  activeSignals: Array<{ id: number; signalType: string; severity: string;
+                         title: string; reasons: string[];
+                         compositeScore?: number; createdAt: string; periodKey: string }>;
+}) {
+  if (!latestScore && activeSignals.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-indigo-500" />
+              الأداء والإشارات
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            لا يوجد سجل تقييم بعد. يُحسب التقييم تلقائيًا كل اثنين 03:00 (أسبوعي)
+            وأول كل شهر 04:00 (شهري) — بعد تجميع بيانات حضور/مهام/تقييمات/تدريب كافية.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+  const score = latestScore?.compositeScore ?? 0;
+  const scoreColor = score >= 85 ? "text-emerald-600" :
+                     score >= 70 ? "text-status-info-foreground" :
+                     score >= 50 ? "text-amber-600" : "text-status-error-foreground";
+  const trendIcon = !latestScore || latestScore.trend === 0 ? Minus
+                  : latestScore.trend > 0 ? TrendingUp : TrendingDown;
+  const TrendIcon = trendIcon;
+  const trendColor = !latestScore || latestScore.trend === 0 ? "text-muted-foreground"
+                   : latestScore.trend > 0 ? "text-emerald-600" : "text-status-error-foreground";
+  const sigCount = activeSignals.length;
+  const critical = activeSignals.filter((s) => s.severity === "critical").length;
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-medium flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-indigo-500" />
+            الأداء والإشارات
+            {latestScore && (
+              <span className="text-xs text-muted-foreground font-mono">
+                {latestScore.periodKey}
+              </span>
+            )}
+          </p>
+          {sigCount > 0 && (
+            <Badge variant={critical > 0 ? "destructive" : "outline"} className="gap-1">
+              <Flame className="h-3 w-3" />
+              {sigCount} إشار{sigCount === 1 ? "ة" : "ات"} نشطة
+              {critical > 0 ? ` (${critical} حرج${critical === 1 ? "" : "ة"})` : ""}
+            </Badge>
+          )}
+        </div>
+        {latestScore && (
+          <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
+            <div className="flex flex-col items-center justify-center bg-surface-subtle rounded p-3">
+              <div className="flex items-center gap-1">
+                <span className={cn("text-4xl font-bold", scoreColor)}>
+                  {Math.round(Number(score))}
+                </span>
+                <TrendIcon className={cn("h-5 w-5", trendColor)} />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">من 100</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              {[
+                { k: "disciplineScore", l: "انضباط (20%)" },
+                { k: "activityScore", l: "نشاط (15%)" },
+                { k: "productivityScore", l: "إنتاجية (35%)" },
+                { k: "qualityScore", l: "جودة (15%)" },
+                { k: "managerScore", l: "تقييم المدير (10%)" },
+                { k: "developmentScore", l: "تطوير ذاتي (5%)" },
+              ].map((d) => {
+                const v = Number((latestScore as any)[d.k] ?? 0);
+                return (
+                  <div key={d.k} className="flex justify-between bg-surface-subtle rounded px-2 py-1">
+                    <span className="text-muted-foreground">{d.l}</span>
+                    <span className="font-bold">{Math.round(v)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {activeSignals.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {activeSignals.slice(0, 3).map((sig) => {
+              const sevColor = sig.severity === "critical" ? "bg-status-error-surface text-status-error-foreground"
+                             : sig.severity === "high" ? "bg-amber-50 text-amber-700"
+                             : sig.severity === "medium" ? "bg-status-info-surface text-status-info-foreground"
+                             : "bg-surface-subtle text-muted-foreground";
+              const typeLabel = sig.signalType === "risk" ? "تحذير"
+                              : sig.signalType === "promotion" ? "مرشّح للترقية"
+                              : sig.signalType === "burnout" ? "إرهاق محتمل"
+                              : "إشارة";
+              return (
+                <div key={sig.id} className={cn("rounded p-2 text-xs", sevColor)}>
+                  <div className="flex items-center gap-2 font-bold mb-0.5">
+                    <span>{typeLabel}</span>
+                    <span>·</span>
+                    <span>{sig.title}</span>
+                  </div>
+                  {sig.reasons && sig.reasons.length > 0 && (
+                    <ul className="text-[11px] opacity-80 list-disc list-inside">
+                      {sig.reasons.slice(0, 2).map((r, i) => <li key={i}>{r}</li>)}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+            {activeSignals.length > 3 && (
+              <p className="text-[11px] text-muted-foreground text-center">
+                + {activeSignals.length - 3} إشارة أخرى
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ViolationTimeline({ violations }: { violations: any[] }) {
   const [expanded, setExpanded] = useState<number | null>(null);
 
@@ -472,6 +610,11 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const contract: any = employee?.contract ?? null;
   const position: any = employee?.position ?? null;
   const custodies: any[] = employee?.custodies || [];
+  // HR-014 — Employee 360 overview enrichment (#1799 priority #10).
+  // Latest monthly composite score + unacknowledged signals from
+  // the last 90 days. Both are nullable / empty by design.
+  const latestScore: any = employee?.latestScore ?? null;
+  const activeSignals: any[] = employee?.activeSignals || [];
 
   const hireDate = employee?.hireDate ? new Date(employee.hireDate) : null;
   const serviceDays = hireDate ? Math.floor((Date.now() - hireDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
@@ -548,6 +691,13 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
               Renders the "is everything wired?" check in one card so HR
               doesn't have to bounce between custody/fleet/admin pages. */}
           <FinanceLinkageCard employeeId={id ?? ""} />
+
+          {/* HR-014 — Performance score + active signals widget.
+              Reads from the latest monthly row in employee_scores +
+              the unacknowledged rows in employee_signals (last 90 days).
+              When the engines haven't yet produced a score (new hire, or
+              before the first monthly cron run), renders an empty state. */}
+          <PerformanceWidget latestScore={latestScore} activeSignals={activeSignals} />
 
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
@@ -941,7 +1091,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 })}
                 <div className="pt-2 border-t mt-3">
                   <a
-                    href={`/admin/users/${userAccount.id}`}
+                    href={`/admin/effective-permissions?userId=${userAccount.id}`}
                     className="text-xs text-primary hover:underline flex items-center gap-1"
                   >
                     عرض الصلاحيات الفعلية الكاملة (Effective Permissions) →
