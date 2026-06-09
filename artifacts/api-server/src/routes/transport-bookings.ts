@@ -660,8 +660,19 @@ transportBookingsRouter.patch(
       const sets: string[] = [];
       const params: unknown[] = [];
       let p = 1;
+      // #1812 — column whitelist. `tripFamily` and `routePatternId`
+      // are system-managed (set by the create endpoint or the
+      // materialise endpoint) — the operator must not be able to
+      // mutate them post-hoc via PATCH. They are silently dropped
+      // here instead of erroring so the SPA can refetch + PATCH
+      // a wider partial without fearing 400s.
+      const PATCH_BANNED = new Set([
+        "tripFamily", "routePatternId", "bookingSource",
+        "bookingNumber", "companyId", "branchId",
+        "createdBy", "createdAt", "deletedAt",
+      ]);
       for (const [col, val] of Object.entries(b)) {
-        if (val !== undefined) {
+        if (val !== undefined && !PATCH_BANNED.has(col)) {
           sets.push(`"${col}" = $${p++}`);
           params.push(val);
         }

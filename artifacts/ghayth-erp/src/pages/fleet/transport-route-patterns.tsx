@@ -74,19 +74,33 @@ export default function TransportRoutePatterns() {
   if (isError) return <ErrorState />;
   const rows = data?.data ?? [];
 
+  // #1812 — per-row "firing" state prevents double-click duplicates while
+  // the request is in flight. The backend itself is idempotent (returns
+  // the existing booking on a same-day collision) so this is belt-and-
+  // suspenders, but it gives the operator immediate UI feedback.
+  const [firingId, setFiringId] = useState<number | null>(null);
+
   const handleMaterialise = async (row: RoutePatternRow) => {
+    if (firingId !== null) return;
+    setFiringId(row.id);
     try {
-      const res = await apiFetch<{ data: { bookingId: number; bookingNumber: string } }>(
+      const res = await apiFetch<{
+        data: { bookingId: number; bookingNumber: string; alreadyExisted?: boolean };
+      }>(
         `/transport/route-patterns/${row.id}/materialise`,
         { method: "POST", body: JSON.stringify({}) },
       );
       if (res?.data?.bookingNumber) {
-        toast({ title: `تم إنشاء حجز ${res.data.bookingNumber}` });
+        const title = res.data.alreadyExisted
+          ? `الحجز ${res.data.bookingNumber} موجود مسبقاً — جارٍ الفتح`
+          : `تم إنشاء حجز ${res.data.bookingNumber}`;
+        toast({ title });
         navigate(`/fleet/transport/bookings/${res.data.bookingId}`);
-        refetch();
       }
     } catch (err: any) {
       toast({ variant: "destructive", title: "تعذّر التشغيل", description: err?.message });
+    } finally {
+      setFiringId(null);
     }
   };
 
@@ -95,9 +109,10 @@ export default function TransportRoutePatterns() {
       key: "patternCode",
       header: "الرمز",
       render: (r) => (
-        <Link href={`/fleet/transport/route-patterns/${r.id}`}>
-          <a className="font-mono text-status-info-foreground hover:underline">{r.patternCode}</a>
-        </Link>
+        // #1812 — detail page isn't registered yet (separate PR scope).
+        // Render the code as monospace text so it doesn't 404 on click.
+        // When the detail page lands, swap back to a Link.
+        <span className="font-mono">{r.patternCode}</span>
       ),
     },
     { key: "name", header: "الاسم", render: (r) => r.name || "—" },
@@ -143,12 +158,12 @@ export default function TransportRoutePatterns() {
       render: (r) => (
         <Button
           size="sm" variant="outline"
-          disabled={r.status !== "active"}
+          disabled={r.status !== "active" || firingId === r.id}
           onClick={() => handleMaterialise(r)}
           rateLimitAware
         >
           <Play className="h-3 w-3 ml-1" />
-          تشغيل اليوم
+          {firingId === r.id ? "جارٍ التشغيل..." : "تشغيل اليوم"}
         </Button>
       ),
     },

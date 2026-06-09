@@ -28,7 +28,7 @@ import { Router } from "express";
 import { z } from "zod";
 
 import {
-  handleRouteError, NotFoundError, parseId, zodParse,
+  handleRouteError, NotFoundError, ValidationError, parseId, zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -207,6 +207,15 @@ transportRoutePatternsRouter.post(
       const scope = req.scope!;
       const id = parseId(req.params.id, "id");
       const target = (req.body?.targetDate as string | undefined) ?? todayISO();
+
+      // #1812 — input sanitization. The target shapes the bookingNumber
+      // so we enforce ISO YYYY-MM-DD only (no full ISO timestamp).
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(target)) {
+        throw new ValidationError("targetDate يجب أن يكون بصيغة YYYY-MM-DD", {
+          field: "targetDate", fix: "أرسل تاريخاً بصيغة 2026-06-09",
+        });
+      }
+
       const [pattern] = await rawQuery<Record<string, unknown>>(
         `SELECT * FROM transport_route_patterns
           WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = 'active'`,
@@ -214,8 +223,27 @@ transportRoutePatternsRouter.post(
       );
       if (!pattern) throw new NotFoundError("القالب غير موجود أو غير نشط");
 
-      // Generate a unique bookingNumber tied to the pattern + target date.
+      // #1812 — idempotency. The bookingNumber is deterministic from
+      // (pattern, target_date), so a duplicate materialise (operator
+      // double-click, cron retry, manual + scheduled) must return the
+      // existing booking instead of creating a duplicate row that gets
+      // billed twice.
       const bookingNumber = `RP-${pattern.patternCode}-${target.replace(/-/g, "")}`;
+      const [existing] = await rawQuery<{ id: number }>(
+        `SELECT id FROM transport_bookings
+          WHERE "companyId" = $1 AND "routePatternId" = $2
+            AND "requestedPickupDate" = $3 AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [scope.companyId, id, target],
+      );
+      if (existing) {
+        // Idempotent return — operator's double-click resolves to the
+        // booking that the first click created. Status 200 (not 201)
+        // signals "already existed, no new write".
+        res.json({ data: { bookingId: existing.id, bookingNumber, alreadyExisted: true } });
+        return;
+      }
+
       const { insertId } = await rawExecute(
         `INSERT INTO transport_bookings
            ("companyId", "branchId", "bookingNumber", "bookingSource", "transportServiceType",

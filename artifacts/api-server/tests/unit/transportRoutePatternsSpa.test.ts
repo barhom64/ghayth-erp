@@ -54,8 +54,18 @@ describe("#1812 — TransportRoutePatterns list page", () => {
     expect(LIST).toMatch(/handleMaterialise/);
   });
 
-  it("disables materialise button for non-active patterns", () => {
-    expect(LIST).toMatch(/disabled=\{r\.status !== "active"\}/);
+  it("disables materialise button for non-active patterns + during firing", () => {
+    expect(LIST).toMatch(/disabled=\{r\.status !== "active" \|\| firingId === r\.id\}/);
+  });
+
+  it("prevents double-click duplicates via per-row firingId state", () => {
+    expect(LIST).toMatch(/const \[firingId, setFiringId\] = useState<number \| null>/);
+    expect(LIST).toMatch(/if \(firingId !== null\) return/);
+  });
+
+  it("surfaces idempotent-return signal to the operator", () => {
+    expect(LIST).toMatch(/alreadyExisted/);
+    expect(LIST).toMatch(/موجود مسبقاً/);
   });
 
   it("explains the cron behavior to operators", () => {

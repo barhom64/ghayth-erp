@@ -327,6 +327,24 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
 
   // 2) Load candidate vehicles. Pull `vehicle_location_snapshots`
   //    latest ping per vehicle as the proxy for "current location".
+  //
+  // #1812 — family filter. The booking is either a passenger or cargo
+  // trip; vehicles flagged !validForPassengers / !validForCargo (via
+  // migration 284) are dropped at the SQL level so they never enter
+  // the scoring loop. NULL on either side is treated as "unknown →
+  // allowed" so legacy fleets continue to work without backfill.
+  const isPassengerBooking =
+    booking.transportServiceType.startsWith("passenger_") ||
+    booking.transportServiceType === "equipment_rental" ||
+    ((booking.passengerCount ?? 0) > 0);
+  const isCargoBooking =
+    booking.transportServiceType === "cargo_load" ||
+    ((Number(booking.cargoWeight) ?? 0) > 0);
+  const familyFilterSql = isPassengerBooking && !isCargoBooking
+    ? `AND (v."validForPassengers" IS NULL OR v."validForPassengers" = TRUE)`
+    : isCargoBooking && !isPassengerBooking
+    ? `AND (v."validForCargo" IS NULL OR v."validForCargo" = TRUE)`
+    : ""; // mixed or unknown → no family filter
   const vehicles = await rawQuery<VehicleRow>(
     `SELECT v.id, v."plateNumber", v."vehicleType", v.status,
             v."payloadKg", v."seatCount",
@@ -344,6 +362,7 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
       WHERE v."companyId" = $1
         AND v."deletedAt" IS NULL
         AND v.status IN ('available', 'in_use')
+        ${familyFilterSql}
       LIMIT 200`,
     [req.companyId],
   );
