@@ -226,6 +226,14 @@ export function authorize(opts: AuthorizeOptions) {
     }
 
     req.access = result;
+    // IGOC-001 (migration 284): publish the resolved scope onto req.scope
+    // so the audit middleware can persist it as audit_logs.resolved_scope.
+    // The granted scope answers: which scope window (self/team/department/
+    // branch/company/global) did THIS specific call run under? Without it,
+    // an auditor sees the user's potential maximum scope only.
+    if (result.diagnostics?.grantedScope) {
+      scope.resolvedScope = result.diagnostics.grantedScope;
+    }
     next();
   };
 }
