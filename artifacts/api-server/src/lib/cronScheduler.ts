@@ -1122,11 +1122,11 @@ async function dailyDeductionCheck(): Promise<string> {
     for (const a of absentees) {
       // 1) خصم غياب في قيد الرواتب
       await rawExecute(
-        `INSERT INTO payroll_deductions ("companyId", "employeeId", type, amount, description, "effectiveDate", "createdAt")
+        `INSERT INTO payroll_deductions ("companyId", "employeeId", type, amount, reason, date, "createdAt")
          SELECT $1, $2, 'absence', 0, $3, CURRENT_DATE, NOW()
          WHERE NOT EXISTS (
            SELECT 1 FROM payroll_deductions
-           WHERE "companyId" = $1 AND "employeeId" = $2 AND "effectiveDate" = CURRENT_DATE AND type = 'absence'
+           WHERE "companyId" = $1 AND "employeeId" = $2 AND date = CURRENT_DATE AND type = 'absence'
          )`,
         [company.id, a.employeeId, `خصم غياب تلقائي — ${a.name}`]
       ).catch((e) => logger.error(e, "[cronScheduler] absence deduction insert failed"));
@@ -2791,7 +2791,7 @@ async function runScheduledReports(): Promise<string> {
 
         const historyStatus = queued > 0 ? "sent" : (recipients.length === 0 ? "generated" : "failed");
         await rawExecute(
-          `INSERT INTO scheduled_report_history ("scheduledReportId", status, "sentAt", recipients, error)
+          `INSERT INTO scheduled_report_history ("scheduledReportId", status, "sentAt", result, error)
            VALUES ($1, $2, NOW(), $3, $4)`,
           [report.id, historyStatus, JSON.stringify(recipients), emailError ?? null]
         );
