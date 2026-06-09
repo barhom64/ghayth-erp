@@ -1381,7 +1381,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
       throw new NotFoundError("الموظف غير موجود");
     }
 
-    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles, contract, custodies, position] = await Promise.all([
+    const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime, userAccount, roles, contract, custodies, position, latestScore, activeSignals] = await Promise.all([
       rawQuery<Record<string, unknown>>(
         `SELECT pt.id, pt.title, pt.status, pt.priority, pt."dueDate", p.name AS "projectName"
          FROM project_tasks pt
@@ -1530,6 +1530,37 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
           WHERE ea.id = $3 LIMIT 1`,
         [id, scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees position query failed"); return []; }) : Promise.resolve([]),
+      // HR-014 — Employee 360 overview enrichment (#1799 priority #10):
+      // surface the latest monthly score + active (unacknowledged) signals
+      // inside the overview tab so HR doesn't need to jump to a separate
+      // dashboard. Both queries are scoped on assignmentId — when the
+      // employee has no active assignment they return [].
+      employee.assignmentId ? rawQuery<Record<string, unknown>>(
+        `SELECT scope, "periodKey", "compositeScore", trend,
+                "disciplineScore", "activityScore", "productivityScore",
+                "qualityScore", "managerScore", "developmentScore",
+                rationale, "computedAt"
+           FROM employee_scores
+          WHERE "assignmentId" = $3 AND "companyId" = $2 AND scope = 'monthly'
+          ORDER BY "periodKey" DESC LIMIT 1`,
+        [id, scope.companyId, employee.assignmentId]
+      ).catch((e) => { logger.error(e, "employees latestScore query failed"); return []; }) : Promise.resolve([]),
+      employee.assignmentId ? rawQuery<Record<string, unknown>>(
+        `SELECT id, "signalType", severity, scope, "periodKey", title,
+                reasons, "compositeScore", "createdAt"
+           FROM employee_signals
+          WHERE "assignmentId" = $3 AND "companyId" = $2
+            AND "acknowledgedAt" IS NULL
+            AND "createdAt" >= CURRENT_DATE - INTERVAL '90 days'
+          ORDER BY
+            CASE severity
+              WHEN 'critical' THEN 0 WHEN 'high' THEN 1
+              WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4
+            END,
+            "createdAt" DESC
+          LIMIT 20`,
+        [id, scope.companyId, employee.assignmentId]
+      ).catch((e) => { logger.error(e, "employees activeSignals query failed"); return []; }) : Promise.resolve([]),
     ]);
 
     res.json(maskFields(req, {
@@ -1547,6 +1578,10 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
       contract: Array.isArray(contract) && contract.length > 0 ? contract[0] : null,
       position: Array.isArray(position) && position.length > 0 ? position[0] : null,
       custodies: custodies ?? [],
+      // HR-014 — overview enrichment: single most-recent monthly score
+      // (or null) + array of unacknowledged signals from the last 90 days.
+      latestScore: Array.isArray(latestScore) && latestScore.length > 0 ? latestScore[0] : null,
+      activeSignals: activeSignals ?? [],
     }));
   } catch (err) {
     handleRouteError(err, res, "Get employee error:");

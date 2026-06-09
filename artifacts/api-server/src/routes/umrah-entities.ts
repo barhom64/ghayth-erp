@@ -35,6 +35,7 @@ import {
   generateStatement,
   listUninvoicedGroups,
 } from "../lib/umrahInvoicingEngine.js";
+import { postNuskJournalEntries } from "../lib/umrahImportEngine.js";
 import {
   calculateCommissionForPlan,
   simulateCommission,
@@ -1189,6 +1190,7 @@ const updateNuskInvoiceSchema = z.object({
   additionalServices: z.coerce.number().optional(),
   netCost: z.coerce.number().optional(),
   totalAmount: z.coerce.number().optional(),
+  refundAmount: z.coerce.number().optional(),
   nuskStatus: z.enum(["pending", "paid", "in_progress", "expired", "refunded", "cancelled"]).optional(),
   issueDate: z.string().optional(),
   expiryDate: z.string().optional(),
@@ -1204,17 +1206,40 @@ router.post("/nusk-invoices", authorize({ feature: "umrah", action: "create" }),
       [b.nuskInvoiceNumber, scope.companyId]
     );
     if (dup) throw new ConflictError("رقم فاتورة نسك مكرر");
-    const rows = await rawQuery(
-      `INSERT INTO umrah_nusk_invoices ("companyId","branchId","nuskInvoiceNumber","agentId","subAgentId","groupId","mutamerCount",
-       "groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate","createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
-      [scope.companyId, scope.branchId || null, b.nuskInvoiceNumber, b.agentId, b.subAgentId || null, b.groupId || null, b.mutamerCount,
-       b.groundServices, b.visaFees, b.insuranceFees, b.transportTotal, b.hotelTotal, b.additionalServices, b.netCost, b.totalAmount, b.nuskStatus,
-       b.issueDate || null, b.expiryDate || null, scope.userId]
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_nusk_invoices", entityId: rows[0]?.id, after: { nuskInvoiceNumber: b.nuskInvoiceNumber } }).catch((e) => logger.error(e, "nusk bg"));
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.created", entity: "umrah_nusk_invoices", entityId: rows[0]?.id }).catch((e) => logger.error(e, "nusk bg"));
-    res.status(201).json(rows[0]);
+    // Single transaction: invoice row + AP journal entry must land
+    // together. The legacy code wrote the row only — so the NUSK
+    // obligation (DR 5201 cost / CR 2101 AP) never posted, the
+    // trial balance under-reported AP, and the reconciliation desk
+    // couldn't match the NUSK supplier ledger. Mirrors what
+    // confirmVouchersImport() does on every imported voucher.
+    const created = await withTransaction(async (client) => {
+      const res = await client.query(
+        `INSERT INTO umrah_nusk_invoices ("companyId","branchId","nuskInvoiceNumber","agentId","subAgentId","groupId","mutamerCount",
+         "groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate","createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+        [scope.companyId, scope.branchId || null, b.nuskInvoiceNumber, b.agentId, b.subAgentId || null, b.groupId || null, b.mutamerCount,
+         b.groundServices, b.visaFees, b.insuranceFees, b.transportTotal, b.hotelTotal, b.additionalServices, b.netCost, b.totalAmount, b.nuskStatus,
+         b.issueDate || null, b.expiryDate || null, scope.userId]
+      );
+      const row = res.rows[0];
+      await postNuskJournalEntries(
+        client,
+        { companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, seasonId: 0 },
+        {
+          nuskId: row.id,
+          nuskInvoiceNumber: b.nuskInvoiceNumber,
+          totalAmount: Number(b.totalAmount ?? 0),
+          refundAmount: 0,
+          nuskStatus: String(b.nuskStatus ?? "pending").toLowerCase(),
+          existingApJeId: null,
+          existingRefundJeId: null,
+        },
+      );
+      return row;
+    });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_nusk_invoices", entityId: created?.id, after: { nuskInvoiceNumber: b.nuskInvoiceNumber } }).catch((e) => logger.error(e, "nusk bg"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.created", entity: "umrah_nusk_invoices", entityId: created?.id }).catch((e) => logger.error(e, "nusk bg"));
+    res.status(201).json(created);
   } catch (err) { handleRouteError(err, res, "Create nusk invoice"); }
 });
 
@@ -1223,32 +1248,67 @@ router.patch("/nusk-invoices/:id", authorize({ feature: "umrah", action: "update
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateNuskInvoiceSchema.safeParse(req.body));
-    const [existing] = await rawQuery<{ id: number; nuskStatus: string }>(
-      `SELECT * FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    const [existing] = await rawQuery<{
+      id: number; nuskStatus: string; nuskInvoiceNumber: string;
+      totalAmount: number | string | null; refundAmount: number | string | null;
+      purchaseInvoiceId: number | null; journalEntryId: number | null;
+    }>(
+      `SELECT id, "nuskStatus", "nuskInvoiceNumber", "totalAmount", "refundAmount",
+              "purchaseInvoiceId", "journalEntryId"
+       FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) { res.status(404).json({ error: "فاتورة نسك غير موجودة" }); return; }
     if (existing.nuskStatus === "paid" && b.nuskStatus !== "refunded") {
       throw new ConflictError("لا يمكن تعديل فاتورة نسك مدفوعة");
     }
-    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate"] as const;
-    const params: unknown[] = [];
-    const sets: string[] = [];
-    for (const key of fields) {
-      // as-any-reason: justified-pragmatic - dynamic key access on Zod-parsed body whose generic does not expose indexer; key is bound to const whitelist `fields` (12 hardcoded columns)
-      if ((b as any)[key] !== undefined) { params.push((b as any)[key]); sets.push(`"${key}"=$${params.length}`); }
-    }
-    if (sets.length === 0) { res.json(existing); return; }
-    params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
-    sets.push(`"updatedAt"=NOW()`);
-    params.push(id); params.push(scope.companyId);
-    const [row] = await rawQuery(
-      `UPDATE umrah_nusk_invoices SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
-      params
-    );
+    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","refundAmount","nuskStatus","issueDate","expiryDate"] as const;
+    // Single transaction: UPDATE row + (idempotent) re-evaluation
+    // of the AP / refund-reversal journal entries. The legacy code
+    // updated the row only — so transitioning a nusk invoice to
+    // 'refunded' never posted the DR-AP / CR-cost reversal, the
+    // trial balance over-reported AP, and finance had to manually
+    // book the entry every refund. postNuskJournalEntries is
+    // idempotent via sourceKey + existing-id guards: it backfills
+    // legacy AP-less rows on first update AND posts the reversal
+    // the first time status flips to 'refunded'. Mirrors the
+    // confirmVouchersImport() update path.
+    const updated = await withTransaction(async (client) => {
+      const params: unknown[] = [];
+      const sets: string[] = [];
+      for (const key of fields) {
+        // as-any-reason: justified-pragmatic - dynamic key access on Zod-parsed body whose generic does not expose indexer; key is bound to const whitelist (13 hardcoded columns)
+        if ((b as any)[key] !== undefined) { params.push((b as any)[key]); sets.push(`"${key}"=$${params.length}`); }
+      }
+      let row = existing;
+      if (sets.length > 0) {
+        params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
+        sets.push(`"updatedAt"=NOW()`);
+        params.push(id); params.push(scope.companyId);
+        const upd = await client.query(
+          `UPDATE umrah_nusk_invoices SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
+          params
+        );
+        row = upd.rows[0];
+      }
+      await postNuskJournalEntries(
+        client,
+        { companyId: scope.companyId, branchId: scope.branchId || 0, userId: scope.userId, seasonId: 0 },
+        {
+          nuskId: row.id,
+          nuskInvoiceNumber: String(row.nuskInvoiceNumber),
+          totalAmount: Number(b.totalAmount ?? row.totalAmount ?? 0),
+          refundAmount: Number(b.refundAmount ?? row.refundAmount ?? 0),
+          nuskStatus: String(b.nuskStatus ?? row.nuskStatus ?? "pending").toLowerCase(),
+          existingApJeId: row.purchaseInvoiceId ?? null,
+          existingRefundJeId: row.journalEntryId ?? null,
+        },
+      );
+      return row;
+    });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_nusk_invoices", entityId: id, after: b }).catch((e) => logger.error(e, "nusk bg"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.updated", entity: "umrah_nusk_invoices", entityId: id }).catch((e) => logger.error(e, "nusk bg"));
-    res.json(row);
+    res.json(updated);
   } catch (err) { handleRouteError(err, res, "Update nusk invoice"); }
 });
 
@@ -1553,6 +1613,200 @@ router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: 
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List batch changes"); }
+});
+
+// ============================================================================
+// IMPORT — unlinked-rows recovery (§3 of #1870)
+// ============================================================================
+//
+// Why this exists. The engine resolvers fall back to NULL when the source
+// row lacks the lookup key (nuskAgentNumber / nuskGroupNumber / nuskCode).
+// The row still lands in umrah_pilgrims, but with NULL agentId / groupId /
+// subAgentId — meaning it's invisible on the agent → group → sub-agent
+// drill-down and on per-entity rollup queries. The wizard now shows
+// pre-confirm counts; this endpoint pair is the after-confirm recovery
+// path so the operator can bulk-assign without re-importing the file.
+
+router.get("/import/batches/:id/unlinked", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const dimension = String(req.query.dimension ?? "agent");
+    if (!["agent", "group", "subAgent"].includes(dimension)) {
+      throw new ValidationError("البُعد المطلوب غير صالح", { field: "dimension" });
+    }
+    const [batch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!batch) throw new NotFoundError("الدفعة غير موجودة");
+
+    // The pilgrim row carries no batchId column, so we join through
+    // umrah_import_changes which DOES tag every row written during
+    // a batch. Filter to entityType='mutamer' + changeType in
+    // ('created','updated') so we don't sweep in skips / errors.
+    const fkColumn = dimension === "agent" ? "agentId"
+                   : dimension === "group" ? "groupId"
+                   : "subAgentId";
+    const rows = await rawQuery<{
+      id: number; nuskNumber: string | null; fullName: string;
+      nationality: string | null; status: string | null;
+      agentId: number | null; groupId: number | null; subAgentId: number | null;
+    }>(
+      `SELECT p.id, p."nuskNumber", p."fullName", p.nationality, p.status,
+              p."agentId", p."groupId", p."subAgentId"
+       FROM umrah_pilgrims p
+       WHERE p."companyId" = $1
+         AND p."${fkColumn}" IS NULL
+         AND p."deletedAt" IS NULL
+         AND EXISTS (
+           SELECT 1 FROM umrah_import_changes ic
+           WHERE ic."batchId" = $2
+             AND ic."entityType" = 'mutamer'
+             AND ic."entityId" = p.id
+             AND ic."changeType" IN ('created','updated')
+         )
+       ORDER BY p."nuskNumber" NULLS LAST, p.id
+       LIMIT 1000`,
+      [scope.companyId, id]
+    );
+    res.json(maskFields(req, { data: rows, dimension, batchId: id }));
+  } catch (err) { handleRouteError(err, res, "List unlinked rows"); }
+});
+
+const linkUnlinkedSchema = z.object({
+  dimension: z.enum(["agent", "group", "subAgent"]),
+  pilgrimIds: z.array(z.coerce.number().int().positive()).min(1, "اختر صفًا واحدًا على الأقل"),
+  // exactly one of: existing target id, or new-entity name to create
+  targetId: z.coerce.number().int().positive().optional(),
+  newEntityName: z.string().trim().min(1).optional(),
+  // optional parent linkage for sub-agent creation (must belong to an agent)
+  parentAgentId: z.coerce.number().int().positive().optional(),
+}).refine((v) => (v.targetId !== undefined) !== (v.newEntityName !== undefined), {
+  message: "يجب تحديد إما هدف موجود أو اسم لإنشاء كيان جديد، لا الاثنين معًا",
+});
+
+router.post("/import/batches/:id/unlinked/link", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(linkUnlinkedSchema.safeParse(req.body));
+    const [batch] = await rawQuery<{ id: number; seasonId: number | null }>(
+      `SELECT id, "seasonId" FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!batch) throw new NotFoundError("الدفعة غير موجودة");
+
+    const result = await withTransaction(async (client) => {
+      // Resolve the target FK. Either look up the existing one and
+      // verify it belongs to the same tenant, or create a fresh row
+      // in the dimension table. Both branches return the id we'll
+      // stamp on every selected pilgrim.
+      let resolvedTargetId: number;
+      if (b.targetId !== undefined) {
+        const table = b.dimension === "agent" ? "umrah_agents"
+                    : b.dimension === "group" ? "umrah_groups"
+                    : "umrah_sub_agents";
+        const exists = await client.query(
+          `SELECT id FROM ${table} WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+          [b.targetId, scope.companyId]
+        );
+        if (exists.rows.length === 0) {
+          throw new NotFoundError(
+            b.dimension === "agent" ? "الوكيل غير موجود"
+            : b.dimension === "group" ? "المجموعة غير موجودة"
+            : "الوكيل الفرعي غير موجود"
+          );
+        }
+        resolvedTargetId = b.targetId;
+      } else {
+        const name = b.newEntityName!;
+        if (b.dimension === "agent") {
+          const ins = await client.query(
+            `INSERT INTO umrah_agents ("companyId","branchId",name,"createdBy","createdAt","updatedAt")
+             VALUES ($1,$2,$3,$4,NOW(),NOW()) RETURNING id`,
+            [scope.companyId, scope.branchId || null, name, scope.userId]
+          );
+          resolvedTargetId = ins.rows[0].id;
+        } else if (b.dimension === "group") {
+          const ins = await client.query(
+            `INSERT INTO umrah_groups ("companyId","branchId","seasonId",name,"agentId","createdBy","createdAt","updatedAt")
+             VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW()) RETURNING id`,
+            [scope.companyId, scope.branchId || null, batch.seasonId, name, b.parentAgentId || null, scope.userId]
+          );
+          resolvedTargetId = ins.rows[0].id;
+        } else {
+          // Sub-agent needs a parent agent — refuse fast if missing,
+          // otherwise the rollup queries on per-agent statements
+          // wouldn't pick up the new sub-agent at all.
+          if (!b.parentAgentId) {
+            throw new ValidationError("يجب اختيار الوكيل الأم للوكيل الفرعي", { field: "parentAgentId" });
+          }
+          const parent = await client.query(
+            `SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+            [b.parentAgentId, scope.companyId]
+          );
+          if (parent.rows.length === 0) throw new NotFoundError("الوكيل الأم غير موجود");
+          const ins = await client.query(
+            `INSERT INTO umrah_sub_agents ("companyId","branchId","agentId",name,"createdBy","createdAt","updatedAt")
+             VALUES ($1,$2,$3,$4,$5,NOW(),NOW()) RETURNING id`,
+            [scope.companyId, scope.branchId || null, b.parentAgentId, name, scope.userId]
+          );
+          resolvedTargetId = ins.rows[0].id;
+        }
+      }
+
+      const fkColumn = b.dimension === "agent" ? "agentId"
+                     : b.dimension === "group" ? "groupId"
+                     : "subAgentId";
+      // Only UPDATE rows that are STILL unlinked + that were touched
+      // by THIS batch — defence against concurrent edits and against
+      // an operator pasting pilgrimIds from a different batch.
+      const upd = await client.query(
+        `UPDATE umrah_pilgrims p
+         SET "${fkColumn}"=$1, "updatedBy"=$2, "updatedAt"=NOW()
+         WHERE p."companyId"=$3
+           AND p.id = ANY($4::int[])
+           AND p."${fkColumn}" IS NULL
+           AND p."deletedAt" IS NULL
+           AND EXISTS (
+             SELECT 1 FROM umrah_import_changes ic
+             WHERE ic."batchId" = $5 AND ic."entityType" = 'mutamer'
+               AND ic."entityId" = p.id
+           )
+         RETURNING id`,
+        [resolvedTargetId, scope.userId, scope.companyId, b.pilgrimIds, id]
+      );
+      const linkedCount = upd.rows.length;
+
+      // Decrement the batch counter so the recovery screen shows
+      // remaining work, not the pre-link count.
+      const counterCol = b.dimension === "agent" ? "unlinkedAgentCount"
+                       : b.dimension === "group" ? "unlinkedGroupCount"
+                       : "unlinkedSubAgentCount";
+      await client.query(
+        `UPDATE umrah_import_batches
+         SET "${counterCol}" = GREATEST(0, COALESCE("${counterCol}", 0) - $1),
+             "updatedAt" = NOW()
+         WHERE id = $2 AND "companyId" = $3`,
+        [linkedCount, id, scope.companyId]
+      );
+
+      return { linkedCount, resolvedTargetId };
+    });
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update",
+      entity: "umrah_pilgrims", entityId: 0,
+      after: { batchId: id, dimension: b.dimension, targetId: result.resolvedTargetId, linkedCount: result.linkedCount },
+    }).catch((e) => logger.error(e, "unlinked-link bg"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.import.unlinked_rows_linked", entity: "umrah_import_batches", entityId: id,
+      after: { dimension: b.dimension, linkedCount: result.linkedCount },
+    }).catch((e) => logger.error(e, "unlinked-link bg"));
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "Link unlinked rows"); }
 });
 
 // ============================================================================
