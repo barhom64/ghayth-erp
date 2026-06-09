@@ -554,8 +554,22 @@ export default function VouchersCreate() {
             </p>
           </div>
         )}
+        {/* #1715 (owner feedback) — رفع الملف هو الأساس ويُحقّق شرط «المرفق
+            إلزامي» مباشرةً؛ حقل الرابط ثانوي. */}
+        <FileDropZone
+          files={attachments}
+          maxSizeMB={2}
+          label="ارفع المستند الداعم (إشعار تحويل / وصل استلام / فاتورة)"
+          onFilesChange={(f) => {
+            setAttachments(f);
+            if (f.length > 0) setField("attachmentUrl", f[0].dataUrl);
+            else if (form.attachmentUrl.startsWith("data:")) setField("attachmentUrl", "");
+          }}
+        />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField label="رابط المرفق" value={form.attachmentUrl} onChange={(v) => setField("attachmentUrl", v)} placeholder="https://... أو مسار الملف" />
+          <TextField label="أو الصق رابط المستند (اختياري)"
+            value={form.attachmentUrl.startsWith("data:") ? "" : form.attachmentUrl}
+            onChange={(v) => setField("attachmentUrl", v)} placeholder="https://... (إن كان مرفوعًا على نظام آخر)" />
           <FormFieldWrapper label="نوع المرفق">
             <Select value={form.attachmentType} onValueChange={(v) => setField("attachmentType", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -572,9 +586,6 @@ export default function VouchersCreate() {
           </FormFieldWrapper>
         </div>
       </div>
-
-      
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
 
       {/* #1715 §11 — backend dry-run preview of the exact JE that will post. */}
       {preview && preview.lines?.length > 0 && (

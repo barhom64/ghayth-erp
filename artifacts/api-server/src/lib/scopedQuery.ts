@@ -158,7 +158,20 @@ export function buildScopedWhere(
 
     // When includeNullBranch is set, NULL-branch (company-level) rows
     // survive the predicate alongside the scoped branch ids.
-    const nullClause = options.includeNullBranch ? `${branchCol} IS NULL OR ` : "";
+    //
+    // Owners / general_managers have company-wide visibility by definition:
+    // under "all branches" they already see every row, NULL-branch ones
+    // included. When they narrow to a single branch via the header picker
+    // (the default is a single branch, not "all"), a plain `branchId = $x`
+    // predicate would silently drop every company-level (NULL-branch) row —
+    // the exact "الصفحة ما تطلع الا لما أختار كل الفروع" symptom. Since these
+    // rows are not branch-private and the owner/GM is already entitled to
+    // them, always keep NULL-branch rows visible for company-wide roles.
+    // This exposes nothing new (it is a strict subset of their "all
+    // branches" view) and only affects rows with no branch assignment.
+    const isCompanyWideRole = scope.isOwner || BRANCH_SCOPE_EXEMPT_ROLES.has(scope.role);
+    const nullClause =
+      options.includeNullBranch || isCompanyWideRole ? `${branchCol} IS NULL OR ` : "";
     if (branchIds.length === 1) {
       conditions.push(`(${nullClause}${branchCol} = $${paramIdx})`);
       params.push(branchIds[0]);

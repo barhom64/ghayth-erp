@@ -855,10 +855,10 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
             // (fleet route uses it for the trip-complete + violation
             // flow) — INSERT or UPDATE the link via fleet_drivers.
             await client.query(
-              `INSERT INTO fleet_drivers (name, phone, "companyId", "branchId", "linkedEmployeeId", status)
-               VALUES ($1, $2, $3, $4, $5, 'available')
+              `INSERT INTO fleet_drivers (name, phone, "companyId", "employeeId", status)
+               VALUES ($1, $2, $3, $4, 'available')
                ON CONFLICT DO NOTHING`,
-              [name, phone || null, effectiveCompanyId, targetBranchId, empId]
+              [name, phone || null, effectiveCompanyId, empId]
             ).catch(() => undefined);
           } else {
             logger.warn({ vehicleId: wantsVehicle }, "[employees] vehicleId not in company — skipping driver binding");
