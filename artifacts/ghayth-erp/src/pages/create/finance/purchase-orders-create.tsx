@@ -19,18 +19,9 @@ import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/fo
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { Select as LineTreatmentSelect, SelectContent as LTSC, SelectItem as LTSI, SelectTrigger as LTST, SelectValue as LTSV } from "@/components/ui/select";
-
-const LINE_TREATMENTS = [
-  { value: "inventory",            label: "مخزون (Inventory)" },
-  { value: "expense",              label: "مصروف (Expense)" },
-  { value: "fixed_asset",          label: "أصل ثابت (Fixed Asset)" },
-  { value: "project_cost",         label: "تكلفة مشروع (Project Cost)" },
-  { value: "vehicle_cost",         label: "تكلفة مركبة (Vehicle Cost)" },
-  { value: "property_maintenance", label: "صيانة عقار (Property Maintenance)" },
-  { value: "custody",              label: "عهدة موظف (Custody)" },
-  { value: "prepayment",           label: "دفعة مقدمة (Prepayment)" },
-  { value: "service",              label: "خدمة (Service)" },
-];
+// #1945 — the line-treatment list + its expected accounting come from the
+// central finance model (mirrors the backend TREATMENT_PURPOSE; parity tested).
+import { PURCHASE_LINE_TREATMENTS as LINE_TREATMENTS, resolvePurchaseTreatment } from "@/lib/finance/scenario-model";
 
 const DRAFT_KEY = "finance_purchase_orders_create";
 
@@ -234,9 +225,17 @@ export default function PurchaseOrdersCreate() {
                   ))}
                 </LTSC>
               </LineTreatmentSelect>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                ⓘ يحدد كيف يوجَّه البند عند الـ GRN: مخزون / مصروف / أصل ثابت / تكلفة مشروع / إلخ.
-              </p>
+              {/* #1945 — التوجيه المحاسبي المتوقع لهذا البند، مشتق من النموذج
+                  المركزي (مطابق لتوجيه الخادم عند الـ GRN). */}
+              {(() => {
+                const t = resolvePurchaseTreatment(item.lineTreatment);
+                return (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    ⓘ التوجيه المحاسبي عند الـ GRN:{" "}
+                    {t ? `${t.hint}${t.capitalize ? " (رسملة — ميزانية)" : " (مصروف — قائمة الدخل)"}` : "يُحدَّد حسب نوع البند."}
+                  </p>
+                );
+              })()}
             </div>
             <LineAllocationPanel
               value={item.allocation ?? {}}
