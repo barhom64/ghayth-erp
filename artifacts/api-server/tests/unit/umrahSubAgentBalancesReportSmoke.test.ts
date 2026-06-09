@@ -101,9 +101,17 @@ describe("UmrahSubAgentBalances page — UX", () => {
     expect(ROUTES_TSX).toMatch(/path: "\/umrah\/reports\/subagent-balances"/);
   });
 
-  it("listed in the reports hub under مالية category", () => {
-    expect(HUB_PAGE).toContain("/umrah/reports/subagent-balances");
-    expect(HUB_PAGE).toContain("أرصدة الوكلاء الفرعيين");
+  it("listed in the §11 reports catalog (read by the hub via /reports/catalog)", () => {
+    // The hub used to inline the tile; with §11 it now reads the
+    // server catalog. Pin both the destination route and the report
+    // id there — the smoke test for the catalog itself
+    // (umrahReportsCatalogSmoke.test.ts) asserts coverage of all 17.
+    const CATALOG = readFileSync(
+      join(import.meta.dirname!, "../../src/lib/umrahReportsCatalog.ts"),
+      "utf8",
+    );
+    expect(CATALOG).toContain("/umrah/reports/subagent-balances");
+    expect(CATALOG).toContain('id: "subagent_report"');
   });
 
   it("4 filters + 4 KPIs + table with stable testids", () => {

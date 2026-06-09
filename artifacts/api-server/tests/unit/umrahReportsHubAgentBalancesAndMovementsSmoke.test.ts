@@ -170,23 +170,30 @@ describe("reports hub + new pages — registration + nav", () => {
     expect(TABS).toMatch(/BarChart3/);
   });
 
-  it("hub page groups tiles by category (مالية / تشغيلية / امتثال)", () => {
-    expect(HUB_PAGE).toMatch(/category: "مالية"/);
-    expect(HUB_PAGE).toMatch(/category: "تشغيلية"/);
-    expect(HUB_PAGE).toMatch(/category: "امتثال"/);
-    expect(HUB_PAGE).toContain('data-testid={`umrah-reports-tile-');
+  it("hub page exposes category + status filters (§11 of #1870)", () => {
+    // The hub was rewritten to consume the server-side catalog
+    // (UMRAH_REPORTS_CATALOG) instead of a hand-curated tile list.
+    // What previously lived inline now sits in /lib/umrahReportsCatalog.ts;
+    // umrahReportsCatalogSmoke.test.ts pins the catalog contents.
+    expect(HUB_PAGE).toContain('data-testid="reports-filter-category"');
+    expect(HUB_PAGE).toContain('data-testid="reports-filter-status"');
+    expect(HUB_PAGE).toMatch(/data-testid=\{`report-card-\$\{r\.id\}`\}/);
   });
 
-  it("hub includes links to BOTH new reports + existing ones (compliance, portfolios, runsheet)", () => {
-    // Pin a few key destinations so a future cleanup that drops one
-    // by accident lands here visibly.
-    expect(HUB_PAGE).toContain("/umrah/reports/agent-balances");
-    expect(HUB_PAGE).toContain("/umrah/reports/pilgrim-movements");
-    expect(HUB_PAGE).toContain("/finance/umrah-group-portfolio");
-    expect(HUB_PAGE).toContain("/finance/umrah-season-portfolio");
-    expect(HUB_PAGE).toContain("/umrah/compliance");
-    expect(HUB_PAGE).toContain("/umrah/daily-runsheet");
-    expect(HUB_PAGE).toContain("/umrah/reconciliation");
+  it("destination routes for the key reports are wired in the SERVER catalog", () => {
+    // The hub used to pin destinations inline; with the §11 catalog
+    // they live in the engine module. Pin them there so a future
+    // edit that drops a route still trips this assertion.
+    const CATALOG = readFileSync(
+      join(import.meta.dirname!, "../../src/lib/umrahReportsCatalog.ts"),
+      "utf8",
+    );
+    expect(CATALOG).toContain("/umrah/reports/agent-balances");
+    expect(CATALOG).toContain("/umrah/reports/pilgrim-movements");
+    expect(CATALOG).toContain("/umrah/reports/group-portfolio");
+    expect(CATALOG).toContain("/umrah/reports/season-portfolio");
+    expect(CATALOG).toContain("/umrah/compliance");
+    expect(CATALOG).toContain("/umrah/daily-runsheet");
   });
 });
 

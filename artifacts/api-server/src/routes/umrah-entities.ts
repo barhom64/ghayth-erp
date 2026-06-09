@@ -47,6 +47,11 @@ import {
   listTransportRequestsForGroup,
 } from "../lib/umrahTransportContract.js";
 import { getDashboardSuggestions } from "../lib/umrahAssistantEngine.js";
+import {
+  UMRAH_REPORTS_CATALOG,
+  REPORT_CATEGORY_LABELS_AR,
+  REPORT_STATUS_LABELS_AR,
+} from "../lib/umrahReportsCatalog.js";
 import { logger } from "../lib/logger.js";
 import { renderPrint } from "../lib/print/printService.js";
 
@@ -4713,6 +4718,20 @@ router.get("/assistant/suggestions", authorize({ feature: "umrah", action: "list
     });
     res.json({ data: suggestions });
   } catch (err) { handleRouteError(err, res, "Assistant suggestions"); }
+});
+
+// §11 of #1870 — Reports Catalog.
+// Returns the 17-report registry so the FE hub can render them
+// with status badges + category filter. The catalog is static
+// (no DB query), so this endpoint is single-millisecond.
+router.get("/reports/catalog", authorize({ feature: "umrah", action: "list" }), async (_req, res): Promise<void> => {
+  try {
+    res.json({
+      data: UMRAH_REPORTS_CATALOG,
+      categories: REPORT_CATEGORY_LABELS_AR,
+      statuses: REPORT_STATUS_LABELS_AR,
+    });
+  } catch (err) { handleRouteError(err, res, "Reports catalog"); }
 });
 
 export default router;
