@@ -1,14 +1,11 @@
 import { useLocation } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { useApiMutation } from "@/lib/api";
+import { AccountSelect } from "@/components/shared/entity-selects";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -34,8 +31,6 @@ export default function OpeningBalancesCreatePage() {
   const { toast } = useToast();
   const { fieldErrors, validate } = useFieldErrors();
 
-  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
-  const accounts = accountsData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_opening_balances_create", {
     periodStart: firstDayOfFiscalYear(),
@@ -75,8 +70,6 @@ export default function OpeningBalancesCreatePage() {
     },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
 
   function updateLine(idx: number, field: keyof OBLine, value: string) {
     setLines((prev) => {
@@ -187,22 +180,11 @@ export default function OpeningBalancesCreatePage() {
             </div>
             {lines.map((line, idx) => (
               <div key={idx} className="grid grid-cols-[2fr_1fr_1fr_40px] gap-2">
-                <Select
-                  value={line.accountCode || "_none"}
-                  onValueChange={(v) => updateLine(idx, "accountCode", v === "_none" ? "" : v)}
-                >
-                  <SelectTrigger className="text-sm h-9">
-                    <SelectValue placeholder="اختر الحساب" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">اختر الحساب</SelectItem>
-                    {accounts.map((a: any) => (
-                      <SelectItem key={a.code || a.id} value={String(a.code || a.id)}>
-                        {a.code} - {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <AccountSelect
+                  value={line.accountCode}
+                  onChange={(v) => updateLine(idx, "accountCode", v)}
+                  label="" allowCreate={false}
+                />
                 <NumberField
                   label="مدين"
                   hideLabel
