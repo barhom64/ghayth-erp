@@ -49,7 +49,6 @@ ALTER TABLE IF EXISTS ONLY public.warehouse_categories DROP CONSTRAINT IF EXISTS
 ALTER TABLE IF EXISTS ONLY public.vouchers DROP CONSTRAINT IF EXISTS "vouchers_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS "users_employeeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.user_sessions DROP CONSTRAINT IF EXISTS "user_sessions_userId_fkey";
-ALTER TABLE IF EXISTS ONLY public.user_roles DROP CONSTRAINT IF EXISTS "user_roles_userId_fkey";
 ALTER TABLE IF EXISTS ONLY public.user_activity_log DROP CONSTRAINT IF EXISTS "user_activity_log_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.umrah_violations DROP CONSTRAINT IF EXISTS "umrah_violations_responsibleAssignmentId_fkey";
 ALTER TABLE IF EXISTS ONLY public.umrah_transport DROP CONSTRAINT IF EXISTS "umrah_transport_updatedBy_fkey";
@@ -89,6 +88,7 @@ ALTER TABLE IF EXISTS ONLY public.umrah_agent_invoices DROP CONSTRAINT IF EXISTS
 ALTER TABLE IF EXISTS ONLY public.umrah_agent_invoices DROP CONSTRAINT IF EXISTS "umrah_agent_invoices_createdBy_fkey";
 ALTER TABLE IF EXISTS ONLY public.umrah_agent_invoices DROP CONSTRAINT IF EXISTS "umrah_agent_invoices_branchId_fkey";
 ALTER TABLE IF EXISTS ONLY public.umrah_agent_invoices DROP CONSTRAINT IF EXISTS "umrah_agent_invoices_agentId_fkey";
+ALTER TABLE IF EXISTS ONLY public.transport_itinerary_legs DROP CONSTRAINT IF EXISTS "transport_itinerary_legs_itineraryId_fkey";
 ALTER TABLE IF EXISTS ONLY public.trainings DROP CONSTRAINT IF EXISTS "trainings_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.training_programs DROP CONSTRAINT IF EXISTS "training_programs_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.training_participants DROP CONSTRAINT IF EXISTS "training_participants_trainingId_fkey";
@@ -99,13 +99,22 @@ ALTER TABLE IF EXISTS ONLY public.training_courses DROP CONSTRAINT IF EXISTS "tr
 ALTER TABLE IF EXISTS ONLY public.ticket_replies DROP CONSTRAINT IF EXISTS "ticket_replies_ticketId_fkey";
 ALTER TABLE IF EXISTS ONLY public.ticket_csat_ratings DROP CONSTRAINT IF EXISTS "ticket_csat_ratings_ticketId_fkey";
 ALTER TABLE IF EXISTS ONLY public.tenants DROP CONSTRAINT IF EXISTS "tenants_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.tenants DROP CONSTRAINT IF EXISTS tenants_client_company_fk;
+ALTER TABLE IF EXISTS ONLY public.teams DROP CONSTRAINT IF EXISTS "teams_leaderAssignmentId_fkey";
+ALTER TABLE IF EXISTS ONLY public.teams DROP CONSTRAINT IF EXISTS "teams_departmentId_fkey";
+ALTER TABLE IF EXISTS ONLY public.teams DROP CONSTRAINT IF EXISTS "teams_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.tax_codes DROP CONSTRAINT IF EXISTS "tax_codes_inputAccountId_fkey";
 ALTER TABLE IF EXISTS ONLY public.tax_codes DROP CONSTRAINT IF EXISTS "tax_codes_accountId_fkey";
 ALTER TABLE IF EXISTS ONLY public.tasks DROP CONSTRAINT IF EXISTS "tasks_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.task_assignees DROP CONSTRAINT IF EXISTS task_assignees_task_fk;
+ALTER TABLE IF EXISTS ONLY public.task_assignees DROP CONSTRAINT IF EXISTS task_assignees_assignment_fk;
 ALTER TABLE IF EXISTS ONLY public.system_evaluations DROP CONSTRAINT IF EXISTS "system_evaluations_employeeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.system_evaluations DROP CONSTRAINT IF EXISTS "system_evaluations_cycleId_fkey";
 ALTER TABLE IF EXISTS ONLY public.system_evaluations DROP CONSTRAINT IF EXISTS "system_evaluations_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.support_tickets DROP CONSTRAINT IF EXISTS "support_tickets_branchId_fkey";
+ALTER TABLE IF EXISTS ONLY public.supervision_lines DROP CONSTRAINT IF EXISTS "supervision_lines_supervisorAssignmentId_fkey";
+ALTER TABLE IF EXISTS ONLY public.supervision_lines DROP CONSTRAINT IF EXISTS "supervision_lines_superviseeAssignmentId_fkey";
+ALTER TABLE IF EXISTS ONLY public.supervision_lines DROP CONSTRAINT IF EXISTS "supervision_lines_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.subsidiary_accounts DROP CONSTRAINT IF EXISTS "subsidiary_accounts_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.subsidiary_accounts DROP CONSTRAINT IF EXISTS "subsidiary_accounts_accountId_fkey";
 ALTER TABLE IF EXISTS ONLY public.store_products DROP CONSTRAINT IF EXISTS "store_products_companyId_fkey";
@@ -115,11 +124,10 @@ ALTER TABLE IF EXISTS ONLY public.store_order_items DROP CONSTRAINT IF EXISTS "s
 ALTER TABLE IF EXISTS ONLY public.smart_recommendations DROP CONSTRAINT IF EXISTS "smart_recommendations_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.shifts DROP CONSTRAINT IF EXISTS "shifts_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.shifts DROP CONSTRAINT IF EXISTS "shifts_branchId_fkey";
+ALTER TABLE IF EXISTS ONLY public.scoring_weights_per_company DROP CONSTRAINT IF EXISTS "scoring_weights_per_company_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.scheduled_report_history DROP CONSTRAINT IF EXISTS "scheduled_report_history_reportId_fkey";
 ALTER TABLE IF EXISTS ONLY public.saudization_snapshots DROP CONSTRAINT IF EXISTS "saudization_snapshots_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.salary_components DROP CONSTRAINT IF EXISTS "salary_components_companyId_fkey";
-ALTER TABLE IF EXISTS ONLY public.role_permissions DROP CONSTRAINT IF EXISTS "role_permissions_companyId_fkey";
-ALTER TABLE IF EXISTS ONLY public.role_permissions DROP CONSTRAINT IF EXISTS "role_permissions_branchId_fkey";
 ALTER TABLE IF EXISTS ONLY public.requests DROP CONSTRAINT IF EXISTS "requests_typeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.requests DROP CONSTRAINT IF EXISTS "requests_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.request_types DROP CONSTRAINT IF EXISTS "request_types_companyId_fkey";
@@ -181,11 +189,9 @@ ALTER TABLE IF EXISTS ONLY public.pricing_rule_applications DROP CONSTRAINT IF E
 ALTER TABLE IF EXISTS ONLY public.pricing_rule_applications DROP CONSTRAINT IF EXISTS "pricing_rule_applications_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.pricing_conditions DROP CONSTRAINT IF EXISTS "pricing_conditions_ruleId_fkey";
 ALTER TABLE IF EXISTS ONLY public.pricing_actions DROP CONSTRAINT IF EXISTS "pricing_actions_ruleId_fkey";
+ALTER TABLE IF EXISTS ONLY public.positions DROP CONSTRAINT IF EXISTS "positions_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.policy_module_links DROP CONSTRAINT IF EXISTS "policy_module_links_policyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.policy_module_links DROP CONSTRAINT IF EXISTS "policy_module_links_companyId_fkey";
-ALTER TABLE IF EXISTS ONLY public.permissions DROP CONSTRAINT IF EXISTS "permissions_userId_fkey";
-ALTER TABLE IF EXISTS ONLY public.permissions DROP CONSTRAINT IF EXISTS "permissions_grantedBy_fkey";
-ALTER TABLE IF EXISTS ONLY public.permissions DROP CONSTRAINT IF EXISTS "permissions_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.performance_reviews DROP CONSTRAINT IF EXISTS "performance_reviews_reviewerId_fkey";
 ALTER TABLE IF EXISTS ONLY public.performance_reviews DROP CONSTRAINT IF EXISTS performance_reviews_employee_id_fk;
 ALTER TABLE IF EXISTS ONLY public.performance_reviews DROP CONSTRAINT IF EXISTS "performance_reviews_employeeId_fkey";
@@ -206,6 +212,7 @@ ALTER TABLE IF EXISTS ONLY public.payment_runs DROP CONSTRAINT IF EXISTS "paymen
 ALTER TABLE IF EXISTS ONLY public.payment_runs DROP CONSTRAINT IF EXISTS "payment_runs_branchId_fkey";
 ALTER TABLE IF EXISTS ONLY public.payment_run_items DROP CONSTRAINT IF EXISTS "payment_run_items_runId_fkey";
 ALTER TABLE IF EXISTS ONLY public.password_reset_requests DROP CONSTRAINT IF EXISTS "password_reset_requests_resolvedBy_fkey";
+ALTER TABLE IF EXISTS ONLY public.party_links DROP CONSTRAINT IF EXISTS "party_links_partyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.outbound_queue DROP CONSTRAINT IF EXISTS "outbound_queue_messageLogId_fkey";
 ALTER TABLE IF EXISTS ONLY public.notifications DROP CONSTRAINT IF EXISTS "notifications_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.notification_webhooks DROP CONSTRAINT IF EXISTS "notification_webhooks_companyId_fkey";
@@ -226,7 +233,9 @@ ALTER TABLE IF EXISTS ONLY public.loan_accounts DROP CONSTRAINT IF EXISTS loan_a
 ALTER TABLE IF EXISTS ONLY public.loan_accounts DROP CONSTRAINT IF EXISTS loan_accounts_company_id_fk;
 ALTER TABLE IF EXISTS ONLY public.legal_sessions DROP CONSTRAINT IF EXISTS "legal_sessions_caseId_fkey";
 ALTER TABLE IF EXISTS ONLY public.legal_judgments DROP CONSTRAINT IF EXISTS "legal_judgments_caseId_fkey";
+ALTER TABLE IF EXISTS ONLY public.legal_entities DROP CONSTRAINT IF EXISTS "legal_entities_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.legal_correspondence DROP CONSTRAINT IF EXISTS "legal_correspondence_caseId_fkey";
+ALTER TABLE IF EXISTS ONLY public.legal_cases DROP CONSTRAINT IF EXISTS legal_cases_client_company_fk;
 ALTER TABLE IF EXISTS ONLY public.leave_balances DROP CONSTRAINT IF EXISTS "leave_balances_leaveTypeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.leave_balances DROP CONSTRAINT IF EXISTS "leave_balances_employeeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.leave_balances DROP CONSTRAINT IF EXISTS "leave_balances_companyId_fkey";
@@ -369,6 +378,7 @@ ALTER TABLE IF EXISTS ONLY public.financial_periods DROP CONSTRAINT IF EXISTS "f
 ALTER TABLE IF EXISTS ONLY public.financial_periods DROP CONSTRAINT IF EXISTS "financial_periods_lockedBy_fkey";
 ALTER TABLE IF EXISTS ONLY public.financial_periods DROP CONSTRAINT IF EXISTS "financial_periods_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.financial_periods DROP CONSTRAINT IF EXISTS "financial_periods_closedBy_fkey";
+ALTER TABLE IF EXISTS ONLY public.field_tracking_points DROP CONSTRAINT IF EXISTS "field_tracking_points_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.expenses DROP CONSTRAINT IF EXISTS "expenses_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.expense_claims DROP CONSTRAINT IF EXISTS "expense_claims_employeeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.expense_claims DROP CONSTRAINT IF EXISTS "expense_claims_companyId_fkey";
@@ -382,6 +392,13 @@ ALTER TABLE IF EXISTS ONLY public.evaluation_participants DROP CONSTRAINT IF EXI
 ALTER TABLE IF EXISTS ONLY public.evaluation_cycles DROP CONSTRAINT IF EXISTS "evaluation_cycles_initiatorId_fkey";
 ALTER TABLE IF EXISTS ONLY public.evaluation_cycles DROP CONSTRAINT IF EXISTS "evaluation_cycles_employeeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.evaluation_cycles DROP CONSTRAINT IF EXISTS "evaluation_cycles_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_team_memberships DROP CONSTRAINT IF EXISTS "employee_team_memberships_teamId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_team_memberships DROP CONSTRAINT IF EXISTS "employee_team_memberships_assignmentId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_signals DROP CONSTRAINT IF EXISTS "employee_signals_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_scores DROP CONSTRAINT IF EXISTS "employee_scores_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_project_assignments DROP CONSTRAINT IF EXISTS "employee_project_assignments_projectId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_project_assignments DROP CONSTRAINT IF EXISTS "employee_project_assignments_costCenterId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_project_assignments DROP CONSTRAINT IF EXISTS "employee_project_assignments_assignmentId_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_of_month DROP CONSTRAINT IF EXISTS "employee_of_month_employeeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_of_month DROP CONSTRAINT IF EXISTS "employee_of_month_createdBy_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_of_month DROP CONSTRAINT IF EXISTS "employee_of_month_companyId_fkey";
@@ -391,12 +408,19 @@ ALTER TABLE IF EXISTS ONLY public.employee_kpi_snapshots DROP CONSTRAINT IF EXIS
 ALTER TABLE IF EXISTS ONLY public.employee_documents DROP CONSTRAINT IF EXISTS "employee_documents_uploadedBy_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_documents DROP CONSTRAINT IF EXISTS "employee_documents_employeeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_documents DROP CONSTRAINT IF EXISTS "employee_documents_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_committee_memberships DROP CONSTRAINT IF EXISTS "employee_committee_memberships_committeeId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_committee_memberships DROP CONSTRAINT IF EXISTS "employee_committee_memberships_assignmentId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_categories DROP CONSTRAINT IF EXISTS "employee_categories_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_assignments DROP CONSTRAINT IF EXISTS "employee_assignments_positionId_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_assignments DROP CONSTRAINT IF EXISTS "employee_assignments_managerId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_assignments DROP CONSTRAINT IF EXISTS "employee_assignments_legalEntityId_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_assignments DROP CONSTRAINT IF EXISTS "employee_assignments_jobTitleId_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_assignments DROP CONSTRAINT IF EXISTS "employee_assignments_employeeId_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_assignments DROP CONSTRAINT IF EXISTS "employee_assignments_departmentId_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_assignments DROP CONSTRAINT IF EXISTS "employee_assignments_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.employee_assignments DROP CONSTRAINT IF EXISTS "employee_assignments_branchId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_assets DROP CONSTRAINT IF EXISTS "employee_assets_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.employee_assets DROP CONSTRAINT IF EXISTS "employee_assets_assignmentId_fkey";
 ALTER TABLE IF EXISTS ONLY public.dunning_letters DROP CONSTRAINT IF EXISTS "dunning_letters_sentBy_fkey";
 ALTER TABLE IF EXISTS ONLY public.dunning_letters DROP CONSTRAINT IF EXISTS "dunning_letters_invoiceId_fkey";
 ALTER TABLE IF EXISTS ONLY public.dunning_letters DROP CONSTRAINT IF EXISTS "dunning_letters_companyId_fkey";
@@ -444,12 +468,19 @@ ALTER TABLE IF EXISTS ONLY public.credit_memos DROP CONSTRAINT IF EXISTS "credit
 ALTER TABLE IF EXISTS ONLY public.cost_centers DROP CONSTRAINT IF EXISTS "cost_centers_parentId_fkey";
 ALTER TABLE IF EXISTS ONLY public.contract_payment_schedule DROP CONSTRAINT IF EXISTS "contract_payment_schedule_contractId_fkey";
 ALTER TABLE IF EXISTS ONLY public.contract_payment_schedule DROP CONSTRAINT IF EXISTS "contract_payment_schedule_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.committees DROP CONSTRAINT IF EXISTS "committees_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.committees DROP CONSTRAINT IF EXISTS "committees_chairAssignmentId_fkey";
 ALTER TABLE IF EXISTS ONLY public.clients DROP CONSTRAINT IF EXISTS "clients_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.client_rfm_scores DROP CONSTRAINT IF EXISTS "client_rfm_scores_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.client_rfm_scores DROP CONSTRAINT IF EXISTS "client_rfm_scores_clientId_fkey";
 ALTER TABLE IF EXISTS ONLY public.client_portal_accounts DROP CONSTRAINT IF EXISTS "client_portal_accounts_clientId_fkey";
 ALTER TABLE IF EXISTS ONLY public.chart_of_accounts DROP CONSTRAINT IF EXISTS "chart_of_accounts_parentId_fkey";
 ALTER TABLE IF EXISTS ONLY public.chart_of_accounts DROP CONSTRAINT IF EXISTS "chart_of_accounts_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.cargo_manifests DROP CONSTRAINT IF EXISTS "cargo_manifests_vehicleId_fkey";
+ALTER TABLE IF EXISTS ONLY public.cargo_manifests DROP CONSTRAINT IF EXISTS "cargo_manifests_fleetTripId_fkey";
+ALTER TABLE IF EXISTS ONLY public.cargo_manifests DROP CONSTRAINT IF EXISTS "cargo_manifests_driverId_fkey";
+ALTER TABLE IF EXISTS ONLY public.cargo_manifests DROP CONSTRAINT IF EXISTS "cargo_manifests_customerId_fkey";
+ALTER TABLE IF EXISTS ONLY public.cargo_items DROP CONSTRAINT IF EXISTS "cargo_items_manifestId_fkey";
 ALTER TABLE IF EXISTS ONLY public.business_rules DROP CONSTRAINT IF EXISTS "business_rules_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.business_rule_logs DROP CONSTRAINT IF EXISTS "business_rule_logs_ruleId_fkey";
 ALTER TABLE IF EXISTS ONLY public.budgets DROP CONSTRAINT IF EXISTS "budgets_createdBy_fkey";
@@ -457,6 +488,7 @@ ALTER TABLE IF EXISTS ONLY public.budgets DROP CONSTRAINT IF EXISTS "budgets_com
 ALTER TABLE IF EXISTS ONLY public.budgets DROP CONSTRAINT IF EXISTS "budgets_approvedBy_fkey";
 ALTER TABLE IF EXISTS ONLY public.budget_lines DROP CONSTRAINT IF EXISTS "budget_lines_budgetId_fkey";
 ALTER TABLE IF EXISTS ONLY public.budget_lines DROP CONSTRAINT IF EXISTS "budget_lines_accountId_fkey";
+ALTER TABLE IF EXISTS ONLY public.branches DROP CONSTRAINT IF EXISTS "branches_legalEntityId_fkey";
 ALTER TABLE IF EXISTS ONLY public.branches DROP CONSTRAINT IF EXISTS "branches_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.bi_reports DROP CONSTRAINT IF EXISTS "bi_reports_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.bi_kpis DROP CONSTRAINT IF EXISTS "bi_kpis_companyId_fkey";
@@ -465,10 +497,13 @@ ALTER TABLE IF EXISTS ONLY public.bank_guarantees DROP CONSTRAINT IF EXISTS "ban
 ALTER TABLE IF EXISTS ONLY public.bank_guarantees DROP CONSTRAINT IF EXISTS "bank_guarantees_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.bank_guarantees DROP CONSTRAINT IF EXISTS "bank_guarantees_branchId_fkey";
 ALTER TABLE IF EXISTS ONLY public.audit_umrah_access DROP CONSTRAINT IF EXISTS "audit_umrah_access_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.attendance_policies_per_category DROP CONSTRAINT IF EXISTS "attendance_policies_per_category_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.attendance DROP CONSTRAINT IF EXISTS "attendance_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.approval_requests DROP CONSTRAINT IF EXISTS "approval_requests_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.approval_requests DROP CONSTRAINT IF EXISTS "approval_requests_chainId_fkey";
 ALTER TABLE IF EXISTS ONLY public.approval_chain_steps DROP CONSTRAINT IF EXISTS "approval_chain_steps_chainId_fkey";
+ALTER TABLE IF EXISTS ONLY public.approval_authorities DROP CONSTRAINT IF EXISTS "approval_authorities_companyId_fkey";
+ALTER TABLE IF EXISTS ONLY public.approval_authorities DROP CONSTRAINT IF EXISTS "approval_authorities_assignmentId_fkey";
 ALTER TABLE IF EXISTS ONLY public.approval_actions DROP CONSTRAINT IF EXISTS "approval_actions_actionBy_fkey";
 ALTER TABLE IF EXISTS ONLY public.anonymous_upward_reviews DROP CONSTRAINT IF EXISTS "anonymous_upward_reviews_managerId_fkey";
 ALTER TABLE IF EXISTS ONLY public.anonymous_upward_reviews DROP CONSTRAINT IF EXISTS "anonymous_upward_reviews_cycleId_fkey";
@@ -492,13 +527,16 @@ DROP INDEX IF EXISTS public.warehouse_stock_lots_writeoff_journal_idx;
 DROP INDEX IF EXISTS public.warehouse_movements_gl_status_failed_idx;
 DROP INDEX IF EXISTS public.viol_regulation_idx;
 DROP INDEX IF EXISTS public.viol_memo_idx;
-DROP INDEX IF EXISTS public."user_roles_userId_roleKey_companyId_key";
 DROP INDEX IF EXISTS public.uq_wps_skip_alerts_company_run;
 DROP INDEX IF EXISTS public.uq_wps_runs_company_period_bank;
 DROP INDEX IF EXISTS public.uq_wps_bank_credentials_company_bank;
 DROP INDEX IF EXISTS public.uq_warehouse_stock_serials_company_serial;
+DROP INDEX IF EXISTS public.uq_vehicle_active_primary;
+DROP INDEX IF EXISTS public.uq_umrah_transport_pilgrims_seat;
+DROP INDEX IF EXISTS public.uq_task_assignees_active;
 DROP INDEX IF EXISTS public.uq_serials_company_serial;
 DROP INDEX IF EXISTS public.uq_saudization_company_period;
+DROP INDEX IF EXISTS public.uq_parties_company_nationalid;
 DROP INDEX IF EXISTS public.uq_lots_company_product_warehouse_lotnum;
 DROP INDEX IF EXISTS public.uq_invoices_company_icv;
 DROP INDEX IF EXISTS public.uq_goods_receipts_ref;
@@ -534,10 +572,6 @@ DROP INDEX IF EXISTS public.settings_system_key_uq;
 DROP INDEX IF EXISTS public.settings_scoped_key_uq;
 DROP INDEX IF EXISTS public.settings_scope_id_idx;
 DROP INDEX IF EXISTS public.salary_components_company_idx;
-DROP INDEX IF EXISTS public.role_permissions_role_perm_global_uq;
-DROP INDEX IF EXISTS public.role_permissions_role_perm_company_uq;
-DROP INDEX IF EXISTS public.role_permissions_role_perm_branch_uq;
-DROP INDEX IF EXISTS public.role_permissions_role_company_idx;
 DROP INDEX IF EXISTS public.requests_ref_idx;
 DROP INDEX IF EXISTS public.requests_branch_idx;
 DROP INDEX IF EXISTS public.purchase_requests_ref_company_uq;
@@ -558,9 +592,6 @@ DROP INDEX IF EXISTS public.pr_status_idx;
 DROP INDEX IF EXISTS public.pr_priority_idx;
 DROP INDEX IF EXISTS public.pr_deleted_idx;
 DROP INDEX IF EXISTS public.pr_company_idx;
-DROP INDEX IF EXISTS public.permissions_user_perm_global_uq;
-DROP INDEX IF EXISTS public.permissions_user_perm_company_uq;
-DROP INDEX IF EXISTS public.permissions_user_company_idx;
 DROP INDEX IF EXISTS public.performance_reviews_employee_idx;
 DROP INDEX IF EXISTS public.performance_reviews_company_idx;
 DROP INDEX IF EXISTS public.peer_evaluations_employee_idx;
@@ -644,14 +675,19 @@ DROP INDEX IF EXISTS public.idx_warehouse_categories_deletedat;
 DROP INDEX IF EXISTS public.idx_warehouse_categories_companyid;
 DROP INDEX IF EXISTS public.idx_vouchers_company;
 DROP INDEX IF EXISTS public.idx_violations_excluded;
+DROP INDEX IF EXISTS public.idx_vehicle_snapshots_latest;
+DROP INDEX IF EXISTS public.idx_vehicle_components_vehicle;
+DROP INDEX IF EXISTS public.idx_vehicle_components_next_service;
+DROP INDEX IF EXISTS public.idx_vehicle_assignments_vehicle;
+DROP INDEX IF EXISTS public.idx_vehicle_assignments_driver;
 DROP INDEX IF EXISTS public.idx_user_sessions_user;
-DROP INDEX IF EXISTS public.idx_user_roles_companyid;
 DROP INDEX IF EXISTS public.idx_umrah_violations_responsible_assignment;
 DROP INDEX IF EXISTS public.idx_umrah_violations_deletedat;
 DROP INDEX IF EXISTS public.idx_umrah_violations_companyid;
 DROP INDEX IF EXISTS public.idx_umrah_violations_company;
 DROP INDEX IF EXISTS public.idx_umrah_transport_pilgrims_transport;
 DROP INDEX IF EXISTS public.idx_umrah_transport_pilgrims_pilgrim;
+DROP INDEX IF EXISTS public.idx_umrah_transport_pilgrims_pending_checkin;
 DROP INDEX IF EXISTS public.idx_umrah_transport_deletedat;
 DROP INDEX IF EXISTS public.idx_umrah_transport_companyid;
 DROP INDEX IF EXISTS public.idx_umrah_transport_branch_alive;
@@ -666,13 +702,20 @@ DROP INDEX IF EXISTS public.idx_umrah_sales_inv_sub_agent;
 DROP INDEX IF EXISTS public.idx_umrah_sales_inv_season;
 DROP INDEX IF EXISTS public.idx_umrah_sales_inv_ref;
 DROP INDEX IF EXISTS public.idx_umrah_sales_inv_items;
+DROP INDEX IF EXISTS public.idx_umrah_room_blocks_hotel_season;
+DROP INDEX IF EXISTS public.idx_umrah_refund_requests_status;
+DROP INDEX IF EXISTS public.idx_umrah_refund_requests_pilgrim;
+DROP INDEX IF EXISTS public.idx_umrah_refund_requests_invoice;
+DROP INDEX IF EXISTS public.idx_umrah_refund_requests_companyid;
 DROP INDEX IF EXISTS public.idx_umrah_pricing_deletedat;
 DROP INDEX IF EXISTS public.idx_umrah_pricing_companyid;
 DROP INDEX IF EXISTS public.idx_umrah_pricing_company;
 DROP INDEX IF EXISTS public.idx_umrah_pilgrims_visa_hash;
 DROP INDEX IF EXISTS public.idx_umrah_pilgrims_visa_expiry;
+DROP INDEX IF EXISTS public.idx_umrah_pilgrims_visa_active;
 DROP INDEX IF EXISTS public.idx_umrah_pilgrims_passport_hash;
 DROP INDEX IF EXISTS public.idx_umrah_pilgrims_nusk;
+DROP INDEX IF EXISTS public.idx_umrah_pilgrims_familyid;
 DROP INDEX IF EXISTS public.idx_umrah_pilgrim_passport_season;
 DROP INDEX IF EXISTS public.idx_umrah_penalties_season;
 DROP INDEX IF EXISTS public.idx_umrah_penalties_pilgrim;
@@ -699,6 +742,13 @@ DROP INDEX IF EXISTS public.idx_umrah_import_batches_season;
 DROP INDEX IF EXISTS public.idx_umrah_import_batches_companyid;
 DROP INDEX IF EXISTS public.idx_umrah_import_batches_company;
 DROP INDEX IF EXISTS public.idx_umrah_import_batches_branch_alive;
+DROP INDEX IF EXISTS public.idx_umrah_hotels_city;
+DROP INDEX IF EXISTS public.idx_umrah_families_name_lower;
+DROP INDEX IF EXISTS public.idx_umrah_families_head;
+DROP INDEX IF EXISTS public.idx_umrah_families_deletedat;
+DROP INDEX IF EXISTS public.idx_umrah_families_companyid;
+DROP INDEX IF EXISTS public.idx_umrah_allocations_pilgrim;
+DROP INDEX IF EXISTS public.idx_umrah_allocations_block;
 DROP INDEX IF EXISTS public.idx_umrah_agent_invoices_season;
 DROP INDEX IF EXISTS public.idx_umrah_agent_invoices_companyid;
 DROP INDEX IF EXISTS public.idx_umrah_agent_invoices_company;
@@ -707,6 +757,12 @@ DROP INDEX IF EXISTS public.idx_umrah_agent_invoices_agent;
 DROP INDEX IF EXISTS public.idx_ual_user;
 DROP INDEX IF EXISTS public.idx_ual_created;
 DROP INDEX IF EXISTS public.idx_ual_company;
+DROP INDEX IF EXISTS public.idx_transport_locations_company;
+DROP INDEX IF EXISTS public.idx_transport_legs_order;
+DROP INDEX IF EXISTS public.idx_transport_legs_lookup;
+DROP INDEX IF EXISTS public.idx_transport_itineraries_lookup;
+DROP INDEX IF EXISTS public.idx_transport_bookings_to_kind;
+DROP INDEX IF EXISTS public.idx_transport_bookings_from_kind;
 DROP INDEX IF EXISTS public.idx_trainings_company;
 DROP INDEX IF EXISTS public.idx_training_participants_training;
 DROP INDEX IF EXISTS public.idx_training_participants_employee;
@@ -716,10 +772,14 @@ DROP INDEX IF EXISTS public.idx_ticket_csat_ratings_companyid;
 DROP INDEX IF EXISTS public.idx_tenants_national_id;
 DROP INDEX IF EXISTS public.idx_tenants_company;
 DROP INDEX IF EXISTS public.idx_technicians_companyid;
+DROP INDEX IF EXISTS public.idx_teams_company_active;
 DROP INDEX IF EXISTS public.idx_tax_codes_type;
 DROP INDEX IF EXISTS public.idx_tax_codes_company_active;
 DROP INDEX IF EXISTS public.idx_tasks_status;
+DROP INDEX IF EXISTS public.idx_tasks_createdby;
 DROP INDEX IF EXISTS public.idx_tasks_company;
+DROP INDEX IF EXISTS public.idx_task_assignees_task;
+DROP INDEX IF EXISTS public.idx_task_assignees_assignment;
 DROP INDEX IF EXISTS public.idx_system_stops_companyid;
 DROP INDEX IF EXISTS public.idx_system_stops_active;
 DROP INDEX IF EXISTS public.idx_system_settings_companyid;
@@ -730,6 +790,9 @@ DROP INDEX IF EXISTS public.idx_support_tickets_company;
 DROP INDEX IF EXISTS public.idx_support_tickets_branchid;
 DROP INDEX IF EXISTS public.idx_suppliers_non_resident;
 DROP INDEX IF EXISTS public.idx_supplier_payment_allocations_wht;
+DROP INDEX IF EXISTS public.idx_supervision_lines_supervisor;
+DROP INDEX IF EXISTS public.idx_supervision_lines_supervisee;
+DROP INDEX IF EXISTS public.idx_subsidiary_accounts_entity_lookup;
 DROP INDEX IF EXISTS public.idx_store_orders_journal;
 DROP INDEX IF EXISTS public.idx_store_order_items_order;
 DROP INDEX IF EXISTS public.idx_spa_obligation;
@@ -740,18 +803,20 @@ DROP INDEX IF EXISTS public.idx_sla_definitions_companyid;
 DROP INDEX IF EXISTS public.idx_sig_otps_doc;
 DROP INDEX IF EXISTS public.idx_sig_logs_doc;
 DROP INDEX IF EXISTS public.idx_sig_logs_company;
+DROP INDEX IF EXISTS public.idx_service_lines_invoice;
+DROP INDEX IF EXISTS public.idx_service_lines_customer_status;
 DROP INDEX IF EXISTS public.idx_serials_product_status;
 DROP INDEX IF EXISTS public.idx_security_log_user;
 DROP INDEX IF EXISTS public.idx_security_log_created;
 DROP INDEX IF EXISTS public.idx_security_log_company;
+DROP INDEX IF EXISTS public.idx_scoring_weights_company;
 DROP INDEX IF EXISTS public.idx_scheduled_reports_companyid;
 DROP INDEX IF EXISTS public.idx_salary_history_employee;
 DROP INDEX IF EXISTS public.idx_salary_history_company;
 DROP INDEX IF EXISTS public.idx_routing_rules_event;
 DROP INDEX IF EXISTS public.idx_routing_rules_company;
-DROP INDEX IF EXISTS public.idx_roles_companyid;
-DROP INDEX IF EXISTS public.idx_role_permissions_role;
-DROP INDEX IF EXISTS public.idx_role_permissions_branchid;
+DROP INDEX IF EXISTS public.idx_route_estimates_lookup;
+DROP INDEX IF EXISTS public.idx_route_estimates_expiry;
 DROP INDEX IF EXISTS public.idx_rfm_segment;
 DROP INDEX IF EXISTS public.idx_rfm_company;
 DROP INDEX IF EXISTS public.idx_rfm_churn;
@@ -811,11 +876,11 @@ DROP INDEX IF EXISTS public.idx_products_company;
 DROP INDEX IF EXISTS public.idx_processing_log_type;
 DROP INDEX IF EXISTS public.idx_processing_log_created;
 DROP INDEX IF EXISTS public.idx_processing_log_company;
+DROP INDEX IF EXISTS public.idx_price_rules_lookup;
 DROP INDEX IF EXISTS public.idx_policy_module_links_policy;
 DROP INDEX IF EXISTS public.idx_policy_module_links_module;
 DROP INDEX IF EXISTS public.idx_policy_module_links_companyid;
 DROP INDEX IF EXISTS public.idx_policy_compliance_actions_deletedat;
-DROP INDEX IF EXISTS public.idx_permissions_companyid;
 DROP INDEX IF EXISTS public.idx_pbx_extensions_employee;
 DROP INDEX IF EXISTS public.idx_pbx_extensions_company_status;
 DROP INDEX IF EXISTS public.idx_pbx_calls_companyid;
@@ -834,6 +899,10 @@ DROP INDEX IF EXISTS public.idx_payment_runs_companyid;
 DROP INDEX IF EXISTS public.idx_payment_runs_company;
 DROP INDEX IF EXISTS public.idx_payment_run_items_run;
 DROP INDEX IF EXISTS public.idx_password_reset_pending;
+DROP INDEX IF EXISTS public.idx_party_links_party;
+DROP INDEX IF EXISTS public.idx_party_links_company;
+DROP INDEX IF EXISTS public.idx_parties_company_phone;
+DROP INDEX IF EXISTS public.idx_parties_company_name;
 DROP INDEX IF EXISTS public.idx_outbound_queue_pending;
 DROP INDEX IF EXISTS public.idx_outbound_queue_legacy;
 DROP INDEX IF EXISTS public.idx_outbound_queue_company_channel;
@@ -853,11 +922,16 @@ DROP INDEX IF EXISTS public.idx_notif_pref_user;
 DROP INDEX IF EXISTS public.idx_notif_pref_company;
 DROP INDEX IF EXISTS public.idx_mudad_employee;
 DROP INDEX IF EXISTS public.idx_mudad_company_period;
+DROP INDEX IF EXISTS public.idx_message_referrals_user;
+DROP INDEX IF EXISTS public.idx_message_referrals_chain;
 DROP INDEX IF EXISTS public.idx_message_log_starred;
 DROP INDEX IF EXISTS public.idx_message_log_legacy;
 DROP INDEX IF EXISTS public.idx_message_log_company_folder;
 DROP INDEX IF EXISTS public.idx_message_log_company_channel;
 DROP INDEX IF EXISTS public.idx_marketing_campaigns_companyid;
+DROP INDEX IF EXISTS public.idx_maintenance_schedules_vehicle;
+DROP INDEX IF EXISTS public.idx_maintenance_schedules_due;
+DROP INDEX IF EXISTS public.idx_maintenance_requests_linked_expense;
 DROP INDEX IF EXISTS public.idx_maintenance_requests_companyid;
 DROP INDEX IF EXISTS public.idx_mailbox_sync_cursors_account;
 DROP INDEX IF EXISTS public.idx_mailbox_accounts_sync_due;
@@ -868,6 +942,7 @@ DROP INDEX IF EXISTS public.idx_lot_expiry_alerts_company;
 DROP INDEX IF EXISTS public.idx_loan_accounts_companyid;
 DROP INDEX IF EXISTS public.idx_legal_sessions_deletedat;
 DROP INDEX IF EXISTS public.idx_legal_judgments_companyid;
+DROP INDEX IF EXISTS public.idx_legal_entities_company;
 DROP INDEX IF EXISTS public.idx_legal_correspondence_companyid;
 DROP INDEX IF EXISTS public.idx_legal_corr_company;
 DROP INDEX IF EXISTS public.idx_legal_corr_case;
@@ -880,6 +955,7 @@ DROP INDEX IF EXISTS public.idx_kb_status;
 DROP INDEX IF EXISTS public.idx_kb_company;
 DROP INDEX IF EXISTS public.idx_judgments_company;
 DROP INDEX IF EXISTS public.idx_judgments_case;
+DROP INDEX IF EXISTS public.idx_journey_company;
 DROP INDEX IF EXISTS public.idx_journal_lines_vendor;
 DROP INDEX IF EXISTS public.idx_journal_lines_source_line;
 DROP INDEX IF EXISTS public.idx_journal_lines_product;
@@ -909,6 +985,7 @@ DROP INDEX IF EXISTS public.idx_invoices_client;
 DROP INDEX IF EXISTS public.idx_invoices_branch;
 DROP INDEX IF EXISTS public.idx_invoices_active;
 DROP INDEX IF EXISTS public.idx_invoice_payments_companyid;
+DROP INDEX IF EXISTS public.idx_invoice_links_invoice;
 DROP INDEX IF EXISTS public.idx_invoice_lines_unmapped;
 DROP INDEX IF EXISTS public.idx_invoice_lines_cogs_pending;
 DROP INDEX IF EXISTS public.idx_invoice_lines_cogs_partially_reversed;
@@ -928,6 +1005,7 @@ DROP INDEX IF EXISTS public.idx_integration_logs_status;
 DROP INDEX IF EXISTS public.idx_integration_logs_company;
 DROP INDEX IF EXISTS public.idx_integration_logs_channel;
 DROP INDEX IF EXISTS public.idx_integration_logs_archive_companyid;
+DROP INDEX IF EXISTS public.idx_intake_rules_lookup;
 DROP INDEX IF EXISTS public.idx_import_batches_status;
 DROP INDEX IF EXISTS public.idx_import_batches_company_entity;
 DROP INDEX IF EXISTS public.idx_idempotency_keys_createdat;
@@ -987,15 +1065,28 @@ DROP INDEX IF EXISTS public.idx_fleet_video_sessions_company_started;
 DROP INDEX IF EXISTS public.idx_fleet_video_access_logs_user;
 DROP INDEX IF EXISTS public.idx_fleet_video_access_logs_session_time;
 DROP INDEX IF EXISTS public.idx_fleet_video_access_logs_company_time;
+DROP INDEX IF EXISTS public.idx_fleet_vehicles_type;
+DROP INDEX IF EXISTS public.idx_fleet_vehicles_seats;
+DROP INDEX IF EXISTS public.idx_fleet_vehicles_req_class;
+DROP INDEX IF EXISTS public.idx_fleet_vehicles_payload;
 DROP INDEX IF EXISTS public.idx_fleet_trips_vehicle_status_starttime;
 DROP INDEX IF EXISTS public.idx_fleet_trips_client;
 DROP INDEX IF EXISTS public.idx_fleet_traffic_violations_deletedat;
 DROP INDEX IF EXISTS public.idx_fleet_traffic_violations_companyid;
+DROP INDEX IF EXISTS public.idx_fleet_tires_vehicle;
+DROP INDEX IF EXISTS public.idx_fleet_tires_status;
+DROP INDEX IF EXISTS public.idx_fleet_tires_serial;
+DROP INDEX IF EXISTS public.idx_fleet_tires_axle;
 DROP INDEX IF EXISTS public.idx_fleet_telematics_integrations_company;
 DROP INDEX IF EXISTS public.idx_fleet_telematics_devices_vehicle;
 DROP INDEX IF EXISTS public.idx_fleet_telematics_devices_company_status;
 DROP INDEX IF EXISTS public.idx_fleet_sensor_readings_vehicle_time;
 DROP INDEX IF EXISTS public.idx_fleet_sensor_readings_device_time;
+DROP INDEX IF EXISTS public.idx_fleet_rental_payments_overdue;
+DROP INDEX IF EXISTS public.idx_fleet_rental_payments_contract;
+DROP INDEX IF EXISTS public.idx_fleet_rental_contracts_vehicle;
+DROP INDEX IF EXISTS public.idx_fleet_rental_contracts_client;
+DROP INDEX IF EXISTS public.idx_fleet_rental_contracts_active;
 DROP INDEX IF EXISTS public.idx_fleet_preventive_plans_deletedat;
 DROP INDEX IF EXISTS public.idx_fleet_preventive_plans_companyid;
 DROP INDEX IF EXISTS public.idx_fleet_positions_vehicle_time;
@@ -1003,6 +1094,11 @@ DROP INDEX IF EXISTS public.idx_fleet_positions_device_time;
 DROP INDEX IF EXISTS public.idx_fleet_positions_company_time;
 DROP INDEX IF EXISTS public.idx_fleet_media_evidence_company_time;
 DROP INDEX IF EXISTS public.idx_fleet_media_evidence_alert;
+DROP INDEX IF EXISTS public.idx_fleet_fuel_logs_trip;
+DROP INDEX IF EXISTS public.idx_fleet_drivers_service_profile;
+DROP INDEX IF EXISTS public.idx_fleet_drivers_national_id;
+DROP INDEX IF EXISTS public.idx_fleet_drivers_license_class;
+DROP INDEX IF EXISTS public.idx_fleet_drivers_iqama;
 DROP INDEX IF EXISTS public.idx_fleet_device_sync_logs_integration;
 DROP INDEX IF EXISTS public.idx_fleet_device_sync_logs_company_started;
 DROP INDEX IF EXISTS public.idx_fleet_device_events_vehicle_type;
@@ -1014,11 +1110,14 @@ DROP INDEX IF EXISTS public.idx_financial_periods_status;
 DROP INDEX IF EXISTS public.idx_financial_periods_deleted_at;
 DROP INDEX IF EXISTS public.idx_financial_periods_dates;
 DROP INDEX IF EXISTS public.idx_financial_periods_company;
+DROP INDEX IF EXISTS public.idx_field_tracking_points_company_day;
+DROP INDEX IF EXISTS public.idx_field_tracking_points_assignment_ts;
 DROP INDEX IF EXISTS public.idx_feature_catalog_parent;
 DROP INDEX IF EXISTS public.idx_feature_catalog_module;
 DROP INDEX IF EXISTS public.idx_fallback_chains_company;
 DROP INDEX IF EXISTS public.idx_expenses_status;
 DROP INDEX IF EXISTS public.idx_expenses_company;
+DROP INDEX IF EXISTS public.idx_expense_rules_lookup;
 DROP INDEX IF EXISTS public.idx_excuse_company_date;
 DROP INDEX IF EXISTS public.idx_excuse_assignment;
 DROP INDEX IF EXISTS public.idx_event_logs_company_date;
@@ -1034,6 +1133,10 @@ DROP INDEX IF EXISTS public.idx_employees_branch;
 DROP INDEX IF EXISTS public.idx_employees_active;
 DROP INDEX IF EXISTS public.idx_employee_violations_deletedat;
 DROP INDEX IF EXISTS public.idx_employee_transfers_companyid;
+DROP INDEX IF EXISTS public.idx_employee_signals_company_period;
+DROP INDEX IF EXISTS public.idx_employee_signals_assignment;
+DROP INDEX IF EXISTS public.idx_employee_scores_company_period;
+DROP INDEX IF EXISTS public.idx_employee_scores_assignment_period;
 DROP INDEX IF EXISTS public.idx_employee_of_month_companyid;
 DROP INDEX IF EXISTS public.idx_employee_monthly_attendance_companyid;
 DROP INDEX IF EXISTS public.idx_employee_kpi_snapshots_companyid;
@@ -1045,24 +1148,34 @@ DROP INDEX IF EXISTS public.idx_employee_commission_plans_deletedat;
 DROP INDEX IF EXISTS public.idx_employee_commission_plans_companyid;
 DROP INDEX IF EXISTS public.idx_employee_commission_calculations_deletedat;
 DROP INDEX IF EXISTS public.idx_employee_commission_calculations_companyid;
+DROP INDEX IF EXISTS public.idx_employee_categories_company;
 DROP INDEX IF EXISTS public.idx_employee_assignments_status;
+DROP INDEX IF EXISTS public.idx_employee_assignments_positionid;
 DROP INDEX IF EXISTS public.idx_employee_assignments_manager_id;
 DROP INDEX IF EXISTS public.idx_employee_assignments_jobtitle;
 DROP INDEX IF EXISTS public.idx_employee_assignments_employee;
 DROP INDEX IF EXISTS public.idx_employee_assignments_department;
 DROP INDEX IF EXISTS public.idx_employee_assignments_company;
+DROP INDEX IF EXISTS public.idx_employee_assignments_categorykey;
 DROP INDEX IF EXISTS public.idx_employee_assignments_branch;
+DROP INDEX IF EXISTS public.idx_employee_assets_assignment;
+DROP INDEX IF EXISTS public.idx_employee_assets_active;
 DROP INDEX IF EXISTS public.idx_emp_salary_comp_employee;
 DROP INDEX IF EXISTS public.idx_emp_salary_comp_company;
+DROP INDEX IF EXISTS public.idx_emp_project_assignments_active;
 DROP INDEX IF EXISTS public.idx_email_signatures_user;
 DROP INDEX IF EXISTS public.idx_email_queue_companyid;
 DROP INDEX IF EXISTS public.idx_email_drafts_user;
+DROP INDEX IF EXISTS public.idx_eligibility_overrides_driver;
 DROP INDEX IF EXISTS public.idx_ect_plan;
 DROP INDEX IF EXISTS public.idx_ecp_company;
 DROP INDEX IF EXISTS public.idx_ecc_plan;
 DROP INDEX IF EXISTS public.idx_ea_manager_id;
 DROP INDEX IF EXISTS public.idx_dunning_letters_invoice;
+DROP INDEX IF EXISTS public.idx_driver_nav_driver;
+DROP INDEX IF EXISTS public.idx_driver_nav_active_per_order;
 DROP INDEX IF EXISTS public.idx_documents_status;
+DROP INDEX IF EXISTS public.idx_documents_retention_due;
 DROP INDEX IF EXISTS public.idx_documents_print_job_id;
 DROP INDEX IF EXISTS public.idx_documents_ocr_text_trgm;
 DROP INDEX IF EXISTS public.idx_documents_ocr_status_pending;
@@ -1072,10 +1185,19 @@ DROP INDEX IF EXISTS public.idx_documents_category;
 DROP INDEX IF EXISTS public.idx_document_templates_deletedat;
 DROP INDEX IF EXISTS public.idx_document_templates_companyid;
 DROP INDEX IF EXISTS public.idx_document_folders_companyid;
+DROP INDEX IF EXISTS public.idx_document_acls_user;
+DROP INDEX IF EXISTS public.idx_document_acls_role;
+DROP INDEX IF EXISTS public.idx_document_acls_doc;
+DROP INDEX IF EXISTS public.idx_document_acls_dept;
 DROP INDEX IF EXISTS public.idx_doc_versions_docid;
 DROP INDEX IF EXISTS public.idx_doc_ocr_extractions_document;
 DROP INDEX IF EXISTS public.idx_doc_ocr_extractions_company_status;
 DROP INDEX IF EXISTS public.idx_doc_entity_links_entity;
+DROP INDEX IF EXISTS public.idx_doc_access_log_user;
+DROP INDEX IF EXISTS public.idx_doc_access_log_doc;
+DROP INDEX IF EXISTS public.idx_dispatch_vehicle_window;
+DROP INDEX IF EXISTS public.idx_dispatch_driver_window;
+DROP INDEX IF EXISTS public.idx_dispatch_company_window;
 DROP INDEX IF EXISTS public.idx_discipline_memos_violation;
 DROP INDEX IF EXISTS public.idx_discipline_memos_company;
 DROP INDEX IF EXISTS public.idx_digital_signature_otps_companyid;
@@ -1087,6 +1209,7 @@ DROP INDEX IF EXISTS public.idx_delivery_log_notification;
 DROP INDEX IF EXISTS public.idx_delivery_log_created;
 DROP INDEX IF EXISTS public.idx_delivery_log_company;
 DROP INDEX IF EXISTS public.idx_delivery_log_channel;
+DROP INDEX IF EXISTS public.idx_delegations_delegate_active;
 DROP INDEX IF EXISTS public.idx_delegations_company;
 DROP INDEX IF EXISTS public.idx_debit_memos_invoice;
 DROP INDEX IF EXISTS public.idx_debit_memos_company;
@@ -1099,7 +1222,6 @@ DROP INDEX IF EXISTS public.idx_cycle_counts_warehouse_status;
 DROP INDEX IF EXISTS public.idx_customer_advances_companyid;
 DROP INDEX IF EXISTS public.idx_customer_advances_company;
 DROP INDEX IF EXISTS public.idx_customer_advances_client;
-DROP INDEX IF EXISTS public.idx_custom_roles_company;
 DROP INDEX IF EXISTS public.idx_csat_company;
 DROP INDEX IF EXISTS public.idx_csat_assignee;
 DROP INDEX IF EXISTS public.idx_cron_logs_companyid;
@@ -1114,6 +1236,7 @@ DROP INDEX IF EXISTS public.idx_cost_centers_entity;
 DROP INDEX IF EXISTS public.idx_cost_centers_company;
 DROP INDEX IF EXISTS public.idx_correspondence_company;
 DROP INDEX IF EXISTS public.idx_company_documents_company;
+DROP INDEX IF EXISTS public.idx_companies_subscription_status;
 DROP INDEX IF EXISTS public.idx_comp_actions_company;
 DROP INDEX IF EXISTS public.idx_communications_log_starred;
 DROP INDEX IF EXISTS public.idx_communications_log_deletedat;
@@ -1121,12 +1244,25 @@ DROP INDEX IF EXISTS public.idx_communications_log_companyid;
 DROP INDEX IF EXISTS public.idx_communications_log_company_folder;
 DROP INDEX IF EXISTS public.idx_communication_providers_channel_priority;
 DROP INDEX IF EXISTS public.idx_communication_dlp_rules_company_enabled;
+DROP INDEX IF EXISTS public.idx_committees_company_active;
 DROP INDEX IF EXISTS public.idx_collection_follow_ups_companyid;
+DROP INDEX IF EXISTS public.idx_coa_usage;
+DROP INDEX IF EXISTS public.idx_coa_branch;
 DROP INDEX IF EXISTS public.idx_clients_companyid;
 DROP INDEX IF EXISTS public.idx_clients_company;
 DROP INDEX IF EXISTS public.idx_client_portal_accounts_email;
 DROP INDEX IF EXISTS public.idx_client_portal_accounts_client;
 DROP INDEX IF EXISTS public.idx_chart_of_accounts_deletedat;
+DROP INDEX IF EXISTS public.idx_cargo_manifests_vehicle;
+DROP INDEX IF EXISTS public.idx_cargo_manifests_trip;
+DROP INDEX IF EXISTS public.idx_cargo_manifests_status;
+DROP INDEX IF EXISTS public.idx_cargo_manifests_driver;
+DROP INDEX IF EXISTS public.idx_cargo_manifests_customer;
+DROP INDEX IF EXISTS public.idx_cargo_manifests_company;
+DROP INDEX IF EXISTS public.idx_cargo_manifests_billing_status;
+DROP INDEX IF EXISTS public.idx_cargo_items_manifest;
+DROP INDEX IF EXISTS public.idx_cargo_items_hazmat;
+DROP INDEX IF EXISTS public.idx_capacity_overrides_vehicle;
 DROP INDEX IF EXISTS public.idx_capa_company;
 DROP INDEX IF EXISTS public.idx_business_rules_trigger;
 DROP INDEX IF EXISTS public.idx_business_rules_deletedat;
@@ -1136,6 +1272,12 @@ DROP INDEX IF EXISTS public.idx_business_rule_logs_rule;
 DROP INDEX IF EXISTS public.idx_business_rule_logs_executed;
 DROP INDEX IF EXISTS public.idx_business_rule_logs_company;
 DROP INDEX IF EXISTS public.idx_branches_companyid;
+DROP INDEX IF EXISTS public.idx_bookings_customer;
+DROP INDEX IF EXISTS public.idx_bookings_company_status;
+DROP INDEX IF EXISTS public.idx_booking_lines_booking;
+DROP INDEX IF EXISTS public.idx_billing_candidates_vehicle;
+DROP INDEX IF EXISTS public.idx_billing_candidates_customer;
+DROP INDEX IF EXISTS public.idx_billing_candidates_company_status;
 DROP INDEX IF EXISTS public.idx_bi_reports_companyid;
 DROP INDEX IF EXISTS public.idx_bi_kpis_companyid;
 DROP INDEX IF EXISTS public.idx_bi_dashboards_companyid;
@@ -1160,12 +1302,14 @@ DROP INDEX IF EXISTS public.idx_audit_logs_company_date;
 DROP INDEX IF EXISTS public.idx_audit_logs_company;
 DROP INDEX IF EXISTS public.idx_audit_logs_archive_companyid;
 DROP INDEX IF EXISTS public.idx_audit_archive_company;
+DROP INDEX IF EXISTS public.idx_attendance_policies_per_category_company;
 DROP INDEX IF EXISTS public.idx_attendance_policies_companyid;
 DROP INDEX IF EXISTS public.idx_attendance_deletedat;
 DROP INDEX IF EXISTS public.idx_attendance_deductions_companyid;
 DROP INDEX IF EXISTS public.idx_approval_requests_status;
 DROP INDEX IF EXISTS public.idx_approval_requests_company_status;
 DROP INDEX IF EXISTS public.idx_approval_requests_company;
+DROP INDEX IF EXISTS public.idx_approval_authorities_assignment;
 DROP INDEX IF EXISTS public.idx_approval_actions_entity;
 DROP INDEX IF EXISTS public.idx_approval_actions_company;
 DROP INDEX IF EXISTS public.idx_applicant_accounts_email;
@@ -1296,12 +1440,24 @@ ALTER TABLE IF EXISTS ONLY public.warehouse_categories DROP CONSTRAINT IF EXISTS
 ALTER TABLE IF EXISTS ONLY public.vouchers DROP CONSTRAINT IF EXISTS vouchers_pkey;
 ALTER TABLE IF EXISTS ONLY public.vendor_secrets DROP CONSTRAINT IF EXISTS vendor_secrets_slug_key;
 ALTER TABLE IF EXISTS ONLY public.vendor_secrets DROP CONSTRAINT IF EXISTS vendor_secrets_pkey;
+ALTER TABLE IF EXISTS ONLY public.vehicle_maintenance_schedules DROP CONSTRAINT IF EXISTS vehicle_maintenance_schedules_pkey;
+ALTER TABLE IF EXISTS ONLY public.vehicle_location_snapshots DROP CONSTRAINT IF EXISTS vehicle_location_snapshots_pkey;
+ALTER TABLE IF EXISTS ONLY public.vehicle_driver_assignments DROP CONSTRAINT IF EXISTS vehicle_driver_assignments_pkey;
+ALTER TABLE IF EXISTS ONLY public.vehicle_components DROP CONSTRAINT IF EXISTS vehicle_components_pkey;
+ALTER TABLE IF EXISTS ONLY public.vehicle_capacity_overrides DROP CONSTRAINT IF EXISTS vehicle_capacity_overrides_pkey;
 ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS users_pkey;
 ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS users_email_key;
 ALTER TABLE IF EXISTS ONLY public.user_sessions DROP CONSTRAINT IF EXISTS user_sessions_pkey;
-ALTER TABLE IF EXISTS ONLY public.user_roles DROP CONSTRAINT IF EXISTS user_roles_pkey;
 ALTER TABLE IF EXISTS ONLY public.user_activity_log DROP CONSTRAINT IF EXISTS user_activity_log_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_service_lines DROP CONSTRAINT IF EXISTS uq_transport_service_line_source;
+ALTER TABLE IF EXISTS ONLY public.transport_invoice_links DROP CONSTRAINT IF EXISTS uq_transport_invoice_link_service;
+ALTER TABLE IF EXISTS ONLY public.transport_bookings DROP CONSTRAINT IF EXISTS uq_transport_booking_number;
+ALTER TABLE IF EXISTS ONLY public.party_links DROP CONSTRAINT IF EXISTS uq_party_links_entity;
+ALTER TABLE IF EXISTS ONLY public.driver_eligibility_overrides DROP CONSTRAINT IF EXISTS uq_eligibility_override_source;
 ALTER TABLE IF EXISTS ONLY public.client_portal_accounts DROP CONSTRAINT IF EXISTS uq_client_portal_accounts_client;
+ALTER TABLE IF EXISTS ONLY public.vehicle_capacity_overrides DROP CONSTRAINT IF EXISTS uq_capacity_override_source;
+ALTER TABLE IF EXISTS ONLY public.transport_booking_lines DROP CONSTRAINT IF EXISTS uq_booking_line;
+ALTER TABLE IF EXISTS ONLY public.transport_billing_candidates DROP CONSTRAINT IF EXISTS uq_billing_candidate_source;
 ALTER TABLE IF EXISTS ONLY public.umrah_violations DROP CONSTRAINT IF EXISTS umrah_violations_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_transport DROP CONSTRAINT IF EXISTS umrah_transport_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_transport_pilgrims DROP CONSTRAINT IF EXISTS "umrah_transport_pilgrims_transportId_pilgrimId_key";
@@ -1310,6 +1466,9 @@ ALTER TABLE IF EXISTS ONLY public.umrah_sub_agents DROP CONSTRAINT IF EXISTS umr
 ALTER TABLE IF EXISTS ONLY public.umrah_seasons DROP CONSTRAINT IF EXISTS umrah_seasons_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_sales_invoices DROP CONSTRAINT IF EXISTS umrah_sales_invoices_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_sales_invoice_items DROP CONSTRAINT IF EXISTS umrah_sales_invoice_items_pkey;
+ALTER TABLE IF EXISTS ONLY public.umrah_room_blocks DROP CONSTRAINT IF EXISTS umrah_room_blocks_pkey;
+ALTER TABLE IF EXISTS ONLY public.umrah_room_allocations DROP CONSTRAINT IF EXISTS umrah_room_allocations_pkey;
+ALTER TABLE IF EXISTS ONLY public.umrah_refund_requests DROP CONSTRAINT IF EXISTS umrah_refund_requests_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_pricing DROP CONSTRAINT IF EXISTS umrah_pricing_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_pilgrims DROP CONSTRAINT IF EXISTS umrah_pilgrims_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_penalties DROP CONSTRAINT IF EXISTS umrah_penalties_pkey;
@@ -1320,9 +1479,24 @@ ALTER TABLE IF EXISTS ONLY public.umrah_nusk_invoices DROP CONSTRAINT IF EXISTS 
 ALTER TABLE IF EXISTS ONLY public.umrah_import_logs DROP CONSTRAINT IF EXISTS umrah_import_logs_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_import_changes DROP CONSTRAINT IF EXISTS umrah_import_changes_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_import_batches DROP CONSTRAINT IF EXISTS umrah_import_batches_pkey;
+ALTER TABLE IF EXISTS ONLY public.umrah_hotels DROP CONSTRAINT IF EXISTS umrah_hotels_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_groups DROP CONSTRAINT IF EXISTS umrah_groups_pkey;
+ALTER TABLE IF EXISTS ONLY public.umrah_families DROP CONSTRAINT IF EXISTS umrah_families_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_agents DROP CONSTRAINT IF EXISTS umrah_agents_pkey;
 ALTER TABLE IF EXISTS ONLY public.umrah_agent_invoices DROP CONSTRAINT IF EXISTS umrah_agent_invoices_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_service_lines DROP CONSTRAINT IF EXISTS transport_service_lines_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_route_estimates DROP CONSTRAINT IF EXISTS transport_route_estimates_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_price_rules DROP CONSTRAINT IF EXISTS transport_price_rules_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_planning_settings DROP CONSTRAINT IF EXISTS transport_planning_settings_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_locations DROP CONSTRAINT IF EXISTS transport_locations_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_itinerary_legs DROP CONSTRAINT IF EXISTS transport_itinerary_legs_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_itineraries DROP CONSTRAINT IF EXISTS transport_itineraries_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_invoice_links DROP CONSTRAINT IF EXISTS transport_invoice_links_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_intake_rules DROP CONSTRAINT IF EXISTS transport_intake_rules_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_dispatch_orders DROP CONSTRAINT IF EXISTS transport_dispatch_orders_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_bookings DROP CONSTRAINT IF EXISTS transport_bookings_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_booking_lines DROP CONSTRAINT IF EXISTS transport_booking_lines_pkey;
+ALTER TABLE IF EXISTS ONLY public.transport_billing_candidates DROP CONSTRAINT IF EXISTS transport_billing_candidates_pkey;
 ALTER TABLE IF EXISTS ONLY public.trainings DROP CONSTRAINT IF EXISTS trainings_pkey;
 ALTER TABLE IF EXISTS ONLY public.training_programs DROP CONSTRAINT IF EXISTS training_programs_pkey;
 ALTER TABLE IF EXISTS ONLY public.training_participants DROP CONSTRAINT IF EXISTS training_participants_pkey;
@@ -1333,8 +1507,10 @@ ALTER TABLE IF EXISTS ONLY public.ticket_csat_ratings DROP CONSTRAINT IF EXISTS 
 ALTER TABLE IF EXISTS ONLY public.ticket_csat_ratings DROP CONSTRAINT IF EXISTS ticket_csat_ratings_pkey;
 ALTER TABLE IF EXISTS ONLY public.tenants DROP CONSTRAINT IF EXISTS tenants_pkey;
 ALTER TABLE IF EXISTS ONLY public.technicians DROP CONSTRAINT IF EXISTS technicians_pkey;
+ALTER TABLE IF EXISTS ONLY public.teams DROP CONSTRAINT IF EXISTS teams_pkey;
 ALTER TABLE IF EXISTS ONLY public.tax_codes DROP CONSTRAINT IF EXISTS tax_codes_company_code_uniq;
 ALTER TABLE IF EXISTS ONLY public.tasks DROP CONSTRAINT IF EXISTS tasks_pkey;
+ALTER TABLE IF EXISTS ONLY public.task_assignees DROP CONSTRAINT IF EXISTS task_assignees_pkey;
 ALTER TABLE IF EXISTS ONLY public.system_stops DROP CONSTRAINT IF EXISTS system_stops_pkey;
 ALTER TABLE IF EXISTS ONLY public.system_settings DROP CONSTRAINT IF EXISTS system_settings_pkey;
 ALTER TABLE IF EXISTS ONLY public.system_settings DROP CONSTRAINT IF EXISTS "system_settings_companyId_branchId_key_key";
@@ -1342,6 +1518,8 @@ ALTER TABLE IF EXISTS ONLY public.system_evaluations DROP CONSTRAINT IF EXISTS s
 ALTER TABLE IF EXISTS ONLY public.support_tickets DROP CONSTRAINT IF EXISTS support_tickets_pkey;
 ALTER TABLE IF EXISTS ONLY public.suppliers DROP CONSTRAINT IF EXISTS suppliers_pkey;
 ALTER TABLE IF EXISTS ONLY public.supplier_payment_allocations DROP CONSTRAINT IF EXISTS supplier_payment_allocations_pkey;
+ALTER TABLE IF EXISTS ONLY public.supervision_lines DROP CONSTRAINT IF EXISTS "supervision_lines_supervisorAssignmentId_superviseeAssignme_key";
+ALTER TABLE IF EXISTS ONLY public.supervision_lines DROP CONSTRAINT IF EXISTS supervision_lines_pkey;
 ALTER TABLE IF EXISTS ONLY public.subsidiary_accounts DROP CONSTRAINT IF EXISTS subsidiary_accounts_pkey;
 ALTER TABLE IF EXISTS ONLY public.subsidiary_accounts DROP CONSTRAINT IF EXISTS "subsidiary_accounts_companyId_entityType_entityId_accountTy_key";
 ALTER TABLE IF EXISTS ONLY public.store_products DROP CONSTRAINT IF EXISTS store_products_pkey;
@@ -1355,15 +1533,13 @@ ALTER TABLE IF EXISTS ONLY public.sla_definitions DROP CONSTRAINT IF EXISTS "sla
 ALTER TABLE IF EXISTS ONLY public.shifts DROP CONSTRAINT IF EXISTS shifts_pkey;
 ALTER TABLE IF EXISTS ONLY public.settings DROP CONSTRAINT IF EXISTS settings_pkey;
 ALTER TABLE IF EXISTS ONLY public.security_log DROP CONSTRAINT IF EXISTS security_log_pkey;
-ALTER TABLE IF EXISTS ONLY public.schema_migrations DROP CONSTRAINT IF EXISTS schema_migrations_pkey;
-ALTER TABLE IF EXISTS ONLY public.schema_migrations DROP CONSTRAINT IF EXISTS schema_migrations_filename_key;
+ALTER TABLE IF EXISTS ONLY public.scoring_weights_per_company DROP CONSTRAINT IF EXISTS scoring_weights_per_company_pkey;
+ALTER TABLE IF EXISTS ONLY public.scoring_weights_per_company DROP CONSTRAINT IF EXISTS "scoring_weights_per_company_companyId_categoryKey_key";
 ALTER TABLE IF EXISTS ONLY public.scheduled_reports DROP CONSTRAINT IF EXISTS scheduled_reports_pkey;
 ALTER TABLE IF EXISTS ONLY public.scheduled_report_history DROP CONSTRAINT IF EXISTS scheduled_report_history_pkey;
 ALTER TABLE IF EXISTS ONLY public.saudization_snapshots DROP CONSTRAINT IF EXISTS saudization_snapshots_pkey;
 ALTER TABLE IF EXISTS ONLY public.salary_history DROP CONSTRAINT IF EXISTS salary_history_pkey;
 ALTER TABLE IF EXISTS ONLY public.salary_components DROP CONSTRAINT IF EXISTS salary_components_pkey;
-ALTER TABLE IF EXISTS ONLY public.roles DROP CONSTRAINT IF EXISTS roles_pkey;
-ALTER TABLE IF EXISTS ONLY public.role_permissions DROP CONSTRAINT IF EXISTS role_permissions_pkey;
 ALTER TABLE IF EXISTS ONLY public.requests DROP CONSTRAINT IF EXISTS requests_pkey;
 ALTER TABLE IF EXISTS ONLY public.request_types DROP CONSTRAINT IF EXISTS request_types_pkey;
 ALTER TABLE IF EXISTS ONLY public.rental_contracts DROP CONSTRAINT IF EXISTS rental_contracts_pkey;
@@ -1425,10 +1601,11 @@ ALTER TABLE IF EXISTS ONLY public.pricing_rule_applications DROP CONSTRAINT IF E
 ALTER TABLE IF EXISTS ONLY public.pricing_conditions DROP CONSTRAINT IF EXISTS pricing_conditions_pkey;
 ALTER TABLE IF EXISTS ONLY public.pricing_actions DROP CONSTRAINT IF EXISTS "pricing_actions_ruleId_key";
 ALTER TABLE IF EXISTS ONLY public.pricing_actions DROP CONSTRAINT IF EXISTS pricing_actions_pkey;
+ALTER TABLE IF EXISTS ONLY public.positions DROP CONSTRAINT IF EXISTS positions_pkey;
+ALTER TABLE IF EXISTS ONLY public.positions DROP CONSTRAINT IF EXISTS "positions_companyId_positionKey_key";
 ALTER TABLE IF EXISTS ONLY public.policy_module_links DROP CONSTRAINT IF EXISTS "policy_module_links_policyId_module_key";
 ALTER TABLE IF EXISTS ONLY public.policy_module_links DROP CONSTRAINT IF EXISTS policy_module_links_pkey;
 ALTER TABLE IF EXISTS ONLY public.policy_compliance_actions DROP CONSTRAINT IF EXISTS policy_compliance_actions_pkey;
-ALTER TABLE IF EXISTS ONLY public.permissions DROP CONSTRAINT IF EXISTS permissions_pkey;
 ALTER TABLE IF EXISTS ONLY public.performance_reviews DROP CONSTRAINT IF EXISTS performance_reviews_pkey;
 ALTER TABLE IF EXISTS ONLY public.peer_evaluations DROP CONSTRAINT IF EXISTS peer_evaluations_pkey;
 ALTER TABLE IF EXISTS ONLY public.pbx_extensions DROP CONSTRAINT IF EXISTS pbx_extensions_pkey;
@@ -1444,6 +1621,8 @@ ALTER TABLE IF EXISTS ONLY public.payroll_deductions DROP CONSTRAINT IF EXISTS p
 ALTER TABLE IF EXISTS ONLY public.payment_runs DROP CONSTRAINT IF EXISTS payment_runs_pkey;
 ALTER TABLE IF EXISTS ONLY public.payment_run_items DROP CONSTRAINT IF EXISTS payment_run_items_pkey;
 ALTER TABLE IF EXISTS ONLY public.password_reset_requests DROP CONSTRAINT IF EXISTS password_reset_requests_pkey;
+ALTER TABLE IF EXISTS ONLY public.party_links DROP CONSTRAINT IF EXISTS party_links_pkey;
+ALTER TABLE IF EXISTS ONLY public.parties DROP CONSTRAINT IF EXISTS parties_pkey;
 ALTER TABLE IF EXISTS ONLY public.outbound_queue DROP CONSTRAINT IF EXISTS outbound_queue_pkey;
 ALTER TABLE IF EXISTS ONLY public.onboarding_tasks DROP CONSTRAINT IF EXISTS onboarding_tasks_pkey;
 ALTER TABLE IF EXISTS ONLY public.official_letters DROP CONSTRAINT IF EXISTS official_letters_pkey;
@@ -1461,6 +1640,7 @@ ALTER TABLE IF EXISTS ONLY public.notification_log DROP CONSTRAINT IF EXISTS not
 ALTER TABLE IF EXISTS ONLY public.notification_fallback_chains DROP CONSTRAINT IF EXISTS notification_fallback_chains_pkey;
 ALTER TABLE IF EXISTS ONLY public.notification_delivery_log DROP CONSTRAINT IF EXISTS notification_delivery_log_pkey;
 ALTER TABLE IF EXISTS ONLY public.mudad_settlements DROP CONSTRAINT IF EXISTS mudad_settlements_pkey;
+ALTER TABLE IF EXISTS ONLY public.message_referrals DROP CONSTRAINT IF EXISTS message_referrals_pkey;
 ALTER TABLE IF EXISTS ONLY public.message_log DROP CONSTRAINT IF EXISTS message_log_pkey;
 ALTER TABLE IF EXISTS ONLY public.marketing_campaigns DROP CONSTRAINT IF EXISTS marketing_campaigns_pkey;
 ALTER TABLE IF EXISTS ONLY public.maintenance_requests DROP CONSTRAINT IF EXISTS maintenance_requests_pkey;
@@ -1471,6 +1651,7 @@ ALTER TABLE IF EXISTS ONLY public.lot_expiry_alerts DROP CONSTRAINT IF EXISTS "l
 ALTER TABLE IF EXISTS ONLY public.loan_accounts DROP CONSTRAINT IF EXISTS loan_accounts_pkey;
 ALTER TABLE IF EXISTS ONLY public.legal_sessions DROP CONSTRAINT IF EXISTS legal_sessions_pkey;
 ALTER TABLE IF EXISTS ONLY public.legal_judgments DROP CONSTRAINT IF EXISTS legal_judgments_pkey;
+ALTER TABLE IF EXISTS ONLY public.legal_entities DROP CONSTRAINT IF EXISTS legal_entities_pkey;
 ALTER TABLE IF EXISTS ONLY public.legal_correspondence DROP CONSTRAINT IF EXISTS legal_correspondence_pkey;
 ALTER TABLE IF EXISTS ONLY public.legal_contracts DROP CONSTRAINT IF EXISTS legal_contracts_pkey;
 ALTER TABLE IF EXISTS ONLY public.legal_cases DROP CONSTRAINT IF EXISTS legal_cases_pkey;
@@ -1480,6 +1661,7 @@ ALTER TABLE IF EXISTS ONLY public.leave_approval_stages DROP CONSTRAINT IF EXIST
 ALTER TABLE IF EXISTS ONLY public.late_rent_actions DROP CONSTRAINT IF EXISTS late_rent_actions_pkey;
 ALTER TABLE IF EXISTS ONLY public.kpi_snapshots DROP CONSTRAINT IF EXISTS kpi_snapshots_pkey;
 ALTER TABLE IF EXISTS ONLY public.kb_articles DROP CONSTRAINT IF EXISTS kb_articles_pkey;
+ALTER TABLE IF EXISTS ONLY public.journey_instances DROP CONSTRAINT IF EXISTS journey_instances_pkey;
 ALTER TABLE IF EXISTS ONLY public.journal_lines DROP CONSTRAINT IF EXISTS journal_lines_pkey;
 ALTER TABLE IF EXISTS ONLY public.journal_entry_templates DROP CONSTRAINT IF EXISTS journal_entry_templates_pkey;
 ALTER TABLE IF EXISTS ONLY public.journal_entry_template_lines DROP CONSTRAINT IF EXISTS journal_entry_template_lines_pkey;
@@ -1544,15 +1726,19 @@ ALTER TABLE IF EXISTS ONLY public.fleet_video_access_logs DROP CONSTRAINT IF EXI
 ALTER TABLE IF EXISTS ONLY public.fleet_vehicles DROP CONSTRAINT IF EXISTS fleet_vehicles_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_trips DROP CONSTRAINT IF EXISTS fleet_trips_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_traffic_violations DROP CONSTRAINT IF EXISTS fleet_traffic_violations_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_tires DROP CONSTRAINT IF EXISTS fleet_tires_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_telematics_integrations DROP CONSTRAINT IF EXISTS fleet_telematics_integrations_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_telematics_devices DROP CONSTRAINT IF EXISTS fleet_telematics_devices_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_sensor_readings DROP CONSTRAINT IF EXISTS fleet_sensor_readings_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_rental_payments DROP CONSTRAINT IF EXISTS fleet_rental_payments_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_rental_contracts DROP CONSTRAINT IF EXISTS fleet_rental_contracts_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_preventive_plans DROP CONSTRAINT IF EXISTS fleet_preventive_plans_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_media_evidence DROP CONSTRAINT IF EXISTS fleet_media_evidence_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_maintenance DROP CONSTRAINT IF EXISTS fleet_maintenance_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_insurance DROP CONSTRAINT IF EXISTS fleet_insurance_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_gps_tracking DROP CONSTRAINT IF EXISTS fleet_gps_tracking_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_fuel_logs DROP CONSTRAINT IF EXISTS fleet_fuel_logs_pkey;
+ALTER TABLE IF EXISTS ONLY public.fleet_expense_rules DROP CONSTRAINT IF EXISTS fleet_expense_rules_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_drivers DROP CONSTRAINT IF EXISTS fleet_drivers_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_device_sync_logs DROP CONSTRAINT IF EXISTS fleet_device_sync_logs_pkey;
 ALTER TABLE IF EXISTS ONLY public.fleet_device_positions DROP CONSTRAINT IF EXISTS fleet_device_positions_pkey;
@@ -1561,6 +1747,7 @@ ALTER TABLE IF EXISTS ONLY public.fleet_ai_alerts DROP CONSTRAINT IF EXISTS flee
 ALTER TABLE IF EXISTS ONLY public.fixed_assets DROP CONSTRAINT IF EXISTS fixed_assets_pkey;
 ALTER TABLE IF EXISTS ONLY public.financial_posting_failures DROP CONSTRAINT IF EXISTS financial_posting_failures_pkey;
 ALTER TABLE IF EXISTS ONLY public.financial_periods DROP CONSTRAINT IF EXISTS financial_periods_pkey;
+ALTER TABLE IF EXISTS ONLY public.field_tracking_points DROP CONSTRAINT IF EXISTS field_tracking_points_pkey;
 ALTER TABLE IF EXISTS ONLY public.feature_catalog DROP CONSTRAINT IF EXISTS feature_catalog_pkey;
 ALTER TABLE IF EXISTS ONLY public.feature_catalog DROP CONSTRAINT IF EXISTS feature_catalog_feature_key_key;
 ALTER TABLE IF EXISTS ONLY public.expenses DROP CONSTRAINT IF EXISTS expenses_pkey;
@@ -1579,9 +1766,17 @@ ALTER TABLE IF EXISTS ONLY public.employees DROP CONSTRAINT IF EXISTS employees_
 ALTER TABLE IF EXISTS ONLY public.employees DROP CONSTRAINT IF EXISTS "employees_nationalId_key";
 ALTER TABLE IF EXISTS ONLY public.employee_violations DROP CONSTRAINT IF EXISTS employee_violations_pkey;
 ALTER TABLE IF EXISTS ONLY public.employee_transfers DROP CONSTRAINT IF EXISTS employee_transfers_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_team_memberships DROP CONSTRAINT IF EXISTS employee_team_memberships_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_team_memberships DROP CONSTRAINT IF EXISTS "employee_team_memberships_assignmentId_teamId_key";
+ALTER TABLE IF EXISTS ONLY public.employee_signals DROP CONSTRAINT IF EXISTS employee_signals_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_signals DROP CONSTRAINT IF EXISTS "employee_signals_assignmentId_signalType_scope_periodKey_key";
 ALTER TABLE IF EXISTS ONLY public.employee_shift_assignments DROP CONSTRAINT IF EXISTS employee_shift_assignments_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_scores DROP CONSTRAINT IF EXISTS employee_scores_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_scores DROP CONSTRAINT IF EXISTS "employee_scores_assignmentId_scope_periodKey_key";
 ALTER TABLE IF EXISTS ONLY public.employee_salary_components DROP CONSTRAINT IF EXISTS employee_salary_components_pkey;
 ALTER TABLE IF EXISTS ONLY public.employee_salary_components DROP CONSTRAINT IF EXISTS "employee_salary_components_assignmentId_componentId_key";
+ALTER TABLE IF EXISTS ONLY public.employee_project_assignments DROP CONSTRAINT IF EXISTS employee_project_assignments_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_project_assignments DROP CONSTRAINT IF EXISTS "employee_project_assignments_assignmentId_projectId_startDa_key";
 ALTER TABLE IF EXISTS ONLY public.employee_of_month DROP CONSTRAINT IF EXISTS employee_of_month_pkey;
 ALTER TABLE IF EXISTS ONLY public.employee_of_month DROP CONSTRAINT IF EXISTS "employee_of_month_companyId_month_year_key";
 ALTER TABLE IF EXISTS ONLY public.employee_monthly_attendance DROP CONSTRAINT IF EXISTS employee_monthly_attendance_pkey;
@@ -1590,14 +1785,21 @@ ALTER TABLE IF EXISTS ONLY public.employee_kpi_snapshots DROP CONSTRAINT IF EXIS
 ALTER TABLE IF EXISTS ONLY public.employee_documents DROP CONSTRAINT IF EXISTS employee_documents_pkey;
 ALTER TABLE IF EXISTS ONLY public.employee_development_plans DROP CONSTRAINT IF EXISTS employee_development_plans_pkey;
 ALTER TABLE IF EXISTS ONLY public.employee_contracts DROP CONSTRAINT IF EXISTS employee_contracts_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_committee_memberships DROP CONSTRAINT IF EXISTS employee_committee_memberships_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_committee_memberships DROP CONSTRAINT IF EXISTS "employee_committee_memberships_assignmentId_committeeId_key";
 ALTER TABLE IF EXISTS ONLY public.employee_commission_tiers DROP CONSTRAINT IF EXISTS employee_commission_tiers_pkey;
 ALTER TABLE IF EXISTS ONLY public.employee_commission_plans DROP CONSTRAINT IF EXISTS employee_commission_plans_pkey;
 ALTER TABLE IF EXISTS ONLY public.employee_commission_calculations DROP CONSTRAINT IF EXISTS employee_commission_calculations_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_categories DROP CONSTRAINT IF EXISTS employee_categories_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_categories DROP CONSTRAINT IF EXISTS "employee_categories_companyId_categoryKey_key";
 ALTER TABLE IF EXISTS ONLY public.employee_assignments DROP CONSTRAINT IF EXISTS employee_assignments_pkey;
+ALTER TABLE IF EXISTS ONLY public.employee_assets DROP CONSTRAINT IF EXISTS employee_assets_pkey;
 ALTER TABLE IF EXISTS ONLY public.email_signatures DROP CONSTRAINT IF EXISTS email_signatures_pkey;
 ALTER TABLE IF EXISTS ONLY public.email_queue DROP CONSTRAINT IF EXISTS email_queue_pkey;
 ALTER TABLE IF EXISTS ONLY public.email_drafts DROP CONSTRAINT IF EXISTS email_drafts_pkey;
 ALTER TABLE IF EXISTS ONLY public.dunning_letters DROP CONSTRAINT IF EXISTS dunning_letters_pkey;
+ALTER TABLE IF EXISTS ONLY public.driver_navigation_sessions DROP CONSTRAINT IF EXISTS driver_navigation_sessions_pkey;
+ALTER TABLE IF EXISTS ONLY public.driver_eligibility_overrides DROP CONSTRAINT IF EXISTS driver_eligibility_overrides_pkey;
 ALTER TABLE IF EXISTS ONLY public.documents DROP CONSTRAINT IF EXISTS documents_pkey;
 ALTER TABLE IF EXISTS ONLY public.document_versions DROP CONSTRAINT IF EXISTS document_versions_pkey;
 ALTER TABLE IF EXISTS ONLY public.document_templates DROP CONSTRAINT IF EXISTS document_templates_pkey;
@@ -1605,6 +1807,8 @@ ALTER TABLE IF EXISTS ONLY public.document_ocr_extractions DROP CONSTRAINT IF EX
 ALTER TABLE IF EXISTS ONLY public.document_folders DROP CONSTRAINT IF EXISTS document_folders_pkey;
 ALTER TABLE IF EXISTS ONLY public.document_entity_links DROP CONSTRAINT IF EXISTS document_entity_links_pkey;
 ALTER TABLE IF EXISTS ONLY public.document_entity_links DROP CONSTRAINT IF EXISTS "document_entity_links_documentId_entityType_entityId_key";
+ALTER TABLE IF EXISTS ONLY public.document_acls DROP CONSTRAINT IF EXISTS document_acls_pkey;
+ALTER TABLE IF EXISTS ONLY public.document_access_log DROP CONSTRAINT IF EXISTS document_access_log_pkey;
 ALTER TABLE IF EXISTS ONLY public.discipline_memos DROP CONSTRAINT IF EXISTS discipline_memos_pkey;
 ALTER TABLE IF EXISTS ONLY public.digital_signature_otps DROP CONSTRAINT IF EXISTS digital_signature_otps_pkey;
 ALTER TABLE IF EXISTS ONLY public.digital_signature_logs DROP CONSTRAINT IF EXISTS digital_signature_logs_pkey;
@@ -1620,8 +1824,6 @@ ALTER TABLE IF EXISTS ONLY public.daily_closures DROP CONSTRAINT IF EXISTS "dail
 ALTER TABLE IF EXISTS ONLY public.daily_close_log DROP CONSTRAINT IF EXISTS daily_close_log_pkey;
 ALTER TABLE IF EXISTS ONLY public.daily_close_log DROP CONSTRAINT IF EXISTS "daily_close_log_companyId_closeDate_key";
 ALTER TABLE IF EXISTS ONLY public.customer_advances DROP CONSTRAINT IF EXISTS customer_advances_pkey;
-ALTER TABLE IF EXISTS ONLY public.custom_roles DROP CONSTRAINT IF EXISTS custom_roles_pkey;
-ALTER TABLE IF EXISTS ONLY public.custom_roles DROP CONSTRAINT IF EXISTS "custom_roles_companyId_roleKey_key";
 ALTER TABLE IF EXISTS ONLY public.cron_logs DROP CONSTRAINT IF EXISTS cron_logs_pkey;
 ALTER TABLE IF EXISTS ONLY public.cron_locks DROP CONSTRAINT IF EXISTS cron_locks_pkey;
 ALTER TABLE IF EXISTS ONLY public.cron_locks DROP CONSTRAINT IF EXISTS cron_locks_job_name_key;
@@ -1642,14 +1844,18 @@ ALTER TABLE IF EXISTS ONLY public.communications_log DROP CONSTRAINT IF EXISTS c
 ALTER TABLE IF EXISTS ONLY public.communication_providers DROP CONSTRAINT IF EXISTS communication_providers_pkey;
 ALTER TABLE IF EXISTS ONLY public.communication_providers DROP CONSTRAINT IF EXISTS communication_providers_channel_slug_unique;
 ALTER TABLE IF EXISTS ONLY public.communication_dlp_rules DROP CONSTRAINT IF EXISTS communication_dlp_rules_pkey;
+ALTER TABLE IF EXISTS ONLY public.committees DROP CONSTRAINT IF EXISTS committees_pkey;
 ALTER TABLE IF EXISTS ONLY public.collection_follow_ups DROP CONSTRAINT IF EXISTS collection_follow_ups_pkey;
 ALTER TABLE IF EXISTS ONLY public.clients DROP CONSTRAINT IF EXISTS clients_pkey;
+ALTER TABLE IF EXISTS ONLY public.clients DROP CONSTRAINT IF EXISTS clients_id_company_uq;
 ALTER TABLE IF EXISTS ONLY public.client_rfm_scores DROP CONSTRAINT IF EXISTS client_rfm_scores_pkey;
 ALTER TABLE IF EXISTS ONLY public.client_rfm_scores DROP CONSTRAINT IF EXISTS "client_rfm_scores_companyId_clientId_key";
 ALTER TABLE IF EXISTS ONLY public.client_portal_accounts DROP CONSTRAINT IF EXISTS client_portal_accounts_pkey;
 ALTER TABLE IF EXISTS ONLY public.client_portal_accounts DROP CONSTRAINT IF EXISTS client_portal_accounts_email_key;
 ALTER TABLE IF EXISTS ONLY public.chart_of_accounts DROP CONSTRAINT IF EXISTS chart_of_accounts_pkey;
 ALTER TABLE IF EXISTS ONLY public.chart_of_accounts DROP CONSTRAINT IF EXISTS chart_of_accounts_company_code_uq;
+ALTER TABLE IF EXISTS ONLY public.cargo_manifests DROP CONSTRAINT IF EXISTS cargo_manifests_pkey;
+ALTER TABLE IF EXISTS ONLY public.cargo_items DROP CONSTRAINT IF EXISTS cargo_items_pkey;
 ALTER TABLE IF EXISTS ONLY public.business_rules DROP CONSTRAINT IF EXISTS business_rules_pkey;
 ALTER TABLE IF EXISTS ONLY public.business_rule_logs DROP CONSTRAINT IF EXISTS business_rule_logs_pkey;
 ALTER TABLE IF EXISTS ONLY public.budgets DROP CONSTRAINT IF EXISTS budgets_pkey;
@@ -1667,12 +1873,16 @@ ALTER TABLE IF EXISTS ONLY public.audit_umrah_access DROP CONSTRAINT IF EXISTS a
 ALTER TABLE IF EXISTS ONLY public.audit_logs DROP CONSTRAINT IF EXISTS audit_logs_pkey;
 ALTER TABLE IF EXISTS ONLY public.audit_archive DROP CONSTRAINT IF EXISTS audit_archive_pkey;
 ALTER TABLE IF EXISTS ONLY public.attendance_policies DROP CONSTRAINT IF EXISTS attendance_policies_pkey;
+ALTER TABLE IF EXISTS ONLY public.attendance_policies_per_category DROP CONSTRAINT IF EXISTS attendance_policies_per_category_pkey;
+ALTER TABLE IF EXISTS ONLY public.attendance_policies_per_category DROP CONSTRAINT IF EXISTS "attendance_policies_per_category_companyId_categoryKey_key";
 ALTER TABLE IF EXISTS ONLY public.attendance_policies DROP CONSTRAINT IF EXISTS "attendance_policies_companyId_key";
 ALTER TABLE IF EXISTS ONLY public.attendance DROP CONSTRAINT IF EXISTS attendance_pkey;
 ALTER TABLE IF EXISTS ONLY public.attendance_deductions DROP CONSTRAINT IF EXISTS attendance_deductions_pkey;
 ALTER TABLE IF EXISTS ONLY public.approval_requests DROP CONSTRAINT IF EXISTS approval_requests_pkey;
 ALTER TABLE IF EXISTS ONLY public.approval_chains DROP CONSTRAINT IF EXISTS approval_chains_pkey;
 ALTER TABLE IF EXISTS ONLY public.approval_chain_steps DROP CONSTRAINT IF EXISTS approval_chain_steps_pkey;
+ALTER TABLE IF EXISTS ONLY public.approval_authorities DROP CONSTRAINT IF EXISTS approval_authorities_pkey;
+ALTER TABLE IF EXISTS ONLY public.approval_authorities DROP CONSTRAINT IF EXISTS "approval_authorities_assignmentId_featureKey_action_currenc_key";
 ALTER TABLE IF EXISTS ONLY public.approval_actions DROP CONSTRAINT IF EXISTS approval_actions_pkey;
 ALTER TABLE IF EXISTS ONLY public.applicant_accounts DROP CONSTRAINT IF EXISTS applicant_accounts_pkey;
 ALTER TABLE IF EXISTS ONLY public.applicant_accounts DROP CONSTRAINT IF EXISTS applicant_accounts_email_key;
@@ -1719,9 +1929,13 @@ ALTER TABLE IF EXISTS public.warehouse_cycle_count_lines ALTER COLUMN id DROP DE
 ALTER TABLE IF EXISTS public.warehouse_categories ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.vouchers ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.vendor_secrets ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.vehicle_maintenance_schedules ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.vehicle_location_snapshots ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.vehicle_driver_assignments ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.vehicle_components ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.vehicle_capacity_overrides ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.users ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.user_sessions ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.user_roles ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.user_activity_log ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_violations ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_transport_pilgrims ALTER COLUMN id DROP DEFAULT;
@@ -1730,6 +1944,9 @@ ALTER TABLE IF EXISTS public.umrah_sub_agents ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_seasons ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_sales_invoices ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_sales_invoice_items ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.umrah_room_blocks ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.umrah_room_allocations ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.umrah_refund_requests ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_pricing ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_pilgrims ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_penalties ALTER COLUMN id DROP DEFAULT;
@@ -1740,9 +1957,23 @@ ALTER TABLE IF EXISTS public.umrah_nusk_invoices ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_import_logs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_import_changes ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_import_batches ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.umrah_hotels ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_groups ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.umrah_families ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_agents ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.umrah_agent_invoices ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_service_lines ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_route_estimates ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_price_rules ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_locations ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_itinerary_legs ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_itineraries ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_invoice_links ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_intake_rules ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_dispatch_orders ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_bookings ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_booking_lines ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.transport_billing_candidates ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.trainings ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.training_programs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.training_participants ALTER COLUMN id DROP DEFAULT;
@@ -1752,12 +1983,15 @@ ALTER TABLE IF EXISTS public.ticket_replies ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.ticket_csat_ratings ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.tenants ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.technicians ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.teams ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.tasks ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.task_assignees ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.system_stops ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.system_settings ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.system_evaluations ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.support_tickets ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.suppliers ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.supervision_lines ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.subsidiary_accounts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.store_products ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.store_orders ALTER COLUMN id DROP DEFAULT;
@@ -1769,14 +2003,12 @@ ALTER TABLE IF EXISTS public.sla_definitions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.shifts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.settings ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.security_log ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.schema_migrations ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.scoring_weights_per_company ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.scheduled_reports ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.scheduled_report_history ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.saudization_snapshots ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.salary_history ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.salary_components ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.roles ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.role_permissions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.requests ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.request_types ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.rental_contracts ALTER COLUMN id DROP DEFAULT;
@@ -1825,9 +2057,9 @@ ALTER TABLE IF EXISTS public.pricing_rules ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.pricing_rule_applications ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.pricing_conditions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.pricing_actions ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.positions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.policy_module_links ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.policy_compliance_actions ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.permissions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.performance_reviews ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.peer_evaluations ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.pbx_extensions ALTER COLUMN id DROP DEFAULT;
@@ -1840,6 +2072,8 @@ ALTER TABLE IF EXISTS public.payroll_deductions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.payment_runs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.payment_run_items ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.password_reset_requests ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.party_links ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.parties ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.outbound_queue ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.onboarding_tasks ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.official_letters ALTER COLUMN id DROP DEFAULT;
@@ -1857,6 +2091,7 @@ ALTER TABLE IF EXISTS public.notification_log ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.notification_fallback_chains ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.notification_delivery_log ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.mudad_settlements ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.message_referrals ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.message_log ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.marketing_campaigns ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.maintenance_requests ALTER COLUMN id DROP DEFAULT;
@@ -1866,6 +2101,7 @@ ALTER TABLE IF EXISTS public.lot_expiry_alerts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.loan_accounts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.legal_sessions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.legal_judgments ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.legal_entities ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.legal_correspondence ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.legal_contracts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.legal_cases ALTER COLUMN id DROP DEFAULT;
@@ -1874,6 +2110,7 @@ ALTER TABLE IF EXISTS public.leave_approval_stages ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.late_rent_actions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.kpi_snapshots ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.kb_articles ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.journey_instances ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.journal_lines ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.journal_entry_templates ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.journal_entry_template_lines ALTER COLUMN id DROP DEFAULT;
@@ -1929,15 +2166,19 @@ ALTER TABLE IF EXISTS public.fleet_video_access_logs ALTER COLUMN id DROP DEFAUL
 ALTER TABLE IF EXISTS public.fleet_vehicles ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_trips ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_traffic_violations ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_tires ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_telematics_integrations ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_telematics_devices ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_sensor_readings ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_rental_payments ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_rental_contracts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_preventive_plans ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_media_evidence ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_maintenance ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_insurance ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_gps_tracking ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_fuel_logs ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.fleet_expense_rules ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_drivers ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_device_sync_logs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fleet_device_positions ALTER COLUMN id DROP DEFAULT;
@@ -1946,6 +2187,7 @@ ALTER TABLE IF EXISTS public.fleet_ai_alerts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.fixed_assets ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.financial_posting_failures ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.financial_periods ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.field_tracking_points ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.feature_catalog ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.expenses ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.expense_claims ALTER COLUMN id DROP DEFAULT;
@@ -1959,28 +2201,39 @@ ALTER TABLE IF EXISTS public.entity_comments ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employees ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_violations ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_transfers ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.employee_team_memberships ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.employee_signals ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_shift_assignments ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.employee_scores ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_salary_components ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.employee_project_assignments ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_of_month ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_monthly_attendance ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_kpi_snapshots ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_documents ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_development_plans ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_contracts ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.employee_committee_memberships ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_commission_tiers ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_commission_plans ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_commission_calculations ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.employee_categories ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_assignments ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.employee_assets ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.email_signatures ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.email_queue ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.email_drafts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.dunning_letters ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.driver_navigation_sessions ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.driver_eligibility_overrides ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.documents ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.document_versions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.document_templates ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.document_ocr_extractions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.document_folders ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.document_entity_links ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.document_acls ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.document_access_log ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.discipline_memos ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.digital_signature_otps ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.digital_signature_logs ALTER COLUMN id DROP DEFAULT;
@@ -1993,7 +2246,6 @@ ALTER TABLE IF EXISTS public.data_access_requests ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.daily_closures ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.daily_close_log ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.customer_advances ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.custom_roles ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.cron_logs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.cron_locks ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.cron_jobs ALTER COLUMN id DROP DEFAULT;
@@ -2010,11 +2262,14 @@ ALTER TABLE IF EXISTS public.companies ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.communications_log ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.communication_providers ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.communication_dlp_rules ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.committees ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.collection_follow_ups ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.clients ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.client_rfm_scores ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.client_portal_accounts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.chart_of_accounts ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.cargo_manifests ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.cargo_items ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.business_rules ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.business_rule_logs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.budgets ALTER COLUMN id DROP DEFAULT;
@@ -2031,12 +2286,14 @@ ALTER TABLE IF EXISTS public.audit_violations ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.audit_umrah_access ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.audit_logs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.audit_archive ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.attendance_policies_per_category ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.attendance_policies ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.attendance_deductions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.attendance ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.approval_requests ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.approval_chains ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.approval_chain_steps ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.approval_authorities ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.approval_actions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.applicant_accounts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.anonymous_upward_reviews ALTER COLUMN id DROP DEFAULT;
@@ -2110,13 +2367,21 @@ DROP SEQUENCE IF EXISTS public.vendor_secrets_id_seq;
 DROP TABLE IF EXISTS public.vendor_secrets;
 DROP SEQUENCE IF EXISTS public.vendor_contracts_id_seq;
 DROP TABLE IF EXISTS public.vendor_contracts;
+DROP SEQUENCE IF EXISTS public.vehicle_maintenance_schedules_id_seq;
+DROP TABLE IF EXISTS public.vehicle_maintenance_schedules;
+DROP SEQUENCE IF EXISTS public.vehicle_location_snapshots_id_seq;
+DROP TABLE IF EXISTS public.vehicle_location_snapshots;
+DROP SEQUENCE IF EXISTS public.vehicle_driver_assignments_id_seq;
+DROP TABLE IF EXISTS public.vehicle_driver_assignments;
+DROP SEQUENCE IF EXISTS public.vehicle_components_id_seq;
+DROP TABLE IF EXISTS public.vehicle_components;
+DROP SEQUENCE IF EXISTS public.vehicle_capacity_overrides_id_seq;
+DROP TABLE IF EXISTS public.vehicle_capacity_overrides;
 DROP VIEW IF EXISTS public.v_message_log_all;
 DROP SEQUENCE IF EXISTS public.users_id_seq;
 DROP TABLE IF EXISTS public.users;
 DROP SEQUENCE IF EXISTS public.user_sessions_id_seq;
 DROP TABLE IF EXISTS public.user_sessions;
-DROP SEQUENCE IF EXISTS public.user_roles_id_seq;
-DROP TABLE IF EXISTS public.user_roles;
 DROP SEQUENCE IF EXISTS public.user_activity_log_id_seq;
 DROP TABLE IF EXISTS public.user_activity_log;
 DROP SEQUENCE IF EXISTS public.umrah_violations_id_seq;
@@ -2134,6 +2399,12 @@ DROP TABLE IF EXISTS public.umrah_sales_invoices;
 DROP SEQUENCE IF EXISTS public.umrah_sales_invoice_seq;
 DROP SEQUENCE IF EXISTS public.umrah_sales_invoice_items_id_seq;
 DROP TABLE IF EXISTS public.umrah_sales_invoice_items;
+DROP SEQUENCE IF EXISTS public.umrah_room_blocks_id_seq;
+DROP TABLE IF EXISTS public.umrah_room_blocks;
+DROP SEQUENCE IF EXISTS public.umrah_room_allocations_id_seq;
+DROP TABLE IF EXISTS public.umrah_room_allocations;
+DROP SEQUENCE IF EXISTS public.umrah_refund_requests_id_seq;
+DROP TABLE IF EXISTS public.umrah_refund_requests;
 DROP SEQUENCE IF EXISTS public.umrah_pricing_id_seq;
 DROP TABLE IF EXISTS public.umrah_pricing;
 DROP SEQUENCE IF EXISTS public.umrah_pilgrims_id_seq;
@@ -2149,19 +2420,49 @@ DROP SEQUENCE IF EXISTS public.umrah_packages_id_seq;
 DROP TABLE IF EXISTS public.umrah_packages;
 DROP SEQUENCE IF EXISTS public.umrah_nusk_invoices_id_seq;
 DROP TABLE IF EXISTS public.umrah_nusk_invoices;
+DROP TABLE IF EXISTS public.umrah_import_mapping_presets;
 DROP SEQUENCE IF EXISTS public.umrah_import_logs_id_seq;
 DROP TABLE IF EXISTS public.umrah_import_logs;
 DROP SEQUENCE IF EXISTS public.umrah_import_changes_id_seq;
 DROP TABLE IF EXISTS public.umrah_import_changes;
 DROP SEQUENCE IF EXISTS public.umrah_import_batches_id_seq;
 DROP TABLE IF EXISTS public.umrah_import_batches;
+DROP SEQUENCE IF EXISTS public.umrah_hotels_id_seq;
+DROP TABLE IF EXISTS public.umrah_hotels;
 DROP SEQUENCE IF EXISTS public.umrah_groups_id_seq;
 DROP TABLE IF EXISTS public.umrah_groups;
+DROP SEQUENCE IF EXISTS public.umrah_families_id_seq;
+DROP TABLE IF EXISTS public.umrah_families;
 DROP TABLE IF EXISTS public.umrah_attachments;
 DROP SEQUENCE IF EXISTS public.umrah_agents_id_seq;
 DROP TABLE IF EXISTS public.umrah_agents;
 DROP SEQUENCE IF EXISTS public.umrah_agent_invoices_id_seq;
 DROP TABLE IF EXISTS public.umrah_agent_invoices;
+DROP SEQUENCE IF EXISTS public.transport_service_lines_id_seq;
+DROP TABLE IF EXISTS public.transport_service_lines;
+DROP SEQUENCE IF EXISTS public.transport_route_estimates_id_seq;
+DROP TABLE IF EXISTS public.transport_route_estimates;
+DROP SEQUENCE IF EXISTS public.transport_price_rules_id_seq;
+DROP TABLE IF EXISTS public.transport_price_rules;
+DROP TABLE IF EXISTS public.transport_planning_settings;
+DROP SEQUENCE IF EXISTS public.transport_locations_id_seq;
+DROP TABLE IF EXISTS public.transport_locations;
+DROP SEQUENCE IF EXISTS public.transport_itinerary_legs_id_seq;
+DROP TABLE IF EXISTS public.transport_itinerary_legs;
+DROP SEQUENCE IF EXISTS public.transport_itineraries_id_seq;
+DROP TABLE IF EXISTS public.transport_itineraries;
+DROP SEQUENCE IF EXISTS public.transport_invoice_links_id_seq;
+DROP TABLE IF EXISTS public.transport_invoice_links;
+DROP SEQUENCE IF EXISTS public.transport_intake_rules_id_seq;
+DROP TABLE IF EXISTS public.transport_intake_rules;
+DROP SEQUENCE IF EXISTS public.transport_dispatch_orders_id_seq;
+DROP TABLE IF EXISTS public.transport_dispatch_orders;
+DROP SEQUENCE IF EXISTS public.transport_bookings_id_seq;
+DROP TABLE IF EXISTS public.transport_bookings;
+DROP SEQUENCE IF EXISTS public.transport_booking_lines_id_seq;
+DROP TABLE IF EXISTS public.transport_booking_lines;
+DROP SEQUENCE IF EXISTS public.transport_billing_candidates_id_seq;
+DROP TABLE IF EXISTS public.transport_billing_candidates;
 DROP SEQUENCE IF EXISTS public.trainings_id_seq;
 DROP TABLE IF EXISTS public.trainings;
 DROP SEQUENCE IF EXISTS public.training_programs_id_seq;
@@ -2180,9 +2481,13 @@ DROP SEQUENCE IF EXISTS public.tenants_id_seq;
 DROP TABLE IF EXISTS public.tenants;
 DROP SEQUENCE IF EXISTS public.technicians_id_seq;
 DROP TABLE IF EXISTS public.technicians;
+DROP SEQUENCE IF EXISTS public.teams_id_seq;
+DROP TABLE IF EXISTS public.teams;
 DROP TABLE IF EXISTS public.tax_codes;
 DROP SEQUENCE IF EXISTS public.tasks_id_seq;
 DROP TABLE IF EXISTS public.tasks;
+DROP SEQUENCE IF EXISTS public.task_assignees_id_seq;
+DROP TABLE IF EXISTS public.task_assignees;
 DROP SEQUENCE IF EXISTS public.system_stops_id_seq;
 DROP TABLE IF EXISTS public.system_stops;
 DROP SEQUENCE IF EXISTS public.system_settings_id_seq;
@@ -2194,6 +2499,8 @@ DROP TABLE IF EXISTS public.support_tickets;
 DROP SEQUENCE IF EXISTS public.suppliers_id_seq;
 DROP TABLE IF EXISTS public.suppliers;
 DROP TABLE IF EXISTS public.supplier_payment_allocations;
+DROP SEQUENCE IF EXISTS public.supervision_lines_id_seq;
+DROP TABLE IF EXISTS public.supervision_lines;
 DROP SEQUENCE IF EXISTS public.subsidiary_accounts_id_seq;
 DROP TABLE IF EXISTS public.subsidiary_accounts;
 DROP SEQUENCE IF EXISTS public.store_products_id_seq;
@@ -2216,8 +2523,8 @@ DROP SEQUENCE IF EXISTS public.settings_id_seq;
 DROP TABLE IF EXISTS public.settings;
 DROP SEQUENCE IF EXISTS public.security_log_id_seq;
 DROP TABLE IF EXISTS public.security_log;
-DROP SEQUENCE IF EXISTS public.schema_migrations_id_seq;
-DROP TABLE IF EXISTS public.schema_migrations;
+DROP SEQUENCE IF EXISTS public.scoring_weights_per_company_id_seq;
+DROP TABLE IF EXISTS public.scoring_weights_per_company;
 DROP SEQUENCE IF EXISTS public.scheduled_reports_id_seq;
 DROP TABLE IF EXISTS public.scheduled_reports;
 DROP SEQUENCE IF EXISTS public.scheduled_report_history_id_seq;
@@ -2228,10 +2535,6 @@ DROP SEQUENCE IF EXISTS public.salary_history_id_seq;
 DROP TABLE IF EXISTS public.salary_history;
 DROP SEQUENCE IF EXISTS public.salary_components_id_seq;
 DROP TABLE IF EXISTS public.salary_components;
-DROP SEQUENCE IF EXISTS public.roles_id_seq;
-DROP TABLE IF EXISTS public.roles;
-DROP SEQUENCE IF EXISTS public.role_permissions_id_seq;
-DROP TABLE IF EXISTS public.role_permissions;
 DROP SEQUENCE IF EXISTS public.requests_id_seq;
 DROP TABLE IF EXISTS public.requests;
 DROP SEQUENCE IF EXISTS public.request_types_id_seq;
@@ -2331,12 +2634,12 @@ DROP SEQUENCE IF EXISTS public.pricing_conditions_id_seq;
 DROP TABLE IF EXISTS public.pricing_conditions;
 DROP SEQUENCE IF EXISTS public.pricing_actions_id_seq;
 DROP TABLE IF EXISTS public.pricing_actions;
+DROP SEQUENCE IF EXISTS public.positions_id_seq;
+DROP TABLE IF EXISTS public.positions;
 DROP SEQUENCE IF EXISTS public.policy_module_links_id_seq;
 DROP TABLE IF EXISTS public.policy_module_links;
 DROP SEQUENCE IF EXISTS public.policy_compliance_actions_id_seq;
 DROP TABLE IF EXISTS public.policy_compliance_actions;
-DROP SEQUENCE IF EXISTS public.permissions_id_seq;
-DROP TABLE IF EXISTS public.permissions;
 DROP SEQUENCE IF EXISTS public.performance_reviews_id_seq;
 DROP TABLE IF EXISTS public.performance_reviews;
 DROP SEQUENCE IF EXISTS public.peer_evaluations_id_seq;
@@ -2362,6 +2665,10 @@ DROP SEQUENCE IF EXISTS public.payment_run_items_id_seq;
 DROP TABLE IF EXISTS public.payment_run_items;
 DROP SEQUENCE IF EXISTS public.password_reset_requests_id_seq;
 DROP TABLE IF EXISTS public.password_reset_requests;
+DROP SEQUENCE IF EXISTS public.party_links_id_seq;
+DROP TABLE IF EXISTS public.party_links;
+DROP SEQUENCE IF EXISTS public.parties_id_seq;
+DROP TABLE IF EXISTS public.parties;
 DROP SEQUENCE IF EXISTS public.outbound_queue_id_seq;
 DROP TABLE IF EXISTS public.outbound_queue;
 DROP SEQUENCE IF EXISTS public.onboarding_tasks_id_seq;
@@ -2396,6 +2703,8 @@ DROP SEQUENCE IF EXISTS public.notification_delivery_log_id_seq;
 DROP TABLE IF EXISTS public.notification_delivery_log;
 DROP SEQUENCE IF EXISTS public.mudad_settlements_id_seq;
 DROP TABLE IF EXISTS public.mudad_settlements;
+DROP SEQUENCE IF EXISTS public.message_referrals_id_seq;
+DROP TABLE IF EXISTS public.message_referrals;
 DROP SEQUENCE IF EXISTS public.message_log_id_seq;
 DROP TABLE IF EXISTS public.message_log;
 DROP SEQUENCE IF EXISTS public.marketing_campaigns_id_seq;
@@ -2414,6 +2723,8 @@ DROP SEQUENCE IF EXISTS public.legal_sessions_id_seq;
 DROP TABLE IF EXISTS public.legal_sessions;
 DROP SEQUENCE IF EXISTS public.legal_judgments_id_seq;
 DROP TABLE IF EXISTS public.legal_judgments;
+DROP SEQUENCE IF EXISTS public.legal_entities_id_seq;
+DROP TABLE IF EXISTS public.legal_entities;
 DROP SEQUENCE IF EXISTS public.legal_correspondence_id_seq;
 DROP TABLE IF EXISTS public.legal_correspondence;
 DROP SEQUENCE IF EXISTS public.legal_contracts_id_seq;
@@ -2430,6 +2741,8 @@ DROP SEQUENCE IF EXISTS public.kpi_snapshots_id_seq;
 DROP TABLE IF EXISTS public.kpi_snapshots;
 DROP SEQUENCE IF EXISTS public.kb_articles_id_seq;
 DROP TABLE IF EXISTS public.kb_articles;
+DROP SEQUENCE IF EXISTS public.journey_instances_id_seq;
+DROP TABLE IF EXISTS public.journey_instances;
 DROP SEQUENCE IF EXISTS public.journal_lines_id_seq;
 DROP TABLE IF EXISTS public.journal_lines;
 DROP SEQUENCE IF EXISTS public.journal_entry_templates_id_seq;
@@ -2541,12 +2854,18 @@ DROP SEQUENCE IF EXISTS public.fleet_trips_id_seq;
 DROP TABLE IF EXISTS public.fleet_trips;
 DROP SEQUENCE IF EXISTS public.fleet_traffic_violations_id_seq;
 DROP TABLE IF EXISTS public.fleet_traffic_violations;
+DROP SEQUENCE IF EXISTS public.fleet_tires_id_seq;
+DROP TABLE IF EXISTS public.fleet_tires;
 DROP SEQUENCE IF EXISTS public.fleet_telematics_integrations_id_seq;
 DROP TABLE IF EXISTS public.fleet_telematics_integrations;
 DROP SEQUENCE IF EXISTS public.fleet_telematics_devices_id_seq;
 DROP TABLE IF EXISTS public.fleet_telematics_devices;
 DROP SEQUENCE IF EXISTS public.fleet_sensor_readings_id_seq;
 DROP TABLE IF EXISTS public.fleet_sensor_readings;
+DROP SEQUENCE IF EXISTS public.fleet_rental_payments_id_seq;
+DROP TABLE IF EXISTS public.fleet_rental_payments;
+DROP SEQUENCE IF EXISTS public.fleet_rental_contracts_id_seq;
+DROP TABLE IF EXISTS public.fleet_rental_contracts;
 DROP SEQUENCE IF EXISTS public.fleet_preventive_plans_id_seq;
 DROP TABLE IF EXISTS public.fleet_preventive_plans;
 DROP SEQUENCE IF EXISTS public.fleet_media_evidence_id_seq;
@@ -2559,6 +2878,8 @@ DROP SEQUENCE IF EXISTS public.fleet_gps_tracking_id_seq;
 DROP TABLE IF EXISTS public.fleet_gps_tracking;
 DROP SEQUENCE IF EXISTS public.fleet_fuel_logs_id_seq;
 DROP TABLE IF EXISTS public.fleet_fuel_logs;
+DROP SEQUENCE IF EXISTS public.fleet_expense_rules_id_seq;
+DROP TABLE IF EXISTS public.fleet_expense_rules;
 DROP SEQUENCE IF EXISTS public.fleet_drivers_id_seq;
 DROP TABLE IF EXISTS public.fleet_drivers;
 DROP SEQUENCE IF EXISTS public.fleet_device_sync_logs_id_seq;
@@ -2577,6 +2898,8 @@ DROP SEQUENCE IF EXISTS public.financial_posting_failures_id_seq;
 DROP TABLE IF EXISTS public.financial_posting_failures;
 DROP SEQUENCE IF EXISTS public.financial_periods_id_seq;
 DROP TABLE IF EXISTS public.financial_periods;
+DROP SEQUENCE IF EXISTS public.field_tracking_points_id_seq;
+DROP TABLE IF EXISTS public.field_tracking_points;
 DROP SEQUENCE IF EXISTS public.feature_catalog_id_seq;
 DROP TABLE IF EXISTS public.feature_catalog;
 DROP SEQUENCE IF EXISTS public.expenses_id_seq;
@@ -2604,10 +2927,18 @@ DROP SEQUENCE IF EXISTS public.employee_violations_id_seq;
 DROP TABLE IF EXISTS public.employee_violations;
 DROP SEQUENCE IF EXISTS public.employee_transfers_id_seq;
 DROP TABLE IF EXISTS public.employee_transfers;
+DROP SEQUENCE IF EXISTS public.employee_team_memberships_id_seq;
+DROP TABLE IF EXISTS public.employee_team_memberships;
+DROP SEQUENCE IF EXISTS public.employee_signals_id_seq;
+DROP TABLE IF EXISTS public.employee_signals;
 DROP SEQUENCE IF EXISTS public.employee_shift_assignments_id_seq;
 DROP TABLE IF EXISTS public.employee_shift_assignments;
+DROP SEQUENCE IF EXISTS public.employee_scores_id_seq;
+DROP TABLE IF EXISTS public.employee_scores;
 DROP SEQUENCE IF EXISTS public.employee_salary_components_id_seq;
 DROP TABLE IF EXISTS public.employee_salary_components;
+DROP SEQUENCE IF EXISTS public.employee_project_assignments_id_seq;
+DROP TABLE IF EXISTS public.employee_project_assignments;
 DROP SEQUENCE IF EXISTS public.employee_of_month_id_seq;
 DROP TABLE IF EXISTS public.employee_of_month;
 DROP SEQUENCE IF EXISTS public.employee_monthly_attendance_id_seq;
@@ -2620,14 +2951,20 @@ DROP SEQUENCE IF EXISTS public.employee_development_plans_id_seq;
 DROP TABLE IF EXISTS public.employee_development_plans;
 DROP SEQUENCE IF EXISTS public.employee_contracts_id_seq;
 DROP TABLE IF EXISTS public.employee_contracts;
+DROP SEQUENCE IF EXISTS public.employee_committee_memberships_id_seq;
+DROP TABLE IF EXISTS public.employee_committee_memberships;
 DROP SEQUENCE IF EXISTS public.employee_commission_tiers_id_seq;
 DROP TABLE IF EXISTS public.employee_commission_tiers;
 DROP SEQUENCE IF EXISTS public.employee_commission_plans_id_seq;
 DROP TABLE IF EXISTS public.employee_commission_plans;
 DROP SEQUENCE IF EXISTS public.employee_commission_calculations_id_seq;
 DROP TABLE IF EXISTS public.employee_commission_calculations;
+DROP SEQUENCE IF EXISTS public.employee_categories_id_seq;
+DROP TABLE IF EXISTS public.employee_categories;
 DROP SEQUENCE IF EXISTS public.employee_assignments_id_seq;
 DROP TABLE IF EXISTS public.employee_assignments;
+DROP SEQUENCE IF EXISTS public.employee_assets_id_seq;
+DROP TABLE IF EXISTS public.employee_assets;
 DROP SEQUENCE IF EXISTS public.email_signatures_id_seq;
 DROP TABLE IF EXISTS public.email_signatures;
 DROP SEQUENCE IF EXISTS public.email_queue_id_seq;
@@ -2636,6 +2973,10 @@ DROP SEQUENCE IF EXISTS public.email_drafts_id_seq;
 DROP TABLE IF EXISTS public.email_drafts;
 DROP SEQUENCE IF EXISTS public.dunning_letters_id_seq;
 DROP TABLE IF EXISTS public.dunning_letters;
+DROP SEQUENCE IF EXISTS public.driver_navigation_sessions_id_seq;
+DROP TABLE IF EXISTS public.driver_navigation_sessions;
+DROP SEQUENCE IF EXISTS public.driver_eligibility_overrides_id_seq;
+DROP TABLE IF EXISTS public.driver_eligibility_overrides;
 DROP SEQUENCE IF EXISTS public.documents_id_seq;
 DROP TABLE IF EXISTS public.documents;
 DROP SEQUENCE IF EXISTS public.document_versions_id_seq;
@@ -2648,6 +2989,10 @@ DROP SEQUENCE IF EXISTS public.document_folders_id_seq;
 DROP TABLE IF EXISTS public.document_folders;
 DROP SEQUENCE IF EXISTS public.document_entity_links_id_seq;
 DROP TABLE IF EXISTS public.document_entity_links;
+DROP SEQUENCE IF EXISTS public.document_acls_id_seq;
+DROP TABLE IF EXISTS public.document_acls;
+DROP SEQUENCE IF EXISTS public.document_access_log_id_seq;
+DROP TABLE IF EXISTS public.document_access_log;
 DROP SEQUENCE IF EXISTS public.discipline_memos_id_seq;
 DROP TABLE IF EXISTS public.discipline_memos;
 DROP SEQUENCE IF EXISTS public.digital_signature_otps_id_seq;
@@ -2672,8 +3017,6 @@ DROP SEQUENCE IF EXISTS public.daily_close_log_id_seq;
 DROP TABLE IF EXISTS public.daily_close_log;
 DROP SEQUENCE IF EXISTS public.customer_advances_id_seq;
 DROP TABLE IF EXISTS public.customer_advances;
-DROP SEQUENCE IF EXISTS public.custom_roles_id_seq;
-DROP TABLE IF EXISTS public.custom_roles;
 DROP SEQUENCE IF EXISTS public.cron_logs_id_seq;
 DROP TABLE IF EXISTS public.cron_logs;
 DROP SEQUENCE IF EXISTS public.cron_locks_id_seq;
@@ -2706,6 +3049,8 @@ DROP SEQUENCE IF EXISTS public.communication_providers_id_seq;
 DROP TABLE IF EXISTS public.communication_providers;
 DROP SEQUENCE IF EXISTS public.communication_dlp_rules_id_seq;
 DROP TABLE IF EXISTS public.communication_dlp_rules;
+DROP SEQUENCE IF EXISTS public.committees_id_seq;
+DROP TABLE IF EXISTS public.committees;
 DROP SEQUENCE IF EXISTS public.collection_follow_ups_id_seq;
 DROP TABLE IF EXISTS public.collection_follow_ups;
 DROP SEQUENCE IF EXISTS public.clients_id_seq;
@@ -2716,6 +3061,10 @@ DROP SEQUENCE IF EXISTS public.client_portal_accounts_id_seq;
 DROP TABLE IF EXISTS public.client_portal_accounts;
 DROP SEQUENCE IF EXISTS public.chart_of_accounts_id_seq;
 DROP TABLE IF EXISTS public.chart_of_accounts;
+DROP SEQUENCE IF EXISTS public.cargo_manifests_id_seq;
+DROP TABLE IF EXISTS public.cargo_manifests;
+DROP SEQUENCE IF EXISTS public.cargo_items_id_seq;
+DROP TABLE IF EXISTS public.cargo_items;
 DROP SEQUENCE IF EXISTS public.business_rules_id_seq;
 DROP TABLE IF EXISTS public.business_rules;
 DROP SEQUENCE IF EXISTS public.business_rule_logs_id_seq;
@@ -2751,6 +3100,8 @@ DROP SEQUENCE IF EXISTS public.audit_logs_id_seq;
 DROP TABLE IF EXISTS public.audit_logs;
 DROP SEQUENCE IF EXISTS public.audit_archive_id_seq;
 DROP TABLE IF EXISTS public.audit_archive;
+DROP SEQUENCE IF EXISTS public.attendance_policies_per_category_id_seq;
+DROP TABLE IF EXISTS public.attendance_policies_per_category;
 DROP SEQUENCE IF EXISTS public.attendance_policies_id_seq;
 DROP TABLE IF EXISTS public.attendance_policies;
 DROP SEQUENCE IF EXISTS public.attendance_id_seq;
@@ -2763,6 +3114,8 @@ DROP SEQUENCE IF EXISTS public.approval_chains_id_seq;
 DROP TABLE IF EXISTS public.approval_chains;
 DROP SEQUENCE IF EXISTS public.approval_chain_steps_id_seq;
 DROP TABLE IF EXISTS public.approval_chain_steps;
+DROP SEQUENCE IF EXISTS public.approval_authorities_id_seq;
+DROP TABLE IF EXISTS public.approval_authorities;
 DROP SEQUENCE IF EXISTS public.approval_actions_id_seq;
 DROP TABLE IF EXISTS public.approval_actions;
 DROP SEQUENCE IF EXISTS public.applicant_accounts_id_seq;
@@ -3467,6 +3820,46 @@ ALTER SEQUENCE public.approval_actions_id_seq OWNED BY public.approval_actions.i
 
 
 --
+-- Name: approval_authorities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.approval_authorities (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "assignmentId" integer NOT NULL,
+    "featureKey" character varying(80) NOT NULL,
+    action character varying(40) NOT NULL,
+    currency character varying(3) DEFAULT 'SAR'::character varying NOT NULL,
+    "maxAmount" numeric(14,2),
+    "requiresDualControl" boolean DEFAULT false NOT NULL,
+    reason text NOT NULL,
+    "expiresAt" timestamp with time zone,
+    "grantedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: approval_authorities_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.approval_authorities_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: approval_authorities_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.approval_authorities_id_seq OWNED BY public.approval_authorities.id;
+
+
+--
 -- Name: approval_chain_steps; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3712,6 +4105,52 @@ CREATE SEQUENCE public.attendance_policies_id_seq
 --
 
 ALTER SEQUENCE public.attendance_policies_id_seq OWNED BY public.attendance_policies.id;
+
+
+--
+-- Name: attendance_policies_per_category; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.attendance_policies_per_category (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "categoryKey" character varying(40) NOT NULL,
+    "lateThresholdMinutes" integer,
+    "gracePeriodMinutes" integer,
+    "gpsRadiusMeters" integer,
+    "penaltyLevel1" numeric,
+    "penaltyLevel2" numeric,
+    "penaltyLevel3" numeric,
+    "penaltyLevel4" numeric,
+    "penaltyLevel5" numeric,
+    "autoDeductionEnabled" boolean,
+    "requireGps" boolean,
+    "allowedSources" text[],
+    "trackingFrequencySeconds" integer,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "createdBy" integer
+);
+
+
+--
+-- Name: attendance_policies_per_category_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.attendance_policies_per_category_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: attendance_policies_per_category_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.attendance_policies_per_category_id_seq OWNED BY public.attendance_policies_per_category.id;
 
 
 --
@@ -4199,7 +4638,8 @@ CREATE TABLE public.branches (
     "footerText" text,
     "nameEn" character varying(200),
     city character varying(100),
-    "numberingCode" character varying(10)
+    "numberingCode" character varying(10),
+    "legalEntityId" integer
 );
 
 
@@ -4444,6 +4884,106 @@ ALTER SEQUENCE public.business_rules_id_seq OWNED BY public.business_rules.id;
 
 
 --
+-- Name: cargo_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cargo_items (
+    id integer NOT NULL,
+    "manifestId" integer NOT NULL,
+    "companyId" integer NOT NULL,
+    description character varying(255) NOT NULL,
+    quantity integer DEFAULT 1 NOT NULL,
+    "unitOfMeasure" character varying(32) DEFAULT 'piece'::character varying,
+    weight numeric(12,2) DEFAULT 0,
+    "declaredValue" numeric(14,2) DEFAULT 0,
+    dimensions jsonb,
+    "isHazmat" boolean DEFAULT false NOT NULL,
+    "hazmatClass" character varying(32),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+--
+-- Name: cargo_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.cargo_items_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: cargo_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.cargo_items_id_seq OWNED BY public.cargo_items.id;
+
+
+--
+-- Name: cargo_manifests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cargo_manifests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "manifestNumber" character varying(64) NOT NULL,
+    status character varying(24) DEFAULT 'draft'::character varying NOT NULL,
+    "customerId" integer,
+    "customerName" character varying(255),
+    "customerPhone" character varying(64),
+    "fleetTripId" integer,
+    "fromLocation" character varying(255),
+    "toLocation" character varying(255),
+    "pickupDate" date,
+    "deliveryDate" date,
+    "vehicleId" integer,
+    "driverId" integer,
+    "totalWeight" numeric(12,2) DEFAULT 0,
+    "totalDeclaredValue" numeric(14,2) DEFAULT 0,
+    "freightRevenue" numeric(14,2) DEFAULT 0,
+    "freightCost" numeric(14,2) DEFAULT 0,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    "billingStatus" text DEFAULT 'not_billable'::text NOT NULL,
+    "transportServiceType" text DEFAULT 'cargo_load'::text NOT NULL,
+    CONSTRAINT cargo_manifests_billing_status_check CHECK (("billingStatus" = ANY (ARRAY['not_billable'::text, 'ready_for_accounting'::text, 'under_review'::text, 'invoiced'::text, 'excluded'::text]))),
+    CONSTRAINT cargo_manifests_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text]))),
+    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY (ARRAY['draft'::text, 'requested'::text, 'approved'::text, 'assigned_to_driver'::text, 'driver_accepted'::text, 'trip_started'::text, 'arrived_pickup'::text, 'loaded'::text, 'in_transit'::text, 'arrived_delivery'::text, 'delivered'::text, 'completed'::text, 'ready_for_invoice'::text, 'financially_closed'::text, 'cancelled'::text])))
+);
+
+
+--
+-- Name: cargo_manifests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.cargo_manifests_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: cargo_manifests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.cargo_manifests_id_seq OWNED BY public.cargo_manifests.id;
+
+
+--
 -- Name: chart_of_accounts; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4472,7 +5012,9 @@ CREATE TABLE public.chart_of_accounts (
     "deletedAt" timestamp with time zone,
     subtype character varying,
     "accountSubtype" character varying,
-    nature character varying DEFAULT 'debit'::character varying
+    nature character varying DEFAULT 'debit'::character varying,
+    "accountUsage" character varying(40),
+    "childrenUsagePolicy" character varying(20) DEFAULT 'inherit_default'::character varying
 );
 
 
@@ -4605,8 +5147,7 @@ CREATE TABLE public.clients (
     notes text,
     "deletedAt" timestamp with time zone,
     attachments jsonb,
-    "taxNumber" text,
-    CONSTRAINT clients_id_company_uq UNIQUE (id, "companyId")
+    "taxNumber" text
 );
 
 
@@ -4665,6 +5206,45 @@ CREATE SEQUENCE public.collection_follow_ups_id_seq
 --
 
 ALTER SEQUENCE public.collection_follow_ups_id_seq OWNED BY public.collection_follow_ups.id;
+
+
+--
+-- Name: committees; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.committees (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    name character varying(200) NOT NULL,
+    type character varying(40) NOT NULL,
+    "chairAssignmentId" integer,
+    description text,
+    "startDate" date,
+    "endDate" date,
+    "isActive" boolean DEFAULT true NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: committees_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.committees_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: committees_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.committees_id_seq OWNED BY public.committees.id;
 
 
 --
@@ -4815,12 +5395,11 @@ CREATE TABLE public.companies (
     "umrahVisaProductId" integer,
     "umrahServicesProductId" integer,
     "umrahTransportProductId" integer,
-    "subscriptionStatus" character varying(20) DEFAULT 'trial' NOT NULL,
+    "subscriptionStatus" character varying(20) DEFAULT 'trial'::character varying NOT NULL,
     "trialExpiresAt" timestamp with time zone,
-    "subscriptionPlan" character varying(40) DEFAULT 'trial' NOT NULL,
+    "subscriptionPlan" character varying(40) DEFAULT 'trial'::character varying NOT NULL,
     CONSTRAINT chk_companies_functional_currency_iso CHECK (("functionalCurrency" ~ '^[A-Z]{3}$'::text)),
-    CONSTRAINT companies_subscription_status_check
-      CHECK (("subscriptionStatus"::text = ANY (ARRAY['trial'::text, 'active'::text, 'expired'::text, 'cancelled'::text])))
+    CONSTRAINT companies_subscription_status_check CHECK ((("subscriptionStatus")::text = ANY (ARRAY['trial'::text, 'active'::text, 'expired'::text, 'cancelled'::text])))
 );
 
 
@@ -5349,42 +5928,6 @@ ALTER SEQUENCE public.cron_logs_id_seq OWNED BY public.cron_logs.id;
 
 
 --
--- Name: custom_roles; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.custom_roles (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "roleKey" character varying(100) NOT NULL,
-    label character varying(200) NOT NULL,
-    level integer DEFAULT 10 NOT NULL,
-    modules jsonb DEFAULT '[]'::jsonb,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now()
-);
-
-
---
--- Name: custom_roles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.custom_roles_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: custom_roles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.custom_roles_id_seq OWNED BY public.custom_roles.id;
-
-
---
 -- Name: customer_advances; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -5857,21 +6400,44 @@ ALTER SEQUENCE public.discipline_memos_id_seq OWNED BY public.discipline_memos.i
 
 
 --
--- Name: document_entity_links; Type: TABLE; Schema: public; Owner: -
+-- Name: document_access_log; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.document_entity_links (
+CREATE TABLE public.document_access_log (
     id integer NOT NULL,
-    "documentId" integer,
-    "entityType" character varying(50) NOT NULL,
-    "entityId" integer NOT NULL,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+    "companyId" integer NOT NULL,
+    "documentId" integer NOT NULL,
+    "userId" integer,
+    "accessType" text NOT NULL,
+    "accessedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "ipAddress" text,
+    "userAgent" text,
+    CONSTRAINT document_access_log_access_type_check CHECK (("accessType" = ANY (ARRAY['download'::text, 'preview'::text, 'view'::text, 'sign'::text])))
 );
 
 
 --
+-- Name: document_access_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.document_access_log_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: document_access_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.document_access_log_id_seq OWNED BY public.document_access_log.id;
+
+
+--
 -- Name: document_acls; Type: TABLE; Schema: public; Owner: -
--- Source: migration 242_document_acl.sql (per-document access control).
 --
 
 CREATE TABLE public.document_acls (
@@ -5885,14 +6451,8 @@ CREATE TABLE public.document_acls (
     "grantedBy" integer,
     "grantedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "expiresAt" timestamp with time zone,
-    CONSTRAINT document_acls_permission_check
-      CHECK ((permission::text = ANY (ARRAY['read'::text, 'write'::text, 'admin'::text]))),
-    CONSTRAINT document_acls_principal_check
-      CHECK (
-        ((("userId" IS NOT NULL))::int +
-         (("roleKey" IS NOT NULL))::int +
-         (("departmentId" IS NOT NULL))::int) = 1
-      )
+    CONSTRAINT document_acls_permission_check CHECK (((permission)::text = ANY (ARRAY['read'::text, 'write'::text, 'admin'::text]))),
+    CONSTRAINT document_acls_principal_check CHECK (((((("userId" IS NOT NULL))::integer + (("roleKey" IS NOT NULL))::integer) + (("departmentId" IS NOT NULL))::integer) = 1))
 );
 
 
@@ -5917,42 +6477,16 @@ ALTER SEQUENCE public.document_acls_id_seq OWNED BY public.document_acls.id;
 
 
 --
--- Name: document_access_log; Type: TABLE; Schema: public; Owner: -
--- Source: migration 234_document_access_log.sql (per-access compliance log for downloads/previews).
+-- Name: document_entity_links; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.document_access_log (
+CREATE TABLE public.document_entity_links (
     id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "documentId" integer NOT NULL,
-    "userId" integer,
-    "accessType" text NOT NULL,
-    "accessedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "ipAddress" text,
-    "userAgent" text,
-    CONSTRAINT document_access_log_access_type_check
-      CHECK (("accessType" = ANY (ARRAY['download'::text, 'preview'::text, 'view'::text, 'sign'::text])))
+    "documentId" integer,
+    "entityType" character varying(50) NOT NULL,
+    "entityId" integer NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
-
-
---
--- Name: document_access_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.document_access_log_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: document_access_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.document_access_log_id_seq OWNED BY public.document_access_log.id;
 
 
 --
@@ -6207,6 +6741,102 @@ ALTER SEQUENCE public.documents_id_seq OWNED BY public.documents.id;
 
 
 --
+-- Name: driver_eligibility_overrides; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.driver_eligibility_overrides (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "driverId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "driverLicenseClass" text,
+    "vehicleRequiredClass" text NOT NULL,
+    reason text NOT NULL,
+    "approvedBy" integer NOT NULL,
+    "approvedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: driver_eligibility_overrides_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.driver_eligibility_overrides_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: driver_eligibility_overrides_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.driver_eligibility_overrides_id_seq OWNED BY public.driver_eligibility_overrides.id;
+
+
+--
+-- Name: driver_navigation_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.driver_navigation_sessions (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "dispatchOrderId" integer NOT NULL,
+    "driverId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    status text DEFAULT 'active'::text NOT NULL,
+    "startedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "endedAt" timestamp with time zone,
+    "originLat" numeric(9,6),
+    "originLng" numeric(9,6),
+    "destinationLat" numeric(9,6),
+    "destinationLng" numeric(9,6),
+    "lastLat" numeric(9,6),
+    "lastLng" numeric(9,6),
+    "lastSpeedKmh" numeric(6,2),
+    "lastHeading" numeric(5,2),
+    "lastPingAt" timestamp with time zone,
+    "etaSeconds" integer,
+    "remainingMeters" integer,
+    provider text DEFAULT 'manual_only'::text NOT NULL,
+    "arrivedPickupAt" timestamp with time zone,
+    "loadedAt" timestamp with time zone,
+    "arrivedDropoffAt" timestamp with time zone,
+    "deliveredAt" timestamp with time zone,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT driver_nav_status_check CHECK ((status = ANY (ARRAY['active'::text, 'arrived_pickup'::text, 'loaded'::text, 'arrived_dropoff'::text, 'delivered'::text, 'ended'::text, 'cancelled'::text])))
+);
+
+
+--
+-- Name: driver_navigation_sessions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.driver_navigation_sessions_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: driver_navigation_sessions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.driver_navigation_sessions_id_seq OWNED BY public.driver_navigation_sessions.id;
+
+
+--
 -- Name: dunning_letters; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6378,6 +7008,52 @@ ALTER SEQUENCE public.email_signatures_id_seq OWNED BY public.email_signatures.i
 
 
 --
+-- Name: employee_assets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_assets (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "assignmentId" integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "assetType" character varying(40) NOT NULL,
+    "assetKey" character varying(120) NOT NULL,
+    "assetLabel" character varying(200),
+    "serialNumber" character varying(120),
+    "warehouseAssetId" integer,
+    "assignedAt" date DEFAULT CURRENT_DATE NOT NULL,
+    "assignedBy" integer,
+    "returnedAt" date,
+    "returnedBy" integer,
+    "conditionOnAssign" text,
+    "conditionOnReturn" text,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: employee_assets_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.employee_assets_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: employee_assets_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.employee_assets_id_seq OWNED BY public.employee_assets.id;
+
+
+--
 -- Name: employee_assignments; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6402,7 +7078,10 @@ CREATE TABLE public.employee_assignments (
     status character varying(20) DEFAULT 'active'::character varying,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "jobTitleId" integer,
-    "managerId" integer
+    "managerId" integer,
+    "categoryKey" character varying(40),
+    "positionId" integer,
+    "legalEntityId" integer
 );
 
 
@@ -6424,6 +7103,47 @@ CREATE SEQUENCE public.employee_assignments_id_seq
 --
 
 ALTER SEQUENCE public.employee_assignments_id_seq OWNED BY public.employee_assignments.id;
+
+
+--
+-- Name: employee_categories; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_categories (
+    id integer NOT NULL,
+    "companyId" integer,
+    "categoryKey" character varying(40) NOT NULL,
+    "labelAr" character varying(120) NOT NULL,
+    "labelEn" character varying(120),
+    description text,
+    color character varying(20),
+    "displayOrder" integer DEFAULT 100,
+    "exemptFromAutoDeduction" boolean DEFAULT false NOT NULL,
+    "trackingFrequencySeconds" integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    "createdAt" timestamp without time zone DEFAULT now(),
+    "updatedAt" timestamp without time zone DEFAULT now()
+);
+
+
+--
+-- Name: employee_categories_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.employee_categories_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: employee_categories_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.employee_categories_id_seq OWNED BY public.employee_categories.id;
 
 
 --
@@ -6579,6 +7299,42 @@ CREATE SEQUENCE public.employee_commission_tiers_id_seq
 --
 
 ALTER SEQUENCE public.employee_commission_tiers_id_seq OWNED BY public.employee_commission_tiers.id;
+
+
+--
+-- Name: employee_committee_memberships; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_committee_memberships (
+    id integer NOT NULL,
+    "assignmentId" integer NOT NULL,
+    "committeeId" integer NOT NULL,
+    role character varying(40) DEFAULT 'member'::character varying,
+    "isVoting" boolean DEFAULT true NOT NULL,
+    "startDate" date DEFAULT CURRENT_DATE NOT NULL,
+    "endDate" date,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: employee_committee_memberships_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.employee_committee_memberships_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: employee_committee_memberships_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.employee_committee_memberships_id_seq OWNED BY public.employee_committee_memberships.id;
 
 
 --
@@ -6850,6 +7606,44 @@ ALTER SEQUENCE public.employee_of_month_id_seq OWNED BY public.employee_of_month
 
 
 --
+-- Name: employee_project_assignments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_project_assignments (
+    id integer NOT NULL,
+    "assignmentId" integer NOT NULL,
+    "projectId" integer NOT NULL,
+    role character varying(80) DEFAULT 'contributor'::character varying,
+    "allocationPercent" numeric(5,2) DEFAULT 100.00 NOT NULL,
+    "startDate" date DEFAULT CURRENT_DATE NOT NULL,
+    "endDate" date,
+    "costCenterId" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT "employee_project_assignments_allocationPercent_check" CHECK ((("allocationPercent" > (0)::numeric) AND ("allocationPercent" <= (100)::numeric)))
+);
+
+
+--
+-- Name: employee_project_assignments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.employee_project_assignments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: employee_project_assignments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.employee_project_assignments_id_seq OWNED BY public.employee_project_assignments.id;
+
+
+--
 -- Name: employee_salary_components; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6886,6 +7680,54 @@ ALTER SEQUENCE public.employee_salary_components_id_seq OWNED BY public.employee
 
 
 --
+-- Name: employee_scores; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_scores (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "assignmentId" integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    scope character varying(12) NOT NULL,
+    "periodKey" character varying(10) NOT NULL,
+    "compositeScore" numeric(5,2) NOT NULL,
+    trend smallint DEFAULT 0 NOT NULL,
+    "disciplineScore" numeric(5,2) DEFAULT 0 NOT NULL,
+    "activityScore" numeric(5,2) DEFAULT 0 NOT NULL,
+    "productivityScore" numeric(5,2) DEFAULT 0 NOT NULL,
+    "qualityScore" numeric(5,2) DEFAULT 0 NOT NULL,
+    "managerScore" numeric(5,2) DEFAULT 0 NOT NULL,
+    "developmentScore" numeric(5,2) DEFAULT 0 NOT NULL,
+    rationale jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "weightsUsed" jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "rawCounters" jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "computedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT employee_scores_scope_check CHECK (((scope)::text = ANY ((ARRAY['weekly'::character varying, 'monthly'::character varying, 'quarterly'::character varying])::text[]))),
+    CONSTRAINT employee_scores_trend_check CHECK (((trend >= '-1'::integer) AND (trend <= 1)))
+);
+
+
+--
+-- Name: employee_scores_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.employee_scores_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: employee_scores_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.employee_scores_id_seq OWNED BY public.employee_scores.id;
+
+
+--
 -- Name: employee_shift_assignments; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6918,6 +7760,86 @@ CREATE SEQUENCE public.employee_shift_assignments_id_seq
 --
 
 ALTER SEQUENCE public.employee_shift_assignments_id_seq OWNED BY public.employee_shift_assignments.id;
+
+
+--
+-- Name: employee_signals; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_signals (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "assignmentId" integer NOT NULL,
+    "employeeId" integer NOT NULL,
+    "signalType" character varying(20) NOT NULL,
+    severity character varying(20) NOT NULL,
+    scope character varying(12) NOT NULL,
+    "periodKey" character varying(10) NOT NULL,
+    title character varying(200) NOT NULL,
+    reasons jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "compositeScore" numeric(5,2),
+    "acknowledgedAt" timestamp with time zone,
+    "acknowledgedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT employee_signals_scope_check CHECK (((scope)::text = ANY ((ARRAY['weekly'::character varying, 'monthly'::character varying, 'quarterly'::character varying])::text[]))),
+    CONSTRAINT employee_signals_severity_check CHECK (((severity)::text = ANY ((ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))),
+    CONSTRAINT "employee_signals_signalType_check" CHECK ((("signalType")::text = ANY ((ARRAY['risk'::character varying, 'promotion'::character varying, 'burnout'::character varying, 'custom'::character varying])::text[])))
+);
+
+
+--
+-- Name: employee_signals_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.employee_signals_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: employee_signals_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.employee_signals_id_seq OWNED BY public.employee_signals.id;
+
+
+--
+-- Name: employee_team_memberships; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_team_memberships (
+    id integer NOT NULL,
+    "assignmentId" integer NOT NULL,
+    "teamId" integer NOT NULL,
+    role character varying(40) DEFAULT 'member'::character varying,
+    "startDate" date DEFAULT CURRENT_DATE NOT NULL,
+    "endDate" date,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: employee_team_memberships_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.employee_team_memberships_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: employee_team_memberships_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.employee_team_memberships_id_seq OWNED BY public.employee_team_memberships.id;
 
 
 --
@@ -7517,6 +8439,52 @@ ALTER SEQUENCE public.feature_catalog_id_seq OWNED BY public.feature_catalog.id;
 
 
 --
+-- Name: field_tracking_points; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.field_tracking_points (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "assignmentId" integer NOT NULL,
+    "employeeId" integer,
+    lat double precision NOT NULL,
+    lng double precision NOT NULL,
+    accuracy double precision,
+    speed double precision,
+    heading double precision,
+    altitude double precision,
+    battery smallint,
+    "deviceId" character varying(120),
+    source character varying(20) DEFAULT 'mobile'::character varying NOT NULL,
+    "taskId" integer,
+    "tripId" integer,
+    "visitId" integer,
+    "capturedAt" timestamp with time zone NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: field_tracking_points_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.field_tracking_points_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: field_tracking_points_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.field_tracking_points_id_seq OWNED BY public.field_tracking_points.id;
+
+
+--
 -- Name: financial_periods; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -7690,10 +8658,10 @@ CREATE TABLE public.fleet_ai_alerts (
     "resolvedBy" integer,
     "resolvedAt" timestamp with time zone,
     "resolutionNote" text,
-    CONSTRAINT fleet_ai_alerts_category_check CHECK (((category)::text = ANY ((ARRAY['adas'::character varying, 'dms'::character varying, 'bsd'::character varying, 'safety'::character varying, 'other'::character varying])::text[]))),
+    CONSTRAINT fleet_ai_alerts_category_check CHECK (((category)::text = ANY (ARRAY[('adas'::character varying)::text, ('dms'::character varying)::text, ('bsd'::character varying)::text, ('safety'::character varying)::text, ('other'::character varying)::text]))),
     CONSTRAINT fleet_ai_alerts_payload_size CHECK (((("rawPayload" IS NULL) OR (octet_length(("rawPayload")::text) < 65536)) AND (("normalizedPayload" IS NULL) OR (octet_length(("normalizedPayload")::text) < 65536)))),
-    CONSTRAINT fleet_ai_alerts_severity_check CHECK (((severity)::text = ANY ((ARRAY['info'::character varying, 'low'::character varying, 'medium'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))),
-    CONSTRAINT fleet_ai_alerts_status_check CHECK (((status)::text = ANY ((ARRAY['open'::character varying, 'acknowledged'::character varying, 'resolved'::character varying, 'dismissed'::character varying])::text[])))
+    CONSTRAINT fleet_ai_alerts_severity_check CHECK (((severity)::text = ANY (ARRAY[('info'::character varying)::text, ('low'::character varying)::text, ('medium'::character varying)::text, ('high'::character varying)::text, ('critical'::character varying)::text]))),
+    CONSTRAINT fleet_ai_alerts_status_check CHECK (((status)::text = ANY (ARRAY[('open'::character varying)::text, ('acknowledged'::character varying)::text, ('resolved'::character varying)::text, ('dismissed'::character varying)::text])))
 );
 
 
@@ -7784,7 +8752,7 @@ CREATE TABLE public.fleet_device_events (
     "rawPayload" jsonb,
     "normalizedPayload" jsonb,
     CONSTRAINT fleet_device_events_payload_size CHECK (((("rawPayload" IS NULL) OR (octet_length(("rawPayload")::text) < 65536)) AND (("normalizedPayload" IS NULL) OR (octet_length(("normalizedPayload")::text) < 65536)))),
-    CONSTRAINT fleet_device_events_severity_check CHECK (((severity)::text = ANY ((ARRAY['info'::character varying, 'low'::character varying, 'medium'::character varying, 'high'::character varying, 'critical'::character varying])::text[])))
+    CONSTRAINT fleet_device_events_severity_check CHECK (((severity)::text = ANY (ARRAY[('info'::character varying)::text, ('low'::character varying)::text, ('medium'::character varying)::text, ('high'::character varying)::text, ('critical'::character varying)::text])))
 );
 
 
@@ -7872,7 +8840,7 @@ CREATE TABLE public.fleet_device_sync_logs (
     payload jsonb,
     "startedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "finishedAt" timestamp with time zone,
-    CONSTRAINT fleet_device_sync_logs_status_check CHECK (((status)::text = ANY ((ARRAY['success'::character varying, 'partial'::character varying, 'failure'::character varying, 'skipped'::character varying])::text[])))
+    CONSTRAINT fleet_device_sync_logs_status_check CHECK (((status)::text = ANY (ARRAY[('success'::character varying)::text, ('partial'::character varying)::text, ('failure'::character varying)::text, ('skipped'::character varying)::text])))
 );
 
 
@@ -7918,107 +8886,15 @@ CREATE TABLE public.fleet_drivers (
     "deletedAt" timestamp with time zone,
     "updatedAt" timestamp with time zone DEFAULT now(),
     "licenseClass" text,
-    "driverServiceProfile" text
+    "driverServiceProfile" text,
+    "restHoursRequired" numeric(4,2) DEFAULT 8 NOT NULL,
+    "lastDutyEndedAt" timestamp with time zone,
+    "nationalId" text,
+    "iqamaNumber" text,
+    "licenseIssueDate" date,
+    "licenseIssuingAuthority" text,
+    "licenseOrigin" text
 );
-
-
---
--- Name: transport_price_rules; Type: TABLE; Schema: public; Owner: -
---
--- #1733 Pricing engine (Issue Comment 3).
-
-CREATE TABLE public.transport_price_rules (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "customerId" integer,
-    "transportServiceType" text NOT NULL,
-    "vehicleType" text,
-    "routeFrom" text,
-    "routeTo" text,
-    "cargoType" text,
-    "unitOfMeasure" text NOT NULL,
-    "unitPrice" numeric(18,4) NOT NULL,
-    "minimumCharge" numeric(18,2),
-    currency text DEFAULT 'SAR'::text NOT NULL,
-    "vatRate" numeric(5,2),
-    "validFrom" date NOT NULL,
-    "validTo" date,
-    priority integer DEFAULT 0 NOT NULL,
-    "isActive" boolean DEFAULT true NOT NULL,
-    notes text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT transport_price_rules_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
-);
-
-CREATE SEQUENCE public.transport_price_rules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.transport_price_rules_id_seq OWNED BY public.transport_price_rules.id;
-
-
---
--- Name: transport_invoice_links; Type: TABLE; Schema: public; Owner: -
---
--- #1733 Multi-trip invoice merging (Issue Comment 3).
-
-CREATE TABLE public.transport_invoice_links (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "serviceLineId" integer NOT NULL,
-    "invoiceId" integer NOT NULL,
-    "invoiceLineId" integer,
-    "appliedPriceRuleId" integer,
-    "appliedUnitPrice" numeric(18,4),
-    "linkedBy" integer,
-    "linkedAt" timestamp with time zone DEFAULT now() NOT NULL
-);
-
-CREATE SEQUENCE public.transport_invoice_links_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.transport_invoice_links_id_seq OWNED BY public.transport_invoice_links.id;
-
-
---
--- Name: driver_eligibility_overrides; Type: TABLE; Schema: public; Owner: -
---
--- #1733 Phase 2 — documented-exception log for unqualified-driver
--- assignments. Mirror of vehicle_capacity_overrides.
-
-CREATE TABLE public.driver_eligibility_overrides (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "driverId" integer NOT NULL,
-    "vehicleId" integer NOT NULL,
-    "sourceType" text NOT NULL,
-    "sourceId" integer NOT NULL,
-    "driverLicenseClass" text,
-    "vehicleRequiredClass" text NOT NULL,
-    reason text NOT NULL,
-    "approvedBy" integer NOT NULL,
-    "approvedAt" timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
--- Name: driver_eligibility_overrides_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.driver_eligibility_overrides_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: driver_eligibility_overrides_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.driver_eligibility_overrides_id_seq OWNED BY public.driver_eligibility_overrides.id;
 
 
 --
@@ -8039,6 +8915,58 @@ CREATE SEQUENCE public.fleet_drivers_id_seq
 --
 
 ALTER SEQUENCE public.fleet_drivers_id_seq OWNED BY public.fleet_drivers.id;
+
+
+--
+-- Name: fleet_expense_rules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_expense_rules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "ruleName" text NOT NULL,
+    "expenseSource" text NOT NULL,
+    "vehicleId" integer,
+    "vehicleType" text,
+    "stationName" text,
+    "maintenanceType" text,
+    "violationType" text,
+    "defaultAccountingTreatment" text,
+    "defaultRechargeable" boolean DEFAULT false NOT NULL,
+    "defaultLiabilityParty" text,
+    "defaultCostCenterId" integer,
+    "requiresApproval" boolean DEFAULT false NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT fleet_expense_rules_acct_check CHECK ((("defaultAccountingTreatment" IS NULL) OR ("defaultAccountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text])))),
+    CONSTRAINT fleet_expense_rules_source_check CHECK (("expenseSource" = ANY (ARRAY['fuel_log'::text, 'maintenance'::text, 'traffic_violation'::text])))
+);
+
+
+--
+-- Name: fleet_expense_rules_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_expense_rules_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_expense_rules_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_expense_rules_id_seq OWNED BY public.fleet_expense_rules.id;
 
 
 --
@@ -8065,8 +8993,8 @@ CREATE TABLE public.fleet_fuel_logs (
     "customerBillableAmount" numeric(14,2),
     "linkedExpenseId" integer,
     "liabilityParty" text,
-    CONSTRAINT fleet_fuel_logs_acct_treatment_check CHECK (("accountingTreatment" IS NULL OR "accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text]))),
-    CONSTRAINT fleet_fuel_logs_liability_check CHECK (("liabilityParty" IS NULL OR "liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text])))
+    CONSTRAINT fleet_fuel_logs_acct_treatment_check CHECK ((("accountingTreatment" IS NULL) OR ("accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text])))),
+    CONSTRAINT fleet_fuel_logs_liability_check CHECK ((("liabilityParty" IS NULL) OR ("liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text]))))
 );
 
 
@@ -8194,8 +9122,9 @@ CREATE TABLE public.fleet_maintenance (
     "customerBillableAmount" numeric(14,2),
     "linkedExpenseId" integer,
     "liabilityParty" text,
-    CONSTRAINT fleet_maintenance_acct_treatment_check CHECK (("accountingTreatment" IS NULL OR "accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text]))),
-    CONSTRAINT fleet_maintenance_liability_check CHECK (("liabilityParty" IS NULL OR "liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text])))
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fleet_maintenance_acct_treatment_check CHECK ((("accountingTreatment" IS NULL) OR ("accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text])))),
+    CONSTRAINT fleet_maintenance_liability_check CHECK ((("liabilityParty" IS NULL) OR ("liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text]))))
 );
 
 
@@ -8241,7 +9170,7 @@ CREATE TABLE public.fleet_media_evidence (
     "uploadedBy" integer,
     "externalMediaId" character varying(120),
     "rawPayload" jsonb,
-    CONSTRAINT fleet_media_evidence_type_check CHECK ((("mediaType")::text = ANY ((ARRAY['image'::character varying, 'video'::character varying, 'audio'::character varying])::text[])))
+    CONSTRAINT fleet_media_evidence_type_check CHECK ((("mediaType")::text = ANY (ARRAY[('image'::character varying)::text, ('video'::character varying)::text, ('audio'::character varying)::text])))
 );
 
 
@@ -8310,6 +9239,96 @@ ALTER SEQUENCE public.fleet_preventive_plans_id_seq OWNED BY public.fleet_preven
 
 
 --
+-- Name: fleet_rental_contracts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_rental_contracts (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    ref character varying(80),
+    "vehicleId" integer NOT NULL,
+    "clientId" integer NOT NULL,
+    "startDate" date NOT NULL,
+    "endDate" date,
+    "dailyRate" numeric(12,2),
+    "totalAmount" numeric(15,2),
+    "securityDeposit" numeric(12,2) DEFAULT 0,
+    "paymentTerms" character varying(40) DEFAULT 'monthly'::character varying,
+    status character varying(20) DEFAULT 'draft'::character varying NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT fleet_rental_contracts_payment_terms_check CHECK ((("paymentTerms")::text = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text, 'quarterly'::text, 'one_time'::text]))),
+    CONSTRAINT fleet_rental_contracts_status_check CHECK (((status)::text = ANY (ARRAY['draft'::text, 'active'::text, 'completed'::text, 'cancelled'::text])))
+);
+
+
+--
+-- Name: fleet_rental_contracts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_rental_contracts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_rental_contracts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_rental_contracts_id_seq OWNED BY public.fleet_rental_contracts.id;
+
+
+--
+-- Name: fleet_rental_payments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_rental_payments (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "contractId" integer NOT NULL,
+    "dueDate" date NOT NULL,
+    amount numeric(12,2) NOT NULL,
+    "paidAmount" numeric(12,2) DEFAULT 0,
+    "paidDate" date,
+    method character varying(30),
+    status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
+    "journalEntryId" integer,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fleet_rental_payments_status_check CHECK (((status)::text = ANY (ARRAY['pending'::text, 'partial'::text, 'paid'::text, 'overdue'::text])))
+);
+
+
+--
+-- Name: fleet_rental_payments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_rental_payments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_rental_payments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_rental_payments_id_seq OWNED BY public.fleet_rental_payments.id;
+
+
+--
 -- Name: fleet_sensor_readings; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -8329,7 +9348,7 @@ CREATE TABLE public.fleet_sensor_readings (
     "externalReadingId" character varying(120),
     "rawPayload" jsonb,
     CONSTRAINT fleet_sensor_readings_payload_size CHECK ((("rawPayload" IS NULL) OR (octet_length(("rawPayload")::text) < 65536))),
-    CONSTRAINT fleet_sensor_readings_type_check CHECK ((("sensorType")::text = ANY ((ARRAY['fuel_level'::character varying, 'weight'::character varying, 'air_pressure'::character varying, 'pto'::character varying, 'dump_piston'::character varying, 'door'::character varying, 'temperature'::character varying, 'engine_rpm'::character varying, 'battery_voltage'::character varying, 'odometer'::character varying, 'custom'::character varying])::text[])))
+    CONSTRAINT fleet_sensor_readings_type_check CHECK ((("sensorType")::text = ANY (ARRAY[('fuel_level'::character varying)::text, ('weight'::character varying)::text, ('air_pressure'::character varying)::text, ('pto'::character varying)::text, ('dump_piston'::character varying)::text, ('door'::character varying)::text, ('temperature'::character varying)::text, ('engine_rpm'::character varying)::text, ('battery_voltage'::character varying)::text, ('odometer'::character varying)::text, ('custom'::character varying)::text])))
 );
 
 
@@ -8380,7 +9399,7 @@ CREATE TABLE public.fleet_telematics_devices (
     "createdBy" integer,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT fleet_telematics_devices_status_check CHECK (((status)::text = ANY ((ARRAY['unlinked'::character varying, 'linked'::character varying, 'online'::character varying, 'offline'::character varying, 'error'::character varying, 'decommissioned'::character varying])::text[])))
+    CONSTRAINT fleet_telematics_devices_status_check CHECK (((status)::text = ANY (ARRAY[('unlinked'::character varying)::text, ('linked'::character varying)::text, ('online'::character varying)::text, ('offline'::character varying)::text, ('error'::character varying)::text, ('decommissioned'::character varying)::text])))
 );
 
 
@@ -8433,9 +9452,9 @@ CREATE TABLE public.fleet_telematics_integrations (
     "syncLogRetentionDays" smallint DEFAULT 30 NOT NULL,
     "offlineThresholdSec" integer DEFAULT 600 NOT NULL,
     "videoAccessLogRetentionDays" smallint DEFAULT 90 NOT NULL,
-    CONSTRAINT fleet_telematics_integrations_provider_check CHECK (((provider)::text = ANY ((ARRAY['cmsv6'::character varying, 'wialon'::character varying, 'teltonika'::character varying, 'manual'::character varying])::text[]))),
-    CONSTRAINT fleet_telematics_integrations_retention_check CHECK (((("positionRetentionDays" >= 1) AND ("positionRetentionDays" <= 3650)) AND (("syncLogRetentionDays" >= 1) AND ("syncLogRetentionDays" <= 365)) AND (("offlineThresholdSec" >= 60) AND ("offlineThresholdSec" <= 86400)))),
-    CONSTRAINT fleet_telematics_integrations_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'inactive'::character varying, 'error'::character varying, 'paused'::character varying])::text[]))),
+    CONSTRAINT fleet_telematics_integrations_provider_check CHECK (((provider)::text = ANY (ARRAY[('cmsv6'::character varying)::text, ('wialon'::character varying)::text, ('teltonika'::character varying)::text, ('manual'::character varying)::text]))),
+    CONSTRAINT fleet_telematics_integrations_retention_check CHECK ((("positionRetentionDays" >= 1) AND ("positionRetentionDays" <= 3650) AND (("syncLogRetentionDays" >= 1) AND ("syncLogRetentionDays" <= 365)) AND (("offlineThresholdSec" >= 60) AND ("offlineThresholdSec" <= 86400)))),
+    CONSTRAINT fleet_telematics_integrations_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('error'::character varying)::text, ('paused'::character varying)::text]))),
     CONSTRAINT fleet_telematics_integrations_video_log_retention_check CHECK ((("videoAccessLogRetentionDays" >= 1) AND ("videoAccessLogRetentionDays" <= 365)))
 );
 
@@ -8458,6 +9477,58 @@ CREATE SEQUENCE public.fleet_telematics_integrations_id_seq
 --
 
 ALTER SEQUENCE public.fleet_telematics_integrations_id_seq OWNED BY public.fleet_telematics_integrations.id;
+
+
+--
+-- Name: fleet_tires; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fleet_tires (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "vehicleId" integer NOT NULL,
+    "position" character varying(20) NOT NULL,
+    brand character varying(80),
+    size character varying(40),
+    "installMileage" integer,
+    "installDate" date,
+    "replaceMileage" integer,
+    "replaceDate" date,
+    status character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    "axleNumber" integer,
+    side text,
+    "serialNumber" text,
+    "currentMileageKm" integer,
+    "expectedLifeKm" integer,
+    "removalReason" text,
+    CONSTRAINT fleet_tires_position_check CHECK ((("position")::text = ANY (ARRAY['front_left'::text, 'front_right'::text, 'rear_left'::text, 'rear_right'::text, 'spare'::text, 'extra'::text]))),
+    CONSTRAINT fleet_tires_status_check CHECK (((status)::text = ANY (ARRAY['active'::text, 'rotated'::text, 'replaced'::text, 'discarded'::text])))
+);
+
+
+--
+-- Name: fleet_tires_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.fleet_tires_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: fleet_tires_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.fleet_tires_id_seq OWNED BY public.fleet_tires.id;
 
 
 --
@@ -8486,81 +9557,10 @@ CREATE TABLE public.fleet_traffic_violations (
     "customerBillableAmount" numeric(14,2),
     "linkedExpenseId" integer,
     "liabilityParty" text,
-    CONSTRAINT fleet_traffic_violations_acct_treatment_check CHECK (("accountingTreatment" IS NULL OR "accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text]))),
-    CONSTRAINT fleet_traffic_violations_liability_check CHECK (("liabilityParty" IS NULL OR "liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text])))
-);
-
-
---
--- Name: fleet_expense_rules; Type: TABLE; Schema: public; Owner: -
---
--- #1733 Comment 7 — expense classification rules engine.
-
-CREATE TABLE public.fleet_expense_rules (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "ruleName" text NOT NULL,
-    "expenseSource" text NOT NULL,
-    "vehicleId" integer,
-    "vehicleType" text,
-    "stationName" text,
-    "maintenanceType" text,
-    "violationType" text,
-    "defaultAccountingTreatment" text,
-    "defaultRechargeable" boolean DEFAULT false NOT NULL,
-    "defaultLiabilityParty" text,
-    "defaultCostCenterId" integer,
-    "requiresApproval" boolean DEFAULT false NOT NULL,
-    priority integer DEFAULT 0 NOT NULL,
-    "isActive" boolean DEFAULT true NOT NULL,
-    notes text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT fleet_expense_rules_source_check CHECK (("expenseSource" = ANY (ARRAY['fuel_log'::text, 'maintenance'::text, 'traffic_violation'::text]))),
-    CONSTRAINT fleet_expense_rules_acct_check CHECK (("defaultAccountingTreatment" IS NULL OR "defaultAccountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text])))
+    CONSTRAINT fleet_traffic_violations_acct_treatment_check CHECK ((("accountingTreatment" IS NULL) OR ("accountingTreatment" = ANY (ARRAY['direct_expense'::text, 'capitalized_asset_improvement'::text, 'deferred_expense'::text])))),
+    CONSTRAINT fleet_traffic_violations_liability_check CHECK ((("liabilityParty" IS NULL) OR ("liabilityParty" = ANY (ARRAY['company'::text, 'driver'::text, 'customer'::text, 'third_party'::text, 'insurance'::text, 'unknown'::text]))))
 );
-
-CREATE SEQUENCE public.fleet_expense_rules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.fleet_expense_rules_id_seq OWNED BY public.fleet_expense_rules.id;
-
-
---
--- Name: transport_intake_rules; Type: TABLE; Schema: public; Owner: -
---
--- #1733 Comment 5/6 — Intake Engine for TRIP/SERVICE capture (NOT expenses).
-
-CREATE TABLE public.transport_intake_rules (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "ruleName" text NOT NULL,
-    "operationType" text NOT NULL,
-    "transportServiceType" text NOT NULL,
-    "customerId" integer,
-    "bookingSource" text,
-    "requiredVehicleType" text,
-    "requiredLicenseClass" text,
-    "defaultCostCenterId" integer,
-    "requiresAttachment" boolean DEFAULT false NOT NULL,
-    "requiresApproval" boolean DEFAULT false NOT NULL,
-    "createsBookingDraft" boolean DEFAULT false NOT NULL,
-    "createsBillingCandidate" boolean DEFAULT false NOT NULL,
-    priority integer DEFAULT 0 NOT NULL,
-    "isActive" boolean DEFAULT true NOT NULL,
-    notes text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT transport_intake_rules_op_check CHECK (("operationType" = ANY (ARRAY['booking'::text, 'dispatch'::text, 'service_line'::text]))),
-    CONSTRAINT transport_intake_rules_service_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
-);
-
-CREATE SEQUENCE public.transport_intake_rules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.transport_intake_rules_id_seq OWNED BY public.transport_intake_rules.id;
 
 
 --
@@ -8610,7 +9610,8 @@ CREATE TABLE public.fleet_trips (
     "cancelledAt" timestamp with time zone,
     "cancellationReason" text,
     "sourceKey" character varying(128),
-    ref character varying(50)
+    ref character varying(50),
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -8632,221 +9633,6 @@ CREATE SEQUENCE public.fleet_trips_id_seq
 --
 
 ALTER SEQUENCE public.fleet_trips_id_seq OWNED BY public.fleet_trips.id;
-
-
---
--- Name: fleet_tires; Type: TABLE; Schema: public; Owner: -
--- Source: migration 245_fleet_tires.sql (per-vehicle tire inventory).
---
-
---
--- Name: fleet_rental_contracts; Type: TABLE; Schema: public; Owner: -
--- Source: migration 247_fleet_rental_contracts.sql.
---
-
-CREATE TABLE public.fleet_rental_contracts (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    ref character varying(80),
-    "vehicleId" integer NOT NULL,
-    "clientId" integer NOT NULL,
-    "startDate" date NOT NULL,
-    "endDate" date,
-    "dailyRate" numeric(12,2),
-    "totalAmount" numeric(15,2),
-    "securityDeposit" numeric(12,2) DEFAULT 0,
-    "paymentTerms" character varying(40) DEFAULT 'monthly',
-    status character varying(20) DEFAULT 'draft' NOT NULL,
-    notes text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT fleet_rental_contracts_status_check
-      CHECK ((status::text = ANY (ARRAY['draft'::text, 'active'::text, 'completed'::text, 'cancelled'::text]))),
-    CONSTRAINT fleet_rental_contracts_payment_terms_check
-      CHECK (("paymentTerms"::text = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text, 'quarterly'::text, 'one_time'::text])))
-);
-
-CREATE SEQUENCE public.fleet_rental_contracts_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.fleet_rental_contracts_id_seq OWNED BY public.fleet_rental_contracts.id;
-
-
---
--- Name: fleet_rental_payments; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.fleet_rental_payments (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "contractId" integer NOT NULL,
-    "dueDate" date NOT NULL,
-    amount numeric(12,2) NOT NULL,
-    "paidAmount" numeric(12,2) DEFAULT 0,
-    "paidDate" date,
-    method character varying(30),
-    status character varying(20) DEFAULT 'pending' NOT NULL,
-    "journalEntryId" integer,
-    notes text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT fleet_rental_payments_status_check
-      CHECK ((status::text = ANY (ARRAY['pending'::text, 'partial'::text, 'paid'::text, 'overdue'::text])))
-);
-
-CREATE SEQUENCE public.fleet_rental_payments_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.fleet_rental_payments_id_seq OWNED BY public.fleet_rental_payments.id;
-
-
-CREATE TABLE public.fleet_tires (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "vehicleId" integer NOT NULL,
-    "position" character varying(20) NOT NULL,
-    brand character varying(80),
-    size character varying(40),
-    "installMileage" integer,
-    "installDate" date,
-    "replaceMileage" integer,
-    "replaceDate" date,
-    status character varying(20) DEFAULT 'active' NOT NULL,
-    notes text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    "axleNumber" integer,
-    side text,
-    "serialNumber" text,
-    "currentMileageKm" integer,
-    "expectedLifeKm" integer,
-    "removalReason" text,
-    CONSTRAINT fleet_tires_position_check
-      CHECK (("position"::text = ANY (ARRAY['front_left'::text, 'front_right'::text, 'rear_left'::text, 'rear_right'::text, 'spare'::text, 'extra'::text]))),
-    CONSTRAINT fleet_tires_status_check
-      CHECK ((status::text = ANY (ARRAY['active'::text, 'rotated'::text, 'replaced'::text, 'discarded'::text])))
-);
-
-
---
--- Name: vehicle_components; Type: TABLE; Schema: public; Owner: -
---
--- #1733 Vehicle profile deep extension (Issue Comment 7).
-
-CREATE TABLE public.vehicle_components (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "vehicleId" integer NOT NULL,
-    "componentType" text NOT NULL,
-    "componentSubtype" text,
-    "serialNumber" text,
-    manufacturer text,
-    model text,
-    "installationDate" date,
-    "installationMileageKm" integer,
-    "installationHours" numeric(10,1),
-    "expectedLifeKm" integer,
-    "expectedLifeHours" numeric(10,1),
-    "expectedLifeDays" integer,
-    "lastServiceDate" date,
-    "lastServiceMileageKm" integer,
-    "nextServiceDate" date,
-    "nextServiceMileageKm" integer,
-    status text DEFAULT 'active'::text NOT NULL,
-    "removalDate" date,
-    "removalReason" text,
-    notes text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT vehicle_components_type_check CHECK (("componentType" = ANY (ARRAY['engine'::text, 'transmission'::text, 'axle'::text, 'battery'::text, 'ac_unit'::text, 'cooling_unit'::text, 'hydraulic_system'::text, 'lift_gate'::text, 'crane'::text, 'box_or_bed'::text, 'trailer'::text, 'doors'::text, 'seats'::text, 'upholstery'::text, 'screens'::text, 'brakes'::text, 'suspension'::text, 'steering'::text, 'safety_system'::text, 'fuel_system'::text, 'electrical_system'::text, 'other'::text]))),
-    CONSTRAINT vehicle_components_status_check CHECK ((status = ANY (ARRAY['active'::text, 'serviceable'::text, 'needs_service'::text, 'replaced'::text, 'removed'::text, 'damaged'::text])))
-);
-
-CREATE SEQUENCE public.vehicle_components_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.vehicle_components_id_seq OWNED BY public.vehicle_components.id;
-
-
---
--- Name: vehicle_driver_assignments; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.vehicle_driver_assignments (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "vehicleId" integer NOT NULL,
-    "driverId" integer NOT NULL,
-    "assignmentType" text NOT NULL,
-    "startDate" date NOT NULL,
-    "endDate" date,
-    status text DEFAULT 'active'::text NOT NULL,
-    reason text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT vehicle_driver_assignments_type_check CHECK (("assignmentType" = ANY (ARRAY['primary'::text, 'backup'::text, 'temporary'::text]))),
-    CONSTRAINT vehicle_driver_assignments_status_check CHECK ((status = ANY (ARRAY['active'::text, 'ended'::text, 'cancelled'::text])))
-);
-
-CREATE SEQUENCE public.vehicle_driver_assignments_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.vehicle_driver_assignments_id_seq OWNED BY public.vehicle_driver_assignments.id;
-
-
---
--- Name: vehicle_maintenance_schedules; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.vehicle_maintenance_schedules (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "vehicleId" integer,
-    "vehicleType" text,
-    "componentId" integer,
-    "scheduleName" text NOT NULL,
-    "intervalType" text NOT NULL,
-    "intervalValue" integer NOT NULL,
-    "lastTriggeredAt" timestamp with time zone,
-    "lastTriggeredKm" integer,
-    "lastTriggeredHours" numeric(10,1),
-    "nextDueDate" date,
-    "nextDueKm" integer,
-    "nextDueHours" numeric(10,1),
-    "isActive" boolean DEFAULT true NOT NULL,
-    notes text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT vehicle_maintenance_schedules_interval_check CHECK (("intervalType" = ANY (ARRAY['mileage'::text, 'hours'::text, 'days'::text])))
-);
-
-CREATE SEQUENCE public.vehicle_maintenance_schedules_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.vehicle_maintenance_schedules_id_seq OWNED BY public.vehicle_maintenance_schedules.id;
-
-
---
--- Name: fleet_tires_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.fleet_tires_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: fleet_tires_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.fleet_tires_id_seq OWNED BY public.fleet_tires.id;
 
 
 --
@@ -8909,50 +9695,6 @@ CREATE TABLE public.fleet_vehicles (
 
 
 --
--- Name: vehicle_capacity_overrides; Type: TABLE; Schema: public; Owner: -
---
--- #1733 Blocker #2 — documented-exception log for over-capacity
--- assignments. Required so an audit can ask "who let a 5-ton load
--- onto a 3-ton truck and why".
-
-CREATE TABLE public.vehicle_capacity_overrides (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "vehicleId" integer NOT NULL,
-    "sourceType" text NOT NULL,
-    "sourceId" integer NOT NULL,
-    "capacityType" text NOT NULL,
-    "vehicleCapacity" numeric(12,2) NOT NULL,
-    "requestedAmount" numeric(12,2) NOT NULL,
-    "exceededBy" numeric(12,2) NOT NULL,
-    reason text NOT NULL,
-    "approvedBy" integer NOT NULL,
-    "approvedAt" timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
--- Name: vehicle_capacity_overrides_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.vehicle_capacity_overrides_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: vehicle_capacity_overrides_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.vehicle_capacity_overrides_id_seq OWNED BY public.vehicle_capacity_overrides.id;
-
-
---
 -- Name: fleet_vehicles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -8986,7 +9728,7 @@ CREATE TABLE public.fleet_video_access_logs (
     "userAgent" text,
     status character varying(20) NOT NULL,
     "errorReason" text,
-    CONSTRAINT fleet_video_access_logs_status_check CHECK (((status)::text = ANY ((ARRAY['granted'::character varying, 'denied_token'::character varying, 'denied_expired'::character varying, 'denied_session'::character varying, 'denied_user'::character varying])::text[])))
+    CONSTRAINT fleet_video_access_logs_status_check CHECK (((status)::text = ANY (ARRAY[('granted'::character varying)::text, ('denied_token'::character varying)::text, ('denied_expired'::character varying)::text, ('denied_session'::character varying)::text, ('denied_user'::character varying)::text])))
 );
 
 
@@ -9025,7 +9767,7 @@ CREATE TABLE public.fleet_video_channels (
     "hlsUrl" text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT fleet_video_channels_type_check CHECK ((("channelType" IS NULL) OR (("channelType")::text = ANY ((ARRAY['front'::character varying, 'driver'::character varying, 'side_left'::character varying, 'side_right'::character varying, 'rear'::character varying, 'cabin'::character varying, 'other'::character varying])::text[]))))
+    CONSTRAINT fleet_video_channels_type_check CHECK ((("channelType" IS NULL) OR (("channelType")::text = ANY (ARRAY[('front'::character varying)::text, ('driver'::character varying)::text, ('side_left'::character varying)::text, ('side_right'::character varying)::text, ('rear'::character varying)::text, ('cabin'::character varying)::text, ('other'::character varying)::text]))))
 );
 
 
@@ -9072,8 +9814,8 @@ CREATE TABLE public.fleet_video_sessions (
     "externalSessionId" character varying(120),
     "streamProxyToken" text,
     "streamProxyExpiresAt" timestamp with time zone,
-    CONSTRAINT fleet_video_sessions_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'stopped'::character varying, 'expired'::character varying, 'error'::character varying])::text[]))),
-    CONSTRAINT fleet_video_sessions_stream_check CHECK ((("streamType")::text = ANY ((ARRAY['rtsp'::character varying, 'hls'::character varying, 'http_flv'::character varying, 'webrtc'::character varying])::text[])))
+    CONSTRAINT fleet_video_sessions_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('stopped'::character varying)::text, ('expired'::character varying)::text, ('error'::character varying)::text]))),
+    CONSTRAINT fleet_video_sessions_stream_check CHECK ((("streamType")::text = ANY (ARRAY[('rtsp'::character varying)::text, ('hls'::character varying)::text, ('http_flv'::character varying)::text, ('webrtc'::character varying)::text])))
 );
 
 
@@ -10119,8 +10861,7 @@ CREATE TABLE public.hr_leave_requests (
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
     "updatedAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT chk_hr_leave_requests_status CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('stage1_approved'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text]))),
-    CONSTRAINT hr_leave_requests_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text, ('returned'::character varying)::text])))
+    CONSTRAINT chk_hr_leave_requests_status CHECK (((status)::text = ANY (ARRAY['pending'::text, 'stage1_approved'::text, 'approved'::text, 'rejected'::text, 'returned'::text, 'cancelled'::text, 'completed'::text])))
 );
 
 
@@ -10867,7 +11608,7 @@ CREATE TABLE public.invoices (
     "taxInclusive" boolean DEFAULT false,
     "cogsTotal" numeric(18,2) DEFAULT 0,
     "cogsJournalEntryId" integer,
-    CONSTRAINT chk_invoices_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('sent'::character varying)::text, ('partially_paid'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('void'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text])))
+    CONSTRAINT chk_invoices_status CHECK (((status)::text = ANY (ARRAY['draft'::text, 'pending_approval'::text, 'approved'::text, 'sent'::text, 'partially_paid'::text, 'paid'::text, 'overdue'::text, 'void'::text, 'rejected'::text, 'cancelled'::text, 'posted'::text, 'partial'::text, 'returned'::text, 'closed'::text])))
 );
 
 
@@ -11342,6 +12083,46 @@ ALTER SEQUENCE public.journal_lines_id_seq OWNED BY public.journal_lines.id;
 
 
 --
+-- Name: journey_instances; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.journey_instances (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "journeyType" character varying(40) NOT NULL,
+    "entityType" character varying(40),
+    "entityId" integer,
+    label text NOT NULL,
+    "completedSteps" jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "totalSteps" integer NOT NULL,
+    status character varying(20) DEFAULT 'in_progress'::character varying NOT NULL,
+    metadata jsonb,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: journey_instances_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.journey_instances_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: journey_instances_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.journey_instances_id_seq OWNED BY public.journey_instances.id;
+
+
+--
 -- Name: kb_articles; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -11560,8 +12341,7 @@ CREATE TABLE public.legal_cases (
     "financialRisk" numeric(15,2),
     "riskLevel" text,
     "clientId" integer,
-    CONSTRAINT "legal_cases_riskLevel_check" CHECK ((("riskLevel" = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])) OR ("riskLevel" IS NULL))),
-    CONSTRAINT legal_cases_client_company_fk FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients (id, "companyId") ON DELETE SET NULL
+    CONSTRAINT "legal_cases_riskLevel_check" CHECK ((("riskLevel" = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])) OR ("riskLevel" IS NULL)))
 );
 
 
@@ -11676,6 +12456,44 @@ CREATE SEQUENCE public.legal_correspondence_id_seq
 --
 
 ALTER SEQUENCE public.legal_correspondence_id_seq OWNED BY public.legal_correspondence.id;
+
+
+--
+-- Name: legal_entities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.legal_entities (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "nameAr" character varying(200) NOT NULL,
+    "nameEn" character varying(200),
+    "crNumber" character varying(40),
+    "vatNumber" character varying(40),
+    "taxNumber" character varying(40),
+    "isActive" boolean DEFAULT true NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: legal_entities_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.legal_entities_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: legal_entities_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.legal_entities_id_seq OWNED BY public.legal_entities.id;
 
 
 --
@@ -11953,7 +12771,8 @@ CREATE TABLE public.maintenance_requests (
     "closureReport" text,
     "materialsUsed" jsonb DEFAULT '[]'::jsonb,
     "slaDeadline" timestamp with time zone,
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "linkedExpenseId" integer
 );
 
 
@@ -12026,48 +12845,6 @@ ALTER SEQUENCE public.marketing_campaigns_id_seq OWNED BY public.marketing_campa
 -- Name: message_log; Type: TABLE; Schema: public; Owner: -
 --
 
---
--- Name: message_referrals; Type: TABLE; Schema: public; Owner: -
--- Source: migration 240_message_referral_chain.sql (per-hop referral chain on message_log).
---
-
-CREATE TABLE public.message_referrals (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "sourceLogId" integer NOT NULL,
-    "hopNumber" integer DEFAULT 1 NOT NULL,
-    "fromUserId" integer,
-    "toUserId" integer,
-    "toRoleHint" text,
-    "targetType" text,
-    "targetId" integer,
-    reason text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT message_referrals_target_type_check
-      CHECK (("targetType" IS NULL OR "targetType" = ANY (ARRAY['task'::text, 'ticket'::text, 'request'::text, 'assignment'::text, 'archive'::text])))
-);
-
-
---
--- Name: message_referrals_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.message_referrals_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: message_referrals_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.message_referrals_id_seq OWNED BY public.message_referrals.id;
-
-
 CREATE TABLE public.message_log (
     id bigint NOT NULL,
     "companyId" integer NOT NULL,
@@ -12110,6 +12887,46 @@ CREATE SEQUENCE public.message_log_id_seq
 --
 
 ALTER SEQUENCE public.message_log_id_seq OWNED BY public.message_log.id;
+
+
+--
+-- Name: message_referrals; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.message_referrals (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "sourceLogId" integer NOT NULL,
+    "hopNumber" integer DEFAULT 1 NOT NULL,
+    "fromUserId" integer,
+    "toUserId" integer,
+    "toRoleHint" text,
+    "targetType" text,
+    "targetId" integer,
+    reason text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT message_referrals_target_type_check CHECK ((("targetType" IS NULL) OR ("targetType" = ANY (ARRAY['task'::text, 'ticket'::text, 'request'::text, 'assignment'::text, 'archive'::text]))))
+);
+
+
+--
+-- Name: message_referrals_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.message_referrals_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: message_referrals_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.message_referrals_id_seq OWNED BY public.message_referrals.id;
 
 
 --
@@ -12884,6 +13701,78 @@ ALTER SEQUENCE public.outbound_queue_id_seq OWNED BY public.outbound_queue.id;
 
 
 --
+-- Name: parties; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.parties (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    kind character varying(20) DEFAULT 'person'::character varying NOT NULL,
+    "displayName" text NOT NULL,
+    "nationalId" character varying(40),
+    phone character varying(40),
+    email character varying(200),
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: parties_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.parties_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: parties_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.parties_id_seq OWNED BY public.parties.id;
+
+
+--
+-- Name: party_links; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.party_links (
+    id integer NOT NULL,
+    "partyId" integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "entityTable" character varying(50) NOT NULL,
+    "entityId" integer NOT NULL,
+    role character varying(30) NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: party_links_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.party_links_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: party_links_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.party_links_id_seq OWNED BY public.party_links.id;
+
+
+--
 -- Name: password_reset_requests; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -13097,7 +13986,8 @@ CREATE TABLE public.payroll_runs (
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     reference text,
     notes text,
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -13404,43 +14294,6 @@ ALTER SEQUENCE public.performance_reviews_id_seq OWNED BY public.performance_rev
 
 
 --
--- Name: permissions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.permissions (
-    id integer NOT NULL,
-    "userId" integer NOT NULL,
-    permission character varying(100) NOT NULL,
-    type character varying(10) DEFAULT 'grant'::character varying NOT NULL,
-    "companyId" integer,
-    "grantedBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT permissions_type_check CHECK (((type)::text = ANY (ARRAY[('grant'::character varying)::text, ('revoke'::character varying)::text])))
-);
-
-
---
--- Name: permissions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.permissions_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: permissions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.permissions_id_seq OWNED BY public.permissions.id;
-
-
---
 -- Name: policy_compliance_actions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -13513,6 +14366,43 @@ CREATE SEQUENCE public.policy_module_links_id_seq
 --
 
 ALTER SEQUENCE public.policy_module_links_id_seq OWNED BY public.policy_module_links.id;
+
+
+--
+-- Name: positions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.positions (
+    id integer NOT NULL,
+    "companyId" integer,
+    "positionKey" character varying(50) NOT NULL,
+    "labelAr" character varying(120) NOT NULL,
+    "labelEn" character varying(120),
+    description text,
+    level smallint DEFAULT 50 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: positions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.positions_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: positions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.positions_id_seq OWNED BY public.positions.id;
 
 
 --
@@ -14786,8 +15676,8 @@ CREATE TABLE public.purchase_orders (
     "deletedAt" timestamp with time zone,
     currency character varying(8) DEFAULT 'SAR'::character varying,
     "exchangeRate" numeric(18,8) DEFAULT 1,
-    CONSTRAINT chk_purchase_orders_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('returned'::character varying)::text, ('received'::character varying)::text, ('partially_received'::character varying)::text]))),
-    CONSTRAINT purchase_orders_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('received'::character varying)::text, ('cancelled'::character varying)::text, ('completed'::character varying)::text, ('paid'::character varying)::text, ('confirmed'::character varying)::text, ('ordered'::character varying)::text, ('delivered'::character varying)::text])))
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_purchase_orders_status CHECK (((status)::text = ANY (ARRAY['draft'::text, 'pending'::text, 'pending_approval'::text, 'approved'::text, 'rejected'::text, 'returned'::text, 'received'::text, 'partially_received'::text, 'cancelled'::text, 'confirmed'::text, 'sent'::text, 'paid'::text, 'payment_scheduled'::text, 'invoice_matched'::text, 'invoice_mismatch'::text, 'completed'::text, 'ordered'::text, 'delivered'::text])))
 );
 
 
@@ -15635,75 +16525,6 @@ ALTER SEQUENCE public.requests_id_seq OWNED BY public.requests.id;
 
 
 --
--- Name: role_permissions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.role_permissions (
-    id integer NOT NULL,
-    role character varying(50) NOT NULL,
-    permission character varying(100) NOT NULL,
-    "companyId" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "branchId" integer
-);
-
-
---
--- Name: role_permissions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.role_permissions_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: role_permissions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.role_permissions_id_seq OWNED BY public.role_permissions.id;
-
-
---
--- Name: roles; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.roles (
-    id integer NOT NULL,
-    name character varying(255) NOT NULL,
-    description text,
-    permissions jsonb DEFAULT '[]'::jsonb,
-    "isSystem" boolean DEFAULT false,
-    "createdAt" timestamp without time zone DEFAULT now(),
-    "companyId" integer
-);
-
-
---
--- Name: roles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.roles_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: roles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.roles_id_seq OWNED BY public.roles.id;
-
-
---
 -- Name: salary_components; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -15900,21 +16721,36 @@ ALTER SEQUENCE public.scheduled_reports_id_seq OWNED BY public.scheduled_reports
 
 
 --
--- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
+-- Name: scoring_weights_per_company; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.schema_migrations (
+CREATE TABLE public.scoring_weights_per_company (
     id integer NOT NULL,
-    filename character varying(200) NOT NULL,
-    "appliedAt" timestamp with time zone DEFAULT now() NOT NULL
+    "companyId" integer NOT NULL,
+    "categoryKey" character varying(40),
+    "disciplineWeight" numeric(4,3) DEFAULT 0.200 NOT NULL,
+    "activityWeight" numeric(4,3) DEFAULT 0.150 NOT NULL,
+    "productivityWeight" numeric(4,3) DEFAULT 0.350 NOT NULL,
+    "qualityWeight" numeric(4,3) DEFAULT 0.150 NOT NULL,
+    "managerWeight" numeric(4,3) DEFAULT 0.100 NOT NULL,
+    "developmentWeight" numeric(4,3) DEFAULT 0.050 NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT "scoring_weights_per_company_activityWeight_check" CHECK ((("activityWeight" >= (0)::numeric) AND ("activityWeight" <= (1)::numeric))),
+    CONSTRAINT "scoring_weights_per_company_developmentWeight_check" CHECK ((("developmentWeight" >= (0)::numeric) AND ("developmentWeight" <= (1)::numeric))),
+    CONSTRAINT "scoring_weights_per_company_disciplineWeight_check" CHECK ((("disciplineWeight" >= (0)::numeric) AND ("disciplineWeight" <= (1)::numeric))),
+    CONSTRAINT "scoring_weights_per_company_managerWeight_check" CHECK ((("managerWeight" >= (0)::numeric) AND ("managerWeight" <= (1)::numeric))),
+    CONSTRAINT "scoring_weights_per_company_productivityWeight_check" CHECK ((("productivityWeight" >= (0)::numeric) AND ("productivityWeight" <= (1)::numeric))),
+    CONSTRAINT "scoring_weights_per_company_qualityWeight_check" CHECK ((("qualityWeight" >= (0)::numeric) AND ("qualityWeight" <= (1)::numeric))),
+    CONSTRAINT scoring_weights_sum_to_one CHECK ((abs((((((("disciplineWeight" + "activityWeight") + "productivityWeight") + "qualityWeight") + "managerWeight") + "developmentWeight") - (1)::numeric)) < 0.001))
 );
 
 
 --
--- Name: schema_migrations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: scoring_weights_per_company_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.schema_migrations_id_seq
+CREATE SEQUENCE public.scoring_weights_per_company_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -15924,10 +16760,10 @@ CREATE SEQUENCE public.schema_migrations_id_seq
 
 
 --
--- Name: schema_migrations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: scoring_weights_per_company_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.schema_migrations_id_seq OWNED BY public.schema_migrations.id;
+ALTER SEQUENCE public.scoring_weights_per_company_id_seq OWNED BY public.scoring_weights_per_company.id;
 
 
 --
@@ -16344,7 +17180,7 @@ CREATE TABLE public.subsidiary_accounts (
     "isActive" boolean DEFAULT true NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT "subsidiary_accounts_entityType_check" CHECK ((("entityType")::text = ANY (ARRAY[('employee'::character varying)::text, ('client'::character varying)::text, ('vendor'::character varying)::text, ('project'::character varying)::text, ('property'::character varying)::text, ('umrah_agent'::character varying)::text, ('umrah_sub_agent'::character varying)::text, ('umrah_season'::character varying)::text, ('property_unit'::character varying)::text])))
+    CONSTRAINT "subsidiary_accounts_entityType_check" CHECK ((("entityType")::text = ANY ((ARRAY['employee'::character varying, 'client'::character varying, 'vendor'::character varying, 'project'::character varying, 'property'::character varying, 'umrah_agent'::character varying, 'umrah_sub_agent'::character varying, 'umrah_season'::character varying, 'property_unit'::character varying, 'vehicle'::character varying, 'driver'::character varying])::text[])))
 );
 
 
@@ -16366,6 +17202,47 @@ CREATE SEQUENCE public.subsidiary_accounts_id_seq
 --
 
 ALTER SEQUENCE public.subsidiary_accounts_id_seq OWNED BY public.subsidiary_accounts.id;
+
+
+--
+-- Name: supervision_lines; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.supervision_lines (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "supervisorAssignmentId" integer NOT NULL,
+    "superviseeAssignmentId" integer NOT NULL,
+    "lineType" character varying(20) DEFAULT 'administrative'::character varying NOT NULL,
+    "scopeType" character varying(20),
+    "scopeId" integer,
+    "startDate" date DEFAULT CURRENT_DATE NOT NULL,
+    "endDate" date,
+    "isPrimary" boolean DEFAULT false NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT supervision_lines_check CHECK (("supervisorAssignmentId" <> "superviseeAssignmentId")),
+    CONSTRAINT "supervision_lines_lineType_check" CHECK ((("lineType")::text = ANY ((ARRAY['administrative'::character varying, 'project'::character varying, 'functional'::character varying, 'dotted'::character varying])::text[])))
+);
+
+
+--
+-- Name: supervision_lines_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.supervision_lines_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: supervision_lines_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.supervision_lines_id_seq OWNED BY public.supervision_lines.id;
 
 
 --
@@ -16620,6 +17497,44 @@ ALTER SEQUENCE public.system_stops_id_seq OWNED BY public.system_stops.id;
 
 
 --
+-- Name: task_assignees; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.task_assignees (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "taskId" integer NOT NULL,
+    "assignmentId" integer NOT NULL,
+    role character varying(20) DEFAULT 'member'::character varying NOT NULL,
+    "assignedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "assignedBy" integer,
+    "removedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT task_assignees_role_check CHECK (((role)::text = ANY ((ARRAY['primary'::character varying, 'member'::character varying])::text[])))
+);
+
+
+--
+-- Name: task_assignees_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.task_assignees_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: task_assignees_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.task_assignees_id_seq OWNED BY public.task_assignees.id;
+
+
+--
 -- Name: tasks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -16652,7 +17567,9 @@ CREATE TABLE public.tasks (
     "linkedEntityType" character varying(50),
     "linkedEntityId" integer,
     "autoGenerated" boolean DEFAULT false,
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "createdBy" integer,
+    "updatedAt" timestamp with time zone DEFAULT now()
 );
 
 
@@ -16701,6 +17618,44 @@ CREATE TABLE public.tax_codes (
     CONSTRAINT tax_codes_rate_check CHECK (((rate >= (0)::numeric) AND (rate <= (100)::numeric))),
     CONSTRAINT tax_codes_type_check CHECK ((("taxType")::text = ANY (ARRAY['standard'::text, 'zero'::text, 'exempt'::text, 'out_of_scope'::text, 'reverse_charge'::text])))
 );
+
+
+--
+-- Name: teams; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.teams (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "departmentId" integer,
+    "leaderAssignmentId" integer,
+    name character varying(200) NOT NULL,
+    description text,
+    "scopeType" character varying(30) DEFAULT 'department'::character varying,
+    "isActive" boolean DEFAULT true NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: teams_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.teams_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: teams_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.teams_id_seq OWNED BY public.teams.id;
 
 
 --
@@ -16777,8 +17732,7 @@ CREATE TABLE public.tenants (
     "previousLandlord" character varying(200),
     "previousLandlordPhone" character varying(50),
     "deletedAt" timestamp with time zone,
-    "clientId" integer,
-    CONSTRAINT tenants_client_company_fk FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients (id, "companyId") ON DELETE SET NULL
+    "clientId" integer
 );
 
 
@@ -17083,6 +18037,679 @@ ALTER SEQUENCE public.trainings_id_seq OWNED BY public.trainings.id;
 
 
 --
+-- Name: transport_billing_candidates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_billing_candidates (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "sourceRef" text,
+    "customerId" integer,
+    "serviceType" text NOT NULL,
+    "serviceDate" date NOT NULL,
+    "routeFrom" text,
+    "routeTo" text,
+    "vehicleId" integer,
+    "driverId" integer,
+    quantity numeric(18,3) DEFAULT 0 NOT NULL,
+    "unitOfMeasure" text,
+    "operationalStatus" text NOT NULL,
+    "suggestedRevenue" numeric(18,2),
+    "suggestedCost" numeric(18,2),
+    attachments jsonb DEFAULT '[]'::jsonb NOT NULL,
+    notes text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    "materializedJournalEntryId" integer,
+    "materializedBy" integer,
+    "materializedAt" timestamp with time zone,
+    "rejectedBy" integer,
+    "rejectedAt" timestamp with time zone,
+    "rejectionReason" text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: transport_billing_candidates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_billing_candidates_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_billing_candidates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_billing_candidates_id_seq OWNED BY public.transport_billing_candidates.id;
+
+
+--
+-- Name: transport_booking_lines; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_booking_lines (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "bookingId" integer NOT NULL,
+    "lineNumber" integer NOT NULL,
+    "requiredVehicleType" text,
+    "requiredCapacityKg" numeric(10,2),
+    "requiredSeatCount" integer,
+    "requiredLicenseClass" text,
+    "fromLocationId" integer,
+    "toLocationId" integer,
+    "scheduledPickupAt" timestamp with time zone,
+    "scheduledDeliveryAt" timestamp with time zone,
+    "lineDescription" text,
+    quantity numeric(18,3),
+    "unitOfMeasure" text,
+    "passengerCount" integer,
+    status text DEFAULT 'open'::text NOT NULL,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    "fromLocationText" text,
+    "toLocationText" text,
+    "fromLocationKind" text,
+    "toLocationKind" text,
+    "fromLat" numeric(10,7),
+    "fromLng" numeric(10,7),
+    "fromPlaceId" text,
+    "toLat" numeric(10,7),
+    "toLng" numeric(10,7),
+    "toPlaceId" text,
+    "legRouteType" text,
+    CONSTRAINT transport_booking_lines_status_check CHECK ((status = ANY (ARRAY['open'::text, 'dispatched'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text])))
+);
+
+
+--
+-- Name: transport_booking_lines_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_booking_lines_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_booking_lines_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_booking_lines_id_seq OWNED BY public.transport_booking_lines.id;
+
+
+--
+-- Name: transport_bookings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_bookings (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "bookingNumber" text NOT NULL,
+    "bookingSource" text DEFAULT 'manual_entry'::text NOT NULL,
+    "transportServiceType" text NOT NULL,
+    "customerId" integer,
+    "customerName" text,
+    "customerPhone" text,
+    "contractId" integer,
+    "fromLocationId" integer,
+    "toLocationId" integer,
+    "fromLocationText" text,
+    "toLocationText" text,
+    "routeType" text,
+    "requestedPickupDate" date,
+    "requestedPickupTime" time without time zone,
+    "requestedDeliveryDate" date,
+    "requestedDeliveryTime" time without time zone,
+    "cargoDescription" text,
+    "cargoQuantity" numeric(18,3),
+    "cargoUnit" text,
+    "cargoWeight" numeric(12,2),
+    "passengerCount" integer,
+    "umrahGroupId" integer,
+    "flightNumber" text,
+    "supervisorName" text,
+    "supervisorPhone" text,
+    "hotelName" text,
+    "hotelLocation" text,
+    "beneficiaryType" text,
+    "beneficiaryId" integer,
+    "projectId" integer,
+    "waqfId" integer,
+    "costCenterId" integer,
+    status text DEFAULT 'draft'::text NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    "requestedVehicleClass" text,
+    "vehicleSubstitutionPolicy" text DEFAULT 'equivalent_allowed'::text NOT NULL,
+    "allowUpgrade" boolean DEFAULT false NOT NULL,
+    "requiredExactVehicleId" integer,
+    "requiredExactDriverId" integer,
+    "pickupWindowStart" timestamp with time zone,
+    "pickupWindowEnd" timestamp with time zone,
+    "dropoffWindowStart" timestamp with time zone,
+    "dropoffWindowEnd" timestamp with time zone,
+    "fixedAppointmentTime" timestamp with time zone,
+    "isFlexibleTime" boolean DEFAULT false NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    "fromLocationKind" text,
+    "toLocationKind" text,
+    "fromLat" numeric(10,7),
+    "fromLng" numeric(10,7),
+    "fromPlaceId" text,
+    "toLat" numeric(10,7),
+    "toLng" numeric(10,7),
+    "toPlaceId" text,
+    CONSTRAINT transport_bookings_route_type_check CHECK ((("routeType" IS NULL) OR ("routeType" = ANY (ARRAY['airport_to_makkah'::text, 'makkah_to_madinah'::text, 'madinah_to_airport'::text, 'makkah_local'::text, 'madinah_local'::text, 'ziyarah'::text, 'custom'::text])))),
+    CONSTRAINT transport_bookings_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text]))),
+    CONSTRAINT transport_bookings_source_check CHECK (("bookingSource" = ANY (ARRAY['manual_entry'::text, 'customer_request'::text, 'umrah_group'::text, 'contract_schedule'::text, 'import_excel'::text, 'api_integration'::text, 'recurring_schedule'::text]))),
+    CONSTRAINT transport_bookings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'submitted'::text, 'pending_approval'::text, 'approved'::text, 'scheduled'::text, 'dispatched'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text, 'rejected'::text]))),
+    CONSTRAINT transport_bookings_substitution_policy_check CHECK (("vehicleSubstitutionPolicy" = ANY (ARRAY['exact_only'::text, 'same_class_only'::text, 'equivalent_allowed'::text, 'upgrade_allowed'::text, 'operator_approval'::text, 'customer_approval'::text])))
+);
+
+
+--
+-- Name: transport_bookings_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_bookings_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_bookings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_bookings_id_seq OWNED BY public.transport_bookings.id;
+
+
+--
+-- Name: transport_dispatch_orders; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_dispatch_orders (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "bookingId" integer NOT NULL,
+    "bookingLineId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "driverId" integer NOT NULL,
+    "scheduledStartAt" timestamp with time zone NOT NULL,
+    "scheduledEndAt" timestamp with time zone NOT NULL,
+    "linkedManifestId" integer,
+    "linkedTripId" integer,
+    "linkedUmrahTransportId" integer,
+    status text DEFAULT 'pending'::text NOT NULL,
+    "declinedReason" text,
+    "dispatchedBy" integer,
+    "dispatchedAt" timestamp with time zone,
+    "acceptedAt" timestamp with time zone,
+    "startedAt" timestamp with time zone,
+    "completedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "estimatedPrepMinutes" integer,
+    "estimatedTravelMinutes" integer,
+    "estimatedLoadingMinutes" integer,
+    "estimatedUnloadingMinutes" integer,
+    "estimatedDistanceKm" numeric(10,3),
+    CONSTRAINT transport_dispatch_orders_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'notified'::text, 'accepted'::text, 'declined'::text, 'executing'::text, 'completed'::text, 'closed'::text, 'cancelled'::text])))
+);
+
+
+--
+-- Name: transport_dispatch_orders_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_dispatch_orders_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_dispatch_orders_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_dispatch_orders_id_seq OWNED BY public.transport_dispatch_orders.id;
+
+
+--
+-- Name: transport_intake_rules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_intake_rules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "ruleName" text NOT NULL,
+    "operationType" text NOT NULL,
+    "transportServiceType" text NOT NULL,
+    "customerId" integer,
+    "bookingSource" text,
+    "requiredVehicleType" text,
+    "requiredLicenseClass" text,
+    "defaultCostCenterId" integer,
+    "requiresAttachment" boolean DEFAULT false NOT NULL,
+    "requiresApproval" boolean DEFAULT false NOT NULL,
+    "createsBookingDraft" boolean DEFAULT false NOT NULL,
+    "createsBillingCandidate" boolean DEFAULT false NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_intake_rules_op_check CHECK (("operationType" = ANY (ARRAY['booking'::text, 'dispatch'::text, 'service_line'::text]))),
+    CONSTRAINT transport_intake_rules_service_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
+);
+
+
+--
+-- Name: transport_intake_rules_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_intake_rules_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_intake_rules_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_intake_rules_id_seq OWNED BY public.transport_intake_rules.id;
+
+
+--
+-- Name: transport_invoice_links; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_invoice_links (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "serviceLineId" integer NOT NULL,
+    "invoiceId" integer NOT NULL,
+    "invoiceLineId" integer,
+    "appliedPriceRuleId" integer,
+    "appliedUnitPrice" numeric(18,4),
+    "linkedBy" integer,
+    "linkedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: transport_invoice_links_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_invoice_links_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_invoice_links_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_invoice_links_id_seq OWNED BY public.transport_invoice_links.id;
+
+
+--
+-- Name: transport_itineraries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_itineraries (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "itineraryName" text NOT NULL,
+    "customerId" integer,
+    "umrahGroupId" integer,
+    "transportServiceType" text NOT NULL,
+    status text DEFAULT 'draft'::text NOT NULL,
+    "startsAt" timestamp with time zone,
+    "endsAt" timestamp with time zone,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_itin_service_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text]))),
+    CONSTRAINT transport_itin_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'scheduled'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text])))
+);
+
+
+--
+-- Name: transport_itineraries_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_itineraries_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_itineraries_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_itineraries_id_seq OWNED BY public.transport_itineraries.id;
+
+
+--
+-- Name: transport_itinerary_legs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_itinerary_legs (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "itineraryId" integer NOT NULL,
+    "legNumber" integer NOT NULL,
+    "legType" text DEFAULT 'transit'::text NOT NULL,
+    "originText" text,
+    "originLocationId" integer,
+    "destinationText" text,
+    "destinationLocationId" integer,
+    "scheduledStart" timestamp with time zone,
+    "scheduledEnd" timestamp with time zone,
+    "pickupWindowStart" timestamp with time zone,
+    "pickupWindowEnd" timestamp with time zone,
+    "dropoffWindowStart" timestamp with time zone,
+    "dropoffWindowEnd" timestamp with time zone,
+    "requiredVehicleClass" text,
+    "assignedVehicleId" integer,
+    "assignedDriverId" integer,
+    "dispatchOrderId" integer,
+    "estimatedDistanceKm" numeric(10,3),
+    "estimatedDurationMinutes" integer,
+    status text DEFAULT 'pending'::text NOT NULL,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT transport_leg_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'scheduled'::text, 'assigned'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text, 'skipped'::text]))),
+    CONSTRAINT transport_leg_type_check CHECK (("legType" = ANY (ARRAY['transit'::text, 'pickup'::text, 'dropoff'::text, 'rest'::text, 'fuel'::text, 'inspection'::text, 'custom'::text])))
+);
+
+
+--
+-- Name: transport_itinerary_legs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_itinerary_legs_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_itinerary_legs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_itinerary_legs_id_seq OWNED BY public.transport_itinerary_legs.id;
+
+
+--
+-- Name: transport_locations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_locations (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    code text,
+    name text NOT NULL,
+    "locationType" text,
+    city text,
+    address text,
+    latitude numeric(10,7),
+    longitude numeric(10,7),
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+--
+-- Name: transport_locations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_locations_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_locations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_locations_id_seq OWNED BY public.transport_locations.id;
+
+
+--
+-- Name: transport_planning_settings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_planning_settings (
+    "companyId" integer NOT NULL,
+    "mapProvider" text DEFAULT 'manual_only'::text NOT NULL,
+    "mapProviderApiKey" text,
+    "defaultRestHoursRequired" numeric(4,2) DEFAULT 8 NOT NULL,
+    "defaultLoadingMinutes" integer DEFAULT 15 NOT NULL,
+    "defaultUnloadingMinutes" integer DEFAULT 15 NOT NULL,
+    "defaultBufferMinutes" integer DEFAULT 15 NOT NULL,
+    "defaultDeadheadKmh" integer DEFAULT 60 NOT NULL,
+    "estimateCacheTtlMinutes" integer DEFAULT 1440 NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT transport_planning_map_provider_check CHECK (("mapProvider" = ANY (ARRAY['manual_only'::text, 'google_maps'::text, 'mapbox'::text, 'here_maps'::text])))
+);
+
+
+--
+-- Name: transport_price_rules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_price_rules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "customerId" integer,
+    "transportServiceType" text NOT NULL,
+    "vehicleType" text,
+    "routeFrom" text,
+    "routeTo" text,
+    "cargoType" text,
+    "unitOfMeasure" text NOT NULL,
+    "unitPrice" numeric(18,4) NOT NULL,
+    "minimumCharge" numeric(18,2),
+    currency text DEFAULT 'SAR'::text NOT NULL,
+    "vatRate" numeric(5,2),
+    "validFrom" date NOT NULL,
+    "validTo" date,
+    priority integer DEFAULT 0 NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT transport_price_rules_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
+);
+
+
+--
+-- Name: transport_price_rules_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_price_rules_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_price_rules_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_price_rules_id_seq OWNED BY public.transport_price_rules.id;
+
+
+--
+-- Name: transport_route_estimates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_route_estimates (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    provider text NOT NULL,
+    "originLat" numeric(9,6) NOT NULL,
+    "originLng" numeric(9,6) NOT NULL,
+    "destinationLat" numeric(9,6) NOT NULL,
+    "destinationLng" numeric(9,6) NOT NULL,
+    "distanceMeters" integer NOT NULL,
+    "durationSeconds" integer NOT NULL,
+    "encodedPolyline" text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "expiresAt" timestamp with time zone NOT NULL,
+    CONSTRAINT transport_route_estimates_provider_check CHECK ((provider = ANY (ARRAY['manual_only'::text, 'google_maps'::text, 'mapbox'::text, 'here_maps'::text])))
+);
+
+
+--
+-- Name: transport_route_estimates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_route_estimates_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_route_estimates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_route_estimates_id_seq OWNED BY public.transport_route_estimates.id;
+
+
+--
+-- Name: transport_service_lines; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.transport_service_lines (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "customerId" integer,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "sourceRef" text,
+    "serviceType" text NOT NULL,
+    "serviceDate" date NOT NULL,
+    "tripId" integer,
+    "manifestId" integer,
+    "umrahTransportId" integer,
+    "vehicleId" integer,
+    "driverId" integer,
+    "routeFrom" text,
+    "routeTo" text,
+    "cargoType" text,
+    "passengerCount" integer,
+    quantity numeric(18,3) DEFAULT 0 NOT NULL,
+    "unitOfMeasure" text,
+    "unitPrice" numeric(18,4),
+    "lineTotal" numeric(18,2),
+    "billingStatus" text DEFAULT 'ready_for_accounting'::text NOT NULL,
+    "invoiceId" integer,
+    "invoiceLineId" integer,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT transport_service_lines_billing_status_check CHECK (("billingStatus" = ANY (ARRAY['ready_for_accounting'::text, 'under_review'::text, 'invoiced'::text, 'excluded'::text]))),
+    CONSTRAINT transport_service_lines_service_type_check CHECK (("serviceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
+);
+
+
+--
+-- Name: transport_service_lines_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.transport_service_lines_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: transport_service_lines_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.transport_service_lines_id_seq OWNED BY public.transport_service_lines.id;
+
+
+--
 -- Name: umrah_agent_invoices; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -17213,6 +18840,44 @@ CREATE TABLE public.umrah_attachments (
 
 
 --
+-- Name: umrah_families; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.umrah_families (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "familyName" character varying(200) NOT NULL,
+    "headPilgrimId" integer,
+    "contactPhone" character varying(40),
+    "contactName" character varying(200),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+--
+-- Name: umrah_families_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.umrah_families_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: umrah_families_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.umrah_families_id_seq OWNED BY public.umrah_families.id;
+
+
+--
 -- Name: umrah_groups; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -17257,6 +18922,49 @@ CREATE SEQUENCE public.umrah_groups_id_seq
 --
 
 ALTER SEQUENCE public.umrah_groups_id_seq OWNED BY public.umrah_groups.id;
+
+
+--
+-- Name: umrah_hotels; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.umrah_hotels (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    name character varying(200) NOT NULL,
+    "nameEn" character varying(200),
+    city character varying(60),
+    address text,
+    "starRating" integer,
+    "contactName" character varying(120),
+    "contactPhone" character varying(40),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_hotels_star_rating_check CHECK ((("starRating" IS NULL) OR (("starRating" >= 1) AND ("starRating" <= 7))))
+);
+
+
+--
+-- Name: umrah_hotels_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.umrah_hotels_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: umrah_hotels_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.umrah_hotels_id_seq OWNED BY public.umrah_hotels.id;
 
 
 --
@@ -17356,26 +19064,6 @@ ALTER SEQUENCE public.umrah_import_changes_id_seq OWNED BY public.umrah_import_c
 
 
 --
--- Name: umrah_import_mapping_presets; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.umrah_import_mapping_presets (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "userId" integer NOT NULL,
-    name character varying(120) NOT NULL,
-    "fileType" character varying(20) NOT NULL,
-    mapping jsonb DEFAULT '{}'::jsonb NOT NULL,
-    "isDefault" boolean DEFAULT false NOT NULL,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT umrah_import_mapping_presets_filetype_check CHECK ((("fileType")::text = ANY (ARRAY[('mutamers'::character varying)::text, ('vouchers'::character varying)::text])))
-);
-
-
---
 -- Name: umrah_import_logs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -17420,6 +19108,26 @@ CREATE SEQUENCE public.umrah_import_logs_id_seq
 --
 
 ALTER SEQUENCE public.umrah_import_logs_id_seq OWNED BY public.umrah_import_logs.id;
+
+
+--
+-- Name: umrah_import_mapping_presets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.umrah_import_mapping_presets (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "userId" integer NOT NULL,
+    name character varying(120) NOT NULL,
+    "fileType" character varying(20) NOT NULL,
+    mapping jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "isDefault" boolean DEFAULT false NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_import_mapping_presets_filetype_check CHECK ((("fileType")::text = ANY (ARRAY[('mutamers'::character varying)::text, ('vouchers'::character varying)::text])))
+);
 
 
 --
@@ -17650,6 +19358,7 @@ CREATE TABLE public.umrah_penalties (
     "updatedBy" integer,
     "branchId" integer,
     "journalEntryId" integer,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT umrah_penalties_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('invoiced'::character varying)::text, ('paid'::character varying)::text, ('waived'::character varying)::text]))),
     CONSTRAINT umrah_penalties_type_check CHECK (((type)::text = ANY (ARRAY[('overstay'::character varying)::text, ('violation'::character varying)::text, ('lost'::character varying)::text, ('regulatory'::character varying)::text])))
 );
@@ -17676,162 +19385,6 @@ ALTER SEQUENCE public.umrah_penalties_id_seq OWNED BY public.umrah_penalties.id;
 
 
 --
--- Name: umrah_hotels; Type: TABLE; Schema: public; Owner: -
--- Source: migration 246_umrah_accommodations.sql.
---
-
-CREATE TABLE public.umrah_hotels (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    name character varying(200) NOT NULL,
-    "nameEn" character varying(200),
-    city character varying(60),
-    address text,
-    "starRating" integer,
-    "contactName" character varying(120),
-    "contactPhone" character varying(40),
-    notes text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT umrah_hotels_star_rating_check
-      CHECK (("starRating" IS NULL OR ("starRating" BETWEEN 1 AND 7)))
-);
-
-
-CREATE SEQUENCE public.umrah_hotels_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.umrah_hotels_id_seq OWNED BY public.umrah_hotels.id;
-
-
---
--- Name: umrah_families; Type: TABLE; Schema: public; Owner: -
--- Source: migration 265_umrah_families.sql.
---
-
-CREATE TABLE public.umrah_families (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "familyName" character varying(200) NOT NULL,
-    "headPilgrimId" integer,
-    "contactPhone" character varying(40),
-    "contactName" character varying(200),
-    notes text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone
-);
-
-
-CREATE SEQUENCE public.umrah_families_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.umrah_families_id_seq OWNED BY public.umrah_families.id;
-
-
---
--- Name: umrah_refund_requests; Type: TABLE; Schema: public; Owner: -
--- Source: migration 268_umrah_refund_workflow.sql.
---
-
-CREATE TABLE public.umrah_refund_requests (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "pilgrimId" integer,
-    "agentId" integer,
-    "salesInvoiceId" integer,
-    "nuskInvoiceId" integer,
-    "grossAmount" numeric(12,2) NOT NULL,
-    "mofaRetention" numeric(12,2) DEFAULT 0,
-    "netAmount" numeric(12,2) GENERATED ALWAYS AS (("grossAmount" - COALESCE("mofaRetention", (0)::numeric))) STORED,
-    currency character(3) DEFAULT 'SAR' NOT NULL,
-    status character varying(20) DEFAULT 'requested' NOT NULL,
-    reason text NOT NULL,
-    "rejectionReason" text,
-    "requestedBy" integer NOT NULL,
-    "requestedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "approvedBy" integer,
-    "approvedAt" timestamp with time zone,
-    "rejectedBy" integer,
-    "rejectedAt" timestamp with time zone,
-    "paidBy" integer,
-    "paidAt" timestamp with time zone,
-    "paymentReference" character varying(60),
-    "treasuryId" integer,
-    "creditMemoId" integer,
-    "settledAmount" numeric(12,2),
-    notes text,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT umrah_refund_amount_positive CHECK (("grossAmount" > (0)::numeric)),
-    CONSTRAINT umrah_refund_either_party_required CHECK ((("pilgrimId" IS NOT NULL) OR ("agentId" IS NOT NULL))),
-    CONSTRAINT umrah_refund_requests_status_check CHECK (((status)::text = ANY (ARRAY[('requested'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('paid'::character varying)::text, ('closed'::character varying)::text, ('cancelled'::character varying)::text])))
-);
-
-
-CREATE SEQUENCE public.umrah_refund_requests_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.umrah_refund_requests_id_seq OWNED BY public.umrah_refund_requests.id;
-
-
---
--- Name: umrah_room_blocks; Type: TABLE; Schema: public; Owner: -
--- Source: migration 246_umrah_accommodations.sql.
---
-
-CREATE TABLE public.umrah_room_blocks (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "hotelId" integer NOT NULL,
-    "seasonId" integer,
-    "checkInDate" date,
-    "checkOutDate" date,
-    "roomType" character varying(40),
-    "totalRooms" integer DEFAULT 0 NOT NULL,
-    "ratePerNight" numeric(10,2),
-    currency character(3) DEFAULT 'SAR',
-    notes text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT umrah_room_blocks_room_type_check
-      CHECK (("roomType" IS NULL OR "roomType"::text = ANY (ARRAY['single'::text, 'double'::text, 'triple'::text, 'quad'::text, 'suite'::text])))
-);
-
-
-CREATE SEQUENCE public.umrah_room_blocks_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.umrah_room_blocks_id_seq OWNED BY public.umrah_room_blocks.id;
-
-
---
--- Name: umrah_room_allocations; Type: TABLE; Schema: public; Owner: -
--- Source: migration 246_umrah_accommodations.sql.
---
-
-CREATE TABLE public.umrah_room_allocations (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "blockId" integer NOT NULL,
-    "pilgrimId" integer NOT NULL,
-    "roomNumber" character varying(40),
-    occupants integer DEFAULT 1,
-    "checkInAt" timestamp with time zone,
-    "checkOutAt" timestamp with time zone,
-    notes text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT umrah_room_allocations_occupants_check
-      CHECK ((occupants > 0 AND occupants < 10))
-);
-
-
-CREATE SEQUENCE public.umrah_room_allocations_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.umrah_room_allocations_id_seq OWNED BY public.umrah_room_allocations.id;
-
-
---
 -- Name: umrah_pilgrims; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -17842,8 +19395,8 @@ CREATE TABLE public.umrah_pilgrims (
     "agentId" integer,
     "packageId" integer,
     "fullName" character varying(300) NOT NULL,
-    "passportNumber" character varying(50) NOT NULL,
-    "visaNumber" character varying(50),
+    "passportNumber" text NOT NULL,
+    "visaNumber" text,
     nationality character varying(100),
     gender character varying(10),
     "dateOfBirth" date,
@@ -17890,7 +19443,7 @@ CREATE TABLE public.umrah_pilgrims (
     "overstayExemptBy" integer,
     "overstayExemptAt" timestamp with time zone,
     "familyId" integer,
-    "visaStatus" character varying(20) DEFAULT 'not_requested' NOT NULL,
+    "visaStatus" character varying(20) DEFAULT 'not_requested'::character varying NOT NULL,
     "visaRequestedAt" timestamp with time zone,
     "visaIssuedAt" timestamp with time zone,
     "visaRejectedAt" timestamp with time zone,
@@ -17962,6 +19515,148 @@ CREATE SEQUENCE public.umrah_pricing_id_seq
 --
 
 ALTER SEQUENCE public.umrah_pricing_id_seq OWNED BY public.umrah_pricing.id;
+
+
+--
+-- Name: umrah_refund_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.umrah_refund_requests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "pilgrimId" integer,
+    "agentId" integer,
+    "salesInvoiceId" integer,
+    "nuskInvoiceId" integer,
+    "grossAmount" numeric(12,2) NOT NULL,
+    "mofaRetention" numeric(12,2) DEFAULT 0,
+    "netAmount" numeric(12,2) GENERATED ALWAYS AS (("grossAmount" - COALESCE("mofaRetention", (0)::numeric))) STORED,
+    currency character(3) DEFAULT 'SAR'::bpchar NOT NULL,
+    status character varying(20) DEFAULT 'requested'::character varying NOT NULL,
+    reason text NOT NULL,
+    "rejectionReason" text,
+    "requestedBy" integer NOT NULL,
+    "requestedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "rejectedBy" integer,
+    "rejectedAt" timestamp with time zone,
+    "paidBy" integer,
+    "paidAt" timestamp with time zone,
+    "paymentReference" character varying(60),
+    "treasuryId" integer,
+    "creditMemoId" integer,
+    "settledAmount" numeric(12,2),
+    notes text,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_refund_amount_positive CHECK (("grossAmount" > (0)::numeric)),
+    CONSTRAINT umrah_refund_either_party_required CHECK ((("pilgrimId" IS NOT NULL) OR ("agentId" IS NOT NULL))),
+    CONSTRAINT umrah_refund_requests_status_check CHECK (((status)::text = ANY (ARRAY[('requested'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('paid'::character varying)::text, ('closed'::character varying)::text, ('cancelled'::character varying)::text])))
+);
+
+
+--
+-- Name: umrah_refund_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.umrah_refund_requests_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: umrah_refund_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.umrah_refund_requests_id_seq OWNED BY public.umrah_refund_requests.id;
+
+
+--
+-- Name: umrah_room_allocations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.umrah_room_allocations (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "blockId" integer NOT NULL,
+    "pilgrimId" integer NOT NULL,
+    "roomNumber" character varying(40),
+    occupants integer DEFAULT 1,
+    "checkInAt" timestamp with time zone,
+    "checkOutAt" timestamp with time zone,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_room_allocations_occupants_check CHECK (((occupants > 0) AND (occupants < 10)))
+);
+
+
+--
+-- Name: umrah_room_allocations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.umrah_room_allocations_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: umrah_room_allocations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.umrah_room_allocations_id_seq OWNED BY public.umrah_room_allocations.id;
+
+
+--
+-- Name: umrah_room_blocks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.umrah_room_blocks (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "hotelId" integer NOT NULL,
+    "seasonId" integer,
+    "checkInDate" date,
+    "checkOutDate" date,
+    "roomType" character varying(40),
+    "totalRooms" integer DEFAULT 0 NOT NULL,
+    "ratePerNight" numeric(10,2),
+    currency character(3) DEFAULT 'SAR'::bpchar,
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_room_blocks_room_type_check CHECK ((("roomType" IS NULL) OR (("roomType")::text = ANY (ARRAY['single'::text, 'double'::text, 'triple'::text, 'quad'::text, 'suite'::text]))))
+);
+
+
+--
+-- Name: umrah_room_blocks_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.umrah_room_blocks_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: umrah_room_blocks_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.umrah_room_blocks_id_seq OWNED BY public.umrah_room_blocks.id;
 
 
 --
@@ -18353,42 +20048,6 @@ ALTER SEQUENCE public.user_activity_log_id_seq OWNED BY public.user_activity_log
 
 
 --
--- Name: user_roles; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.user_roles (
-    id integer NOT NULL,
-    "userId" integer NOT NULL,
-    "roleKey" character varying(50) NOT NULL,
-    label character varying(100) NOT NULL,
-    modules jsonb DEFAULT '[]'::jsonb NOT NULL,
-    level integer DEFAULT 10 NOT NULL,
-    "createdAt" timestamp without time zone DEFAULT now(),
-    "companyId" integer
-);
-
-
---
--- Name: user_roles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.user_roles_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: user_roles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.user_roles_id_seq OWNED BY public.user_roles.id;
-
-
---
 -- Name: user_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -18489,6 +20148,234 @@ CREATE VIEW public.v_message_log_all AS
     "deletedAt",
     'message_log'::text AS _origin
    FROM public.message_log ml;
+
+
+--
+-- Name: vehicle_capacity_overrides; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_capacity_overrides (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "vehicleId" integer NOT NULL,
+    "sourceType" text NOT NULL,
+    "sourceId" integer NOT NULL,
+    "capacityType" text NOT NULL,
+    "vehicleCapacity" numeric(12,2) NOT NULL,
+    "requestedAmount" numeric(12,2) NOT NULL,
+    "exceededBy" numeric(12,2) NOT NULL,
+    reason text NOT NULL,
+    "approvedBy" integer NOT NULL,
+    "approvedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: vehicle_capacity_overrides_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.vehicle_capacity_overrides_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: vehicle_capacity_overrides_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.vehicle_capacity_overrides_id_seq OWNED BY public.vehicle_capacity_overrides.id;
+
+
+--
+-- Name: vehicle_components; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_components (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "componentType" text NOT NULL,
+    "componentSubtype" text,
+    "serialNumber" text,
+    manufacturer text,
+    model text,
+    "installationDate" date,
+    "installationMileageKm" integer,
+    "installationHours" numeric(10,1),
+    "expectedLifeKm" integer,
+    "expectedLifeHours" numeric(10,1),
+    "expectedLifeDays" integer,
+    "lastServiceDate" date,
+    "lastServiceMileageKm" integer,
+    "nextServiceDate" date,
+    "nextServiceMileageKm" integer,
+    status text DEFAULT 'active'::text NOT NULL,
+    "removalDate" date,
+    "removalReason" text,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT vehicle_components_status_check CHECK ((status = ANY (ARRAY['active'::text, 'serviceable'::text, 'needs_service'::text, 'replaced'::text, 'removed'::text, 'damaged'::text]))),
+    CONSTRAINT vehicle_components_type_check CHECK (("componentType" = ANY (ARRAY['engine'::text, 'transmission'::text, 'axle'::text, 'battery'::text, 'ac_unit'::text, 'cooling_unit'::text, 'hydraulic_system'::text, 'lift_gate'::text, 'crane'::text, 'box_or_bed'::text, 'trailer'::text, 'doors'::text, 'seats'::text, 'upholstery'::text, 'screens'::text, 'brakes'::text, 'suspension'::text, 'steering'::text, 'safety_system'::text, 'fuel_system'::text, 'electrical_system'::text, 'other'::text])))
+);
+
+
+--
+-- Name: vehicle_components_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.vehicle_components_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: vehicle_components_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.vehicle_components_id_seq OWNED BY public.vehicle_components.id;
+
+
+--
+-- Name: vehicle_driver_assignments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_driver_assignments (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "vehicleId" integer NOT NULL,
+    "driverId" integer NOT NULL,
+    "assignmentType" text NOT NULL,
+    "startDate" date NOT NULL,
+    "endDate" date,
+    status text DEFAULT 'active'::text NOT NULL,
+    reason text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT vehicle_driver_assignments_status_check CHECK ((status = ANY (ARRAY['active'::text, 'ended'::text, 'cancelled'::text]))),
+    CONSTRAINT vehicle_driver_assignments_type_check CHECK (("assignmentType" = ANY (ARRAY['primary'::text, 'backup'::text, 'temporary'::text])))
+);
+
+
+--
+-- Name: vehicle_driver_assignments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.vehicle_driver_assignments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: vehicle_driver_assignments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.vehicle_driver_assignments_id_seq OWNED BY public.vehicle_driver_assignments.id;
+
+
+--
+-- Name: vehicle_location_snapshots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_location_snapshots (
+    id bigint NOT NULL,
+    "companyId" integer NOT NULL,
+    "vehicleId" integer NOT NULL,
+    "driverId" integer,
+    "dispatchOrderId" integer,
+    latitude numeric(10,7) NOT NULL,
+    longitude numeric(10,7) NOT NULL,
+    "speedKmh" numeric(6,2),
+    heading numeric(5,2),
+    "capturedAt" timestamp with time zone NOT NULL,
+    source text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: vehicle_location_snapshots_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.vehicle_location_snapshots_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: vehicle_location_snapshots_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.vehicle_location_snapshots_id_seq OWNED BY public.vehicle_location_snapshots.id;
+
+
+--
+-- Name: vehicle_maintenance_schedules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vehicle_maintenance_schedules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "vehicleId" integer,
+    "vehicleType" text,
+    "componentId" integer,
+    "scheduleName" text NOT NULL,
+    "intervalType" text NOT NULL,
+    "intervalValue" integer NOT NULL,
+    "lastTriggeredAt" timestamp with time zone,
+    "lastTriggeredKm" integer,
+    "lastTriggeredHours" numeric(10,1),
+    "nextDueDate" date,
+    "nextDueKm" integer,
+    "nextDueHours" numeric(10,1),
+    "isActive" boolean DEFAULT true NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT vehicle_maintenance_schedules_interval_check CHECK (("intervalType" = ANY (ARRAY['mileage'::text, 'hours'::text, 'days'::text])))
+);
+
+
+--
+-- Name: vehicle_maintenance_schedules_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.vehicle_maintenance_schedules_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: vehicle_maintenance_schedules_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.vehicle_maintenance_schedules_id_seq OWNED BY public.vehicle_maintenance_schedules.id;
 
 
 --
@@ -19719,396 +21606,3 @@ CREATE TABLE public.zatca_submission_log (
     CONSTRAINT "zatca_submission_log_entityType_check" CHECK ((("entityType")::text = ANY (ARRAY[('invoice'::character varying)::text, ('expense'::character varying)::text]))),
     CONSTRAINT zatca_submission_log_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('submitted'::character varying)::text, ('accepted'::character varying)::text, ('rejected'::character varying)::text, ('error'::character varying)::text])))
 );
-
-
---
--- Name: cargo_manifests; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.cargo_manifests (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "manifestNumber" character varying(64) NOT NULL,
-    status character varying(24) DEFAULT 'draft'::character varying NOT NULL,
-    "customerId" integer,
-    "customerName" character varying(255),
-    "customerPhone" character varying(64),
-    "fleetTripId" integer,
-    "fromLocation" character varying(255),
-    "toLocation" character varying(255),
-    "pickupDate" date,
-    "deliveryDate" date,
-    "vehicleId" integer,
-    "driverId" integer,
-    "totalWeight" numeric(12,2) DEFAULT 0,
-    "totalDeclaredValue" numeric(14,2) DEFAULT 0,
-    "freightRevenue" numeric(14,2) DEFAULT 0,
-    "freightCost" numeric(14,2) DEFAULT 0,
-    notes text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    "billingStatus" text DEFAULT 'not_billable'::text NOT NULL,
-    "transportServiceType" text DEFAULT 'cargo_load'::text NOT NULL,
-    CONSTRAINT cargo_manifests_billing_status_check CHECK (("billingStatus" = ANY (ARRAY['not_billable'::text, 'ready_for_accounting'::text, 'under_review'::text, 'invoiced'::text, 'excluded'::text]))),
-    CONSTRAINT cargo_manifests_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text]))),
-    CONSTRAINT cargo_manifests_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'requested'::character varying, 'approved'::character varying, 'assigned_to_driver'::character varying, 'driver_accepted'::character varying, 'trip_started'::character varying, 'arrived_pickup'::character varying, 'loaded'::character varying, 'in_transit'::character varying, 'arrived_delivery'::character varying, 'delivered'::character varying, 'completed'::character varying, 'ready_for_invoice'::character varying, 'financially_closed'::character varying, 'cancelled'::character varying])::text[])))
-);
-
-
---
--- Name: transport_service_lines; Type: TABLE; Schema: public; Owner: -
---
--- #1733 Foundation — operational-to-billable bridge.
-
-CREATE TABLE public.transport_service_lines (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "customerId" integer,
-    "sourceType" text NOT NULL,
-    "sourceId" integer NOT NULL,
-    "sourceRef" text,
-    "serviceType" text NOT NULL,
-    "serviceDate" date NOT NULL,
-    "tripId" integer,
-    "manifestId" integer,
-    "umrahTransportId" integer,
-    "vehicleId" integer,
-    "driverId" integer,
-    "routeFrom" text,
-    "routeTo" text,
-    "cargoType" text,
-    "passengerCount" integer,
-    quantity numeric(18,3) DEFAULT 0 NOT NULL,
-    "unitOfMeasure" text,
-    "unitPrice" numeric(18,4),
-    "lineTotal" numeric(18,2),
-    "billingStatus" text DEFAULT 'ready_for_accounting'::text NOT NULL,
-    "invoiceId" integer,
-    "invoiceLineId" integer,
-    notes text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT transport_service_lines_billing_status_check CHECK (("billingStatus" = ANY (ARRAY['ready_for_accounting'::text, 'under_review'::text, 'invoiced'::text, 'excluded'::text]))),
-    CONSTRAINT transport_service_lines_service_type_check CHECK (("serviceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text])))
-);
-
-
---
--- Name: transport_service_lines_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.transport_service_lines_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: transport_service_lines_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.transport_service_lines_id_seq OWNED BY public.transport_service_lines.id;
-
-
---
--- Name: cargo_manifests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.cargo_manifests_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: cargo_manifests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.cargo_manifests_id_seq OWNED BY public.cargo_manifests.id;
-
-
---
--- Name: transport_billing_candidates; Type: TABLE; Schema: public; Owner: -
---
--- #1733 — Operational-to-finance handoff. Transport never posts JEs;
--- it inserts a pending candidate row that the accountant materializes.
-
-CREATE TABLE public.transport_billing_candidates (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "sourceType" text NOT NULL,
-    "sourceId" integer NOT NULL,
-    "sourceRef" text,
-    "customerId" integer,
-    "serviceType" text NOT NULL,
-    "serviceDate" date NOT NULL,
-    "routeFrom" text,
-    "routeTo" text,
-    "vehicleId" integer,
-    "driverId" integer,
-    quantity numeric(18,3) DEFAULT 0 NOT NULL,
-    "unitOfMeasure" text,
-    "operationalStatus" text NOT NULL,
-    "suggestedRevenue" numeric(18,2),
-    "suggestedCost" numeric(18,2),
-    attachments jsonb DEFAULT '[]'::jsonb NOT NULL,
-    notes text,
-    status text DEFAULT 'pending'::text NOT NULL,
-    "materializedJournalEntryId" integer,
-    "materializedBy" integer,
-    "materializedAt" timestamp with time zone,
-    "rejectedBy" integer,
-    "rejectedAt" timestamp with time zone,
-    "rejectionReason" text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
--- Name: transport_billing_candidates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.transport_billing_candidates_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: transport_billing_candidates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.transport_billing_candidates_id_seq OWNED BY public.transport_billing_candidates.id;
-
-
---
--- Name: transport_locations; Type: TABLE; Schema: public; Owner: -
---
--- #1733 Booking + Dispatch layer (Issue Comment 9).
-
-CREATE TABLE public.transport_locations (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    code text,
-    name text NOT NULL,
-    "locationType" text,
-    city text,
-    address text,
-    latitude numeric(10,7),
-    longitude numeric(10,7),
-    "isActive" boolean DEFAULT true NOT NULL,
-    notes text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone
-);
-
-CREATE SEQUENCE public.transport_locations_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.transport_locations_id_seq OWNED BY public.transport_locations.id;
-
-
---
--- Name: transport_bookings; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.transport_bookings (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "bookingNumber" text NOT NULL,
-    "bookingSource" text DEFAULT 'manual_entry'::text NOT NULL,
-    "transportServiceType" text NOT NULL,
-    "customerId" integer,
-    "customerName" text,
-    "customerPhone" text,
-    "contractId" integer,
-    "fromLocationId" integer,
-    "toLocationId" integer,
-    "fromLocationText" text,
-    "toLocationText" text,
-    "routeType" text,
-    "requestedPickupDate" date,
-    "requestedPickupTime" time without time zone,
-    "requestedDeliveryDate" date,
-    "requestedDeliveryTime" time without time zone,
-    "cargoDescription" text,
-    "cargoQuantity" numeric(18,3),
-    "cargoUnit" text,
-    "cargoWeight" numeric(12,2),
-    "passengerCount" integer,
-    "umrahGroupId" integer,
-    "flightNumber" text,
-    "supervisorName" text,
-    "supervisorPhone" text,
-    "hotelName" text,
-    "hotelLocation" text,
-    "beneficiaryType" text,
-    "beneficiaryId" integer,
-    "projectId" integer,
-    "waqfId" integer,
-    "costCenterId" integer,
-    status text DEFAULT 'draft'::text NOT NULL,
-    notes text,
-    "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT transport_bookings_source_check CHECK (("bookingSource" = ANY (ARRAY['manual_entry'::text, 'customer_request'::text, 'umrah_group'::text, 'contract_schedule'::text, 'import_excel'::text, 'api_integration'::text, 'recurring_schedule'::text]))),
-    CONSTRAINT transport_bookings_service_type_check CHECK (("transportServiceType" = ANY (ARRAY['cargo_load'::text, 'passenger_umrah'::text, 'passenger_general'::text, 'equipment_rental'::text, 'internal_transfer'::text, 'other'::text]))),
-    CONSTRAINT transport_bookings_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'submitted'::text, 'pending_approval'::text, 'approved'::text, 'scheduled'::text, 'dispatched'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text, 'rejected'::text]))),
-    CONSTRAINT transport_bookings_route_type_check CHECK (("routeType" IS NULL OR "routeType" = ANY (ARRAY['airport_to_makkah'::text, 'makkah_to_madinah'::text, 'madinah_to_airport'::text, 'makkah_local'::text, 'madinah_local'::text, 'ziyarah'::text, 'custom'::text])))
-);
-
-CREATE SEQUENCE public.transport_bookings_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.transport_bookings_id_seq OWNED BY public.transport_bookings.id;
-
-
---
--- Name: transport_booking_lines; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.transport_booking_lines (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "bookingId" integer NOT NULL,
-    "lineNumber" integer NOT NULL,
-    "requiredVehicleType" text,
-    "requiredCapacityKg" numeric(10,2),
-    "requiredSeatCount" integer,
-    "requiredLicenseClass" text,
-    "fromLocationId" integer,
-    "toLocationId" integer,
-    "scheduledPickupAt" timestamp with time zone,
-    "scheduledDeliveryAt" timestamp with time zone,
-    "lineDescription" text,
-    quantity numeric(18,3),
-    "unitOfMeasure" text,
-    "passengerCount" integer,
-    status text DEFAULT 'open'::text NOT NULL,
-    notes text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone,
-    CONSTRAINT transport_booking_lines_status_check CHECK ((status = ANY (ARRAY['open'::text, 'dispatched'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text])))
-);
-
-CREATE SEQUENCE public.transport_booking_lines_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.transport_booking_lines_id_seq OWNED BY public.transport_booking_lines.id;
-
-
---
--- Name: transport_dispatch_orders; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.transport_dispatch_orders (
-    id integer NOT NULL,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "bookingId" integer NOT NULL,
-    "bookingLineId" integer NOT NULL,
-    "vehicleId" integer NOT NULL,
-    "driverId" integer NOT NULL,
-    "scheduledStartAt" timestamp with time zone NOT NULL,
-    "scheduledEndAt" timestamp with time zone NOT NULL,
-    "linkedManifestId" integer,
-    "linkedTripId" integer,
-    "linkedUmrahTransportId" integer,
-    status text DEFAULT 'pending'::text NOT NULL,
-    "declinedReason" text,
-    "dispatchedBy" integer,
-    "dispatchedAt" timestamp with time zone,
-    "acceptedAt" timestamp with time zone,
-    "startedAt" timestamp with time zone,
-    "completedAt" timestamp with time zone,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT transport_dispatch_orders_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'notified'::text, 'accepted'::text, 'declined'::text, 'executing'::text, 'completed'::text, 'closed'::text, 'cancelled'::text])))
-);
-
-CREATE SEQUENCE public.transport_dispatch_orders_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.transport_dispatch_orders_id_seq OWNED BY public.transport_dispatch_orders.id;
-
-
---
--- Name: vehicle_location_snapshots; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.vehicle_location_snapshots (
-    id bigint NOT NULL,
-    "companyId" integer NOT NULL,
-    "vehicleId" integer NOT NULL,
-    "driverId" integer,
-    "dispatchOrderId" integer,
-    latitude numeric(10,7) NOT NULL,
-    longitude numeric(10,7) NOT NULL,
-    "speedKmh" numeric(6,2),
-    heading numeric(5,2),
-    "capturedAt" timestamp with time zone NOT NULL,
-    source text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
-);
-
-CREATE SEQUENCE public.vehicle_location_snapshots_id_seq AS bigint START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.vehicle_location_snapshots_id_seq OWNED BY public.vehicle_location_snapshots.id;
-
-
---
--- Name: cargo_items; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.cargo_items (
-    id integer NOT NULL,
-    "manifestId" integer NOT NULL,
-    "companyId" integer NOT NULL,
-    description character varying(255) NOT NULL,
-    quantity integer DEFAULT 1 NOT NULL,
-    "unitOfMeasure" character varying(32) DEFAULT 'piece'::character varying,
-    weight numeric(12,2) DEFAULT 0,
-    "declaredValue" numeric(14,2) DEFAULT 0,
-    dimensions jsonb,
-    "isHazmat" boolean DEFAULT false NOT NULL,
-    "hazmatClass" character varying(32),
-    notes text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "deletedAt" timestamp with time zone
-);
-
-
---
--- Name: cargo_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.cargo_items_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: cargo_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.cargo_items_id_seq OWNED BY public.cargo_items.id;

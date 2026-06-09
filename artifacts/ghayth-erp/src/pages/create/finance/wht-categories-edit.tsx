@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Autocomplete } from "@/components/ui/autocomplete";
+import { AccountIdSelect } from "@/components/shared/entity-selects";
 import { CreatePageLayout } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -84,10 +84,6 @@ export default function WhtCategoriesEdit() {
     });
   }, [existing]);
 
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(
-    ["accounts-list"], "/finance/accounts",
-  );
-  const accounts = accountsData?.data ?? [];
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
@@ -176,14 +172,11 @@ export default function WhtCategoriesEdit() {
         </FormFieldWrapper>
 
         <FormFieldWrapper label="حساب الاستقطاع المستحق لزاتكا (دائن)">
-          <Autocomplete
+          <AccountIdSelect
             value={form.payableAccountId}
-            onChange={(v) => setForm((f) => ({ ...f, payableAccountId: String(v) }))}
-            options={accounts
-              .filter((a: any) => a.type === "liability" || String(a.code).startsWith("23"))
-              .map((a: any) => ({ value: String(a.id), label: `${a.code} - ${a.name}` }))}
-            placeholder="ابحث عن حساب الخصوم..."
-            emptyMessage="لا توجد حسابات"
+            onChange={(v) => setForm((f) => ({ ...f, payableAccountId: v }))}
+            label="" allowCreate={false}
+            filter={(a: any) => a.type === "liability" || String(a.code).startsWith("23")}
           />
         </FormFieldWrapper>
 
