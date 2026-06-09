@@ -33,7 +33,10 @@ export interface BookingSourcePrefill {
   projectId?: number;
   umrahGroupId?: number;
   passengerCount?: number;
-  recurringTemplateId?: number;
+  /** #1812 audit fix — renamed from recurringTemplateId (which had no
+   *  backend column). Maps to transport_bookings.routePatternId added
+   *  in migration 284 — the canonical cargo recurring back-link. */
+  routePatternId?: number;
   importJobId?: number;
   externalRef?: string;
 }
