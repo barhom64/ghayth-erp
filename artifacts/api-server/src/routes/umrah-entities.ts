@@ -4412,4 +4412,148 @@ router.get("/reports/profitability", authorize({ feature: "umrah", action: "list
   } catch (err) { handleRouteError(err, res, "Profitability report"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// §6 Deep Finance Integration — GL Drill-Through (Charter #1870)
+//
+// «من فاتورة العمرة → القيد المحاسبي → سطور الحسابات» في خطوة واحدة.
+//
+// السؤال اللي يجاوب عليه:
+//   «هل هذي الفاتورة ترحَّلت محاسبياً صح؟ على أي حساب؟ بأي مبلغ؟»
+//
+// المسار:
+//   GET /umrah/journal/:sourceType/:sourceId
+//
+// نقبل ٥ أنواع مصدر فقط (whitelist) — ما نسمح للمستخدم يقرأ قيود
+// أي جدول. كل واحد فيه عمود "journalEntryId":
+//   - umrah_sales_invoices  (فواتير العملاء)
+//   - umrah_nusk_invoices   (فواتير نسك)
+//   - umrah_payments        (الدفعات الواردة)
+//   - umrah_agent_invoices  (فواتير الوكلاء)
+//   - umrah_violations      (الغرامات/المخالفات)
+//
+// نرجِّع: { source, journal, lines } مع جميع الأبعاد (umrahAgentId/
+// umrahSeasonId/costCenter/employee/...). كل القراءات tenant-scoped
+// عبر journal_entries."companyId" + journal_lines.journalId.
+// ─────────────────────────────────────────────────────────────────────────────
+// Per source: refCol = الرقم المرئي للعامل، statusCol = اسم عمود الحالة
+// لأن بعض الجداول status والبعض nuskStatus (نسك). umrah_penalties ما عنده
+// ref فنستخدم type كنص بديل (overstay/violation/lost/regulatory).
+const JOURNAL_DRILL_SOURCES: Record<string, { table: string; refCol: string; statusCol: string }> = {
+  umrah_sales_invoices:  { table: "umrah_sales_invoices",  refCol: "ref",               statusCol: "status"     },
+  umrah_nusk_invoices:   { table: "umrah_nusk_invoices",   refCol: "nuskInvoiceNumber", statusCol: "nuskStatus" },
+  umrah_payments:        { table: "umrah_payments",        refCol: "ref",               statusCol: "method"     },
+  umrah_agent_invoices:  { table: "umrah_agent_invoices",  refCol: "ref",               statusCol: "status"     },
+  umrah_penalties:       { table: "umrah_penalties",       refCol: "type",              statusCol: "status"     },
+};
+
+router.get("/journal/:sourceType/:sourceId", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const sourceType = String(req.params.sourceType ?? "");
+    const sourceId = parseId(req.params.sourceId, "sourceId");
+
+    const meta = JOURNAL_DRILL_SOURCES[sourceType];
+    if (!meta) throw new ValidationError(`نوع المصدر غير مدعوم: ${sourceType}`, { field: "sourceType" });
+
+    // Read the source row first — confirms tenant ownership AND
+    // surfaces the source's own ref/status/journalEntryId so the FE
+    // can render a header without a second roundtrip.
+    const [source] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "journalEntryId", "${meta.refCol}" AS ref, "${meta.statusCol}" AS status
+         FROM ${meta.table}
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [sourceId, scope.companyId],
+    );
+    if (!source) throw new NotFoundError("المصدر غير موجود");
+
+    const journalEntryId = source.journalEntryId as number | null;
+    if (!journalEntryId) {
+      res.json(maskFields(req, {
+        source: { id: sourceId, sourceType, ref: source.ref, status: source.status },
+        journal: null,
+        lines: [],
+        message: "لم يتم ترحيل قيد محاسبي بعد لهذا المصدر",
+      }));
+      return;
+    }
+
+    // Header + lines in parallel — both scoped to the same companyId
+    // for defence-in-depth (even though journalEntryId is single-tenant
+    // by construction, an attacker who has a leaked id from another
+    // tenant shouldn't be able to read its lines through this path).
+    const [headerArr, lines] = await Promise.all([
+      rawQuery<Record<string, unknown>>(
+        `SELECT je.id, je.ref, je.description, je.date, je.type, je.status,
+                je."sourceType", je."sourceId", je."sourceKey",
+                je."postedBy", je."postedAt", je."approvalStatus",
+                je."createdAt", je."updatedAt",
+                je."originalCurrency", je."exchangeRate", je."originalAmount",
+                je."reversalOfId", je."reversedById", je."reversedAt", je."reversalReason"
+           FROM journal_entries je
+          WHERE je.id = $1
+            AND je."companyId" = $2
+            AND je."deletedAt" IS NULL
+          LIMIT 1`,
+        [journalEntryId, scope.companyId],
+      ),
+      rawQuery<Record<string, unknown>>(
+        // join chart_of_accounts for the human-readable Arabic name.
+        // Tenant-safe: COA is tenant-scoped on companyId.
+        `SELECT jl.id, jl."accountCode", jl.debit, jl.credit, jl.description,
+                jl."costCenter", jl."costCenterId",
+                jl."departmentId", jl."projectId", jl."employeeId",
+                jl."vehicleId", jl."clientId", jl."vendorId", jl."driverId",
+                jl."umrahSeasonId", jl."umrahAgentId",
+                jl."originalCurrency", jl."originalDebit", jl."originalCredit",
+                jl."exchangeRate",
+                coa.name      AS "accountName",
+                coa.type      AS "accountType"
+           FROM journal_lines jl
+      LEFT JOIN chart_of_accounts coa
+             ON coa.code = jl."accountCode"
+            AND coa."companyId" = $2
+            AND coa."deletedAt" IS NULL
+          WHERE jl."journalId" = $1
+            AND jl."deletedAt" IS NULL
+          ORDER BY jl.id`,
+        [journalEntryId, scope.companyId],
+      ),
+    ]);
+
+    const header = headerArr[0];
+    if (!header) {
+      // FK present but the entry was deleted — surface so the operator
+      // sees the gap rather than silently rendering "no journal".
+      res.json(maskFields(req, {
+        source: { id: sourceId, sourceType, ref: source.ref, status: source.status },
+        journal: null,
+        lines: [],
+        message: `قيد المحاسبة #${journalEntryId} المربوط غير موجود — قد يكون محذوفاً`,
+        orphanJournalEntryId: journalEntryId,
+      }));
+      return;
+    }
+
+    // Footer totals — debit/credit balance check for the auditor.
+    // Engine guarantees balance, but a stale-line scenario (one line
+    // soft-deleted) would surface here, not silently.
+    const totals = lines.reduce<{ debit: number; credit: number }>(
+      (acc, l) => ({
+        debit:  acc.debit  + Number(l.debit  ?? 0),
+        credit: acc.credit + Number(l.credit ?? 0),
+      }),
+      { debit: 0, credit: 0 },
+    );
+
+    res.json(maskFields(req, {
+      source: { id: sourceId, sourceType, ref: source.ref, status: source.status },
+      journal: header,
+      lines,
+      totals,
+      isBalanced: Math.abs(totals.debit - totals.credit) < 0.01,
+    }));
+  } catch (err) { handleRouteError(err, res, "Umrah journal drill-through"); }
+});
+
 export default router;
