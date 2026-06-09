@@ -2934,42 +2934,47 @@ async function createOpeningBalanceEntry(params: {
     return { error: `الحسابات التالية غير موجودة: ${missing.join(", ")}`, status: 400 };
   }
 
-  // Soft-delete prior OB if force
-  if (force) {
-    // A2 (silent ledger corruption): reverse each prior OB's GL deltas
-    // alongside soft-deleting it. Without this reverse, the replacement OB
-    // posted below adds its deltas on top of the un-reversed prior-OB
-    // deltas and currentBalance silently double-counts the opening balance.
-    // Mirrors the soft-delete + reverseAccountBalances pattern already used
-    // for /expenses/:id and /vouchers/:id in this file.
-    const priorObs = await rawQuery<{ id: number }>(
-      `UPDATE journal_entries SET "deletedAt" = NOW()
-       WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL
-       RETURNING id`,
-      [scope.companyId, ref]
-    );
-    for (const prior of priorObs) {
-      await reverseAccountBalances(scope.companyId, prior.id);
-    }
-  }
-
   const description = `أرصدة افتتاحية ${periodStart}`;
   const { financialEngine } = await import("../lib/engines/index.js");
-  const { journalId } = await financialEngine.postJournalEntry({
-    companyId: scope.companyId,
-    branchId: scope.branchId,
-    createdBy: scope.activeAssignmentId,
-    ref,
-    description,
-    type: "opening_balance",
-    sourceType: "opening_balance",
-    sourceId: 0,
-    sourceKey: `finance:opening_balance:${scope.companyId}:${periodStart}`,
-    lines: lines.map((l) => ({
-      accountCode: String(l.accountCode),
-      debit: Number(l.debit || 0),
-      credit: Number(l.credit || 0),
-    })),
+  // #1715 correctness review (L2) — the force-replacement reversal + soft-delete
+  // and the replacement post must be ONE transaction. Pre-fix they ran in
+  // sequence outside any txn, so if the post threw (e.g. a closed period) the
+  // prior OB was already reversed + soft-deleted with NO replacement. Wrapping
+  // them rolls the deletion back on failure. reverseAccountBalances is txn-aware
+  // (same pattern as the /expenses/:id + /vouchers/:id delete routes), and
+  // postJournalEntry's internal transaction joins this one reentrantly.
+  let journalId!: number;
+  await withTransaction(async () => {
+    // Soft-delete + reverse prior OB if force (A2: without the reverse the
+    // replacement OB would double-count the opening balance on currentBalance).
+    if (force) {
+      const priorObs = await rawQuery<{ id: number }>(
+        `UPDATE journal_entries SET "deletedAt" = NOW()
+         WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL
+         RETURNING id`,
+        [scope.companyId, ref]
+      );
+      for (const prior of priorObs) {
+        await reverseAccountBalances(scope.companyId, prior.id);
+      }
+    }
+
+    ({ journalId } = await financialEngine.postJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref,
+      description,
+      type: "opening_balance",
+      sourceType: "opening_balance",
+      sourceId: 0,
+      sourceKey: `finance:opening_balance:${scope.companyId}:${periodStart}`,
+      lines: lines.map((l) => ({
+        accountCode: String(l.accountCode),
+        debit: Number(l.debit || 0),
+        credit: Number(l.credit || 0),
+      })),
+    }));
   });
 
   return { id: journalId, ref, description };
