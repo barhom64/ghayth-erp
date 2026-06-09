@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { AssistantHints } from "@/components/umrah/assistant-hints";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { formatUmrahDate, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -110,6 +111,13 @@ export default function UmrahDashboard() {
       }
     >
       <UmrahTabsNav />
+
+      {/* §9 of #1870 — Assistant Hints. Reads system state on mount
+          and surfaces ranked suggestions ("12 pilgrim orphans need
+          recovery", "3 invoices missing AP JE", ...) above the
+          dashboard. Renders nothing when zero suggestions, so the
+          quick-actions row sits at the top on a clean tenant. */}
+      <AssistantHints />
 
       {/* Quick Actions — أهم 4 إجراءات يومية للعامل، ظاهرة مباشرة
           بدون ما يضطر يفتح tab. كانت كل وحدة مدفونة في مكان مختلف:
