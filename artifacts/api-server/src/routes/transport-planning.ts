@@ -101,6 +101,24 @@ transportPlanningRouter.patch(
   },
 );
 
+// #1812 — maps-provider health check. Admin UI calls this immediately
+// after the operator pastes a new API key to give live feedback
+// ("ok" / "invalid_key" / "quota_exceeded" / "network_error" /
+// "missing" / "not_supported") so they know whether to fix the key.
+transportPlanningRouter.post(
+  "/transport/planning-settings/health-check",
+  authorize({ feature: "fleet.bookings", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const status = await MapsService.healthCheck(scope.companyId);
+      res.json({ data: { status } });
+    } catch (err) {
+      handleRouteError(err, res, "Maps provider health-check error:");
+    }
+  },
+);
+
 // ─── Suggest-assignment + estimate-route ─────────────────────────────
 
 const suggestSchema = z.object({
