@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Autocomplete } from "@/components/ui/autocomplete";
+import { AccountIdSelect } from "@/components/shared/entity-selects";
 import { CreatePageLayout } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -92,10 +92,6 @@ export default function TaxCodesEdit() {
     });
   }, [existing]);
 
-  const { data: accountsData } = useApiQuery<{ data: any[] }>(
-    ["accounts-list"], "/finance/accounts",
-  );
-  const accounts = accountsData?.data ?? [];
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
@@ -201,26 +197,20 @@ export default function TaxCodesEdit() {
         </FormFieldWrapper>
 
         <FormFieldWrapper label="حساب ضريبة المخرجات (دائن عند البيع)">
-          <Autocomplete
+          <AccountIdSelect
             value={form.accountId}
-            onChange={(v) => setForm((f) => ({ ...f, accountId: String(v) }))}
-            options={accounts
-              .filter((a: any) => a.type === "liability" || String(a.code).startsWith("23"))
-              .map((a: any) => ({ value: String(a.id), label: `${a.code} - ${a.name}` }))}
-            placeholder="ابحث عن حساب الخصوم..."
-            emptyMessage="لا توجد حسابات"
+            onChange={(v) => setForm((f) => ({ ...f, accountId: v }))}
+            label="" allowCreate={false}
+            filter={(a: any) => a.type === "liability" || String(a.code).startsWith("23")}
           />
         </FormFieldWrapper>
 
         <FormFieldWrapper label="حساب ضريبة المدخلات (مدين عند الشراء)">
-          <Autocomplete
+          <AccountIdSelect
             value={form.inputAccountId}
-            onChange={(v) => setForm((f) => ({ ...f, inputAccountId: String(v) }))}
-            options={accounts
-              .filter((a: any) => a.type === "asset" || String(a.code).startsWith("11") || String(a.code).startsWith("14"))
-              .map((a: any) => ({ value: String(a.id), label: `${a.code} - ${a.name}` }))}
-            placeholder="ابحث عن حساب الأصول..."
-            emptyMessage="لا توجد حسابات"
+            onChange={(v) => setForm((f) => ({ ...f, inputAccountId: v }))}
+            label="" allowCreate={false}
+            filter={(a: any) => a.type === "asset" || String(a.code).startsWith("11") || String(a.code).startsWith("14")}
           />
         </FormFieldWrapper>
 
