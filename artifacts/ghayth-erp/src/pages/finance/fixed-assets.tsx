@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DEPRECIATION_METHODS } from "@/lib/finance-type-maps";
 import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
@@ -172,7 +173,7 @@ export default function FixedAssetsPage() {
           { key: "usefulLifeYears", header: "العمر (سنة)", render: (a: any) => <span className={!a.usefulLifeYears ? "text-status-error font-bold" : "text-muted-foreground"}>{a.usefulLifeYears ?? "—"}</span> },
           { key: "depreciationMethod", header: "طريقة الإهلاك", render: (a: any) => (
             <Badge variant="outline" className="text-xs">
-              {a.depreciationMethod === "declining_balance" ? "القسط المتناقص" : "القسط الثابت"}
+              {DEPRECIATION_METHODS[a.depreciationMethod] ?? a.depreciationMethod}
             </Badge>
           ) },
           { key: "status", header: "الحالة", render: (a: any) => <PageStatusBadge status={a.status} domain="asset" /> },
@@ -240,10 +241,7 @@ export default function FixedAssetsPage() {
                 <FormSelectField
                   name="depreciationMethod"
                   label="طريقة الإهلاك"
-                  options={[
-                    { value: "straight_line", label: "القسط الثابت" },
-                    { value: "declining_balance", label: "القسط المتناقص" },
-                  ]}
+                  options={Object.entries(DEPRECIATION_METHODS).map(([value, label]) => ({ value, label }))}
                 />
                 <FormTextField
                   name="paymentAccountCode"

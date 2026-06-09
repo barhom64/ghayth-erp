@@ -138,6 +138,38 @@ const clamp = (n: number): number => Math.max(0, Math.min(100, n));
  * Returns the breakdown the engine just wrote. Re-running for the
  * same triple is idempotent (ON CONFLICT DO UPDATE).
  */
+// HR-020 — read company-scoped weight overrides from
+// `scoring_weights_per_company`. Falls back to DEFAULT_WEIGHTS when no
+// row exists for the (companyId, categoryKey) pair. Per-category override
+// (categoryKey != NULL) wins over company-wide default (categoryKey IS NULL).
+export async function resolveCompanyWeights(
+  companyId: number,
+  categoryKey?: string | null,
+): Promise<DimensionWeights> {
+  const rows = await rawQuery<{
+    categoryKey: string | null;
+    disciplineWeight: number; activityWeight: number; productivityWeight: number;
+    qualityWeight: number; managerWeight: number; developmentWeight: number;
+  }>(
+    `SELECT "categoryKey", "disciplineWeight", "activityWeight", "productivityWeight",
+            "qualityWeight", "managerWeight", "developmentWeight"
+       FROM scoring_weights_per_company
+      WHERE "companyId" = $1 AND ("categoryKey" = $2 OR "categoryKey" IS NULL)
+      ORDER BY "categoryKey" NULLS LAST LIMIT 1`,
+    [companyId, categoryKey ?? null],
+  ).catch(() => [] as any[]);
+  if (rows.length === 0) return DEFAULT_WEIGHTS;
+  const r = rows[0];
+  return {
+    discipline: Number(r.disciplineWeight),
+    activity: Number(r.activityWeight),
+    productivity: Number(r.productivityWeight),
+    quality: Number(r.qualityWeight),
+    manager: Number(r.managerWeight),
+    development: Number(r.developmentWeight),
+  };
+}
+
 export async function scoreEmployee(args: {
   companyId: number;
   assignmentId: number;
@@ -147,7 +179,18 @@ export async function scoreEmployee(args: {
   periodKey: string;
   weights?: Partial<DimensionWeights>;
 }): Promise<ScoreBreakdown> {
-  const weights: DimensionWeights = { ...DEFAULT_WEIGHTS, ...args.weights };
+  // If caller didn't pass explicit weights, pull from per-company table.
+  // Pass-through of the explicit weights is preserved for callers that
+  // already resolved them (e.g. test fixtures, ad-hoc rescore).
+  let effective = args.weights;
+  if (!effective) {
+    const [asn] = await rawQuery<{ categoryKey: string | null }>(
+      `SELECT "categoryKey" FROM employee_assignments WHERE id = $1`,
+      [args.assignmentId],
+    ).catch(() => [] as any[]);
+    effective = await resolveCompanyWeights(args.companyId, asn?.categoryKey);
+  }
+  const weights: DimensionWeights = { ...DEFAULT_WEIGHTS, ...effective };
   const range = periodRange(args.scope, args.periodKey);
 
   // ── Discipline (20%) ──
