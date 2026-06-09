@@ -2618,7 +2618,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
           await client.query(
             `DELETE FROM payroll_deductions
              WHERE "companyId" = $1 AND "employeeId" = $2 AND type = 'absence'
-               AND "effectiveDate" BETWEEN $3 AND $4
+               AND date BETWEEN $3 AND $4
                AND (status IS NULL OR status <> 'deducted_in_payroll')`,
             [asn.companyId, request.employeeId, request.startDate, request.endDate]
           );

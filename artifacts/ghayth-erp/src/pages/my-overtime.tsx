@@ -64,11 +64,11 @@ export default function MyOvertime() {
     `/hr/overtime/my?month=${month}`
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const records: any[] = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(records);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const totalHours = records.reduce((s: number, r: any) => s + Number(r.hours || 0), 0);
   const totalAmount = records.reduce((s: number, r: any) => s + Number(r.totalAmount || 0), 0);

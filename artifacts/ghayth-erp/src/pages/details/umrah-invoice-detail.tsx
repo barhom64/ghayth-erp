@@ -17,6 +17,7 @@ import { FileText, Users, Package, Calendar, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { UmrahJournalDrillCard } from "@/components/shared/umrah-journal-drill-card";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -251,6 +252,15 @@ export default function UmrahInvoiceDetail() {
           </Card>
         )}
       </div>
+
+      {/* §6 من شرائع #1870 — drill-through محاسبي.
+          العامل/المحاسب يشوف القيد المرحَّل بسطوره وأبعاده مباشرة من
+          صفحة الفاتورة بدل ما يدور في /finance/journal-entries يدوياً. */}
+      {id && (
+        <div className="md:col-span-3">
+          <UmrahJournalDrillCard sourceType="umrah_agent_invoices" sourceId={id} />
+        </div>
+      )}
 
       {id && <EntityComments entityType="umrah-invoice" entityId={id} />}
       {id && <EntityTags entityType="umrah-invoice" entityId={id} />}
