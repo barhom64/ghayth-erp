@@ -69,6 +69,8 @@ const UmrahSubAgentBalancesReport = lazy(() => import("@/pages/umrah/reports/sub
 const UmrahPilgrimMovementsReport = lazy(() => import("@/pages/umrah/reports/pilgrim-movements"));
 const UmrahGroupProfitabilityReport = lazy(() => import("@/pages/umrah/reports/profitability"));
 const UmrahAgentProfitabilityReport = lazy(() => import("@/pages/umrah/reports/agent-profitability"));
+// §11 من شرائع #1870 — ملخّص أخطاء الاستيراد (KPIs + توزيع + آخر ١٠٠ دفعة).
+const UmrahImportErrorsSummaryReport = lazy(() => import("@/pages/umrah/reports/import-errors-summary"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -117,6 +119,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/reports/pilgrim-movements", component: UmrahPilgrimMovementsReport, module: "operations" },
   { path: "/umrah/reports/group-profitability", component: UmrahGroupProfitabilityReport, module: "operations" },
   { path: "/umrah/reports/agent-profitability", component: UmrahAgentProfitabilityReport, module: "operations" },
+  { path: "/umrah/reports/import-errors-summary", component: UmrahImportErrorsSummaryReport, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },

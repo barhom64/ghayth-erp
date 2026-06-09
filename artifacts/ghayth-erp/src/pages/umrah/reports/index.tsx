@@ -109,6 +109,16 @@ const REPORTS: ReportTile[] = [
     tone: "text-status-warning-foreground bg-status-warning-surface",
     category: "مالية",
   },
+  {
+    // §11 من شرائع #1870 — ملخّص أخطاء الاستيراد.
+    // KPIs + توزيع (الحالة/النوع/المستخدم) + آخر ١٠٠ دفعة استيراد.
+    href: "/umrah/reports/import-errors-summary",
+    title: "ملخّص أخطاء الاستيراد",
+    description: "كل دفعات الاستيراد + الفاشلة + الجزئية + السطور المرفوضة + توزيع حسب الحالة والنوع والمستخدم",
+    icon: AlertTriangle,
+    tone: "text-status-warning-foreground bg-status-warning-surface",
+    category: "تشغيلية",
+  },
 ];
 
 export default function UmrahReportsHub() {
