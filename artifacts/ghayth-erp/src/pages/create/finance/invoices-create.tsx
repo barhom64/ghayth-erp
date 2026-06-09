@@ -14,7 +14,6 @@ import { lineTaxSplit } from "@/lib/tax-math";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAppContext } from "@/contexts/app-context";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
@@ -124,7 +123,6 @@ export default function InvoicesCreate() {
     for (const t of taxCodes) m.set(t.code, t);
     return m;
   }, [taxCodes]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [copied, setCopied] = useState(false);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
@@ -496,8 +494,6 @@ export default function InvoicesCreate() {
           label="معاينة أثر الفاتورة"
         />
       )}
-
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <div className="flex items-center justify-between">

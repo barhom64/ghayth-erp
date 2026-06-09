@@ -185,7 +185,11 @@ export default function VouchersCreate() {
   const buildVoucherPayload = (extra?: Record<string, unknown>) => ({
     type: form.type,
     operationType: form.operationType,
-    amount: Number(form.amount),
+    // #1715 review — post the NET amount (backend adds VAT on top). With «شامل
+    // الضريبة» on, form.amount is gross, so sending it raw posted gross+VAT — and
+    // the dry-run «معاينة القيد» (same handler) showed it too. taxSplit.net ==
+    // form.amount when NOT inclusive, so only the inclusive case changes.
+    amount: Number(taxSplit.net),
     date: form.date || undefined,
     description: form.description || undefined,
     accountCode: form.accountCode || undefined,

@@ -121,7 +121,9 @@ export default function JournalCreate() {
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <AutoField label="رقم القيد" value={autoNumberRef.current} />
+        {/* #1715 review — the JE number is assigned by the server on save (it
+            ignores any client ref), so don't show a fake JE-… that won't match. */}
+        <AutoField label="رقم القيد" value="يُحدَّد تلقائيًا عند الحفظ" />
         <CreationDateField />
         <BranchSelect
           value={form.branchId ?? ""}
