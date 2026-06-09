@@ -1318,6 +1318,13 @@ const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
   fx_revaluation_ap: { type: "liability", keywords: ["دائنون", "موردون"] },
   fx_revaluation_gain: { type: "revenue", keywords: ["أرباح فروق", "ربح صرف"] },
   fx_revaluation_loss: { type: "expense", keywords: ["خسائر فروق", "خسارة صرف"] },
+  // #1715 correctness review — customer-money flows (payments + advances). On a
+  // SOCPA tree the literal fallbacks (1100/1110 cash, 2400 advance-liability)
+  // are non-postable HEADERS or absent, so without these the cash/liability leg
+  // resolved to a header and the post FAILED. Intent search then finds the
+  // postable leaf (e.g. 1111 الصندوق الرئيسي, 2160 إيرادات مقبوضة مقدماً).
+  invoice_payment_cash: { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  customer_advance_liability: { type: "liability", keywords: ["دفعات مقدمة", "مقبوضة مقدم", "عملاء", "advance", "unearned"] },
 };
 
 const _resolvedAccountCache = new Map<string, string>();
