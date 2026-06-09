@@ -32,6 +32,7 @@ import {
   BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator, LayoutGrid,
   RefreshCw, Globe, TrendingDown as TrendingDown2,
   Satellite, Bot, HardDrive, Video as VideoIcon, Award,
+  ShieldCheck,
 } from "lucide-react";
 
 export interface NavItem {
@@ -78,6 +79,7 @@ export const allNavSections: NavSection[] = [
       { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar, minRoleLevel: 20 },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
+        { label: "ما ينتظر إجراءاتي", path: "/my/work-queue", icon: ListChecks },
         { label: "مساحتي", path: "/my-space", icon: User },
         { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
         { label: "إشعاراتي", path: "/notifications", icon: Bell },
@@ -238,6 +240,10 @@ export const allNavSections: NavSection[] = [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
         { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
+        { label: "عضويات المؤسسة (فرق/لجان/مشاريع)", path: "/admin/org-memberships", icon: Users2, subKey: "settings" },
+        { label: "أوزان التقييم وترتيب الأداء", path: "/admin/scoring-weights", icon: TrendingUp, subKey: "settings" },
+        { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
+        { label: "فئات الموظفين وسياسات الحضور", path: "/admin/attendance-categories", icon: Users, subKey: "settings" },
       ]},
     ],
   },
@@ -496,6 +502,17 @@ export const allNavSections: NavSection[] = [
         { label: "الشحن والبضائع", path: "/fleet/cargo", icon: Package, perm: "fleet.cargo:list" },
         { label: "نظام التتبع (Telematics)", path: "/fleet/telematics", icon: Satellite, perm: "fleet.telematics.live:list" },
         { label: "الإطارات", path: "/fleet/tires", icon: Settings, perm: "fleet.maintenance:list" },
+        // النقل والمواصلات (#1812) — كانت هذه الصفحات مركّبة لكن بلا مدخل في
+        // القائمة (orphan)، فلا يصل إليها المستخدم إلا برابط مباشر. أُضيفت
+        // بنفس بوابات الـ backend: الحجوزات/التسعير/القواعد عبر fleet.bookings،
+        // والإرسال/المسارات/لوحة العمليات عبر fleet.dispatch.
+        { label: "حجوزات النقل", path: "/fleet/transport/bookings", icon: ClipboardList, perm: "fleet.bookings:list" },
+        { label: "الإرسال (Dispatch)", path: "/fleet/transport/dispatch", icon: Send, perm: "fleet.dispatch:list" },
+        { label: "خطط المسارات", path: "/fleet/transport/itineraries", icon: Navigation, perm: "fleet.dispatch:list" },
+        { label: "لوحة عمليات النقل", path: "/fleet/transport/ops-dashboard", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
+        { label: "قواعد تسعير النقل", path: "/fleet/transport/price-rules", icon: Percent, perm: "fleet.bookings:list" },
+        { label: "قواعد استقبال النقل", path: "/fleet/transport/rules", icon: ListChecks, perm: "fleet.bookings:list" },
+        { label: "تكامل النقل", path: "/fleet/transport/integration", icon: Network, perm: "fleet.bookings:list" },
       ]},
     ],
   },

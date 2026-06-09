@@ -15,6 +15,7 @@ import { ArrowLeft, Plus, Users, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
+import { LocationKindPicker } from "@/components/shared/location-kind-picker";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
@@ -63,6 +64,13 @@ export default function TransportBookingCreate() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [fromLocationText, setFromLocationText] = useState("");
   const [toLocationText, setToLocationText] = useState("");
+  const [fromLocationKind, setFromLocationKind] = useState<string | undefined>();
+  const [toLocationKind, setToLocationKind] = useState<string | undefined>();
+  const [fromLat, setFromLat] = useState("");
+  const [fromLng, setFromLng] = useState("");
+  const [toLat, setToLat] = useState("");
+  const [toLng, setToLng] = useState("");
+  const [showGeoFields, setShowGeoFields] = useState(false);
   const [requestedPickupDate, setRequestedPickupDate] = useState("");
   const [requestedPickupTime, setRequestedPickupTime] = useState("");
   const [requestedDeliveryDate, setRequestedDeliveryDate] = useState("");
@@ -118,6 +126,12 @@ export default function TransportBookingCreate() {
         customerPhone: customerPhone.trim() || undefined,
         fromLocationText: fromLocationText.trim() || undefined,
         toLocationText: toLocationText.trim() || undefined,
+        fromLocationKind: fromLocationKind || undefined,
+        toLocationKind: toLocationKind || undefined,
+        fromLat: fromLat ? Number(fromLat) : undefined,
+        fromLng: fromLng ? Number(fromLng) : undefined,
+        toLat: toLat ? Number(toLat) : undefined,
+        toLng: toLng ? Number(toLng) : undefined,
         requestedPickupDate: requestedPickupDate || undefined,
         requestedPickupTime: requestedPickupTime || undefined,
         requestedDeliveryDate: requestedDeliveryDate || undefined,
@@ -251,13 +265,62 @@ export default function TransportBookingCreate() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">المسار والتوقيت</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="from">من</Label>
               <Input id="from" value={fromLocationText} onChange={(e) => setFromLocationText(e.target.value)} placeholder="موقع التحميل" />
+              <LocationKindPicker
+                id="fromKind"
+                value={fromLocationKind}
+                onChange={setFromLocationKind}
+                placeholder="نوع موقع التحميل"
+              />
+              {showGeoFields && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number" step="0.0000001" value={fromLat}
+                    onChange={(e) => setFromLat(e.target.value)}
+                    placeholder="خط العرض"
+                  />
+                  <Input
+                    type="number" step="0.0000001" value={fromLng}
+                    onChange={(e) => setFromLng(e.target.value)}
+                    placeholder="خط الطول"
+                  />
+                </div>
+              )}
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="to">إلى</Label>
               <Input id="to" value={toLocationText} onChange={(e) => setToLocationText(e.target.value)} placeholder="موقع التسليم" />
+              <LocationKindPicker
+                id="toKind"
+                value={toLocationKind}
+                onChange={setToLocationKind}
+                placeholder="نوع موقع التسليم"
+              />
+              {showGeoFields && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="number" step="0.0000001" value={toLat}
+                    onChange={(e) => setToLat(e.target.value)}
+                    placeholder="خط العرض"
+                  />
+                  <Input
+                    type="number" step="0.0000001" value={toLng}
+                    onChange={(e) => setToLng(e.target.value)}
+                    placeholder="خط الطول"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="md:col-span-2">
+              <button
+                type="button"
+                className="text-xs text-status-info-foreground hover:underline"
+                onClick={() => setShowGeoFields((s) => !s)}
+              >
+                {showGeoFields ? "إخفاء إحداثيات GPS" : "أضف إحداثيات GPS (اختياري)"}
+              </button>
             </div>
             {/* #1812 unified-dates (user's gap #8) — DateField wraps the
                 canonical UnifiedDateInput so date display matches the
