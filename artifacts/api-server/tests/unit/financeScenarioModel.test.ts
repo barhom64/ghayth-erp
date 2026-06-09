@@ -4,10 +4,16 @@ import {
   DOMAIN_LABELS,
   scenariosForDomain,
   resolveScenario,
+  TARGET_HINTS,
+  resolveTargetHint,
   type FinanceDomain,
   type FinanceScenario,
+  type FinanceTarget,
 } from "../../../ghayth-erp/src/lib/finance/scenario-model.ts";
-import { deriveSpecializedAccount } from "../../src/lib/financeSpecializedAccount.js";
+import {
+  deriveSpecializedAccount,
+  deriveOperationalEffectHint,
+} from "../../src/lib/financeSpecializedAccount.js";
 
 // #1715 / #1945 — acceptance tests for THE central finance scenario model.
 //
@@ -126,4 +132,43 @@ describe("finance scenario model — FE purpose ⇄ backend derivation", () => {
       expect(Boolean(fe.capitalize)).toBe(be.capitalize);
     });
   }
+});
+
+// The «ربط العملية بـ» panel renders its expected-account / effect / future-task
+// from TARGET_HINTS. This locks that source to the backend so the operator's
+// preview is exactly what posts — the renderer is genuinely model-driven, not a
+// hand-maintained copy.
+describe("finance scenario model — target hints ⇄ backend", () => {
+  const TARGETS = Object.keys(TARGET_HINTS) as FinanceTarget[];
+
+  it("resolves a known target and returns null for an unknown one", () => {
+    expect(resolveTargetHint("vehicle_maintenance")?.accountPurpose).toBe("vehicle_maintenance_expense");
+    expect(resolveTargetHint("not_a_target")).toBeNull();
+  });
+
+  for (const t of TARGETS) {
+    it(`${t}: hint account purpose + capitalisation == backend derivation`, () => {
+      const be = deriveSpecializedAccount({ targetType: t });
+      expect(TARGET_HINTS[t].accountPurpose).toBe(be.purpose);
+      expect(TARGET_HINTS[t].capitalize).toBe(be.capitalize);
+    });
+  }
+
+  // Where the backend schedules a future task (maintenance reminder / asset
+  // depreciation), the panel must surface one too — no silent operational gap.
+  for (const t of TARGETS) {
+    it(`${t}: future-task presence matches backend hint`, () => {
+      const spec = deriveSpecializedAccount({ targetType: t });
+      const beHint = deriveOperationalEffectHint({ targetType: t, spec });
+      if (beHint.futureTask) {
+        expect(TARGET_HINTS[t].futureTask).toBeTruthy();
+      }
+    });
+  }
+
+  it("gives every target that produces a real side-effect an effect string", () => {
+    for (const t of ["vehicle_maintenance", "property_maintenance", "fixed_asset"] as FinanceTarget[]) {
+      expect(TARGET_HINTS[t].effect).toBeTruthy();
+    }
+  });
 });

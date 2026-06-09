@@ -229,3 +229,108 @@ export function scenariosForDomain(domain: FinanceDomain): FinanceScenario[] {
 export function resolveScenario(scenarioId: string): FinanceScenario | null {
   return FINANCE_SCENARIOS[scenarioId] ?? null;
 }
+
+// ── allocation targets ──────────────────────────────────────────────────────
+//
+// The «ربط العملية بـ» master picker (AllocationTargetSelect) chooses WHAT an
+// operation is linked to. Each target has a single, canonical hint — the
+// expected GL purpose, the operational effect, and the future task it
+// schedules — that the panel renders BEFORE saving (spec §5/§6/§7). These keys
+// are the SAME strings the backend deriveSpecializedAccount /
+// deriveOperationalEffectHint use, and the acceptance test pins the parity so
+// the FE hint can never drift from what the backend actually posts.
+
+export type FinanceTarget =
+  | "none"
+  | "vehicle"
+  | "vehicle_maintenance"
+  | "property"
+  | "property_maintenance"
+  | "unit"
+  | "contract"
+  | "project"
+  | "umrah_season"
+  | "umrah_agent"
+  | "transport_trip"
+  | "supplier"
+  | "customer"
+  | "employee"
+  | "fixed_asset";
+
+export interface TargetHint {
+  /** Expected GL purpose — equals deriveSpecializedAccount(target).purpose. */
+  accountPurpose: string;
+  /** True when the spend capitalises (balance sheet), not a P&L expense. */
+  capitalize: boolean;
+  /** Where the amount is charged / the operational side-effect it produces. */
+  effect: string | null;
+  /** The future task the link schedules, if any. */
+  futureTask: string | null;
+}
+
+export const TARGET_HINTS: Record<FinanceTarget, TargetHint> = {
+  none: { accountPurpose: "general_expense", capitalize: false, effect: null, futureTask: null },
+  vehicle: {
+    accountPurpose: "vehicle_expense", capitalize: false,
+    effect: "يُحمَّل على المركبة ويظهر في تقرير تكلفة المركبة.", futureTask: null,
+  },
+  vehicle_maintenance: {
+    accountPurpose: "vehicle_maintenance_expense", capitalize: false,
+    effect: "سيُنشئ تذكرة صيانة مركبة وتُربط بهذا المصروف، ويُحدَّث عدّاد المركبة.",
+    futureTask: "تذكير الصيانة الوقائية القادم يُحتسب من جدول صيانة المركبة.",
+  },
+  property: {
+    accountPurpose: "property_expense", capitalize: false,
+    effect: "يُحمَّل على العقار ويظهر في تقرير ربحية العقار.", futureTask: null,
+  },
+  property_maintenance: {
+    accountPurpose: "property_maintenance_expense", capitalize: false,
+    effect: "سيُنشئ تذكرة صيانة عقارية وتُربط بهذا المصروف (العقار/الوحدة/المستأجر).", futureTask: null,
+  },
+  unit: {
+    accountPurpose: "property_maintenance_expense", capitalize: false,
+    effect: "يُحمَّل على الوحدة العقارية ويظهر في تقرير ربحية العقار.", futureTask: null,
+  },
+  contract: {
+    accountPurpose: "property_expense", capitalize: false,
+    effect: "يُحمَّل على العقد المرتبط.", futureTask: null,
+  },
+  project: {
+    accountPurpose: "project_cost", capitalize: false,
+    effect: "يُحمَّل على المشروع ويظهر في تكلفة المشروع.", futureTask: null,
+  },
+  umrah_season: {
+    accountPurpose: "umrah_cost", capitalize: false,
+    effect: "يُحمَّل على موسم العمرة.", futureTask: null,
+  },
+  umrah_agent: {
+    accountPurpose: "umrah_cost", capitalize: false,
+    effect: "يُحمَّل على وكيل العمرة.", futureTask: null,
+  },
+  transport_trip: {
+    accountPurpose: "transport_cost", capitalize: false,
+    effect: "يُحمَّل على رحلة النقل.", futureTask: null,
+  },
+  supplier: {
+    accountPurpose: "general_expense", capitalize: false,
+    effect: "يُربط بالمورد ويظهر في كشف حساب المورد.", futureTask: null,
+  },
+  customer: {
+    accountPurpose: "general_expense", capitalize: false,
+    effect: "يُربط بالعميل ويظهر في كشف حساب العميل.", futureTask: null,
+  },
+  employee: {
+    accountPurpose: "general_expense", capitalize: false,
+    effect: "يُربط بالموظف.", futureTask: null,
+  },
+  fixed_asset: {
+    accountPurpose: "fixed_asset_purchase", capitalize: true,
+    effect: "يُرسمَل كأصل ثابت بدل قيده مصروفًا، وتزداد قيمته الدفترية.",
+    futureTask: "سيبدأ احتساب الإهلاك الشهري تلقائيًا عبر محرك الإهلاك.",
+  },
+};
+
+/** Resolve the hint for a linked target — the single source the panel reads. */
+export function resolveTargetHint(target: string): TargetHint | null {
+  return TARGET_HINTS[target as FinanceTarget] ?? null;
+}
