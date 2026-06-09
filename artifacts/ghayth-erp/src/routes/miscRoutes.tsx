@@ -55,6 +55,7 @@ const ActionCenter = lazy(() => import("@/pages/action-center"));
 const ManagerBoard = lazy(() => import("@/pages/manager-board"));
 const Workspace = lazy(() => import("@/pages/workspace"));
 const ManagerWorkspace = lazy(() => import("@/pages/manager-workspace"));
+const WorkQueue = lazy(() => import("@/pages/my/work-queue"));
 const ReprintApprovals = lazy(() => import("@/pages/manager-board/reprint-approvals"));
 const ModuleDashboards = lazy(() => import("@/pages/module-dashboards"));
 const OperationsCenter = lazy(() => import("@/pages/operations-center"));
@@ -83,6 +84,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/action-center", component: ActionCenter },
   { path: "/workspace", component: Workspace },
   { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 40 },
+  { path: "/my/work-queue", component: WorkQueue },
   { path: "/obligations", component: Obligations, module: "operations" },
   { path: "/calendar", component: CalendarPage },
   // Agent-5 (route↔backend consistency): /api/exec-dashboard mounts with
