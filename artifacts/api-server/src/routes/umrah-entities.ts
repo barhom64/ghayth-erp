@@ -4039,19 +4039,26 @@ export type CalendarLayer =
   | "visa_expiring"
   | "overstay"
   | "transport_trip"
-  | "nusk_expiring";
+  | "nusk_expiring"
+  // §4 Phase 2 of #1870 — two extra layers so the yearly view +
+  // operational dashboard answer "where does money flow?" not just
+  // "where are the pilgrims?"
+  | "nusk_invoice_issued"
+  | "penalty_created";
 
 export const CALENDAR_LAYER_META: Record<CalendarLayer, {
   label: string;
   color: "green" | "yellow" | "red" | "gray" | "blue" | "purple";
   entityType: string;
 }> = {
-  pilgrim_arrival:   { label: "وصول معتمرين",         color: "green",  entityType: "umrah_pilgrims" },
-  pilgrim_departure: { label: "مغادرة معتمرين",       color: "blue",   entityType: "umrah_pilgrims" },
-  visa_expiring:     { label: "تأشيرات تنتهي",         color: "yellow", entityType: "umrah_pilgrims" },
-  overstay:          { label: "متأخرون عن المغادرة",  color: "red",    entityType: "umrah_pilgrims" },
-  transport_trip:    { label: "رحلات نقل",             color: "purple", entityType: "umrah_transport" },
-  nusk_expiring:     { label: "فواتير نسك تنتهي",     color: "yellow", entityType: "umrah_nusk_invoices" },
+  pilgrim_arrival:     { label: "وصول معتمرين",         color: "green",  entityType: "umrah_pilgrims" },
+  pilgrim_departure:   { label: "مغادرة معتمرين",       color: "blue",   entityType: "umrah_pilgrims" },
+  visa_expiring:       { label: "تأشيرات تنتهي",         color: "yellow", entityType: "umrah_pilgrims" },
+  overstay:            { label: "متأخرون عن المغادرة",  color: "red",    entityType: "umrah_pilgrims" },
+  transport_trip:      { label: "رحلات نقل",             color: "purple", entityType: "umrah_transport" },
+  nusk_expiring:       { label: "فواتير نسك تنتهي",     color: "yellow", entityType: "umrah_nusk_invoices" },
+  nusk_invoice_issued: { label: "فواتير نسك مُصدَرة",  color: "blue",   entityType: "umrah_nusk_invoices" },
+  penalty_created:     { label: "غرامات مُصدرة",        color: "red",    entityType: "umrah_penalties" },
 };
 
 const ALL_LAYERS = Object.keys(CALENDAR_LAYER_META) as CalendarLayer[];
@@ -4073,8 +4080,13 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
     const fromDate = new Date(fromStr + "T00:00:00Z");
     const toDate   = new Date(toStr   + "T00:00:00Z");
     const days = Math.floor((toDate.getTime() - fromDate.getTime()) / 86400000);
-    if (days > 90) {
-      throw new ValidationError("نافذة التقويم محدودة بـ 90 يوماً", { field: "to" });
+    // §4 Phase 2 — cap raised to 366 days so the yearly view can
+    // request a single round-trip per year instead of 12 per-month
+    // calls. The probes are still cheap (COUNT + ARRAY_AGG[1:10] per
+    // day per layer); 366 × 8 layers stays in the single-digit second
+    // budget on a typical season.
+    if (days > 366) {
+      throw new ValidationError("نافذة التقويم محدودة بـ 366 يوماً", { field: "to" });
     }
 
     // Layer whitelist. Operator can pass `layers=pilgrim_arrival,visa_expiring`
@@ -4108,6 +4120,7 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
     const runs: Record<CalendarLayer, Promise<Row[]> | null> = {
       pilgrim_arrival: null, pilgrim_departure: null, visa_expiring: null,
       overstay: null, transport_trip: null, nusk_expiring: null,
+      nusk_invoice_issued: null, penalty_created: null,
     };
 
     if (requestedLayers.includes("pilgrim_arrival")) {
@@ -4191,6 +4204,34 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
             AND n."nuskStatus" NOT IN ('cancelled', 'refunded')
             AND n."deletedAt" IS NULL
           GROUP BY n."expiryDate"`,
+        nuskParams,
+      );
+    }
+    // §4 Phase 2 — finance-flow layers.
+    if (requestedLayers.includes("nusk_invoice_issued")) {
+      runs.nusk_invoice_issued = rawQuery<Row>(
+        `SELECT n."issueDate"::text AS date,
+                COUNT(*)::text AS c,
+                (ARRAY_AGG(n.id ORDER BY n.id))[1:10] AS "sampleIds"
+           FROM umrah_nusk_invoices n
+          WHERE n."companyId" = $1
+            AND n."issueDate" BETWEEN $2::date AND $3::date
+            AND n."nuskStatus" <> 'cancelled'
+            AND n."deletedAt" IS NULL
+          GROUP BY n."issueDate"`,
+        nuskParams,
+      );
+    }
+    if (requestedLayers.includes("penalty_created")) {
+      runs.penalty_created = rawQuery<Row>(
+        `SELECT pen."createdAt"::date::text AS date,
+                COUNT(*)::text AS c,
+                (ARRAY_AGG(pen.id ORDER BY pen.id))[1:10] AS "sampleIds"
+           FROM umrah_penalties pen
+          WHERE pen."companyId" = $1
+            AND pen."createdAt"::date BETWEEN $2::date AND $3::date
+            AND pen."deletedAt" IS NULL
+          GROUP BY pen."createdAt"::date`,
         nuskParams,
       );
     }
