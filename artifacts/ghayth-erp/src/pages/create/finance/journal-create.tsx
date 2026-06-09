@@ -11,7 +11,6 @@ import { Plus, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, NumberField } from "@/components/shared/form-field-wrapper";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { BranchSelect, PostingAccountSelect } from "@/components/shared/entity-selects";
@@ -49,7 +48,6 @@ export default function JournalCreate() {
   const autoNumberRef = useRef(`JE-${Date.now().toString(36).toUpperCase()}`);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [lines, setLines] = useState<JournalLine[]>([
     { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" },
     { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" },
@@ -123,7 +121,9 @@ export default function JournalCreate() {
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <AutoField label="رقم القيد" value={autoNumberRef.current} />
+        {/* #1715 review — the JE number is assigned by the server on save (it
+            ignores any client ref), so don't show a fake JE-… that won't match. */}
+        <AutoField label="رقم القيد" value="يُحدَّد تلقائيًا عند الحفظ" />
         <CreationDateField />
         <BranchSelect
           value={form.branchId ?? ""}
@@ -210,7 +210,6 @@ export default function JournalCreate() {
         </CardContent>
       </Card>
 
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/journal")}>إلغاء</Button>
         <Button onClick={handleSubmit} disabled={!isBalanced || createMut.isPending} rateLimitAware>

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { INVOICE_TYPE_CODES, TAX_CATEGORY_CODES } from "@/lib/finance-type-maps";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,6 @@ import { lineTaxSplit } from "@/lib/tax-math";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAppContext } from "@/contexts/app-context";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
@@ -31,19 +31,6 @@ interface TaxCode {
   isInclusiveDefault?: boolean;
   isActive: boolean;
 }
-
-const INVOICE_TYPE_CODES = [
-  { value: "388", label: "فاتورة ضريبية (388)" },
-  { value: "381", label: "إشعار دائن (381)" },
-  { value: "383", label: "إشعار مدين (383)" },
-];
-
-const TAX_CATEGORY_CODES = [
-  { value: "S", label: "خاضع للضريبة (S)" },
-  { value: "Z", label: "نسبة صفرية (Z)" },
-  { value: "E", label: "معفى (E)" },
-  { value: "O", label: "خارج نطاق الضريبة (O)" },
-];
 
 const PAYMENT_TERMS_OPTIONS = [
   { value: "", label: "اختر شروط الدفع" },
@@ -124,7 +111,6 @@ export default function InvoicesCreate() {
     for (const t of taxCodes) m.set(t.code, t);
     return m;
   }, [taxCodes]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [copied, setCopied] = useState(false);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
@@ -496,8 +482,6 @@ export default function InvoicesCreate() {
           label="معاينة أثر الفاتورة"
         />
       )}
-
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <div className="flex items-center justify-between">

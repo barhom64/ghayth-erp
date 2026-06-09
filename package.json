@@ -20,6 +20,7 @@
     "check:schema-drift": "node scripts/src/check-schema-drift.mjs",
     "check:ghost-rows": "node scripts/src/check-ghost-rows.mjs",
     "check:insert-columns": "node scripts/src/check-insert-columns.mjs",
+    "check:constraint-literals": "node scripts/src/check-check-constraint-literals.mjs",
     "check:sql-ambiguity": "node scripts/src/check-sql-ambiguity.mjs",
     "check:duplicate-migrations": "node scripts/src/check-duplicate-migrations.mjs",
     "audit:migrations": "node scripts/src/check-migration-policy.mjs",
