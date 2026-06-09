@@ -872,9 +872,28 @@ export default function ExpensesCreate() {
               <p className="text-sm text-status-error-foreground">هذا النوع من العمليات يستوجب إرفاق مستند داعم (فاتورة، وصل استلام، أو إشعار تحويل) قبل الحفظ.</p>
             </div>
           )}
+          {/* #1715 (owner feedback) — رفع الملف هو الأساس: رفع مستند يُحقّق شرط
+              «المرفق إلزامي» مباشرةً (يُخزَّن كمرجع في attachmentUrl)؛ حقل الرابط
+              ثانوي لمن لديه رابط جاهز. سابقًا كان الحقل يطلب «رابطًا» ورفع الملف
+              لا يُرسَل ولا يُحقّق الشرط. */}
+          <FileDropZone
+            files={attachments}
+            maxSizeMB={2}
+            label="ارفع المستند الداعم (فاتورة / وصل استلام / إشعار تحويل)"
+            onFilesChange={(f) => {
+              setAttachments(f);
+              setForm((prev) => {
+                if (f.length > 0) return { ...prev, attachmentUrl: f[0].dataUrl };
+                // only clear when the value WAS an uploaded file, not a typed link
+                return prev.attachmentUrl.startsWith("data:") ? { ...prev, attachmentUrl: "" } : prev;
+              });
+            }}
+          />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <TextField label="رابط المرفق" value={form.attachmentUrl} onChange={(v) => setForm({ ...form, attachmentUrl: v })}
-              placeholder="https://... أو مسار الملف" />
+            <TextField label="أو الصق رابط المستند (اختياري)"
+              value={form.attachmentUrl.startsWith("data:") ? "" : form.attachmentUrl}
+              onChange={(v) => setForm({ ...form, attachmentUrl: v })}
+              placeholder="https://... (إن كان المستند مرفوعًا على نظام آخر)" />
             <FormFieldWrapper label="نوع المرفق">
               <Select value={form.attachmentType} onValueChange={(v) => setForm({ ...form, attachmentType: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1010,7 +1029,6 @@ export default function ExpensesCreate() {
           </div>
         )}
 
-        <FileDropZone files={attachments} onFilesChange={setAttachments} />
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center justify-between">
