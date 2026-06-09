@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { PAYMENT_METHOD_OPTIONS as PAYMENT_METHODS, VOUCHER_OPERATIONS } from "@/lib/finance-type-maps";
+import { PAYMENT_METHOD_OPTIONS as PAYMENT_METHODS, VOUCHER_OPERATIONS, type TaxCodeOption } from "@/lib/finance-type-maps";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -28,15 +28,6 @@ import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/fo
 import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect, EmployeeSelect, ClientSelect, SupplierSelect } from "@/components/shared/entity-selects";
 import { Switch } from "@/components/ui/switch";
 
-interface TaxCodeOption {
-  id: number;
-  code: string;
-  name: string;
-  rate: number | string;
-  taxType: "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
-  isInclusiveDefault: boolean;
-  isActive: boolean;
-}
 
 const voucherTaxSplit = amountTaxSplit;
 
@@ -185,7 +176,11 @@ export default function VouchersCreate() {
   const buildVoucherPayload = (extra?: Record<string, unknown>) => ({
     type: form.type,
     operationType: form.operationType,
-    amount: Number(form.amount),
+    // #1715 review — post the NET amount (backend adds VAT on top). With «شامل
+    // الضريبة» on, form.amount is gross, so sending it raw posted gross+VAT — and
+    // the dry-run «معاينة القيد» (same handler) showed it too. taxSplit.net ==
+    // form.amount when NOT inclusive, so only the inclusive case changes.
+    amount: Number(taxSplit.net),
     date: form.date || undefined,
     description: form.description || undefined,
     accountCode: form.accountCode || undefined,
@@ -554,8 +549,22 @@ export default function VouchersCreate() {
             </p>
           </div>
         )}
+        {/* #1715 (owner feedback) — رفع الملف هو الأساس ويُحقّق شرط «المرفق
+            إلزامي» مباشرةً؛ حقل الرابط ثانوي. */}
+        <FileDropZone
+          files={attachments}
+          maxSizeMB={2}
+          label="ارفع المستند الداعم (إشعار تحويل / وصل استلام / فاتورة)"
+          onFilesChange={(f) => {
+            setAttachments(f);
+            if (f.length > 0) setField("attachmentUrl", f[0].dataUrl);
+            else if (form.attachmentUrl.startsWith("data:")) setField("attachmentUrl", "");
+          }}
+        />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField label="رابط المرفق" value={form.attachmentUrl} onChange={(v) => setField("attachmentUrl", v)} placeholder="https://... أو مسار الملف" />
+          <TextField label="أو الصق رابط المستند (اختياري)"
+            value={form.attachmentUrl.startsWith("data:") ? "" : form.attachmentUrl}
+            onChange={(v) => setField("attachmentUrl", v)} placeholder="https://... (إن كان مرفوعًا على نظام آخر)" />
           <FormFieldWrapper label="نوع المرفق">
             <Select value={form.attachmentType} onValueChange={(v) => setField("attachmentType", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -572,9 +581,6 @@ export default function VouchersCreate() {
           </FormFieldWrapper>
         </div>
       </div>
-
-      
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
 
       {/* #1715 §11 — backend dry-run preview of the exact JE that will post. */}
       {preview && preview.lines?.length > 0 && (
