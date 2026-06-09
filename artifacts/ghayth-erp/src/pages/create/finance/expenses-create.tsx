@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PAYMENT_METHOD_OPTIONS_WITH_CUSTODY as PAYMENT_METHODS } from "@/lib/finance-type-maps";
+import { PAYMENT_METHOD_OPTIONS_WITH_CUSTODY as PAYMENT_METHODS, INVOICE_TYPE_CODES, TAX_CATEGORY_CODES, type TaxCodeOption } from "@/lib/finance-type-maps";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -34,16 +34,6 @@ import { LiveImpactPreview } from "@/components/shared/impact-preview";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
-interface TaxCodeOption {
-  id: number;
-  code: string;
-  name: string;
-  rate: number | string;
-  taxType: "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
-  zatcaCategoryCode: string | null;
-  isInclusiveDefault: boolean;
-  isActive: boolean;
-}
 
 const expenseTaxSplit = amountTaxSplit;
 
@@ -100,19 +90,6 @@ const TAX_CATEGORIES = [
 ];
 
 const ATTACHMENT_REQUIRED_TYPES = ["vendor_invoice", "purchase", "custody_settlement", "advance_claim", "legal_fee"];
-
-const INVOICE_TYPE_CODES = [
-  { value: "388", label: "فاتورة ضريبية (388)" },
-  { value: "381", label: "إشعار دائن (381)" },
-  { value: "383", label: "إشعار مدين (383)" },
-];
-
-const TAX_CATEGORY_CODES = [
-  { value: "S", label: "خاضع للضريبة (S)" },
-  { value: "Z", label: "نسبة صفرية (Z)" },
-  { value: "E", label: "معفى (E)" },
-  { value: "O", label: "خارج نطاق الضريبة (O)" },
-];
 
 function generateAutoDescription(params: {
   operationType: string;
@@ -381,7 +358,15 @@ export default function ExpensesCreate() {
       await createMut.mutateAsync({
         accountCode: form.accountCode || undefined,
         sourceAccountCode: form.sourceAccountCode || undefined,
-        amount: Number(form.amount),
+        // #1715 review — post the NET amount. The backend treats `amount` as net
+        // and adds VAT on top; when «شامل الضريبة» is on, form.amount is the GROSS
+        // the operator typed, so sending it raw posted gross+VAT (more than the
+        // on-screen preview). taxSplit.net == form.amount when NOT inclusive, so
+        // this only changes the inclusive case.
+        amount: Number(taxSplit.net),
+        // #1715 review — the «الحالة» selector was rendered but never sent, so the
+        // operator's draft/pending/posted choice was silently dropped.
+        status: form.status,
         description: [
           form.description,
           lineItem.itemName
@@ -872,9 +857,28 @@ export default function ExpensesCreate() {
               <p className="text-sm text-status-error-foreground">هذا النوع من العمليات يستوجب إرفاق مستند داعم (فاتورة، وصل استلام، أو إشعار تحويل) قبل الحفظ.</p>
             </div>
           )}
+          {/* #1715 (owner feedback) — رفع الملف هو الأساس: رفع مستند يُحقّق شرط
+              «المرفق إلزامي» مباشرةً (يُخزَّن كمرجع في attachmentUrl)؛ حقل الرابط
+              ثانوي لمن لديه رابط جاهز. سابقًا كان الحقل يطلب «رابطًا» ورفع الملف
+              لا يُرسَل ولا يُحقّق الشرط. */}
+          <FileDropZone
+            files={attachments}
+            maxSizeMB={2}
+            label="ارفع المستند الداعم (فاتورة / وصل استلام / إشعار تحويل)"
+            onFilesChange={(f) => {
+              setAttachments(f);
+              setForm((prev) => {
+                if (f.length > 0) return { ...prev, attachmentUrl: f[0].dataUrl };
+                // only clear when the value WAS an uploaded file, not a typed link
+                return prev.attachmentUrl.startsWith("data:") ? { ...prev, attachmentUrl: "" } : prev;
+              });
+            }}
+          />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <TextField label="رابط المرفق" value={form.attachmentUrl} onChange={(v) => setForm({ ...form, attachmentUrl: v })}
-              placeholder="https://... أو مسار الملف" />
+            <TextField label="أو الصق رابط المستند (اختياري)"
+              value={form.attachmentUrl.startsWith("data:") ? "" : form.attachmentUrl}
+              onChange={(v) => setForm({ ...form, attachmentUrl: v })}
+              placeholder="https://... (إن كان المستند مرفوعًا على نظام آخر)" />
             <FormFieldWrapper label="نوع المرفق">
               <Select value={form.attachmentType} onValueChange={(v) => setForm({ ...form, attachmentType: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1010,7 +1014,6 @@ export default function ExpensesCreate() {
           </div>
         )}
 
-        <FileDropZone files={attachments} onFilesChange={setAttachments} />
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center justify-between">
