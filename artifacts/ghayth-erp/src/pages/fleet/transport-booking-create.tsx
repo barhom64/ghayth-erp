@@ -15,9 +15,10 @@ import { ArrowLeft, Plus, Users, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
-import { UmrahContextQuestionnaire } from "@/components/shared/umrah-context-questionnaire";
+import { BookingSourceSelector, type BookingSourcePrefill } from "@/components/shared/booking-source-selector";
 import { LocationKindPicker } from "@/components/shared/location-kind-picker";
 import { MultiLegBookingEditor, type BookingLeg, legsToApiPayload } from "@/components/shared/multi-leg-booking-editor";
+import { UmrahContextQuestionnaire } from "@/components/shared/umrah-context-questionnaire";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
@@ -63,6 +64,13 @@ export default function TransportBookingCreate() {
   const [bookingSource, setBookingSource] = useState<string>("manual_entry");
   const [transportServiceType, setTransportServiceType] = useState<string>("cargo_load");
   const [customerName, setCustomerName] = useState("");
+  // #1812 source-driven booking (gap #1) — customer/contract/project IDs
+  // come from the source selector; the form proceeds to text-only edit
+  // after the source is locked.
+  const [customerId, setCustomerId] = useState<string>("");
+  const [contractId, setContractId] = useState<string>("");
+  const [projectId, setProjectId] = useState<string>("");
+  const [recurringTemplateId, setRecurringTemplateId] = useState<string>("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [fromLocationText, setFromLocationText] = useState("");
   const [toLocationText, setToLocationText] = useState("");
@@ -111,6 +119,20 @@ export default function TransportBookingCreate() {
   const [isFlexibleTime, setIsFlexibleTime] = useState(false);
   const [priority, setPriority] = useState<string>("0");
 
+  // #1812 source-driven booking — applyPrefill is defined AFTER all
+  // useState hooks so JS hoisting doesn't break the setter references.
+  const applyPrefill = (p: BookingSourcePrefill) => {
+    setBookingSource(p.bookingSource);
+    if (p.customerId) setCustomerId(String(p.customerId));
+    if (p.customerName) setCustomerName(p.customerName);
+    if (p.customerPhone) setCustomerPhone(p.customerPhone);
+    if (p.contractId) setContractId(String(p.contractId));
+    if (p.projectId) setProjectId(String(p.projectId));
+    if (p.umrahGroupId) setUmrahGroupId(String(p.umrahGroupId));
+    if (p.passengerCount != null) setPassengerCount(String(p.passengerCount));
+    if (p.recurringTemplateId) setRecurringTemplateId(String(p.recurringTemplateId));
+  };
+
   const isCargo = transportServiceType === "cargo_load";
   const isUmrah = transportServiceType === "passenger_umrah";
   const isPassenger = transportServiceType.startsWith("passenger_");
@@ -127,6 +149,11 @@ export default function TransportBookingCreate() {
         bookingNumber: bookingNumber.trim(),
         bookingSource,
         transportServiceType,
+        // #1812 source-driven booking — IDs come from the BookingSourceSelector.
+        customerId: customerId ? Number(customerId) : undefined,
+        contractId: contractId ? Number(contractId) : undefined,
+        projectId: projectId ? Number(projectId) : undefined,
+        recurringTemplateId: recurringTemplateId ? Number(recurringTemplateId) : undefined,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         fromLocationText: fromLocationText.trim() || undefined,
@@ -210,6 +237,15 @@ export default function TransportBookingCreate() {
       <FleetTabsNav />
 
       <form onSubmit={submit} className="space-y-4 max-w-4xl">
+        {/* #1812 source-driven booking (user's gap #1). The selector
+            comes FIRST so the operator picks an upstream source
+            (umrah_group / customer / contract / project) before
+            typing any free-form fields. Source picks auto-fill
+            customer name, phone, passenger count, etc. */}
+        <BookingSourceSelector
+          currentSource={bookingSource}
+          onPrefill={applyPrefill}
+        />
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">البيانات الأساسية</CardTitle>

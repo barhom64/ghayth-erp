@@ -181,18 +181,6 @@ export default function InvoiceDetailPage() {
     { successMessage: "تم ترحيل الفاتورة" },
   );
 
-  // PATCH /finance/invoices/:id/approve — direct approve helper that
-  // skips the ApprovalActions flow (no return-with-notes branch). Used
-  // by the "اعتماد سريع" override button for invoices on the manager
-  // queue where a one-shot approve is faster than the dialog round-trip.
-  // Server enforces the same `finance.invoices:approve` gate.
-  const directApproveInvoiceMut = useApiMutation<unknown, Record<string, never>>(
-    `/finance/invoices/${id}/approve`,
-    "PATCH",
-    [["invoice-detail", id || ""], ["invoices"]],
-    { successMessage: "تم اعتماد الفاتورة مباشرةً" },
-  );
-
   // Loading / error states are now handled by DetailPageLayout.
 
   const lines = invoice?.lines || [];
@@ -269,20 +257,11 @@ export default function InvoiceDetailPage() {
           تعديل ZATCA
         </GuardedButton>
       )}
-      {invoice?.status === "pending" && (
-        <GuardedButton
-          perm="finance:approve"
-          variant="outline"
-          size="sm"
-          onClick={() => directApproveInvoiceMut.mutate({})}
-          disabled={directApproveInvoiceMut.isPending}
-          rateLimitAware
-          className="gap-1"
-        >
-          <CheckCircle className="h-4 w-4" />
-          اعتماد سريع
-        </GuardedButton>
-      )}
+      {/* #1715 correctness review (H1) — removed the dead «اعتماد سريع» button:
+          it was gated on status === "pending" (a status the invoice machine
+          never sets, so it never rendered) AND it called PATCH /approve, which
+          approved WITHOUT posting the GL. Approval goes through the dialog →
+          POST /invoices/:id/approve (GL-posting). */}
       {invoice?.status === "approved" && (
         <GuardedButton
           perm="finance:approve"
