@@ -72,6 +72,13 @@ const DRIVER_SERVICE_PROFILES = [
   "cargo_driver", "umrah_driver", "passenger_driver", "rental_driver", "mixed",
 ] as const;
 
+// #1812 — KSA license-origin alphabet. Tightens the previously freeform
+// `licenseType` text column into the four canonical values used by the
+// KSA traffic department.
+const LICENSE_ORIGIN_VALUES = [
+  "saudi", "gcc", "international", "temporary",
+] as const;
+
 const createVehicleSchema = z.object({
   plateNumber: z.string().min(1),
   make: z.string().min(1),
@@ -109,13 +116,36 @@ const createDriverSchema = z.object({
   licenseExpiry: z.string().optional(),
   licenseType: z.string().optional(),
   licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
+  // #1812 — KSA driver identity fields (user's operational review).
+  // The app layer enforces "saudi → nationalId required" and
+  // "non-saudi → iqamaNumber required"; both columns are nullable
+  // at the DB level so legacy rows stay valid.
+  nationalId: z.string().regex(/^\d{10}$/, "الهوية الوطنية يجب أن تكون 10 أرقام").optional(),
+  iqamaNumber: z.string().regex(/^\d{10}$/, "رقم الإقامة يجب أن يكون 10 أرقام").optional(),
+  licenseIssueDate: z.string().optional(),
+  licenseIssuingAuthority: z.string().max(255).optional(),
+  licenseOrigin: z.enum(LICENSE_ORIGIN_VALUES).optional(),
   // #1733 Pricing tier — service-type specialisation. Used by the
   // dispatch board to surface only drivers whose profile matches the
   // booking's transportServiceType.
   driverServiceProfile: z.enum(DRIVER_SERVICE_PROFILES).optional(),
   employeeId: z.coerce.number().optional(),
   status: z.string().optional(),
-});
+}).refine(
+  (d) => {
+    // Saudi origin → must carry nationalId.
+    // Non-Saudi origin (gcc / international / temporary) → must carry iqamaNumber.
+    if (!d.licenseOrigin) return true; // legacy / not yet specified
+    if (d.licenseOrigin === "saudi") return !!d.nationalId;
+    return !!d.iqamaNumber;
+  },
+  (d) => ({
+    message: d.licenseOrigin === "saudi"
+      ? "الرخصة سعودية — رقم الهوية الوطنية مطلوب"
+      : "السائق غير سعودي — رقم الإقامة مطلوب",
+    path: d.licenseOrigin === "saudi" ? ["nationalId"] : ["iqamaNumber"],
+  }),
+);
 
 const createMaintenanceSchema = z.object({
   vehicleId: z.coerce.number({ required_error: "المركبة مطلوبة" }),
@@ -190,6 +220,12 @@ const updateDriverSchema = z.object({
   status: z.string().optional(),
   licenseType: z.string().optional(),
   licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
+  // #1812 KSA identity (same alphabet as create).
+  nationalId: z.string().regex(/^\d{10}$/, "الهوية الوطنية يجب أن تكون 10 أرقام").optional(),
+  iqamaNumber: z.string().regex(/^\d{10}$/, "رقم الإقامة يجب أن يكون 10 أرقام").optional(),
+  licenseIssueDate: z.string().optional(),
+  licenseIssuingAuthority: z.string().max(255).optional(),
+  licenseOrigin: z.enum(LICENSE_ORIGIN_VALUES).optional(),
   driverServiceProfile: z.enum(DRIVER_SERVICE_PROFILES).optional(),
 });
 
@@ -595,6 +631,8 @@ router.get("/me", authorize({ feature: "fleet.driver.me", action: "view" }), asy
     if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
     const [row] = await rawQuery(
       `SELECT id, name, phone, "licenseNumber", "licenseExpiry", "licenseType",
+              "licenseClass", "nationalId", "iqamaNumber",
+              "licenseIssueDate", "licenseIssuingAuthority", "licenseOrigin",
               status, rating, "totalTrips"
          FROM fleet_drivers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [driver.id, driver.companyId]
@@ -870,8 +908,18 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","licenseClass","driverServiceProfile","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.licenseClass || null, b.driverServiceProfile || null, b.employeeId || null, b.status || 'available']
+      `INSERT INTO fleet_drivers (
+         "companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","licenseClass",
+         "nationalId","iqamaNumber","licenseIssueDate","licenseIssuingAuthority","licenseOrigin",
+         "driverServiceProfile","employeeId",status
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7, $8,$9,$10,$11,$12, $13,$14,$15)`,
+      [
+        scope.companyId, name, phone, licenseNumber,
+        b.licenseExpiry || null, b.licenseType || null, b.licenseClass || null,
+        b.nationalId || null, b.iqamaNumber || null,
+        b.licenseIssueDate || null, b.licenseIssuingAuthority || null, b.licenseOrigin || null,
+        b.driverServiceProfile || null, b.employeeId || null, b.status || 'available',
+      ]
     );
     assertInsert(insertId, "fleet_drivers");
 
@@ -1243,7 +1291,11 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       }
     }
 
-    const trackedFields = ["name","phone","licenseNumber","licenseExpiry","status","licenseType","licenseClass","driverServiceProfile"] as const;
+    const trackedFields = [
+      "name","phone","licenseNumber","licenseExpiry","status","licenseType","licenseClass",
+      "nationalId","iqamaNumber","licenseIssueDate","licenseIssuingAuthority","licenseOrigin",
+      "driverServiceProfile",
+    ] as const;
     const colMap: Record<string, string> = {
       name: "name",
       phone: "phone",
@@ -1251,6 +1303,12 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       licenseExpiry: '"licenseExpiry"',
       status: "status",
       licenseType: '"licenseType"',
+      // #1812 KSA identity fields.
+      nationalId: '"nationalId"',
+      iqamaNumber: '"iqamaNumber"',
+      licenseIssueDate: '"licenseIssueDate"',
+      licenseIssuingAuthority: '"licenseIssuingAuthority"',
+      licenseOrigin: '"licenseOrigin"',
       // #1733 Phase 2 — KSA driving-licence stack used by the eligibility guard.
       licenseClass: '"licenseClass"',
       // #1733 Pricing tier — service-type specialisation.
