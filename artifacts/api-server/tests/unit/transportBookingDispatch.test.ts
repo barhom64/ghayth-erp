@@ -91,7 +91,14 @@ describe("#1733 Booking + Dispatch — migration 266 + schema dump", () => {
     // Conflict-detection indexes — partial on status NOT IN (declined, cancelled).
     expect(post).toContain("idx_dispatch_driver_window");
     expect(post).toContain("idx_dispatch_vehicle_window");
-    expect(post).toContain("status NOT IN ('declined', 'cancelled')");
+    // Postgres 16's planner rewrites `NOT IN (a, b)` into the equivalent
+    // `<> ALL (ARRAY[a, b])` when re-dumped. Accept both forms so the
+    // test survives `pnpm db:dump-schema` regenerations.
+    const hasNotInForm = post.includes("status NOT IN ('declined', 'cancelled')");
+    const hasNotAllForm = /status <> ALL \(ARRAY\['declined'(::text)?, ?'cancelled'(::text)?\]\)/.test(post);
+    expect(hasNotInForm || hasNotAllForm,
+      "dispatch order conflict-detection indexes must filter out declined/cancelled rows",
+    ).toBe(true);
   });
 });
 

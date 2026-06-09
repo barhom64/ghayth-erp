@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DateField } from "@/components/shared/form-field-wrapper";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -14,7 +15,9 @@ import { ArrowLeft, Plus, Users, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
+import { UmrahContextQuestionnaire } from "@/components/shared/umrah-context-questionnaire";
 import { LocationKindPicker } from "@/components/shared/location-kind-picker";
+import { MultiLegBookingEditor, type BookingLeg, legsToApiPayload } from "@/components/shared/multi-leg-booking-editor";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
@@ -63,6 +66,7 @@ export default function TransportBookingCreate() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [fromLocationText, setFromLocationText] = useState("");
   const [toLocationText, setToLocationText] = useState("");
+  // #1812 location-kind + inline geo on booking header (from #1888).
   const [fromLocationKind, setFromLocationKind] = useState<string | undefined>();
   const [toLocationKind, setToLocationKind] = useState<string | undefined>();
   const [fromLat, setFromLat] = useState("");
@@ -70,6 +74,8 @@ export default function TransportBookingCreate() {
   const [toLat, setToLat] = useState("");
   const [toLng, setToLng] = useState("");
   const [showGeoFields, setShowGeoFields] = useState(false);
+  // #1812 multi-leg booking — user's #1 explicit gap.
+  const [legs, setLegs] = useState<BookingLeg[]>([]);
   const [requestedPickupDate, setRequestedPickupDate] = useState("");
   const [requestedPickupTime, setRequestedPickupTime] = useState("");
   const [requestedDeliveryDate, setRequestedDeliveryDate] = useState("");
@@ -131,6 +137,7 @@ export default function TransportBookingCreate() {
         fromLng: fromLng ? Number(fromLng) : undefined,
         toLat: toLat ? Number(toLat) : undefined,
         toLng: toLng ? Number(toLng) : undefined,
+        lines: legs.length > 0 ? legsToApiPayload(legs) : undefined,
         requestedPickupDate: requestedPickupDate || undefined,
         requestedPickupTime: requestedPickupTime || undefined,
         requestedDeliveryDate: requestedDeliveryDate || undefined,
@@ -261,6 +268,29 @@ export default function TransportBookingCreate() {
           </CardContent>
         </Card>
 
+        {/* #1812 umrah context (user's gap #2). Activates ONLY when the
+            service type is passenger_umrah. Walks the operator through
+            the 4 discovery questions (group / flight / hotel / supervisor)
+            and links each "yes" answer to the matching picker/field. */}
+        <UmrahContextQuestionnaire
+          active={isUmrah}
+          umrahGroupId={umrahGroupId}
+          flightNumber={flightNumber}
+          hotelName={hotelName}
+          supervisorName={supervisorName}
+          supervisorPhone={supervisorPhone}
+          routeType={routeType}
+          setUmrahGroupId={setUmrahGroupId}
+          setPassengerCount={setPassengerCount}
+          setCustomerName={setCustomerName}
+          setFlightNumber={setFlightNumber}
+          setHotelName={setHotelName}
+          setSupervisorName={setSupervisorName}
+          setSupervisorPhone={setSupervisorPhone}
+          setRouteType={setRouteType}
+          setBookingSource={setBookingSource}
+        />
+
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">المسار والتوقيت</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -321,26 +351,47 @@ export default function TransportBookingCreate() {
                 {showGeoFields ? "إخفاء إحداثيات GPS" : "أضف إحداثيات GPS (اختياري)"}
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label htmlFor="pickupDate">تاريخ التحميل</Label>
-                <Input id="pickupDate" type="date" value={requestedPickupDate} onChange={(e) => setRequestedPickupDate(e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="pickupTime">وقت التحميل</Label>
-                <Input id="pickupTime" type="time" value={requestedPickupTime} onChange={(e) => setRequestedPickupTime(e.target.value)} />
-              </div>
+            {/* #1812 unified-dates (user's gap #8) — DateField wraps the
+                canonical UnifiedDateInput so date display matches the
+                rest of Ghaith (Hijri toggle, Asia/Riyadh anchor,
+                shared parser). Replaces the native <input type=date>
+                that broke the dashboard / calendar / report formatters. */}
+            <DateField
+              label="تاريخ التحميل" id="pickupDate" mode="date"
+              value={requestedPickupDate}
+              onChange={setRequestedPickupDate}
+            />
+            <div>
+              <Label htmlFor="pickupTime">وقت التحميل</Label>
+              <Input id="pickupTime" type="time" value={requestedPickupTime} onChange={(e) => setRequestedPickupTime(e.target.value)} />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label htmlFor="deliveryDate">تاريخ التسليم</Label>
-                <Input id="deliveryDate" type="date" value={requestedDeliveryDate} onChange={(e) => setRequestedDeliveryDate(e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="deliveryTime">وقت التسليم</Label>
-                <Input id="deliveryTime" type="time" value={requestedDeliveryTime} onChange={(e) => setRequestedDeliveryTime(e.target.value)} />
-              </div>
+            <DateField
+              label="تاريخ التسليم" id="deliveryDate" mode="date"
+              value={requestedDeliveryDate}
+              onChange={setRequestedDeliveryDate}
+            />
+            <div>
+              <Label htmlFor="deliveryTime">وقت التسليم</Label>
+              <Input id="deliveryTime" type="time" value={requestedDeliveryTime} onChange={(e) => setRequestedDeliveryTime(e.target.value)} />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* #1812 multi-leg booking — user's #1 explicit gap. Each leg
+            maps to a transport_booking_lines row; the editor submits
+            the whole array atomically. */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">
+              مقاطع المسار (Multi-leg)
+            </CardTitle>
+            <p className="text-xs text-muted-foreground pt-1">
+              للرحلات متعددة المقاطع (مثل: مطار → فندق → الحرم → المدينة → فندق → مطار).
+              المقاطع اختيارية — اتركها فارغة للرحلة البسيطة.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <MultiLegBookingEditor legs={legs} onChange={setLegs} />
           </CardContent>
         </Card>
 
@@ -513,41 +564,33 @@ export default function TransportBookingCreate() {
               />
               <Label htmlFor="isFlexibleTime" className="cursor-pointer">الوقت مرن</Label>
             </div>
-            <div>
-              <Label>نافذة التحميل — من</Label>
-              <Input type="datetime-local"
-                value={pickupWindowStart}
-                onChange={(e) => setPickupWindowStart(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>نافذة التحميل — إلى</Label>
-              <Input type="datetime-local"
-                value={pickupWindowEnd}
-                onChange={(e) => setPickupWindowEnd(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>نافذة التسليم — من</Label>
-              <Input type="datetime-local"
-                value={dropoffWindowStart}
-                onChange={(e) => setDropoffWindowStart(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>نافذة التسليم — إلى</Label>
-              <Input type="datetime-local"
-                value={dropoffWindowEnd}
-                onChange={(e) => setDropoffWindowEnd(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>موعد ثابت (إن وجد)</Label>
-              <Input type="datetime-local"
-                value={fixedAppointmentTime}
-                onChange={(e) => setFixedAppointmentTime(e.target.value)}
-              />
-            </div>
+            {/* #1812 unified-dates — DateField mode="datetime" replaces
+                the native <input type="datetime-local">. */}
+            <DateField
+              label="نافذة التحميل — من" mode="datetime"
+              value={pickupWindowStart}
+              onChange={setPickupWindowStart}
+            />
+            <DateField
+              label="نافذة التحميل — إلى" mode="datetime"
+              value={pickupWindowEnd}
+              onChange={setPickupWindowEnd}
+            />
+            <DateField
+              label="نافذة التسليم — من" mode="datetime"
+              value={dropoffWindowStart}
+              onChange={setDropoffWindowStart}
+            />
+            <DateField
+              label="نافذة التسليم — إلى" mode="datetime"
+              value={dropoffWindowEnd}
+              onChange={setDropoffWindowEnd}
+            />
+            <DateField
+              label="موعد ثابت (إن وجد)" mode="datetime"
+              value={fixedAppointmentTime}
+              onChange={setFixedAppointmentTime}
+            />
             <div>
               <Label>الأولوية (0 = عادي، أعلى = أهم)</Label>
               <Input type="number" min={0}

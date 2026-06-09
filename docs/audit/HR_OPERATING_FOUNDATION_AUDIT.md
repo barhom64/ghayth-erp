@@ -353,10 +353,10 @@
 | HR-018 | Legacy `custom_roles` → `rbac_roles` migration + ratchet test | 🟢 **مُنفّذ** — migration 269 موجودة + ratchet test يمنع regression | R1 |
 | HR-019 | Org bridges CRUD (team/committee/project members) | 🟢 **مُنفّذ** — 9 endpoints + `/admin/org-memberships` بـ 3 tabs | §B 3 bridges + R2 |
 | HR-020 | Scoring weights configurable + company-wide ranking dashboard | 🟢 **مُنفّذ** — migration 279 + helper engine + `/admin/scoring-weights` بـ 2 tabs | R4 |
-| HR-021 | باقي §K integration tests (GPS pipeline، manual correction، scoring composition) | 🟢 **مُنفّذ** — `hrAttendancePolicyByCategory.dynamic.test.ts` للـ category exemption + `hrFieldTrackingPipeline.dynamic.test.ts` للـ GPS ingestion + breadcrumb ordering | R5 |
-| HR-022 | `pnpm db:dump-schema` regen + commit | 🔴 يحتاج DB local | R6 (1 يوم) |
+| HR-021 | باقي §K integration tests (GPS pipeline، manual correction، scoring composition) | 🟢 **مُكتمل** — 3 dynamic test files: `hrAttendancePolicyByCategory` (worker/manager exemption) + `hrFieldTrackingPipeline` (GPS ingestion + breadcrumb) + `hrManualCorrectionAndScoringComposition` (audit log + multi-source scoring + idempotent UPSERT) | R5 |
+| HR-022 | `pnpm db:dump-schema` regen + commit | 🟢 **مُكتمل** — تم تشغيل Postgres محلي داخل الـ session، تحميل الـ baseline، تطبيق 55 migration بعد الـ dump القديم، dump جديد بـ 425 جدول + 887 index + 504 FK، round-trip test أكّد تحميل نظيف من DB فارغ، check-schema-drift أعطى زيرو drift | R6 |
 
-**ما تبقى:** HR-021 (جزء من السيناريوهات) + HR-022 (يحتاج db local).
+**ما تبقى:** **لا شيء** — كل الـ 8 توصيات (HR-015 → HR-022) مُنفّذة.
 
 ---
 

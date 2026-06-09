@@ -2001,7 +2001,12 @@ invoicesRouter.get("/invoices/:id", authorize({ feature: "finance.invoices", act
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     const lines = await rawQuery<Record<string, unknown>>(`SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id LIMIT 500`, [id]);
     const [payments, journalEntries] = await Promise.all([
-      rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl."accountCode" = '1100' AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
+      // #1715 correctness review (M3) — identify the payment by its PAY-<ref>
+      // JE and sum its single DEBIT leg (the cash/bank inflow = paymentAmount).
+      // The old `accountCode = '1100'` filter dropped bank/other-cash payments
+      // entirely (DR 1110 or a tenant-mapped account); the payment JE has
+      // exactly one debit leg, so SUM(debit) is the amount for ANY cash account.
+      rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
       rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND (je.ref LIKE $2 OR je.ref LIKE $3) ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `JE-${invoice.ref}%`, `PAY-${invoice.ref}%`]),
     ]);
     res.json(maskFields(req, { ...invoice, lines, payments, journalEntries }));
@@ -2312,6 +2317,18 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
+    // #1715 correctness review (H1) — approval MUST post the revenue/AR/VAT JE.
+    // This status-only path posted NO GL, stranding the invoice as "approved"
+    // with no ledger impact (and POST /invoices/:id/post then only flips
+    // approved→posted, so the JE never appeared). The GL-posting approval lives
+    // at POST /invoices/:id/approve — route approvals there. This function keeps
+    // serving reject/return (which correctly post the GL reversal).
+    if (newStatus === "approved") {
+      throw new ConflictError(
+        "اعتماد الفاتورة يجب أن يمرّ عبر مسار الترحيل المحاسبي",
+        { field: "status", fix: "استخدم POST /finance/invoices/:id/approve لاعتماد الفاتورة مع ترحيل القيد (إيراد/ذمم/ضريبة)" }
+      );
+    }
     const { notes } = zodParse(invoiceApprovalActionSchema.safeParse(req.body ?? {}));
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(
@@ -3319,11 +3336,11 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
         : roundTo2(afterDiscountSubtotal + newVat);
 
       const newInvIns = await client.query(
-        `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,date,"discountAmount","discountPercent","taxCode","taxInclusive","amendedFromInvoiceId")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+        `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,"discountAmount","discountPercent","taxCode","taxInclusive","amendedFromInvoiceId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
         [scope.companyId, original.branchId, newClientId, newRef, newDescription, afterDiscountSubtotal,
          vatRate, newVat, newTotal, newDueDate, scope.activeAssignmentId, newNotes,
-         amendDate, newDiscountAmount, newDiscountPercent, newTaxCode, newTaxInclusive, id]
+         newDiscountAmount, newDiscountPercent, newTaxCode, newTaxInclusive, id]
       );
       const newInvoiceId = newInvIns.rows[0].id;
       await client.query(
@@ -3337,7 +3354,7 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
         const price = Number(l.unitPrice || 0);
         const lineTotal = roundTo2(qty * price);
         await client.query(
-          `INSERT INTO invoice_lines ("invoiceId",description,quantity,"unitPrice",total,"accountCode","accountId","costCenterId","activityType","projectId","vehicleId","propertyId","unitId","assetId","employeeId","driverId","contractId","umrahSeasonId","umrahAgentId","productId","taxCode")
+          `INSERT INTO invoice_lines ("invoiceId",description,quantity,"unitPrice","lineTotal","accountCode","accountId","costCenterId","activityType","projectId","vehicleId","propertyId","unitId","assetId","employeeId","driverId","contractId","umrahSeasonId","umrahAgentId","productId","taxCode")
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
           [newInvoiceId, l.description ?? null, qty, price, lineTotal,
            l.accountCode ?? null, l.accountId ?? null, l.costCenterId ?? null,
@@ -3970,7 +3987,12 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     // (same pattern as credit-memo / debit-memo).
     const { financialEngine } = await import("../lib/engines/index.js");
     const [cashCode, advLiabCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "debit", "1100"),
+      // A customer advance is customer money coming IN — resolve the cash/bank
+      // account the SAME way the customer-payment route does (invoice_payment_cash),
+      // not the payroll-payout purpose. The old "payroll_bank_payout" key has no
+      // debit-side mapping, so it fell through to the non-postable header 1100 and
+      // the advance failed to post on tenants whose 1100 isn't a posting account.
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
       financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2400"),
     ]);
 
