@@ -117,18 +117,66 @@ const ROUTE_TYPE_LABEL: Record<string, string> = {
 };
 
 // Same alphabet as backend BOOKING_TRANSITIONS.
-const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: "draft", label: "مسودة" },
-  { value: "submitted", label: "مُقدَّمة" },
-  { value: "pending_approval", label: "بانتظار الاعتماد" },
-  { value: "approved", label: "معتمدة" },
-  { value: "scheduled", label: "مجدولة" },
-  { value: "dispatched", label: "موزّعة" },
-  { value: "in_progress", label: "جارية" },
-  { value: "completed", label: "مكتملة" },
-  { value: "cancelled", label: "ملغاة" },
-  { value: "rejected", label: "مرفوضة" },
-];
+// #1812 operational review — the user explicitly called out:
+//   "الحالات غير مؤتمتة. وجود Dropdown للحالة كآلية التشغيل الأساسية
+//    يعتبر خطأ تصميمياً."
+//
+// Backend cascade (PR #1877) already auto-flips booking.status when the
+// driver acts on the dispatch order:
+//   dispatch.accepted   → booking_line.dispatched   → booking.dispatched
+//   dispatch.executing  → booking_line.in_progress  → booking.in_progress
+//   dispatch.completed  → booking_line.completed    → booking.completed
+//
+// So the UI dropdown must NOT offer those three states — they're system-driven.
+// The dropdown only exposes states the operator legitimately drives:
+//   draft → submitted
+//   submitted → pending_approval
+//   pending_approval → approved | rejected | cancelled
+//   approved → scheduled | cancelled
+//   scheduled → cancelled  (dispatched is auto-cascaded)
+//   in_progress → cancelled  (completion is auto-cascaded)
+//   cancelled / completed / rejected are terminal
+//
+// BOOKING_TRANSITIONS mirrors the server alphabet in transport-bookings.ts.
+// The component filters to "next states reachable from current that are
+// operator-driveable" — auto-cascaded transitions are dropped.
+
+const ALL_STATUS_LABELS: Record<string, string> = {
+  draft:            "مسودة",
+  submitted:        "مُقدَّمة",
+  pending_approval: "بانتظار الاعتماد",
+  approved:         "معتمدة",
+  scheduled:        "مجدولة",
+  dispatched:       "موزّعة (تلقائياً)",
+  in_progress:      "جارية (تلقائياً)",
+  completed:        "مكتملة (تلقائياً)",
+  cancelled:        "ملغاة",
+  rejected:         "مرفوضة",
+};
+
+// States the operator is NOT allowed to set manually — they cascade
+// from driver actions on the dispatch order.
+const AUTO_CASCADED_STATES = new Set(["dispatched", "in_progress", "completed"]);
+
+const BOOKING_TRANSITIONS: Record<string, string[]> = {
+  draft:            ["submitted", "cancelled"],
+  submitted:        ["pending_approval", "cancelled"],
+  pending_approval: ["approved", "rejected", "cancelled"],
+  approved:         ["scheduled", "cancelled"],
+  scheduled:        ["cancelled"],
+  dispatched:       ["cancelled"],
+  in_progress:      ["cancelled"],
+  completed:        [],
+  cancelled:        [],
+  rejected:         [],
+};
+
+function operatorOptionsFor(current: string): { value: string; label: string }[] {
+  const targets = BOOKING_TRANSITIONS[current] ?? [];
+  return targets
+    .filter((t) => !AUTO_CASCADED_STATES.has(t))
+    .map((t) => ({ value: t, label: ALL_STATUS_LABELS[t] ?? t }));
+}
 
 export default function TransportBookingDetail() {
   const [, params] = useRoute("/fleet/transport/bookings/:id");
@@ -240,17 +288,37 @@ export default function TransportBookingDetail() {
           <Link href={`/fleet/transport/bookings/${id}/confirmation`}>
             <Button variant="outline" size="sm">تأكيد الحجز (طباعة / PDF)</Button>
           </Link>
-          <Select
-            value={b.status}
-            onValueChange={(v) => statusMut.mutate({ status: v })}
-          >
-            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* #1812 — auto-cascade dropdown from #1900 (merged). */}
+          {(() => {
+            const opts = operatorOptionsFor(b.status);
+            const isAutoState = AUTO_CASCADED_STATES.has(b.status);
+            return (
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-muted-foreground">الحالة:</div>
+                <PageStatusBadge status={b.status} />
+                {isAutoState && (
+                  <span className="text-xs text-muted-foreground italic">
+                    (تتغير تلقائياً من إجراءات السائق)
+                  </span>
+                )}
+                {opts.length > 0 && (
+                  <Select
+                    value=""
+                    onValueChange={(v) => { if (v) statusMut.mutate({ status: v }); }}
+                  >
+                    <SelectTrigger className="w-44">
+                      <SelectValue placeholder={`تغيير الحالة (${opts.length})`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {opts.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>→ {o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            );
+          })()}
         </div>
       }
     >
