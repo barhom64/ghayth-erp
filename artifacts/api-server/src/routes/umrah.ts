@@ -2501,6 +2501,10 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.created", entity: "umrah_transport", entityId: rows[0]?.id, details: JSON.stringify({ fromLocation: b.fromLocation, toLocation: b.toLocation, cost: b.cost }) }).catch((e) => logger.error(e, "umrah background task failed"));
+    // §10 of #1870 — canonical "transport requested" event for the
+    // Service Contract pattern between Umrah and Fleet (§7). Umrah
+    // is the consumer here; Fleet listens to fulfil the request.
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.requested", entity: "umrah_transport", entityId: rows[0]?.id, after: { fromLocation: b.fromLocation, toLocation: b.toLocation, cost: b.cost } }).catch((e) => logger.error(e, "umrah background task failed"));
 
     // Mirror the WhatsApp dispatch path that fleet trip-create uses
     // (#1354 — driver_assigned). umrah_transport is a parallel trip
