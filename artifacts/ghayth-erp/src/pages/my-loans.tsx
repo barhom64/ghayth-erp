@@ -65,11 +65,11 @@ export default function MyLoans() {
   const [, navigate] = useLocation();
   const { data, isLoading, isError } = useApiQuery<any>(["my-loans"], "/hr/loans/my");
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
   const loans: any[] = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(loans);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const totalAmount = loans.reduce((s: number, l: any) => s + Number(l.amount || 0), 0);
   const remainingAmount = loans
