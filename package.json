@@ -22,6 +22,8 @@
     "check:insert-columns": "node scripts/src/check-insert-columns.mjs",
     "check:constraint-literals": "node scripts/src/check-check-constraint-literals.mjs",
     "check:required-columns": "node scripts/src/check-required-columns.mjs",
+    "check:update-columns": "node scripts/src/check-update-columns.mjs",
+    "check:on-conflict-targets": "node scripts/src/check-on-conflict-targets.mjs",
     "check:sql-ambiguity": "node scripts/src/check-sql-ambiguity.mjs",
     "check:duplicate-migrations": "node scripts/src/check-duplicate-migrations.mjs",
     "audit:migrations": "node scripts/src/check-migration-policy.mjs",

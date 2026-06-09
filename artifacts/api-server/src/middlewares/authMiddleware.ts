@@ -26,6 +26,31 @@ export interface RequestScope {
    * picker is unset → full union of all assigned roles applies.
    */
   selectedRoleKey: string | null;
+  /**
+   * IGOC-001 (migration 284): the department the user's ACTIVE assignment
+   * belongs to. The user may have assignments across multiple departments;
+   * this is the one for the currently-selected (activeAssignmentId). NULL
+   * when the active assignment isn't department-scoped (owner/GM).
+   * Populated into audit_logs.active_department_id on every audited write.
+   */
+  activeDepartmentId: number | null;
+  /**
+   * IGOC-001 (migration 284): when a Super Admin (level ≥ 100) uses the
+   * role-switcher to PREVIEW as another role, this is the REAL userId
+   * behind the impersonated session. NULL when not impersonating (the
+   * actor is operating as themselves). Populated into
+   * audit_logs.impersonation_source_user.
+   */
+  impersonationSourceUser: number | null;
+  /**
+   * IGOC-001 (migration 284): the scope value the authzEngine resolved for
+   * this specific call (self|team|department|department_tree|branch|
+   * branches|company|multi_company|all). Set by authzEngine after grant
+   * resolution; consumed by audit emit so audit_logs.resolved_scope tells
+   * an auditor «which scope window this action ran under».
+   * Mutable — set late in the request lifecycle by authorize().
+   */
+  resolvedScope?: string | null;
 }
 
 declare global {
@@ -84,10 +109,11 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
 
   const [assignment] = await rawQuery<{
     id: number; employeeId: number; companyId: number; branchId: number | null;
+    departmentId: number | null;
     role: string; jobTitleId: number | null; jobTitle: string | null; userName: string;
   }>(
-    `SELECT ea.id, ea."employeeId", ea."companyId", ea."branchId", ea.role,
-            ea."jobTitleId", COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
+    `SELECT ea.id, ea."employeeId", ea."companyId", ea."branchId", ea."departmentId",
+            ea.role, ea."jobTitleId", COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
             COALESCE(e.name, 'مستخدم') AS "userName"
      FROM employee_assignments ea
      JOIN users u ON u."employeeId" = ea."employeeId"
@@ -204,6 +230,13 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
   let selectedRoleKey: string | null = null;
   let effectiveRole = assignment.role;
   let effectiveIsOwner = assignment.role === "owner";
+  // IGOC-001 (migration 284): track impersonation. The actor's REAL
+  // userId is `payload.userId` always; we only flag impersonation when
+  // a Super Admin (level 100 / role=owner) downgrades into a different
+  // role via the picker. That downgrade is the canonical "preview as"
+  // mode the spec calls out. Persisting the source user gives the audit
+  // trail an answer to "was this a real action or a preview?"
+  let impersonationSourceUser: number | null = null;
   if (requestedRoleKey) {
     const ownedRoleRows = await rawQuery<{ roleKey: string }>(
       `SELECT r.role_key AS "roleKey"
@@ -219,6 +252,11 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
       // Downgrade only — picking a non-owner role drops owner bypass for
       // this request. Picking "owner" leaves things as-is.
       if (requestedRoleKey !== "owner") {
+        // If the actor WAS owner before the downgrade, this is a Super
+        // Admin previewing as a lesser role. Audit it.
+        if (assignment.role === "owner") {
+          impersonationSourceUser = payload.userId;
+        }
         effectiveRole = requestedRoleKey;
         effectiveIsOwner = false;
       }
@@ -231,6 +269,8 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
     companyId: assignment.companyId,
     branchId: effectiveBranchId as number,
     activeAssignmentId,
+    activeDepartmentId: assignment.departmentId ?? null,
+    impersonationSourceUser,
     allowedCompanies,
     allowedBranches,
     allowedDepartments,

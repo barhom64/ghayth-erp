@@ -142,6 +142,10 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // cascade to add for a cross-domain bridge.
   "transport-integration.ts",
   "fleet-rules-admin.ts",
+  // transport-route-patterns.ts: #1812 Comment 4663005810 — cargo recurring
+  // schedule template. List/lookup keyed on (companyId, id) — same shape as
+  // the other transport surfaces; buildScopedWhere has no branch cascade to add.
+  "transport-route-patterns.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -226,9 +230,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 113,
+      total: 114,
       helperUsers: 36,
-      manualOnly: 74,
+      manualOnly: 75,
     });
   });
 });

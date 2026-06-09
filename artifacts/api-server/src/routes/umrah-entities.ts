@@ -46,6 +46,7 @@ import {
   createTransportRequestFromUmrah,
   listTransportRequestsForGroup,
 } from "../lib/umrahTransportContract.js";
+import { getDashboardSuggestions } from "../lib/umrahAssistantEngine.js";
 import { logger } from "../lib/logger.js";
 import { renderPrint } from "../lib/print/printService.js";
 
@@ -2063,6 +2064,8 @@ router.post("/invoices/generate", authorize({ feature: "umrah", action: "create"
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { subAgentId, groupIds, seasonId, manualPrices: manualPrices ? Object.keys(manualPrices).length : 0 } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { ref: result.ref, total: result.total, subAgentId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    // §10 of #1870 — canonical name (see eventCatalog).
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sales_invoice.created", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { ref: result.ref, total: result.total, subAgentId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.status(201).json(result);
   } catch (err) { handleRouteError(err, res, "Generate umrah invoice"); }
 });
@@ -4695,6 +4698,21 @@ router.get("/journal/:sourceType/:sourceId", authorize({ feature: "umrah", actio
       isBalanced: Math.abs(totals.debit - totals.credit) < 0.01,
     }));
   } catch (err) { handleRouteError(err, res, "Umrah journal drill-through"); }
+});
+
+// §9 of #1870 — Assistant Suggestions.
+// Returns up-to-six ranked suggestions for the operator's dashboard.
+// Cheap (six COUNTs, parallel); the FE caches with react-query so
+// repeated tab visits are zero-cost.
+router.get("/assistant/suggestions", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
+    const suggestions = await getDashboardSuggestions({
+      companyId: scope.companyId, branchId: scope.branchId, seasonId,
+    });
+    res.json({ data: suggestions });
+  } catch (err) { handleRouteError(err, res, "Assistant suggestions"); }
 });
 
 export default router;
