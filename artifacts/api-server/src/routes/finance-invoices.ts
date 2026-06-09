@@ -3970,7 +3970,12 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     // (same pattern as credit-memo / debit-memo).
     const { financialEngine } = await import("../lib/engines/index.js");
     const [cashCode, advLiabCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "debit", "1100"),
+      // A customer advance is customer money coming IN — resolve the cash/bank
+      // account the SAME way the customer-payment route does (invoice_payment_cash),
+      // not the payroll-payout purpose. The old "payroll_bank_payout" key has no
+      // debit-side mapping, so it fell through to the non-postable header 1100 and
+      // the advance failed to post on tenants whose 1100 isn't a posting account.
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
       financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2400"),
     ]);
 
