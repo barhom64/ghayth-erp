@@ -41,6 +41,10 @@ import {
   simulateCommission,
   calculateAllForCompany,
 } from "../lib/umrahCommissionEngine.js";
+import {
+  createTransportRequestFromUmrah,
+  listTransportRequestsForGroup,
+} from "../lib/umrahTransportContract.js";
 import { logger } from "../lib/logger.js";
 import { renderPrint } from "../lib/print/printService.js";
 
@@ -935,6 +939,65 @@ router.delete("/groups/:id", authorize({ feature: "umrah", action: "delete" }), 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.group.deleted", entity: "umrah_groups", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah groups bg"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete group"); }
+});
+
+// ============================================================================
+// SERVICE CONTRACT — umrah → transport (§7 of #1870)
+// ============================================================================
+//
+// Thin HTTP layer over `lib/umrahTransportContract.ts`. The engine
+// library owns the schema knowledge + event emission; these routes
+// just adapt the request/response shape.
+
+const transportRequestSchema = z.object({
+  seasonId: z.coerce.number().int().positive().optional(),
+  pilgrimsCount: z.coerce.number().int().nonnegative().optional(),
+  dateTime: z.string().optional(),
+  fromLocation: z.string().trim().min(1, "نقطة الانطلاق مطلوبة"),
+  toLocation: z.string().trim().min(1, "الوجهة مطلوبة"),
+  routeType: z.enum([
+    "airport_to_makkah", "makkah_to_madinah", "madinah_to_airport",
+    "makkah_local", "madinah_local", "ziyarah", "custom",
+  ]).optional(),
+  requiredVehicleType: z.string().trim().optional(),
+  flightNumber: z.string().trim().optional(),
+  notes: z.string().trim().optional(),
+});
+
+router.post("/groups/:id/transport-requests", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const groupId = parseId(req.params.id, "id");
+    const b = zodParse(transportRequestSchema.safeParse(req.body));
+    const result = await createTransportRequestFromUmrah(
+      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      {
+        groupId,
+        seasonId: b.seasonId ?? null,
+        pilgrimsCount: b.pilgrimsCount ?? null,
+        dateTime: b.dateTime ?? null,
+        fromLocation: b.fromLocation,
+        toLocation: b.toLocation,
+        routeType: b.routeType ?? null,
+        requiredVehicleType: b.requiredVehicleType ?? null,
+        flightNumber: b.flightNumber ?? null,
+        notes: b.notes ?? null,
+      },
+    );
+    res.status(201).json(result);
+  } catch (err) { handleRouteError(err, res, "Create transport request"); }
+});
+
+router.get("/groups/:id/transport-requests", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const groupId = parseId(req.params.id, "id");
+    const rows = await listTransportRequestsForGroup(
+      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      groupId,
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) { handleRouteError(err, res, "List transport requests"); }
 });
 
 // ============================================================================
@@ -3900,6 +3963,238 @@ router.post("/refund-requests/:id/close", authorize({ feature: "umrah", action: 
     }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "Close refund"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPERATIONAL UMRAH CALENDAR — §4 of #1870
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The Charter says the calendar is "the heart of operations" — not a
+// shapeless month-view, but a layer-aware aggregator that tells the
+// operator "what's happening today, what to chase, what to confirm".
+//
+// Phase 1 (this PR) — six layers driven by existing date columns:
+//
+//   pilgrim_arrival   umrah_pilgrims.arrivalDate    (green)
+//   pilgrim_departure umrah_pilgrims.departureDate  (blue)
+//   visa_expiring     umrah_pilgrims.visaExpiry     (yellow / red ≤7d)
+//   overstay          status='overstayed' or 'overstay_penalized' (red)
+//   transport_trip    umrah_transport.tripDate      (purple)
+//   nusk_expiring     umrah_nusk_invoices.expiryDate (yellow)
+//
+// Each event is aggregated per day so the frontend can render the
+// monthly grid in one pass. `sampleIds` carries the first 10 entity
+// ids so the day-detail panel can drill straight to the records
+// without a second round-trip.
+//
+// Phase 2 (follow-up): group/season/yearly views, calendar actions
+// (open pilgrim, send alert, update arrival), pricing/commission
+// layers, real-time updates via the §10 event stream.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CalendarLayer =
+  | "pilgrim_arrival"
+  | "pilgrim_departure"
+  | "visa_expiring"
+  | "overstay"
+  | "transport_trip"
+  | "nusk_expiring";
+
+export const CALENDAR_LAYER_META: Record<CalendarLayer, {
+  label: string;
+  color: "green" | "yellow" | "red" | "gray" | "blue" | "purple";
+  entityType: string;
+}> = {
+  pilgrim_arrival:   { label: "وصول معتمرين",         color: "green",  entityType: "umrah_pilgrims" },
+  pilgrim_departure: { label: "مغادرة معتمرين",       color: "blue",   entityType: "umrah_pilgrims" },
+  visa_expiring:     { label: "تأشيرات تنتهي",         color: "yellow", entityType: "umrah_pilgrims" },
+  overstay:          { label: "متأخرون عن المغادرة",  color: "red",    entityType: "umrah_pilgrims" },
+  transport_trip:    { label: "رحلات نقل",             color: "purple", entityType: "umrah_transport" },
+  nusk_expiring:     { label: "فواتير نسك تنتهي",     color: "yellow", entityType: "umrah_nusk_invoices" },
+};
+
+const ALL_LAYERS = Object.keys(CALENDAR_LAYER_META) as CalendarLayer[];
+
+router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const fromStr = String(req.query.from ?? "");
+    const toStr   = String(req.query.to ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromStr) || !/^\d{4}-\d{2}-\d{2}$/.test(toStr)) {
+      throw new ValidationError("from/to تاريخ بالشكل YYYY-MM-DD مطلوب");
+    }
+    if (fromStr > toStr) {
+      throw new ValidationError("from يجب أن يكون قبل to");
+    }
+    // Cap the window. A 90-day cap covers a typical season + the
+    // operator's "look ahead one quarter" use case, while keeping
+    // the aggregation queries cheap (6 small COUNTs per layer).
+    const fromDate = new Date(fromStr + "T00:00:00Z");
+    const toDate   = new Date(toStr   + "T00:00:00Z");
+    const days = Math.floor((toDate.getTime() - fromDate.getTime()) / 86400000);
+    if (days > 90) {
+      throw new ValidationError("نافذة التقويم محدودة بـ 90 يوماً", { field: "to" });
+    }
+
+    // Layer whitelist. Operator can pass `layers=pilgrim_arrival,visa_expiring`
+    // to scope the response to only the layers their FE toggle has on.
+    const layersParam = String(req.query.layers ?? "").trim();
+    const requestedLayers: CalendarLayer[] = layersParam
+      ? layersParam.split(",")
+        .map((s) => s.trim())
+        .filter((s): s is CalendarLayer => (ALL_LAYERS as string[]).includes(s))
+      : ALL_LAYERS;
+    if (requestedLayers.length === 0) {
+      res.json({ data: [], layers: CALENDAR_LAYER_META, window: { from: fromStr, to: toStr } });
+      return;
+    }
+
+    const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
+
+    // Per-layer SQL. Each query returns { date, c, sampleIds } per day
+    // within the window, then we collapse to one row per (date, layer).
+    type Row = { date: string; c: string; sampleIds: number[] };
+    const baseParams: unknown[] = [scope.companyId, fromStr, toStr];
+    let pilgrimSeasonClause = "";
+    let transportSeasonClause = "";
+    if (seasonId) {
+      baseParams.push(seasonId);
+      pilgrimSeasonClause = ` AND p."seasonId" = $${baseParams.length}`;
+      transportSeasonClause = ` AND t."seasonId" = $${baseParams.length}`;
+    }
+    const nuskParams: unknown[] = [scope.companyId, fromStr, toStr];
+
+    const runs: Record<CalendarLayer, Promise<Row[]> | null> = {
+      pilgrim_arrival: null, pilgrim_departure: null, visa_expiring: null,
+      overstay: null, transport_trip: null, nusk_expiring: null,
+    };
+
+    if (requestedLayers.includes("pilgrim_arrival")) {
+      runs.pilgrim_arrival = rawQuery<Row>(
+        `SELECT p."arrivalDate"::text AS date,
+                COUNT(*)::text AS c,
+                (ARRAY_AGG(p.id ORDER BY p.id))[1:10] AS "sampleIds"
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1
+            AND p."arrivalDate" BETWEEN $2::date AND $3::date
+            AND p."deletedAt" IS NULL${pilgrimSeasonClause}
+          GROUP BY p."arrivalDate"`,
+        baseParams,
+      );
+    }
+    if (requestedLayers.includes("pilgrim_departure")) {
+      runs.pilgrim_departure = rawQuery<Row>(
+        `SELECT p."departureDate"::text AS date,
+                COUNT(*)::text AS c,
+                (ARRAY_AGG(p.id ORDER BY p.id))[1:10] AS "sampleIds"
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1
+            AND p."departureDate" BETWEEN $2::date AND $3::date
+            AND p."deletedAt" IS NULL${pilgrimSeasonClause}
+          GROUP BY p."departureDate"`,
+        baseParams,
+      );
+    }
+    if (requestedLayers.includes("visa_expiring")) {
+      runs.visa_expiring = rawQuery<Row>(
+        `SELECT p."visaExpiry"::text AS date,
+                COUNT(*)::text AS c,
+                (ARRAY_AGG(p.id ORDER BY p.id))[1:10] AS "sampleIds"
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1
+            AND p."visaExpiry" BETWEEN $2::date AND $3::date
+            AND p.status NOT IN ('departed', 'cancelled')
+            AND p."deletedAt" IS NULL${pilgrimSeasonClause}
+          GROUP BY p."visaExpiry"`,
+        baseParams,
+      );
+    }
+    if (requestedLayers.includes("overstay")) {
+      // Overstaying pilgrims don't have a single date — bucket them
+      // by the operator-supplied `from` so the layer surfaces as
+      // "today's outstanding overstayers" on the day the operator
+      // opens the calendar. Cheap, useful, no schema change.
+      runs.overstay = rawQuery<Row>(
+        `SELECT $2::text AS date,
+                COUNT(*)::text AS c,
+                (ARRAY_AGG(p.id ORDER BY p.id))[1:10] AS "sampleIds"
+           FROM umrah_pilgrims p
+          WHERE p."companyId" = $1
+            AND p.status IN ('overstayed', 'overstay_penalized')
+            AND p."deletedAt" IS NULL${pilgrimSeasonClause}
+          HAVING COUNT(*) > 0`,
+        baseParams,
+      );
+    }
+    if (requestedLayers.includes("transport_trip")) {
+      runs.transport_trip = rawQuery<Row>(
+        `SELECT t."tripDate"::text AS date,
+                COUNT(*)::text AS c,
+                (ARRAY_AGG(t.id ORDER BY t.id))[1:10] AS "sampleIds"
+           FROM umrah_transport t
+          WHERE t."companyId" = $1
+            AND t."tripDate" BETWEEN $2::date AND $3::date
+            AND t."deletedAt" IS NULL${transportSeasonClause}
+          GROUP BY t."tripDate"`,
+        baseParams,
+      );
+    }
+    if (requestedLayers.includes("nusk_expiring")) {
+      runs.nusk_expiring = rawQuery<Row>(
+        `SELECT n."expiryDate"::text AS date,
+                COUNT(*)::text AS c,
+                (ARRAY_AGG(n.id ORDER BY n.id))[1:10] AS "sampleIds"
+           FROM umrah_nusk_invoices n
+          WHERE n."companyId" = $1
+            AND n."expiryDate" BETWEEN $2::date AND $3::date
+            AND n."nuskStatus" NOT IN ('cancelled', 'refunded')
+            AND n."deletedAt" IS NULL
+          GROUP BY n."expiryDate"`,
+        nuskParams,
+      );
+    }
+
+    // Parallel awaits — each layer is an independent COUNT.
+    const settled = await Promise.all(
+      ALL_LAYERS.map(async (layer) => {
+        const p = runs[layer];
+        if (!p) return null;
+        const rows = await p;
+        return { layer, rows };
+      }),
+    );
+
+    const events: Array<{
+      date: string;
+      layer: CalendarLayer;
+      count: number;
+      color: string;
+      label: string;
+      entityType: string;
+      sampleIds: number[];
+    }> = [];
+    for (const result of settled) {
+      if (!result) continue;
+      const meta = CALENDAR_LAYER_META[result.layer];
+      for (const r of result.rows) {
+        events.push({
+          date: r.date,
+          layer: result.layer,
+          count: Number(r.c),
+          color: meta.color,
+          label: meta.label,
+          entityType: meta.entityType,
+          sampleIds: r.sampleIds ?? [],
+        });
+      }
+    }
+
+    res.json({
+      data: events,
+      layers: CALENDAR_LAYER_META,
+      window: { from: fromStr, to: toStr },
+    });
+  } catch (err) { handleRouteError(err, res, "Calendar events"); }
 });
 
 export default router;

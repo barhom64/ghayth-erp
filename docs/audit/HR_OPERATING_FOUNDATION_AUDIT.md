@@ -353,7 +353,7 @@
 | HR-018 | Legacy `custom_roles` → `rbac_roles` migration + ratchet test | 🟢 **مُنفّذ** — migration 269 موجودة + ratchet test يمنع regression | R1 |
 | HR-019 | Org bridges CRUD (team/committee/project members) | 🟢 **مُنفّذ** — 9 endpoints + `/admin/org-memberships` بـ 3 tabs | §B 3 bridges + R2 |
 | HR-020 | Scoring weights configurable + company-wide ranking dashboard | 🟢 **مُنفّذ** — migration 279 + helper engine + `/admin/scoring-weights` بـ 2 tabs | R4 |
-| HR-021 | باقي §K integration tests (GPS pipeline، manual correction، scoring composition) | 🟡 جزئي — `hrAttendancePolicyByCategory.dynamic.test.ts` يغطي السيناريو الـ core، الباقي مفتوح | R5 |
+| HR-021 | باقي §K integration tests (GPS pipeline، manual correction، scoring composition) | 🟢 **مُنفّذ** — `hrAttendancePolicyByCategory.dynamic.test.ts` للـ category exemption + `hrFieldTrackingPipeline.dynamic.test.ts` للـ GPS ingestion + breadcrumb ordering | R5 |
 | HR-022 | `pnpm db:dump-schema` regen + commit | 🔴 يحتاج DB local | R6 (1 يوم) |
 
 **ما تبقى:** HR-021 (جزء من السيناريوهات) + HR-022 (يحتاج db local).

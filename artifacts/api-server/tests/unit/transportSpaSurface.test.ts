@@ -67,13 +67,19 @@ describe("#1733 Comment 9 — booking detail SPA page", () => {
     expect(BOOKING_DETAIL).toContain("أوامر التوزيع");
   });
 
-  it("exposes status transitions for all 10 booking states", () => {
+  it("knows all 10 booking states (Arabic labels in ALL_STATUS_LABELS)", () => {
+    // #1812 — the operator-driveable Select now hides auto-cascaded
+    // states (dispatched/in_progress/completed), so they no longer
+    // appear as `value: "..."` literals. But the UI must still know
+    // their Arabic labels for the read-only badge. Assert via the
+    // unified labels map declared on booking-detail.tsx.
     for (const v of [
       "draft", "submitted", "pending_approval", "approved",
       "scheduled", "dispatched", "in_progress", "completed",
       "cancelled", "rejected",
     ]) {
-      expect(BOOKING_DETAIL, `status ${v} missing`).toContain(`value: "${v}"`);
+      expect(BOOKING_DETAIL, `label for ${v} missing from ALL_STATUS_LABELS`)
+        .toMatch(new RegExp(`\\b${v}:\\s*"`));
     }
   });
 
