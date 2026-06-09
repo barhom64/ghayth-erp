@@ -61,6 +61,11 @@ const UmrahExemptPilgrims = lazy(() => import("@/pages/umrah/exempt-pilgrims"));
 // Compliance dashboard — folds exempt + visa-expiring + overstay +
 // unpaid penalties into 4 KPI tiles + drill-down links.
 const UmrahCompliance = lazy(() => import("@/pages/umrah/compliance"));
+// §3 ext — legacy orphan-pilgrim recovery (#1870 review 3.ب).
+// Sweeps umrah_pilgrims directly for NULL agentId/groupId/subAgentId
+// independent of batch lineage, so 1,363-row legacy damage from the
+// pre-#1867 doImport path can be recovered without "re-import".
+const UmrahOrphanPilgrims = lazy(() => import("@/pages/umrah/orphan-pilgrims"));
 const UmrahCalendar = lazy(() => import("@/pages/umrah/calendar"));
 // Reports hub + new operational reports.
 const UmrahReportsHub = lazy(() => import("@/pages/umrah/reports/index"));
@@ -112,6 +117,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
   { path: "/umrah/exempt-pilgrims", component: UmrahExemptPilgrims, module: "operations" },
   { path: "/umrah/compliance", component: UmrahCompliance, module: "operations" },
+  { path: "/umrah/orphan-pilgrims", component: UmrahOrphanPilgrims, module: "operations" },
   { path: "/umrah/calendar", component: UmrahCalendar, module: "operations" },
   { path: "/umrah/reports", component: UmrahReportsHub, module: "operations" },
   { path: "/umrah/reports/agent-balances", component: UmrahAgentBalancesReport, module: "operations" },
