@@ -26,6 +26,7 @@ import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, build
 import { EMPTY_ALLOCATION_TARGET, buildOperationalEffectsPayload, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
 import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
 import { DOCUMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, POSTING_STATUS_LABELS } from "@/lib/finance/status-model";
+import { deriveRelatedEntity } from "@/lib/finance/scenario-model";
 import { useAppContext } from "@/contexts/app-context";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
@@ -115,34 +116,6 @@ function generateAutoDescription(params: {
   return typeMap[operationType] || `عملية مالية${entityLabel}${amountLabel}`;
 }
 
-// #1945 — the linked entity is derived from the «ربط العملية بـ» scenario
-// (allocTarget), the single source. The legacy duplicate «الجهة المرتبطة»
-// pair was removed; this maps the scenario's allocation dims onto the
-// relatedEntityType/Id the backend persists, plus the context-card kind.
-function deriveRelatedFromTarget(t: AllocationTargetValue): {
-  type: "" | "employee" | "vehicle" | "supplier" | "contract" | "property";
-  id: string;
-} {
-  const a = t.allocation;
-  switch (t.target) {
-    case "vehicle":
-    case "vehicle_maintenance":
-    case "transport_trip":
-      return { type: a.vehicleId ? "vehicle" : "", id: a.vehicleId ?? "" };
-    case "supplier":
-      return { type: a.vendorId ? "supplier" : "", id: a.vendorId ?? "" };
-    case "employee":
-      return { type: a.employeeId ? "employee" : "", id: a.employeeId ?? "" };
-    case "property":
-    case "property_maintenance":
-    case "unit":
-      return { type: a.unitId ? "property" : "", id: a.unitId ?? "" };
-    case "contract":
-      return { type: a.contractId ? "contract" : "", id: a.contractId ?? "" };
-    default:
-      return { type: "", id: "" };
-  }
-}
 
 export default function ExpensesCreate() {
   const [, setLocation] = useLocation();
@@ -238,7 +211,7 @@ export default function ExpensesCreate() {
   // feed the same `allocation` dim payload the backend already consumes.
   const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
   // #1945 — the single linked-entity source: derived from the scenario panel.
-  const derivedRelated = deriveRelatedFromTarget(allocTarget);
+  const derivedRelated = deriveRelatedEntity(allocTarget.target, allocTarget.allocation);
   const derivedRelatedName = (() => {
     const { type, id } = derivedRelated;
     if (!id) return "";

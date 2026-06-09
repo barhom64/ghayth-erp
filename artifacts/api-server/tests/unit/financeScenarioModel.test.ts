@@ -6,6 +6,7 @@ import {
   resolveScenario,
   TARGET_HINTS,
   resolveTargetHint,
+  deriveRelatedEntity,
   type FinanceDomain,
   type FinanceScenario,
   type FinanceTarget,
@@ -170,5 +171,30 @@ describe("finance scenario model — target hints ⇄ backend", () => {
     for (const t of ["vehicle_maintenance", "property_maintenance", "fixed_asset"] as FinanceTarget[]) {
       expect(TARGET_HINTS[t].effect).toBeTruthy();
     }
+  });
+});
+
+// The expense AND voucher forms derive the persisted relatedEntity from this
+// single function — no per-form duplicate picker. Locks the dim→entity map.
+describe("finance scenario model — linked entity derivation", () => {
+  it("maps each entity-bearing target to its persisted relatedEntity", () => {
+    expect(deriveRelatedEntity("vehicle", { vehicleId: "7" })).toEqual({ type: "vehicle", id: "7" });
+    expect(deriveRelatedEntity("vehicle_maintenance", { vehicleId: "7" })).toEqual({ type: "vehicle", id: "7" });
+    expect(deriveRelatedEntity("supplier", { vendorId: "3" })).toEqual({ type: "supplier", id: "3" });
+    expect(deriveRelatedEntity("customer", { clientId: "9" })).toEqual({ type: "customer", id: "9" });
+    expect(deriveRelatedEntity("employee", { employeeId: "5" })).toEqual({ type: "employee", id: "5" });
+    expect(deriveRelatedEntity("unit", { unitId: "2" })).toEqual({ type: "property", id: "2" });
+    expect(deriveRelatedEntity("property_maintenance", { unitId: "2" })).toEqual({ type: "property", id: "2" });
+    expect(deriveRelatedEntity("contract", { contractId: "4" })).toEqual({ type: "contract", id: "4" });
+  });
+
+  it("returns an empty entity for targets without a person/asset dim", () => {
+    expect(deriveRelatedEntity("project", { vehicleId: "7" })).toEqual({ type: "", id: "" });
+    expect(deriveRelatedEntity("umrah_season", {})).toEqual({ type: "", id: "" });
+    expect(deriveRelatedEntity("none", {})).toEqual({ type: "", id: "" });
+  });
+
+  it("is empty when the relevant dim is missing", () => {
+    expect(deriveRelatedEntity("supplier", {})).toEqual({ type: "", id: "" });
   });
 });

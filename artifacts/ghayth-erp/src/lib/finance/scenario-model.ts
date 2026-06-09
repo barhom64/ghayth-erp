@@ -334,3 +334,56 @@ export const TARGET_HINTS: Record<FinanceTarget, TargetHint> = {
 export function resolveTargetHint(target: string): TargetHint | null {
   return TARGET_HINTS[target as FinanceTarget] ?? null;
 }
+
+// ── linked entity derivation ────────────────────────────────────────────────
+//
+// The legacy expense / voucher forms each had their OWN «الجهة المرتبطة»
+// picker on top of the scenario panel — a duplicate dimension. Both now derive
+// the linked entity from the chosen scenario via this one function, so the
+// relatedEntityType/Id the backend persists has a single, shared source.
+
+export type RelatedKind =
+  | ""
+  | "employee"
+  | "vehicle"
+  | "supplier"
+  | "customer"
+  | "contract"
+  | "property";
+
+/** The allocation dimensions a target may carry (subset that maps to an entity). */
+export interface RelatedDims {
+  vehicleId?: string;
+  vendorId?: string;
+  employeeId?: string;
+  clientId?: string;
+  unitId?: string;
+  contractId?: string;
+}
+
+/** Map a chosen target + its allocation dims onto the persisted related entity. */
+export function deriveRelatedEntity(
+  target: string,
+  a: RelatedDims,
+): { type: RelatedKind; id: string } {
+  switch (target as FinanceTarget) {
+    case "vehicle":
+    case "vehicle_maintenance":
+    case "transport_trip":
+      return { type: a.vehicleId ? "vehicle" : "", id: a.vehicleId ?? "" };
+    case "supplier":
+      return { type: a.vendorId ? "supplier" : "", id: a.vendorId ?? "" };
+    case "customer":
+      return { type: a.clientId ? "customer" : "", id: a.clientId ?? "" };
+    case "employee":
+      return { type: a.employeeId ? "employee" : "", id: a.employeeId ?? "" };
+    case "property":
+    case "property_maintenance":
+    case "unit":
+      return { type: a.unitId ? "property" : "", id: a.unitId ?? "" };
+    case "contract":
+      return { type: a.contractId ? "contract" : "", id: a.contractId ?? "" };
+    default:
+      return { type: "", id: "" };
+  }
+}
