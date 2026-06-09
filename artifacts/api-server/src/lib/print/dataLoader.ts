@@ -227,6 +227,8 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "fleet_trip":
     case "trip":
       return await loadFleetTrip(companyId, entityId);
+    case "transport_booking_confirmation":
+      return await loadTransportBookingConfirmation(companyId, entityId);
     case "cargo_manifest":
     case "manifest":
       return await loadCargoManifest(companyId, entityId);
@@ -383,6 +385,7 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   // Fleet
   vehicle: "fleet_vehicles",
   fleet_trip: "fleet_trips",
+  transport_booking_confirmation: "transport_bookings",
   fuel: "fleet_fuel_logs",
   // The fleet driver master is in `fleet_drivers` — there's no `drivers` table.
   // Earlier wave (#1286) misnamed this; left a 404 when SPA hit the print
@@ -1168,6 +1171,94 @@ async function loadVehicle(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => []);
   return { entity: vehicle, insurance: insurance[0] ?? null };
+}
+
+// #1812 — booking confirmation document (user's gap #10). Loads the
+// booking header + lines + dispatch (with vehicle/driver) and emits a
+// QR data-URL for the customer's scan-to-verify use case. The print
+// preset (templateResolver.ts) renders the corresponding template.
+async function loadTransportBookingConfirmation(companyId: number, id: string) {
+  const [booking] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM transport_bookings
+       WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+       LIMIT 1`,
+    [id, companyId],
+  ).catch(() => [null]);
+  if (!booking) return { entity: { id } };
+  const lines = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM transport_booking_lines
+       WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
+    [id],
+  ).catch(() => []);
+  const dispatchOrders = await rawQuery<Record<string, unknown>>(
+    `SELECT d.*, v."plateNumber" AS "vehiclePlate",
+            dr.name AS "driverName", dr.phone AS "driverPhone"
+       FROM transport_dispatch_orders d
+       LEFT JOIN fleet_vehicles v ON v.id = d."vehicleId" AND v."companyId" = d."companyId"
+       LEFT JOIN fleet_drivers dr ON dr.id = d."driverId" AND dr."companyId" = d."companyId"
+      WHERE d."bookingId" = $1
+      ORDER BY d."scheduledStartAt" ASC`,
+    [id],
+  ).catch(() => []);
+  const qrPayload = `GHAYTH|TRANSPORT_BOOKING|${booking.bookingNumber}|${id}|${companyId}`;
+  let qrDataUrl: string | null = null;
+  try {
+    qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 200, margin: 1 });
+  } catch (err) {
+    logger.warn({ err }, "[print/loadTransportBookingConfirmation] QR generation failed");
+  }
+  // Render an HTML-string per-leg block + per-dispatch block so the
+  // preset can `{{{entity.legsHtml}}}` it. Avoids needing per-row
+  // Handlebars iteration in the preset template.
+  const legsHtml = lines.length === 0
+    ? '<div style="color:#64748b">— لا توجد مقاطع تفصيلية —</div>'
+    : `<table style="width:100%;border-collapse:collapse">
+         <thead><tr style="background:#f8fafc">
+           <th style="border:1px solid #e2e8f0;padding:4px">#</th>
+           <th style="border:1px solid #e2e8f0;padding:4px">من</th>
+           <th style="border:1px solid #e2e8f0;padding:4px">إلى</th>
+           <th style="border:1px solid #e2e8f0;padding:4px">الانطلاق</th>
+           <th style="border:1px solid #e2e8f0;padding:4px">الوصول</th>
+         </tr></thead>
+         <tbody>
+           ${lines.map((l) => `
+             <tr>
+               <td style="border:1px solid #e2e8f0;padding:4px;font-family:monospace">${l.lineNumber ?? ""}</td>
+               <td style="border:1px solid #e2e8f0;padding:4px">${l.fromLocationText ?? "—"}</td>
+               <td style="border:1px solid #e2e8f0;padding:4px">${l.toLocationText ?? "—"}</td>
+               <td style="border:1px solid #e2e8f0;padding:4px;font-size:11px">${l.scheduledPickupAt ?? "—"}</td>
+               <td style="border:1px solid #e2e8f0;padding:4px;font-size:11px">${l.scheduledDeliveryAt ?? "—"}</td>
+             </tr>`).join("")}
+         </tbody>
+       </table>`;
+  const dispatchHtml = dispatchOrders.length === 0
+    ? '<div style="color:#64748b">— لم يُسنَد بعد —</div>'
+    : `<table style="width:100%;border-collapse:collapse">
+         <thead><tr style="background:#f8fafc">
+           <th style="border:1px solid #e2e8f0;padding:4px">المركبة</th>
+           <th style="border:1px solid #e2e8f0;padding:4px">السائق</th>
+           <th style="border:1px solid #e2e8f0;padding:4px">هاتف السائق</th>
+           <th style="border:1px solid #e2e8f0;padding:4px">البداية</th>
+         </tr></thead>
+         <tbody>
+           ${dispatchOrders.map((d) => `
+             <tr>
+               <td style="border:1px solid #e2e8f0;padding:4px;font-family:monospace">${d.vehiclePlate ?? "—"}</td>
+               <td style="border:1px solid #e2e8f0;padding:4px">${d.driverName ?? "—"}</td>
+               <td style="border:1px solid #e2e8f0;padding:4px;font-family:monospace">${d.driverPhone ?? "—"}</td>
+               <td style="border:1px solid #e2e8f0;padding:4px;font-size:11px">${d.scheduledStartAt ?? ""}</td>
+             </tr>`).join("")}
+         </tbody>
+       </table>`;
+  return {
+    entity: {
+      ...booking,
+      legsHtml,
+      dispatchHtml,
+      qrDataUrl,
+      qrPayload,
+    },
+  };
 }
 
 async function loadFleetTrip(companyId: number, id: string) {

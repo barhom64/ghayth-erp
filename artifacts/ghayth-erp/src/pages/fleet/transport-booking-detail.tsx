@@ -283,15 +283,14 @@ export default function TransportBookingDetail() {
           <Link href="/fleet/transport/dispatch">
             <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />لوحة التوزيع</Button>
           </Link>
-          {/* #1812 — auto-cascade dropdown. Shows current status as
-              read-only badge + operator-driveable transitions only
-              (auto-cascaded states are dropped per BOOKING_TRANSITIONS
-              filter). If there are no manual transitions, the badge
-              shows alone with a small "تتغير تلقائياً" hint so the
-              operator knows the system is driving this state. */}
+          {/* #1812 — booking confirmation (gap #10). Opens a print-friendly
+              Arabic confirmation page with QR for customer pickup. */}
+          <Link href={`/fleet/transport/bookings/${id}/confirmation`}>
+            <Button variant="outline" size="sm">تأكيد الحجز (طباعة / PDF)</Button>
+          </Link>
+          {/* #1812 — auto-cascade dropdown from #1900 (merged). */}
           {(() => {
             const opts = operatorOptionsFor(b.status);
-            const currentLabel = ALL_STATUS_LABELS[b.status] ?? b.status;
             const isAutoState = AUTO_CASCADED_STATES.has(b.status);
             return (
               <div className="flex items-center gap-2">
@@ -305,18 +304,14 @@ export default function TransportBookingDetail() {
                 {opts.length > 0 && (
                   <Select
                     value=""
-                    onValueChange={(v) => {
-                      if (v) statusMut.mutate({ status: v });
-                    }}
+                    onValueChange={(v) => { if (v) statusMut.mutate({ status: v }); }}
                   >
                     <SelectTrigger className="w-44">
                       <SelectValue placeholder={`تغيير الحالة (${opts.length})`} />
                     </SelectTrigger>
                     <SelectContent>
                       {opts.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          → {o.label}
-                        </SelectItem>
+                        <SelectItem key={o.value} value={o.value}>→ {o.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
