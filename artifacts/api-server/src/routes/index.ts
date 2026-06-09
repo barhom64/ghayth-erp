@@ -80,6 +80,7 @@ import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
 import { transportPlanningRouter } from "./transport-planning.js";
 import { transportIntegrationRouter } from "./transport-integration.js";
+import { transportRoutePatternsRouter } from "./transport-route-patterns.js";
 import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
@@ -411,6 +412,8 @@ router.use(requireModule("fleet"), requireGuards("financial"), transportPlanning
 // feed for the central calendar. The user's governing comment: "النقل
 // ليس جزيرة" — this router is the proof.
 router.use(requireModule("fleet"), requireGuards("financial"), transportIntegrationRouter);
+// #1812 Comment 4663005810 — cargo recurring route patterns.
+router.use(requireModule("fleet"), requireGuards("financial"), transportRoutePatternsRouter);
 router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);

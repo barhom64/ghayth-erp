@@ -15,6 +15,7 @@ import { Link } from "wouter";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { UmrahJournalDrillCard } from "@/components/shared/umrah-journal-drill-card";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلقة",
@@ -272,6 +273,15 @@ export default function UmrahPenaltyDetail() {
           </Card>
         )}
       </div>
+
+      {/* §6 drill-through — line-level GL trace for the penalty's posted JE.
+          The audit-trail card above only links to the JE; this card opens
+          it inline with debit/credit + dimensions. */}
+      {id && (
+        <div className="md:col-span-3">
+          <UmrahJournalDrillCard sourceType="umrah_penalties" sourceId={id} />
+        </div>
+      )}
 
       {id && <EntityComments entityType="umrah-penalty" entityId={id} />}
       {id && <EntityTags entityType="umrah-penalty" entityId={id} />}

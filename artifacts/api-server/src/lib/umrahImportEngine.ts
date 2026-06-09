@@ -1018,6 +1018,15 @@ export async function confirmMutamersImport(
       }).catch((e) => logger.error(e, "umrah import event emit failed"));
     }
 
+    // §10 of #1870 — canonical event. Emitted ALONGSIDE the legacy
+    // `umrah.mutamers.imported` event so existing listeners keep
+    // firing; future code should subscribe to the canonical name.
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.import.confirmed", entity: "umrah_import_batches", entityId: batchId,
+      after: { fileType: "mutamers", newCount, updatedCount, skippedCount, errorCount },
+    }).catch((e) => logger.error(e, "umrah import event emit failed"));
+
     return {
       batchId, newCount, updatedCount, skippedCount, errorCount, financialImpactCount,
       unlinkedAgentCount, unlinkedGroupCount, unlinkedSubAgentCount,
@@ -1241,6 +1250,15 @@ export async function confirmVouchersImport(
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "umrah.vouchers.imported", entity: "umrah_import_batches", entityId: batchId,
       after: { newCount, updatedCount, skippedCount, errorCount },
+    }).catch((e) => logger.error(e, "umrah import event emit failed"));
+
+    // §10 of #1870 — canonical event. Emitted ALONGSIDE the legacy
+    // `umrah.vouchers.imported` event; the catalog entry documents
+    // this as the spec-mandated name.
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.import.confirmed", entity: "umrah_import_batches", entityId: batchId,
+      after: { fileType: "vouchers", newCount, updatedCount, skippedCount, errorCount },
     }).catch((e) => logger.error(e, "umrah import event emit failed"));
 
     return {
