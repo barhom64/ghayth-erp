@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { useApiMutation } from "@/lib/api";
+import { AccountSelect } from "@/components/shared/entity-selects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -31,9 +31,6 @@ export default function RecurringJournalsCreatePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { fieldErrors, validate } = useFieldErrors();
-
-  const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
-  const accounts = accountsData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_recurring_journals_create", {
     name: "",
@@ -74,9 +71,6 @@ export default function RecurringJournalsCreatePage() {
       onSuccess: () => { clearDraft(); setLocation("/finance/recurring-journals"); },
     },
   );
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
 
   function updateLine(idx: number, field: keyof TemplateLine, value: string) {
     setLines((prev) => {
@@ -174,22 +168,11 @@ export default function RecurringJournalsCreatePage() {
             </div>
             {lines.map((line, idx) => (
               <div key={idx} className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2">
-                <Select
-                  value={line.accountCode || "_none"}
-                  onValueChange={(v) => updateLine(idx, "accountCode", v === "_none" ? "" : v)}
-                >
-                  <SelectTrigger className="text-sm h-9">
-                    <SelectValue placeholder="اختر الحساب" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">اختر الحساب</SelectItem>
-                    {accounts.map((a: any) => (
-                      <SelectItem key={a.code || a.id} value={String(a.code || a.id)}>
-                        {a.code} - {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <AccountSelect
+                  value={line.accountCode}
+                  onChange={(v) => updateLine(idx, "accountCode", v)}
+                  label="" allowCreate={false}
+                />
                 <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="البيان" />
                 <NumberField label="مدين" hideLabel min={0} value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
                 <NumberField label="دائن" hideLabel min={0} value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />

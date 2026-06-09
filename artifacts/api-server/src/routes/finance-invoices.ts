@@ -3319,11 +3319,11 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
         : roundTo2(afterDiscountSubtotal + newVat);
 
       const newInvIns = await client.query(
-        `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,date,"discountAmount","discountPercent","taxCode","taxInclusive","amendedFromInvoiceId")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+        `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,"discountAmount","discountPercent","taxCode","taxInclusive","amendedFromInvoiceId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
         [scope.companyId, original.branchId, newClientId, newRef, newDescription, afterDiscountSubtotal,
          vatRate, newVat, newTotal, newDueDate, scope.activeAssignmentId, newNotes,
-         amendDate, newDiscountAmount, newDiscountPercent, newTaxCode, newTaxInclusive, id]
+         newDiscountAmount, newDiscountPercent, newTaxCode, newTaxInclusive, id]
       );
       const newInvoiceId = newInvIns.rows[0].id;
       await client.query(
@@ -3337,7 +3337,7 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
         const price = Number(l.unitPrice || 0);
         const lineTotal = roundTo2(qty * price);
         await client.query(
-          `INSERT INTO invoice_lines ("invoiceId",description,quantity,"unitPrice",total,"accountCode","accountId","costCenterId","activityType","projectId","vehicleId","propertyId","unitId","assetId","employeeId","driverId","contractId","umrahSeasonId","umrahAgentId","productId","taxCode")
+          `INSERT INTO invoice_lines ("invoiceId",description,quantity,"unitPrice","lineTotal","accountCode","accountId","costCenterId","activityType","projectId","vehicleId","propertyId","unitId","assetId","employeeId","driverId","contractId","umrahSeasonId","umrahAgentId","productId","taxCode")
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
           [newInvoiceId, l.description ?? null, qty, price, lineTotal,
            l.accountCode ?? null, l.accountId ?? null, l.costCenterId ?? null,

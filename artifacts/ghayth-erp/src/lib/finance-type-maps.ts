@@ -45,14 +45,6 @@ export const VOUCHER_OPERATIONS: Record<string, string> = {
   maintenance: "دفع صيانة",
 };
 
-// ── أنواع الفواتير ──────────────────────────────────────────────────
-export const INVOICE_TYPES: Record<string, string> = {
-  standard: "فاتورة عادية",
-  simplified: "فاتورة مبسطة",
-  credit_memo: "إشعار دائن",
-  debit_memo: "إشعار مدين",
-};
-
 // ── طرق الإهلاك ─────────────────────────────────────────────────────
 export const DEPRECIATION_METHODS: Record<string, string> = {
   straight_line: "القسط الثابت",
@@ -70,19 +62,6 @@ export const ACCOUNT_TYPES: Record<string, string> = {
   revenue: "إيرادات",
   expense: "مصروفات",
   contra: "حساب مقابل",
-};
-
-// ── فئات المصروفات ──────────────────────────────────────────────────
-export const EXPENSE_CATEGORIES: Record<string, string> = {
-  operational: "تشغيلية",
-  administrative: "إدارية",
-  marketing: "تسويقية",
-  maintenance: "صيانة",
-  travel: "سفر",
-  utilities: "مرافق",
-  rent: "إيجار",
-  salaries: "رواتب",
-  other: "أخرى",
 };
 
 // ── أنواع الضمانات البنكية ──────────────────────────────────────────
