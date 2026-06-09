@@ -179,8 +179,8 @@ async function executeAction(
         );
         if (emp) {
           await rawExecute(
-            `INSERT INTO tasks ("companyId","branchId",title,description,priority,status,"assignedTo","scheduledDate","createdAt")
-             VALUES ($1,$2,$3,$4,$5,'pending',$6,CURRENT_DATE,NOW())`,
+            `INSERT INTO tasks ("companyId","branchId",type,title,description,priority,status,"assignedTo","scheduledDate","createdAt")
+             VALUES ($1,$2,'follow_up',$3,$4,$5,'pending',$6,CURRENT_DATE,NOW())`,
             [companyId, payload.branchId ?? null, title, body, config.priority || "high", assignmentId]
           );
           return "task_created";
