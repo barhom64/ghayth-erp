@@ -105,6 +105,64 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserProfile"
 
+  /auth/mobile/login:
+    post:
+      operationId: mobileLogin
+      tags: [auth]
+      summary: Mobile (Bearer-token) login
+      description: >
+        Employee login for native/mobile clients. Returns the access and
+        refresh tokens in the JSON body (NOT as cookies). The access token is
+        the same JWT used by the web cookie flow, so it carries identical
+        RBAC / allowedModules / feature-flag scope — send it as
+        `Authorization: Bearer <accessToken>` on subsequent requests. When the
+        access token expires (HTTP 401), call `/auth/mobile/refresh` with the
+        stored refresh token to obtain a new pair. To sign out, POST the
+        refresh token to `/auth/logout`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login successful — tokens returned in body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileAuthResponse"
+        "403":
+          description: Invalid credentials, suspended account, or no active assignment
+        "429":
+          description: Account locked due to too many failed login attempts
+
+  /auth/mobile/refresh:
+    post:
+      operationId: mobileRefresh
+      tags: [auth]
+      summary: Mobile refresh-token rotation
+      description: >
+        Exchanges a valid refresh token for a new access + refresh token pair
+        (returned in the body). Refresh tokens are rotated on every use;
+        re-using an already-rotated token revokes the entire session
+        (reuse detection).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MobileRefreshBody"
+      responses:
+        "200":
+          description: New token pair issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileTokenPair"
+        "403":
+          description: Invalid, expired, or revoked refresh token
+
   # ─── Dashboard ─────────────────────────────────────────────
   /dashboard:
     get:
@@ -1044,6 +1102,50 @@ components:
           items:
             type: object
       required: [token, assignments]
+
+    MobileTokenPair:
+      type: object
+      description: Access + refresh token pair returned in the body for mobile clients.
+      properties:
+        tokenType:
+          type: string
+          enum: [Bearer]
+        accessToken:
+          type: string
+          description: "Short-lived JWT — send as `Authorization: Bearer <accessToken>`."
+        refreshToken:
+          type: string
+          description: Long-lived opaque token used to obtain a new pair via /auth/mobile/refresh.
+        accessTokenExpiresIn:
+          type: integer
+          description: Access-token lifetime in seconds.
+        refreshTokenExpiresIn:
+          type: integer
+          description: Refresh-token lifetime in seconds.
+      required:
+        [tokenType, accessToken, refreshToken, accessTokenExpiresIn, refreshTokenExpiresIn]
+
+    MobileAuthResponse:
+      allOf:
+        - $ref: "#/components/schemas/MobileTokenPair"
+        - type: object
+          properties:
+            assignments:
+              type: array
+              items:
+                type: object
+            userRoles:
+              type: array
+              items:
+                type: object
+          required: [assignments, userRoles]
+
+    MobileRefreshBody:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+      required: [refreshToken]
 
     UserProfile:
       type: object
