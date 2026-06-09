@@ -361,6 +361,45 @@ export interface RelatedDims {
   contractId?: string;
 }
 
+// ── purchase line treatments ────────────────────────────────────────────────
+//
+// The purchase / GRN intake form classifies each line by how it should post
+// (inventory / expense / fixed-asset / project-cost / …). The backend's
+// TREATMENT_PURPOSE map (finance-purchase.ts) is the authority that routes the
+// GRN GL entry. This registry mirrors it so the intake form can show the
+// expected accounting per line (same «التوجيه المحاسبي المتوقع» principle as
+// the expense scenario), and a unit test pins the parity against the backend.
+
+export interface PurchaseTreatment {
+  value: string;
+  label: string;
+  /** GL purpose — equals the backend TREATMENT_PURPOSE[value].purpose. */
+  accountPurpose: string;
+  /** Seed default account — equals the backend defaultCode. */
+  defaultCode: string;
+  /** True when the line capitalises (balance-sheet account), not a P&L expense. */
+  capitalize: boolean;
+  /** Short Arabic expected-accounting hint shown under the line. */
+  hint: string;
+}
+
+export const PURCHASE_LINE_TREATMENTS: PurchaseTreatment[] = [
+  { value: "inventory", label: "مخزون (Inventory)", accountPurpose: "inventory_receipt", defaultCode: "1250", capitalize: true, hint: "يُرسمَل في المخزون ويُسوّى عند استلام البضاعة (GRN)." },
+  { value: "expense", label: "مصروف (Expense)", accountPurpose: "general_expense", defaultCode: "6900", capitalize: false, hint: "يُقيَّد مصروفًا عامًا فور الاستلام." },
+  { value: "fixed_asset", label: "أصل ثابت (Fixed Asset)", accountPurpose: "fixed_asset_purchase", defaultCode: "1500", capitalize: true, hint: "يُرسمَل كأصل ثابت ويبدأ إهلاكه الشهري تلقائيًا." },
+  { value: "project_cost", label: "تكلفة مشروع (Project Cost)", accountPurpose: "project_cost", defaultCode: "6800", capitalize: false, hint: "يُحمَّل على تكلفة المشروع المرتبط." },
+  { value: "vehicle_cost", label: "تكلفة مركبة (Vehicle Cost)", accountPurpose: "vehicle_expense", defaultCode: "6500", capitalize: false, hint: "يُحمَّل على مصروفات المركبة." },
+  { value: "property_maintenance", label: "صيانة عقار (Property Maintenance)", accountPurpose: "property_maintenance_expense", defaultCode: "6600", capitalize: false, hint: "يُحمَّل على صيانة العقار." },
+  { value: "custody", label: "عهدة موظف (Custody)", accountPurpose: "employee_custody", defaultCode: "1130", capitalize: true, hint: "يُسجَّل كعهدة على الموظف (أصل) حتى التسوية." },
+  { value: "prepayment", label: "دفعة مقدمة (Prepayment)", accountPurpose: "supplier_prepayment", defaultCode: "1340", capitalize: true, hint: "يُسجَّل دفعة مقدمة للمورد (أصل) حتى التسوية." },
+  { value: "service", label: "خدمة (Service)", accountPurpose: "service_expense", defaultCode: "6920", capitalize: false, hint: "يُقيَّد مصروف خدمات." },
+];
+
+/** Resolve a purchase line treatment — the source the intake form reads. */
+export function resolvePurchaseTreatment(value: string): PurchaseTreatment | null {
+  return PURCHASE_LINE_TREATMENTS.find((t) => t.value === value) ?? null;
+}
+
 /** Map a chosen target + its allocation dims onto the persisted related entity. */
 export function deriveRelatedEntity(
   target: string,

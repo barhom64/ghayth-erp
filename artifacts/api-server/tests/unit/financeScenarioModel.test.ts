@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   FINANCE_SCENARIOS,
   DOMAIN_LABELS,
@@ -7,6 +9,8 @@ import {
   TARGET_HINTS,
   resolveTargetHint,
   deriveRelatedEntity,
+  PURCHASE_LINE_TREATMENTS,
+  resolvePurchaseTreatment,
   type FinanceDomain,
   type FinanceScenario,
   type FinanceTarget,
@@ -197,4 +201,38 @@ describe("finance scenario model — linked entity derivation", () => {
   it("is empty when the relevant dim is missing", () => {
     expect(deriveRelatedEntity("supplier", {})).toEqual({ type: "", id: "" });
   });
+});
+
+// The purchase / GRN intake form shows the expected accounting per line from
+// PURCHASE_LINE_TREATMENTS. This pins that registry to the backend's authority
+// (TREATMENT_PURPOSE in finance-purchase.ts) so the intake hint always equals
+// what the GRN actually posts — read as text to avoid importing the router.
+describe("finance scenario model — purchase line treatments ⇄ backend", () => {
+  const PURCHASE_ROUTE = readFileSync(
+    join(import.meta.dirname!, "../../src/routes/finance-purchase.ts"),
+    "utf8",
+  );
+
+  it("resolves a known treatment and null for an unknown one", () => {
+    expect(resolvePurchaseTreatment("fixed_asset")?.accountPurpose).toBe("fixed_asset_purchase");
+    expect(resolvePurchaseTreatment("nope")).toBeNull();
+  });
+
+  it("capitalises exactly the balance-sheet (1xxx) treatments", () => {
+    for (const t of PURCHASE_LINE_TREATMENTS) {
+      expect(t.capitalize).toBe(t.defaultCode.startsWith("1"));
+      expect(t.label.trim()).not.toBe("");
+      expect(t.hint.trim()).not.toBe("");
+    }
+  });
+
+  for (const t of PURCHASE_LINE_TREATMENTS) {
+    it(`${t.value}: registry purpose + defaultCode match the backend TREATMENT_PURPOSE`, () => {
+      // The backend declares e.g.  fixed_asset: { purpose: "fixed_asset_purchase", side: "debit", defaultCode: "1500" }
+      const re = new RegExp(
+        `${t.value}:\\s*\\{[^}]*purpose:\\s*"${t.accountPurpose}"[^}]*defaultCode:\\s*"${t.defaultCode}"`,
+      );
+      expect(PURCHASE_ROUTE).toMatch(re);
+    });
+  }
 });
