@@ -1316,6 +1316,43 @@ export async function postNuskJournalEntries(
 ): Promise<void> {
   const { nuskId, nuskInvoiceNumber, totalAmount, refundAmount, nuskStatus, existingApJeId, existingRefundJeId } = params;
 
+  // §6.2 of #1870 — every NUSK purchase JE line now carries the FULL
+  // cycle dimensions per operator directive:
+  //   1) umrahAgentId   — the main NUSK agent (from umrah_nusk_invoices.agentId).
+  //                       "الوكيل الرئيسي في نسك" the operator drills by.
+  //   2) umrahSeasonId  — resolved via the NUSK row's groupId → group.seasonId.
+  //                       Lets purchase cost roll up to the season's
+  //                       margin report alongside the matching sales.
+  //   3) vendorId       — companies.nuskSupplierId on the AP line so the
+  //                       supplier sub-ledger ("ذمم المورد — وزارة الحج عبر
+  //                       نسك") reconciles end-to-end. Cost line stays
+  //                       vendor-less (it's the company's own expense).
+  // All three are looked up in a SINGLE round-trip; failures are
+  // non-fatal (the JE still posts, just without the dimension).
+  const [dims] = await rawQuery<{
+    agentId: number | null;
+    seasonId: number | null;
+    nuskSupplierId: number | null;
+  }>(
+    // Season comes via the group (umrah_nusk_invoices has no own seasonId
+    // column). If the NUSK row isn't linked to a group, season stays null
+    // — the JE still posts; only the drill-by-season slice is degraded
+    // until the import flow links the group.
+    `SELECT ni."agentId",
+            g."seasonId",
+            c."nuskSupplierId"
+       FROM umrah_nusk_invoices ni
+       LEFT JOIN umrah_groups g ON g.id = ni."groupId" AND g."companyId" = ni."companyId"
+       LEFT JOIN companies c    ON c.id = ni."companyId"
+      WHERE ni.id = $1 AND ni."companyId" = $2`,
+    [nuskId, scope.companyId]
+  );
+  const purchaseDims = {
+    umrahAgentId: dims?.agentId ?? undefined,
+    umrahSeasonId: dims?.seasonId ?? undefined,
+  };
+  const vendorId = dims?.nuskSupplierId ?? undefined;
+
   if (totalAmount > 0 && nuskStatus !== "cancelled" && !existingApJeId) {
     try {
       const expCode = scope.purchaseAccountCode
@@ -1332,8 +1369,8 @@ export async function postNuskJournalEntries(
         sourceId: nuskId,
         sourceKey: `umrah_nusk_ap_${nuskId}`,
         lines: [
-          { accountCode: expCode, debit: totalAmount, credit: 0, description: "تكلفة خدمات نسك" },
-          { accountCode: apCode, debit: 0, credit: totalAmount, description: "مستحقات نسك" },
+          { accountCode: expCode, debit: totalAmount, credit: 0, description: "تكلفة خدمات نسك", ...purchaseDims },
+          { accountCode: apCode, debit: 0, credit: totalAmount, description: "مستحقات نسك", ...purchaseDims, vendorId },
         ],
       }, { table: "umrah_nusk_invoices", id: nuskId });
       if (apJeId) {
@@ -1363,8 +1400,8 @@ export async function postNuskJournalEntries(
         sourceId: nuskId,
         sourceKey: `umrah_nusk_refund_${nuskId}`,
         lines: [
-          { accountCode: apCode, debit: refundAmount, credit: 0, description: "عكس مستحقات نسك — إرجاع" },
-          { accountCode: expCode, debit: 0, credit: refundAmount, description: "عكس تكلفة خدمات نسك — إرجاع" },
+          { accountCode: apCode, debit: refundAmount, credit: 0, description: "عكس مستحقات نسك — إرجاع", ...purchaseDims, vendorId },
+          { accountCode: expCode, debit: 0, credit: refundAmount, description: "عكس تكلفة خدمات نسك — إرجاع", ...purchaseDims },
         ],
       }, { table: "umrah_nusk_invoices", id: nuskId });
       if (refundJeId) {
