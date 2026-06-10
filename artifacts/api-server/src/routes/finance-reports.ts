@@ -819,6 +819,37 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     const totalCredit = movements.reduce((s, m) => s + Number(m.credit), 0);
     const endingBalance = roundTo2(openingBalance + totalDebit - totalCredit);
 
+    // ── Security deposits held for this customer ─────────────────────
+    // Property security deposits post to the GL as a LIABILITY
+    // (security_deposit_liability / 2300 — see propertiesEngine.
+    // postSecurityDepositGL), so they must NOT enter the AR running
+    // balance above: a held deposit is money we owe the tenant, the
+    // opposite direction of the receivable. Pre-fix the statement was
+    // blind to them entirely — an operator settling a departing
+    // tenant had to hunt the deposit in the property module while the
+    // statement implied a clean slate. Surface them as a separate
+    // block: per-deposit rows + the total still held as of `asOf`.
+    // Join chain: deposit → rental_contract → tenants.clientId.
+    const depositParams: unknown[] = [clientId, scope.companyId, asOf];
+    const heldDeposits = await rawQuery<Record<string, unknown>>(
+      `SELECT psd.id, psd.amount, psd."receivedDate", psd.status,
+              rc.id AS "contractId", rc."contractNumber",
+              COALESCE(psd."refundAmount", 0) AS "refundedAmount",
+              (psd.amount - COALESCE(psd."refundAmount", 0)) AS "heldAmount"
+         FROM property_security_deposits psd
+         JOIN rental_contracts rc ON rc.id = psd."contractId" AND rc."deletedAt" IS NULL
+         JOIN tenants t ON t.id = rc."tenantId"
+        WHERE t."clientId" = $1
+          AND psd."companyId" = $2
+          AND psd."receivedDate" <= $3
+          AND (psd.amount - COALESCE(psd."refundAmount", 0)) > 0.01
+        ORDER BY psd."receivedDate"`,
+      depositParams
+    );
+    const totalHeldDeposits = roundTo2(
+      heldDeposits.reduce((s, d) => s + Number(d.heldAmount), 0)
+    );
+
     res.json(maskFields(req, {
       client,
       period: { from, to: asOf },
@@ -838,6 +869,10 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
         "90+": roundTo2(buckets.d90plus),
         total: roundTo2(
           (buckets.current + buckets.d30 + buckets.d60 + buckets.d90 + buckets.d90plus)),
+      },
+      securityDeposits: {
+        totalHeld: totalHeldDeposits,
+        rows: heldDeposits,
       },
     }));
   } catch (err) {
