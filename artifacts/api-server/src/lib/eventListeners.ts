@@ -12,6 +12,7 @@ import {
 } from "./inboxClassifier.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
 import { registerObligation, markObligationMet } from "./obligationsEngine.js";
+import { warehouseEngine } from "./engines/warehouseEngine.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
 import { sendMessage } from "./messageSender.js";
 import { pickBestMatch, composeAutoReplyBody } from "./inboxAutoReply.js";
@@ -2138,6 +2139,15 @@ export function registerEventListeners() {
         [invoiceId, boqItemIds, payload.companyId]
       );
     }
+    // Same back-link for sold development units (Wave C.2).
+    const devUnitIds = Array.isArray(payload.devUnitIds) ? (payload.devUnitIds as number[]) : [];
+    if (devUnitIds.length > 0 && invoiceId > 0) {
+      await rawExecute(
+        `UPDATE development_units SET "invoiceId"=$1, "updatedAt"=NOW()
+         WHERE id = ANY($2::int[]) AND "companyId"=$3`,
+        [invoiceId, devUnitIds, payload.companyId]
+      );
+    }
   };
 
   registerCrossDomainHandler("property.invoice.requested", invoiceRequestHandler);
@@ -2181,14 +2191,22 @@ export function registerEventListeners() {
     if (!payload?.companyId || !payload?.parts) return;
     const parts = payload.parts as Array<{ productId: number; quantity: number; unitCost?: number }>;
     const maintenanceId = payload.maintenanceId as number;
+    // Route each consumed part through the warehouse engine so the issue is a
+    // REAL movement with full accounting: FIFO batch depletion + COGS GL
+    // posting (DR COGS / CR inventory). The previous raw UPDATE+INSERT skipped
+    // FIFO and GL, leaving maintenance parts cost out of COGS — so the part
+    // cost never reached the maintenance/owner/project P&L.
+    const branchId = (payload.branchId as number | undefined) ?? 0;
     for (const part of parts) {
-      await rawExecute(
-        `UPDATE warehouse_products SET "currentStock"="currentStock"-$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-        [part.quantity, part.productId, payload.companyId]
-      );
-      await rawExecute(
-        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy") VALUES ($1,$2,'out',$3,$4,$5,$6,$7)`,
-        [payload.companyId, part.productId, part.quantity, part.unitCost || 0, `MAINT-${maintenanceId}`, `صيانة مركبة - طلب #${maintenanceId}`, payload.userId ?? 0]
+      await warehouseEngine.issueStock(
+        { companyId: payload.companyId, branchId, createdBy: payload.userId ?? 0 },
+        {
+          productId: part.productId,
+          quantity: part.quantity,
+          unitCost: part.unitCost,
+          reference: `MAINT-${maintenanceId}`,
+          notes: `صيانة مركبة - طلب #${maintenanceId}`,
+        }
       );
     }
   });
