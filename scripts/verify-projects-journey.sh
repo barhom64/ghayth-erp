@@ -15,11 +15,21 @@
 #     → phase         → in_progress → complete → milestone invoice
 #
 # Every accounting effect is asserted BALANCED. Re-runnable (unique per run).
+#
+# RUNS AS A NON-ADMIN projects_manager BY DEFAULT — the #1959 criterion: prove the
+# whole chain (UI → effect, INCLUDING the server-side GL postings) works for a
+# non-admin role, not just owner. The account is self-provisioned idempotently
+# (reuses the owner's bcrypt hash so PASSWORD still authenticates). Set NONADMIN=0
+# to run as owner instead, or override EMAIL/PASSWORD.
+#
 # Prereqs: a HEAD-OF-MAIN DB + built server (الضياء tenant: postable 1111/1270/
 # 5130). For a head-of-main agent DB use `pnpm db:provision-agent`.
 set -euo pipefail
-BASE="${BASE:-http://localhost:5000/api}"; EMAIL="${EMAIL:-door@door.sa}"; PASSWORD="${PASSWORD:-Door@2026Diaa}"
+BASE="${BASE:-http://localhost:5000/api}"
 DSN="${DATABASE_URL:-postgres://ghayth_erp:ghayth_erp@localhost:5432/ghayth_erp}"
+NONADMIN="${NONADMIN:-1}"
+PM_EMAIL="${PM_EMAIL:-pm-projects@door.sa}"
+PASSWORD="${PASSWORD:-Door@2026Diaa}"
 J="$(mktemp)"; PASS=0; FAIL=0
 RUN="$(date +%H%M%S)$RANDOM"
 py(){ python3 -c "$1" 2>/dev/null; }
@@ -27,15 +37,41 @@ ok(){ echo "  ✅ $1"; PASS=$((PASS+1)); }
 no(){ echo "  ❌ $1"; FAIL=$((FAIL+1)); }
 export PGPASSWORD="$(echo "$DSN" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')"
 q(){ psql "$DSN" -tA -c "$1" 2>/dev/null; }
+balanced(){ [ "$(q "SELECT (SUM(debit)=SUM(credit) AND SUM(debit)>0) FROM journal_lines WHERE \"journalId\"=$1;")" = "t" ]; }
 echo "▶ Projects journey — #1594 (مشروع→تكلفة WIP→BOQ→بيع وحدة→مستخلص، قيود متوازنة)"
+
+# Choose login: self-provisioned NON-ADMIN projects_manager (default) or owner.
+EMAIL="${EMAIL:-door@door.sa}"
+if [ "$NONADMIN" = "1" ]; then
+  RID="$(q "SELECT id FROM rbac_roles WHERE role_key='projects_manager' AND \"companyId\"=2 LIMIT 1;")"
+  BR="$(q "SELECT \"branchId\" FROM employee_assignments WHERE \"companyId\"=2 AND status='active' AND \"branchId\" IS NOT NULL ORDER BY id LIMIT 1;")"
+  if [ -n "$RID" ] && [ -n "$BR" ]; then
+    q "DO \$\$ DECLARE h text; e int; u int; BEGIN
+        SELECT \"passwordHash\" INTO h FROM users WHERE email='door@door.sa';
+        SELECT id INTO e FROM employees WHERE email='$PM_EMAIL' AND \"companyId\"=2;
+        IF e IS NULL THEN INSERT INTO employees(name,\"companyId\",email,status) VALUES('مدير المشاريع (تحقق)',2,'$PM_EMAIL','active') RETURNING id INTO e;
+          INSERT INTO employee_assignments(\"employeeId\",\"companyId\",\"branchId\",\"jobTitle\",role,status,\"hireDate\",\"isPrimary\") VALUES(e,2,$BR,'مدير مشاريع','projects_manager','active',CURRENT_DATE,true); END IF;
+        SELECT id INTO u FROM users WHERE email='$PM_EMAIL';
+        IF u IS NULL THEN INSERT INTO users(email,\"passwordHash\",role,\"employeeId\",\"isActive\") VALUES('$PM_EMAIL',h,'projects_manager',e,true) RETURNING id INTO u; END IF;
+        INSERT INTO rbac_user_roles(\"userId\",\"companyId\",role_id,\"branchId\",is_primary) VALUES(u,2,$RID,$BR,true) ON CONFLICT(\"userId\",\"companyId\",role_id) DO NOTHING;
+      END \$\$;" >/dev/null
+    EMAIL="$PM_EMAIL"; ok "هُيّئ حساب non-admin (projects_manager)"
+  else
+    no "تعذّر تهيئة non-admin (role/branch مفقود) — تشغيل كـowner"; NONADMIN=0
+  fi
+fi
 
 curl -fsS -c "$J" -H "X-E2E-Test: 1" -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" -o /dev/null
 CSRF="$(grep erp_csrf "$J" | awk '{print $7}')"; [ -n "$CSRF" ] && ok "login ($EMAIL)" || { no login; exit 1; }
 pw(){ curl -sS -b "$J" -H "x-csrf-token: $CSRF" -H "Content-Type: application/json" -X POST "$BASE$1" -d "$2"; }
 ptch(){ curl -sS -b "$J" -H "x-csrf-token: $CSRF" -H "Content-Type: application/json" -X PATCH "$BASE$1" -d "$2"; }
 gid(){ py "import sys,json;d=json.load(sys.stdin);print(d.get('$1') or '')"; }
-gf(){ py "import sys,json;d=json.load(sys.stdin);print(d.get('$1') or '')"; }
-balanced(){ [ "$(q "SELECT (SUM(debit)=SUM(credit) AND SUM(debit)>0) FROM journal_lines WHERE \"journalId\"=$1;")" = "t" ]; }
+
+# Assert the running role is NOT owner (the #1959 point) in non-admin mode.
+if [ "$NONADMIN" = "1" ]; then
+  ROLE="$(q "SELECT role FROM users WHERE email='$EMAIL';")"
+  [ "$ROLE" = "projects_manager" ] && ok "الدور الجاري non-admin (projects_manager، ليس owner) — معيار #1959" || no "role check ($ROLE)"
+fi
 
 CLIENT="$(q "SELECT id FROM clients WHERE \"companyId\"=2 AND \"deletedAt\" IS NULL LIMIT 1;")"
 [ -n "$CLIENT" ] && ok "عميل موجود (#$CLIENT)" || { no "no client"; exit 1; }
