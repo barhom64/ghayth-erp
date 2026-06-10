@@ -133,7 +133,7 @@ const DISPATCH_TRANSITIONS: Record<typeof DISPATCH_STATUSES[number], string[]> =
 };
 
 // ─── Zod schemas ──────────────────────────────────────────────────────
-const createBookingSchema = z.object({
+const createBookingBaseSchema = z.object({
   bookingNumber: z.string().min(1).max(64),
   bookingSource: z.enum(BOOKING_SOURCES).optional(),
   transportServiceType: z.enum(TRANSPORT_SERVICE_TYPES),
@@ -202,7 +202,26 @@ const createBookingSchema = z.object({
   lines: z.lazy(() => z.array(nestedBookingLineSchema).max(20)).optional(),
 });
 
-const updateBookingSchema = createBookingSchema.partial().extend({
+// #1812 Wave 0.2 — enforce linked source on CREATE. The base schema
+// stays a ZodObject so .partial() still works for PATCH (which has its
+// own update semantics — e.g. an admin clearing a stale link must be
+// able to do so without re-asserting a new one in the same call).
+const createBookingSchema = createBookingBaseSchema.refine(
+  (b) =>
+    b.customerId != null ||
+    b.umrahGroupId != null ||
+    b.contractId != null ||
+    b.projectId != null ||
+    b.waqfId != null ||
+    (b.beneficiaryType != null && b.beneficiaryId != null),
+  {
+    message:
+      "يجب ربط الحجز بمصدر منظَّم (عميل / مجموعة عمرة / عقد / مشروع / وقف / مستفيد) — اسم العميل النصّي وحده غير مقبول.",
+    path: ["customerId"],
+  },
+);
+
+const updateBookingSchema = createBookingBaseSchema.partial().extend({
   status: z.enum(BOOKING_STATUSES).optional(),
 });
 
