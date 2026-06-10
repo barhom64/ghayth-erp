@@ -563,9 +563,12 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
                   <p className="text-xs text-muted-foreground truncate">
                     {t.direction === "outbound" ? "← " : "→ "}{t.body_preview}
                   </p>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-[10px] text-muted-foreground">{formatDateAr(t.createdAt)}</span>
-                    <span className="text-[10px] text-muted-foreground">{t.total_messages} رسالة</span>
+                  <div className="flex items-center justify-between gap-1 mt-1">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-[10px] text-muted-foreground shrink-0">{formatDateAr(t.createdAt)}</span>
+                      {t.direction === "outbound" && t.status && <SendStatusBadge status={t.status} />}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground shrink-0">{t.total_messages} رسالة</span>
                   </div>
                 </button>
                 <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1458,5 +1461,32 @@ function SearchHitsList({ hits, isLoading, query }: {
         })}
       </CardContent>
     </Card>
+  );
+}
+
+// ─── SendStatusBadge ────────────────────────────────────────────
+// Outbound messages carry a delivery status: pending (in the queue),
+// queued (worker has it), sent (provider accepted), failed (worker
+// gave up after retries), blocked_dlp (DLP blocked the send). Until
+// now the inbox didn't show this — the user had to assume their
+// message went out. Tiny badge that surfaces it inline.
+function SendStatusBadge({ status }: { status: string }) {
+  const meta: Record<string, { label: string; tone: string }> = {
+    pending:     { label: "في الانتظار",  tone: "bg-muted text-muted-foreground" },
+    queued:      { label: "في الطابور",   tone: "bg-status-info-surface text-status-info-foreground" },
+    sending:     { label: "يُرسَل",       tone: "bg-status-info-surface text-status-info-foreground" },
+    sent:        { label: "أُرسلت",       tone: "bg-status-success-surface text-status-success-foreground" },
+    delivered:   { label: "وصلت",         tone: "bg-status-success-surface text-status-success-foreground" },
+    failed:      { label: "فشل الإرسال",  tone: "bg-status-error-surface text-status-error-foreground" },
+    cancelled:   { label: "أُلغيت",       tone: "bg-muted text-muted-foreground" },
+    blocked_dlp: { label: "حُجبت DLP",    tone: "bg-status-error-surface text-status-error-foreground" },
+    received:    { label: "وارد",         tone: "bg-status-info-surface text-status-info-foreground" },
+  };
+  const m = meta[status];
+  if (!m) return null;
+  return (
+    <span className={cn("text-[9px] rounded px-1.5 py-0.5 font-medium shrink-0", m.tone)} data-testid={`send-status-${status}`}>
+      {m.label}
+    </span>
   );
 }
