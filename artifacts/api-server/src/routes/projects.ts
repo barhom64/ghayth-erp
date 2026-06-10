@@ -27,7 +27,7 @@ import {
   computeVat,
   getCompanyVatRate,
 } from "../lib/businessHelpers.js";
-import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
+import { createCostCenterForEntity, syncEntityCostCenterAllocation } from "../lib/costCenterAutoCreate.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -500,8 +500,8 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
         for (let i = 0; i < b.phases.length; i++) {
           const phase = b.phases[i];
           await client.query(
-            `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
-            [insertId, phase.name, i, phase.startDate, phase.endDate]
+            `INSERT INTO project_phases ("companyId","projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5,$6)`,
+            [scope.companyId, insertId, phase.name, i, phase.startDate, phase.endDate]
           );
         }
       }
@@ -532,6 +532,9 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
         parentEntityType: scope.branchId ? "branch" : null,
         parentEntityId: scope.branchId ?? null,
         actorUserId: scope.userId,
+        // Budget → allocatedAmount so variance (allocated vs used) reads
+        // correctly from day one; budget edits re-sync via PATCH below.
+        allocatedAmount: b.budget != null ? Number(b.budget) : null,
       },
     ).catch((e) => logger.error(e, "project cost-centre auto-create failed"));
 
@@ -736,6 +739,13 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
     if (!affectedRows) throw new NotFoundError("المشروع غير موجود");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
+    // Budget edits re-sync the project cost centre's allocatedAmount so
+    // variance reporting (allocated vs used) never reads a stale allocation.
+    if ("budget" in after) {
+      syncEntityCostCenterAllocation(scope.companyId, "project", id, Number(after.budget) || 0)
+        .catch((e) => logger.error(e, "projects background task failed"));
+    }
+
     createAuditLog({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -825,8 +835,8 @@ router.post("/:id/phases", authorize({ feature: "projects.tasks", action: "creat
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
     const { insertId } = await rawExecute(
-      `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
-      [projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
+      `INSERT INTO project_phases ("companyId","projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5,$6)`,
+      [scope.companyId, projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
     );
     assertInsert(insertId, "project_phases");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [insertId, projectId]);
@@ -920,6 +930,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
             dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
             sourceType: "project_phases",
             sourceId: phaseId,
+            projectId,
           }
         );
         milestoneInvoiceCreated = true;
