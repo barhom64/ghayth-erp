@@ -5305,7 +5305,6 @@ router.get("/reports/umrah-transport", authorize({ feature: "umrah", action: "li
 });
 
 
-
 // §11 stub conversion — umrah costs report (#1870).
 // Aggregates umrah_nusk_invoices into a cost breakdown per
 // dimension (season / group / agent), showing each cost
@@ -5436,6 +5435,149 @@ router.get("/reports/umrah-costs", authorize({ feature: "umrah", action: "list" 
 
     res.json(maskFields(req, { data: rows, dimension, totals }));
   } catch (err) { handleRouteError(err, res, "Umrah costs report"); }
+});
+
+// تقرير ملخّص أخطاء الاستيراد (import errors summary) — §11 من شرائع #1870.
+// يجاوب على أسئلة العامل/المسؤول الإداري:
+//   «كم دفعة فشلت/جزئية؟ كم سطر مرفوض؟ من أكثر مستخدم تنزّل دفعات
+//    فيها أخطاء؟ ما نوع الملف الأكثر إشكالاً؟»
+//
+// ٥ تجميعات بالتوازي على umrah_import_batches (المصدر الرئيسي):
+//   1) kpis        → totalBatches / failedBatches / partialBatches /
+//                    totalRows / errorRows / financialImpactRows /
+//                    affectedSeasons / affectedUploaders
+//   2) byStatus    → توزيع الدفعات حسب status (pending/completed/failed/...)
+//   3) byFileType  → توزيع حسب نوع الملف (mutamers/vouchers/...)
+//   4) byUploader  → ٢٠ مستخدم الأعلى من حيث الأخطاء (للوحة الإداريين)
+//   5) recent      → آخر ١٠٠ دفعة (للجدول السفلي مع drill إلى changes)
+//
+// نوصل إلى umrah_seasons + users (للأسماء) عبر LEFT JOIN — كل التجميعات
+// تحت companyId + deletedAt IS NULL.
+//
+// نعتبر "دفعة فيها أخطاء" حين:
+//   - status='failed'
+//   - errorCount > 0
+//   - skippedCount > 0
+//
+// الفلاتر: seasonId / status / fileType / uploadedBy / from / to (YYYY-MM-DD على createdAt).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/import-errors-summary", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, status, fileType, uploadedBy, from, to } = req.query as Record<string, string | undefined>;
+
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    if (from && !dateRe.test(from)) throw new ValidationError("from يجب أن يكون YYYY-MM-DD", { field: "from" });
+    if (to   && !dateRe.test(to))   throw new ValidationError("to يجب أن يكون YYYY-MM-DD",   { field: "to" });
+
+    const baseParams: unknown[] = [scope.companyId];
+    let whereClause = `b."companyId" = $1 AND b."deletedAt" IS NULL`;
+    if (seasonId)   { baseParams.push(Number(seasonId));   whereClause += ` AND b."seasonId"    = $${baseParams.length}`; }
+    if (status)     { baseParams.push(status);             whereClause += ` AND b.status        = $${baseParams.length}`; }
+    if (fileType)   { baseParams.push(fileType);           whereClause += ` AND b."fileType"    = $${baseParams.length}`; }
+    if (uploadedBy) { baseParams.push(Number(uploadedBy)); whereClause += ` AND b."uploadedBy"  = $${baseParams.length}`; }
+    if (from)       { baseParams.push(from);               whereClause += ` AND b."createdAt"  >= $${baseParams.length}`; }
+    if (to)         { baseParams.push(to);                 whereClause += ` AND b."createdAt"  <= ($${baseParams.length}::date + INTERVAL '1 day')`; }
+
+    const [kpiRowArr, byStatus, byFileType, byUploader, recent] = await Promise.all([
+      rawQuery<Record<string, unknown>>(
+        // problemBatches = صراحة بها أخطاء أو فشلت — العامل بحاجة لرقم
+        // واحد ينطلق منه. failedBatches فقط status='failed'؛
+        // partialBatches = errorCount>0 أو skippedCount>0 لكن مش failed.
+        `SELECT COUNT(*)::int                                    AS "totalBatches",
+                COUNT(*) FILTER (WHERE b.status = 'failed')::int AS "failedBatches",
+                COUNT(*) FILTER (WHERE b.status <> 'failed' AND
+                                       (COALESCE(b."errorCount", 0) > 0
+                                        OR COALESCE(b."skippedCount", 0) > 0))::int
+                                                                  AS "partialBatches",
+                COALESCE(SUM(b."totalRows"), 0)::int              AS "totalRows",
+                COALESCE(SUM(b."errorCount"), 0)::int             AS "errorRows",
+                COALESCE(SUM(b."skippedCount"), 0)::int           AS "skippedRows",
+                COALESCE(SUM(b."newCount"), 0)::int               AS "newRows",
+                COALESCE(SUM(b."updatedCount"), 0)::int           AS "updatedRows",
+                COALESCE(SUM(b."financialImpactCount"), 0)::int   AS "financialImpactRows",
+                COUNT(DISTINCT b."seasonId") FILTER (WHERE b."seasonId" IS NOT NULL)::int AS "affectedSeasons",
+                COUNT(DISTINCT b."uploadedBy") FILTER (WHERE b."uploadedBy" IS NOT NULL)::int AS "affectedUploaders"
+           FROM umrah_import_batches b
+          WHERE ${whereClause}`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT b.status                                AS "status",
+                COUNT(*)::int                            AS "count",
+                COALESCE(SUM(b."totalRows"), 0)::int     AS "totalRows",
+                COALESCE(SUM(b."errorCount"), 0)::int    AS "errorRows"
+           FROM umrah_import_batches b
+          WHERE ${whereClause}
+          GROUP BY b.status
+          ORDER BY COUNT(*) DESC`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT b."fileType"                             AS "fileType",
+                COUNT(*)::int                            AS "count",
+                COALESCE(SUM(b."totalRows"), 0)::int     AS "totalRows",
+                COALESCE(SUM(b."errorCount"), 0)::int    AS "errorRows",
+                COALESCE(SUM(b."skippedCount"), 0)::int  AS "skippedRows"
+           FROM umrah_import_batches b
+          WHERE ${whereClause}
+          GROUP BY b."fileType"
+          ORDER BY COALESCE(SUM(b."errorCount"), 0) DESC, COUNT(*) DESC`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT b."uploadedBy"                                    AS "uploadedBy",
+                COALESCE(e.name, u.email)                          AS "uploaderName",
+                u.email                                            AS "uploaderEmail",
+                COUNT(*)::int                                      AS "count",
+                COUNT(*) FILTER (WHERE b.status = 'failed')::int   AS "failedCount",
+                COALESCE(SUM(b."totalRows"), 0)::int               AS "totalRows",
+                COALESCE(SUM(b."errorCount"), 0)::int              AS "errorRows",
+                COALESCE(SUM(b."skippedCount"), 0)::int            AS "skippedRows"
+           FROM umrah_import_batches b
+      LEFT JOIN users u    ON u.id = b."uploadedBy"
+      LEFT JOIN employees e ON e.id = u."employeeId"
+          WHERE ${whereClause}
+          GROUP BY b."uploadedBy", e.name, u.email
+          ORDER BY COALESCE(SUM(b."errorCount"), 0) DESC, COUNT(*) DESC
+          LIMIT 20`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT b.id, b."fileName", b."fileType", b.status,
+                b."totalRows", b."newCount", b."updatedCount",
+                b."skippedCount", b."errorCount", b."financialImpactCount",
+                b."seasonId", se.title AS "seasonTitle",
+                b."uploadedBy", COALESCE(e.name, u.email) AS "uploaderName",
+                b."createdAt", b."completedAt", b.notes
+           FROM umrah_import_batches b
+      LEFT JOIN umrah_seasons se
+             ON se.id = b."seasonId"
+            AND se."companyId" = b."companyId"
+            AND se."deletedAt" IS NULL
+      LEFT JOIN users u    ON u.id = b."uploadedBy"
+      LEFT JOIN employees e ON e.id = u."employeeId"
+          WHERE ${whereClause}
+          ORDER BY b."createdAt" DESC, b.id DESC
+          LIMIT 100`,
+        baseParams,
+      ),
+    ]);
+
+    const kpiRow = kpiRowArr[0] ?? {
+      totalBatches: 0, failedBatches: 0, partialBatches: 0,
+      totalRows: 0, errorRows: 0, skippedRows: 0, newRows: 0, updatedRows: 0,
+      financialImpactRows: 0, affectedSeasons: 0, affectedUploaders: 0,
+    };
+
+    res.json(maskFields(req, {
+      kpis: kpiRow,
+      byStatus,
+      byFileType,
+      byUploader,
+      recent,
+    }));
+  } catch (err) { handleRouteError(err, res, "Import errors summary report"); }
 });
 
 
