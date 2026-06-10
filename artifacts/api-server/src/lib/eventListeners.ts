@@ -2096,12 +2096,14 @@ export function registerEventListeners() {
     const subtotal = Number(payload.subtotal ?? 0);
     const vatAmount = Number(payload.vatAmount ?? 0);
     const total = Number(payload.total ?? subtotal + vatAmount);
-    await rawExecute(
-      `INSERT INTO invoices ("companyId","clientId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,15,0,'draft',$8,$9)`,
+    const projectId = payload.projectId != null ? Number(payload.projectId) : null;
+    const ins = await rawExecute(
+      `INSERT INTO invoices ("companyId","clientId","projectId",ref,description,subtotal,total,"vatAmount","vatRate","paidAmount",status,"dueDate","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,15,0,'draft',$9,$10) RETURNING id`,
       [
         payload.companyId,
         payload.clientId ?? null,
+        projectId,
         ref,
         payload.description ?? "",
         subtotal,
@@ -2111,6 +2113,31 @@ export function registerEventListeners() {
         payload.userId ?? 0,
       ]
     );
+    const invoiceId = ins.insertId;
+    // Optional line items (e.g. BOQ): one invoice_line per supplied line.
+    // Back-compat — existing emitters pass no `lines` and this loop is skipped.
+    const lines = Array.isArray(payload.lines) ? (payload.lines as Array<Record<string, unknown>>) : [];
+    for (const ln of lines) {
+      const q = Number(ln.quantity ?? 1);
+      const up = Number(ln.unitPrice ?? 0);
+      const ltot = Number(ln.lineTotal ?? Math.round(q * up * 100) / 100);
+      await rawExecute(
+        `INSERT INTO invoice_lines ("invoiceId",description,quantity,"unitPrice","lineTotal","projectId")
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [invoiceId, String(ln.description ?? ""), q, up, ltot, projectId]
+      );
+    }
+    // Optional: link the source BOQ items to the invoice just created. The
+    // emitting route has already claimed them (status='billed'); here we only
+    // stamp the resulting invoiceId so the project ledger shows what was billed.
+    const boqItemIds = Array.isArray(payload.boqItemIds) ? (payload.boqItemIds as number[]) : [];
+    if (boqItemIds.length > 0 && invoiceId > 0) {
+      await rawExecute(
+        `UPDATE project_boq_items SET "invoiceId"=$1, "updatedAt"=NOW()
+         WHERE id = ANY($2::int[]) AND "companyId"=$3`,
+        [invoiceId, boqItemIds, payload.companyId]
+      );
+    }
   };
 
   registerCrossDomainHandler("property.invoice.requested", invoiceRequestHandler);
