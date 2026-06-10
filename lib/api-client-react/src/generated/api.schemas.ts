@@ -7,6 +7,26 @@
  */
 export interface HealthStatus {
   status: string;
+  redisRateLimit?: string;
+}
+
+export type HealthSchemaStatusTables = { [key: string]: unknown };
+
+export type HealthSchemaStatusMigrations = { [key: string]: unknown };
+
+/**
+ * Response from `GET /api/health/schema`. `status` is the readiness
+verdict (`ok` | `degraded` | `critical`). `tables` and `migrations`
+carry diagnostic detail whose internal shape is intentionally left
+open (bare object) to avoid forcing spec churn on every change to
+the readiness check.
+
+ */
+export interface HealthSchemaStatus {
+  status: string;
+  tables?: HealthSchemaStatusTables;
+  migrations?: HealthSchemaStatusMigrations;
+  checkedAt: string;
 }
 
 export interface LoginBody {
@@ -16,31 +36,89 @@ export interface LoginBody {
 
 export type LoginResponseAssignmentsItem = { [key: string]: unknown };
 
+export type LoginResponseUserRolesItem = { [key: string]: unknown };
+
 export interface LoginResponse {
-  token: string;
   assignments: LoginResponseAssignmentsItem[];
+  userRoles: LoginResponseUserRolesItem[];
 }
 
+export type MobileTokenPairTokenType =
+  (typeof MobileTokenPairTokenType)[keyof typeof MobileTokenPairTokenType];
+
+export const MobileTokenPairTokenType = {
+  Bearer: "Bearer",
+} as const;
+
+/**
+ * Access + refresh token pair returned in the body for mobile clients.
+ */
+export interface MobileTokenPair {
+  tokenType: MobileTokenPairTokenType;
+  /** Short-lived JWT — send as `Authorization: Bearer <accessToken>`. */
+  accessToken: string;
+  /** Long-lived opaque token used to obtain a new pair via /auth/mobile/refresh. */
+  refreshToken: string;
+  /** Access-token lifetime in seconds. */
+  accessTokenExpiresIn: number;
+  /** Refresh-token lifetime in seconds. */
+  refreshTokenExpiresIn: number;
+}
+
+export type MobileAuthResponseAssignmentsItem = { [key: string]: unknown };
+
+export type MobileAuthResponseUserRolesItem = { [key: string]: unknown };
+
+export type MobileAuthResponse = MobileTokenPair & {
+  assignments: MobileAuthResponseAssignmentsItem[];
+  userRoles: MobileAuthResponseUserRolesItem[];
+};
+
+export interface MobileRefreshBody {
+  refreshToken: string;
+}
+
+export type UserProfileUserRolesItem = { [key: string]: unknown };
+
 export interface UserProfile {
+  id: number;
   name: string;
-  phone?: string;
-  email?: string;
-  photoUrl?: string;
-  jobTitle?: string;
+  phone?: string | null;
+  email?: string | null;
+  empNumber?: string | null;
+  photoUrl?: string | null;
+  status?: string;
+  jobTitle?: string | null;
+  jobTitleId?: number | null;
   role: string;
-  salary?: number;
-  companyName: string;
-  branchName: string;
+  salary?: string | null;
+  companyId: number;
+  branchId?: number | null;
+  companyName?: string | null;
+  branchName?: string | null;
+  preferredCalendar?: string | null;
+  preferredLocale?: string | null;
+  userRoles: UserProfileUserRolesItem[];
 }
 
 export type DashboardDataCards = {
   todayTasks?: number;
   awaitingMe?: number;
   overdue?: number;
+  completedToday?: number;
   completedPct?: number;
+  total?: number;
 };
 
 export type DashboardDataPendingApprovalsItem = { [key: string]: unknown };
+
+export type DashboardDataPendingFinanceApprovalsItem = {
+  [key: string]: unknown;
+};
+
+export type DashboardDataPendingPurchaseRequestsItem = {
+  [key: string]: unknown;
+};
 
 export interface Task {
   id: number;
@@ -58,18 +136,58 @@ export interface Notification {
   id: number;
   type: string;
   title: string;
-  body?: string;
-  priority?: string;
+  body?: string | null;
+  priority?: string | null;
   isRead: boolean;
   createdAt?: string;
+  refType?: string | null;
+  refId?: number | null;
+  actionUrl?: string | null;
 }
 
 export interface DashboardData {
   cards: DashboardDataCards;
   todayTasks: Task[];
   pendingApprovals: DashboardDataPendingApprovalsItem[];
+  pendingFinanceApprovals?: DashboardDataPendingFinanceApprovalsItem[];
+  pendingPurchaseRequests?: DashboardDataPendingPurchaseRequestsItem[];
   notifications: Notification[];
+  role?: string;
 }
+
+export type DashboardSummaryVehicles = {
+  total?: number;
+  active?: number;
+};
+
+export type DashboardSummaryTickets = {
+  open?: number;
+  breached?: number;
+};
+
+export type DashboardSummaryProjects = {
+  total?: number;
+  active?: number;
+};
+
+export type DashboardSummaryContracts = {
+  active?: number;
+  expiringSoon?: number;
+};
+
+export type DashboardSummaryOpportunities = {
+  total?: number;
+  value?: number;
+};
+
+export type DashboardSummaryUmrah = {
+  activePilgrims?: number;
+  overstayPilgrims?: number;
+  openSeasons?: number;
+  monthlyRevenue?: number;
+  pendingInvoices?: number;
+  openPenalties?: number;
+};
 
 export interface DashboardSummary {
   totalEmployees: number;
@@ -78,29 +196,943 @@ export interface DashboardSummary {
   pendingInvoices: number;
   activeTasksToday: number;
   presentToday: number;
+  vehicles?: DashboardSummaryVehicles;
+  tickets?: DashboardSummaryTickets;
+  projects?: DashboardSummaryProjects;
+  contracts?: DashboardSummaryContracts;
+  opportunities?: DashboardSummaryOpportunities;
+  warehouseAlerts?: number;
+  pendingLeaveRequests?: number;
+  umrah?: DashboardSummaryUmrah;
 }
 
 export interface Employee {
   id: number;
   name: string;
-  phone?: string;
-  email?: string;
-  assignmentId?: number;
-  jobTitle: string;
-  role: string;
-  salary?: number;
+  phone?: string | null;
+  email?: string | null;
+  empNumber?: string | null;
   status: string;
-  empNumber?: string;
+  activeAssignmentId?: number | null;
+  iqamaNumber?: string | null;
+  iqamaExpiry?: string | null;
+  iqamaStatus?: string | null;
+  jobTitle?: string | null;
+  jobTitleId?: number | null;
+  role: string;
+  salary?: string | null;
+  branchId?: number | null;
+  branchName?: string | null;
+  govLinkCount?: number;
 }
 
-export type EmployeeDetail = Employee & {
-  gender?: string;
-  nationality?: string;
-  hireDate?: string;
-  departmentName?: string;
-  branchName?: string;
-  companyName?: string;
+export type EmployeeDetailTasksItem = { [key: string]: unknown };
+
+export type EmployeeDetailAttendanceItem = { [key: string]: unknown };
+
+export type EmployeeDetailLeavesItem = { [key: string]: unknown };
+
+export type EmployeeDetailTrainingsItem = { [key: string]: unknown };
+
+export type EmployeeDetailPayrollItem = { [key: string]: unknown };
+
+export type EmployeeDetailViolationsItem = { [key: string]: unknown };
+
+export type EmployeeDetailLoansItem = { [key: string]: unknown };
+
+export type EmployeeDetailOvertimeItem = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type EmployeeDetailUserAccount = { [key: string]: unknown } | null;
+
+export type EmployeeDetailRolesItem = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type EmployeeDetailContract = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type EmployeeDetailPosition = { [key: string]: unknown } | null;
+
+export type EmployeeDetailCustodiesItem = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type EmployeeDetailLatestScore = { [key: string]: unknown } | null;
+
+export type EmployeeDetailActiveSignalsItem = { [key: string]: unknown };
+
+/**
+ * Full employee record returned by `GET /api/hr/employees/:id`. Combines
+the `employees` row, the active `employee_assignments` columns, joined
+lookup names, and nested operational arrays/objects. Numeric/decimal
+columns serialize as JSON strings.
+
+ */
+export interface EmployeeDetail {
+  id: number;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  empNumber?: string | null;
+  /** @nullable */
+  photoUrl?: string | null;
+  /** @nullable */
+  status?: string | null;
+  createdAt: string;
+  /** @nullable */
+  nationalId?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  gender?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  iqamaNumber?: string | null;
+  /** @nullable */
+  iqamaExpiry?: string | null;
+  /** @nullable */
+  passportNumber?: string | null;
+  /** @nullable */
+  passportExpiry?: string | null;
+  /** @nullable */
+  borderNumber?: string | null;
+  /** @nullable */
+  visaNumber?: string | null;
+  /** @nullable */
+  visaType?: string | null;
+  /** @nullable */
+  visaExpiry?: string | null;
+  /** @nullable */
+  sponsorNumber?: string | null;
+  /** @nullable */
+  workPermitNumber?: string | null;
+  /** @nullable */
+  workPermitExpiry?: string | null;
+  /** @nullable */
+  iqamaStatus?: string | null;
+  /** @nullable */
+  assignmentId?: number | null;
+  jobTitle: string;
+  /** @nullable */
+  jobTitleId?: number | null;
+  /** @nullable */
+  role?: string | null;
+  /** @nullable */
+  salary?: string | null;
+  /** @nullable */
+  hireDate?: string | null;
+  companyId: number;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  managerId?: number | null;
+  /** @nullable */
+  branchName?: string | null;
+  /** @nullable */
+  departmentName?: string | null;
+  /** @nullable */
+  managerName?: string | null;
+  tasks?: EmployeeDetailTasksItem[];
+  attendance?: EmployeeDetailAttendanceItem[];
+  leaves?: EmployeeDetailLeavesItem[];
+  trainings?: EmployeeDetailTrainingsItem[];
+  payroll?: EmployeeDetailPayrollItem[];
+  violations?: EmployeeDetailViolationsItem[];
+  loans?: EmployeeDetailLoansItem[];
+  overtime?: EmployeeDetailOvertimeItem[];
+  /** @nullable */
+  userAccount?: EmployeeDetailUserAccount;
+  roles?: EmployeeDetailRolesItem[];
+  /** @nullable */
+  contract?: EmployeeDetailContract;
+  /** @nullable */
+  position?: EmployeeDetailPosition;
+  custodies?: EmployeeDetailCustodiesItem[];
+  /** @nullable */
+  latestScore?: EmployeeDetailLatestScore;
+  activeSignals?: EmployeeDetailActiveSignalsItem[];
+}
+
+export type UmrahSubAgentDetailStatusBreakdown = { [key: string]: unknown };
+
+/**
+ * Full `umrah_sub_agents` row (every persisted column — pg serializes
+the numeric defaultPricePerMutamer as a string and timestamptz
+columns as ISO strings) joined with the linked agent/client names,
+plus the statement aggregates the detail pane renders. Every column
+is enumerated rather than passthrough so the contract-drift guard
+fires if a handler adds/renames a returned field.
+
+ */
+export interface UmrahSubAgentDetail {
+  id: number;
+  companyId: number;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  nuskCode?: string | null;
+  name: string;
+  /** @nullable */
+  agentId?: number | null;
+  /** @nullable */
+  clientId?: number | null;
+  /** @nullable */
+  paymentTerms?: string | null;
+  /** @nullable */
+  defaultPricePerMutamer?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  isActive?: boolean | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdBy?: number | null;
+  /** @nullable */
+  updatedBy?: number | null;
+  /** @nullable */
+  createdAt?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+  /** @nullable */
+  deletedAt?: string | null;
+  /** @nullable */
+  agentName?: string | null;
+  /** @nullable */
+  clientName?: string | null;
+  pilgrimCount: number;
+  overstayedCount: number;
+  totalPaid: number;
+  statusBreakdown: UmrahSubAgentDetailStatusBreakdown;
+}
+
+export type UmrahSubAgentStatementEntriesItem = { [key: string]: unknown };
+
+export interface UmrahSubAgentStatement {
+  openingBalance: number;
+  closingBalance: number;
+  entries: UmrahSubAgentStatementEntriesItem[];
+}
+
+export type UmrahAgentDetailStatusBreakdown = { [key: string]: unknown };
+
+/**
+ * Full `umrah_agents` row (every persisted column — pg serializes the
+numeric profitMargin as a string and timestamptz columns as ISO
+strings) plus the statement aggregates the detail pane renders. Every
+column is enumerated rather than passthrough so the contract-drift
+guard fires if a handler adds/renames a returned field.
+
+ */
+export interface UmrahAgentDetail {
+  id: number;
+  companyId: number;
+  name: string;
+  /** @nullable */
+  contactPerson?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  profitMargin?: string | null;
+  /** @nullable */
+  contractRef?: string | null;
+  /** @nullable */
+  currency?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdAt?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  seasonId?: number | null;
+  /** @nullable */
+  nuskAgentNumber?: string | null;
+  /** @nullable */
+  createdBy?: number | null;
+  /** @nullable */
+  updatedBy?: number | null;
+  /** @nullable */
+  deletedAt?: string | null;
+  pilgrimCount: number;
+  overstayedCount: number;
+  totalInvoiced: number;
+  totalPaid: number;
+  totalOutstanding: number;
+  statusBreakdown: UmrahAgentDetailStatusBreakdown;
+}
+
+export type UmrahGroupDetailPilgrimsItem = {
+  id: number;
+  fullName: string;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  overstayExempt?: boolean | null;
+  /** @nullable */
+  visaExpiry?: string | null;
+  /** @nullable */
+  entryFlight?: string | null;
+  /** @nullable */
+  exitFlight?: string | null;
 };
+
+export type UmrahGroupDetailStatusBreakdown = { [key: string]: unknown };
+
+export type UmrahGroupDetailFinance = {
+  invoiceCount: number;
+  invoiceTotal: number;
+  invoicePaid: number;
+  invoiceOutstanding: number;
+  nuskCount: number;
+  nuskNetCost: number;
+  nuskRefund: number;
+  margin: number;
+};
+
+export type UmrahGroupDetailSchedule = {
+  /** @nullable */
+  minArrival: string | null;
+  /** @nullable */
+  maxDeparture: string | null;
+  entryFlights: string[];
+  exitFlights: string[];
+};
+
+/**
+ * Full `umrah_groups` row joined with agent/sub-agent/season names, plus
+the roster summary, per-status breakdown dict, exemption/visa-expiring
+counts, and nested finance + schedule objects. Every column is
+enumerated rather than passthrough so the contract-drift guard fires
+if a handler adds/renames a returned field.
+
+ */
+export interface UmrahGroupDetail {
+  id: number;
+  companyId: number;
+  /** @nullable */
+  branchId?: number | null;
+  nuskGroupNumber: string;
+  /** @nullable */
+  internalRef?: string | null;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  agentId?: number | null;
+  /** @nullable */
+  subAgentId?: number | null;
+  /** @nullable */
+  seasonId?: number | null;
+  /** @nullable */
+  mutamerCount?: number | null;
+  /** @nullable */
+  programDuration?: number | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  nuskInvoiceNumber?: string | null;
+  /** @nullable */
+  salesInvoiceId?: number | null;
+  /** @nullable */
+  createdBy?: number | null;
+  /** @nullable */
+  updatedBy?: number | null;
+  /** @nullable */
+  createdAt?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+  /** @nullable */
+  deletedAt?: string | null;
+  /** @nullable */
+  agentName?: string | null;
+  /** @nullable */
+  subAgentName?: string | null;
+  /** @nullable */
+  seasonTitle?: string | null;
+  pilgrims: UmrahGroupDetailPilgrimsItem[];
+  statusBreakdown: UmrahGroupDetailStatusBreakdown;
+  overstayExemptCount: number;
+  visaExpiringCount: number;
+  finance: UmrahGroupDetailFinance;
+  schedule: UmrahGroupDetailSchedule;
+}
+
+export type UmrahPilgrimDetailPenaltiesItem = {
+  id: number;
+  companyId: number;
+  /** @nullable */
+  pilgrimId?: number | null;
+  /** @nullable */
+  agentId?: number | null;
+  /** @nullable */
+  seasonId?: number | null;
+  type: string;
+  /** @nullable */
+  daysOverstayed?: number | null;
+  /** @nullable */
+  amount: string | null;
+  /** @nullable */
+  currency?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  invoiceId?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdAt?: string | null;
+  /** @nullable */
+  deletedAt?: string | null;
+  /** @nullable */
+  createdBy?: number | null;
+  /** @nullable */
+  updatedBy?: number | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  journalEntryId?: number | null;
+  /** @nullable */
+  updatedAt?: string | null;
+};
+
+/**
+ * Full `umrah_pilgrims` row (sensitive passport/visa/border/mofa fields
+decrypted, plus their `*_hash` lookup columns; date columns serialize
+as ISO strings) joined with agent/package/season/group/sub-agent
+names, followed by the pilgrim's penalty rows. Every column is
+enumerated rather than passthrough so the contract-drift guard fires
+if a handler adds/renames a returned field.
+
+ */
+export interface UmrahPilgrimDetail {
+  id: number;
+  companyId: number;
+  /** @nullable */
+  seasonId?: number | null;
+  /** @nullable */
+  agentId?: number | null;
+  /** @nullable */
+  packageId?: number | null;
+  fullName: string;
+  passportNumber: string;
+  /** @nullable */
+  visaNumber?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  gender?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  arrivalDate?: string | null;
+  /** @nullable */
+  departureDate?: string | null;
+  /** @nullable */
+  actualArrival?: string | null;
+  /** @nullable */
+  actualDeparture?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  hotelName?: string | null;
+  /** @nullable */
+  roomNumber?: string | null;
+  /** @nullable */
+  transportAssigned?: boolean | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdAt?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+  /** @nullable */
+  nuskNumber?: string | null;
+  /** @nullable */
+  entryPort?: string | null;
+  /** @nullable */
+  exitPort?: string | null;
+  /** @nullable */
+  overstayDays?: number | null;
+  /** @nullable */
+  actualStayDays?: number | null;
+  /** @nullable */
+  deletedAt?: string | null;
+  /** @nullable */
+  subAgentId?: number | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  passportExpiry?: string | null;
+  /** @nullable */
+  groupId?: number | null;
+  /** @nullable */
+  entryFlight?: string | null;
+  /** @nullable */
+  exitFlight?: string | null;
+  /** @nullable */
+  programDuration?: number | null;
+  /** @nullable */
+  borderNumber?: string | null;
+  /** @nullable */
+  mofaNumber?: string | null;
+  /** @nullable */
+  isInsideKingdom?: boolean | null;
+  /** @nullable */
+  hasUmrahPermit?: boolean | null;
+  /** @nullable */
+  createdBy?: number | null;
+  /** @nullable */
+  updatedBy?: number | null;
+  /** @nullable */
+  passportNumber_hash?: string | null;
+  /** @nullable */
+  visaNumber_hash?: string | null;
+  /** @nullable */
+  mofaNumber_hash?: string | null;
+  /** @nullable */
+  borderNumber_hash?: string | null;
+  /** @nullable */
+  visaExpiry?: string | null;
+  /** @nullable */
+  entryDate?: string | null;
+  /** @nullable */
+  exitDate?: string | null;
+  /** @nullable */
+  overstayExempt?: boolean | null;
+  /** @nullable */
+  overstayExemptReason?: string | null;
+  /** @nullable */
+  overstayExemptBy?: number | null;
+  /** @nullable */
+  overstayExemptAt?: string | null;
+  /** @nullable */
+  familyId?: number | null;
+  /** @nullable */
+  visaStatus?: string | null;
+  /** @nullable */
+  visaRequestedAt?: string | null;
+  /** @nullable */
+  visaIssuedAt?: string | null;
+  /** @nullable */
+  visaRejectedAt?: string | null;
+  /** @nullable */
+  visaRejectionReason?: string | null;
+  /** @nullable */
+  agentName?: string | null;
+  /** @nullable */
+  packageName?: string | null;
+  /** @nullable */
+  seasonTitle?: string | null;
+  /** @nullable */
+  groupName?: string | null;
+  /** @nullable */
+  subAgentName?: string | null;
+  penalties: UmrahPilgrimDetailPenaltiesItem[];
+}
+
+export type SupportTicketDetailRepliesItem = { [key: string]: unknown };
+
+/**
+ * Full `support_tickets` row joined with the client name, plus the reply
+thread and the computed SLA fields (`isSlaBreached` boolean,
+`slaRemainingHours` string). Every column is enumerated rather than
+passthrough so the contract-drift guard fires if a handler
+adds/renames a returned field.
+
+ */
+export interface SupportTicketDetail {
+  id: number;
+  companyId: number;
+  /** @nullable */
+  ref?: string | null;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  priority?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  clientId?: number | null;
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  slaDeadline?: string | null;
+  /** @nullable */
+  firstResponseAt?: string | null;
+  /** @nullable */
+  resolvedAt?: string | null;
+  /** @nullable */
+  createdAt?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+  /** @nullable */
+  escalationLevel?: number | null;
+  /** @nullable */
+  rating?: number | null;
+  /** @nullable */
+  ratingComment?: string | null;
+  /** @nullable */
+  slaBreached?: boolean | null;
+  /** @nullable */
+  deletedAt?: string | null;
+  /** @nullable */
+  invoiceId?: number | null;
+  /** @nullable */
+  contractId?: number | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  clientName?: string | null;
+  replies: SupportTicketDetailRepliesItem[];
+  isSlaBreached: boolean;
+  /** @nullable */
+  slaRemainingHours?: string | null;
+}
+
+export type PropertyUnitDetailContractsItem = { [key: string]: unknown };
+
+export type PropertyUnitDetailPaymentsItem = { [key: string]: unknown };
+
+export type PropertyUnitDetailMaintenanceItem = { [key: string]: unknown };
+
+export type PropertyUnitDetailTimelineItem = { [key: string]: unknown };
+
+/**
+ * Full `property_units` row (numeric area/rent columns serialize as
+strings, timestamps as ISO strings) plus the related contracts,
+payments, maintenance requests, and activity timeline. Every column is
+enumerated rather than passthrough so the contract-drift guard fires
+if a handler adds/renames a returned field.
+
+ */
+export interface PropertyUnitDetail {
+  id: number;
+  companyId: number;
+  unitNumber: string;
+  /** @nullable */
+  buildingName?: string | null;
+  /** @nullable */
+  type?: string | null;
+  /** @nullable */
+  area?: string | null;
+  /** @nullable */
+  bedrooms?: number | null;
+  /** @nullable */
+  bathrooms?: number | null;
+  /** @nullable */
+  floor?: number | null;
+  /** @nullable */
+  monthlyRent?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  createdAt?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+  /** @nullable */
+  buildingId?: number | null;
+  /** @nullable */
+  features?: string[] | null;
+  /** @nullable */
+  direction?: string | null;
+  /** @nullable */
+  finishing?: string | null;
+  amenities?: unknown;
+  /** @nullable */
+  electricityMeter?: string | null;
+  /** @nullable */
+  waterMeter?: string | null;
+  /** @nullable */
+  usageType?: string | null;
+  /** @nullable */
+  ownerId?: number | null;
+  /** @nullable */
+  parkingSpaces?: number | null;
+  /** @nullable */
+  acType?: string | null;
+  /** @nullable */
+  hasKitchen?: boolean | null;
+  /** @nullable */
+  yearlyRent?: string | null;
+  /** @nullable */
+  insurancePolicy?: string | null;
+  /** @nullable */
+  insuranceExpiry?: string | null;
+  /** @nullable */
+  deletedAt?: string | null;
+  contracts: PropertyUnitDetailContractsItem[];
+  payments: PropertyUnitDetailPaymentsItem[];
+  maintenance: PropertyUnitDetailMaintenanceItem[];
+  timeline: PropertyUnitDetailTimelineItem[];
+}
+
+export type JournalEntryDetailLinesItem = {
+  id: number;
+  journalId: number;
+  accountCode: string;
+  /** @nullable */
+  debit?: string | null;
+  /** @nullable */
+  credit?: string | null;
+  /** @nullable */
+  accountId?: number | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  costCenter?: string | null;
+  /** @nullable */
+  createdAt?: string | null;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  projectId?: number | null;
+  /** @nullable */
+  employeeId?: number | null;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  propertyId?: number | null;
+  /** @nullable */
+  contractId?: number | null;
+  /** @nullable */
+  activityType?: string | null;
+  /** @nullable */
+  templateId?: number | null;
+  /** @nullable */
+  productId?: number | null;
+  /** @nullable */
+  clientId?: number | null;
+  /** @nullable */
+  vendorId?: number | null;
+  /** @nullable */
+  driverId?: number | null;
+  /** @nullable */
+  originalCurrency?: string | null;
+  /** @nullable */
+  originalDebit?: string | null;
+  /** @nullable */
+  originalCredit?: string | null;
+  /** @nullable */
+  exchangeRate?: string | null;
+  /** @nullable */
+  costCenterId?: number | null;
+  /** @nullable */
+  unitId?: number | null;
+  /** @nullable */
+  assetId?: number | null;
+  /** @nullable */
+  umrahSeasonId?: number | null;
+  /** @nullable */
+  umrahAgentId?: number | null;
+  /** @nullable */
+  sourceLineTable?: string | null;
+  /** @nullable */
+  sourceLineId?: number | null;
+  dimensionJson?: unknown;
+  /** @nullable */
+  deletedAt?: string | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  accountName?: string | null;
+};
+
+/**
+ * @nullable
+ */
+export type JournalEntryDetailReversalOf = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type JournalEntryDetailReversedBy = { [key: string]: unknown } | null;
+
+/**
+ * Full `journal_entries` row (numeric exchangeRate/amount columns
+serialize as strings, timestamps as ISO strings) plus the
+reversal-link reference/description fields, the entry's lines (each the
+full `journal_lines` row joined with the account name), and the nested
+`reversalOf` / `reversedBy` linked-entry objects (null when not a
+reversal). Every column is enumerated rather than passthrough so the
+contract-drift guard fires if a handler adds/renames a returned field.
+
+ */
+export interface JournalEntryDetail {
+  id: number;
+  companyId: number;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  ref?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  createdBy?: number | null;
+  /** @nullable */
+  createdAt?: string | null;
+  /** @nullable */
+  date?: string | null;
+  /** @nullable */
+  type?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  balancesApplied?: boolean | null;
+  /** @nullable */
+  sourceType?: string | null;
+  /** @nullable */
+  sourceId?: number | null;
+  /** @nullable */
+  postedBy?: number | null;
+  /** @nullable */
+  postedAt?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+  /** @nullable */
+  costCenter?: string | null;
+  /** @nullable */
+  departmentId?: number | null;
+  /** @nullable */
+  relatedEntityType?: string | null;
+  /** @nullable */
+  relatedEntityId?: number | null;
+  /** @nullable */
+  paymentMethod?: string | null;
+  /** @nullable */
+  reference?: string | null;
+  /** @nullable */
+  isPaid?: boolean | null;
+  /** @nullable */
+  attachmentUrl?: string | null;
+  /** @nullable */
+  attachmentType?: string | null;
+  /** @nullable */
+  expenseType?: string | null;
+  /** @nullable */
+  operationType?: string | null;
+  /** @nullable */
+  projectId?: number | null;
+  /** @nullable */
+  taxCategory?: string | null;
+  /** @nullable */
+  deletedAt?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  isTaxLinked?: boolean | null;
+  /** @nullable */
+  zatcaStatus?: string | null;
+  /** @nullable */
+  zatcaUuid?: string | null;
+  /** @nullable */
+  zatcaHash?: string | null;
+  /** @nullable */
+  zatcaQrCode?: string | null;
+  /** @nullable */
+  invoiceTypeCode?: string | null;
+  /** @nullable */
+  taxCategoryCode?: string | null;
+  /** @nullable */
+  exemptionReason?: string | null;
+  /** @nullable */
+  govIntegrationId?: number | null;
+  /** @nullable */
+  govSyncEnabled?: boolean | null;
+  /** @nullable */
+  govExternalRef?: string | null;
+  /** @nullable */
+  govEntityType?: string | null;
+  /** @nullable */
+  govEntityId?: number | null;
+  /** @nullable */
+  approvalStatus?: string | null;
+  /** @nullable */
+  isManual?: boolean | null;
+  /** @nullable */
+  reviewedBy?: number | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  /** @nullable */
+  approvedBy?: number | null;
+  /** @nullable */
+  approvedAt?: string | null;
+  /** @nullable */
+  approvalNotes?: string | null;
+  /** @nullable */
+  reversalOfId?: number | null;
+  /** @nullable */
+  reversedById?: number | null;
+  /** @nullable */
+  reversedAt?: string | null;
+  /** @nullable */
+  reversalReason?: string | null;
+  /** @nullable */
+  sourceKey?: string | null;
+  /** @nullable */
+  originalCurrency?: string | null;
+  /** @nullable */
+  exchangeRate?: string | null;
+  /** @nullable */
+  originalAmount?: string | null;
+  /** @nullable */
+  documentStatus?: string | null;
+  /** @nullable */
+  paymentStatus?: string | null;
+  /** @nullable */
+  postingStatus?: string | null;
+  /** @nullable */
+  reversalOfRef?: string | null;
+  /** @nullable */
+  reversalOfDescription?: string | null;
+  /** @nullable */
+  reversedByRef?: string | null;
+  /** @nullable */
+  reversedByDescription?: string | null;
+  lines: JournalEntryDetailLinesItem[];
+  /** @nullable */
+  reversalOf?: JournalEntryDetailReversalOf;
+  /** @nullable */
+  reversedBy?: JournalEntryDetailReversedBy;
+}
 
 export interface CreateEmployeeBody {
   nationalId?: string;
@@ -116,22 +1148,61 @@ export interface CreateEmployeeBody {
   hireDate: string;
 }
 
+/**
+ * @nullable
+ */
+export type CreateEmployeeResponseUserAccount = {
+  [key: string]: unknown;
+} | null;
+
+/**
+ * Response from `POST /api/hr/employees`. Returns the created employee
+(list-row projection joined with the new active assignment) plus
+onboarding metadata and the linked user account. Numeric/decimal
+columns serialize as JSON strings.
+
+ */
 export interface CreateEmployeeResponse {
-  employeeId: number;
-  assignmentId: number;
-  empNumber: string;
+  id: number;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  empNumber?: string | null;
+  /** @nullable */
+  status?: string | null;
+  jobTitle: string;
+  /** @nullable */
+  role?: string | null;
+  /** @nullable */
+  salary?: string | null;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  branchName?: string | null;
+  /** @nullable */
+  assignmentId?: number | null;
+  /** @nullable */
+  onboardingTasksCreated?: number | null;
+  /** @nullable */
+  probationEndDate?: string | null;
+  /** @nullable */
+  userAccount?: CreateEmployeeResponseUserAccount;
 }
 
 export interface Client {
   id: number;
-  name?: string;
-  phone?: string;
-  email?: string;
-  classification: string;
-  source?: string;
-  totalRevenue?: number;
-  isBlacklisted?: boolean;
-  assignedToName?: string;
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  classification?: string | null;
+  source?: string | null;
+  totalRevenue?: string | null;
+  expectedRevenue?: string | null;
+  isBlacklisted?: boolean | null;
   createdAt?: string;
 }
 
@@ -142,10 +1213,113 @@ export interface CreateClientBody {
   source?: string;
 }
 
+/**
+ * Response from `POST /api/clients`. Returns the full created `clients`
+row. Numeric/decimal columns serialize as JSON strings; `tags` and
+`attachments` are free-form JSON.
+
+ */
 export interface CreateClientResponse {
-  clientId: number;
-  code: string;
+  id: number;
+  companyId: number;
+  /** @nullable */
+  code?: string | null;
+  /** @nullable */
+  type?: string | null;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  language?: string | null;
+  /** @nullable */
+  lat?: string | null;
+  /** @nullable */
+  lon?: string | null;
+  /** @nullable */
+  classification?: string | null;
+  /** @nullable */
+  source?: string | null;
+  /** @nullable */
+  assignedTo?: number | null;
+  /** @nullable */
+  totalRevenue?: string | null;
+  /** @nullable */
+  avgRating?: string | null;
+  tags?: unknown;
+  /** @nullable */
+  isBlacklisted?: boolean | null;
+  /** @nullable */
+  lastActivityAt?: string | null;
+  /** @nullable */
+  lastPaymentAt?: string | null;
+  createdAt: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  deletedAt?: string | null;
+  attachments?: unknown;
+  /** @nullable */
+  taxNumber?: string | null;
+  /** @nullable */
+  expectedRevenue?: string | null;
+  updatedAt: string;
 }
+
+export type ClientDetailInvoicesItem = { [key: string]: unknown };
+
+export type ClientDetailOpportunitiesItem = { [key: string]: unknown };
+
+export type ClientDetailTicketsItem = { [key: string]: unknown };
+
+export type ClientDetailProjectsItem = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type ClientDetailFinancials = { [key: string]: unknown } | null;
+
+export type ClientDetailConversationsItem = { [key: string]: unknown };
+
+export type ClientDetailTimelineItem = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type ClientDetailActiveServices = { [key: string]: unknown } | null;
+
+export type ClientDetailTenanciesItem = { [key: string]: unknown };
+
+export type ClientDetailLegalCasesItem = { [key: string]: unknown };
+
+export type ClientDetailUmrahSubAgentsItem = { [key: string]: unknown };
+
+/**
+ * Full client record returned by `GET /api/clients/:id`. The base
+`clients` row plus nested related arrays/objects (invoices,
+opportunities, tickets, projects, financials aggregate, conversations,
+timeline, active services, tenancies, legal cases, umrah sub-agents).
+
+ */
+export type ClientDetail = CreateClientResponse & {
+  invoices?: ClientDetailInvoicesItem[];
+  opportunities?: ClientDetailOpportunitiesItem[];
+  tickets?: ClientDetailTicketsItem[];
+  projects?: ClientDetailProjectsItem[];
+  /** @nullable */
+  financials?: ClientDetailFinancials;
+  conversations?: ClientDetailConversationsItem[];
+  timeline?: ClientDetailTimelineItem[];
+  /** @nullable */
+  activeServices?: ClientDetailActiveServices;
+  tenancies?: ClientDetailTenanciesItem[];
+  legalCases?: ClientDetailLegalCasesItem[];
+  umrahSubAgents?: ClientDetailUmrahSubAgentsItem[];
+};
 
 export interface CheckInBody {
   lat: number;
@@ -161,23 +1335,34 @@ export interface CheckInResponse {
 export interface AttendanceRecord {
   id: number;
   date: string;
-  checkIn?: string;
-  checkOut?: string;
-  lateMinutes?: number;
+  checkIn?: string | null;
+  checkOut?: string | null;
+  lateMinutes?: number | null;
   status: string;
+  employeeName?: string | null;
+  checkInLat?: string | null;
+  checkInLon?: string | null;
+  checkOutLat?: string | null;
+  checkOutLon?: string | null;
+  workHours?: string | null;
+  overtimeMinutes?: number | null;
+  deductionAmount?: string | null;
+  violationSeverity?: string | null;
 }
 
 export interface LeaveType {
   id: number;
   name: string;
-  annualDays: number;
+  maxDays?: number | null;
+  requiresApproval?: boolean;
   isPaid?: boolean;
 }
 
 export interface LeaveBalance {
   leaveTypeId: number;
-  leaveTypeName?: string;
-  entitled: number;
+  name: string;
+  annualDays?: number | null;
+  maxDays: number;
   used: number;
   reserved?: number;
   remaining: number;
@@ -185,13 +1370,16 @@ export interface LeaveBalance {
 
 export interface LeaveRequest {
   id: number;
-  leaveTypeId?: number;
-  leaveTypeName?: string;
+  leaveTypeName?: string | null;
+  employeeName?: string | null;
   startDate: string;
   endDate: string;
   days: number;
   status: string;
-  reason?: string;
+  reason?: string | null;
+  rejectedReason?: string | null;
+  approvedBy?: number | null;
+  approvedAt?: string | null;
   createdAt?: string;
 }
 
@@ -216,9 +1404,12 @@ export interface ApproveLeaveBody {
 export interface PayrollRun {
   id: number;
   period: string;
+  month?: string;
   status: string;
-  totalNet: number;
+  totalNet?: string | null;
+  totalAmount?: number;
   employeeCount?: number;
+  runByName?: string | null;
   createdAt?: string;
 }
 
@@ -233,20 +1424,31 @@ export interface PayrollRunResult {
   employeeCount: number;
 }
 
+/**
+ * Monetary fields (subtotal, vatRate, vatAmount, total, paidAmount) are
+serialized as strings (pg `numeric`). `issueDate` is the row's
+`createdAt` timestamp, aliased by the list handler.
+
+ */
 export interface Invoice {
   id: number;
-  ref: string;
-  clientName?: string;
-  clientId?: number;
-  description?: string;
-  subtotal?: number;
-  vatRate?: number;
-  vatAmount?: number;
-  total: number;
-  paidAmount?: number;
+  ref?: string | null;
+  clientName?: string | null;
+  clientId?: number | null;
+  description?: string | null;
+  subtotal?: string | null;
+  vatRate?: string | null;
+  vatAmount?: string | null;
+  total?: string | null;
+  paidAmount?: string | null;
   status: string;
-  dueDate?: string;
-  createdAt?: string;
+  issueDate: string;
+  dueDate?: string | null;
+  paymentTerms?: string | null;
+  notes?: string | null;
+  isTaxLinked?: boolean | null;
+  zatcaStatus?: string | null;
+  createdByName?: string | null;
 }
 
 export type CreateInvoiceBodyItemsItem = {
@@ -262,11 +1464,130 @@ export interface CreateInvoiceBody {
   dueInDays?: number;
 }
 
+export type CreateInvoiceResponseLinesItem = { [key: string]: unknown };
+
+/**
+ * Response from `POST /api/finance/invoices`. Returns the full created
+`invoices` row (incl. all ZATCA columns) plus the joined `clientName`
+and the invoice `lines`. Numeric/decimal columns serialize as JSON
+strings.
+
+ */
 export interface CreateInvoiceResponse {
-  invoiceId: number;
-  ref: string;
-  total: number;
-  dueDate?: string;
+  id: number;
+  companyId: number;
+  /** @nullable */
+  branchId?: number | null;
+  /** @nullable */
+  clientId?: number | null;
+  /** @nullable */
+  ref?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  subtotal?: string | null;
+  /** @nullable */
+  vatRate?: string | null;
+  /** @nullable */
+  vatAmount?: string | null;
+  /** @nullable */
+  total?: string | null;
+  /** @nullable */
+  paidAmount?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  paidAt?: string | null;
+  /** @nullable */
+  createdBy?: number | null;
+  createdAt: string;
+  currency: string;
+  /** @nullable */
+  paymentTerms?: string | null;
+  /** @nullable */
+  poNumber?: string | null;
+  discountAmount: string;
+  discountPercent: string;
+  /** @nullable */
+  journalEntryId?: number | null;
+  /** @nullable */
+  sentAt?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  deletedAt?: string | null;
+  /** @nullable */
+  isTaxLinked?: boolean | null;
+  /** @nullable */
+  zatcaStatus?: string | null;
+  /** @nullable */
+  zatcaUuid?: string | null;
+  /** @nullable */
+  zatcaHash?: string | null;
+  /** @nullable */
+  zatcaQrCode?: string | null;
+  /** @nullable */
+  invoiceTypeCode?: string | null;
+  /** @nullable */
+  taxCategoryCode?: string | null;
+  /** @nullable */
+  exemptionReason?: string | null;
+  /** @nullable */
+  projectId?: number | null;
+  /** @nullable */
+  lastDunningStage?: number | null;
+  /** @nullable */
+  lastDunningAt?: string | null;
+  /** @nullable */
+  exchangeRate?: string | null;
+  updatedAt: string;
+  /** @nullable */
+  costCenter?: string | null;
+  /** @nullable */
+  zatcaIcv?: number | null;
+  /** @nullable */
+  zatcaPih?: string | null;
+  /** @nullable */
+  zatcaSignature?: string | null;
+  /** @nullable */
+  zatcaClearedXml?: string | null;
+  /** @nullable */
+  zatcaClearanceStatus?: string | null;
+  /** @nullable */
+  zatcaClearedAt?: string | null;
+  /** @nullable */
+  zatcaReportedAt?: string | null;
+  /** @nullable */
+  zatcaLastError?: string | null;
+  /** @nullable */
+  approvedBy?: number | null;
+  /** @nullable */
+  approvedAt?: string | null;
+  /** @nullable */
+  postedBy?: number | null;
+  /** @nullable */
+  postedAt?: string | null;
+  /** @nullable */
+  taxCode?: string | null;
+  /** @nullable */
+  taxInclusive?: boolean | null;
+  /** @nullable */
+  cogsTotal?: string | null;
+  /** @nullable */
+  cogsJournalEntryId?: number | null;
+  /** @nullable */
+  amendedFromInvoiceId?: number | null;
+  /** @nullable */
+  amendedToInvoiceId?: number | null;
+  /** @nullable */
+  amendmentReason?: string | null;
+  /** @nullable */
+  amendedAt?: string | null;
+  /** @nullable */
+  clientName?: string | null;
+  lines?: CreateInvoiceResponseLinesItem[];
 }
 
 export interface RecordPaymentBody {
@@ -285,15 +1606,25 @@ export interface Account {
   code: string;
   name: string;
   type: string;
+  parentCode?: string | null;
+  status?: string;
+  branchId?: number | null;
+  accountUsage?: string | null;
+  childrenUsagePolicy?: string | null;
 }
 
 export type FinanceStatsInvoicesByStatusItem = { [key: string]: unknown };
 
+/**
+ * Monetary aggregates are serialized as strings (PostgreSQL `numeric`
+is returned verbatim by the driver, not coerced to a JS number).
+
+ */
 export interface FinanceStats {
-  totalRevenue: number;
-  pendingAmount: number;
-  overdueAmount: number;
-  paidThisMonth: number;
+  totalRevenue: string;
+  pendingAmount: string;
+  overdueAmount: string;
+  paidThisMonth: string;
   invoicesByStatus?: FinanceStatsInvoicesByStatusItem[];
 }
 
@@ -307,18 +1638,67 @@ export type ListEmployeesParams = {
   limit?: number;
 };
 
+export type ListEmployees200 = {
+  data: Employee[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type ListClientsParams = {
   search?: string;
   classification?: string;
   page?: number;
 };
 
+export type ListClients200 = {
+  data: Client[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type GetAttendanceParams = {
   month?: string;
 };
 
+export type GetAttendance200 = {
+  data: AttendanceRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type ListLeaveTypes200 = {
+  data: LeaveType[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type GetLeaveBalance200 = {
+  data: LeaveBalance[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type ListLeaveRequestsParams = {
   status?: string;
+};
+
+export type ListLeaveRequests200 = {
+  data: LeaveRequest[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type ListPayrollRuns200 = {
+  data: PayrollRun[];
+  total: number;
+  page: number;
+  pageSize: number;
 };
 
 export type ListInvoicesParams = {
@@ -326,7 +1706,213 @@ export type ListInvoicesParams = {
   page?: number;
 };
 
+export type ListInvoices200 = {
+  data: Invoice[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type CreateProjectBodyStatus =
+  (typeof CreateProjectBodyStatus)[keyof typeof CreateProjectBodyStatus];
+
+export const CreateProjectBodyStatus = {
+  planning: "planning",
+  active: "active",
+  on_hold: "on_hold",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export type CreateProjectBodyPhasesItem = {
+  name: string;
+  startDate?: string;
+  endDate?: string;
+};
+
+export type CreateProjectBody = {
+  name: string;
+  description?: string;
+  clientId?: number | null;
+  managerId?: number | null;
+  startDate: string;
+  endDate: string;
+  /** @minimum 0 */
+  budget?: number;
+  status?: CreateProjectBodyStatus;
+  phases?: CreateProjectBodyPhasesItem[];
+};
+
+export type ListNotifications200 = {
+  data: Notification[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type ListTasksParams = {
   status?: string;
   date?: string;
+};
+
+export type SplitUmrahGroupBody = {
+  pilgrimIds: number[];
+  newGroupName?: string;
+  newNuskGroupNumber?: string;
+};
+
+export type SplitUmrahGroup200NewGroup = { [key: string]: unknown };
+
+export type SplitUmrahGroup200 = {
+  success?: boolean;
+  newGroup?: SplitUmrahGroup200NewGroup;
+  movedCount?: number;
+};
+
+export type MergeUmrahGroupsBody = {
+  sourceGroupIds: number[];
+  targetGroupId: number;
+};
+
+export type MergeUmrahGroups200 = {
+  success?: boolean;
+  movedCount?: number;
+  mergedSourceIds?: number[];
+};
+
+export type BulkWaiveUmrahPenaltiesBody = {
+  penaltyIds: number[];
+  reason: string;
+};
+
+export type BulkWaiveUmrahPenalties200SkippedItem = { [key: string]: unknown };
+
+export type BulkWaiveUmrahPenalties200ErrorsItem = { [key: string]: unknown };
+
+export type BulkWaiveUmrahPenalties200 = {
+  successCount?: number;
+  successIds?: number[];
+  totalWaivedAmount?: number;
+  skipped?: BulkWaiveUmrahPenalties200SkippedItem[];
+  errors?: BulkWaiveUmrahPenalties200ErrorsItem[];
+};
+
+export type ListUmrahAttachmentsParams = {
+  entityType?: ListUmrahAttachmentsEntityType;
+  entityId?: number;
+  type?: ListUmrahAttachmentsType;
+};
+
+export type ListUmrahAttachmentsEntityType =
+  (typeof ListUmrahAttachmentsEntityType)[keyof typeof ListUmrahAttachmentsEntityType];
+
+export const ListUmrahAttachmentsEntityType = {
+  mutamer: "mutamer",
+  sub_agent: "sub_agent",
+  group: "group",
+  agent: "agent",
+  nusk_invoice: "nusk_invoice",
+  season: "season",
+  sales_invoice: "sales_invoice",
+  violation: "violation",
+} as const;
+
+export type ListUmrahAttachmentsType =
+  (typeof ListUmrahAttachmentsType)[keyof typeof ListUmrahAttachmentsType];
+
+export const ListUmrahAttachmentsType = {
+  passport: "passport",
+  visa: "visa",
+  contract: "contract",
+  nusk_file: "nusk_file",
+  identity: "identity",
+  transfer_receipt: "transfer_receipt",
+  other: "other",
+} as const;
+
+export type ListUmrahAttachments200DataItem = { [key: string]: unknown };
+
+export type ListUmrahAttachments200 = {
+  data?: ListUmrahAttachments200DataItem[];
+};
+
+export type CreateUmrahAttachmentBody = {
+  entityType: string;
+  entityId: number;
+  type: string;
+  title: string;
+  notes?: string;
+  fileUrl?: string;
+  storageKey?: string;
+  fileSize?: number;
+  mimeType?: string;
+};
+
+export type CreateUmrahAttachment201 = {
+  id?: number;
+};
+
+export type UmrahSubAgentStatementParams = {
+  type?: UmrahSubAgentStatementType;
+  from?: string;
+  to?: string;
+};
+
+export type UmrahSubAgentStatementType =
+  (typeof UmrahSubAgentStatementType)[keyof typeof UmrahSubAgentStatementType];
+
+export const UmrahSubAgentStatementType = {
+  detailed: "detailed",
+  summary: "summary",
+} as const;
+
+export type UmrahReconciliationReportParams = {
+  seasonId?: number;
+};
+
+export type UmrahReconciliationReport200Summary = { [key: string]: unknown };
+
+export type UmrahReconciliationReport200AmountDiffsItem = {
+  [key: string]: unknown;
+};
+
+export type UmrahReconciliationReport200CountDiffsItem = {
+  [key: string]: unknown;
+};
+
+export type UmrahReconciliationReport200OverstayGapsItem = {
+  [key: string]: unknown;
+};
+
+export type UmrahReconciliationReport200 = {
+  summary?: UmrahReconciliationReport200Summary;
+  amountDiffs?: UmrahReconciliationReport200AmountDiffsItem[];
+  countDiffs?: UmrahReconciliationReport200CountDiffsItem[];
+  overstayGaps?: UmrahReconciliationReport200OverstayGapsItem[];
+};
+
+export type UmrahDailyRunsheetParams = {
+  date?: string;
+};
+
+export type UmrahDailyRunsheet200ArrivalsItem = { [key: string]: unknown };
+
+export type UmrahDailyRunsheet200DeparturesItem = { [key: string]: unknown };
+
+export type UmrahDailyRunsheet200OverstaysItem = { [key: string]: unknown };
+
+export type UmrahDailyRunsheet200 = {
+  date?: string;
+  arrivals?: UmrahDailyRunsheet200ArrivalsItem[];
+  departures?: UmrahDailyRunsheet200DeparturesItem[];
+  overstays?: UmrahDailyRunsheet200OverstaysItem[];
+};
+
+export type UmrahDailyRunsheetPdfParams = {
+  date?: string;
+};
+
+export type UmrahSubAgentStatementPdfParams = {
+  from?: string;
+  to?: string;
 };
