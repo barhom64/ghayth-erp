@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { useApiMutation, getErrorMessage } from "@/lib/api";
+import { useApiMutation, useApiQuery, getErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,6 +56,16 @@ export default function AllocationRuleCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/finance/allocation-rules", "POST", [["allocation-rules"]]);
+  // #1945 (FIN-17) — the backend stores numeric *AccountId; AccountSelect emits
+  // the account CODE. Resolve code → id so the chosen accounts actually persist
+  // (previously every *AccountId was hard-coded undefined → mappings dropped).
+  const { data: accountsData } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const accountIdByCode = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of accountsData?.data ?? []) if (a?.code != null) m.set(String(a.code), Number(a.id));
+    return m;
+  }, [accountsData]);
+  const idFor = (code: string) => (code ? accountIdByCode.get(code) : undefined);
 
   const [form, setForm] = useState({
     name: "",
@@ -89,8 +99,6 @@ export default function AllocationRuleCreate() {
       return;
     }
 
-    // Convert account codes → IDs. For now, send codes; backend can
-    // resolve. If schema wants IDs, the admin can author with API directly.
     try {
       await createMut.mutateAsync({
         name: form.name,
@@ -98,17 +106,14 @@ export default function AllocationRuleCreate() {
         lineType: form.lineType || undefined,
         activityType: form.activityType || undefined,
         entityType: form.entityType || undefined,
-        // The backend expects *Id fields; map codes here at the route layer
-        // (front-end sends both code + null id; the backend treats undefined id as 'no mapping').
-        // For pure-code authoring, we provide the codes as the readable backup
-        // and let the admin re-bind via API if precise IDs are required.
-        revenueAccountId: undefined,
-        expenseAccountId: undefined,
-        inventoryAccountId: undefined,
-        assetAccountId: undefined,
-        vatAccountId: undefined,
-        debitAccountId: undefined,
-        creditAccountId: undefined,
+        // Resolve the chosen account CODES → numeric ids the backend stores.
+        revenueAccountId: idFor(form.revenueAccountCode),
+        expenseAccountId: idFor(form.expenseAccountCode),
+        inventoryAccountId: idFor(form.inventoryAccountCode),
+        assetAccountId: idFor(form.assetAccountCode),
+        vatAccountId: idFor(form.vatAccountCode),
+        debitAccountId: idFor(form.debitAccountCode),
+        creditAccountId: idFor(form.creditAccountCode),
         costCenterStrategy: form.costCenterStrategy === "none" ? null : form.costCenterStrategy,
         autoCreateMissing: form.autoCreateMissing,
         requiresEntityLink: form.requiresEntityLink,
@@ -295,9 +300,10 @@ export default function AllocationRuleCreate() {
 
       <Card className="mt-4 bg-status-warning-surface/30 border-status-warning-surface">
         <CardContent className="p-3 text-xs text-status-warning-foreground">
-          ⓘ هذا الـ Form يدعم القواعد البسيطة. للقواعد المعقدة مع
+          ⓘ هذا الـ Form يدعم القواعد البسيطة (الحسابات المختارة أعلاه تُحفظ فعليًا الآن).
+          للشروط المتقدمة مع
           <code className="bg-white border px-1 mx-1 rounded">conditionsJson</code> أو
-          <code className="bg-white border px-1 mx-1 rounded">dimensionStrategyJson</code> أو ربط الحسابات بـ IDs محددة،
+          <code className="bg-white border px-1 mx-1 rounded">dimensionStrategyJson</code>،
           استخدم الـ API مباشرة <code className="bg-white border px-1 mx-1 rounded">POST /finance/allocation-rules</code>.
           الـ wizard المتقدم — follow-up PR.
         </CardContent>
