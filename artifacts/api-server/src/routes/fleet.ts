@@ -15,7 +15,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { hashPassword } from "../lib/auth.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2, currentDateInTz } from "../lib/businessHelpers.js";
 import { sendMessage } from "../lib/messageSender.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -62,6 +62,14 @@ const vehicleTechnicalProfileSchema = z.object({
   safetyFeatures: z.array(z.string()).optional(),
   operatingHours: z.coerce.number().nonnegative().optional(),
   equipmentAttachments: z.array(z.string()).optional(),
+  // #1812 Wave 0.3 — assignment-decision fields (migration 284). The
+  // canonical filter the assignment engine uses to decide which
+  // vehicles can serve a passenger booking vs a cargo booking, and
+  // what payload the dispatcher should actually quote (operational
+  // payload sits below technical payloadKg for a safety margin).
+  operationalPayloadKg: z.coerce.number().nonnegative().optional(),
+  validForPassengers: z.boolean().optional(),
+  validForCargo: z.boolean().optional(),
 });
 
 // #1733 Pricing tier (Issue Comment 3) — driverServiceProfile extends
@@ -524,11 +532,14 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
 
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate","requiredLicenseClass",
-        "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments")
+        "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments",
+        "operationalPayloadKg","validForPassengers","validForCargo")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,
-        $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)`,
+        $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,
+        $42,$43,$44)`,
       [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null, b.requiredLicenseClass || null,
-        b.vehicleType ?? null, b.payloadKg ?? null, b.boxLengthCm ?? null, b.boxWidthCm ?? null, b.boxHeightCm ?? null, b.axleCount ?? null, b.tireCount ?? null, b.tireSize ?? null, b.engineDisplacementCc ?? null, b.transmissionType ?? null, b.seatCount ?? null, b.hasAc ?? null, b.screenCount ?? null, b.doorCount ?? null, b.upholsteryType ?? null, b.safetyFeatures ? JSON.stringify(b.safetyFeatures) : null, b.operatingHours ?? null, b.equipmentAttachments ? JSON.stringify(b.equipmentAttachments) : null]
+        b.vehicleType ?? null, b.payloadKg ?? null, b.boxLengthCm ?? null, b.boxWidthCm ?? null, b.boxHeightCm ?? null, b.axleCount ?? null, b.tireCount ?? null, b.tireSize ?? null, b.engineDisplacementCc ?? null, b.transmissionType ?? null, b.seatCount ?? null, b.hasAc ?? null, b.screenCount ?? null, b.doorCount ?? null, b.upholsteryType ?? null, b.safetyFeatures ? JSON.stringify(b.safetyFeatures) : null, b.operatingHours ?? null, b.equipmentAttachments ? JSON.stringify(b.equipmentAttachments) : null,
+        b.operationalPayloadKg ?? null, b.validForPassengers ?? null, b.validForCargo ?? null]
     );
     assertInsert(insertId, "fleet_vehicles");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -1079,6 +1090,8 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
       "requiredLicenseClass",
       // #1733 Blocker #2 — technical profile fields.
       "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments",
+      // #1812 Wave 0.3 — assignment-decision fields from migration 284.
+      "operationalPayloadKg","validForPassengers","validForCargo",
     ] as const;
     const colMap: Record<string, string> = {
       plateNumber: '"plateNumber"',
@@ -1118,6 +1131,10 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
       safetyFeatures: '"safetyFeatures"',
       operatingHours: '"operatingHours"',
       equipmentAttachments: '"equipmentAttachments"',
+      // #1812 Wave 0.3.
+      operationalPayloadKg: '"operationalPayloadKg"',
+      validForPassengers: '"validForPassengers"',
+      validForCargo: '"validForCargo"',
     };
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
@@ -4409,8 +4426,15 @@ router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.vehicles
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(rentalReturnSchema.safeParse(req.body));
-    const [c] = await rawQuery<{ id: number; status: string; handoverAt: string | null }>(
-      `SELECT id, status, "handoverAt"
+    const [c] = await rawQuery<{
+      id: number; status: string; handoverAt: string | null;
+      ref: string | null; clientId: number; vehicleId: number;
+      driverId: number | null; startDate: string;
+      totalAmount: string | null; notes: string | null;
+      branchId: number | null;
+    }>(
+      `SELECT id, status, "handoverAt", ref, "clientId", "vehicleId",
+              "driverId", "startDate", "totalAmount", notes, "branchId"
          FROM fleet_rental_contracts
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId],
@@ -4451,7 +4475,25 @@ router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.vehicles
       entity: "fleet_rental_contracts", entityId: id,
       details: JSON.stringify({ overageAmount: b.overageAmount ?? 0 }),
     }).catch((e) => logger.error(e, "rental return event failed"));
-    res.json({ ok: true });
+    // #1812 — الإيراد عند الإغلاق → Accounting Candidate. Hands the
+    // closed rental to the accountant queue (transport_billing_candidates)
+    // with quantity = rental days so revenue is recognised over the
+    // duration. NO journal entry here — the accountant materializes from
+    // the finance side. Soft-fail: a candidate hiccup must not roll back
+    // the operational close (the insert is idempotent and re-runnable).
+    const candidate = await fleetEngine.createRentalBillingCandidate(
+      { companyId: scope.companyId, branchId: c.branchId ?? scope.branchId ?? 0, createdBy: scope.userId },
+      {
+        id: c.id, ref: c.ref, clientId: c.clientId, vehicleId: c.vehicleId,
+        driverId: c.driverId,
+        startDate: c.startDate,
+        actualEndDate: b.actualEndDate ?? currentDateInTz(),
+        totalAmount: c.totalAmount != null ? Number(c.totalAmount) : null,
+        overageAmount: b.overageAmount ?? 0,
+        notes: c.notes,
+      },
+    ).catch((e) => { logger.error(e, "rental billing candidate failed"); return null; });
+    res.json({ ok: true, billingCandidateId: candidate?.id ?? null });
   } catch (err) { handleRouteError(err, res, "rental return error"); }
 });
 
