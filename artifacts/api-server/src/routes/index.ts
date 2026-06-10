@@ -28,6 +28,7 @@ import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import cargoRouter from "./cargo.js";
 import warehouseRouter from "./warehouse.js";
 import { warehouseCycleCountsRouter } from "./warehouse-cycle-counts.js";
+import { warehouseAdvancedRouter } from "./warehouse-advanced.js";
 import propertiesRouter from "./properties.js";
 import legalRouter from "./legal.js";
 import projectsRouter from "./projects.js";
@@ -420,6 +421,7 @@ router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRo
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseCycleCountsRouter);
+router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseAdvancedRouter);
 router.use("/properties", propertiesUserLimiter);
 router.use("/properties", requireModule("property"), requireGuards("financial"), propertiesRouter);
 // Agent 7 (visibility consistency sweep) — sidebar gates /legal/cases at

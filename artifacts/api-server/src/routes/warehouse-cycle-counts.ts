@@ -30,7 +30,7 @@ const recordSchema = z.object({
 });
 
 /** Find the company's default warehouse, creating "المستودع الرئيسي" once. */
-async function resolveWarehouseId(companyId: number, branchId: number | null, requested?: number): Promise<number> {
+export async function resolveWarehouseId(companyId: number, branchId: number | null, requested?: number): Promise<number> {
   if (requested) {
     const [w] = await rawQuery<{ id: number }>(
       `SELECT id FROM warehouses WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
