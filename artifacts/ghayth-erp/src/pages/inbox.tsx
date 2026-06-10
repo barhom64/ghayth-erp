@@ -419,6 +419,16 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
       apiFetch(`/inbox/messages/${id}/folder`, { method: "POST", body: JSON.stringify({ folder }) }),
     onSuccess: () => { toast({ title: "تم النقل" }); onChange?.(); },
   });
+  // Retry a failed outbound message — see /inbox/messages/:id/retry.
+  // The endpoint resets the queue row to status='pending' so the next
+  // worker tick picks it up. Most useful after fixing SMTP credentials
+  // or a recipient typo without rewriting the message.
+  const retryMut = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch<{ status: string }>(`/inbox/messages/${id}/retry`, { method: "POST" }),
+    onSuccess: () => { toast({ title: "أُعيد إلى قائمة الإرسال" }); onChange?.(); },
+    onError: (e: Error) => toast({ title: "فشل إعادة المحاولة", description: e.message, variant: "destructive" }),
+  });
 
   // Bulk selection: selected message ids. Single round-trip move via
   // /inbox/messages/bulk-folder so 50 threads → 1 request, not 50.
@@ -572,6 +582,18 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
                   </div>
                 </button>
                 <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {t.direction === "outbound" && t.status === "failed" && (
+                    <button
+                      type="button"
+                      onClick={() => retryMut.mutate(t.id)}
+                      disabled={retryMut.isPending}
+                      className="p-1 hover:bg-status-success-surface/60 rounded"
+                      title="إعادة محاولة الإرسال"
+                      data-testid={`retry-${t.id}`}
+                    >
+                      <RefreshCw className={cn("w-3 h-3 text-status-success-foreground", retryMut.isPending && "animate-spin")} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => toggleStar.mutate(t.id)}
