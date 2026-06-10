@@ -38,6 +38,35 @@ const MOVEMENT_TYPES = ["in", "out", "return", "transfer_in", "transfer_out", "a
 // rejected. Stockable = product / consumable (NULL defaults to 'product').
 const NON_STOCK_ITEM_TYPES = new Set(["service", "digital", "asset"]);
 
+// ─── Controllable warehouse policies ────────────────────────────────────────
+// Stored in the cascading `settings` table (system → company), edited from
+// the system-controls tab (سياسات المستودع). Defaults preserve the current
+// behavior so flipping nothing changes nothing.
+interface WarehousePolicies {
+  /** W5 — "لا حركة بلا سبب": when true, POST /movements rejects an empty reference. */
+  requireMovementReference: boolean;
+  /** When false, hitting min-stock does NOT auto-create a purchase request. */
+  autoPurchaseRequestOnMinStock: boolean;
+}
+
+function parsePolicyBool(raw: unknown, fallback: boolean): boolean {
+  if (raw === undefined || raw === null) return fallback;
+  if (typeof raw === "boolean") return raw;
+  try { return JSON.parse(String(raw)) === true; } catch { return fallback; }
+}
+
+async function getWarehousePolicies(companyId: number, branchId?: number): Promise<WarehousePolicies> {
+  const { resolveSettings } = await import("../lib/settings.js");
+  const [requireRef, autoPr] = await Promise.all([
+    resolveSettings("warehouse.require_movement_reference", companyId, branchId),
+    resolveSettings("warehouse.auto_purchase_request_on_min_stock", companyId, branchId),
+  ]);
+  return {
+    requireMovementReference: parsePolicyBool(requireRef, false),
+    autoPurchaseRequestOnMinStock: parsePolicyBool(autoPr, true),
+  };
+}
+
 const createProductSchema = z.object({
   name: z.string().min(1, "اسم المنتج مطلوب"),
   sku: z.string().min(1, "رمز المنتج (SKU) مطلوب"),
@@ -632,10 +661,81 @@ router.get("/movements/:id", authorize({ feature: "warehouse.transfers", action:
   } catch (err) { handleRouteError(err, res, "Warehouse movement detail error:"); }
 });
 
+// W6 — معاينة الأثر قبل الحفظ. Pure read: computes the stock delta, the
+// min-stock alert, the overdraw danger, and an estimated value line, shaped
+// for the shared ImpactPreviewButton. Costs here are visible only to roles
+// that can already create movements (the form shows unitCost + the context
+// card's costPrice to the same audience). Valuation/COGS itself stays in
+// finance — this previews quantities and flags, it does not post anything.
+router.post("/movements/impact-preview", authorize({ feature: "warehouse.transfers", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createMovementSchema.safeParse(req.body));
+    const [product] = await rawQuery<Record<string, any>>(
+      `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.productId, scope.companyId]
+    );
+    if (!product) throw new NotFoundError("المنتج غير موجود");
+
+    const isOutbound = b.type === "out" || b.type === "transfer_out" || b.type === "adjustment_out";
+    const qty = Math.abs(Number(b.quantity));
+    const current = Number(product.currentStock ?? 0);
+    const minStock = Number(product.minStock ?? 0);
+    const newStock = isOutbound ? current - qty : current + qty;
+    const unitCost = Number(b.unitCost) > 0 ? Number(b.unitCost) : Number(product.costPrice ?? 0);
+    const estValue = roundTo2(qty * unitCost);
+
+    const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [
+      { category: "المخزون", label: "الرصيد الحالي", value: String(current), severity: "info" },
+      { category: "المخزون", label: "الرصيد بعد الحركة", value: String(newStock), severity: newStock < 0 ? "danger" : "success" },
+    ];
+    if (NON_STOCK_ITEM_TYPES.has(String(product.itemType ?? "product"))) {
+      items.push({ category: "تحقق", label: "صنف غير مخزني", value: "سيُرفض الحفظ — الخدمات/الرقمي/الأصول بلا حركات", severity: "danger" });
+    }
+    if (isOutbound && qty > current) {
+      items.push({ category: "تحقق", label: "سحب زائد", value: `الكمية (${qty}) تتجاوز المتاح (${current}) — سيُرفض الحفظ`, severity: "danger" });
+    }
+    if (newStock >= 0 && newStock <= minStock) {
+      const policies = await getWarehousePolicies(scope.companyId, scope.branchId);
+      items.push({
+        category: "الحد الأدنى",
+        label: "تنبيه حد أدنى",
+        value: policies.autoPurchaseRequestOnMinStock
+          ? `سيهبط الرصيد إلى ${newStock} (الحد: ${minStock}) — سيُنشأ طلب شراء تلقائي`
+          : `سيهبط الرصيد إلى ${newStock} (الحد: ${minStock}) — إنشاء طلب الشراء التلقائي معطَّل بالسياسة`,
+        severity: "warning",
+      });
+    }
+    if (estValue > 0) {
+      items.push({ category: "القيمة", label: "قيمة تقديرية (تُحتسب نهائياً في المالية)", value: `${estValue.toFixed(2)} ر.س`, severity: "info" });
+    }
+
+    const hasDanger = items.some((i) => i.severity === "danger");
+    res.json(maskFields(req, {
+      actionType: "warehouse_movement",
+      employeeId: 0,
+      employeeName: `${product.name}${product.sku ? ` (${product.sku})` : ""}`,
+      items,
+      summary: hasDanger
+        ? "لا يمكن حفظ هذه الحركة — راجع بنود الخطر أعلاه"
+        : `حركة ${isOutbound ? "صرف" : "إدخال"} ${qty} × ${product.name} — الرصيد ${current} ← ${newStock}`,
+    }));
+  } catch (err) { handleRouteError(err, res, "Movement impact preview error:"); }
+});
+
 router.post("/movements", authorize({ feature: "warehouse.transfers", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMovementSchema.safeParse(req.body));
+    const policies = await getWarehousePolicies(scope.companyId, scope.branchId);
+    // W5 — "لا حركة بلا سبب/مرجع" — enforced only when the company policy
+    // (سياسات المستودع في ضوابط النظام) turns it on.
+    if (policies.requireMovementReference && !(b.reference && b.reference.trim().length > 0)) {
+      throw new ValidationError(
+        "المرجع مطلوب لكل حركة مخزون (سياسة الشركة: لا حركة بلا سبب)",
+        { field: "reference", fix: "أدخل مرجع الحركة: GRN / أمر صرف / تذكرة صيانة / طلب" }
+      );
+    }
     const qtyNum = b.quantity;
     // A movement either raises or lowers on-hand stock. `adjustment_in`
     // (stock-up correction) behaves like a receipt; `adjustment_out`
@@ -896,10 +996,14 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
 
     if (updatedProduct && Number(updatedProduct.currentStock) <= Number(updatedProduct.minStock)) {
       let autoRequestId: number | null = null;
-      try {
-        autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId, scope.activeAssignmentId);
-      } catch (e) {
-        logger.error(e, "[MinStock] Pipeline error (non-critical, movement already committed):");
+      // Controllable: the auto purchase-request can be switched off from
+      // سياسات المستودع; the low-stock alert itself still fires.
+      if (policies.autoPurchaseRequestOnMinStock) {
+        try {
+          autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId, scope.activeAssignmentId);
+        } catch (e) {
+          logger.error(e, "[MinStock] Pipeline error (non-critical, movement already committed):");
+        }
       }
       res.status(201).json({ ...row, autoRequestId, lowStockAlert: true });
       return;
