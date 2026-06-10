@@ -75,6 +75,8 @@ const UmrahCommissionsSummaryReport = lazy(() => import("@/pages/umrah/reports/c
 const UmrahCostsReport = lazy(() => import("@/pages/umrah/reports/umrah-costs"));
 const UmrahNuskInvoicesSummaryReport = lazy(() => import("@/pages/umrah/reports/nusk-invoices-summary"));
 const UmrahTransportReport = lazy(() => import("@/pages/umrah/reports/transport-requests"));
+// §11 partial → available — تقرير ملخّص فواتير العملاء (KPIs + 3 breakdowns + 100 recent).
+const UmrahSalesInvoicesSummaryReport = lazy(() => import("@/pages/umrah/reports/sales-invoices-summary"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -128,6 +130,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/reports/umrah-costs", component: UmrahCostsReport, module: "operations" },
   { path: "/umrah/reports/nusk-invoices-summary", component: UmrahNuskInvoicesSummaryReport, module: "operations" },
   { path: "/umrah/reports/transport-requests", component: UmrahTransportReport, module: "operations" },
+  { path: "/umrah/reports/sales-invoices-summary", component: UmrahSalesInvoicesSummaryReport, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },
