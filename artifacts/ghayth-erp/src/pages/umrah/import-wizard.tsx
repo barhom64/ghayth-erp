@@ -16,7 +16,7 @@ import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber, todayLocal } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";
-import { Upload, CheckCircle2, AlertTriangle, Link2, ArrowRight, FileSpreadsheet, AlertOctagon } from "lucide-react";
+import { Upload, CheckCircle2, AlertTriangle, Link2, ArrowRight, FileSpreadsheet, AlertOctagon, Trash2 } from "lucide-react";
 
 type FileType = "mutamers" | "vouchers";
 
@@ -612,6 +612,32 @@ export default function UmrahImportWizard() {
                   >
                     حفظ كقالب
                   </Button>
+                  {/* Delete the selected preset — wires DELETE
+                      /umrah/import/presets/:id (save+list were already
+                      wired; this completes the management surface). */}
+                  {selectedPresetId && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-status-error-foreground"
+                      onClick={async () => {
+                        const p = presets.find((x) => String(x.id) === selectedPresetId);
+                        if (!p) return;
+                        try {
+                          await apiFetch(`/umrah/import/presets/${p.id}`, { method: "DELETE" });
+                          toast({ title: "تم حذف القالب" });
+                          setSelectedPresetId("");
+                          presetsQ.refetch?.();
+                        } catch (err: any) {
+                          toast({ variant: "destructive", title: err?.message ?? "فشل الحذف" });
+                        }
+                      }}
+                      rateLimitAware
+                      aria-label="حذف القالب"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
 
                 {/* Inline save form — appears when the operator clicks حفظ. */}

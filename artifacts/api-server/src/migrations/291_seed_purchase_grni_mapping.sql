@@ -1,4 +1,4 @@
--- 280_seed_purchase_grni_mapping.sql
+-- 291_seed_purchase_grni_mapping.sql
 --
 -- Operational-readiness fix (#1594 — controllable GL mappings, write-path review).
 --

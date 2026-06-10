@@ -1429,7 +1429,7 @@ export async function getAccountCodeFromMapping(
   companyId: number,
   operationType: string,
   side: "debit" | "credit",
-  fallbackCode: string
+  fallbackCode: string = ""
 ): Promise<string> {
   const [mapping] = await rawQuery<{ debitAccountCode: string | null; creditAccountCode: string | null; debitCode: string | null; creditCode: string | null }>(
     `SELECT "debitAccountCode", "creditAccountCode", "debitAccountId", "creditAccountId",

@@ -1,0 +1,87 @@
+#!/bin/bash
+# verify-warehouse-journey.sh — live E2E proof of the warehouse journey on a
+# real DB (pnpm db:provision-agent), driven through the HTTP API by the tenant
+# operator (door@door.sa — a non-platform-admin), exercising real RBAC
+# (warehouse.inventory / warehouse.transfers). Proves the full chain that the
+# warehouse PRs landed:
+#   1. product create → receipt movement → on-hand up           (#warehouse)
+#   2. issue movement → on-hand down + COGS GL (DR 5110/CR 1151) (#2020)
+#   3. impact-preview returns a forecast WITHOUT posting          (#2040)
+#   4. inventory count → record variance → approve → adjustment   (lifecycle)
+#      movement + balanced variance JE (quantity changes ONLY on approve)
+#   5. controllable policy: turn ON warehouse.require_movement_reference →
+#      a movement with no reference is REJECTED; reset the policy            (#2040)
+# Re-runnable (SKU carries a fresh suffix each run). The warehouse never posts
+# a JE itself — it requests the financial engine; this only proves the effects.
+# Prereqs: bootstrap (الضياء tenant) + built+running server.
+set -euo pipefail
+BASE="${BASE:-http://localhost:5000/api}"; EMAIL="${EMAIL:-door@door.sa}"; PASSWORD="${PASSWORD:-Door@2026Diaa}"
+DSN="${DATABASE_URL:-postgres://ghayth_erp:ghayth_erp@localhost:5432/ghayth_erp}"
+CID="${CID:-2}"
+J="$(mktemp)"; PASS=0; FAIL=0
+py(){ python3 -c "$1" 2>/dev/null; }
+ok(){ echo "  ✅ $1"; PASS=$((PASS+1)); }
+no(){ echo "  ❌ $1"; FAIL=$((FAIL+1)); }
+export PGPASSWORD="$(echo "$DSN" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')"
+q(){ psql "$DSN" -tA -c "$1"; }
+echo "▶ Warehouse journey (إنشاء→استلام→صرف+COGS→معاينة→جرد→اعتماد→تسوية→سياسة المرجع)"
+
+curl -fsS -c "$J" -H "X-E2E-Test: 1" -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" -o /dev/null
+CSRF="$(grep erp_csrf "$J" | awk '{print $7}')"; [ -n "$CSRF" ] && ok "login ($EMAIL)" || { no login; exit 1; }
+pw(){ curl -sS -b "$J" -H "x-csrf-token: $CSRF" -H "Content-Type: application/json" -X POST "$BASE$1" -d "$2"; }
+put(){ curl -sS -b "$J" -H "x-csrf-token: $CSRF" -H "Content-Type: application/json" -X PUT "$BASE$1" -d "$2"; }
+code(){ curl -sS -o /dev/null -w "%{http_code}" -b "$J" -H "x-csrf-token: $CSRF" -H "Content-Type: application/json" -X POST "$BASE$1" -d "$2"; }
+gid(){ py "import sys,json;d=json.load(sys.stdin);print(d.get('$1') or '')"; }
+
+SKU="WJ-$(date +%s)"
+
+# 1) Create a stockable product (starts at 0, min 2).
+P="$(pw /warehouse/products "{\"name\":\"صنف رحلة المستودع\",\"sku\":\"$SKU\",\"unit\":\"piece\",\"costPrice\":5,\"sellPrice\":8,\"currentStock\":0,\"minStock\":2}")"
+PID="$(echo "$P" | gid id)"
+[ -n "$PID" ] && ok "إنشاء صنف (#$PID, $SKU)" || { no "product create: $(echo "$P"|gid error)"; rm -f "$J"; echo "▶ Result: $PASS passed, $((FAIL+1)) failed"; exit 1; }
+
+# 2) Receipt — on-hand 0 → 10.
+pw /warehouse/movements "{\"productId\":$PID,\"type\":\"in\",\"quantity\":10,\"unitCost\":5,\"reference\":\"GRN-$SKU\"}" >/dev/null
+ST="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
+[ "$ST" = "10" ] && ok "استلام: الرصيد 0 ← 10" || no "receipt stock=$ST (expected 10)"
+
+# 3) Issue — on-hand 10 → 7 + COGS GL (DR 5110 / CR 1151 = 15).
+ISS="$(pw /warehouse/movements "{\"productId\":$PID,\"type\":\"out\",\"quantity\":3,\"reference\":\"ISSUE-$SKU\"}")"
+MID="$(echo "$ISS" | gid id)"
+ST="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
+[ "$ST" = "7" ] && ok "صرف: الرصيد 10 ← 7" || no "issue stock=$ST (expected 7)"
+JBAL="$(q "select (sum(jl.debit)=sum(jl.credit) and sum(jl.debit)>0)::text from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" where je.\"companyId\"=$CID and je.\"sourceKey\"='warehouse:movement:${MID:-0}';")"
+[ "$JBAL" = "true" ] && ok "قيد COGS متوازن للحركة #$MID (DR تكلفة / CR مخزون)" || no "COGS JE not balanced ($JBAL)"
+DRC="$(q "select string_agg(distinct \"accountCode\",',' order by \"accountCode\") from journal_lines where \"journalId\" in (select id from journal_entries where \"sourceKey\"='warehouse:movement:${MID:-0}');")"
+echo "$DRC" | grep -q "5110" && echo "$DRC" | grep -q "1151" && ok "حسابا القيد متمايزان (5110 تكلفة / 1151 مخزون)" || no "JE accounts unexpected ($DRC)"
+
+# 4) Impact preview — forecasts WITHOUT posting (movement count unchanged).
+MC1="$(q "select count(*)::int from warehouse_movements where \"productId\"=$PID;")"
+IMP="$(pw /warehouse/movements/impact-preview "{\"productId\":$PID,\"type\":\"out\",\"quantity\":2}")"
+NITEMS="$(echo "$IMP" | py "import sys,json;print(len((json.load(sys.stdin) or {}).get('items') or []))")"
+MC2="$(q "select count(*)::int from warehouse_movements where \"productId\"=$PID;")"
+{ [ "${NITEMS:-0}" -gt 0 ] && [ "$MC1" = "$MC2" ]; } && ok "معاينة الأثر ($NITEMS بنود) بلا أي ترحيل (الحركات $MC1=$MC2)" || no "impact-preview items=$NITEMS movements $MC1→$MC2"
+
+# 5) Inventory count → variance → approve → adjustment (qty changes ONLY on approve).
+CNT="$(pw /warehouse/inventory-counts "{\"countDate\":\"$(date +%F)\",\"notes\":\"رحلة اختبار\"}")"
+CNTID="$(echo "$CNT" | gid id)"
+[ -n "$CNTID" ] && ok "فتح جرد (#$CNTID)" || no "count create: $(echo "$CNT"|gid error)"
+# Record physical 5 vs system 7 → variance -2. Stock must NOT move yet.
+pw /warehouse/inventory-counts/$CNTID/items "{\"productId\":$PID,\"physicalCount\":5}" >/dev/null
+ST_PRE="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
+[ "$ST_PRE" = "7" ] && ok "تسجيل الفرق لا يحرّك الكمية (ما زال 7)" || no "stock moved before approval ($ST_PRE)"
+# Approve → adjustment applied.
+pw /warehouse/inventory-counts/$CNTID/approve "{}" >/dev/null
+ST_POST="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
+CSTAT="$(q "select status from inventory_counts where id=${CNTID:-0};")"
+{ [ "$ST_POST" = "5" ] && [ "$CSTAT" = "approved" ]; } && ok "اعتماد الجرد: تسوية 7 ← 5 (status=approved)" || no "count approve stock=$ST_POST status=$CSTAT (expected 5/approved)"
+
+# 6) Controllable policy: require reference ON → movement without reference rejected.
+put /settings/system-controls "{\"warehouse.require_movement_reference\":true}" >/dev/null
+RC="$(code /warehouse/movements "{\"productId\":$PID,\"type\":\"in\",\"quantity\":1}")"
+{ [ "$RC" -ge 400 ] && [ "$RC" -lt 500 ]; } && ok "سياسة «إلزام المرجع» مفعّلة: حركة بلا مرجع مرفوضة (HTTP $RC)" || no "policy not enforced (HTTP $RC, expected 4xx)"
+# Reset the policy so the run is idempotent.
+put /settings/system-controls "{\"warehouse.require_movement_reference\":false}" >/dev/null
+ok "إعادة ضبط السياسة (idempotent)"
+
+rm -f "$J"; echo; echo "▶ Result: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ] || exit 1

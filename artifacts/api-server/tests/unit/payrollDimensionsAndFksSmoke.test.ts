@@ -15,7 +15,10 @@ const MIGRATION_207 = readFileSync(
 describe("postPayrollRunGL accepts optional breakdown", () => {
   it("signature declares breakdown as optional Array", () => {
     const idx = HR_ENGINE.indexOf("async postPayrollRunGL");
-    const sig = HR_ENGINE.slice(idx, idx + 1800);
+    // Window widened (1800→3200): the totalCommission doc-block (umrah
+    // راتب+عمولة wiring) sits between totalWht and breakdown in the
+    // signature; the pin's subject is unchanged.
+    const sig = HR_ENGINE.slice(idx, idx + 3200);
     expect(sig).toMatch(/breakdown\?:\s*Array<\{/);
   });
 
@@ -54,8 +57,12 @@ describe("postPayrollRunGL accepts optional breakdown", () => {
     expect(HR_ENGINE).not.toMatch(/breakdown\.[^.]+forEach[\s\S]{0,500}salaryPayableCode/);
   });
 
-  it("legacy callers (no breakdown) get the original 3-line debit aggregate", () => {
-    expect(HR_ENGINE).toMatch(/\/\/ Legacy 3-line aggregate\.[\s\S]{0,500}debitLines\.push\([\s\S]{0,200}salaryExpenseCode/);
+  it("legacy callers (no breakdown) get the aggregate debit lines (salary + OT + GOSI + commission)", () => {
+    // Renamed from «Legacy 3-line aggregate» when the umrah commission
+    // DR joined the aggregate (now 4 candidate lines; zero-amount lines
+    // are filtered out so legacy callers still post exactly 3).
+    expect(HR_ENGINE).toMatch(/\/\/ Legacy aggregate lines\.[\s\S]{0,600}debitLines\.push\([\s\S]{0,200}salaryExpenseCode/);
+    expect(HR_ENGINE).toMatch(/\/\/ Legacy aggregate lines\.[\s\S]{0,800}commissionExpenseCode/);
   });
 });
 
