@@ -123,6 +123,7 @@ const Custodies = lazy(() => import("@/pages/finance/custodies"));
 const CustodyDetail = lazy(() => import("@/pages/finance/custody-detail"));
 const CustodyAgingReport = lazy(() => import("@/pages/finance/custody-aging-report"));
 const CustodyWorkbench = lazy(() => import("@/pages/finance/custody-workbench"));
+const ProjectPortfolioDashboard = lazy(() => import("@/pages/finance/project-portfolio-dashboard"));
 const FiscalPeriods = lazy(() => import("@/pages/finance/fiscal-periods"));
 const FiscalPeriodsV2 = lazy(() => import("@/pages/finance/fiscal-periods-v2"));
 const PeriodClosePreflight = lazy(() => import("@/pages/finance/period-close-preflight"));
@@ -394,6 +395,7 @@ export const financeRoutes = [
   { path: "/finance/vehicle-portfolio", component: VehiclePortfolioDashboard },
   { path: "/finance/umrah-group-portfolio", component: UmrahGroupPortfolio },
   { path: "/finance/umrah-season-portfolio", component: UmrahSeasonPortfolio },
+  { path: "/finance/project-portfolio", component: ProjectPortfolioDashboard },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
   { path: "/finance/opening-balances", component: OpeningBalances },
