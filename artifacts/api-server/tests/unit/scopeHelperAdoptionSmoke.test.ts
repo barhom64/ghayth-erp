@@ -238,10 +238,11 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      // +1 total/helperUsers: routes/warehouse-cycle-counts.ts ships with
-      // buildScopedWhere adopted from day one (company-level list cascade).
-      total: 116,
-      helperUsers: 37,
+      // +2 total/helperUsers: routes/warehouse-cycle-counts.ts and
+      // routes/warehouse-advanced.ts both ship with buildScopedWhere
+      // adopted from day one (company-level list cascades).
+      total: 117,
+      helperUsers: 38,
       manualOnly: 76,
     });
   });
