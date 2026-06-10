@@ -5799,6 +5799,14 @@ ALTER TABLE ONLY public.scheduled_reports
 
 
 --
+-- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schema_migrations
+    ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (filename);
+
+
+--
 -- Name: scoring_weights_per_company scoring_weights_per_company_companyId_categoryKey_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11685,7 +11693,7 @@ CREATE INDEX idx_umrah_pilgrims_passport_hash ON public.umrah_pilgrims USING btr
 -- Name: idx_umrah_pilgrims_visa_active; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_umrah_pilgrims_visa_active ON public.umrah_pilgrims USING btree ("companyId", "visaStatus") WHERE (("deletedAt" IS NULL) AND (("visaStatus")::text = ANY ((ARRAY['requested'::character varying, 'under_review'::character varying, 'approved'::character varying])::text[])));
+CREATE INDEX idx_umrah_pilgrims_visa_active ON public.umrah_pilgrims USING btree ("companyId", "visaStatus") WHERE (("deletedAt" IS NULL) AND (("visaStatus")::text = ANY (ARRAY[('requested'::character varying)::text, ('under_review'::character varying)::text, ('approved'::character varying)::text])));
 
 
 --
