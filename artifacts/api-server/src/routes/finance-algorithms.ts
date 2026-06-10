@@ -17,7 +17,7 @@ import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPerio
 import { internalTechRef } from "../lib/internalRef.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 import { logger } from "../lib/logger.js";
-import { requestIdempotencyToken } from "../lib/requestIdempotency.js";
+import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -973,6 +973,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/post-adjustment", authorize({
       },
     }).catch((e) => logger.error(e, "finance-algorithms bank post-adjustment audit failed"));
 
+    markIdempotencyReplay(req, res, result.alreadyExists);
     res.status(result.alreadyExists ? 200 : 201).json({
       ...result,
       message: result.alreadyExists ? "قيد التسوية موجود مسبقًا" : "تم ترحيل قيد التسوية ومطابقة السطر",

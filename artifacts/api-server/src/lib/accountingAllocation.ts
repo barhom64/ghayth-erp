@@ -340,6 +340,21 @@ export async function resolveDocumentAllocations(
  * those are already recorded on the source line itself.
  */
 export async function writeAllocationResult(input: AllocationInput, result: AllocationResult, actorAssignmentId?: number): Promise<void> {
+  // #1945 hardening — this audit write is best-effort by design (the catch
+  // below), but when it runs INSIDE a caller's transaction (e.g. the invoice
+  // approval flow) a failed INSERT used to leave that transaction ABORTED:
+  // the error was swallowed here, then the caller's NEXT statement blew up
+  // with «current transaction is aborted» — which is exactly how the missing
+  // id-sequence drift (fixed by migration 291) turned every invoice approval
+  // into a 500. Guard the INSERT with a SAVEPOINT so a failure rolls back
+  // only this statement, never the caller's transaction. Outside a
+  // transaction the SAVEPOINT itself fails — harmless, because autocommit
+  // already isolates the failed INSERT.
+  let sp = false;
+  try {
+    await rawQuery("SAVEPOINT wa_alloc_result", []);
+    sp = true;
+  } catch { /* not inside a transaction — autocommit isolation suffices */ }
   try {
     await rawExecute(
       `INSERT INTO accounting_allocation_results (
@@ -387,7 +402,9 @@ export async function writeAllocationResult(input: AllocationInput, result: Allo
         JSON.stringify(result.dimensions),
       ]
     );
+    if (sp) await rawQuery("RELEASE SAVEPOINT wa_alloc_result", []).catch(() => {});
   } catch (err) {
+    if (sp) await rawQuery("ROLLBACK TO SAVEPOINT wa_alloc_result", []).catch(() => {});
     logger.error({ err, input }, "[accountingAllocation] writeResult failed");
   }
 }

@@ -177,6 +177,8 @@ export async function postCustomerReceipt(p: CustomerReceiptParams): Promise<Cus
   let advanceId: number | null = null;
   let journalId = 0;
   const applied: CustomerReceiptResult["applied"] = [];
+  // per-invoice branch/ref collected under the row lock, consumed by the AR lines
+  const invoiceMeta = new Map<number, { branchId: number | null; ref: string }>();
 
   try {
     await withTransaction(async (tx: any) => {
@@ -228,9 +230,8 @@ export async function postCustomerReceipt(p: CustomerReceiptParams): Promise<Cus
         );
         applied.push({ invoiceId: a.invoiceId, ref: invoice.ref, amount: a.amount, newPaidAmount: newPaid, newStatus });
 
-        // remember the invoice branch for the AR line (split-branch posting)
-        (a as any)._branchId = invBranchId;
-        (a as any)._ref = invoice.ref;
+        // remember the invoice branch/ref for the AR line (split-branch posting)
+        invoiceMeta.set(a.invoiceId, { branchId: invBranchId, ref: invoice.ref });
       }
 
       // Leftover → customer_advances row (the FIN-08 flow).
@@ -252,12 +253,15 @@ export async function postCustomerReceipt(p: CustomerReceiptParams): Promise<Cus
       // updates + advance row with it — no silent AR overstatement.
       const lines: any[] = [
         { accountCode: cashCode, debit: amt, credit: 0, clientId: p.clientId, description: `استلام من العميل — ${p.reference || recvDate}`, ...(p.dims ?? {}) },
-        ...apps.map((a: any) => ({
-          accountCode: arCode, debit: 0, credit: a.amount, clientId: p.clientId,
-          description: `تسوية فاتورة ${a._ref}`,
-          sourceLineTable: "invoices", sourceLineId: a.invoiceId,
-          ...(a._branchId != null ? { branchId: a._branchId } : {}),
-        })),
+        ...apps.map((a) => {
+          const meta = invoiceMeta.get(a.invoiceId);
+          return {
+            accountCode: arCode, debit: 0, credit: a.amount, clientId: p.clientId,
+            description: `تسوية فاتورة ${meta?.ref ?? a.invoiceId}`,
+            sourceLineTable: "invoices", sourceLineId: a.invoiceId,
+            ...(meta?.branchId != null ? { branchId: meta.branchId } : {}),
+          };
+        }),
         ...(leftover > 0.005
           ? [{ accountCode: advCode, debit: 0, credit: leftover, clientId: p.clientId, description: "دفعة مقدّمة — متبقي سند القبض" }]
           : []),
