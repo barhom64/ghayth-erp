@@ -17,6 +17,7 @@ import { amountTaxSplit } from "@/lib/tax-math";
 import { allowedUsagesForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
 import { EMPTY_ALLOCATION_TARGET, buildOperationalEffectsPayload, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
 import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
+import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { deriveRelatedEntity } from "@/lib/finance/scenario-model";
 import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { AlertCircle, Paperclip } from "lucide-react";
@@ -129,6 +130,7 @@ export default function VouchersCreate() {
     return "";
   })();
   const { fieldErrors, validate, setApiError } = useFieldErrors();
+  const activeCtx = useActiveFinanceContext();
 
   const operationTypes = form.type === "receipt" ? OPERATION_TYPES_RECEIPT : OPERATION_TYPES_PAYMENT;
 
@@ -276,6 +278,7 @@ export default function VouchersCreate() {
           <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
+      <ActiveContextNotice ctx={activeCtx} />
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <AutoField label="رقم السند" value={autoNumberRef.current} />
@@ -540,7 +543,7 @@ export default function VouchersCreate() {
         <Button variant="outline" onClick={handlePreview} disabled={!form.amount || previewMut.isPending} rateLimitAware>
           {previewMut.isPending ? "جارٍ المعاينة..." : "معاينة القيد"}
         </Button>
-        <Button onClick={handleSubmit} disabled={!form.amount || createMut.isPending} rateLimitAware>
+        <Button onClick={handleSubmit} disabled={!form.amount || createMut.isPending || !activeCtx.ready} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : `حفظ سند ${form.type === "receipt" ? "القبض" : "الصرف"}`}
         </Button>
       </div>
