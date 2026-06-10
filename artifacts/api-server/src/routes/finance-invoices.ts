@@ -285,6 +285,18 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
     const tax = subtotal * (Number(taxRate) / 100);
     const total = subtotal + tax;
 
+    // #1945 (S7) — resolve the SAME accounts the posting uses (invoice_ar /
+    // invoice_revenue / invoice_vat_payable) so the preview shows the real
+    // resolved codes («التوجيه المحاسبي المتوقّع»), not just generic names.
+    // Read-only: this never pre-fills the line override; the server still
+    // resolves the account at save.
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [arAccountCode, revenueAccountCode, vatAccountCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+    ]);
+
     const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
 
     items.push({
@@ -297,7 +309,7 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
     items.push({
       category: "محاسبي",
       label: "قيد يومية",
-      value: `قيد جديد: مدين ذمم العملاء ${total.toLocaleString("ar-SA")} / دائن إيرادات ${subtotal.toLocaleString("ar-SA")} + ضريبة مخرجة ${tax.toLocaleString("ar-SA")}`,
+      value: `قيد جديد: مدين ذمم العملاء (${arAccountCode}) ${total.toLocaleString("ar-SA")} / دائن إيرادات (${revenueAccountCode}) ${subtotal.toLocaleString("ar-SA")}${tax > 0 ? ` + ض.م.م مخرجة (${vatAccountCode}) ${tax.toLocaleString("ar-SA")}` : ""}`,
       severity: "info",
     });
 
@@ -342,6 +354,11 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
       employeeId: 0,
       employeeName: clientName,
       items,
+      // #1945 (S7) — the resolved revenue/AR/VAT accounts, surfaced for
+      // transparency (read-only; the form does not pre-fill any picker).
+      revenueAccountCode,
+      arAccountCode,
+      vatAccountCode,
       summary: hasWarning
         ? `فاتورة بمبلغ ${total.toLocaleString("ar-SA")} ر.س — راجع رصيد العميل قبل الإصدار`
         : `فاتورة بمبلغ ${total.toLocaleString("ar-SA")} ر.س جاهزة للإصدار`,
