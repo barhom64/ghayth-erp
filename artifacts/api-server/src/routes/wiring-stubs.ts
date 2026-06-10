@@ -51,9 +51,6 @@ function notImplemented(res: Response, feature: string): void {
   });
 }
 
-warehouseStubsRouter.post("/cycle-counts/plans", requireMinLevel(20), async (_req, res) => {
-  notImplemented(res, "warehouse.cycleCounts.generatePlan");
-});
 
 
 /* ============================================================
