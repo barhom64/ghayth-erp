@@ -235,7 +235,7 @@ export default function TransportBookingsList() {
             </Select>
             <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
           </div>
-          <DataTable<BookingRow>
+          <DataTable
             columns={columns}
             data={rows}
             onRowClick={(r) => navigate(`/fleet/transport/bookings/${r.id}`)}
