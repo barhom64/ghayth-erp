@@ -466,3 +466,52 @@ export const VehicleSelect = buildEntitySelect({
   getName: (r) => r?.plateNumber ? `${r.plateNumber}${r.make ? ` - ${r.make}` : ""}` : `#${r?.id}`,
   getSublabel: (r) => r?.model || "",
 });
+
+// HR-Wave-0/0.4 — JobTitleSelect: master-data picker for hr.job_titles.
+// The inline `<Select>` in employees-create.tsx (line ~565) hand-rolls
+// the same data source; once that form moves to the canonical scaffold
+// it will use this picker. allowCreate=true lets HR coin a new title
+// from inside the employee form without leaving the page, which the
+// mandate's «نمط الإنشاء الداخلي الموحّد» rule requires. Backend
+// endpoint is POST /employees/job-titles (authorize hr.employees:create).
+export const JobTitleSelect = buildEntitySelect({
+  queryKey: "job-titles-list",
+  endpoint: "/employees/job-titles",
+  defaultLabel: "المسمى الوظيفي",
+  defaultPlaceholder: "اختر المسمى الوظيفي",
+  searchPlaceholder: "ابحث عن مسمى وظيفي...",
+  createTitle: "إضافة مسمى وظيفي جديد",
+  createLabel: "+ مسمى وظيفي جديد",
+  createApiPath: "/employees/job-titles",
+  createFields: [
+    { key: "name", label: "اسم المسمى", required: true },
+    { key: "category", label: "الفئة" },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.defaultRoleKey || r?.category || "",
+});
+
+// HR-Wave-0/0.4 — CostCenterMasterSelect: master-data picker for the
+// `cost_centers` table (real CC id/code/name). Distinct from the
+// legacy `CostCenterSelect` above, which composes synthetic «فرع/قسم/مشروع»
+// labels for forms that still store free-text cost-center tags.
+// Used by payroll/expense/advance forms to bind HR-touching financial
+// movements to a cost center. allowCreate=true lets finance open a
+// missing center from inside the form. Backend endpoint is POST
+// /finance/cost-centers (authorize finance.cost_centers:create).
+export const CostCenterMasterSelect = buildEntitySelect({
+  queryKey: "cost-centers-list",
+  endpoint: "/finance/cost-centers?limit=500",
+  defaultLabel: "مركز التكلفة",
+  defaultPlaceholder: "اختر مركز التكلفة",
+  searchPlaceholder: "ابحث عن مركز تكلفة (اسم أو رمز)...",
+  createTitle: "إضافة مركز تكلفة جديد",
+  createLabel: "+ مركز تكلفة جديد",
+  createApiPath: "/finance/cost-centers",
+  createFields: [
+    { key: "code", label: "رمز المركز", required: true },
+    { key: "name", label: "اسم المركز", required: true },
+  ],
+  getName: (r) => r?.name ? `${r.code ?? ""}${r.code ? " - " : ""}${r.name}` : r?.code || `#${r?.id}`,
+  getSublabel: (r) => r?.type || "",
+});

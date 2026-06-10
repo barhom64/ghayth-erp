@@ -84,11 +84,16 @@ describe("engine INSERT — persists per-line VAT alongside the existing 8 colum
     expect(ENGINE).toMatch(/const lineVatRate = li\.vatRate \?\? vatRate/);
   });
 
-  it("vatAmount = lineTotal × vatRate / 100 (tax-exclusive math)", () => {
-    // Phase 1 uses tax-exclusive math (rate is added on top). Phase 2
-    // can add an inclusive/exclusive flag per the operator's
-    // "شامل أو غير شامل حسب ما يكون" comment.
-    expect(ENGINE).toMatch(/const lineVatAmount = li\.vatAmount \?\? roundTo2\(li\.lineTotal \* lineVatRate \/ 100\)/);
+  it("per-line vatAmount respects the SAME inclusive/exclusive mode as the header", () => {
+    // §6 of #1870 — VAT direction is operator-configurable. The per-
+    // line value is informational (sum-of-lines may exceed the header
+    // when costBasis > 0 — line uses gross, header uses margin), but
+    // it must follow the same formula as the header so ZATCA per-
+    // line tax fields don't contradict the invoice-total tax.
+    //
+    //   inclusive:  lineVatAmount = lineTotal × rate / (100 + rate)   (extracted)
+    //   exclusive:  lineVatAmount = lineTotal × rate / 100             (added)
+    expect(ENGINE).toMatch(/li\.vatAmount \?\? \(vatInclusive[\s\S]{0,300}roundTo2\(li\.lineTotal \* lineVatRate \/ \(100 \+ lineVatRate\)\)[\s\S]{0,300}roundTo2\(li\.lineTotal \* lineVatRate \/ 100\)\)/);
   });
 
   it("productId + accountCode fall back to null until Phase 2 resolver", () => {
