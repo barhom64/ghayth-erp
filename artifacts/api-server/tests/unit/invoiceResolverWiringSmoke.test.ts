@@ -69,7 +69,10 @@ describe("posting uses resolver output, not raw line fields", () => {
   });
 
   it("falls back to invRevenueCode when resolver returns null account", () => {
-    expect(ROUTE).toMatch(/res\.resolvedAccountCode \|\| invRevenueCode/);
+    // #1945 item 6 — the fallback chain gained the product revenue map
+    // between the resolver output and the generic account:
+    //   res.resolvedAccountCode || productRevenueCodes.get(productId) || invRevenueCode
+    expect(ROUTE).toMatch(/res\.resolvedAccountCode\s*\|\|[\s\S]*?productRevenueCodes[\s\S]*?\|\|\s*invRevenueCode/);
   });
 });
 

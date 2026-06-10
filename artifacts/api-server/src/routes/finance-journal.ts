@@ -1412,6 +1412,11 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
         relatedEntityType,
         relatedEntityId: relatedEntityId != null ? Number(relatedEntityId) : null,
         lineAllocation,
+        // #1945 item 5 — direction-aware counter account (صرف=مصروف /
+        // قبض=إيراد): the chosen revenue/expense/AR/AP leg must match the
+        // voucher direction + operationType (rule 4 in assertOperationValid).
+        counterAccountCode: subAccountCode || accountCode,
+        operationType: operationType || null,
       });
       await assertOperationValid(opCtx);
     }
