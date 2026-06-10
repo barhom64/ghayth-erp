@@ -162,8 +162,9 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير الاستيراد والأخطاء",
     description: "تاريخ دفعات الاستيراد + الصفوف المرفوضة + التحذيرات.",
     category: "import",
-    status: "partial",
-    route: "/umrah/import",
+    status: "available",
+    route: "/umrah/reports/import-errors-summary",
+    apiPath: "/umrah/reports/import-errors-summary",
   },
   {
     id: "unlinked_rows",
