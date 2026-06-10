@@ -55,6 +55,13 @@ JBAL="$(q "select (sum(jl.debit)=sum(jl.credit) and sum(jl.debit)>0)::text from 
 DRC="$(q "select string_agg(distinct \"accountCode\",',' order by \"accountCode\") from journal_lines where \"journalId\" in (select id from journal_entries where \"sourceKey\"='warehouse:movement:${MID:-0}');")"
 echo "$DRC" | grep -q "5110" && echo "$DRC" | grep -q "1151" && ok "حسابا القيد متمايزان (5110 تكلفة / 1151 مخزون)" || no "JE accounts unexpected ($DRC)"
 
+# 3b) Non-stock guard is REAL (migration 298): a service item gets rejected.
+SVC="$(pw /warehouse/products "{\"name\":\"خدمة استشارة\",\"sku\":\"SVC-$SKU\",\"unit\":\"piece\"}")"
+SVCID="$(echo "$SVC" | gid id)"
+q "update warehouse_products set \"itemType\"='service' where id=${SVCID:-0};" >/dev/null
+RCSVC="$(code /warehouse/movements "{\"productId\":$SVCID,\"type\":\"in\",\"quantity\":1,\"reference\":\"X\"}")"
+{ [ "$RCSVC" -ge 400 ] && [ "$RCSVC" -lt 500 ]; } && ok "حارس غير-المخزني فعلي: حركة على خدمة مرفوضة (HTTP $RCSVC)" || no "non-stock guard inert (HTTP $RCSVC, expected 4xx)"
+
 # 4) Impact preview — forecasts WITHOUT posting (movement count unchanged).
 MC1="$(q "select count(*)::int from warehouse_movements where \"productId\"=$PID;")"
 IMP="$(pw /warehouse/movements/impact-preview "{\"productId\":$PID,\"type\":\"out\",\"quantity\":2}")"
@@ -76,7 +83,32 @@ ST_POST="$(q "select \"currentStock\"::int from warehouse_products where id=$PID
 CSTAT="$(q "select status from inventory_counts where id=${CNTID:-0};")"
 { [ "$ST_POST" = "5" ] && [ "$CSTAT" = "approved" ]; } && ok "اعتماد الجرد: تسوية 7 ← 5 (status=approved)" || no "count approve stock=$ST_POST status=$CSTAT (expected 5/approved)"
 
-# 6) Controllable policy: require reference ON → movement without reference rejected.
+# 6) Cycle count (الجرد الدوري): create → record → submit → approve → post →
+#    variance movement + stock change + variance JE stamped (idempotent).
+CC="$(pw /warehouse/cycle-counts "{}")"
+CCID="$(echo "$CC" | gid id)"
+[ -n "$CCID" ] && ok "جرد دوري أُنشئ (#$CCID، snapshot أسطر)" || no "cycle-count create: $(echo "$CC"|gid error)"
+# Current stock is 5 (post inventory-count). Count 4 → variance -1.
+pw /warehouse/cycle-counts/$CCID/record "{\"items\":[{\"productId\":$PID,\"countedQuantity\":4}]}" >/dev/null
+CCST="$(q "select status from warehouse_cycle_counts where id=${CCID:-0};")"
+[ "$CCST" = "in_progress" ] && ok "تسجيل العدّ (status=in_progress)" || no "record status=$CCST"
+# Any other snapshot lines must be counted before submit — count them at system qty.
+q "update warehouse_cycle_count_lines set \"countedQuantity\"=\"systemQuantity\" where \"cycleCountId\"=${CCID:-0} and \"countedQuantity\" is null;" >/dev/null
+pw /warehouse/cycle-counts/$CCID/submit "{}" >/dev/null
+pw /warehouse/cycle-counts/$CCID/approve "{}" >/dev/null
+CCST="$(q "select status from warehouse_cycle_counts where id=${CCID:-0};")"
+[ "$CCST" = "approved" ] && ok "تقديم ← اعتماد (status=approved)" || no "submit/approve status=$CCST"
+ST_BEFORE="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
+pw /warehouse/cycle-counts/$CCID/post "{}" >/dev/null
+ST_AFTER="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
+JESTAMP="$(q "select (\"adjustmentJournalEntryId\" is not null)::text from warehouse_cycle_count_lines where \"cycleCountId\"=${CCID:-0} and \"productId\"=$PID;")"
+{ [ "$ST_BEFORE" = "5" ] && [ "$ST_AFTER" = "4" ] && [ "$JESTAMP" = "true" ]; } && ok "ترحيل الفروق: 5 ← 4 + قيد تسوية مختوم" || no "post stock $ST_BEFORE→$ST_AFTER je=$JESTAMP (expected 5→4,true)"
+# Idempotency: a re-post must not double-apply.
+pw /warehouse/cycle-counts/$CCID/post "{}" >/dev/null
+ST_AGAIN="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
+[ "$ST_AGAIN" = "4" ] && ok "إعادة الترحيل لا تكرّر الأثر (ما زال 4)" || no "re-post double-applied ($ST_AGAIN)"
+
+# 7) Controllable policy: require reference ON → movement without reference rejected.
 put /settings/system-controls "{\"warehouse.require_movement_reference\":true}" >/dev/null
 RC="$(code /warehouse/movements "{\"productId\":$PID,\"type\":\"in\",\"quantity\":1}")"
 { [ "$RC" -ge 400 ] && [ "$RC" -lt 500 ]; } && ok "سياسة «إلزام المرجع» مفعّلة: حركة بلا مرجع مرفوضة (HTTP $RC)" || no "policy not enforced (HTTP $RC, expected 4xx)"

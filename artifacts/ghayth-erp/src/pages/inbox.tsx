@@ -39,7 +39,7 @@ import {
   ArrowDownLeft, ArrowUpRight, AlertOctagon, Sparkles,
   PhoneCall, PhoneIncoming, PhoneOutgoing, PhoneMissed,
   Inbox as InboxIcon, FileEdit, Star, Archive, Trash2, AlertTriangle,
-  Save, PenSquare, Settings,
+  Save, PenSquare, Settings, Clock, BellOff,
 } from "lucide-react";
 
 type Folder = "inbox" | "sent" | "drafts" | "starred" | "archive" | "trash" | "spam";
@@ -757,9 +757,12 @@ function ThreadView({ channel, address, onBack, onSent }: {
             <span>{address}</span>
             <Badge variant="outline" className="text-[10px]">{meta.label}</Badge>
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="w-3 h-3" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <ThreadSnoozeMenu channel={channel} address={address} onSnoozed={onBack} />
+            <Button variant="ghost" size="sm" onClick={() => refetch()}>
+              <RefreshCw className="w-3 h-3" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
@@ -827,6 +830,80 @@ function ThreadView({ channel, address, onBack, onSent }: {
         <p className="text-[10px] text-muted-foreground mt-1">Ctrl+Enter للإرسال السريع</p>
       </div>
     </Card>
+  );
+}
+
+// ─────────────────────── Thread snooze menu ────────────────────────────
+
+const SNOOZE_PRESETS: { label: string; hours: number }[] = [
+  { label: "ساعة", hours: 1 },
+  { label: "4 ساعات", hours: 4 },
+  { label: "غداً ٩ صباحًا", hours: snoozeUntilTomorrowMorning() },
+  { label: "أسبوع", hours: 24 * 7 },
+];
+
+function snoozeUntilTomorrowMorning(): number {
+  const now = new Date();
+  const tomorrow9 = new Date(now);
+  tomorrow9.setDate(tomorrow9.getDate() + 1);
+  tomorrow9.setHours(9, 0, 0, 0);
+  return Math.max(1, (tomorrow9.getTime() - now.getTime()) / 3600_000);
+}
+
+function ThreadSnoozeMenu({ channel, address, onSnoozed }: {
+  channel: Channel;
+  address: string;
+  onSnoozed: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const snooze = useMutation({
+    mutationFn: (hours: number) => {
+      const wakeAt = new Date(Date.now() + hours * 3600_000).toISOString();
+      return apiFetch(`/inbox/threads/${channel}/${encodeURIComponent(address)}/snooze`, {
+        method: "POST",
+        body: JSON.stringify({ wakeAt }),
+      });
+    },
+    onSuccess: () => {
+      setOpen(false);
+      toast({ title: "تم تأجيل المحادثة", description: "سيتم تذكيرك في الوقت المحدد" });
+      onSnoozed();
+    },
+    onError: (e: Error) => toast({ title: "تعذّر التأجيل", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} title="تأجيل المحادثة">
+        <Clock className="w-3 h-3" />
+      </Button>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <BellOff className="w-4 h-4" />
+            تأجيل المحادثة
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            ستختفي المحادثة من الوارد، ثم تظهر مهمّة متابعة تلقائية عند الوقت المحدد.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-2 py-2">
+          {SNOOZE_PRESETS.map((p) => (
+            <Button
+              key={p.label}
+              variant="outline"
+              size="sm"
+              disabled={snooze.isPending}
+              onClick={() => snooze.mutate(p.hours)}
+              className="justify-start"
+            >
+              <Clock className="w-3 h-3 me-2" />{p.label}
+            </Button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
