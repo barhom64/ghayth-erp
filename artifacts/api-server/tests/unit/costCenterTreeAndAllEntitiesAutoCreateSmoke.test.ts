@@ -51,8 +51,13 @@ const ROUTES_TSX = readFileSync(
 // 1. createSubsidiaryAccountsForEntity — driver + vehicle custody
 // ─────────────────────────────────────────────────────────────────────────────
 describe("createSubsidiaryAccountsForEntity — driver + vehicle no-longer-no-ops", () => {
-  it("driver path pushes a custody account under 1131 with 'عهدة سائق' label", () => {
-    expect(ACCT_ENG).toMatch(/entityType === "driver"[\s\S]{1,400}accountType:\s*"custody",\s*parentCode:\s*"1131",\s*suffix:\s*"عهدة سائق"/);
+  // #1945 FIN-003 — parents now resolve by INTENT (the literal parentCode is a
+  // last-resort fallback), and the literals were corrected to the real control
+  // accounts (client→1130 AR, vendor→2110 AP, employee advance→1140, custody→
+  // 1142, driver custody→1113) — the old hardcodes (1111/1121/1131/2102)
+  // matched neither chart. These smoke assertions track the corrected source.
+  it("driver path pushes a custody account under 1113 (cash custody) with 'عهدة سائق' label", () => {
+    expect(ACCT_ENG).toMatch(/entityType === "driver"[\s\S]{1,400}accountType:\s*"custody",\s*parentCode:\s*"1113",\s*suffix:\s*"عهدة سائق"/);
   });
 
   it("vehicle path pushes custody (1113) + fuel(5510)/maintenance(5520)/depreciation(5710) per-vehicle accounts (#1594)", () => {
@@ -61,9 +66,14 @@ describe("createSubsidiaryAccountsForEntity — driver + vehicle no-longer-no-op
     expect(ACCT_ENG).toMatch(/entityType === "vehicle"[\s\S]{1,1500}accountType:\s*"depreciation",\s*parentCode:\s*"5710"/);
   });
 
-  it("driver + vehicle branches don't accidentally clobber employee path (employee still has advance + custody)", () => {
-    // Regression guard for the existing employee shape.
-    expect(ACCT_ENG).toMatch(/entityType === "employee"[\s\S]{1,300}accountType:\s*"advance",\s*parentCode:\s*"1121"[\s\S]{1,200}accountType:\s*"custody",\s*parentCode:\s*"1131",\s*suffix:\s*"عهدة"/);
+  it("employee path keeps advance + custody, now under the correct staff parents (1140 / 1142)", () => {
+    expect(ACCT_ENG).toMatch(/entityType === "employee"[\s\S]{1,300}accountType:\s*"advance",\s*parentCode:\s*"1140"[\s\S]{1,260}accountType:\s*"custody",\s*parentCode:\s*"1142",\s*suffix:\s*"عهدة"/);
+  });
+
+  it("every spec carries a parentIntent so resolution works on any tenant chart (not just the seed)", () => {
+    // client receivable → AR control intent, vendor payable → AP control intent
+    expect(ACCT_ENG).toMatch(/accountType:\s*"receivable",\s*parentCode:\s*"1130"[\s\S]{1,160}parentIntent:\s*\{\s*type:\s*"asset"/);
+    expect(ACCT_ENG).toMatch(/accountType:\s*"payable",\s*parentCode:\s*"2110"[\s\S]{1,160}parentIntent:\s*\{\s*type:\s*"liability"/);
   });
 });
 
