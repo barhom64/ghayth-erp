@@ -33,40 +33,10 @@ export const financeStubsRouter = Router();
 export const adminStubsRouter = Router();
 
 /* ============================================================
- * Warehouse — cycle counts (8)
- * Mounted under /warehouse → endpoint paths relative.
+ * Warehouse — cycle counts: REAL implementation lives in
+ * routes/warehouse-cycle-counts.ts (mounted before this router).
+ * Only plan GENERATION remains a stub here.
  * ============================================================ */
-warehouseStubsRouter.get("/cycle-counts", async (req, res) => {
-  try {
-    const { companyId } = scope(req as any);
-    const rows = await rawQuery<{ id: number }>(
-      `SELECT 1 as id WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='warehouse_cycle_counts')`,
-      []
-    ).catch(() => []);
-    if (rows.length) {
-      const data = await rawQuery(
-        `SELECT * FROM warehouse_cycle_counts WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY id DESC LIMIT 100`,
-        [companyId]
-      ).catch(() => []);
-      res.json({ data, total: data.length });
-      return;
-    }
-    res.json({ data: [], total: 0, note: "cycle-counts table not present" });
-  } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
-});
-
-warehouseStubsRouter.post("/cycle-counts", requireMinLevel(20), async (_req, res) => {
-  notImplemented(res, "warehouse.cycleCounts.create");
-});
-warehouseStubsRouter.get("/cycle-counts/plans", async (_req, res) => {
-  res.json({ data: [], total: 0 });
-});
-warehouseStubsRouter.post("/cycle-counts/plans", requireMinLevel(20), async (_req, res) => {
-  notImplemented(res, "warehouse.cycleCounts.generatePlan");
-});
-warehouseStubsRouter.get("/cycle-counts/:id", async (req, res) => {
-  res.json({ id: Number(req.params.id), status: "draft", items: [], notes: null });
-});
 // 501 helper — every fake-success stub below returns the same shape so the
 // SPA can pattern-match on it and render a "feature in development" banner
 // instead of treating ok:true as a real success. The honest contract: this
@@ -81,17 +51,8 @@ function notImplemented(res: Response, feature: string): void {
   });
 }
 
-warehouseStubsRouter.post("/cycle-counts/:id/approve", requireMinLevel(20), async (_req, res) => {
-  notImplemented(res, "warehouse.cycleCounts.approve");
-});
-warehouseStubsRouter.post("/cycle-counts/:id/submit", requireMinLevel(20), async (_req, res) => {
-  notImplemented(res, "warehouse.cycleCounts.submit");
-});
-warehouseStubsRouter.post("/cycle-counts/:id/post", requireMinLevel(20), async (_req, res) => {
-  notImplemented(res, "warehouse.cycleCounts.post");
-});
-warehouseStubsRouter.post("/cycle-counts/:id/record", requireMinLevel(20), async (_req, res) => {
-  notImplemented(res, "warehouse.cycleCounts.record");
+warehouseStubsRouter.post("/cycle-counts/plans", requireMinLevel(20), async (_req, res) => {
+  notImplemented(res, "warehouse.cycleCounts.generatePlan");
 });
 
 /* Warehouse — lots (5) */
