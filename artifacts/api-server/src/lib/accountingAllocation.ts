@@ -597,3 +597,39 @@ function checkRequiredEntity(entityType: string | null, dims: Required<NonNullab
   }
   return null;
 }
+
+// ── #1945 item 6 — خريطة إيراد المنتج ────────────────────────────────────
+// Map productId → the product's mapped revenue account code
+// (products."defaultRevenueAccountId", migration 203). Consulted by the
+// sales-invoice approval + preview-posting paths for lines whose resolver
+// produced no account (no manual pin, no allocation rule) BEFORE falling
+// back to the generic company-level invoice_revenue — so each product line
+// posts to ITS revenue account with its productId dim, and the preview
+// matches what approval will post. Defensive: only postable accounts of
+// type 'revenue' qualify; a misconfigured product (e.g. pointing at an
+// expense or a header account) is skipped and the caller's generic
+// fallback applies — never a wrong-side posting.
+export async function getProductRevenueCodes(
+  companyId: number,
+  productIds: number[],
+): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+  const ids = [...new Set(productIds.filter((id) => Number.isInteger(id) && id > 0))];
+  if (ids.length === 0) return map;
+  const rows = await rawQuery<{ id: number; code: string; type: string }>(
+    `SELECT p.id, coa.code, coa.type
+       FROM products p
+       JOIN chart_of_accounts coa
+         ON coa.id = p."defaultRevenueAccountId"
+        AND coa."companyId" = p."companyId"
+        AND coa."deletedAt" IS NULL
+        AND coa."allowPosting" = true
+      WHERE p."companyId" = $1 AND p.id = ANY($2::int[])
+        AND p."defaultRevenueAccountId" IS NOT NULL`,
+    [companyId, ids],
+  );
+  for (const r of rows) {
+    if (r.type === "revenue") map.set(Number(r.id), r.code);
+  }
+  return map;
+}

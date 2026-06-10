@@ -1044,6 +1044,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         validateAllocationCompleteness,
         getEnforceLineAllocation,
         logAllocationOverride,
+        getProductRevenueCodes,
       } = await import("../lib/accountingAllocation.js");
       const lineResolutions = await Promise.all(
         dimLines.rows.map((ln) =>
@@ -1125,6 +1126,18 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
       const revenueLines: JournalEntryLine[] = [];
 
+      // #1945 item 6 — خريطة إيراد المنتج: lines the resolver left without an
+      // account (no manual pin, no rule) consult the PRODUCT's mapped revenue
+      // account (products.defaultRevenueAccountId) before the generic
+      // company-level invoice_revenue — each product line lands on ITS
+      // revenue account, carrying its productId dim.
+      const productRevenueCodes = await getProductRevenueCodes(
+        scope.companyId,
+        dimLines.rows
+          .filter((ln, i) => !lineResolutions[i].resolvedAccountCode && ln.productId != null)
+          .map((ln) => Number(ln.productId)),
+      );
+
       if (dimLines.rows.length > 0) {
         // Group lines that share the SAME revenue account + dimension
         // signature into one journal_line, so the GL stays compact
@@ -1151,12 +1164,14 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           const ln = dimLines.rows[i];
           const res = lineResolutions[i];
           // Resolver picked an account (rule match or manual override);
-          // unmapped lines fall back to the generic invoice_revenue
-          // mapping so the entry still posts. The dimensions used in
-          // the bucket key come from the RESOLVER OUTPUT — for an
-          // 'explicit' or 'from_vehicle' strategy that may differ
-          // from the raw line.
-          const acct = res.resolvedAccountCode || invRevenueCode;
+          // unmapped lines try the PRODUCT's mapped revenue account
+          // (#1945 item 6) before the generic invoice_revenue mapping so
+          // the entry still posts. The dimensions used in the bucket key
+          // come from the RESOLVER OUTPUT — for an 'explicit' or
+          // 'from_vehicle' strategy that may differ from the raw line.
+          const acct = res.resolvedAccountCode
+            || (ln.productId != null ? productRevenueCodes.get(Number(ln.productId)) : undefined)
+            || invRevenueCode;
           const dims = res.dimensions;
           const cc = res.costCenterId;
           const key = [
@@ -1567,7 +1582,7 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     // raw line's accountCode. A line with no accountCode but a matching
     // rule shows as "resolved" with the rule's chosen account in the
     // preview, matching exactly what /approve would post.
-    const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+    const { resolveLineAllocation, getProductRevenueCodes } = await import("../lib/accountingAllocation.js");
     const lineResolutions = await Promise.all(
       lines.map((ln) =>
         resolveLineAllocation({
@@ -1621,6 +1636,14 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     const unmappedLineIds: number[] = [];
     // Aggregate resolver warnings so the operator sees them in the preview.
     const resolverWarnings: Array<{ lineId: number; code: string; message: string }> = [];
+    // #1945 item 6 — same product-revenue-map fallback as /approve, so the
+    // preview shows the product's mapped revenue account, not the generic.
+    const productRevenueCodes = await getProductRevenueCodes(
+      scope.companyId,
+      lines
+        .filter((ln: any, i: number) => !lineResolutions[i].resolvedAccountCode && ln.productId != null)
+        .map((ln: any) => Number(ln.productId)),
+    );
     if (lines.length > 0) {
       const buckets = new Map<string, PreviewLine & { _amount: number }>();
       let postedNet = 0;
@@ -1630,7 +1653,9 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
 
         // Resolver output drives the bucket — same as /approve so the
         // preview shows exactly what would post.
-        const acct = res.resolvedAccountCode || invRevenueCode;
+        const acct = res.resolvedAccountCode
+          || (ln.productId != null ? productRevenueCodes.get(Number(ln.productId)) : undefined)
+          || invRevenueCode;
         const cc = res.costCenterId;
         const dims = res.dimensions;
         if (res.status === "unmapped") unmappedLineIds.push(ln.id);

@@ -21,6 +21,13 @@ ALTER SEQUENCE public.zatca_submission_log_id_seq OWNED BY public.zatca_submissi
 
 
 --
+-- Name: accounting_allocation_results id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.accounting_allocation_results ALTER COLUMN id SET DEFAULT nextval('public.accounting_allocation_results_id_seq'::regclass);
+
+
+--
 -- Name: accounting_mappings id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1852,6 +1859,13 @@ ALTER TABLE ONLY public.product_abc_classification ALTER COLUMN id SET DEFAULT n
 --
 
 ALTER TABLE ONLY public.products ALTER COLUMN id SET DEFAULT nextval('public.products_id_seq'::regclass);
+
+
+--
+-- Name: project_boq_items id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.project_boq_items ALTER COLUMN id SET DEFAULT nextval('public.project_boq_items_id_seq'::regclass);
 
 
 --
@@ -5383,6 +5397,14 @@ ALTER TABLE ONLY public.products
 
 
 --
+-- Name: project_boq_items project_boq_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.project_boq_items
+    ADD CONSTRAINT project_boq_items_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: project_costs project_costs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7466,6 +7488,13 @@ CREATE INDEX idx_alert_mute_rules_company ON public.alert_mute_rules USING btree
 --
 
 CREATE INDEX idx_alert_mute_rules_companyid ON public.alert_mute_rules USING btree ("companyId");
+
+
+--
+-- Name: idx_allocation_results_override_diff; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_allocation_results_override_diff ON public.accounting_allocation_results USING btree ("companyId", "resolutionStatus", "resolvedAt" DESC) WHERE (("resolutionStatus")::text = 'manual_override'::text);
 
 
 --
@@ -12632,6 +12661,13 @@ CREATE UNIQUE INDEX proactive_rules_name_company_idx ON public.proactive_rules U
 --
 
 CREATE UNIQUE INDEX proactive_rules_name_idx ON public.proactive_rules USING btree (name);
+
+
+--
+-- Name: project_boq_items_project_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX project_boq_items_project_idx ON public.project_boq_items USING btree ("companyId", "projectId") WHERE ("deletedAt" IS NULL);
 
 
 --

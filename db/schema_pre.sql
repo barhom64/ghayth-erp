@@ -579,6 +579,7 @@ DROP INDEX IF EXISTS public.purchase_orders_ref_company_uq;
 DROP INDEX IF EXISTS public.purchase_orders_deleted_at_idx;
 DROP INDEX IF EXISTS public.purchase_orders_company_status_idx;
 DROP INDEX IF EXISTS public.property_buildings_company_idx;
+DROP INDEX IF EXISTS public.project_boq_items_project_idx;
 DROP INDEX IF EXISTS public.proactive_rules_name_idx;
 DROP INDEX IF EXISTS public.proactive_rules_name_company_idx;
 DROP INDEX IF EXISTS public.proactive_rules_company_idx;
@@ -1317,6 +1318,7 @@ DROP INDEX IF EXISTS public.idx_applicant_accounts_email;
 DROP INDEX IF EXISTS public.idx_allocation_rules_match;
 DROP INDEX IF EXISTS public.idx_allocation_rules_company;
 DROP INDEX IF EXISTS public.idx_allocation_results_status;
+DROP INDEX IF EXISTS public.idx_allocation_results_override_diff;
 DROP INDEX IF EXISTS public.idx_alert_mute_rules_companyid;
 DROP INDEX IF EXISTS public.idx_alert_mute_rules_company;
 DROP INDEX IF EXISTS public.idx_alert_mute_rules_assignment;
@@ -1589,6 +1591,7 @@ ALTER TABLE IF EXISTS ONLY public.project_resources DROP CONSTRAINT IF EXISTS pr
 ALTER TABLE IF EXISTS ONLY public.project_phases DROP CONSTRAINT IF EXISTS project_phases_pkey;
 ALTER TABLE IF EXISTS ONLY public.project_milestones DROP CONSTRAINT IF EXISTS project_milestones_pkey;
 ALTER TABLE IF EXISTS ONLY public.project_costs DROP CONSTRAINT IF EXISTS project_costs_pkey;
+ALTER TABLE IF EXISTS ONLY public.project_boq_items DROP CONSTRAINT IF EXISTS project_boq_items_pkey;
 ALTER TABLE IF EXISTS ONLY public.products DROP CONSTRAINT IF EXISTS products_pkey;
 ALTER TABLE IF EXISTS ONLY public.product_valuation_settings DROP CONSTRAINT IF EXISTS product_valuation_settings_pkey;
 ALTER TABLE IF EXISTS ONLY public.product_abc_classification DROP CONSTRAINT IF EXISTS product_abc_classification_pkey;
@@ -2048,6 +2051,7 @@ ALTER TABLE IF EXISTS public.project_resources ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.project_phases ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.project_milestones ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.project_costs ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.project_boq_items ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.products ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.product_abc_classification ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.processing_activities_log ALTER COLUMN id DROP DEFAULT;
@@ -2310,6 +2314,7 @@ ALTER TABLE IF EXISTS public.ai_prompt_evaluations ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.ai_prompt_evaluation_results ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.activity_logs ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.accounting_mappings ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.accounting_allocation_results ALTER COLUMN id DROP DEFAULT;
 DROP SEQUENCE IF EXISTS public.zatca_submission_log_id_seq;
 DROP TABLE IF EXISTS public.zatca_submission_log;
 DROP SEQUENCE IF EXISTS public.zatca_settings_id_seq;
@@ -2614,6 +2619,8 @@ DROP SEQUENCE IF EXISTS public.project_milestones_id_seq;
 DROP TABLE IF EXISTS public.project_milestones;
 DROP SEQUENCE IF EXISTS public.project_costs_id_seq;
 DROP TABLE IF EXISTS public.project_costs;
+DROP SEQUENCE IF EXISTS public.project_boq_items_id_seq;
+DROP TABLE IF EXISTS public.project_boq_items;
 DROP SEQUENCE IF EXISTS public.products_id_seq;
 DROP TABLE IF EXISTS public.products;
 DROP TABLE IF EXISTS public.product_valuation_settings;
@@ -3148,6 +3155,7 @@ DROP TABLE IF EXISTS public.activity_logs;
 DROP SEQUENCE IF EXISTS public.accounting_mappings_id_seq;
 DROP TABLE IF EXISTS public.accounting_mappings;
 DROP TABLE IF EXISTS public.accounting_allocation_rules;
+DROP SEQUENCE IF EXISTS public.accounting_allocation_results_id_seq;
 DROP TABLE IF EXISTS public.accounting_allocation_results;
 DROP FUNCTION IF EXISTS public.upsert_account(p_company_id integer, p_code character varying, p_name character varying, p_type character varying, p_parent_id integer, p_parent_code character varying, p_level integer, p_allow_posting boolean, p_is_analytical boolean);
 DROP FUNCTION IF EXISTS public.hr_clone_default_regulation(p_company_id integer);
@@ -3235,8 +3243,32 @@ CREATE TABLE public.accounting_allocation_results (
     "resolvedAt" timestamp with time zone DEFAULT now(),
     "manualOverrideBy" integer,
     "manualOverrideReason" text,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "proposedAccountId" integer,
+    "proposedAccountCode" character varying(20),
+    "proposedCostCenterId" integer,
+    "proposedDimensionsJson" jsonb
 );
+
+
+--
+-- Name: accounting_allocation_results_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.accounting_allocation_results_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: accounting_allocation_results_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.accounting_allocation_results_id_seq OWNED BY public.accounting_allocation_results.id;
 
 
 --
@@ -14886,6 +14918,55 @@ CREATE SEQUENCE public.products_id_seq
 --
 
 ALTER SEQUENCE public.products_id_seq OWNED BY public.products.id;
+
+
+--
+-- Name: project_boq_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.project_boq_items (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "projectId" integer NOT NULL,
+    "phaseId" integer,
+    "itemType" character varying(20) DEFAULT 'custom'::character varying NOT NULL,
+    description text NOT NULL,
+    unit character varying(20),
+    quantity numeric(14,3) DEFAULT 1 NOT NULL,
+    "unitPrice" numeric(14,2) DEFAULT 0 NOT NULL,
+    "lineTotal" numeric(14,2) DEFAULT 0 NOT NULL,
+    status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
+    "invoiceId" integer,
+    "sortOrder" integer DEFAULT 0 NOT NULL,
+    notes text,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT "project_boq_items_itemType_check" CHECK ((("itemType")::text = ANY ((ARRAY['aggregate'::character varying, 'custom'::character varying])::text[]))),
+    CONSTRAINT project_boq_items_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'billed'::character varying, 'cancelled'::character varying])::text[])))
+);
+
+
+--
+-- Name: project_boq_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.project_boq_items_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: project_boq_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.project_boq_items_id_seq OWNED BY public.project_boq_items.id;
 
 
 --
