@@ -1,4 +1,4 @@
--- 298_warehouse_products_item_type.sql
+-- 299_warehouse_products_item_type.sql
 --
 -- Schema-drift fix surfaced by the live warehouse journey: migration 203
 -- added "itemType" (+ accounting routing columns) to the LEGACY `products`
