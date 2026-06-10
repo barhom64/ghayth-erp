@@ -666,6 +666,128 @@ router.post("/messages/bulk-folder", authorize({ feature: "communications", acti
 });
 
 /**
+ * POST /inbox/messages/:id/retry — re-queue a failed outbound message.
+ *
+ * When the cron worker exhausts maxAttempts the row sits at status='failed'
+ * with the last errorMessage. Operators often want to retry after fixing
+ * the cause (DNS, credentials, recipient address). This endpoint resets
+ * attempts=0, status='pending', clears errorMessage and bumps scheduledAt
+ * to NOW so the next worker tick picks it up.
+ *
+ * Guards:
+ *   - the row must belong to this tenant
+ *   - the row must have current status='failed' (no retrying a row
+ *     that's actively sending; no resurrecting a cancelled row)
+ *   - blocked_dlp on the message_log side stops the reset (DLP block is
+ *     a policy decision, not a delivery failure)
+ */
+router.post("/messages/:id/retry", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const msgId = parseId(req.params.id, "id");
+
+    // Source of truth is message_log.id; the queue row links via
+    // messageLogId. We require a queue row to retry — outbound-only.
+    const [msg] = await rawQuery<{ id: number; status: string; direction: string }>(
+      `SELECT id, status, direction FROM message_log
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [msgId, scope.companyId],
+    );
+    if (!msg) throw new NotFoundError("الرسالة غير موجودة");
+    if (msg.direction !== "outbound") throw new ValidationError("لا يمكن إعادة محاولة رسالة واردة");
+    if (msg.status === "blocked_dlp") {
+      throw new ValidationError("هذه الرسالة محجوبة بواسطة قواعد DLP — لا يمكن إعادة محاولتها");
+    }
+
+    const { affectedRows } = await rawExecute(
+      `UPDATE outbound_queue
+          SET status = 'pending',
+              attempts = 0,
+              "errorMessage" = NULL,
+              "scheduledAt" = NOW(),
+              "updatedAt" = NOW()
+        WHERE "messageLogId" = $1 AND "companyId" = $2 AND status = 'failed'`,
+      [msgId, scope.companyId],
+    );
+    if (!affectedRows) {
+      throw new ValidationError("لا يوجد صف في قائمة الإرسال بحالة فاشلة لهذه الرسالة");
+    }
+
+    // Mirror message_log so the inbox shows the new status immediately,
+    // without waiting for the worker to tick.
+    await rawExecute(
+      `UPDATE message_log SET status = 'queued' WHERE id = $1 AND "companyId" = $2`,
+      [msgId, scope.companyId],
+    ).catch((e) => logger.warn(e, "[inbox/retry] mirror status update failed"));
+
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "message_log", entityId: msgId,
+      after: { retriedAt: new Date().toISOString(), status: "queued" },
+    }).catch((e) => logger.warn(e, "[audit] message.retry"));
+
+    res.json({ ok: true, status: "queued", rowsReset: affectedRows });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/messages/retry");
+  }
+});
+
+/**
+ * POST /inbox/messages/:id/cancel — cancel a scheduled outbound message.
+ *
+ * Only works when the row in outbound_queue is still 'pending' AND its
+ * scheduledAt is comfortably in the future. Once the worker picks it up
+ * (status flips to 'sending') or it actually went out, cancellation is
+ * no longer possible. Mirrors message_log.status='cancelled' so the
+ * inbox UI reflects the change immediately.
+ */
+router.post("/messages/:id/cancel", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const msgId = parseId(req.params.id, "id");
+
+    const [msg] = await rawQuery<{ id: number; status: string; direction: string }>(
+      `SELECT id, status, direction FROM message_log
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [msgId, scope.companyId],
+    );
+    if (!msg) throw new NotFoundError("الرسالة غير موجودة");
+    if (msg.direction !== "outbound") throw new ValidationError("لا يمكن إلغاء رسالة واردة");
+
+    // Cron worker ticks every 60s — add a 30s safety margin so we don't
+    // race a worker that's milliseconds away from picking the row up.
+    const { affectedRows } = await rawExecute(
+      `UPDATE outbound_queue
+          SET status = 'cancelled', "updatedAt" = NOW()
+        WHERE "messageLogId" = $1 AND "companyId" = $2
+          AND status = 'pending'
+          AND "scheduledAt" IS NOT NULL
+          AND "scheduledAt" > NOW() + INTERVAL '30 seconds'`,
+      [msgId, scope.companyId],
+    );
+    if (!affectedRows) {
+      throw new ValidationError(
+        "لا يمكن إلغاء هذه الرسالة — قد تكون قيد الإرسال أو حان وقت جدولتها",
+      );
+    }
+
+    await rawExecute(
+      `UPDATE message_log SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
+      [msgId, scope.companyId],
+    ).catch((e) => logger.warn(e, "[inbox/cancel] mirror status update failed"));
+
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "message_log", entityId: msgId,
+      after: { cancelledAt: new Date().toISOString(), status: "cancelled" },
+    }).catch((e) => logger.warn(e, "[audit] message.cancel"));
+
+    res.json({ ok: true, status: "cancelled" });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/messages/cancel");
+  }
+});
+/**
  * POST /inbox/messages/:id/star — toggle the starred flag.
  */
 router.post("/messages/:id/star", authorize({ feature: "communications", action: "update" }), async (req, res) => {
