@@ -2138,6 +2138,15 @@ export function registerEventListeners() {
         [invoiceId, boqItemIds, payload.companyId]
       );
     }
+    // Same back-link for sold development units (Wave C.2).
+    const devUnitIds = Array.isArray(payload.devUnitIds) ? (payload.devUnitIds as number[]) : [];
+    if (devUnitIds.length > 0 && invoiceId > 0) {
+      await rawExecute(
+        `UPDATE development_units SET "invoiceId"=$1, "updatedAt"=NOW()
+         WHERE id = ANY($2::int[]) AND "companyId"=$3`,
+        [invoiceId, devUnitIds, payload.companyId]
+      );
+    }
   };
 
   registerCrossDomainHandler("property.invoice.requested", invoiceRequestHandler);
