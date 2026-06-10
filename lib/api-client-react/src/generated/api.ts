@@ -19,44 +19,75 @@ import type {
 import type {
   Account,
   ApproveLeaveBody,
-  AttendanceRecord,
+  BulkWaiveUmrahPenalties200,
+  BulkWaiveUmrahPenaltiesBody,
   CheckInBody,
   CheckInResponse,
-  Client,
+  ClientDetail,
   CreateClientBody,
   CreateClientResponse,
   CreateEmployeeBody,
   CreateEmployeeResponse,
   CreateInvoiceBody,
   CreateInvoiceResponse,
+  CreateProjectBody,
+  CreateUmrahAttachment201,
+  CreateUmrahAttachmentBody,
   DashboardData,
   DashboardSummary,
-  Employee,
   EmployeeDetail,
   FinanceStats,
+  GetAttendance200,
   GetAttendanceParams,
+  GetLeaveBalance200,
+  HealthSchemaStatus,
   HealthStatus,
-  Invoice,
-  LeaveBalance,
-  LeaveRequest,
-  LeaveType,
+  JournalEntryDetail,
+  ListClients200,
   ListClientsParams,
+  ListEmployees200,
   ListEmployeesParams,
+  ListInvoices200,
   ListInvoicesParams,
+  ListLeaveRequests200,
   ListLeaveRequestsParams,
+  ListLeaveTypes200,
+  ListNotifications200,
+  ListPayrollRuns200,
   ListTasksParams,
+  ListUmrahAttachments200,
+  ListUmrahAttachmentsParams,
   LoginBody,
   LoginResponse,
-  Notification,
+  MergeUmrahGroups200,
+  MergeUmrahGroupsBody,
+  MobileAuthResponse,
+  MobileRefreshBody,
+  MobileTokenPair,
   PaymentResponse,
-  PayrollRun,
   PayrollRunResult,
+  PropertyUnitDetail,
   RecordPaymentBody,
   RequestLeaveBody,
   RequestLeaveResponse,
   RunPayrollBody,
+  SplitUmrahGroup200,
+  SplitUmrahGroupBody,
   SuccessResponse,
+  SupportTicketDetail,
   Task,
+  UmrahAgentDetail,
+  UmrahDailyRunsheet200,
+  UmrahDailyRunsheetParams,
+  UmrahDailyRunsheetPdfParams,
+  UmrahGroupDetail,
+  UmrahPilgrimDetail,
+  UmrahReconciliationReport200,
+  UmrahReconciliationReportParams,
+  UmrahSubAgentDetail,
+  UmrahSubAgentStatement,
+  UmrahSubAgentStatementParams,
+  UmrahSubAgentStatementPdfParams,
   UserProfile,
 } from "./api.schemas";
 
@@ -70,7 +101,11 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * @summary Health check
+ * Lightweight liveness check. Proves the process is up. Does NOT
+verify DB connectivity or schema completeness — use
+`GET /api/health/schema` for readiness verification.
+
+ * @summary Liveness probe (lightweight)
  */
 export const getHealthCheckUrl = () => {
   return `/api/healthz`;
@@ -121,7 +156,7 @@ export type HealthCheckQueryResult = NonNullable<
 export type HealthCheckQueryError = ErrorType<unknown>;
 
 /**
- * @summary Health check
+ * @summary Liveness probe (lightweight)
  */
 
 export function useHealthCheck<
@@ -136,6 +171,87 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Readiness probe. Verifies that the expected tables/columns exist
+and that pending migrations have been applied. This is the
+endpoint that post-deploy verification scripts should poll —
+`/api/health` and `/api/healthz` only prove connectivity /
+liveness, not schema completeness.
+
+ * @summary Schema/readiness verification
+ */
+export const getHealthSchemaUrl = () => {
+  return `/api/health/schema`;
+};
+
+export const healthSchema = async (
+  options?: RequestInit,
+): Promise<HealthSchemaStatus> => {
+  return customFetch<HealthSchemaStatus>(getHealthSchemaUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getHealthSchemaQueryKey = () => {
+  return [`/api/health/schema`] as const;
+};
+
+export const getHealthSchemaQueryOptions = <
+  TData = Awaited<ReturnType<typeof healthSchema>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof healthSchema>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getHealthSchemaQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof healthSchema>>> = ({
+    signal,
+  }) => healthSchema({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof healthSchema>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type HealthSchemaQueryResult = NonNullable<
+  Awaited<ReturnType<typeof healthSchema>>
+>;
+export type HealthSchemaQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Schema/readiness verification
+ */
+
+export function useHealthSchema<
+  TData = Awaited<ReturnType<typeof healthSchema>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof healthSchema>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getHealthSchemaQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -292,6 +408,182 @@ export function useGetMe<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Employee login for native/mobile clients. Returns the access and refresh tokens in the JSON body (NOT as cookies). The access token is the same JWT used by the web cookie flow, so it carries identical RBAC / allowedModules / feature-flag scope — send it as `Authorization: Bearer <accessToken>` on subsequent requests. When the access token expires (HTTP 401), call `/auth/mobile/refresh` with the stored refresh token to obtain a new pair. To sign out, POST the refresh token to `/auth/logout`.
+
+ * @summary Mobile (Bearer-token) login
+ */
+export const getMobileLoginUrl = () => {
+  return `/api/auth/mobile/login`;
+};
+
+export const mobileLogin = async (
+  loginBody: LoginBody,
+  options?: RequestInit,
+): Promise<MobileAuthResponse> => {
+  return customFetch<MobileAuthResponse>(getMobileLoginUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(loginBody),
+  });
+};
+
+export const getMobileLoginMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof mobileLogin>>,
+    TError,
+    { data: BodyType<LoginBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof mobileLogin>>,
+  TError,
+  { data: BodyType<LoginBody> },
+  TContext
+> => {
+  const mutationKey = ["mobileLogin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof mobileLogin>>,
+    { data: BodyType<LoginBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return mobileLogin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MobileLoginMutationResult = NonNullable<
+  Awaited<ReturnType<typeof mobileLogin>>
+>;
+export type MobileLoginMutationBody = BodyType<LoginBody>;
+export type MobileLoginMutationError = ErrorType<void>;
+
+/**
+ * @summary Mobile (Bearer-token) login
+ */
+export const useMobileLogin = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof mobileLogin>>,
+    TError,
+    { data: BodyType<LoginBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof mobileLogin>>,
+  TError,
+  { data: BodyType<LoginBody> },
+  TContext
+> => {
+  return useMutation(getMobileLoginMutationOptions(options));
+};
+
+/**
+ * Exchanges a valid refresh token for a new access + refresh token pair (returned in the body). Refresh tokens are rotated on every use; re-using an already-rotated token revokes the entire session (reuse detection).
+
+ * @summary Mobile refresh-token rotation
+ */
+export const getMobileRefreshUrl = () => {
+  return `/api/auth/mobile/refresh`;
+};
+
+export const mobileRefresh = async (
+  mobileRefreshBody: MobileRefreshBody,
+  options?: RequestInit,
+): Promise<MobileTokenPair> => {
+  return customFetch<MobileTokenPair>(getMobileRefreshUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(mobileRefreshBody),
+  });
+};
+
+export const getMobileRefreshMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof mobileRefresh>>,
+    TError,
+    { data: BodyType<MobileRefreshBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof mobileRefresh>>,
+  TError,
+  { data: BodyType<MobileRefreshBody> },
+  TContext
+> => {
+  const mutationKey = ["mobileRefresh"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof mobileRefresh>>,
+    { data: BodyType<MobileRefreshBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return mobileRefresh(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MobileRefreshMutationResult = NonNullable<
+  Awaited<ReturnType<typeof mobileRefresh>>
+>;
+export type MobileRefreshMutationBody = BodyType<MobileRefreshBody>;
+export type MobileRefreshMutationError = ErrorType<void>;
+
+/**
+ * @summary Mobile refresh-token rotation
+ */
+export const useMobileRefresh = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof mobileRefresh>>,
+    TError,
+    { data: BodyType<MobileRefreshBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof mobileRefresh>>,
+  TError,
+  { data: BodyType<MobileRefreshBody> },
+  TContext
+> => {
+  return useMutation(getMobileRefreshMutationOptions(options));
+};
 
 /**
  * @summary Get dashboard stats
@@ -465,8 +757,8 @@ export const getListEmployeesUrl = (params?: ListEmployeesParams) => {
 export const listEmployees = async (
   params?: ListEmployeesParams,
   options?: RequestInit,
-): Promise<Employee[]> => {
-  return customFetch<Employee[]>(getListEmployeesUrl(params), {
+): Promise<ListEmployees200> => {
+  return customFetch<ListEmployees200>(getListEmployeesUrl(params), {
     ...options,
     method: "GET",
   });
@@ -732,8 +1024,8 @@ export const getListClientsUrl = (params?: ListClientsParams) => {
 export const listClients = async (
   params?: ListClientsParams,
   options?: RequestInit,
-): Promise<Client[]> => {
-  return customFetch<Client[]>(getListClientsUrl(params), {
+): Promise<ListClients200> => {
+  return customFetch<ListClients200>(getListClientsUrl(params), {
     ...options,
     method: "GET",
   });
@@ -900,8 +1192,8 @@ export const getGetClientUrl = (id: number) => {
 export const getClient = async (
   id: number,
   options?: RequestInit,
-): Promise<Client> => {
-  return customFetch<Client>(getGetClientUrl(id), {
+): Promise<ClientDetail> => {
+  return customFetch<ClientDetail>(getGetClientUrl(id), {
     ...options,
     method: "GET",
   });
@@ -1083,8 +1375,8 @@ export const getGetAttendanceUrl = (params?: GetAttendanceParams) => {
 export const getAttendance = async (
   params?: GetAttendanceParams,
   options?: RequestInit,
-): Promise<AttendanceRecord[]> => {
-  return customFetch<AttendanceRecord[]>(getGetAttendanceUrl(params), {
+): Promise<GetAttendance200> => {
+  return customFetch<GetAttendance200>(getGetAttendanceUrl(params), {
     ...options,
     method: "GET",
   });
@@ -1164,8 +1456,8 @@ export const getListLeaveTypesUrl = () => {
 
 export const listLeaveTypes = async (
   options?: RequestInit,
-): Promise<LeaveType[]> => {
-  return customFetch<LeaveType[]>(getListLeaveTypesUrl(), {
+): Promise<ListLeaveTypes200> => {
+  return customFetch<ListLeaveTypes200>(getListLeaveTypesUrl(), {
     ...options,
     method: "GET",
   });
@@ -1239,8 +1531,8 @@ export const getGetLeaveBalanceUrl = () => {
 
 export const getLeaveBalance = async (
   options?: RequestInit,
-): Promise<LeaveBalance[]> => {
-  return customFetch<LeaveBalance[]>(getGetLeaveBalanceUrl(), {
+): Promise<GetLeaveBalance200> => {
+  return customFetch<GetLeaveBalance200>(getGetLeaveBalanceUrl(), {
     ...options,
     method: "GET",
   });
@@ -1327,8 +1619,8 @@ export const getListLeaveRequestsUrl = (params?: ListLeaveRequestsParams) => {
 export const listLeaveRequests = async (
   params?: ListLeaveRequestsParams,
   options?: RequestInit,
-): Promise<LeaveRequest[]> => {
-  return customFetch<LeaveRequest[]>(getListLeaveRequestsUrl(params), {
+): Promise<ListLeaveRequests200> => {
+  return customFetch<ListLeaveRequests200>(getListLeaveRequestsUrl(params), {
     ...options,
     method: "GET",
   });
@@ -1584,8 +1876,8 @@ export const getListPayrollRunsUrl = () => {
 
 export const listPayrollRuns = async (
   options?: RequestInit,
-): Promise<PayrollRun[]> => {
-  return customFetch<PayrollRun[]>(getListPayrollRunsUrl(), {
+): Promise<ListPayrollRuns200> => {
+  return customFetch<ListPayrollRuns200>(getListPayrollRunsUrl(), {
     ...options,
     method: "GET",
   });
@@ -1758,8 +2050,8 @@ export const getListInvoicesUrl = (params?: ListInvoicesParams) => {
 export const listInvoices = async (
   params?: ListInvoicesParams,
   options?: RequestInit,
-): Promise<Invoice[]> => {
-  return customFetch<Invoice[]>(getListInvoicesUrl(params), {
+): Promise<ListInvoices200> => {
+  return customFetch<ListInvoices200>(getListInvoicesUrl(params), {
     ...options,
     method: "GET",
   });
@@ -2154,6 +2446,103 @@ export function useGetFinanceStats<
 }
 
 /**
+ * The **only** supported way to create a project. Used by the
+projects module *and* by finance UI screens that need to spin up
+a new project (e.g. "إنشاء مشروع جديد" shortcut on
+`project-costing`). Enforces:
+  - RBAC `projects.list:create` (or role `projects_manager`).
+  - Manager assignment (auto-pinned to caller for `projects_manager`).
+  - Delivery obligation registration on `endDate`.
+  - `project.created` event + audit log.
+The historical `POST /api/finance/projects` was removed because
+it bypassed all of the above.
+
+ * @summary Create a project (canonical entrypoint)
+ */
+export const getCreateProjectUrl = () => {
+  return `/api/projects`;
+};
+
+export const createProject = async (
+  createProjectBody: CreateProjectBody,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getCreateProjectUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createProjectBody),
+  });
+};
+
+export const getCreateProjectMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProject>>,
+    TError,
+    { data: BodyType<CreateProjectBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createProject>>,
+  TError,
+  { data: BodyType<CreateProjectBody> },
+  TContext
+> => {
+  const mutationKey = ["createProject"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createProject>>,
+    { data: BodyType<CreateProjectBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createProject(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateProjectMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createProject>>
+>;
+export type CreateProjectMutationBody = BodyType<CreateProjectBody>;
+export type CreateProjectMutationError = ErrorType<void>;
+
+/**
+ * @summary Create a project (canonical entrypoint)
+ */
+export const useCreateProject = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createProject>>,
+    TError,
+    { data: BodyType<CreateProjectBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createProject>>,
+  TError,
+  { data: BodyType<CreateProjectBody> },
+  TContext
+> => {
+  return useMutation(getCreateProjectMutationOptions(options));
+};
+
+/**
  * @summary List notifications
  */
 export const getListNotificationsUrl = () => {
@@ -2162,8 +2551,8 @@ export const getListNotificationsUrl = () => {
 
 export const listNotifications = async (
   options?: RequestInit,
-): Promise<Notification[]> => {
-  return customFetch<Notification[]>(getListNotificationsUrl(), {
+): Promise<ListNotifications200> => {
+  return customFetch<ListNotifications200>(getListNotificationsUrl(), {
     ...options,
     method: "GET",
   });
@@ -2398,6 +2787,1794 @@ export function useListTasks<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListTasksQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Moves the listed pilgrims out of the source group into a fresh
+child group. Rejects 409 if the source group is already linked to
+a sales invoice (issue credit note first). agentId / subAgentId /
+seasonId / programDuration are inherited from the source.
+
+ * @summary Split a group into a new group (move N pilgrims)
+ */
+export const getSplitUmrahGroupUrl = (id: number) => {
+  return `/api/umrah/groups/${id}/split`;
+};
+
+export const splitUmrahGroup = async (
+  id: number,
+  splitUmrahGroupBody: SplitUmrahGroupBody,
+  options?: RequestInit,
+): Promise<SplitUmrahGroup200> => {
+  return customFetch<SplitUmrahGroup200>(getSplitUmrahGroupUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(splitUmrahGroupBody),
+  });
+};
+
+export const getSplitUmrahGroupMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof splitUmrahGroup>>,
+    TError,
+    { id: number; data: BodyType<SplitUmrahGroupBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof splitUmrahGroup>>,
+  TError,
+  { id: number; data: BodyType<SplitUmrahGroupBody> },
+  TContext
+> => {
+  const mutationKey = ["splitUmrahGroup"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof splitUmrahGroup>>,
+    { id: number; data: BodyType<SplitUmrahGroupBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return splitUmrahGroup(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SplitUmrahGroupMutationResult = NonNullable<
+  Awaited<ReturnType<typeof splitUmrahGroup>>
+>;
+export type SplitUmrahGroupMutationBody = BodyType<SplitUmrahGroupBody>;
+export type SplitUmrahGroupMutationError = ErrorType<void>;
+
+/**
+ * @summary Split a group into a new group (move N pilgrims)
+ */
+export const useSplitUmrahGroup = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof splitUmrahGroup>>,
+    TError,
+    { id: number; data: BodyType<SplitUmrahGroupBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof splitUmrahGroup>>,
+  TError,
+  { id: number; data: BodyType<SplitUmrahGroupBody> },
+  TContext
+> => {
+  return useMutation(getSplitUmrahGroupMutationOptions(options));
+};
+
+/**
+ * Moves every pilgrim from each source group into the target, then
+soft-deletes the now-empty source groups. Rejects 409 if any
+source is already invoiced. Idempotent on re-runs because
+deleted groups are skipped on subsequent calls.
+
+ * @summary Merge multiple source groups into a target group
+ */
+export const getMergeUmrahGroupsUrl = () => {
+  return `/api/umrah/groups/merge`;
+};
+
+export const mergeUmrahGroups = async (
+  mergeUmrahGroupsBody: MergeUmrahGroupsBody,
+  options?: RequestInit,
+): Promise<MergeUmrahGroups200> => {
+  return customFetch<MergeUmrahGroups200>(getMergeUmrahGroupsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(mergeUmrahGroupsBody),
+  });
+};
+
+export const getMergeUmrahGroupsMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof mergeUmrahGroups>>,
+    TError,
+    { data: BodyType<MergeUmrahGroupsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof mergeUmrahGroups>>,
+  TError,
+  { data: BodyType<MergeUmrahGroupsBody> },
+  TContext
+> => {
+  const mutationKey = ["mergeUmrahGroups"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof mergeUmrahGroups>>,
+    { data: BodyType<MergeUmrahGroupsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return mergeUmrahGroups(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MergeUmrahGroupsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof mergeUmrahGroups>>
+>;
+export type MergeUmrahGroupsMutationBody = BodyType<MergeUmrahGroupsBody>;
+export type MergeUmrahGroupsMutationError = ErrorType<void>;
+
+/**
+ * @summary Merge multiple source groups into a target group
+ */
+export const useMergeUmrahGroups = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof mergeUmrahGroups>>,
+    TError,
+    { data: BodyType<MergeUmrahGroupsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof mergeUmrahGroups>>,
+  TError,
+  { data: BodyType<MergeUmrahGroupsBody> },
+  TContext
+> => {
+  return useMutation(getMergeUmrahGroupsMutationOptions(options));
+};
+
+/**
+ * Loops each penaltyId through `applyTransition` +
+`postPenaltyWaiverGL`. A single bad row does not break the batch
+— failures + skips are reported back so the UI can render a
+non-atomic summary. Posts one consolidated reversal journal
+entry per successful row.
+
+ * @summary Waive multiple penalties under one reason
+ */
+export const getBulkWaiveUmrahPenaltiesUrl = () => {
+  return `/api/umrah/penalties/waive-bulk`;
+};
+
+export const bulkWaiveUmrahPenalties = async (
+  bulkWaiveUmrahPenaltiesBody: BulkWaiveUmrahPenaltiesBody,
+  options?: RequestInit,
+): Promise<BulkWaiveUmrahPenalties200> => {
+  return customFetch<BulkWaiveUmrahPenalties200>(
+    getBulkWaiveUmrahPenaltiesUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(bulkWaiveUmrahPenaltiesBody),
+    },
+  );
+};
+
+export const getBulkWaiveUmrahPenaltiesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkWaiveUmrahPenalties>>,
+    TError,
+    { data: BodyType<BulkWaiveUmrahPenaltiesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkWaiveUmrahPenalties>>,
+  TError,
+  { data: BodyType<BulkWaiveUmrahPenaltiesBody> },
+  TContext
+> => {
+  const mutationKey = ["bulkWaiveUmrahPenalties"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkWaiveUmrahPenalties>>,
+    { data: BodyType<BulkWaiveUmrahPenaltiesBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkWaiveUmrahPenalties(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkWaiveUmrahPenaltiesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkWaiveUmrahPenalties>>
+>;
+export type BulkWaiveUmrahPenaltiesMutationBody =
+  BodyType<BulkWaiveUmrahPenaltiesBody>;
+export type BulkWaiveUmrahPenaltiesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Waive multiple penalties under one reason
+ */
+export const useBulkWaiveUmrahPenalties = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkWaiveUmrahPenalties>>,
+    TError,
+    { data: BodyType<BulkWaiveUmrahPenaltiesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkWaiveUmrahPenalties>>,
+  TError,
+  { data: BodyType<BulkWaiveUmrahPenaltiesBody> },
+  TContext
+> => {
+  return useMutation(getBulkWaiveUmrahPenaltiesMutationOptions(options));
+};
+
+/**
+ * @summary List polymorphic attachments
+ */
+export const getListUmrahAttachmentsUrl = (
+  params?: ListUmrahAttachmentsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/umrah/attachments?${stringifiedParams}`
+    : `/api/umrah/attachments`;
+};
+
+export const listUmrahAttachments = async (
+  params?: ListUmrahAttachmentsParams,
+  options?: RequestInit,
+): Promise<ListUmrahAttachments200> => {
+  return customFetch<ListUmrahAttachments200>(
+    getListUmrahAttachmentsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListUmrahAttachmentsQueryKey = (
+  params?: ListUmrahAttachmentsParams,
+) => {
+  return [`/api/umrah/attachments`, ...(params ? [params] : [])] as const;
+};
+
+export const getListUmrahAttachmentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listUmrahAttachments>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListUmrahAttachmentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listUmrahAttachments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListUmrahAttachmentsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listUmrahAttachments>>
+  > = ({ signal }) =>
+    listUmrahAttachments(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listUmrahAttachments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListUmrahAttachmentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listUmrahAttachments>>
+>;
+export type ListUmrahAttachmentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List polymorphic attachments
+ */
+
+export function useListUmrahAttachments<
+  TData = Awaited<ReturnType<typeof listUmrahAttachments>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListUmrahAttachmentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listUmrahAttachments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListUmrahAttachmentsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Verifies ownership of the target row via an entityType→table
+whitelist before insert (no raw table-name injection). The
+attached file is described by metadata only; uploads go through
+the central storage service and `storageKey` + `fileUrl` are
+recorded here.
+
+ * @summary Attach a file to an umrah entity
+ */
+export const getCreateUmrahAttachmentUrl = () => {
+  return `/api/umrah/attachments`;
+};
+
+export const createUmrahAttachment = async (
+  createUmrahAttachmentBody: CreateUmrahAttachmentBody,
+  options?: RequestInit,
+): Promise<CreateUmrahAttachment201> => {
+  return customFetch<CreateUmrahAttachment201>(getCreateUmrahAttachmentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createUmrahAttachmentBody),
+  });
+};
+
+export const getCreateUmrahAttachmentMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createUmrahAttachment>>,
+    TError,
+    { data: BodyType<CreateUmrahAttachmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createUmrahAttachment>>,
+  TError,
+  { data: BodyType<CreateUmrahAttachmentBody> },
+  TContext
+> => {
+  const mutationKey = ["createUmrahAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createUmrahAttachment>>,
+    { data: BodyType<CreateUmrahAttachmentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createUmrahAttachment(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateUmrahAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createUmrahAttachment>>
+>;
+export type CreateUmrahAttachmentMutationBody =
+  BodyType<CreateUmrahAttachmentBody>;
+export type CreateUmrahAttachmentMutationError = ErrorType<void>;
+
+/**
+ * @summary Attach a file to an umrah entity
+ */
+export const useCreateUmrahAttachment = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createUmrahAttachment>>,
+    TError,
+    { data: BodyType<CreateUmrahAttachmentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createUmrahAttachment>>,
+  TError,
+  { data: BodyType<CreateUmrahAttachmentBody> },
+  TContext
+> => {
+  return useMutation(getCreateUmrahAttachmentMutationOptions(options));
+};
+
+/**
+ * @summary Soft-delete an attachment
+ */
+export const getDeleteUmrahAttachmentUrl = (id: number) => {
+  return `/api/umrah/attachments/${id}`;
+};
+
+export const deleteUmrahAttachment = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getDeleteUmrahAttachmentUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteUmrahAttachmentMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteUmrahAttachment>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteUmrahAttachment>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteUmrahAttachment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteUmrahAttachment>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteUmrahAttachment(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteUmrahAttachmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteUmrahAttachment>>
+>;
+
+export type DeleteUmrahAttachmentMutationError = ErrorType<void>;
+
+/**
+ * @summary Soft-delete an attachment
+ */
+export const useDeleteUmrahAttachment = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteUmrahAttachment>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteUmrahAttachment>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteUmrahAttachmentMutationOptions(options));
+};
+
+/**
+ * Detail-page payload: the full `umrah_agents` row plus the statement
+aggregates the detail pane renders (pilgrim count, overstayed count,
+total invoiced/paid/outstanding, and a per-status breakdown dict).
+Every column is enumerated rather than passthrough so the
+contract-drift guard fires on any added/renamed returned field.
+
+ * @summary Get an umrah agent by ID (full row + statement aggregates)
+ */
+export const getGetUmrahAgentUrl = (id: number) => {
+  return `/api/umrah/agents/${id}`;
+};
+
+export const getUmrahAgent = async (
+  id: number,
+  options?: RequestInit,
+): Promise<UmrahAgentDetail> => {
+  return customFetch<UmrahAgentDetail>(getGetUmrahAgentUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUmrahAgentQueryKey = (id: number) => {
+  return [`/api/umrah/agents/${id}`] as const;
+};
+
+export const getGetUmrahAgentQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUmrahAgent>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUmrahAgent>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUmrahAgentQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUmrahAgent>>> = ({
+    signal,
+  }) => getUmrahAgent(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUmrahAgent>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUmrahAgentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUmrahAgent>>
+>;
+export type GetUmrahAgentQueryError = ErrorType<void>;
+
+/**
+ * @summary Get an umrah agent by ID (full row + statement aggregates)
+ */
+
+export function useGetUmrahAgent<
+  TData = Awaited<ReturnType<typeof getUmrahAgent>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUmrahAgent>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUmrahAgentQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Detail-page payload: the full `umrah_groups` row joined with the
+agent/sub-agent/season names, the pilgrim roster summary, a per-status
+breakdown dict, exemption/visa-expiring counts, and nested finance
+(invoice/NUSK totals + margin) and schedule (date range + flight
+codes) objects. Every column is enumerated so the contract-drift
+guard fires on any added/renamed returned field.
+
+ * @summary Get an umrah group by ID (full row + roster + aggregates)
+ */
+export const getGetUmrahGroupUrl = (id: number) => {
+  return `/api/umrah/groups/${id}`;
+};
+
+export const getUmrahGroup = async (
+  id: number,
+  options?: RequestInit,
+): Promise<UmrahGroupDetail> => {
+  return customFetch<UmrahGroupDetail>(getGetUmrahGroupUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUmrahGroupQueryKey = (id: number) => {
+  return [`/api/umrah/groups/${id}`] as const;
+};
+
+export const getGetUmrahGroupQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUmrahGroup>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUmrahGroup>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUmrahGroupQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUmrahGroup>>> = ({
+    signal,
+  }) => getUmrahGroup(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUmrahGroup>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUmrahGroupQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUmrahGroup>>
+>;
+export type GetUmrahGroupQueryError = ErrorType<void>;
+
+/**
+ * @summary Get an umrah group by ID (full row + roster + aggregates)
+ */
+
+export function useGetUmrahGroup<
+  TData = Awaited<ReturnType<typeof getUmrahGroup>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUmrahGroup>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUmrahGroupQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Detail-page payload: the full `umrah_pilgrims` row (sensitive
+passport/visa/border/mofa fields decrypted, plus their `*_hash`
+lookup columns) joined with the agent/package/season/group/sub-agent
+names, followed by the pilgrim's penalty rows. Every column is
+enumerated so the contract-drift guard fires on any added/renamed
+returned field.
+
+ * @summary Get an umrah pilgrim by ID (decrypted row + penalties)
+ */
+export const getGetUmrahPilgrimUrl = (id: number) => {
+  return `/api/umrah/pilgrims/${id}`;
+};
+
+export const getUmrahPilgrim = async (
+  id: number,
+  options?: RequestInit,
+): Promise<UmrahPilgrimDetail> => {
+  return customFetch<UmrahPilgrimDetail>(getGetUmrahPilgrimUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUmrahPilgrimQueryKey = (id: number) => {
+  return [`/api/umrah/pilgrims/${id}`] as const;
+};
+
+export const getGetUmrahPilgrimQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUmrahPilgrim>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUmrahPilgrim>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUmrahPilgrimQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUmrahPilgrim>>> = ({
+    signal,
+  }) => getUmrahPilgrim(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUmrahPilgrim>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUmrahPilgrimQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUmrahPilgrim>>
+>;
+export type GetUmrahPilgrimQueryError = ErrorType<void>;
+
+/**
+ * @summary Get an umrah pilgrim by ID (decrypted row + penalties)
+ */
+
+export function useGetUmrahPilgrim<
+  TData = Awaited<ReturnType<typeof getUmrahPilgrim>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUmrahPilgrim>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUmrahPilgrimQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Detail-page payload: the full `support_tickets` row joined with the
+client name, the reply thread, and the computed SLA fields
+(`isSlaBreached` boolean + `slaRemainingHours` string). Every column
+is enumerated so the contract-drift guard fires on any added/renamed
+returned field.
+
+ * @summary Get a support ticket by ID (full row + replies + SLA)
+ */
+export const getGetSupportTicketUrl = (id: number) => {
+  return `/api/support/tickets/${id}`;
+};
+
+export const getSupportTicket = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SupportTicketDetail> => {
+  return customFetch<SupportTicketDetail>(getGetSupportTicketUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSupportTicketQueryKey = (id: number) => {
+  return [`/api/support/tickets/${id}`] as const;
+};
+
+export const getGetSupportTicketQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSupportTicket>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSupportTicket>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSupportTicketQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSupportTicket>>
+  > = ({ signal }) => getSupportTicket(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSupportTicket>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSupportTicketQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSupportTicket>>
+>;
+export type GetSupportTicketQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a support ticket by ID (full row + replies + SLA)
+ */
+
+export function useGetSupportTicket<
+  TData = Awaited<ReturnType<typeof getSupportTicket>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSupportTicket>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSupportTicketQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Detail-page payload: the full `property_units` row plus the related
+contracts, payments, maintenance requests, and an activity timeline.
+Every column is enumerated so the contract-drift guard fires on any
+added/renamed returned field.
+
+ * @summary Get a property unit by ID (full row + related collections)
+ */
+export const getGetPropertyUnitUrl = (id: number) => {
+  return `/api/properties/units/${id}`;
+};
+
+export const getPropertyUnit = async (
+  id: number,
+  options?: RequestInit,
+): Promise<PropertyUnitDetail> => {
+  return customFetch<PropertyUnitDetail>(getGetPropertyUnitUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPropertyUnitQueryKey = (id: number) => {
+  return [`/api/properties/units/${id}`] as const;
+};
+
+export const getGetPropertyUnitQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPropertyUnit>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPropertyUnit>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPropertyUnitQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPropertyUnit>>> = ({
+    signal,
+  }) => getPropertyUnit(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPropertyUnit>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPropertyUnitQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPropertyUnit>>
+>;
+export type GetPropertyUnitQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a property unit by ID (full row + related collections)
+ */
+
+export function useGetPropertyUnit<
+  TData = Awaited<ReturnType<typeof getPropertyUnit>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPropertyUnit>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPropertyUnitQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Detail-page payload: the full `journal_entries` row plus the
+reversal-link reference/description fields, the entry's lines (each
+the full `journal_lines` row joined with the account name), and the
+nested `reversalOf` / `reversedBy` linked-entry objects (null when not
+a reversal). Every column is enumerated so the contract-drift guard
+fires on any added/renamed returned field.
+
+ * @summary Get a journal entry by ID (full row + lines + reversal links)
+ */
+export const getGetJournalEntryUrl = (id: number) => {
+  return `/api/finance/journal/${id}`;
+};
+
+export const getJournalEntry = async (
+  id: number,
+  options?: RequestInit,
+): Promise<JournalEntryDetail> => {
+  return customFetch<JournalEntryDetail>(getGetJournalEntryUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetJournalEntryQueryKey = (id: number) => {
+  return [`/api/finance/journal/${id}`] as const;
+};
+
+export const getGetJournalEntryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getJournalEntry>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getJournalEntry>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetJournalEntryQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getJournalEntry>>> = ({
+    signal,
+  }) => getJournalEntry(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getJournalEntry>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetJournalEntryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getJournalEntry>>
+>;
+export type GetJournalEntryQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a journal entry by ID (full row + lines + reversal links)
+ */
+
+export function useGetJournalEntry<
+  TData = Awaited<ReturnType<typeof getJournalEntry>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getJournalEntry>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetJournalEntryQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Detail-page payload: the full `umrah_sub_agents` row joined with
+the linked agent / client names, plus the statement aggregates
+the detail pane renders (pilgrim count, overstayed count, total
+paid, and a per-status breakdown dict).
+
+ * @summary Get a sub-agent by ID (full row + statement aggregates)
+ */
+export const getGetUmrahSubAgentUrl = (id: number) => {
+  return `/api/umrah/sub-agents/${id}`;
+};
+
+export const getUmrahSubAgent = async (
+  id: number,
+  options?: RequestInit,
+): Promise<UmrahSubAgentDetail> => {
+  return customFetch<UmrahSubAgentDetail>(getGetUmrahSubAgentUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUmrahSubAgentQueryKey = (id: number) => {
+  return [`/api/umrah/sub-agents/${id}`] as const;
+};
+
+export const getGetUmrahSubAgentQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUmrahSubAgent>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUmrahSubAgent>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUmrahSubAgentQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getUmrahSubAgent>>
+  > = ({ signal }) => getUmrahSubAgent(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUmrahSubAgent>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUmrahSubAgentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUmrahSubAgent>>
+>;
+export type GetUmrahSubAgentQueryError = ErrorType<void>;
+
+/**
+ * @summary Get a sub-agent by ID (full row + statement aggregates)
+ */
+
+export function useGetUmrahSubAgent<
+  TData = Awaited<ReturnType<typeof getUmrahSubAgent>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUmrahSubAgent>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUmrahSubAgentQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Running-balance ledger (opening balance, dated debit/credit
+entries for invoices + violations + payments, closing balance).
+Defaults to the detailed view; `?type=summary` collapses to a
+monthly roll-up. JSON peer of the printable
+`/umrah/statements/{subAgentId}/pdf`.
+
+ * @summary Sub-agent statement of account (JSON)
+ */
+export const getUmrahSubAgentStatementUrl = (
+  subAgentId: number,
+  params?: UmrahSubAgentStatementParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/umrah/statements/${subAgentId}?${stringifiedParams}`
+    : `/api/umrah/statements/${subAgentId}`;
+};
+
+export const umrahSubAgentStatement = async (
+  subAgentId: number,
+  params?: UmrahSubAgentStatementParams,
+  options?: RequestInit,
+): Promise<UmrahSubAgentStatement> => {
+  return customFetch<UmrahSubAgentStatement>(
+    getUmrahSubAgentStatementUrl(subAgentId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getUmrahSubAgentStatementQueryKey = (
+  subAgentId: number,
+  params?: UmrahSubAgentStatementParams,
+) => {
+  return [
+    `/api/umrah/statements/${subAgentId}`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getUmrahSubAgentStatementQueryOptions = <
+  TData = Awaited<ReturnType<typeof umrahSubAgentStatement>>,
+  TError = ErrorType<unknown>,
+>(
+  subAgentId: number,
+  params?: UmrahSubAgentStatementParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof umrahSubAgentStatement>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getUmrahSubAgentStatementQueryKey(subAgentId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof umrahSubAgentStatement>>
+  > = ({ signal }) =>
+    umrahSubAgentStatement(subAgentId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subAgentId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof umrahSubAgentStatement>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type UmrahSubAgentStatementQueryResult = NonNullable<
+  Awaited<ReturnType<typeof umrahSubAgentStatement>>
+>;
+export type UmrahSubAgentStatementQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Sub-agent statement of account (JSON)
+ */
+
+export function useUmrahSubAgentStatement<
+  TData = Awaited<ReturnType<typeof umrahSubAgentStatement>>,
+  TError = ErrorType<unknown>,
+>(
+  subAgentId: number,
+  params?: UmrahSubAgentStatementParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof umrahSubAgentStatement>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getUmrahSubAgentStatementQueryOptions(
+    subAgentId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Read-only diff across three dimensions:
+  1. amountDiffs — nuskInvoice.totalAmount vs posted JE total
+  2. countDiffs — nuskInvoice.mutamerCount vs actual pilgrims
+  3. overstayGaps — pilgrims with overstayDays>0 and no open
+     violation row
+
+ * @summary NUSK file ↔ system reconciliation
+ */
+export const getUmrahReconciliationReportUrl = (
+  params?: UmrahReconciliationReportParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/umrah/reports/reconciliation?${stringifiedParams}`
+    : `/api/umrah/reports/reconciliation`;
+};
+
+export const umrahReconciliationReport = async (
+  params?: UmrahReconciliationReportParams,
+  options?: RequestInit,
+): Promise<UmrahReconciliationReport200> => {
+  return customFetch<UmrahReconciliationReport200>(
+    getUmrahReconciliationReportUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getUmrahReconciliationReportQueryKey = (
+  params?: UmrahReconciliationReportParams,
+) => {
+  return [
+    `/api/umrah/reports/reconciliation`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getUmrahReconciliationReportQueryOptions = <
+  TData = Awaited<ReturnType<typeof umrahReconciliationReport>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: UmrahReconciliationReportParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof umrahReconciliationReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getUmrahReconciliationReportQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof umrahReconciliationReport>>
+  > = ({ signal }) =>
+    umrahReconciliationReport(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof umrahReconciliationReport>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type UmrahReconciliationReportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof umrahReconciliationReport>>
+>;
+export type UmrahReconciliationReportQueryError = ErrorType<unknown>;
+
+/**
+ * @summary NUSK file ↔ system reconciliation
+ */
+
+export function useUmrahReconciliationReport<
+  TData = Awaited<ReturnType<typeof umrahReconciliationReport>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: UmrahReconciliationReportParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof umrahReconciliationReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getUmrahReconciliationReportQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns arrivals + departures for a given date plus everyone
+currently overstaying. Defaults to today (ISO yyyy-mm-dd).
+Companion PDF at `/umrah/reports/daily-runsheet/pdf`.
+
+ * @summary Daily operations run-sheet (JSON)
+ */
+export const getUmrahDailyRunsheetUrl = (params?: UmrahDailyRunsheetParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/umrah/reports/daily-runsheet?${stringifiedParams}`
+    : `/api/umrah/reports/daily-runsheet`;
+};
+
+export const umrahDailyRunsheet = async (
+  params?: UmrahDailyRunsheetParams,
+  options?: RequestInit,
+): Promise<UmrahDailyRunsheet200> => {
+  return customFetch<UmrahDailyRunsheet200>(getUmrahDailyRunsheetUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getUmrahDailyRunsheetQueryKey = (
+  params?: UmrahDailyRunsheetParams,
+) => {
+  return [
+    `/api/umrah/reports/daily-runsheet`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getUmrahDailyRunsheetQueryOptions = <
+  TData = Awaited<ReturnType<typeof umrahDailyRunsheet>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: UmrahDailyRunsheetParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof umrahDailyRunsheet>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getUmrahDailyRunsheetQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof umrahDailyRunsheet>>
+  > = ({ signal }) => umrahDailyRunsheet(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof umrahDailyRunsheet>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type UmrahDailyRunsheetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof umrahDailyRunsheet>>
+>;
+export type UmrahDailyRunsheetQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Daily operations run-sheet (JSON)
+ */
+
+export function useUmrahDailyRunsheet<
+  TData = Awaited<ReturnType<typeof umrahDailyRunsheet>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: UmrahDailyRunsheetParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof umrahDailyRunsheet>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getUmrahDailyRunsheetQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Daily operations run-sheet (Arabic PDF)
+ */
+export const getUmrahDailyRunsheetPdfUrl = (
+  params?: UmrahDailyRunsheetPdfParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/umrah/reports/daily-runsheet/pdf?${stringifiedParams}`
+    : `/api/umrah/reports/daily-runsheet/pdf`;
+};
+
+export const umrahDailyRunsheetPdf = async (
+  params?: UmrahDailyRunsheetPdfParams,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getUmrahDailyRunsheetPdfUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getUmrahDailyRunsheetPdfQueryKey = (
+  params?: UmrahDailyRunsheetPdfParams,
+) => {
+  return [
+    `/api/umrah/reports/daily-runsheet/pdf`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getUmrahDailyRunsheetPdfQueryOptions = <
+  TData = Awaited<ReturnType<typeof umrahDailyRunsheetPdf>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: UmrahDailyRunsheetPdfParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof umrahDailyRunsheetPdf>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getUmrahDailyRunsheetPdfQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof umrahDailyRunsheetPdf>>
+  > = ({ signal }) =>
+    umrahDailyRunsheetPdf(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof umrahDailyRunsheetPdf>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type UmrahDailyRunsheetPdfQueryResult = NonNullable<
+  Awaited<ReturnType<typeof umrahDailyRunsheetPdf>>
+>;
+export type UmrahDailyRunsheetPdfQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Daily operations run-sheet (Arabic PDF)
+ */
+
+export function useUmrahDailyRunsheetPdf<
+  TData = Awaited<ReturnType<typeof umrahDailyRunsheetPdf>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: UmrahDailyRunsheetPdfParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof umrahDailyRunsheetPdf>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getUmrahDailyRunsheetPdfQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Detailed running-balance ledger (invoices + violations + payments
+with opening + closing balance), rendered as a printable PDF for
+WhatsApp / email / hand delivery.
+
+ * @summary Sub-agent statement of account (Arabic PDF)
+ */
+export const getUmrahSubAgentStatementPdfUrl = (
+  subAgentId: number,
+  params?: UmrahSubAgentStatementPdfParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/umrah/statements/${subAgentId}/pdf?${stringifiedParams}`
+    : `/api/umrah/statements/${subAgentId}/pdf`;
+};
+
+export const umrahSubAgentStatementPdf = async (
+  subAgentId: number,
+  params?: UmrahSubAgentStatementPdfParams,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(
+    getUmrahSubAgentStatementPdfUrl(subAgentId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getUmrahSubAgentStatementPdfQueryKey = (
+  subAgentId: number,
+  params?: UmrahSubAgentStatementPdfParams,
+) => {
+  return [
+    `/api/umrah/statements/${subAgentId}/pdf`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getUmrahSubAgentStatementPdfQueryOptions = <
+  TData = Awaited<ReturnType<typeof umrahSubAgentStatementPdf>>,
+  TError = ErrorType<unknown>,
+>(
+  subAgentId: number,
+  params?: UmrahSubAgentStatementPdfParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof umrahSubAgentStatementPdf>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getUmrahSubAgentStatementPdfQueryKey(subAgentId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof umrahSubAgentStatementPdf>>
+  > = ({ signal }) =>
+    umrahSubAgentStatementPdf(subAgentId, params, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subAgentId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof umrahSubAgentStatementPdf>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type UmrahSubAgentStatementPdfQueryResult = NonNullable<
+  Awaited<ReturnType<typeof umrahSubAgentStatementPdf>>
+>;
+export type UmrahSubAgentStatementPdfQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Sub-agent statement of account (Arabic PDF)
+ */
+
+export function useUmrahSubAgentStatementPdf<
+  TData = Awaited<ReturnType<typeof umrahSubAgentStatementPdf>>,
+  TError = ErrorType<unknown>,
+>(
+  subAgentId: number,
+  params?: UmrahSubAgentStatementPdfParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof umrahSubAgentStatementPdf>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getUmrahSubAgentStatementPdfQueryOptions(
+    subAgentId,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
