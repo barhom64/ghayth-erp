@@ -1315,6 +1315,21 @@ router.post("/suppliers", authorize({ feature: "warehouse.inventory", action: "c
       [scope.companyId, b.name.trim(), b.contactPerson, b.phone, b.email, b.address, b.taxNumber, b.paymentTerms || 30]
     );
     assertInsert(insertId, "suppliers");
+    // Link to the Party master (migration 249) at creation so a supplier who
+    // is also a client/employee resolves to ONE party immediately — no
+    // duplicate master data, no waiting for the operator-triggered backfill.
+    // Non-fatal: a party-link failure must not block supplier creation.
+    try {
+      const { registerEntityParty } = await import("../lib/partyService.js");
+      await registerEntityParty(scope.companyId, "suppliers", insertId, "supplier", {
+        displayName: b.name.trim(),
+        phone: b.phone ?? null,
+        email: b.email ?? null,
+        kind: "organization",
+      });
+    } catch (e) {
+      logger.error(e, "[warehouse] supplier→party link failed (non-fatal)");
+    }
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
