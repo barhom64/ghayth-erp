@@ -1359,7 +1359,13 @@ const _resolvedAccountCache = new Map<string, string>();
 const _RESOLVED_ACCOUNT_CACHE_MAX_SIZE = 5_000;
 
 async function resolveByIntent(companyId: number, operationType: string, fallbackCode: string): Promise<string> {
-  const cacheKey = `${companyId}:${operationType}`;
+  // The fallback differs per side for operations that post both legs under the
+  // SAME operationType (e.g. inventory_issue_cogs: debit→5110 COGS,
+  // credit→1151 inventory). Keying the cache by operationType alone collapsed
+  // both legs onto whichever resolved first — producing a degenerate JE that
+  // debited AND credited COGS with no inventory relief (COGS never truly
+  // posted). Include the fallbackCode so each side resolves independently.
+  const cacheKey = `${companyId}:${operationType}:${fallbackCode}`;
   const cached = _resolvedAccountCache.get(cacheKey);
   if (cached) return cached;
 
