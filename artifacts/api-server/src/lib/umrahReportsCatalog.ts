@@ -189,8 +189,9 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير تكاليف العمرة",
     description: "توزيع التكاليف على الموسم/المجموعة/الوكيل/مركز التكلفة.",
     category: "finance",
-    status: "stub",
+    status: "available",
     route: "/umrah/reports/umrah-costs",
+    apiPath: "/umrah/reports/umrah-costs",
   },
   {
     id: "nusk_invoices_report",
