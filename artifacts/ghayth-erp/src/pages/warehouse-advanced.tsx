@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useApiQuery, apiFetch, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { ProductSelect } from "@/components/shared/product-select";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import {
@@ -287,13 +288,15 @@ function LotsTab() {
   const { toast } = useToast();
   const listQ = useApiQuery<{ data: any[] }>(["warehouse-lots"], "/warehouse/lots");
   const lots: any[] = listQ.data?.data ?? [];
-  const createMut = useApiMutation<unknown, { productId?: number; lotNumber?: string }>(
+  const createMut = useApiMutation<unknown, { productId: number; lotNumber: string; quantity?: number }>(
     "/warehouse/lots",
     "POST",
     [["warehouse-lots"]],
     { successMessage: "تم إنشاء الدفعة" },
   );
   const [newLot, setNewLot] = useState("");
+  const [lotProductId, setLotProductId] = useState("");
+  const [lotQty, setLotQty] = useState("");
 
   const action = async (id: number, kind: "qc-approve" | "qc-reject" | "recall") => {
     try {
@@ -314,19 +317,31 @@ function LotsTab() {
         <CardTitle className="text-sm">دفعات الإنتاج ({lots.length})</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+          <ProductSelect value={lotProductId} onChange={(id) => setLotProductId(id)} stockableOnly placeholder="الصنف" />
           <Input
             value={newLot}
             onChange={(e) => setNewLot(e.target.value)}
             placeholder="رقم الدفعة الجديد"
             className="h-8 text-xs"
           />
+          <Input
+            type="number"
+            min={0}
+            value={lotQty}
+            onChange={(e) => setLotQty(e.target.value)}
+            placeholder="الكمية"
+            className="h-8 text-xs"
+          />
           <GuardedButton
             perm="warehouse:create"
             size="sm"
             rateLimitAware
-            disabled={!newLot || createMut.isPending}
-            onClick={() => { createMut.mutate({ lotNumber: newLot }); setNewLot(""); }}
+            disabled={!newLot || !lotProductId || createMut.isPending}
+            onClick={() => {
+              createMut.mutate({ productId: Number(lotProductId), lotNumber: newLot, quantity: lotQty ? Number(lotQty) : 0 });
+              setNewLot(""); setLotQty("");
+            }}
           >
             إضافة
           </GuardedButton>
@@ -369,13 +384,14 @@ function SerialsTab() {
     selectedSerial ? `/warehouse/serials/${selectedSerial}` : null,
     !!selectedSerial,
   );
-  const createMut = useApiMutation<unknown, { serialNumber: string; productId?: number }>(
+  const createMut = useApiMutation<unknown, { serialNumber: string; productId: number }>(
     "/warehouse/serials",
     "POST",
     [["warehouse-serials"]],
     { successMessage: "تم إنشاء التسلسل" },
   );
   const [newSerial, setNewSerial] = useState("");
+  const [serialProductId, setSerialProductId] = useState("");
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -384,7 +400,8 @@ function SerialsTab() {
           <CardTitle className="text-sm">التسلسلات ({serials.length})</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+            <ProductSelect value={serialProductId} onChange={(id) => setSerialProductId(id)} stockableOnly placeholder="الصنف" />
             <Input
               value={newSerial}
               onChange={(e) => setNewSerial(e.target.value)}
@@ -396,8 +413,8 @@ function SerialsTab() {
               perm="warehouse:create"
               size="sm"
               rateLimitAware
-              disabled={!newSerial || createMut.isPending}
-              onClick={() => { createMut.mutate({ serialNumber: newSerial }); setNewSerial(""); }}
+              disabled={!newSerial || !serialProductId || createMut.isPending}
+              onClick={() => { createMut.mutate({ serialNumber: newSerial, productId: Number(serialProductId) }); setNewSerial(""); }}
             >
               إضافة
             </GuardedButton>
