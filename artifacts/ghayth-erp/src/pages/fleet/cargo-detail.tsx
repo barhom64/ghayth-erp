@@ -288,7 +288,7 @@ export default function CargoDetail() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable<CargoItem>
+          <DataTable
             columns={itemColumns}
             data={m.items}
             emptyMessage="لا أصناف في هذه البوليصة بعد"
