@@ -18,11 +18,11 @@ const apiSrc = join(import.meta.dirname!, "../../src");
 const read = (rel: string) => readFileSync(join(apiSrc, rel), "utf8");
 
 const FLEET     = read("routes/fleet.ts");
-const MIGRATION = read("migrations/282_fleet_rental_inspection_and_driver.sql");
+const MIGRATION = read("migrations/293_fleet_rental_inspection_and_driver.sql");
 
 describe("#1812 Step C — migration 282 schema additions", () => {
   it("migration file exists at the canonical path", () => {
-    expect(existsSync(join(apiSrc, "migrations/282_fleet_rental_inspection_and_driver.sql"))).toBe(true);
+    expect(existsSync(join(apiSrc, "migrations/293_fleet_rental_inspection_and_driver.sql"))).toBe(true);
   });
   it("adds withDriver + driverId columns to fleet_rental_contracts", () => {
     expect(MIGRATION).toMatch(/ADD COLUMN IF NOT EXISTS "withDriver"\s+BOOLEAN/);

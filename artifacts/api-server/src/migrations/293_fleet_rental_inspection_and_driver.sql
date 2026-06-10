@@ -1,4 +1,4 @@
--- 282_fleet_rental_inspection_and_driver.sql
+-- 293_fleet_rental_inspection_and_driver.sql
 --
 -- WHAT: extend `fleet_rental_contracts` (migration 247) with the columns
 --       the R5/R7/R9 steps of the canonical rental flow need:

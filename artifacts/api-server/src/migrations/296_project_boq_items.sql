@@ -1,4 +1,4 @@
--- 287_project_boq_items.sql
+-- 296_project_boq_items.sql
 --
 -- Projects BOQ (Bill of Quantities) line-item billing (#1594 projects package).
 --
