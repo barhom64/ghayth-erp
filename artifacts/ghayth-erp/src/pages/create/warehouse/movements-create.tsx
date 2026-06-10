@@ -9,6 +9,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { ProductContextCard } from "@/components/shared/product-context-card";
 import { ProductSelect } from "@/components/shared/product-select";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "warehouse_movements_create";
@@ -23,6 +24,11 @@ export default function MovementsCreate() {
   // self-contained ProductSelect. Limit 500 so a selected item isn't missed.
   const { data: productsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["warehouse-products-overdraw"], "/warehouse/products?limit=500");
   const products = productsData?.data || [];
+  // Company-controllable policies (سياسات المستودع in system controls):
+  // when warehouse.require_movement_reference is on, المرجع becomes required
+  // here AND is enforced server-side.
+  const { data: controlsResp } = useApiQuery<{ data: Record<string, unknown> }>(["system-controls"], "/settings/system-controls");
+  const requireReference = controlsResp?.data?.["warehouse.require_movement_reference"] === true;
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
@@ -34,6 +40,7 @@ export default function MovementsCreate() {
   const requestedQty = Number(form.quantity || 0);
   const currentStock = Number(selectedProduct?.currentStock ?? 0);
   const wouldOverdraw = Boolean(selectedProduct && STOCK_DECREASE_TYPES.has(form.type) && requestedQty > currentStock);
+  const canPreview = Boolean(form.productId && requestedQty > 0);
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -43,6 +50,9 @@ export default function MovementsCreate() {
         : wouldOverdraw
           ? `الكمية المطلوبة تتجاوز المخزون المتاح (${currentStock})`
           : null,
+      reference: requireReference && !form.reference.trim()
+        ? "المرجع مطلوب لكل حركة (سياسة الشركة: لا حركة بلا سبب)"
+        : null,
     });
 
     if (firstError) {
@@ -117,7 +127,7 @@ export default function MovementsCreate() {
 
         <NumberField label="تكلفة الوحدة" value={form.unitCost} onChange={(v) => setForm((f) => ({ ...f, unitCost: v }))} step={0.01} min={0} />
 
-        <TextField label="المرجع" value={form.reference} onChange={(v) => setForm((f) => ({ ...f, reference: v }))} />
+        <TextField label="المرجع" required={requireReference} placeholder={requireReference ? "GRN / أمر صرف / تذكرة صيانة — إلزامي" : "GRN / أمر صرف / تذكرة صيانة"} value={form.reference} onChange={(v) => setForm((f) => ({ ...f, reference: v }))} error={fieldErrors.reference} />
 
         <TextField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} />
       </div>
@@ -125,6 +135,24 @@ export default function MovementsCreate() {
       {wouldOverdraw && (
         <div className="mt-4 rounded-lg border border-status-error-surface bg-status-error-surface px-4 py-3 text-sm text-status-error-foreground">
           الكمية المطلوبة ({requestedQty}) تتجاوز المخزون المتاح ({currentStock}). سيمنع النظام تنفيذ هذه الحركة.
+        </div>
+      )}
+
+      {/* W6 — معاينة الأثر قبل الحفظ: الرصيد قبل/بعد، تنبيه الحد الأدنى
+          (وطلب الشراء التلقائي حسب السياسة)، السحب الزائد، والقيمة
+          التقديرية (التقييم النهائي في المالية). */}
+      {canPreview && (
+        <div className="mt-4">
+          <ImpactPreviewButton
+            endpoint="/warehouse/movements/impact-preview"
+            payload={{
+              productId: Number(form.productId),
+              type: form.type,
+              quantity: requestedQty,
+              unitCost: form.unitCost ? Number(form.unitCost) : undefined,
+              reference: form.reference || undefined,
+            }}
+          />
         </div>
       )}
 
