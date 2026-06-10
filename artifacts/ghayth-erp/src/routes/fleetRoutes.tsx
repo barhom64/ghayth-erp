@@ -47,6 +47,10 @@ const TransportBookingConfirmation = lazy(() => import("@/pages/fleet/transport-
 const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
 const TransportPriceRules = lazy(() => import("@/pages/fleet/transport-price-rules"));
 const TransportRulesAdmin = lazy(() => import("@/pages/fleet/transport-rules-admin"));
+// #1812 Wave 1 Step C — equipment rental (the third leg).
+const RentalContractsList = lazy(() => import("@/pages/fleet/rental-contracts"));
+const RentalCreate = lazy(() => import("@/pages/fleet/rental-create"));
+const RentalDetail = lazy(() => import("@/pages/fleet/rental-detail"));
 // #1812 Planning engine — ops dashboard + driver in-app navigation.
 const TransportOpsDashboard = lazy(() => import("@/pages/fleet/transport-ops-dashboard"));
 const MeDriverNavigation = lazy(() => import("@/pages/fleet/me-driver-navigation"));
@@ -118,6 +122,12 @@ export const fleetRoutes = [
   { path: "/fleet/transport/dispatch", component: TransportDispatch },
   { path: "/fleet/transport/price-rules", component: TransportPriceRules },
   { path: "/fleet/transport/rules", component: TransportRulesAdmin },
+  // #1812 Wave 1 Step C — equipment rental (3rd transport leg).
+  // /create + /:id come after the parent list path; /:id is a numeric
+  // catch-all so /create must be matched first.
+  { path: "/fleet/rental-contracts", component: RentalContractsList },
+  { path: "/fleet/rental-contracts/create", component: RentalCreate },
+  { path: "/fleet/rental-contracts/:id", component: RentalDetail },
   // #1812 ops dashboard + driver navigation surfaces.
   { path: "/fleet/transport/ops-dashboard", component: TransportOpsDashboard },
   { path: "/fleet/transport/integration", component: TransportIntegration },
