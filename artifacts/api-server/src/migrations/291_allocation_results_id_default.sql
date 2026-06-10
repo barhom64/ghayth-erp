@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 288_allocation_results_id_default.sql
+-- 291_allocation_results_id_default.sql
 -- ---------------------------------------------------------------------------
 -- WHAT:    restore the id sequence + DEFAULT on accounting_allocation_results.
 -- WHY:     #1945 item 6 exposed it — migration 203 created the table with
