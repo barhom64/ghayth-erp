@@ -149,6 +149,20 @@ const impactPreviewSchema = z.object({
 
 const closeProjectSchema = z.object({});
 
+// BOQ (Bill of Quantities) line item — quantity x unitPrice. itemType:
+// 'aggregate' (measured totals, e.g. by the metre) or 'custom' (scoped items).
+const createBoqItemSchema = z.object({
+  itemType: z.enum(["aggregate", "custom"]).optional(),
+  description: z.string().min(1, "وصف البند مطلوب"),
+  unit: z.string().optional().nullable(),
+  quantity: z.union([z.coerce.number(), z.string()]).refine((v) => Number(v) > 0, { message: "الكمية يجب أن تكون أكبر من صفر" }),
+  unitPrice: z.union([z.coerce.number(), z.string()]).refine((v) => Number(v) >= 0, { message: "سعر الوحدة يجب ألا يكون سالباً" }),
+  phaseId: z.coerce.number().optional().nullable(),
+  sortOrder: z.coerce.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+const updateBoqItemSchema = createBoqItemSchema.partial();
+
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1848,6 +1862,172 @@ router.get("/:id/costs", authorize({ feature: "projects.list", action: "list" })
       variance: Number(project?.budget || 0) - Number(totals?.totalActual || 0),
     }));
   } catch (err) { handleRouteError(err, res, "Project costs error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOQ (Bill of Quantities) — line-item billing data model (#1594 projects pkg).
+// Each item is quantity x unitPrice; billing (sum → invoice) lands in a follow-up.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/:id/boq", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
+    const b = zodParse(createBoqItemSchema.safeParse(req.body));
+    const quantity = Number(b.quantity);
+    const unitPrice = Number(b.unitPrice);
+    const lineTotal = Math.round(quantity * unitPrice * 100) / 100;
+    const ins = await rawExecute(
+      `INSERT INTO project_boq_items
+         ("companyId","branchId","projectId","phaseId","itemType",description,unit,quantity,"unitPrice","lineTotal","sortOrder",notes,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+      [scope.companyId, scope.branchId ?? null, projectId, b.phaseId ?? null, b.itemType ?? "custom",
+       b.description, b.unit ?? null, quantity, unitPrice, lineTotal, b.sortOrder ?? 0, b.notes ?? null, scope.userId ?? null]
+    );
+    const boqId = assertInsert(ins.insertId, "project_boq_items");
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.boq.added", entity: "project_boq_items", entityId: boqId, details: JSON.stringify({ projectId, lineTotal }) }).catch((e) => logger.error(e, "projects background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "project_boq_items", entityId: boqId, after: { projectId, description: b.description, quantity, unitPrice, lineTotal } }).catch((e) => logger.error(e, "projects background task failed"));
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_boq_items WHERE id=$1 AND "companyId"=$2`, [boqId, scope.companyId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create BOQ item error:"); }
+});
+
+router.get("/:id/boq", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    await assertProjectAccess(projectId, scope);
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM project_boq_items WHERE "projectId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`,
+      [projectId, scope.companyId]
+    );
+    const totals = rows.reduce(
+      (acc: { total: number; pending: number; billed: number }, r) => {
+        const lt = Number(r.lineTotal || 0);
+        acc.total += lt;
+        if (r.status === "pending") acc.pending += lt;
+        else if (r.status === "billed") acc.billed += lt;
+        return acc;
+      },
+      { total: 0, pending: 0, billed: 0 }
+    );
+    res.json({ items: rows, totals });
+  } catch (err) { handleRouteError(err, res, "List BOQ items error:"); }
+});
+
+router.patch("/boq/:boqId", authorize({ feature: "projects.list", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const boqId = parseId(req.params.boqId, "boqId");
+    const [item] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_boq_items WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [boqId, scope.companyId]);
+    if (!item) throw new NotFoundError("بند BOQ غير موجود");
+    if (item.status === "billed") throw new ConflictError("لا يمكن تعديل بند تمّت فوترته");
+    const project = await assertProjectAccess(item.projectId as number, scope);
+    assertProjectMutable(project);
+    const b = zodParse(updateBoqItemSchema.safeParse(req.body));
+    const quantity = b.quantity !== undefined ? Number(b.quantity) : Number(item.quantity);
+    const unitPrice = b.unitPrice !== undefined ? Number(b.unitPrice) : Number(item.unitPrice);
+    const lineTotal = Math.round(quantity * unitPrice * 100) / 100;
+    const [updated] = await rawQuery<Record<string, unknown>>(
+      `UPDATE project_boq_items SET
+         "itemType"=$1, description=$2, unit=$3, quantity=$4, "unitPrice"=$5, "lineTotal"=$6,
+         "phaseId"=$7, "sortOrder"=$8, notes=$9, "updatedAt"=NOW()
+       WHERE id=$10 AND "companyId"=$11 RETURNING *`,
+      [
+        b.itemType ?? (item.itemType as string),
+        b.description ?? (item.description as string),
+        b.unit !== undefined ? b.unit : (item.unit as string | null),
+        quantity, unitPrice, lineTotal,
+        b.phaseId !== undefined ? b.phaseId : (item.phaseId as number | null),
+        b.sortOrder !== undefined && b.sortOrder !== null ? b.sortOrder : (item.sortOrder as number),
+        b.notes !== undefined ? b.notes : (item.notes as string | null),
+        boqId, scope.companyId,
+      ]
+    );
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "project_boq_items", entityId: boqId, after: { quantity, unitPrice, lineTotal } }).catch((e) => logger.error(e, "projects background task failed"));
+    res.json(updated);
+  } catch (err) { handleRouteError(err, res, "Update BOQ item error:"); }
+});
+
+router.delete("/boq/:boqId", authorize({ feature: "projects.list", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const boqId = parseId(req.params.boqId, "boqId");
+    const [item] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_boq_items WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [boqId, scope.companyId]);
+    if (!item) throw new NotFoundError("بند BOQ غير موجود");
+    if (item.status === "billed") throw new ConflictError("لا يمكن حذف بند تمّت فوترته");
+    const project = await assertProjectAccess(item.projectId as number, scope);
+    assertProjectMutable(project);
+    await rawExecute(`UPDATE project_boq_items SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [boqId, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "project_boq_items", entityId: boqId }).catch((e) => logger.error(e, "projects background task failed"));
+    res.json({ message: "تم حذف البند" });
+  } catch (err) { handleRouteError(err, res, "Delete BOQ item error:"); }
+});
+
+// Bill the project's pending BOQ items: sum quantity x unitPrice into one
+// invoice (each item a line) via the existing project.invoice.requested event —
+// projects never writes invoices directly (domain boundary). Items are claimed
+// atomically (pending → billed) to prevent double-billing; the invoice handler
+// then stamps the resulting invoiceId onto them.
+router.post("/:id/boq/bill", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
+    if (!project.clientId) {
+      throw new ValidationError("لا يمكن فوترة مشروع بلا عميل", { field: "clientId", fix: "اربط المشروع بعميل أولاً" });
+    }
+    const phaseId = req.body?.phaseId != null ? Number(req.body.phaseId) : null;
+    let claimed: Record<string, unknown>[] = [];
+    await withTransaction(async (client) => {
+      const baseWhere = `"projectId"=$1 AND "companyId"=$2 AND status='pending' AND "deletedAt" IS NULL`;
+      const where = phaseId != null ? `${baseWhere} AND "phaseId"=$3` : baseWhere;
+      const params = phaseId != null ? [projectId, scope.companyId, phaseId] : [projectId, scope.companyId];
+      const sel = await client.query(`SELECT * FROM project_boq_items WHERE ${where} ORDER BY "sortOrder", id FOR UPDATE`, params);
+      claimed = sel.rows;
+      if (claimed.length > 0) {
+        await client.query(`UPDATE project_boq_items SET status='billed', "updatedAt"=NOW() WHERE id = ANY($1::int[])`, [claimed.map((r) => r.id)]);
+      }
+    });
+    if (claimed.length === 0) {
+      throw new ValidationError("لا توجد بنود BOQ معلّقة للفوترة", { fix: "أضف بنوداً أو اختر مرحلة بها بنود معلّقة" });
+    }
+    const subtotal = Math.round(claimed.reduce((s, r) => s + Number(r.lineTotal || 0), 0) * 100) / 100;
+    const vatRate = await getCompanyVatRate(scope.companyId);
+    const vatAmount = computeVat(subtotal, vatRate);
+    // ref uniqueness via the first claimed item id (billed once) — no Date.now()
+    // in a refish string (numbering-center lint guard #1141).
+    const ref = `INV-BOQ-${String(currentYear()).slice(2)}${currentMonthPadded()}-${projectId}-${claimed[0].id}`;
+    const lines = claimed.map((r) => ({
+      description: String(r.description ?? ""),
+      quantity: Number(r.quantity ?? 1),
+      unitPrice: Number(r.unitPrice ?? 0),
+      lineTotal: Number(r.lineTotal ?? 0),
+    }));
+    const { projectsEngine } = await import("../lib/engines/index.js");
+    projectsEngine.requestInvoiceCreation(
+      { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+      {
+        clientId: project.clientId as number,
+        ref,
+        description: `فاتورة بنود (BOQ) — مشروع: ${project.name}`,
+        subtotal,
+        vatAmount,
+        total: subtotal + vatAmount,
+        dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
+        sourceType: "project_boq",
+        sourceId: projectId,
+        projectId,
+        lines,
+        boqItemIds: claimed.map((r) => r.id as number),
+      }
+    );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.boq.billed", entity: "projects", entityId: projectId, details: JSON.stringify({ ref, itemCount: claimed.length, subtotal }) }).catch((e) => logger.error(e, "projects background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bill", entity: "project_boq", entityId: projectId, after: { ref, itemCount: claimed.length, subtotal, vatAmount } }).catch((e) => logger.error(e, "projects background task failed"));
+    res.status(201).json({ requested: true, ref, itemCount: claimed.length, subtotal, vatAmount, total: subtotal + vatAmount });
+  } catch (err) { handleRouteError(err, res, "Bill BOQ error:"); }
 });
 
 router.post("/:id/costs", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {

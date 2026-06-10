@@ -26,6 +26,18 @@ interface VehicleDetail {
   assignedDriverId?: number;
   driverName?: string;
   driverPhone?: string;
+  // #1812 Wave 0.3 — surfaced for assignment pre-flight checks. The
+  // dispatcher needs to see capacity/specialty before committing to
+  // a candidate; surfacing it here means the suggestion dialog and
+  // every other booking-side context can show why this vehicle is
+  // (or isn't) eligible without a separate fetch.
+  vehicleType?: string;
+  payloadKg?: number | string | null;
+  operationalPayloadKg?: number | string | null;
+  seatCount?: number | string | null;
+  validForPassengers?: boolean | null;
+  validForCargo?: boolean | null;
+  requiredLicenseClass?: string | null;
   trips?: Array<{
     id: number;
     fromLocation?: string;
@@ -149,6 +161,54 @@ export function VehicleContextCard({
           <InfoTile label="عدد الرحلات" value={`${(data.trips || []).length}`} />
           <InfoTile label="تزويدات سابقة" value={`${(data.fuelLogs || []).length}`} />
         </div>
+
+        {/* #1812 Wave 0.3 — Capacity + specialty row.
+            Only renders when at least one assignment-decision field is
+            populated; legacy vehicles with NULL profile stay quiet so
+            the card doesn't grow a row of empty placeholders. */}
+        {(data.vehicleType || data.payloadKg != null || data.operationalPayloadKg != null
+          || data.seatCount != null || data.validForPassengers != null || data.validForCargo != null
+          || data.requiredLicenseClass) && (
+          <div className="border-t border-sky-100 pt-2">
+            <div className="text-[10px] text-muted-foreground mb-1">سعة المركبة وتخصصها</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {data.vehicleType && (
+                <InfoTile label="النوع" value={data.vehicleType} />
+              )}
+              {data.seatCount != null && (
+                <InfoTile label="عدد المقاعد" value={`${data.seatCount}`} />
+              )}
+              {(data.operationalPayloadKg != null || data.payloadKg != null) && (
+                <InfoTile
+                  label="الحمولة (كغ)"
+                  value={`${data.operationalPayloadKg ?? data.payloadKg}${data.operationalPayloadKg != null && data.payloadKg != null && Number(data.operationalPayloadKg) < Number(data.payloadKg) ? ` / ${data.payloadKg} حد` : ""}`}
+                />
+              )}
+              {data.requiredLicenseClass && (
+                <InfoTile label="رخصة مطلوبة" value={data.requiredLicenseClass} />
+              )}
+              {(data.validForPassengers != null || data.validForCargo != null) && (
+                <div className="col-span-2 flex items-center gap-1 flex-wrap">
+                  {data.validForPassengers && (
+                    <Badge variant="outline" className="bg-status-info-surface text-status-info-foreground text-[10px]">
+                      صالحة للركاب
+                    </Badge>
+                  )}
+                  {data.validForCargo && (
+                    <Badge variant="outline" className="bg-amber-50 text-amber-700 text-[10px]">
+                      صالحة للحمولات
+                    </Badge>
+                  )}
+                  {data.validForPassengers === false && data.validForCargo === false && (
+                    <Badge variant="outline" className="bg-rose-50 text-rose-700 text-[10px]">
+                      غير محدّدة للإسناد
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Not available warning */}
         {notAvailable && (
