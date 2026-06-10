@@ -61,6 +61,9 @@ warehouseStubsRouter.post("/cycle-counts", requireMinLevel(20), async (_req, res
 warehouseStubsRouter.get("/cycle-counts/plans", async (_req, res) => {
   res.json({ data: [], total: 0 });
 });
+warehouseStubsRouter.post("/cycle-counts/plans", requireMinLevel(20), async (_req, res) => {
+  notImplemented(res, "warehouse.cycleCounts.generatePlan");
+});
 warehouseStubsRouter.get("/cycle-counts/:id", async (req, res) => {
   res.json({ id: Number(req.params.id), status: "draft", items: [], notes: null });
 });
@@ -179,6 +182,22 @@ warehouseStubsRouter.get("/serials/:id", async (req, res) => {
 });
 warehouseStubsRouter.post("/serials", requireMinLevel(20), async (_req, res) => {
   notImplemented(res, "warehouse.serials.create");
+});
+warehouseStubsRouter.patch("/serials/:id", requireMinLevel(20), async (req, res) => {
+  try {
+    const { companyId } = scope(req as any);
+    const id = Number(req.params.id);
+    const status = typeof (req.body?.status) === "string" ? req.body.status.trim() : "";
+    if (!Number.isFinite(id) || id <= 0) { res.status(400).json({ message: "معرّف غير صالح" }); return; }
+    if (!status) { res.status(400).json({ message: "الحالة مطلوبة" }); return; }
+    const updated = await rawQuery<{ id: number }>(
+      `UPDATE warehouse_stock_serials SET status=$1, "updatedAt"=NOW()
+       WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL RETURNING id`,
+      [status, id, companyId]
+    ).catch(() => []);
+    if (!updated.length) { res.status(404).json({ message: "غير موجود" }); return; }
+    res.json({ id, status, ok: true });
+  } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
 
 /* Warehouse — ABC & reports (4) */
@@ -321,6 +340,9 @@ hrStubsRouter.get("/saudi/wps/credentials/:bankCode", async (req, res) => {
 });
 hrStubsRouter.put("/saudi/wps/credentials/:bankCode", requireMinLevel(20), async (_req, res) => {
   notImplemented(res, "hr.wps.credentials.save");
+});
+hrStubsRouter.delete("/saudi/wps/credentials/:bankCode", requireMinLevel(20), async (_req, res) => {
+  notImplemented(res, "hr.wps.credentials.clear");
 });
 
 /* ============================================================

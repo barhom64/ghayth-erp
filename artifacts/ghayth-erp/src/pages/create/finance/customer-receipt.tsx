@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { CreatePageLayout } from "@workspace/ui-core";
+import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -226,8 +227,11 @@ export default function CustomerReceiptWizardPage() {
     }
   };
 
+  const activeCtx = useActiveFinanceContext();
+
   return (
     <CreatePageLayout title="معالج استلام دفعة من عميل" backPath="/finance/receivables">
+      <ActiveContextNotice ctx={activeCtx} />
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">
           <p className="font-semibold mb-1 flex items-center gap-2">
@@ -458,7 +462,7 @@ export default function CustomerReceiptWizardPage() {
         <GuardedButton
           perm="finance:create"
           onClick={handleSubmit}
-          disabled={journalMut.isPending || !header.clientId || totalAmount <= 0 || !balanced}
+          disabled={journalMut.isPending || !header.clientId || totalAmount <= 0 || !balanced || !activeCtx.ready}
           rateLimitAware
           className="bg-emerald-600 hover:bg-emerald-700"
         >

@@ -143,12 +143,12 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
     // The snapshot is informational: if it shifts in either direction
     // (route added or removed) the diff reviewer sees the change.
     // Adjust the expected number when the catalog moves on purpose.
-    expect(ALL_REGISTRATIONS.length).toBe(213);
+    expect(ALL_REGISTRATIONS.length).toBe(217);
   });
 
   it("authorize()-gated endpoint count matches snapshot (currently 100%)", () => {
     const gated = ALL_REGISTRATIONS.filter((r) => r.hasAuthorize).length;
-    expect(gated).toBe(213);
+    expect(gated).toBe(217);
   });
 
   it("per-file count pin (catches a router losing or gaining endpoints)", () => {
@@ -156,7 +156,10 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
     for (const r of ALL_REGISTRATIONS) byFile[r.file] = (byFile[r.file] ?? 0) + 1;
     expect(byFile).toEqual({
       "employees.ts": 13,
-      "hr.ts": 121,
+      // main merged 4 new endpoints onto hr.ts (121→125) — ALL still
+      // gated by authorize(); the ratchet's primary invariant (100%
+      // coverage) holds, only the count snapshot moved.
+      "hr.ts": 125,
       "hr-compliance.ts": 3,
       "hr-contracts.ts": 12,
       "hr-discipline.ts": 24,

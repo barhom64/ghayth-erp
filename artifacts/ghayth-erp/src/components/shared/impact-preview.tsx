@@ -17,6 +17,10 @@ interface ImpactPreview {
   employeeName: string;
   items: ImpactItem[];
   summary: string;
+  // #1945 (owner review #3) — the resolved suggested posting account, so a
+  // form can pre-fill it as the real default at save (not just a text hint).
+  suggestedAccountCode?: string | null;
+  suggestedCapitalize?: boolean;
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; icon: any }> = {
@@ -96,7 +100,7 @@ export function ImpactPreviewButton({ endpoint, payload, label = "معاينة �
  * (debounced) whenever the payload changes and renders the panel inline — so
  * the «التوجيه المحاسبي المتوقّع» is visible under the operation without a click.
  */
-export function LiveImpactPreview({ endpoint, payload, enabled = true }: { endpoint: string; payload: Record<string, any>; enabled?: boolean }) {
+export function LiveImpactPreview({ endpoint, payload, enabled = true, onResult }: { endpoint: string; payload: Record<string, any>; enabled?: boolean; onResult?: (r: ImpactPreview) => void }) {
   const [impact, setImpact] = useState<ImpactPreview | null>(null);
   const key = JSON.stringify(payload);
   useEffect(() => {
@@ -105,7 +109,7 @@ export function LiveImpactPreview({ endpoint, payload, enabled = true }: { endpo
     const t = setTimeout(async () => {
       try {
         const result = await apiFetch<ImpactPreview>(endpoint, { method: "POST", body: JSON.stringify(payload) });
-        if (!cancelled) setImpact(result);
+        if (!cancelled) { setImpact(result); onResult?.(result); }
       } catch {
         if (!cancelled) setImpact(null);
       }
