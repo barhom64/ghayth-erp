@@ -2135,6 +2135,94 @@ router.delete("/units/:uid", authorize({ feature: "projects.list", action: "dele
   } catch (err) { handleRouteError(err, res, "Delete development unit error:"); }
 });
 
+// Sell a development unit (Wave C.2): snapshot the unit's area-share cost basis,
+// mark it sold atomically, post WIP→COGS via the engine (mapping-controlled
+// accounts), and emit the sale invoice via project.invoice.requested —
+// profit = salePrice − costBasis. No journal/invoice is written from this route.
+router.post("/units/:uid/sell", authorize({ feature: "projects.list", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const uid = parseId(req.params.uid, "uid");
+    const b = zodParse(z.object({
+      buyerClientId: z.coerce.number().positive("العميل المشتري مطلوب"),
+      salePrice: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+    }).safeParse(req.body ?? {}));
+    const [unit] = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [uid, scope.companyId]);
+    if (!unit) throw new NotFoundError("الوحدة غير موجودة");
+    if (unit.status === "sold") throw new ConflictError("الوحدة مباعة مسبقاً");
+    if (unit.status === "cancelled") throw new ConflictError("لا يمكن بيع وحدة ملغاة");
+    const project = await assertProjectAccess(unit.projectId as number, scope);
+    const salePrice = b.salePrice != null ? Number(b.salePrice) : (unit.salePrice != null ? Number(unit.salePrice) : null);
+    if (salePrice == null || !(salePrice > 0)) {
+      throw new ValidationError("سعر البيع مطلوب", { field: "salePrice", fix: "حدّد سعر بيع للوحدة قبل البيع" });
+    }
+    const [buyer] = await rawQuery<Record<string, unknown>>(`SELECT id FROM clients WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.buyerClientId, scope.companyId]);
+    if (!buyer) throw new NotFoundError("العميل المشتري غير موجود");
+    // A sale must post its COGS — refuse cleanly when the period is closed
+    // rather than leaving a sold unit with no cost recognition.
+    const period = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!period.open) {
+      throw new ConflictError(`الفترة المالية "${period.periodName ?? ""}" مغلقة — لا يمكن إتمام البيع`, { fix: "افتح الفترة المالية أو انتظر الفترة التالية" });
+    }
+    // Snapshot the cost basis = area share of the project's accumulated cost
+    // (same formula the GET endpoint reports live).
+    const spent = Number(project.spentAmount || 0);
+    const [areaRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(area),0) AS total FROM development_units
+       WHERE "projectId"=$1 AND "companyId"=$2 AND status <> 'cancelled' AND "deletedAt" IS NULL`,
+      [unit.projectId, scope.companyId]
+    );
+    const totalArea = Number(areaRow?.total || 0);
+    const costBasis = totalArea > 0 ? Math.round(spent * (Number(unit.area || 0) / totalArea) * 100) / 100 : 0;
+    const { projectsEngine } = await import("../lib/engines/index.js");
+    // Claim + COGS in ONE transaction: if the WIP→COGS journal fails (e.g. a
+    // missing account), the 'sold' claim rolls back too — never a sold unit
+    // without its cost recognition. rawExecute joins the ambient transaction
+    // (AsyncLocalStorage) and postJournalEntry is reentrant via SAVEPOINT.
+    let cogsJournalId: number | null = null;
+    await withTransaction(async () => {
+      const { affectedRows } = await rawExecute(
+        `UPDATE development_units SET status='sold', "costBasis"=$1, "soldAt"=NOW(), "buyerClientId"=$2, "salePrice"=$3, "updatedAt"=NOW()
+         WHERE id=$4 AND "companyId"=$5 AND status <> 'sold' AND "deletedAt" IS NULL`,
+        [costBasis, b.buyerClientId, salePrice, uid, scope.companyId]
+      );
+      if (!affectedRows) throw new ConflictError("الوحدة مباعة مسبقاً");
+      if (costBasis > 0) {
+        const glResult = await projectsEngine.postUnitSaleCogsGL(
+          // as-any-reason: justified-external - scope.activeAssignmentId is injected by authMiddleware at runtime but not exposed on the Scope type here
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: (scope as any).activeAssignmentId ?? scope.userId },
+          { unitId: uid, unitName: unit.name as string, projectId: unit.projectId as number, projectName: project.name as string, costBasis }
+        );
+        cogsJournalId = glResult.journalId;
+      }
+    });
+    // Sale invoice (revenue) via the existing cross-domain event.
+    const vatRate = await getCompanyVatRate(scope.companyId);
+    const vatAmount = computeVat(salePrice, vatRate);
+    const ref = `INV-UNIT-${String(currentYear()).slice(2)}${currentMonthPadded()}-${uid}`;
+    projectsEngine.requestInvoiceCreation(
+      { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+      {
+        clientId: b.buyerClientId,
+        ref,
+        description: `بيع وحدة تطوير "${unit.name}" — مشروع: ${project.name}`,
+        subtotal: salePrice,
+        vatAmount,
+        total: salePrice + vatAmount,
+        dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
+        sourceType: "dev_unit_sale",
+        sourceId: uid,
+        projectId: unit.projectId as number,
+        lines: [{ description: `بيع وحدة "${unit.name}"${unit.code ? ` (${unit.code})` : ""}`, quantity: 1, unitPrice: salePrice, lineTotal: salePrice }],
+        devUnitIds: [uid],
+      }
+    );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.dev_unit.sold", entity: "development_units", entityId: uid, details: JSON.stringify({ projectId: unit.projectId, salePrice, costBasis, profit: Math.round((salePrice - costBasis) * 100) / 100 }) }).catch((e) => logger.error(e, "projects background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "sell", entity: "development_units", entityId: uid, after: { buyerClientId: b.buyerClientId, salePrice, costBasis, cogsJournalId, ref } }).catch((e) => logger.error(e, "projects background task failed"));
+    res.status(201).json({ sold: true, ref, salePrice, costBasis, profit: Math.round((salePrice - costBasis) * 100) / 100, cogsJournalId });
+  } catch (err) { handleRouteError(err, res, "Sell development unit error:"); }
+});
+
 router.post("/:id/costs", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createCostSchema.safeParse(req.body));
