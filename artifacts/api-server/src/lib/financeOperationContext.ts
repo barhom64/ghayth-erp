@@ -70,6 +70,15 @@ export interface FinanceOperationContext {
   party?: { type: string; id?: number | null; name?: string | null };
   moneySource?: { accountCode?: string | null; usage?: AccountUsage | null };
   moneyDestination?: { accountCode?: string | null; usage?: AccountUsage | null };
+  /** #1945 item 5 — the voucher's revenue/expense/AR/AP leg opposite the
+   *  cash leg. `operationKey` is the voucher operationType (rent / salary /
+   *  invoice_payment / …); `direction` is the voucher type. Both drive the
+   *  direction-aware account-type validation in assertOperationValid. */
+  counterAccount?: {
+    accountCode?: string | null;
+    operationKey?: string | null;
+    direction?: "receipt" | "payment" | null;
+  };
   paymentMethod?: string | null;
   allocationTarget: AllocationTarget;
   dimensions: OperationDimensions;
@@ -105,6 +114,41 @@ const REQUIRED_DIM_FOR_TARGET: Partial<
 const FORBIDDEN_TRANSFER_SOURCE_USAGES: AccountUsage[] = [
   "operating_expense", "cogs", "payroll_expense", "fixed_asset", "receivable", "payable",
 ];
+
+// ── #1945 item 5 — direction-aware voucher (صرف=مصروف / قبض=إيراد) ──────
+// The voucher's COUNTER account (the revenue/expense/AR/AP leg opposite the
+// cash leg) is operator-pinned, and nothing validated its direction: a سند
+// قبض crediting an EXPENSE account (or a سند صرف debiting a REVENUE account)
+// posted silently and flipped the P&L. Two-tier rule:
+//   • a known operationType pins the exact allowed chart types below
+//     (e.g. invoice_payment clears AR → asset; deposit creates a liability);
+//   • an unknown/legacy operationType falls back to the direction invariant:
+//     قبض never lands on a مصروف account, صرف never lands on an إيراد account.
+// Mirrored for the form UX in ghayth-erp/src/lib/finance/scenario-model.ts
+// (VOUCHER_COUNTER_ACCOUNT_TYPES) — the backend stays the enforcement point.
+export const VOUCHER_OPERATION_COUNTER_TYPES: Record<string, string[]> = {
+  // receipt direction (قبض)
+  receipt: ["revenue"],
+  rent: ["revenue"],
+  invoice_payment: ["asset"],          // تسوية ذمم العميل
+  deposit: ["liability"],              // ضمان مقبوض = التزام
+  refund: ["expense", "revenue"],      // استرداد مصروف سابق أو ردّ إيراد
+  // payment direction (صرف)
+  payment: ["expense"],
+  vendor_invoice: ["liability", "expense"], // سداد ذمم مورد أو مصروف مباشر
+  salary: ["expense"],
+  advance: ["asset"],                  // سلفة موظف = ذمة مدينة
+  legal_fee: ["expense"],
+  purchase: ["expense", "asset"],      // مشتريات مصروفة أو مخزون/أصل
+  custody: ["asset"],                  // عهدة = أصل بيد الموظف
+  insurance: ["expense", "asset"],     // مصروف أو مدفوع مقدماً
+  maintenance: ["expense"],
+};
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  asset: "أصول/ذمم", liability: "التزامات", equity: "حقوق ملكية",
+  revenue: "إيراد", expense: "مصروف",
+};
 
 /**
  * Assert a finance operation context is internally consistent and legal:
@@ -149,6 +193,46 @@ export async function assertOperationValid(ctx: FinanceOperationContext): Promis
           meta: { sourceUsage: srcUsage },
         },
       );
+    }
+  }
+
+  // (4) #1945 item 5 — direction-aware voucher counter account
+  // (صرف=مصروف / قبض=إيراد). Known operationType → exact allowed types;
+  // unknown → the direction invariant only. Account not found is left to
+  // the posting engine's own existence/postability validation.
+  const ca = ctx.counterAccount;
+  if (ca?.accountCode && ca.direction) {
+    const { rawQuery } = await import("./rawdb.js");
+    const [acc] = await rawQuery<{ type: string; name: string }>(
+      `SELECT type, name FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [ctx.companyId, ca.accountCode],
+    );
+    if (acc) {
+      const allowed = ca.operationKey ? VOUCHER_OPERATION_COUNTER_TYPES[ca.operationKey] : undefined;
+      const dirLabel = ca.direction === "receipt" ? "سند قبض" : "سند صرف";
+      if (allowed) {
+        if (!allowed.includes(acc.type)) {
+          throw new ValidationError(
+            `${dirLabel} (${ca.operationKey}) يتوقع حساب ${allowed.map((t) => ACCOUNT_TYPE_LABELS[t] ?? t).join(" أو ")} — ` +
+            `«${ca.accountCode} ${acc.name}» حساب ${ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}`,
+            {
+              field: "accountCode",
+              fix: "اختر حساباً من النوع المتوقع لهذا النوع من السندات أو غيّر نوع العملية",
+              meta: { operationKey: ca.operationKey, accountType: acc.type, allowedTypes: allowed },
+            },
+          );
+        }
+      } else if (ca.direction === "receipt" && acc.type === "expense") {
+        throw new ValidationError(
+          `سند قبض لا يُقيَّد على حساب مصروف — «${ca.accountCode} ${acc.name}»`,
+          { field: "accountCode", fix: "اختر حساب إيراد/ذمم مناسباً، أو استخدم عملية «استرداد مبلغ» لاسترداد مصروف", meta: { accountType: acc.type } },
+        );
+      } else if (ca.direction === "payment" && acc.type === "revenue") {
+        throw new ValidationError(
+          `سند صرف لا يُقيَّد على حساب إيراد — «${ca.accountCode} ${acc.name}»`,
+          { field: "accountCode", fix: "اختر حساب مصروف/ذمم مناسباً، أو سجّل إشعار دائن إن كان المقصود ردّ إيراد", meta: { accountType: acc.type } },
+        );
+      }
     }
   }
 }
@@ -271,14 +355,22 @@ export function fromLegacyVoucherForm(b: {
   sourceAccountCode?: string | null; method?: string | null;
   relatedEntityType?: string | null; relatedEntityId?: number | null;
   lineAllocation?: LegacyLineAllocation;
+  // #1945 item 5 — the operator-pinned counter account + the voucher
+  // operationType, for the direction-aware validation (rule 4).
+  counterAccountCode?: string | null;
+  operationType?: string | null;
 }): FinanceOperationContext {
   const dims = dimsFromLegacy(b.lineAllocation);
+  const direction: "receipt" | "payment" = b.type === "receipt" ? "receipt" : "payment";
   return {
-    operationType: b.type === "receipt" ? "receipt" : "payment",
+    operationType: direction,
     companyId: b.companyId,
     branchId: b.branchId ?? null,
     party: b.relatedEntityType ? { type: b.relatedEntityType, id: b.relatedEntityId ?? null } : undefined,
     moneySource: { accountCode: b.sourceAccountCode ?? null },
+    counterAccount: b.counterAccountCode
+      ? { accountCode: b.counterAccountCode, operationKey: b.operationType ?? null, direction }
+      : undefined,
     paymentMethod: b.method ?? null,
     allocationTarget: targetFromDims(dims),
     dimensions: dims,

@@ -36,6 +36,18 @@ const MIGRATIONS_DIR = join(REPO_ROOT, "artifacts/api-server/src/migrations");
 
 const PREFIX_RE = /^(\d+)_(.+\.sql)$/;
 
+// ── #1945 / R-002 — duplicate NUMERIC-prefix ratchet ─────────────────────
+// The runner sorts by full filename, so two files sharing a number still
+// apply in a deterministic order — but a duplicate number means two agents
+// numbered concurrently without rebasing, and reviewers/tools that refer to
+// "migration 287" become ambiguous (the R-002 incident: PR #2017 and #2018
+// both shipped a 287). History up to NUMBER_RATCHET_FLOOR is grandfathered
+// (renumbering applied migrations would change their identity in every
+// environment's tracking table); any duplicate number ABOVE the floor fails
+// CI so no NEW collision can land. Bump the floor only when a grandfathered
+// duplicate is consolidated away, never to admit a new one.
+const NUMBER_RATCHET_FLOOR = 290;
+
 async function main() {
   let entries;
   try {
@@ -50,12 +62,30 @@ async function main() {
 
   /** @type {Map<string, string[]>} basename → [prefixedFile, ...] */
   const groups = new Map();
+  /** @type {Map<number, string[]>} numeric prefix → [prefixedFile, ...] */
+  const numberGroups = new Map();
   for (const entry of entries) {
     const match = PREFIX_RE.exec(entry);
     if (!match) continue;
     const base = match[2];
     if (!groups.has(base)) groups.set(base, []);
     groups.get(base).push(entry);
+    const num = Number(match[1]);
+    if (!numberGroups.has(num)) numberGroups.set(num, []);
+    numberGroups.get(num).push(entry);
+  }
+
+  // Numeric-prefix ratchet (R-002): duplicate numbers above the floor fail.
+  const numberCollisions = [...numberGroups.entries()]
+    .filter(([num, files]) => num > NUMBER_RATCHET_FLOOR && files.length > 1);
+  if (numberCollisions.length > 0) {
+    for (const [num, files] of numberCollisions) {
+      console.error(
+        `[check-duplicate-migrations] FAIL — duplicate migration NUMBER ${num} (> ratchet floor ${NUMBER_RATCHET_FLOOR}): ${files.sort().join(", ")}. ` +
+        `Renumber the newer file to the next free number before merging (R-002).`,
+      );
+    }
+    process.exit(1);
   }
 
   const duplicates = [...groups.entries()].filter(([, files]) => files.length > 1);

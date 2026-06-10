@@ -18,7 +18,7 @@ import { allowedUsagesForPaymentMethod, isMoneyAccount } from "@/lib/finance-acc
 import { EMPTY_ALLOCATION_TARGET, buildOperationalEffectsPayload, type AllocationTargetValue } from "@/components/shared/allocation-target-select";
 import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
 import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
-import { deriveRelatedEntity } from "@/lib/finance/scenario-model";
+import { deriveRelatedEntity, voucherCounterAccountHint } from "@/lib/finance/scenario-model";
 import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { AlertCircle, Paperclip } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -381,14 +381,21 @@ export default function VouchersCreate() {
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">الحسابات</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <AccountSelect
-            value={form.accountCode}
-            onChange={(v) => setField("accountCode", v)}
-            label="الحساب المقابل"
-            required
-            error={fieldErrors.accountCode}
-            placeholder="اختر الحساب..."
-          />
+          <div>
+            <AccountSelect
+              value={form.accountCode}
+              onChange={(v) => setField("accountCode", v)}
+              label="الحساب المقابل"
+              required
+              error={fieldErrors.accountCode}
+              placeholder="اختر الحساب..."
+            />
+            {/* #1945 item 5 — direction-aware hint (صرف=مصروف / قبض=إيراد);
+                the backend enforces the same rule and rejects mismatches. */}
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {voucherCounterAccountHint(form.operationType, form.type === "receipt" ? "receipt" : "payment")}
+            </p>
+          </div>
           <AccountSelect
             value={form.sourceAccountCode}
             onChange={(v) => setField("sourceAccountCode", v)}
