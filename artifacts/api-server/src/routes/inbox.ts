@@ -733,6 +733,61 @@ router.post("/messages/:id/retry", authorize({ feature: "communications", action
 });
 
 /**
+ * POST /inbox/messages/:id/cancel — cancel a scheduled outbound message.
+ *
+ * Only works when the row in outbound_queue is still 'pending' AND its
+ * scheduledAt is comfortably in the future. Once the worker picks it up
+ * (status flips to 'sending') or it actually went out, cancellation is
+ * no longer possible. Mirrors message_log.status='cancelled' so the
+ * inbox UI reflects the change immediately.
+ */
+router.post("/messages/:id/cancel", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const msgId = parseId(req.params.id, "id");
+
+    const [msg] = await rawQuery<{ id: number; status: string; direction: string }>(
+      `SELECT id, status, direction FROM message_log
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [msgId, scope.companyId],
+    );
+    if (!msg) throw new NotFoundError("الرسالة غير موجودة");
+    if (msg.direction !== "outbound") throw new ValidationError("لا يمكن إلغاء رسالة واردة");
+
+    // Cron worker ticks every 60s — add a 30s safety margin so we don't
+    // race a worker that's milliseconds away from picking the row up.
+    const { affectedRows } = await rawExecute(
+      `UPDATE outbound_queue
+          SET status = 'cancelled', "updatedAt" = NOW()
+        WHERE "messageLogId" = $1 AND "companyId" = $2
+          AND status = 'pending'
+          AND "scheduledAt" IS NOT NULL
+          AND "scheduledAt" > NOW() + INTERVAL '30 seconds'`,
+      [msgId, scope.companyId],
+    );
+    if (!affectedRows) {
+      throw new ValidationError(
+        "لا يمكن إلغاء هذه الرسالة — قد تكون قيد الإرسال أو حان وقت جدولتها",
+      );
+    }
+
+    await rawExecute(
+      `UPDATE message_log SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
+      [msgId, scope.companyId],
+    ).catch((e) => logger.warn(e, "[inbox/cancel] mirror status update failed"));
+
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "message_log", entityId: msgId,
+      after: { cancelledAt: new Date().toISOString(), status: "cancelled" },
+    }).catch((e) => logger.warn(e, "[audit] message.cancel"));
+
+    res.json({ ok: true, status: "cancelled" });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/messages/cancel");
+  }
+});
+/**
  * POST /inbox/messages/:id/star — toggle the starred flag.
  */
 router.post("/messages/:id/star", authorize({ feature: "communications", action: "update" }), async (req, res) => {
