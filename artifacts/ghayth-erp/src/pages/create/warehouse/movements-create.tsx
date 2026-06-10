@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { ProductContextCard } from "@/components/shared/product-context-card";
+import { ProductSelect } from "@/components/shared/product-select";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "warehouse_movements_create";
@@ -18,7 +19,9 @@ export default function MovementsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/warehouse/movements", "POST", [["warehouse-movements"], ["warehouse-stats"]]);
-  const { data: productsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
+  // Used only for the client-side overdraw check; the dropdown itself is the
+  // self-contained ProductSelect. Limit 500 so a selected item isn't missed.
+  const { data: productsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["warehouse-products-overdraw"], "/warehouse/products?limit=500");
   const products = productsData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
@@ -81,14 +84,12 @@ export default function MovementsCreate() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormFieldWrapper label="المنتج" required error={fieldErrors.productId} className="md:col-span-2">
-          <Select value={form.productId} onValueChange={(v) => setForm((f) => ({ ...f, productId: v }))}>
-            <SelectTrigger><SelectValue placeholder="اختر المنتج" /></SelectTrigger>
-            <SelectContent>
-              {products.map((p: any) => (
-                <SelectItem key={p.id} value={String(p.id)}>{p.sku ? `${p.sku} - ` : ""}{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ProductSelect
+            value={form.productId}
+            onChange={(id) => setForm((f) => ({ ...f, productId: id }))}
+            allowCreate
+            stockableOnly
+          />
 
           {form.productId && (
             <div className="mt-3">
