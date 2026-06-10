@@ -397,6 +397,58 @@ export function auditMutation(
   );
 }
 
+/**
+ * auditFromRequest — canonical audit writer that automatically extracts
+ * the full IGOC operating context from `req.scope`:
+ *
+ *   - companyId  (always)
+ *   - branchId   (when present on scope)
+ *   - userId     (always)
+ *   - activeRoleKey            (RBAC-001 — capacity the actor performed under)
+ *   - activeDepartmentId       (IGOC-001 — actor's primary assignment department)
+ *   - resolvedScope            (IGOC-001 — authz resolution at action time)
+ *   - impersonationSourceUser  (IGOC-001 — super-admin acting as another user)
+ *
+ * Use this in every route handler instead of calling `createAuditLog`
+ * directly. The previous pattern — passing only `activeRoleKey` and
+ * dropping the other three IGOC fields — leaves audit rows with
+ * NULL context, making cross-tenant / impersonation forensics
+ * impossible to reconstruct. The HR-019 «جسور المؤسسة» write was
+ * the live find that surfaced this gap.
+ *
+ * Errors are swallowed (audit must never break the business write).
+ */
+export function auditFromRequest(
+  req: { scope?: any },
+  action: string,
+  entity: string,
+  entityId: number,
+  changes: { before?: any; after?: any; reason?: string } = {},
+): Promise<void> {
+  const scope = req.scope;
+  if (!scope) {
+    logger.warn({ entity, entityId, action }, "[audit] no scope on request — audit skipped");
+    return Promise.resolve();
+  }
+  return createAuditLog({
+    companyId: scope.companyId,
+    branchId: scope.branchId ?? undefined,
+    userId: scope.userId,
+    action,
+    entity,
+    entityId,
+    before: changes.before,
+    after: changes.after,
+    reason: changes.reason,
+    activeRoleKey: scope.selectedRoleKey ?? null,
+    activeDepartmentId: scope.activeDepartmentId ?? null,
+    resolvedScope: scope.resolvedScope ?? null,
+    impersonationSourceUser: scope.impersonationSourceUser ?? null,
+  }).catch((err) =>
+    logger.warn({ err, entity, entityId, action }, "[audit] auditFromRequest failed"),
+  );
+}
+
 export async function createAuditLog(params: {
   companyId: number;
   branchId?: number;

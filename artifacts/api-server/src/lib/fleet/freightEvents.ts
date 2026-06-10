@@ -66,6 +66,15 @@ export const FREIGHT_EVENTS = {
 
   // ── Vehicle operational events (Comment 8 named) ──────────────────
   VehicleOperationalEventRecorded: "fleet.vehicle.operational_event_recorded",
+
+  // ── TR-016 — cargo driver operational checkpoints ─────────────────
+  // The driver tapped a within-step event (weighbridge, rest break,
+  // inspection, customs, fueling, unloading milestone) on a cargo
+  // manifest. These never change the 7-state lifecycle — they are
+  // chronological facts rendered inline on the cargo timeline so the
+  // dispatcher can see WHAT happened during in_transit / loaded /
+  // arrived_pickup as the trip unfolds.
+  CargoCheckpointRecorded:   "fleet.cargo.checkpoint_recorded",
 } as const;
 
 /** Type of any value in FREIGHT_EVENTS — the legal `action` strings. */
@@ -110,4 +119,5 @@ export const FREIGHT_EVENT_LABEL_AR: Record<FreightEvent, string> = {
   [FREIGHT_EVENTS.BillingCandidateRejected]:  "رفض المحاسب الترشيح",
   [FREIGHT_EVENTS.BillingBatchReady]:         "حزمة فواتير جاهزة",
   [FREIGHT_EVENTS.VehicleOperationalEventRecorded]: "حدث تشغيلي للمركبة",
+  [FREIGHT_EVENTS.CargoCheckpointRecorded]:         "نقطة تشغيلية مسجَّلة",
 };

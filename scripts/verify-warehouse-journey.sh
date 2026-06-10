@@ -108,7 +108,32 @@ pw /warehouse/cycle-counts/$CCID/post "{}" >/dev/null
 ST_AGAIN="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
 [ "$ST_AGAIN" = "4" ] && ok "إعادة الترحيل لا تكرّر الأثر (ما زال 4)" || no "re-post double-applied ($ST_AGAIN)"
 
-# 7) Controllable policy: require reference ON → movement without reference rejected.
+# 7) Advanced slice: lot QC lifecycle + recall + ABC + reports.
+LOT="$(pw /warehouse/lots "{\"productId\":$PID,\"lotNumber\":\"LOT-$SKU\",\"quantity\":5,\"expiryDate\":\"$(date -d '+10 days' +%F 2>/dev/null || date -v+10d +%F)\"}")"
+LOTID="$(echo "$LOT" | gid id)"
+LOTQC="$(echo "$LOT" | gid qcStatus)"
+{ [ -n "$LOTID" ] && [ "$LOTQC" = "pending" ]; } && ok "دفعة أُنشئت (#$LOTID، QC=pending)" || no "lot create id=$LOTID qc=$LOTQC: $(echo "$LOT"|gid error)"
+pw /warehouse/lots/$LOTID/qc-approve "{}" >/dev/null
+LQC="$(q "select \"qualityControlStatus\" from warehouse_stock_lots where id=${LOTID:-0};")"
+[ "$LQC" = "approved" ] && ok "اعتماد QC للدفعة" || no "lot qc=$LQC"
+# Double QC decision must be rejected (one-shot gate).
+RCQC="$(code /warehouse/lots/$LOTID/qc-reject "{}")"
+{ [ "$RCQC" -ge 400 ] && [ "$RCQC" -lt 500 ]; } && ok "قرار QC مزدوج مرفوض (HTTP $RCQC)" || no "double QC allowed ($RCQC)"
+# Expiring report sees the lot (expiry in 10 days < 90-day horizon).
+EXPN="$(curl -sS -b "$J" -H "x-csrf-token: $CSRF" "$BASE/warehouse/reports/expiring" | py "import sys,json;print(len((json.load(sys.stdin) or {}).get('data') or []))")"
+[ "${EXPN:-0}" -ge 1 ] && ok "تقرير قرب الانتهاء يلتقط الدفعة ($EXPN)" || no "expiring report empty"
+# ABC: computed lazily from the issue movements of this run (product has value).
+ABCN="$(curl -sS -b "$J" -H "x-csrf-token: $CSRF" "$BASE/warehouse/abc-classification" | py "import sys,json;d=json.load(sys.stdin);rows=d.get('data') or [];print(sum(1 for r in rows if r.get('abcClass')=='A'))")"
+[ "${ABCN:-0}" -ge 1 ] && ok "تصنيف ABC حُسب (صنف A واحد على الأقل)" || no "abc empty"
+# Accuracy report reflects the approved cycle count.
+ACC="$(curl -sS -b "$J" -H "x-csrf-token: $CSRF" "$BASE/warehouse/reports/cycle-count-accuracy" | py "import sys,json;d=json.load(sys.stdin);print(d.get('approvedCounts') or 0)")"
+[ "${ACC:-0}" -ge 1 ] && ok "تقرير دقّة الجرد يعكس الجرد المعتمد ($ACC)" || no "accuracy empty"
+# Recall flips the lot out of active.
+pw /warehouse/lots/$LOTID/recall "{\"reason\":\"اختبار استدعاء\"}" >/dev/null
+LST="$(q "select status from warehouse_stock_lots where id=${LOTID:-0};")"
+[ "$LST" = "recalled" ] && ok "استدعاء الدفعة (status=recalled)" || no "recall status=$LST"
+
+# 8) Controllable policy: require reference ON → movement without reference rejected.
 put /settings/system-controls "{\"warehouse.require_movement_reference\":true}" >/dev/null
 RC="$(code /warehouse/movements "{\"productId\":$PID,\"type\":\"in\",\"quantity\":1}")"
 { [ "$RC" -ge 400 ] && [ "$RC" -lt 500 ]; } && ok "سياسة «إلزام المرجع» مفعّلة: حركة بلا مرجع مرفوضة (HTTP $RC)" || no "policy not enforced (HTTP $RC, expected 4xx)"

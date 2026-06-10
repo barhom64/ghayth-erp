@@ -26,7 +26,10 @@ describe("#1733 follow-up — fleet_expense_rules backend CRUD", () => {
   it("file exists + mounts under requireModule(fleet) + requireGuards(financial)", () => {
     expect(existsSync(join(apiSrc, "routes/fleet-rules-admin.ts"))).toBe(true);
     expect(ROUTES_INDEX).toContain("fleetRulesAdminRouter");
-    expect(ROUTES_INDEX).toMatch(/requireModule\("fleet"\)[\s\S]{0,80}fleetRulesAdminRouter/);
+    // #1959: gated by the path-conditional fleet+financial transportPathGate.
+    expect(ROUTES_INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(ROUTES_INDEX).toContain('const transportFinancialGate = requireGuards("financial")');
+    expect(ROUTES_INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 
   it("exposes the 4 CRUD endpoints + soft-delete", () => {

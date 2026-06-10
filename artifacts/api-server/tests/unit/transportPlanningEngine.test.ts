@@ -203,7 +203,9 @@ describe("#1812 — planning routes", () => {
   it("router file exists + is mounted under requireModule(fleet)", () => {
     expect(existsSync(join(apiSrc, "routes/transport-planning.ts"))).toBe(true);
     expect(ROUTES_INDEX).toContain("transportPlanningRouter");
-    expect(ROUTES_INDEX).toMatch(/requireModule\("fleet"\)[\s\S]{0,100}transportPlanningRouter/);
+    // #1959: gated by the path-conditional fleet+financial transportPathGate.
+    expect(ROUTES_INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(ROUTES_INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 
   it("exposes the 5 planning endpoints", () => {

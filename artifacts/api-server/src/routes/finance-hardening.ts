@@ -36,6 +36,7 @@ import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logger } from "../lib/logger.js";
+import { retryPostingFailure, UNSUPPORTED_RETRY_SOURCE_TYPES } from "../lib/postingFailureRetry.js";
 
 export const financeHardeningRouter = Router();
 financeHardeningRouter.use(authMiddleware);
@@ -1694,6 +1695,159 @@ financeHardeningRouter.patch("/posting-failures/:id/resolve", authorize({ featur
     res.json({ message: "تم إغلاق المشكلة" });
   } catch (err) {
     handleRouteError(err, res, "Resolve posting failure error:");
+  }
+});
+
+// Breakdown of OPEN posting failures grouped by sourceType — lets an admin
+// diagnose WHY the backlog accumulated (which subsystem) before draining it.
+// The plain list endpoint only returns the most-recent 100 rows; this returns
+// the full per-type counts plus one representative error per type.
+financeHardeningRouter.get("/posting-failures/summary", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<{ sourceType: string; cnt: number; sampleError: string | null; firstAt: string; lastAt: string }>(
+      `SELECT "sourceType",
+              COUNT(*)::int AS cnt,
+              (array_agg(error ORDER BY "createdAt" DESC))[1] AS "sampleError",
+              MIN("createdAt") AS "firstAt",
+              MAX("createdAt") AS "lastAt"
+         FROM financial_posting_failures
+        WHERE "companyId" = $1 AND resolved = false
+        GROUP BY "sourceType"
+        ORDER BY cnt DESC`,
+      [scope.companyId],
+    );
+    const total = rows.reduce((s, r) => s + Number(r.cnt), 0);
+    res.json(maskFields(req, { data: rows, total }));
+  } catch (err) {
+    handleRouteError(err, res, "Posting failures summary error:");
+  }
+});
+
+// Single retry — re-invokes the ORIGINAL GL posting for one parked failure.
+// On a supported+successful retry (or a deleted/zero-value source) the row is
+// auto-resolved; unsupported types stay open with an Arabic reason so the admin
+// resolves them manually after fixing the root cause.
+financeHardeningRouter.post("/posting-failures/:id/retry", authorize({ feature: "finance.hardening", action: "approve" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<{ sourceType: string; sourceId: number | null }>(
+      `SELECT "sourceType", "sourceId" FROM financial_posting_failures
+        WHERE id = $1 AND "companyId" = $2 AND resolved = false`,
+      [id, scope.companyId],
+    );
+    if (!row) throw new NotFoundError("السجل غير موجود أو مغلق مسبقاً");
+    const result = await retryPostingFailure(
+      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      { sourceType: row.sourceType, sourceId: row.sourceId },
+    );
+    if (result.ok && result.supported) {
+      await rawExecute(
+        `UPDATE financial_posting_failures SET resolved = true, "resolvedAt" = NOW(), "resolvedBy" = $1
+          WHERE id = $2 AND "companyId" = $3 AND resolved = false`,
+        [scope.userId, id, scope.companyId],
+      );
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "posting_failure.retried", entity: "financial_posting_failures", entityId: id }).catch((e) => logger.error(e, "finance-hardening background task failed"));
+    }
+    res.json({ ...result, resolved: result.ok && result.supported });
+  } catch (err) {
+    handleRouteError(err, res, "Retry posting failure error:");
+  }
+});
+
+// Bulk retry — drains the backlog in batches (financially correct: re-posts the
+// real GL via the idempotent retry dispatcher; only auto-resolves rows that
+// actually posted). Batched (LIMIT 100/call) to stay within the request budget;
+// returns `remaining` so the UI can loop until the backlog is empty.
+financeHardeningRouter.post("/posting-failures/retry-all", authorize({ feature: "finance.hardening", action: "approve" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const BATCH = 100;
+    // Cursor so the client can walk the WHOLE retryable backlog one bounded
+    // window at a time. Without it, a batch of still-failing rows at the head
+    // (by id) would stall forever and never reach later resolvable rows.
+    const { afterId } = zodParse(
+      z.object({ afterId: z.coerce.number().int().nonnegative().optional() }).safeParse(req.body ?? {}),
+    );
+    const cursor = afterId ?? 0;
+    // Exclude source types with no safe automatic retry — selecting them only
+    // wastes batches; they are drained via bulk-resolve (manual dismiss).
+    const batch = await rawQuery<{ id: number; sourceType: string; sourceId: number | null }>(
+      `SELECT id, "sourceType", "sourceId" FROM financial_posting_failures
+        WHERE "companyId" = $1 AND resolved = false AND id > $2
+          AND "sourceType" <> ALL($3::text[])
+          AND "sourceId" IS NOT NULL AND "sourceId" > 0
+        ORDER BY id ASC LIMIT $4`,
+      [scope.companyId, cursor, UNSUPPORTED_RETRY_SOURCE_TYPES as unknown as string[], BATCH],
+    );
+
+    let resolved = 0, stillFailing = 0, notSupported = 0;
+    let lastId = cursor;
+    const byType: Record<string, { resolved: number; stillFailing: number; notSupported: number; sampleError?: string }> = {};
+    const bump = (t: string) => (byType[t] ??= { resolved: 0, stillFailing: 0, notSupported: 0 });
+
+    for (const f of batch) {
+      lastId = f.id;
+      const bt = bump(f.sourceType);
+      const result = await retryPostingFailure(
+        { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+        { sourceType: f.sourceType, sourceId: f.sourceId },
+      );
+      if (result.ok && result.supported) {
+        await rawExecute(
+          `UPDATE financial_posting_failures SET resolved = true, "resolvedAt" = NOW(), "resolvedBy" = $1
+            WHERE id = $2 AND "companyId" = $3 AND resolved = false`,
+          [scope.userId, f.id, scope.companyId],
+        );
+        resolved++; bt.resolved++;
+      } else if (!result.supported) {
+        notSupported++; bt.notSupported++; bt.sampleError = result.message;
+      } else {
+        stillFailing++; bt.stillFailing++; bt.sampleError = result.message;
+      }
+    }
+
+    // hasMore drives the client cursor loop independently of how many rows
+    // actually resolved this pass (a window of still-failing rows must not stop it).
+    const hasMore = batch.length === BATCH;
+    const [{ cnt: remaining } = { cnt: 0 }] = await rawQuery<{ cnt: number }>(
+      `SELECT COUNT(*)::int AS cnt FROM financial_posting_failures
+        WHERE "companyId" = $1 AND resolved = false`,
+      [scope.companyId],
+    );
+    if (resolved > 0) {
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "posting_failure.retry_all", entity: "financial_posting_failures", entityId: 0, details: JSON.stringify({ processed: batch.length, resolved, stillFailing, notSupported, remaining }) }).catch((e) => logger.error(e, "finance-hardening background task failed"));
+    }
+    res.json({ processed: batch.length, resolved, stillFailing, notSupported, remaining, byType, lastId, hasMore });
+  } catch (err) {
+    handleRouteError(err, res, "Retry-all posting failures error:");
+  }
+});
+
+// Bulk dismiss — marks open failures resolved WITHOUT posting any GL. This is a
+// last resort for failures that cannot be auto-retried (e.g. commission_calculation):
+// it only acknowledges/clears the breaker, it does NOT post the missing entry, so
+// the GL stays incomplete for those sources. Optional `sourceType` filter so the
+// admin can dismiss only the un-retryable class and keep retrying the rest.
+financeHardeningRouter.post("/posting-failures/bulk-resolve", authorize({ feature: "finance.hardening", action: "approve" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { sourceType } = zodParse(
+      z.object({ sourceType: z.string().min(1).max(120).optional() }).safeParse(req.body ?? {}),
+    );
+    const params: unknown[] = [scope.userId, scope.companyId];
+    let typeClause = "";
+    if (sourceType) { params.push(sourceType); typeClause = ` AND "sourceType" = $3`; }
+    const { affectedRows } = await rawExecute(
+      `UPDATE financial_posting_failures SET resolved = true, "resolvedAt" = NOW(), "resolvedBy" = $1
+        WHERE "companyId" = $2 AND resolved = false${typeClause}`,
+      params,
+    );
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "posting_failure.bulk_resolved", entity: "financial_posting_failures", entityId: 0, details: JSON.stringify({ resolved: affectedRows, sourceType: sourceType ?? "all" }) }).catch((e) => logger.error(e, "finance-hardening background task failed"));
+    res.json({ resolved: affectedRows, message: `تم إغلاق ${affectedRows} سجل` });
+  } catch (err) {
+    handleRouteError(err, res, "Bulk-resolve posting failures error:");
   }
 });
 
