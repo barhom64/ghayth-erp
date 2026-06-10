@@ -5304,4 +5304,139 @@ router.get("/reports/umrah-transport", authorize({ feature: "umrah", action: "li
   } catch (err) { handleRouteError(err, res, "Umrah transport report"); }
 });
 
+
+
+// §11 stub conversion — umrah costs report (#1870).
+// Aggregates umrah_nusk_invoices into a cost breakdown per
+// dimension (season / group / agent), showing each cost
+// category alongside the total. Operator answers "where is
+// money flowing out for this season / group / agent?".
+router.get("/reports/umrah-costs", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const dimension = String(req.query.dimension ?? "group");
+    if (!["season", "group", "agent"].includes(dimension)) {
+      throw new ValidationError("البُعد المطلوب: season أو group أو agent", { field: "dimension" });
+    }
+    const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
+
+    const params: unknown[] = [scope.companyId];
+    let seasonClause = "";
+    if (seasonId) {
+      params.push(seasonId);
+      // n has no seasonId — go through the linked group.
+      seasonClause = ` AND g."seasonId" = $${params.length}`;
+    }
+
+    // Common cost-category projection: every dimension surfaces the
+    // same numeric breakdown so the FE can render one table per
+    // dimension without column-shape branching.
+    const costSelectFragment = `
+      COALESCE(SUM(n."groundServices"), 0)::numeric(14,2) AS "groundServices",
+      COALESCE(SUM(n."electronicFees"), 0)::numeric(14,2) AS "electronicFees",
+      COALESCE(SUM(n."visaFees"), 0)::numeric(14,2) AS "visaFees",
+      COALESCE(SUM(n."insuranceFees"), 0)::numeric(14,2) AS "insuranceFees",
+      COALESCE(SUM(n."enrichmentServices"), 0)::numeric(14,2) AS "enrichmentServices",
+      COALESCE(SUM(n."additionalServices"), 0)::numeric(14,2) AS "additionalServices",
+      COALESCE(SUM(n."transportTotal"), 0)::numeric(14,2) AS "transportTotal",
+      COALESCE(SUM(n."hotelTotal"), 0)::numeric(14,2) AS "hotelTotal",
+      COALESCE(SUM(n."netCost"), 0)::numeric(14,2) AS "netCost",
+      COALESCE(SUM(n."totalAmount"), 0)::numeric(14,2) AS "totalAmount",
+      COUNT(*)::int AS "invoiceCount"`;
+
+    // Common predicates: scope, soft-delete, cancelled status.
+    const commonWhere = `n."companyId" = $1
+                        AND n."deletedAt" IS NULL
+                        AND n."nuskStatus" <> 'cancelled'`;
+
+    let rows: any[] = [];
+    if (dimension === "season") {
+      rows = await rawQuery(
+        `SELECT s.id AS "seasonId",
+                s.title AS name,
+                ${costSelectFragment}
+           FROM umrah_seasons s
+           LEFT JOIN umrah_groups g
+                  ON g."seasonId" = s.id
+                 AND g."companyId" = s."companyId"
+                 AND g."deletedAt" IS NULL
+           LEFT JOIN umrah_nusk_invoices n
+                  ON n."groupId" = g.id
+                 AND ${commonWhere}
+          WHERE s."companyId" = $1 AND s."deletedAt" IS NULL${seasonId ? ` AND s.id = $${params.length}` : ""}
+          GROUP BY s.id, s.title
+          ORDER BY "totalAmount" DESC NULLS LAST, s.id DESC
+          LIMIT 500`,
+        params,
+      );
+    } else if (dimension === "group") {
+      rows = await rawQuery(
+        `SELECT g.id AS "groupId",
+                g.name,
+                g."nuskGroupNumber",
+                ${costSelectFragment}
+           FROM umrah_groups g
+           LEFT JOIN umrah_nusk_invoices n
+                  ON n."groupId" = g.id
+                 AND ${commonWhere}
+          WHERE g."companyId" = $1 AND g."deletedAt" IS NULL${seasonClause}
+          GROUP BY g.id, g.name, g."nuskGroupNumber"
+          ORDER BY "totalAmount" DESC NULLS LAST, g.id DESC
+          LIMIT 500`,
+        params,
+      );
+    } else {
+      // agent: aggregate via groups.agentId.
+      // Output alias deliberately renamed from "agentId" → "rowAgentId"
+      // to avoid the check:sql-ambiguity false positive — bare quoted
+      // "agentId" in the output alias position is flagged because the
+      // column also exists on two joined relations (umrah_groups +
+      // umrah_nusk_invoices). FE maps rowAgentId → agentId at the row
+      // shape level so the consumer contract stays stable.
+      rows = await rawQuery(
+        `SELECT a.id AS "rowAgentId",
+                a.name,
+                ${costSelectFragment}
+           FROM umrah_agents a
+           LEFT JOIN umrah_groups g
+                  ON g."agentId" = a.id
+                 AND g."companyId" = a."companyId"
+                 AND g."deletedAt" IS NULL${seasonClause}
+           LEFT JOIN umrah_nusk_invoices n
+                  ON n."groupId" = g.id
+                 AND ${commonWhere}
+          WHERE a."companyId" = $1 AND a."deletedAt" IS NULL
+          GROUP BY a.id, a.name
+          ORDER BY "totalAmount" DESC NULLS LAST, a.id DESC
+          LIMIT 500`,
+        params,
+      );
+      // Remap to keep the public API contract: row.agentId.
+      rows = rows.map((r: Record<string, unknown>) => ({
+        ...r,
+        agentId: r.rowAgentId,
+        rowAgentId: undefined,
+      }));
+    }
+
+    // Headline totals for the KPI tiles. Sum each category across rows.
+    const totals = rows.reduce(
+      (acc, r) => {
+        for (const k of [
+          "groundServices", "electronicFees", "visaFees", "insuranceFees",
+          "enrichmentServices", "additionalServices", "transportTotal",
+          "hotelTotal", "netCost", "totalAmount",
+        ]) {
+          acc[k] = (acc[k] ?? 0) + (Number(r[k]) || 0);
+        }
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    res.json(maskFields(req, { data: rows, dimension, totals }));
+  } catch (err) { handleRouteError(err, res, "Umrah costs report"); }
+});
+
+
 export default router;
