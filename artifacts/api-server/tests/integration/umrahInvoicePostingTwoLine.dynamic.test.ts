@@ -106,9 +106,12 @@ d("§6 — two-line umrah invoice posts a balanced JE with margin VAT", () => {
         `DELETE FROM chart_of_accounts WHERE "companyId"=$1 AND code IN ('1200-T','4200-T','2300-T') AND name LIKE '%TEST%'`,
         [COMPANY_ID]
       );
-      // Remove our VAT-rate setting if we created it.
+      // Remove our VAT-rate + VAT-mode settings if we created them.
       await rawExecute(
-        `DELETE FROM system_settings WHERE "companyId"=$1 AND key='umrah_vat_rate' AND value='15'`,
+        `DELETE FROM system_settings
+           WHERE "companyId"=$1
+             AND "branchId" IS NULL
+             AND key IN ('umrah_vat_rate', 'umrah_vat_mode')`,
         [COMPANY_ID]
       );
     } catch (e) {
@@ -137,16 +140,21 @@ d("§6 — two-line umrah invoice posts a balanced JE with margin VAT", () => {
     );
     ids.userId = user.id;
 
-    // 1) VAT rate setting — 15% standard rate. Unique on (companyId, branchId, key)
+    // 1) VAT settings — 15% standard rate + INCLUSIVE mode (extracted).
+    // Operator directive: «الضريبة مستخرَجة من الهامش الشامل (× 15/115)،
+    // وقابلة للتعديل من الإعدادات». Unique on (companyId, branchId, key)
     // but NULL branchId breaks ON CONFLICT — delete-then-insert keeps the
     // setup deterministic without an unrelated partial-index hack.
     await rawExecute(
-      `DELETE FROM system_settings WHERE "companyId"=$1 AND "branchId" IS NULL AND key='umrah_vat_rate'`,
+      `DELETE FROM system_settings
+         WHERE "companyId"=$1 AND "branchId" IS NULL
+           AND key IN ('umrah_vat_rate', 'umrah_vat_mode')`,
       [COMPANY_ID]
     );
     await rawExecute(
       `INSERT INTO system_settings ("companyId", "branchId", key, value, "createdAt", "updatedAt")
-         VALUES ($1, NULL, 'umrah_vat_rate', '15', NOW(), NOW())`,
+         VALUES ($1, NULL, 'umrah_vat_rate', '15', NOW(), NOW()),
+                ($1, NULL, 'umrah_vat_mode', 'inclusive', NOW(), NOW())`,
       [COMPANY_ID]
     );
 
@@ -339,7 +347,7 @@ d("§6 — two-line umrah invoice posts a balanced JE with margin VAT", () => {
     expect(groundRate).toBe(15);
   });
 
-  it("header VAT is computed on the MARGIN only: vatAmount = (subtotal − costBasis) × 15%", async () => {
+  it("header VAT is EXTRACTED from the margin (inclusive mode): vatAmount = margin × 15/115; total = subtotal (no add)", async () => {
     const [inv] = await rawQuery<{
       subtotal: string;
       "costBasis": string;
@@ -352,16 +360,23 @@ d("§6 — two-line umrah invoice posts a balanced JE with margin VAT", () => {
          FROM umrah_sales_invoices WHERE id = $1`,
       [ids.salesInvoiceId]
     );
-    // subtotal = 1000, costBasis = 550, margin = 450, vatRate=15 → vatAmount=67.50, total=1067.50
+    // Operator-confirmed rule («الفرق شامل الضريبة»):
+    //   subtotal  = 1000  (visa 300 + ground service 700)
+    //   costBasis = 550   (NUSK total — visa 300 + transport 100 + hotel 50
+    //                       + electronic 20 + services 50 + insurance 20
+    //                       + additional 10)
+    //   marginBase = 450  (sale − cost)
+    //   vatAmount = 450 × 15/115 = 58.6957 → roundTo2 = 58.70  (EXTRACTED)
+    //   total      = subtotal = 1000  (VAT is inside; nothing added)
     expect(Number(inv.subtotal)).toBe(1000);
     expect(Number(inv.costBasis)).toBe(550);
     expect(Number(inv.marginBase)).toBe(450);
     expect(Number(inv.vatRate)).toBe(15);
-    expect(Number(inv.vatAmount)).toBe(67.5);
-    expect(Number(inv.total)).toBe(1067.5);
+    expect(Number(inv.vatAmount)).toBe(58.70);
+    expect(Number(inv.total)).toBe(1000);
   });
 
-  it("posts a balanced journal entry: DR AR (total) = CR revenue (subtotal) + CR VAT output (vatAmount)", async () => {
+  it("posts a balanced journal entry: DR AR (subtotal) = CR revenue (subtotal − vatAmount) + CR VAT (vatAmount)", async () => {
     // JE linkage is via journal_entries.sourceType/sourceId (the
     // umrah_sales_invoices.journalEntryId back-link isn't part of the
     // generate path — it's the post-cutover linkage we're adding next).
@@ -380,51 +395,130 @@ d("§6 — two-line umrah invoice posts a balanced JE with margin VAT", () => {
       description: string;
       "umrahAgentId": number | null;
       "umrahSeasonId": number | null;
+      "clientId": number | null;
     }>(
-      `SELECT "accountCode", debit, credit, description, "umrahAgentId", "umrahSeasonId"
+      `SELECT "accountCode", debit, credit, description, "umrahAgentId", "umrahSeasonId", "clientId"
          FROM journal_lines WHERE "journalId" = $1 ORDER BY id`,
       [je.id]
     );
 
-    // Totals: balanced + equal to invoice total.
+    // Totals: balanced + equal to invoice total = subtotal (inclusive mode).
     const totalDr = lines.reduce((acc, l) => acc + Number(l.debit), 0);
     const totalCr = lines.reduce((acc, l) => acc + Number(l.credit), 0);
-    expect(totalDr).toBeCloseTo(1067.5, 2);
-    expect(totalCr).toBeCloseTo(1067.5, 2);
+    expect(totalDr).toBeCloseTo(1000, 2);
+    expect(totalCr).toBeCloseTo(1000, 2);
 
-    // Structure: one AR debit line of 1067.50 + at least one revenue
-    // credit + one VAT-output credit of 67.50.
+    // Structure: one AR debit line of 1000 + revenue credits summing to
+    // 941.30 (1000 − 58.70) + one VAT-output credit of 58.70.
     const drLines = lines.filter((l) => Number(l.debit) > 0);
     const crLines = lines.filter((l) => Number(l.credit) > 0);
     expect(drLines.length).toBe(1);
-    expect(Number(drLines[0].debit)).toBeCloseTo(1067.5, 2);
+    expect(Number(drLines[0].debit)).toBeCloseTo(1000, 2);
 
-    const vatLine = lines.find((l) => Number(l.credit) === 67.5);
+    const vatLine = lines.find((l) => Number(l.credit) === 58.70);
     expect(vatLine).toBeTruthy();
     expect(vatLine!.accountCode).toBe("2300-T");
 
-    // Revenue credit(s) sum to subtotal (1000).
+    // Revenue credit(s) sum to subtotal − vatAmount = 1000 − 58.70 = 941.30
+    // (the standard-rated ground-service bucket absorbed the VAT extraction;
+    // visa stays at its pass-through lineTotal of 300).
     const revenueCredit = crLines
       .filter((l) => l.accountCode === "4200-T")
       .reduce((acc, l) => acc + Number(l.credit), 0);
-    expect(revenueCredit).toBeCloseTo(1000, 2);
+    expect(revenueCredit).toBeCloseTo(941.30, 2);
   });
 
-  it("every JE line carries the agent + season dimensions (drill-by-agent-season works end-to-end)", async () => {
+  it("every JE line carries client + agent + season dimensions (الوكيل العميل + الموسم — drill-by-customer works)", async () => {
     const [je] = await rawQuery<{ id: number }>(
       `SELECT id FROM journal_entries
         WHERE "sourceType" = 'umrah_sales_invoices' AND "sourceId" = $1
         ORDER BY id DESC LIMIT 1`,
       [ids.salesInvoiceId]
     );
-    const lines = await rawQuery<{ "umrahAgentId": number | null; "umrahSeasonId": number | null }>(
-      `SELECT "umrahAgentId", "umrahSeasonId" FROM journal_lines WHERE "journalId" = $1`,
+    const lines = await rawQuery<{
+      "umrahAgentId": number | null;
+      "umrahSeasonId": number | null;
+      "clientId": number | null;
+    }>(
+      `SELECT "umrahAgentId", "umrahSeasonId", "clientId" FROM journal_lines WHERE "journalId" = $1`,
       [je.id]
     );
     expect(lines.length).toBeGreaterThan(0);
     for (const l of lines) {
       expect(l.umrahAgentId).toBe(ids.agentId);
       expect(l.umrahSeasonId).toBe(ids.seasonId);
+      // Operator directive §6: every sales-side line must carry the
+      // sub-agent's linked client (= العميل) so the ledger can be
+      // sliced by who owes us.
+      expect(l.clientId).toBe(ids.clientId);
     }
+  });
+
+  it("VAT mode is operator-configurable: flipping to 'exclusive' adds VAT on top instead of extracting", async () => {
+    // Operator directive: «قابلة للتعديل من الإعدادات». Seed a SECOND
+    // group + pilgrim + NUSK invoice (the engine refuses to re-invoice
+    // a group), flip the mode setting, and confirm the math flips too.
+    const [group2] = await rawQuery<{ id: number }>(
+      `INSERT INTO umrah_groups ("companyId", "branchId", "nuskGroupNumber", name, status,
+                                  "mutamerCount", "subAgentId", "agentId", "seasonId")
+          VALUES ($1, $2, 'TEST-GRP-002', 'Group Test §6 (mode)', 'imported', 1, $3, $4, $5)
+          RETURNING id`,
+      [COMPANY_ID, ids.branchId, ids.subAgentId, ids.agentId, ids.seasonId]
+    );
+    const [pilgrim2] = await rawQuery<{ id: number }>(
+      `INSERT INTO umrah_pilgrims ("companyId", "branchId", "groupId", "subAgentId", "agentId", "seasonId",
+                                    "passportNumber", "fullName", "arrivalDate", status)
+          VALUES ($1, $2, $3, $4, $5, $6, 'TEST-PP-002', 'Test Pilgrim 2', '2026-03-01', 'pending')
+          RETURNING id`,
+      [COMPANY_ID, ids.branchId, group2.id, ids.subAgentId, ids.agentId, ids.seasonId]
+    );
+    const [nuskInv2] = await rawQuery<{ id: number }>(
+      `INSERT INTO umrah_nusk_invoices ("companyId", "branchId", "nuskInvoiceNumber",
+                                          "agentId", "subAgentId", "groupId", "mutamerCount",
+                                          "groundServices", "electronicFees", "visaFees", "insuranceFees",
+                                          "enrichmentServices", "additionalServices", "transportTotal",
+                                          "hotelTotal", "refundAmount", "netCost", "totalAmount",
+                                          "nuskStatus", "issueDate")
+          VALUES ($1, $2, 'TEST-NUSK-002', $3, $4, $5, 1,
+                  50, 20, 300, 20, 0, 10, 100, 50, 0, 550, 550, 'issued', NOW())
+          RETURNING id`,
+      [COMPANY_ID, ids.branchId, ids.agentId, ids.subAgentId, group2.id]
+    );
+    await rawExecute(
+      `UPDATE system_settings SET value = 'exclusive', "updatedAt" = NOW()
+        WHERE "companyId" = $1 AND "branchId" IS NULL AND key = 'umrah_vat_mode'`,
+      [COMPANY_ID]
+    );
+
+    const scope = { companyId: COMPANY_ID, branchId: ids.branchId!, userId: ids.userId! };
+    const result = await generateSalesInvoice(scope, {
+      subAgentId: ids.subAgentId,
+      groupIds: [group2.id],
+      seasonId: ids.seasonId,
+    });
+    const [inv] = await rawQuery<{ subtotal: string; vatAmount: string; total: string }>(
+      `SELECT subtotal, "vatAmount", total FROM umrah_sales_invoices WHERE id = $1`,
+      [result.invoiceId]
+    );
+    // Exclusive math: vatAmount = 450 × 15/100 = 67.50; total = subtotal + vatAmount = 1067.50.
+    expect(Number(inv.subtotal)).toBe(1000);
+    expect(Number(inv.vatAmount)).toBe(67.5);
+    expect(Number(inv.total)).toBe(1067.5);
+
+    // Teardown — clean the extra rows so the main teardown stays simple.
+    await rawExecute(
+      `DELETE FROM journal_lines WHERE "journalId" IN
+         (SELECT id FROM journal_entries WHERE "sourceType" = 'umrah_sales_invoices' AND "sourceId" = $1)`,
+      [result.invoiceId]
+    );
+    await rawExecute(
+      `DELETE FROM journal_entries WHERE "sourceType" = 'umrah_sales_invoices' AND "sourceId" = $1`,
+      [result.invoiceId]
+    );
+    await rawExecute(`DELETE FROM umrah_sales_invoice_items WHERE "invoiceId" = $1`, [result.invoiceId]);
+    await rawExecute(`DELETE FROM umrah_sales_invoices WHERE id = $1`, [result.invoiceId]);
+    await rawExecute(`DELETE FROM umrah_nusk_invoices WHERE id = $1`, [nuskInv2.id]);
+    await rawExecute(`DELETE FROM umrah_pilgrims WHERE id = $1`, [pilgrim2.id]);
+    await rawExecute(`DELETE FROM umrah_groups WHERE id = $1`, [group2.id]);
   });
 });

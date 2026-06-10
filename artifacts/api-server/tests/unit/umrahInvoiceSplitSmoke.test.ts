@@ -112,11 +112,57 @@ describe("§6 — VAT-on-margin invariants are preserved", () => {
     expect(ENGINE).toMatch(/const marginBase = roundTo2\(Math\.max\(0, subtotal - costBasis\)\)/);
   });
 
-  it("vatAmount = marginBase × vatRate / 100 — VAT on the margin only, not the full sale", () => {
-    expect(ENGINE).toMatch(/const vatAmount = roundTo2\(marginBase \* \(vatRate \/ 100\)\)/);
-  });
-
   it("sellingBelowCost flag still surfaces (operator warning when subtotal < costBasis)", () => {
     expect(ENGINE).toMatch(/const sellingBelowCost = subtotal < costBasis/);
+  });
+});
+
+describe("§6 — VAT mode is operator-configurable (inclusive/exclusive)", () => {
+  it("reads BOTH umrah_vat_rate AND umrah_vat_mode from system_settings — no hardcoded direction", () => {
+    expect(ENGINE).toMatch(/key = 'umrah_vat_rate'/);
+    expect(ENGINE).toMatch(/key = 'umrah_vat_mode'/);
+  });
+
+  it("default mode is 'inclusive' (KSA margin scheme — VAT lives inside the ground-service line)", () => {
+    expect(ENGINE).toMatch(/const vatMode = .*\?\?\s*"inclusive"/);
+    expect(ENGINE).toMatch(/const vatInclusive = vatMode === "inclusive"/);
+  });
+
+  it("inclusive mode: vatAmount = marginBase × rate / (100 + rate) — EXTRACTED, not added", () => {
+    // Operator directive: «الضريبة مستخرَجة من الهامش الشامل (× 15/115)».
+    // The legacy added formula stays as the exclusive-mode fallback.
+    expect(ENGINE).toMatch(/roundTo2\(marginBase \* vatRate \/ \(100 \+ vatRate\)\)/);
+  });
+
+  it("exclusive mode: legacy add-on-top formula preserved (no regression for non-margin tenants)", () => {
+    expect(ENGINE).toMatch(/roundTo2\(marginBase \* \(vatRate \/ 100\)\)/);
+  });
+
+  it("inclusive mode: total = subtotal + penalties (NO addition — VAT is already inside)", () => {
+    // The whole point of inclusive: the customer-facing price equals the
+    // operator-set sale price, even when ZATCA changes the rate.
+    expect(ENGINE).toMatch(/vatInclusive[\s\S]{0,200}\?\s*subtotal \+ penaltiesTotal\s*\n\s*:\s*subtotal \+ penaltiesTotal \+ vatAmount/);
+  });
+
+  it("inclusive mode: VAT is extracted from the FIRST standard-rated revenue bucket — keeps JE balanced", () => {
+    // Visa is zero-rated pass-through; the standard-rated ground-service
+    // line absorbs the VAT extraction so revenue = sale ex-VAT and the
+    // JE balances against DR AR = subtotal.
+    expect(ENGINE).toMatch(/let standardRatedCode: string \| null = null/);
+    expect(ENGINE).toMatch(/if \(vatInclusive && vatAmount > 0 && standardRatedCode\)/);
+  });
+});
+
+describe("§6 — sales-side JE carries the client + agent + season dimensions", () => {
+  it("every JE line stamped with clientId (the sub-agent's linked client = العميل)", () => {
+    // Operator directive: «أبعاد البيع — الوكيل العميل + الموسم».
+    // The sub-agent's clientId is the customer FK that lets the ledger
+    // be sliced by who owes us; previously only umrahAgentId + season
+    // were stamped.
+    expect(ENGINE).toMatch(/clientId: \(subAgent\.clientId as number \| null\) \?\? undefined/);
+  });
+
+  it("umrahDims now type-includes clientId so every line spread carries it", () => {
+    expect(ENGINE).toMatch(/clientId\?\s*:\s*number;/);
   });
 });
