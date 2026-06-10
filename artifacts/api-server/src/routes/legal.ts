@@ -520,7 +520,7 @@ router.post("/contracts/:id/renew", authorize({ feature: "legal.contracts", acti
     const setExtras: Record<string, any> = {
       endDate: newEndDate,
       renewedAt: { raw: "NOW()" },
-      renewalCount: { raw: `COALESCE("renewalCount", 0) + 1` },
+      renewalCount: (Number(current.renewalCount) || 0) + 1,
     };
     if (newValue !== undefined && newValue !== null) {
       setExtras.value = newValue;
