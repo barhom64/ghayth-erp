@@ -11,7 +11,6 @@ import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, SupplierSelect, BranchSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
@@ -46,7 +45,6 @@ export default function PurchaseOrdersCreate() {
 
   const INITIAL = { supplierId: "", notes: "", branchId: selectedBranchId ? String(selectedBranchId) : "", companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "", costCenter: "", expectedDelivery: "", date: todayLocal() };
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [items, setItems] = useState([{
     productId: "", quantity: "1", unitPrice: "",
     lineTreatment: "inventory" as string,
@@ -271,7 +269,6 @@ export default function PurchaseOrdersCreate() {
         />
       )}
 
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex items-center justify-between gap-3 pt-6">
         <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
           <input
