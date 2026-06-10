@@ -206,8 +206,9 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير فواتير العملاء والوكلاء",
     description: "فواتير البيع + المدفوع + الرصيد + التقادم.",
     category: "finance",
-    status: "partial",
-    route: "/umrah/invoices",
+    status: "available",
+    route: "/umrah/reports/sales-invoices-summary",
+    apiPath: "/umrah/reports/sales-invoices-summary",
   },
   // ── Commission ─────────────────────────────────────────────────────────
   {
