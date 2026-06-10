@@ -82,6 +82,14 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "intelligence.ts",
   "mailboxes.ts",
   "marketing.ts",
+  // meInsights.ts: IGOC-006 — /me/proactive-insights surface. Aggregates
+  // 9 categories inside one Promise.all, each query scoped on the user's
+  // active context (scope.companyId / scope.activeAssignmentId /
+  // scope.employeeId). The endpoint is point-lookup-shaped (LIMIT 5 per
+  // category) — buildScopedWhere is for list cascades with branch +
+  // department filtering, which this surface intentionally doesn't do
+  // because the role gate (ifRole) already narrows visibility.
+  "meInsights.ts",
   "moduleDashboards.ts",
   "mySpace.ts",
   "notification-engine.ts",
@@ -230,9 +238,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 114,
+      total: 115,
       helperUsers: 36,
-      manualOnly: 75,
+      manualOnly: 76,
     });
   });
 });
