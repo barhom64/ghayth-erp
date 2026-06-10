@@ -64,6 +64,7 @@ const Expenses = lazy(() => import("@/pages/finance/expenses"));
 const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
 const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
+const ExpenseMixAnalyzer = lazy(() => import("@/pages/finance/expense-mix-analyzer"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 // Duplicate multi-line form removed — the unified expenses-create
 // page now handles multi-line via "حفظ وإضافة آخر" button.
@@ -271,6 +272,7 @@ export const financeRoutes = [
   { path: "/finance/expenses", component: Expenses },
   { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
+  { path: "/finance/expense-mix", component: ExpenseMixAnalyzer },
   { path: "/finance/expenses/create", component: ExpensesCreate },
   // Legacy multi-line route now redirects to the unified expenses-create
   // form, which supports multi-line via the "حفظ وإضافة آخر" button.
