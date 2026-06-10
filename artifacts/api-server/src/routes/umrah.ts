@@ -3543,7 +3543,7 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
       ["umrahServicesProductId", b.umrahServicesProductId],
       ["umrahTransportProductId", b.umrahTransportProductId],
     ];
-    const auditAfter: Record<string, number | null> = {};
+    const auditAfter: Record<string, number | string | boolean | null> = {};
     for (const [field, value] of fields) {
       if (value === undefined) continue;
       params.push(value);
