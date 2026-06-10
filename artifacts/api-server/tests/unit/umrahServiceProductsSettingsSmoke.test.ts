@@ -105,8 +105,12 @@ describe("PATCH /umrah/settings — validates + dynamic SET clause", () => {
   it("audit log captures only the fields the operator actually changed", () => {
     // Audit logs are evidence. Logging unchanged values would muddy
     // the trail and could mislead a compliance reviewer (looks like
-    // every setting was touched when only one was).
-    expect(ROUTE).toMatch(/auditAfter: Record<string, number \| null> = \{\}/);
+    // every setting was touched when only one was). §8 of #1870
+    // widened the type to accept string|boolean for the new
+    // umrahVatMode + commissionViaHr knobs alongside the existing
+    // number|null fields — the captures-only-what-changed invariant
+    // stays exactly the same.
+    expect(ROUTE).toMatch(/auditAfter: Record<string, number \| string \| boolean \| null> = \{\}/);
     expect(ROUTE).toMatch(/auditAfter\[field\] = value/);
   });
 
