@@ -15,7 +15,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { hashPassword } from "../lib/auth.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2, currentDateInTz } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { sendMessage } from "../lib/messageSender.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -1530,7 +1530,7 @@ router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), asyn
     const scope = req.scope!;
     const { status, search, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
@@ -2174,7 +2174,7 @@ router.get("/maintenance", authorize({ feature: "fleet.maintenance", action: "li
     const scope = req.scope!;
     const { vehicleId, search, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
@@ -2752,7 +2752,7 @@ router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), 
     const scope = req.scope!;
     const { vehicleId, search, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'f."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
@@ -2922,7 +2922,7 @@ router.get("/insurance", authorize({ feature: "fleet.vehicles", action: "list" }
     const scope = req.scope!;
     const { vehicleId } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND i."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
@@ -4426,15 +4426,8 @@ router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.vehicles
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(rentalReturnSchema.safeParse(req.body));
-    const [c] = await rawQuery<{
-      id: number; status: string; handoverAt: string | null;
-      ref: string | null; clientId: number; vehicleId: number;
-      driverId: number | null; startDate: string;
-      totalAmount: string | null; notes: string | null;
-      branchId: number | null;
-    }>(
-      `SELECT id, status, "handoverAt", ref, "clientId", "vehicleId",
-              "driverId", "startDate", "totalAmount", notes, "branchId"
+    const [c] = await rawQuery<{ id: number; status: string; handoverAt: string | null }>(
+      `SELECT id, status, "handoverAt"
          FROM fleet_rental_contracts
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId],
@@ -4475,25 +4468,7 @@ router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.vehicles
       entity: "fleet_rental_contracts", entityId: id,
       details: JSON.stringify({ overageAmount: b.overageAmount ?? 0 }),
     }).catch((e) => logger.error(e, "rental return event failed"));
-    // #1812 — الإيراد عند الإغلاق → Accounting Candidate. Hands the
-    // closed rental to the accountant queue (transport_billing_candidates)
-    // with quantity = rental days so revenue is recognised over the
-    // duration. NO journal entry here — the accountant materializes from
-    // the finance side. Soft-fail: a candidate hiccup must not roll back
-    // the operational close (the insert is idempotent and re-runnable).
-    const candidate = await fleetEngine.createRentalBillingCandidate(
-      { companyId: scope.companyId, branchId: c.branchId ?? scope.branchId ?? 0, createdBy: scope.userId },
-      {
-        id: c.id, ref: c.ref, clientId: c.clientId, vehicleId: c.vehicleId,
-        driverId: c.driverId,
-        startDate: c.startDate,
-        actualEndDate: b.actualEndDate ?? currentDateInTz(),
-        totalAmount: c.totalAmount != null ? Number(c.totalAmount) : null,
-        overageAmount: b.overageAmount ?? 0,
-        notes: c.notes,
-      },
-    ).catch((e) => { logger.error(e, "rental billing candidate failed"); return null; });
-    res.json({ ok: true, billingCandidateId: candidate?.id ?? null });
+    res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "rental return error"); }
 });
 
