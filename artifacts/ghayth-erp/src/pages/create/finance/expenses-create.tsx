@@ -474,6 +474,14 @@ export default function ExpensesCreate() {
                 targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
                 itemType: form.expenseType || undefined,
               }}
+              // #1945 (owner review #3) — the scenario's suggested account becomes
+              // the real DEFAULT at save: pre-fill the (editable) charge account
+              // when the operator hasn't chosen one. Override stays one edit away.
+              onResult={(r) => {
+                if (r.suggestedAccountCode && !form.accountCode) {
+                  setForm((f) => (f.accountCode ? f : { ...f, accountCode: r.suggestedAccountCode! }));
+                }
+              }}
             />
           </div>
         )}

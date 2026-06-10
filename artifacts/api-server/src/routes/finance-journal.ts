@@ -463,11 +463,18 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
     // the specialized posting account derived from the target + item kind so
     // the operator sees where it will land (and whether it capitalises) before
     // saving. Read-only hint; the actual JE still uses the chosen account.
+    // #1945 (owner review #3) — expose the resolved suggested account as a
+    // STRUCTURED field (not only the text hint) so the form can pre-fill it as
+    // the real default at save instead of leaving the operator to pick blind.
+    let suggestedAccountCode: string | null = null;
+    let suggestedCapitalize = false;
     if (targetType && targetType !== "none") {
       const { deriveSpecializedAccount } = await import("../lib/financeSpecializedAccount.js");
       const spec = deriveSpecializedAccount({ targetType, itemType });
       const { financialEngine } = await import("../lib/engines/index.js");
       const resolvedCode = await financialEngine.resolveAccountCode(scope.companyId, spec.purpose, "debit", spec.defaultCode);
+      suggestedAccountCode = resolvedCode;
+      suggestedCapitalize = spec.capitalize;
       items.push({
         category: "محاسبي",
         label: spec.capitalize ? "حساب الرسملة المقترح" : "حساب المصروف المقترح",
@@ -559,6 +566,8 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
       employeeId: 0,
       employeeName: "",
       items,
+      suggestedAccountCode,
+      suggestedCapitalize,
       summary: hasDanger
         ? "مصروف يتجاوز الميزانية — مطلوب اعتماد إضافي"
         : hasWarning
