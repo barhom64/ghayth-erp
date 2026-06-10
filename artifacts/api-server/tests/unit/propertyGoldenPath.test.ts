@@ -54,13 +54,15 @@ describe("Property unit state machine", () => {
     expect(PROP_ROUTE).toContain('"maintenance"');
   });
 
-  it("defines UNIT_TRANSITIONS with all states", () => {
+  it("derives UNIT_TRANSITIONS from lifecycleEngine's single-source machine (P0-4)", () => {
+    // The transition map used to be a private literal here; it now
+    // derives from STATE_MACHINES so the engine and the route can't
+    // diverge. The full state-set assertions live in
+    // propertyUnitLifecycleSingleSource.test.ts against the engine map.
     expect(PROP_ROUTE).toContain("UNIT_TRANSITIONS");
-    const idx = PROP_ROUTE.indexOf("UNIT_TRANSITIONS");
-    const block = PROP_ROUTE.slice(idx, idx + 500);
-    expect(block).toContain("available:");
-    expect(block).toContain("rented:");
-    expect(block).toContain("out_of_service:");
+    expect(PROP_ROUTE).toContain(
+      `STATE_MACHINES.find((sm) => sm.entity === "property_units")`,
+    );
   });
 
   it("validates unit status transitions", () => {
