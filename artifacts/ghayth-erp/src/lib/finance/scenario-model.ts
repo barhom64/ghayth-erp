@@ -426,3 +426,51 @@ export function deriveRelatedEntity(
       return { type: "", id: "" };
   }
 }
+
+// ── #1945 item 5 — direction-aware voucher (صرف=مصروف / قبض=إيراد) ──────
+// Which chart-of-accounts TYPES the voucher's counter account may be, per
+// voucher operationType. Mirrors the backend enforcement map
+// (api-server/src/lib/financeOperationContext.ts VOUCHER_OPERATION_COUNTER_TYPES)
+// — the backend rejects with 422; this map drives the form hint so the
+// operator picks right the first time. Unknown operationType falls back to
+// the direction invariant: قبض لا يقيَّد على مصروف، صرف لا يقيَّد على إيراد.
+export type AccountTypeKey = "asset" | "liability" | "equity" | "revenue" | "expense";
+
+export const ACCOUNT_TYPE_LABELS_AR: Record<AccountTypeKey, string> = {
+  asset: "أصول/ذمم",
+  liability: "التزامات",
+  equity: "حقوق ملكية",
+  revenue: "إيراد",
+  expense: "مصروف",
+};
+
+export const VOUCHER_COUNTER_ACCOUNT_TYPES: Record<string, AccountTypeKey[]> = {
+  // receipt direction (قبض)
+  receipt: ["revenue"],
+  rent: ["revenue"],
+  invoice_payment: ["asset"],
+  deposit: ["liability"],
+  refund: ["expense", "revenue"],
+  // payment direction (صرف)
+  payment: ["expense"],
+  vendor_invoice: ["liability", "expense"],
+  salary: ["expense"],
+  advance: ["asset"],
+  legal_fee: ["expense"],
+  purchase: ["expense", "asset"],
+  custody: ["asset"],
+  insurance: ["expense", "asset"],
+  maintenance: ["expense"],
+};
+
+/** Human hint for the voucher form: which account types the chosen
+ *  operation expects for its counter account. */
+export function voucherCounterAccountHint(operationType: string, direction: "receipt" | "payment"): string {
+  const allowed = VOUCHER_COUNTER_ACCOUNT_TYPES[operationType];
+  if (allowed) {
+    return `هذه العملية تتوقع حساب ${allowed.map((t) => ACCOUNT_TYPE_LABELS_AR[t]).join(" أو ")}.`;
+  }
+  return direction === "receipt"
+    ? "سند القبض لا يُقيَّد على حساب مصروف."
+    : "سند الصرف لا يُقيَّد على حساب إيراد.";
+}

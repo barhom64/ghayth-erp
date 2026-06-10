@@ -1,10 +1,14 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { FolderKanban, ListTodo, BarChart2, ShieldAlert } from "lucide-react";
+import { FolderKanban, BarChart2, ShieldAlert } from "lucide-react";
 
+// NOTE: project tasks (project_tasks) are managed inside the project detail page,
+// not as a top-level tab. The old "/projects/tasks" tab pointed at the GENERAL
+// operations Tasks page (the `tasks` table), which mislabelled operations work as
+// project tasks. Operations tasks live at /tasks; per-project tasks live in the
+// project detail. See docs/PROJECTS_BLUEPRINT.md §4 (task-ownership contract).
 const TABS = [
   { href: "/projects", label: "المشاريع", icon: FolderKanban, match: ["/projects"], exact: true },
-  { href: "/projects/tasks", label: "المهام", icon: ListTodo, match: ["/projects/tasks", "/tasks"] },
   { href: "/projects/gantt", label: "غانت", icon: BarChart2, match: ["/projects/gantt"] },
   { href: "/projects/risks", label: "المخاطر", icon: ShieldAlert, match: ["/projects/risks"] },
 ];
