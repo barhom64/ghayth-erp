@@ -76,8 +76,15 @@ describe.each(REFACTORED_FORMS)("HR-Wave-1/B Group 1 — $file adopts HrCreateSc
     expect(src).toMatch(/onSubmit=\{handleSubmit\}/);
   });
 
-  it("renders AssignmentReadOnlyBadge in the assignmentSelectorSlot", () => {
-    expect(src).toMatch(/assignmentSelectorSlot=\{<AssignmentReadOnlyBadge employee=\{(?:selectedEmp|selectedEmployee)\} \/>\}/);
+  it("passes selectedEmployee so the scaffold's DefaultAssignmentBadge renders (no manual slot)", () => {
+    // Wave-1/B group 2 moved the badge INTO the scaffold. Forms now
+    // pass only the employee row; the scaffold renders the auto-bind
+    // badge by default. A form that re-introduces a local badge copy
+    // (or a manual assignmentSelectorSlot for single-assignment use)
+    // is regressing to the duplicated pattern.
+    expect(src).toMatch(/selectedEmployee=\{(?:selectedEmp|selectedEmployee)\}/);
+    expect(src).not.toMatch(/assignmentSelectorSlot=/);
+    expect(src).not.toMatch(/function AssignmentReadOnlyBadge/);
   });
 
   if (sensitivePerm) {
