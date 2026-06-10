@@ -204,11 +204,12 @@ export default function UmrahExemptPilgrims() {
     setSelectedIds(next);
   };
 
+  const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
 
-  const rows = data?.data ?? [];
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
 
@@ -446,7 +447,7 @@ export default function UmrahExemptPilgrims() {
               لا يوجد معتمرون مستثنون حالياً ضمن هذا الفلتر.
             </div>
           ) : (
-            <DataTable<ExemptRow>
+            <DataTable
               onSortedDataChange={setPrintRows}
         data={rows}
               columns={cols}
