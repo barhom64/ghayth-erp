@@ -788,6 +788,7 @@ function ThreadView({ channel, address, onBack, onSent }: {
         {messages.length === 0 && !isLoading && (
           <p className="text-xs text-muted-foreground text-center py-8">لا توجد رسائل في هذه المحادثة بعد.</p>
         )}
+        <ThreadNotes channel={channel} address={address} />
       </CardContent>
 
       <div className="border-t p-3 shrink-0">
@@ -827,6 +828,91 @@ function ThreadView({ channel, address, onBack, onSent }: {
         <p className="text-[10px] text-muted-foreground mt-1">Ctrl+Enter للإرسال السريع</p>
       </div>
     </Card>
+  );
+}
+
+// ─────────────────────── Thread internal notes ─────────────────────────
+
+interface NoteRow {
+  id: number;
+  body: string;
+  createdAt: string;
+  authorId: number;
+  authorName: string | null;
+}
+
+function ThreadNotes({ channel, address }: { channel: Channel; address: string }) {
+  const { data, refetch } = useApiQuery<{ data: NoteRow[] }>(
+    ["thread-notes", channel, address],
+    `/inbox/threads/${channel}/${encodeURIComponent(address)}/notes`,
+  );
+  const notes = data?.data ?? [];
+  const [text, setText] = useState("");
+
+  const create = useMutation({
+    mutationFn: () =>
+      apiFetch(`/inbox/threads/${channel}/${encodeURIComponent(address)}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ body: text.trim() }),
+      }),
+    onSuccess: () => { setText(""); void refetch(); },
+    onError: (e: Error) => toast({ title: "تعذّر إضافة الملاحظة", description: e.message, variant: "destructive" }),
+  });
+
+  const del = useMutation({
+    mutationFn: (id: number) => apiFetch(`/inbox/notes/${id}`, { method: "DELETE" }),
+    onSuccess: () => { toast({ title: "حُذفت الملاحظة" }); void refetch(); },
+    onError: (e: Error) => toast({ title: "تعذّر الحذف", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="border-t border-dashed border-status-warning-surface pt-3 mt-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Sparkles className="w-3 h-3 text-status-warning-foreground" />
+        <span className="text-xs font-semibold text-status-warning-foreground">ملاحظات داخلية</span>
+        <Badge variant="outline" className="text-[10px]">لا تُرسَل للعميل</Badge>
+      </div>
+      <div className="space-y-2 mb-2">
+        {notes.map((n) => (
+          <div key={n.id} className="bg-status-warning-surface/30 rounded p-2 text-xs flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] text-muted-foreground mb-0.5">
+                {n.authorName ?? `#${n.authorId}`} • {formatDateAr(n.createdAt)}
+              </div>
+              <p className="whitespace-pre-wrap break-words">{n.body}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => del.mutate(n.id)}
+              className="p-1 hover:bg-status-error-surface rounded shrink-0"
+              title="حذف الملاحظة"
+            >
+              <Trash2 className="w-3 h-3 text-muted-foreground" />
+            </button>
+          </div>
+        ))}
+        {notes.length === 0 && (
+          <p className="text-[10px] text-muted-foreground italic">لا توجد ملاحظات داخلية بعد.</p>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="ملاحظة للفريق فقط (لن تُرسَل للعميل)..."
+          rows={2}
+          className="flex-1 text-xs"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!text.trim() || create.isPending}
+          onClick={() => create.mutate()}
+        >
+          {create.isPending ? "..." : "أضف ملاحظة"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
