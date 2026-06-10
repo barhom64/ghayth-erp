@@ -1105,4 +1105,105 @@ router.get("/folder-counts", authorize({ feature: "communications", action: "lis
   }
 });
 
+// ─────────────────────── Thread internal notes ────────────────────────────
+
+/**
+ * GET /inbox/threads/:channel/:address/notes — list internal-only
+ * notes attached to a conversation. Notes are visible only to the
+ * employee team; they never leave the system (no DLP, no provider).
+ *
+ * Returned ascending by createdAt so the frontend renders a
+ * chronologically-readable thread of context.
+ */
+router.get("/threads/:channel/:address/notes", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const channel = String(req.params.channel);
+    const address = String(req.params.address);
+    if (!["email", "whatsapp", "sms", "pbx"].includes(channel)) {
+      throw new ValidationError("قناة غير مدعومة");
+    }
+    const rows = await rawQuery(
+      `SELECT n.id, n.body, n."createdAt",
+              n."authorUserId" AS "authorId",
+              COALESCE(e.name, u.email) AS "authorName"
+         FROM thread_internal_notes n
+         JOIN users u ON u.id = n."authorUserId"
+         LEFT JOIN employees e ON e.id = u."employeeId"
+        WHERE n."companyId" = $1
+          AND n.channel = $2
+          AND n."peerAddress" = $3
+          AND n."deletedAt" IS NULL
+        ORDER BY n."createdAt" ASC
+        LIMIT 200`,
+      [scope.companyId, channel, address],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/threads/notes/list");
+  }
+});
+
+const noteCreateSchema = z.object({
+  body: z.string().min(1, "نص الملاحظة مطلوب").max(5000),
+});
+
+/**
+ * POST /inbox/threads/:channel/:address/notes — add an internal note.
+ * Body is trimmed but otherwise stored verbatim (no DLP scan because
+ * the note never leaves the building). Audit-logged so a deleted note
+ * still has a trail.
+ */
+router.post("/threads/:channel/:address/notes", authorize({ feature: "communications", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const channel = String(req.params.channel);
+    const address = String(req.params.address);
+    if (!["email", "whatsapp", "sms", "pbx"].includes(channel)) {
+      throw new ValidationError("قناة غير مدعومة");
+    }
+    const body = zodParse(noteCreateSchema.safeParse(req.body));
+    const { insertId } = await rawExecute(
+      `INSERT INTO thread_internal_notes
+         ("companyId", channel, "peerAddress", body, "authorUserId")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [scope.companyId, channel, address, body.body.trim(), scope.userId],
+    );
+    assertInsert(insertId, "thread_internal_notes");
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "thread_internal_notes", entityId: insertId,
+      after: { channel, peerAddress: address, body: body.body.trim().slice(0, 200) },
+    }).catch((e) => logger.warn(e, "[audit] thread.note.create"));
+    res.status(201).json({ id: insertId });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/threads/notes/create");
+  }
+});
+
+/**
+ * DELETE /inbox/notes/:id — soft-delete a note. Authors can delete
+ * their own notes; anyone with communications.delete on the company
+ * can delete any note (matches the existing folder/star ACL grain).
+ */
+router.delete("/notes/:id", authorize({ feature: "communications", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(
+      `UPDATE thread_internal_notes SET "deletedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!affectedRows) throw new NotFoundError("الملاحظة غير موجودة");
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "thread_internal_notes", entityId: id,
+    }).catch((e) => logger.warn(e, "[audit] thread.note.delete"));
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/notes/delete");
+  }
+});
+
 export default router;
