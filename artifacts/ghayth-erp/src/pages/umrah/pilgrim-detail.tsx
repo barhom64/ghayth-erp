@@ -501,7 +501,7 @@ export default function PilgrimDetail() {
       />
     )}
     {id && data && (
-      <EntityEditDialog<PilgrimEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل بيانات المعتمر"
@@ -539,7 +539,7 @@ export default function PilgrimDetail() {
       </EntityEditDialog>
     )}
     {id && data && (
-      <EntityEditDialog<PilgrimReassignForm>
+      <EntityEditDialog
         open={reassignOpen}
         onClose={() => setReassignOpen(false)}
         title="إعادة إسناد المعتمر"
