@@ -34,6 +34,10 @@ const router = Router();
 // ─────────────────────────────────────────────────────────────────────────────
 const MOVEMENT_TYPES = ["in", "out", "return", "transfer_in", "transfer_out", "adjustment_in", "adjustment_out"] as const;
 
+// Item types that never carry a stock balance — movements against them are
+// rejected. Stockable = product / consumable (NULL defaults to 'product').
+const NON_STOCK_ITEM_TYPES = new Set(["service", "digital", "asset"]);
+
 const createProductSchema = z.object({
   name: z.string().min(1, "اسم المنتج مطلوب"),
   sku: z.string().min(1, "رمز المنتج (SKU) مطلوب"),
@@ -652,6 +656,17 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       );
       const product = prodRes.rows[0];
       if (!product) throw new NotFoundError("المنتج غير موجود");
+
+      // Non-stock item types (service / digital / fixed asset) never carry a
+      // stock balance, so a warehouse movement against them is meaningless.
+      // Stockable = product / consumable (and the legacy NULL default which
+      // the DB treats as 'product'). Reject early with a clear Arabic reason.
+      if (NON_STOCK_ITEM_TYPES.has(String(product.itemType ?? "product"))) {
+        throw new ValidationError(
+          "هذا الصنف غير مخزني (خدمة/رقمي/أصل) ولا تُسجَّل له حركة مخزون",
+          { field: "productId", fix: "اختر صنفاً مخزنياً (منتج أو مستهلك)" }
+        );
+      }
 
       // Prevent overdraw on any stock-lowering movement
       if (isOutbound && Number(product.currentStock) < qtyNum) {
