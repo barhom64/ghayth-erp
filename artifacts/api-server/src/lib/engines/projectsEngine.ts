@@ -106,6 +106,11 @@ class ProjectsEngineImpl implements DomainEngine {
       dueDate: string;
       sourceType: string;
       sourceId: number;
+      // Optional line-item billing (BOQ): the invoice handler creates one
+      // invoice_line per entry and stamps the source BOQ items with the new id.
+      projectId?: number;
+      lines?: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number }>;
+      boqItemIds?: number[];
     }
   ) {
     eventBus.emit("project.invoice.requested", {

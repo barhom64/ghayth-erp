@@ -148,6 +148,10 @@ run_step "check:finance-period-drift" node scripts/src/check-finance-period-drif
 # build. Route-level exemptions live in scripts/src/audit-stop-ship.mjs.
 run_step "audit:stop-ship"    node scripts/src/audit-stop-ship.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
+# Frontend component tests (jsdom + @testing-library/react). Real behavioural
+# verification for sensitive UI (e.g. ProductSelect snap-to-catalog) without a
+# live app — the gate the package requires for FE component work.
+run_step "test:fe"            pnpm -s --filter @workspace/ghayth-erp run test
 
 END=$(date +%s)
 echo
