@@ -69,6 +69,13 @@ interface AutoCreateOptions {
   ccType?: string;
   /** Optional actor id for traceability — written to autoCreatedBy. */
   actorUserId?: number | null;
+  /**
+   * Initial budget allocation (e.g. the project budget) — written to
+   * cost_centers.allocatedAmount so budget-variance reporting (allocated
+   * vs used) works from day one. Later budget changes go through
+   * syncEntityCostCenterAllocation.
+   */
+  allocatedAmount?: number | null;
 }
 
 export interface AutoCreatedCostCenter {
@@ -167,6 +174,7 @@ export async function createCostCenterForEntity(
         parentId,
         reason,
         options.actorUserId ?? null,
+        options.allocatedAmount != null && Number(options.allocatedAmount) > 0 ? Number(options.allocatedAmount) : 0,
       );
     });
     return row;
@@ -187,6 +195,7 @@ async function upsertCostCenter(
   parentId: number | null,
   reason: string,
   actorUserId: number | null,
+  allocatedAmount = 0,
 ): Promise<AutoCreatedCostCenter | null> {
   // Two-stage idempotency:
   // 1. Look up by (entityType, entityId) — if a CC already represents
@@ -220,12 +229,12 @@ async function upsertCostCenter(
        "companyId", code, name, type, "parentId",
        "relatedEntityType", "relatedEntityId",
        "linkedEntityType",  "linkedEntityId",
-       status, "isActive", "autoCreatedBy", "autoCreatedReason"
+       status, "isActive", "autoCreatedBy", "autoCreatedReason", "allocatedAmount"
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $6, $7, 'active', true, $8, $9)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $6, $7, 'active', true, $8, $9, $10)
      ON CONFLICT ("companyId", code) DO NOTHING
      RETURNING id, code, name, "parentId"`,
-    [companyId, code, entityName, ccType, parentId, entityType, entityId, actorUserId, reason],
+    [companyId, code, entityName, ccType, parentId, entityType, entityId, actorUserId, reason, allocatedAmount],
   );
   if (inserted[0]) {
     return {
@@ -265,4 +274,31 @@ async function upsertCostCenter(
     entityType,
     entityId,
   };
+}
+
+/**
+ * Keep the linked cost centre's allocatedAmount in step with the entity's
+ * budget (e.g. when a project's budget is edited). No-op when the entity has
+ * no auto-created cost centre yet. Variance reporting reads
+ * allocatedAmount − usedAmount, so a stale allocation hides overruns.
+ */
+export async function syncEntityCostCenterAllocation(
+  companyId: number,
+  entityType: CostCenterEntityType,
+  entityId: number,
+  allocatedAmount: number,
+): Promise<void> {
+  try {
+    await rawQuery(
+      `UPDATE cost_centers
+          SET "allocatedAmount" = $1, "updatedAt" = NOW()
+        WHERE "companyId" = $2
+          AND "linkedEntityType" = $3
+          AND "linkedEntityId" = $4
+          AND ("deletedAt" IS NULL)`,
+      [Number(allocatedAmount) || 0, companyId, entityType, entityId],
+    );
+  } catch (err) {
+    logger.error(err, `[costCenterAutoCreate] allocation sync failed for ${entityType} #${entityId}`);
+  }
 }

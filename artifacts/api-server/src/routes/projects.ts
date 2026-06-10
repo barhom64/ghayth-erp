@@ -27,7 +27,7 @@ import {
   computeVat,
   getCompanyVatRate,
 } from "../lib/businessHelpers.js";
-import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
+import { createCostCenterForEntity, syncEntityCostCenterAllocation } from "../lib/costCenterAutoCreate.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -532,6 +532,9 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
         parentEntityType: scope.branchId ? "branch" : null,
         parentEntityId: scope.branchId ?? null,
         actorUserId: scope.userId,
+        // Budget → allocatedAmount so variance (allocated vs used) reads
+        // correctly from day one; budget edits re-sync via PATCH below.
+        allocatedAmount: b.budget != null ? Number(b.budget) : null,
       },
     ).catch((e) => logger.error(e, "project cost-centre auto-create failed"));
 
@@ -735,6 +738,13 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
     const { affectedRows } = await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (!affectedRows) throw new NotFoundError("المشروع غير موجود");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+
+    // Budget edits re-sync the project cost centre's allocatedAmount so
+    // variance reporting (allocated vs used) never reads a stale allocation.
+    if ("budget" in after) {
+      syncEntityCostCenterAllocation(scope.companyId, "project", id, Number(after.budget) || 0)
+        .catch((e) => logger.error(e, "projects background task failed"));
+    }
 
     createAuditLog({
       companyId: scope.companyId,
