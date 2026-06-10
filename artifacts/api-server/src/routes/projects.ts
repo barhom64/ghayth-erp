@@ -1965,6 +1965,71 @@ router.delete("/boq/:boqId", authorize({ feature: "projects.list", action: "dele
   } catch (err) { handleRouteError(err, res, "Delete BOQ item error:"); }
 });
 
+// Bill the project's pending BOQ items: sum quantity x unitPrice into one
+// invoice (each item a line) via the existing project.invoice.requested event —
+// projects never writes invoices directly (domain boundary). Items are claimed
+// atomically (pending → billed) to prevent double-billing; the invoice handler
+// then stamps the resulting invoiceId onto them.
+router.post("/:id/boq/bill", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
+    if (!project.clientId) {
+      throw new ValidationError("لا يمكن فوترة مشروع بلا عميل", { field: "clientId", fix: "اربط المشروع بعميل أولاً" });
+    }
+    const phaseId = req.body?.phaseId != null ? Number(req.body.phaseId) : null;
+    let claimed: Record<string, unknown>[] = [];
+    await withTransaction(async (client) => {
+      const baseWhere = `"projectId"=$1 AND "companyId"=$2 AND status='pending' AND "deletedAt" IS NULL`;
+      const where = phaseId != null ? `${baseWhere} AND "phaseId"=$3` : baseWhere;
+      const params = phaseId != null ? [projectId, scope.companyId, phaseId] : [projectId, scope.companyId];
+      const sel = await client.query(`SELECT * FROM project_boq_items WHERE ${where} ORDER BY "sortOrder", id FOR UPDATE`, params);
+      claimed = sel.rows;
+      if (claimed.length > 0) {
+        await client.query(`UPDATE project_boq_items SET status='billed', "updatedAt"=NOW() WHERE id = ANY($1::int[])`, [claimed.map((r) => r.id)]);
+      }
+    });
+    if (claimed.length === 0) {
+      throw new ValidationError("لا توجد بنود BOQ معلّقة للفوترة", { fix: "أضف بنوداً أو اختر مرحلة بها بنود معلّقة" });
+    }
+    const subtotal = Math.round(claimed.reduce((s, r) => s + Number(r.lineTotal || 0), 0) * 100) / 100;
+    const vatRate = await getCompanyVatRate(scope.companyId);
+    const vatAmount = computeVat(subtotal, vatRate);
+    // ref uniqueness via the first claimed item id (billed once) — no Date.now()
+    // in a refish string (numbering-center lint guard #1141).
+    const ref = `INV-BOQ-${String(currentYear()).slice(2)}${currentMonthPadded()}-${projectId}-${claimed[0].id}`;
+    const lines = claimed.map((r) => ({
+      description: String(r.description ?? ""),
+      quantity: Number(r.quantity ?? 1),
+      unitPrice: Number(r.unitPrice ?? 0),
+      lineTotal: Number(r.lineTotal ?? 0),
+    }));
+    const { projectsEngine } = await import("../lib/engines/index.js");
+    projectsEngine.requestInvoiceCreation(
+      { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+      {
+        clientId: project.clientId as number,
+        ref,
+        description: `فاتورة بنود (BOQ) — مشروع: ${project.name}`,
+        subtotal,
+        vatAmount,
+        total: subtotal + vatAmount,
+        dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
+        sourceType: "project_boq",
+        sourceId: projectId,
+        projectId,
+        lines,
+        boqItemIds: claimed.map((r) => r.id as number),
+      }
+    );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.boq.billed", entity: "projects", entityId: projectId, details: JSON.stringify({ ref, itemCount: claimed.length, subtotal }) }).catch((e) => logger.error(e, "projects background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bill", entity: "project_boq", entityId: projectId, after: { ref, itemCount: claimed.length, subtotal, vatAmount } }).catch((e) => logger.error(e, "projects background task failed"));
+    res.status(201).json({ requested: true, ref, itemCount: claimed.length, subtotal, vatAmount, total: subtotal + vatAmount });
+  } catch (err) { handleRouteError(err, res, "Bill BOQ error:"); }
+});
+
 router.post("/:id/costs", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createCostSchema.safeParse(req.body));
