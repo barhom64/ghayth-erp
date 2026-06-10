@@ -28,6 +28,7 @@ import { FinanceOperationContextPanel } from "@/components/shared/finance-operat
 import { DOCUMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, POSTING_STATUS_LABELS } from "@/lib/finance/status-model";
 import { deriveRelatedEntity } from "@/lib/finance/scenario-model";
 import { useAppContext } from "@/contexts/app-context";
+import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
@@ -121,6 +122,8 @@ export default function ExpensesCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
+  // Wave 0.1 — the entering user's active context must be a single branch.
+  const activeCtx = useActiveFinanceContext();
   const createMut = useApiMutation("/finance/expenses", "POST", [["expenses"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { data: accountsData, isLoading: accountsLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
@@ -410,6 +413,7 @@ export default function ExpensesCreate() {
         </div>
       )}
       <div data-form>
+        <ActiveContextNotice ctx={activeCtx} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <FormFieldWrapper label="التاريخ" required>
             <DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
@@ -932,10 +936,10 @@ export default function ExpensesCreate() {
 
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/finance/expenses")}>إلغاء</Button>
-          <Button variant="secondary" onClick={() => handleSubmit({ addAnother: true })} disabled={createMut.isPending} rateLimitAware>
+          <Button variant="secondary" onClick={() => handleSubmit({ addAnother: true })} disabled={createMut.isPending || !activeCtx.ready} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ وإضافة آخر"}
           </Button>
-          <Button onClick={() => handleSubmit()} disabled={createMut.isPending} rateLimitAware>
+          <Button onClick={() => handleSubmit()} disabled={createMut.isPending || !activeCtx.ready} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ المصروف"}
           </Button>
         </div>
