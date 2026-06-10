@@ -24,7 +24,7 @@ const repoRoot = join(import.meta.dirname!, "../../../..");
 const readApi = (rel: string) => readFileSync(join(apiSrc, rel), "utf8");
 const readDoc = (rel: string) => readFileSync(join(repoRoot, rel), "utf8");
 
-const MIGRATION = readApi("migrations/284_transport_cargo_passenger_canon.sql");
+const MIGRATION = readApi("migrations/295_transport_cargo_passenger_canon.sql");
 const ROUTER    = readApi("routes/transport-bookings.ts");
 const PATTERNS  = readApi("routes/transport-route-patterns.ts");
 const INDEX     = readApi("routes/index.ts");
