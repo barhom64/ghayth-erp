@@ -163,6 +163,20 @@ const createBoqItemSchema = z.object({
 });
 const updateBoqItemSchema = createBoqItemSchema.partial();
 
+// Development unit (internal build-to-sell). Cost basis is computed live as the
+// unit's area share of the project's accumulated cost until it is sold.
+const createDevUnitSchema = z.object({
+  code: z.string().optional().nullable(),
+  name: z.string().min(1, "اسم الوحدة مطلوب"),
+  area: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+  salePrice: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+const updateDevUnitSchema = createDevUnitSchema.partial().extend({
+  // 'sold' is reachable only through the sell flow (Wave C.2), never a plain edit.
+  status: z.enum(["under_development", "for_sale", "cancelled"]).optional(),
+});
+
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2028,6 +2042,97 @@ router.post("/:id/boq/bill", authorize({ feature: "projects.list", action: "crea
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bill", entity: "project_boq", entityId: projectId, after: { ref, itemCount: claimed.length, subtotal, vatAmount } }).catch((e) => logger.error(e, "projects background task failed"));
     res.status(201).json({ requested: true, ref, itemCount: claimed.length, subtotal, vatAmount, total: subtotal + vatAmount });
   } catch (err) { handleRouteError(err, res, "Bill BOQ error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEVELOPMENT UNITS (internal build-to-sell) — Wave C.1 (#1594 projects pkg).
+// Cost basis is computed live as the unit's area share of the project's
+// accumulated cost (project.spentAmount) until the unit is sold (C.2 snapshots
+// it). Selling → invoice + COGS via finance is Wave C.2.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/:id/units", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
+    const b = zodParse(createDevUnitSchema.safeParse(req.body));
+    const area = b.area != null ? Number(b.area) : 0;
+    const salePrice = b.salePrice != null ? Number(b.salePrice) : null;
+    const ins = await rawExecute(
+      `INSERT INTO development_units ("companyId","branchId","projectId",code,name,area,"salePrice",notes,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [scope.companyId, scope.branchId ?? null, projectId, b.code ?? null, b.name, area, salePrice, b.notes ?? null, scope.userId ?? null]
+    );
+    const uid = assertInsert(ins.insertId, "development_units");
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.dev_unit.added", entity: "development_units", entityId: uid, details: JSON.stringify({ projectId, area, salePrice }) }).catch((e) => logger.error(e, "projects background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "development_units", entityId: uid, after: { projectId, name: b.name, area, salePrice } }).catch((e) => logger.error(e, "projects background task failed"));
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE id=$1 AND "companyId"=$2`, [uid, scope.companyId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create development unit error:"); }
+});
+
+router.get("/:id/units", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    const project = await assertProjectAccess(projectId, scope);
+    const units = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE "projectId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY id`, [projectId, scope.companyId]);
+    const spent = Number(project.spentAmount || 0);
+    const totalArea = units.filter((u) => u.status !== "cancelled").reduce((s: number, u) => s + Number(u.area || 0), 0);
+    const enriched = units.map((u) => {
+      const allocatedCost = u.status === "sold"
+        ? Number(u.costBasis || 0)
+        : totalArea > 0 ? Math.round(spent * (Number(u.area || 0) / totalArea) * 100) / 100 : 0;
+      const sale = u.salePrice != null ? Number(u.salePrice) : null;
+      return { ...u, allocatedCost, projectedProfit: sale != null ? Math.round((sale - allocatedCost) * 100) / 100 : null };
+    });
+    res.json({ units: enriched, projectSpent: spent, totalArea });
+  } catch (err) { handleRouteError(err, res, "List development units error:"); }
+});
+
+router.patch("/units/:uid", authorize({ feature: "projects.list", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const uid = parseId(req.params.uid, "uid");
+    const [unit] = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [uid, scope.companyId]);
+    if (!unit) throw new NotFoundError("الوحدة غير موجودة");
+    if (unit.status === "sold") throw new ConflictError("لا يمكن تعديل وحدة مباعة");
+    const project = await assertProjectAccess(unit.projectId as number, scope);
+    assertProjectMutable(project);
+    const b = zodParse(updateDevUnitSchema.safeParse(req.body));
+    const area = b.area !== undefined ? Number(b.area) : Number(unit.area);
+    const salePrice = b.salePrice !== undefined ? (b.salePrice != null ? Number(b.salePrice) : null) : (unit.salePrice != null ? Number(unit.salePrice) : null);
+    const [updated] = await rawQuery<Record<string, unknown>>(
+      `UPDATE development_units SET code=$1, name=$2, area=$3, "salePrice"=$4, status=$5, notes=$6, "updatedAt"=NOW()
+       WHERE id=$7 AND "companyId"=$8 RETURNING *`,
+      [
+        b.code !== undefined ? b.code : (unit.code as string | null),
+        b.name ?? (unit.name as string),
+        area, salePrice,
+        b.status ?? (unit.status as string),
+        b.notes !== undefined ? b.notes : (unit.notes as string | null),
+        uid, scope.companyId,
+      ]
+    );
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "development_units", entityId: uid, after: { area, salePrice, status: b.status ?? unit.status } }).catch((e) => logger.error(e, "projects background task failed"));
+    res.json(updated);
+  } catch (err) { handleRouteError(err, res, "Update development unit error:"); }
+});
+
+router.delete("/units/:uid", authorize({ feature: "projects.list", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const uid = parseId(req.params.uid, "uid");
+    const [unit] = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [uid, scope.companyId]);
+    if (!unit) throw new NotFoundError("الوحدة غير موجودة");
+    if (unit.status === "sold") throw new ConflictError("لا يمكن حذف وحدة مباعة");
+    const project = await assertProjectAccess(unit.projectId as number, scope);
+    assertProjectMutable(project);
+    await rawExecute(`UPDATE development_units SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [uid, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "development_units", entityId: uid }).catch((e) => logger.error(e, "projects background task failed"));
+    res.json({ message: "تم حذف الوحدة" });
+  } catch (err) { handleRouteError(err, res, "Delete development unit error:"); }
 });
 
 router.post("/:id/costs", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
