@@ -162,8 +162,9 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير الاستيراد والأخطاء",
     description: "تاريخ دفعات الاستيراد + الصفوف المرفوضة + التحذيرات.",
     category: "import",
-    status: "partial",
-    route: "/umrah/import",
+    status: "available",
+    route: "/umrah/reports/import-errors-summary",
+    apiPath: "/umrah/reports/import-errors-summary",
   },
   {
     id: "unlinked_rows",
@@ -189,8 +190,9 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير تكاليف العمرة",
     description: "توزيع التكاليف على الموسم/المجموعة/الوكيل/مركز التكلفة.",
     category: "finance",
-    status: "stub",
+    status: "available",
     route: "/umrah/reports/umrah-costs",
+    apiPath: "/umrah/reports/umrah-costs",
   },
   {
     id: "nusk_invoices_report",
@@ -205,8 +207,9 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير فواتير العملاء والوكلاء",
     description: "فواتير البيع + المدفوع + الرصيد + التقادم.",
     category: "finance",
-    status: "partial",
-    route: "/umrah/invoices",
+    status: "available",
+    route: "/umrah/reports/sales-invoices-summary",
+    apiPath: "/umrah/reports/sales-invoices-summary",
   },
   // ── Commission ─────────────────────────────────────────────────────────
   {
