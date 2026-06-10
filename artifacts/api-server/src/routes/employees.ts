@@ -139,6 +139,26 @@ const createEmployeeSchema = z.object({
   // Both are optional and silently skipped if no PBX / table is present.
   pbxExtensionId: z.coerce.number().int().positive().optional().nullable(),
   pbxExtensionNew: z.string().trim().max(20).optional().nullable(),
+  // PR-1 (#2077) — institutional binding fields. The wizard makes the
+  // first five mandatory in the UI; the schema accepts them as optional
+  // so legacy importers + the first bootstrap employee still work, and
+  // the route handler rejects when they're missing in a non-bootstrap
+  // company so the API contract is the second line of defence.
+  //   - positionId   → employee_assignments.positionId (the administrative
+  //     role: مدير قسم / نائب / مشرف). Distinct from jobTitle.
+  //   - categoryKey  → employee_assignments.categoryKey (workforce type:
+  //     worker / driver / manager …). Drives per-category attendance.
+  //   - teamId       → employee_team_memberships bridge row.
+  //   - projectId    → employee_project_assignments bridge row
+  //     (also carries costCenterId on the bridge).
+  //   - costCenterId → bound through the project_assignments bridge.
+  //   - committeeId  → optional employee_committee_memberships bridge.
+  positionId: z.coerce.number().int().positive().optional().nullable(),
+  categoryKey: z.string().trim().min(1).max(40).optional().nullable(),
+  teamId: z.coerce.number().int().positive().optional().nullable(),
+  projectId: z.coerce.number().int().positive().optional().nullable(),
+  costCenterId: z.coerce.number().int().positive().optional().nullable(),
+  committeeId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -349,6 +369,8 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       sponsorNumber, workPermitNumber, workPermitExpiry, iqamaStatus,
       bankName, bankAccount, iban, emergencyContact, emergencyPhone,
       sourceApplicationId,
+      // PR-1 institutional binding (#2077).
+      positionId, categoryKey, teamId, projectId, costCenterId, committeeId,
       // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     } = body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -520,6 +542,140 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
     }
 
+    // PR-1 (#2077) — institutional binding pre-checks. The wizard forces
+    // these in the UI; the API rejects them when missing in a non-empty
+    // company so a future caller (script, CSV import, integration) can't
+    // skip the institutional anchor that downstream HR engines depend
+    // on. Skipped for the very first employee in the company (bootstrap),
+    // where the catalog is necessarily empty.
+    const [{ count: activeEmpCount }] = await rawQuery<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM employee_assignments
+        WHERE "companyId" = $1 AND status = 'active'`,
+      [effectiveCompanyId]
+    );
+    const isBootstrapEmployee = Number(activeEmpCount ?? 0) === 0;
+
+    if (!isBootstrapEmployee) {
+      if (!positionId) {
+        throw new ValidationError("المنصب الإداري مطلوب", {
+          field: "positionId",
+          fix: "اختر منصب الموظف (مدير قسم/نائب/مشرف/…) من القائمة.",
+        });
+      }
+      if (!categoryKey) {
+        throw new ValidationError("فئة الموظف مطلوبة", {
+          field: "categoryKey",
+          fix: "اختر فئة القوى العاملة (موظف/سائق/مدير/…) لتطبيق سياسة الحضور المناسبة.",
+        });
+      }
+      if (!teamId) {
+        throw new ValidationError("الفريق مطلوب", {
+          field: "teamId",
+          fix: "اختر الفريق الذي ينضم إليه الموظف من الإعدادات → الفِرَق.",
+        });
+      }
+      if (!projectId) {
+        throw new ValidationError("المشروع مطلوب", {
+          field: "projectId",
+          fix: "اختر المشروع/المنتج التشغيلي الذي يساهم فيه الموظف.",
+        });
+      }
+      if (!costCenterId) {
+        throw new ValidationError("مركز التكلفة مطلوب", {
+          field: "costCenterId",
+          fix: "اختر مركز التكلفة الذي يُحاسب عليه راتب الموظف.",
+        });
+      }
+      if (!managerId) {
+        throw new ValidationError("المدير المباشر مطلوب", {
+          field: "managerId",
+          fix: "اختر مديراً مباشراً من قائمة الموظفين.",
+        });
+      }
+    }
+
+    if (positionId) {
+      const posRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM positions
+          WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "isActive" = TRUE
+          LIMIT 1`,
+        [Number(positionId), effectiveCompanyId]
+      );
+      if (posRows.length === 0) {
+        throw new ValidationError(`المنصب رقم ${positionId} غير موجود أو غير مفعّل`, {
+          field: "positionId",
+          fix: "اختر منصبًا من القائمة (المناصب المُعطَّلة لا تظهر).",
+        });
+      }
+    }
+
+    if (categoryKey) {
+      const catRows = await rawQuery<{ categoryKey: string }>(
+        `SELECT "categoryKey" FROM employee_categories
+          WHERE "categoryKey" = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "isActive" = TRUE
+          LIMIT 1`,
+        [String(categoryKey), effectiveCompanyId]
+      );
+      if (catRows.length === 0) {
+        throw new ValidationError(`فئة الموظف "${categoryKey}" غير موجودة`, {
+          field: "categoryKey",
+          fix: "اختر فئة من القائمة المعرَّفة (موظف، سائق، مدير، …).",
+        });
+      }
+    }
+
+    if (teamId) {
+      const teamRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM teams WHERE id = $1 AND "companyId" = $2 AND "isActive" = TRUE LIMIT 1`,
+        [Number(teamId), effectiveCompanyId]
+      );
+      if (teamRows.length === 0) {
+        throw new ValidationError(`الفريق رقم ${teamId} غير موجود`, {
+          field: "teamId",
+          fix: "اختر فريقًا تابعًا لشركتك من الإعدادات → الفِرَق.",
+        });
+      }
+    }
+
+    if (projectId) {
+      const projRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM projects WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        [Number(projectId), effectiveCompanyId]
+      );
+      if (projRows.length === 0) {
+        throw new ValidationError(`المشروع رقم ${projectId} غير موجود`, {
+          field: "projectId",
+          fix: "اختر مشروعًا تابعًا لشركتك من قائمة المشاريع.",
+        });
+      }
+    }
+
+    if (costCenterId) {
+      const ccRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM cost_centers WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        [Number(costCenterId), effectiveCompanyId]
+      );
+      if (ccRows.length === 0) {
+        throw new ValidationError(`مركز التكلفة رقم ${costCenterId} غير موجود`, {
+          field: "costCenterId",
+          fix: "اختر مركز تكلفة تابعًا لشركتك من المالية → مراكز التكلفة.",
+        });
+      }
+    }
+
+    if (committeeId) {
+      const comRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM committees WHERE id = $1 AND "companyId" = $2 AND "isActive" = TRUE LIMIT 1`,
+        [Number(committeeId), effectiveCompanyId]
+      );
+      if (comRows.length === 0) {
+        throw new ValidationError(`اللجنة رقم ${committeeId} غير موجودة`, {
+          field: "committeeId",
+          fix: "اختر لجنة مفعّلة تابعة لشركتك أو اترك الحقل فارغًا.",
+        });
+      }
+    }
+
     // Numbering center (Issue #1141) — employee code via central
     // authority (`hr.employee_code`). Issued OUTSIDE the transaction
     // so the numbering counter advances even if the employee insert
@@ -616,12 +772,45 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
 
       const assignRes = await client.query(
-        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status,"managerId")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,'active',$10)
+        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status,"managerId","positionId","categoryKey")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,'active',$10,$11,$12)
          RETURNING id`,
-        [empId, effectiveCompanyId, targetBranchId, resolvedDepartmentId, jobTitle, resolvedJobTitleId, role, Number(salary), effectiveHireDate, managerId ? Number(managerId) : null]
+        [empId, effectiveCompanyId, targetBranchId, resolvedDepartmentId, jobTitle, resolvedJobTitleId, role, Number(salary), effectiveHireDate, managerId ? Number(managerId) : null,
+         positionId ? Number(positionId) : null, categoryKey || null]
       );
       const assignmentId = assignRes.rows[0].id;
+
+      // ── PR-1 (#2077) Step 3b — institutional bridges (team/project/committee) ──
+      // These rows close the «الموظف ككيان تشغيلي مؤسسي» chain at create
+      // time so the engineer never has to remember a follow-up step:
+      //   - team_membership: which sub-unit inside the department.
+      //   - project_assignment: which operational project + cost-center.
+      //   - committee_membership: optional. Cross-department council.
+      // All three carry endDate=NULL so they auto-end when an admin
+      // closes them (the existing DELETE handlers set endDate=today).
+      if (teamId) {
+        await client.query(
+          `INSERT INTO employee_team_memberships ("assignmentId","teamId",role,"startDate")
+           VALUES ($1,$2,'member',$3)
+           ON CONFLICT ("assignmentId","teamId") DO NOTHING`,
+          [assignmentId, Number(teamId), effectiveHireDate]
+        );
+      }
+      if (projectId) {
+        await client.query(
+          `INSERT INTO employee_project_assignments ("assignmentId","projectId",role,"allocationPercent","startDate","costCenterId")
+           VALUES ($1,$2,'contributor',100,$3,$4)`,
+          [assignmentId, Number(projectId), effectiveHireDate, costCenterId ? Number(costCenterId) : null]
+        );
+      }
+      if (committeeId) {
+        await client.query(
+          `INSERT INTO employee_committee_memberships ("assignmentId","committeeId",role,"isVoting","startDate")
+           VALUES ($1,$2,'member',TRUE,$3)
+           ON CONFLICT ("assignmentId","committeeId") DO NOTHING`,
+          [assignmentId, Number(committeeId), effectiveHireDate]
+        );
+      }
 
       // ── Step 4: Initialize leave balances (10 types) ──
       const leaveTypesRes = await client.query(
@@ -987,7 +1176,18 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     await emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "employee.created", entity: "employees", entityId: empId,
-      details: JSON.stringify({ empNumber: finalEmpNumber, assignmentId, jobTitle, role, salary, onboardingTasks: 4, probationDays: Number(probationDays) }),
+      details: JSON.stringify({
+        empNumber: finalEmpNumber, assignmentId, jobTitle, role, salary,
+        onboardingTasks: 4, probationDays: Number(probationDays),
+        // PR-1 (#2077) — institutional binding in the event so audit
+        // dashboards can answer «who got bound to project X this month?»
+        positionId: positionId ? Number(positionId) : null,
+        categoryKey: categoryKey || null,
+        teamId: teamId ? Number(teamId) : null,
+        projectId: projectId ? Number(projectId) : null,
+        costCenterId: costCenterId ? Number(costCenterId) : null,
+        committeeId: committeeId ? Number(committeeId) : null,
+      }),
     });
 
     // ── Step 10b: Register expiry obligations (iqama/passport/work permit/visa) ──
@@ -1003,7 +1203,17 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employees", entityId: empId,
-      after: { name, empNumber: finalEmpNumber, jobTitle, role, salary, contractType, probationDays: Number(probationDays) },
+      after: {
+        name, empNumber: finalEmpNumber, jobTitle, role, salary,
+        contractType, probationDays: Number(probationDays),
+        positionId: positionId ? Number(positionId) : null,
+        categoryKey: categoryKey || null,
+        teamId: teamId ? Number(teamId) : null,
+        projectId: projectId ? Number(projectId) : null,
+        costCenterId: costCenterId ? Number(costCenterId) : null,
+        committeeId: committeeId ? Number(committeeId) : null,
+        managerId: managerId ? Number(managerId) : null,
+      },
     });
 
     // ── Step 11b: HR-005 — recruitment conversion event + audit ──
@@ -1039,6 +1249,16 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       ...employee,
       assignmentId,
       onboardingTasksCreated: 4,
+      // PR-1 (#2077) — surface the institutional binding so the
+      // post-create success card can render «الموظف مرتبط بـ …».
+      institutional: {
+        positionId: positionId ? Number(positionId) : null,
+        categoryKey: categoryKey || null,
+        teamId: teamId ? Number(teamId) : null,
+        projectId: projectId ? Number(projectId) : null,
+        costCenterId: costCenterId ? Number(costCenterId) : null,
+        committeeId: committeeId ? Number(committeeId) : null,
+      },
       probationEndDate: (() => { const d = new Date(effectiveHireDate); d.setDate(d.getDate() + Number(probationDays)); return toDateISO(d); })(),
       userAccount: userId ? {
         userId,
