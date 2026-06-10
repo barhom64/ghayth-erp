@@ -7,7 +7,7 @@
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET client_encoding = 'UTF8';
+SET client_encoding = 'SQL_ASCII';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
 SET check_function_bodies = false;
@@ -1535,6 +1535,7 @@ ALTER TABLE IF EXISTS ONLY public.settings DROP CONSTRAINT IF EXISTS settings_pk
 ALTER TABLE IF EXISTS ONLY public.security_log DROP CONSTRAINT IF EXISTS security_log_pkey;
 ALTER TABLE IF EXISTS ONLY public.scoring_weights_per_company DROP CONSTRAINT IF EXISTS scoring_weights_per_company_pkey;
 ALTER TABLE IF EXISTS ONLY public.scoring_weights_per_company DROP CONSTRAINT IF EXISTS "scoring_weights_per_company_companyId_categoryKey_key";
+ALTER TABLE IF EXISTS ONLY public.schema_migrations DROP CONSTRAINT IF EXISTS schema_migrations_pkey;
 ALTER TABLE IF EXISTS ONLY public.scheduled_reports DROP CONSTRAINT IF EXISTS scheduled_reports_pkey;
 ALTER TABLE IF EXISTS ONLY public.scheduled_report_history DROP CONSTRAINT IF EXISTS scheduled_report_history_pkey;
 ALTER TABLE IF EXISTS ONLY public.saudization_snapshots DROP CONSTRAINT IF EXISTS saudization_snapshots_pkey;
@@ -2525,6 +2526,7 @@ DROP SEQUENCE IF EXISTS public.security_log_id_seq;
 DROP TABLE IF EXISTS public.security_log;
 DROP SEQUENCE IF EXISTS public.scoring_weights_per_company_id_seq;
 DROP TABLE IF EXISTS public.scoring_weights_per_company;
+DROP TABLE IF EXISTS public.schema_migrations;
 DROP SEQUENCE IF EXISTS public.scheduled_reports_id_seq;
 DROP TABLE IF EXISTS public.scheduled_reports;
 DROP SEQUENCE IF EXISTS public.scheduled_report_history_id_seq;
@@ -7703,7 +7705,7 @@ CREATE TABLE public.employee_scores (
     "weightsUsed" jsonb DEFAULT '{}'::jsonb NOT NULL,
     "rawCounters" jsonb DEFAULT '{}'::jsonb NOT NULL,
     "computedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT employee_scores_scope_check CHECK (((scope)::text = ANY ((ARRAY['weekly'::character varying, 'monthly'::character varying, 'quarterly'::character varying])::text[]))),
+    CONSTRAINT employee_scores_scope_check CHECK (((scope)::text = ANY (ARRAY[('weekly'::character varying)::text, ('monthly'::character varying)::text, ('quarterly'::character varying)::text]))),
     CONSTRAINT employee_scores_trend_check CHECK (((trend >= '-1'::integer) AND (trend <= 1)))
 );
 
@@ -7782,9 +7784,9 @@ CREATE TABLE public.employee_signals (
     "acknowledgedAt" timestamp with time zone,
     "acknowledgedBy" integer,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT employee_signals_scope_check CHECK (((scope)::text = ANY ((ARRAY['weekly'::character varying, 'monthly'::character varying, 'quarterly'::character varying])::text[]))),
-    CONSTRAINT employee_signals_severity_check CHECK (((severity)::text = ANY ((ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying, 'critical'::character varying])::text[]))),
-    CONSTRAINT "employee_signals_signalType_check" CHECK ((("signalType")::text = ANY ((ARRAY['risk'::character varying, 'promotion'::character varying, 'burnout'::character varying, 'custom'::character varying])::text[])))
+    CONSTRAINT employee_signals_scope_check CHECK (((scope)::text = ANY (ARRAY[('weekly'::character varying)::text, ('monthly'::character varying)::text, ('quarterly'::character varying)::text]))),
+    CONSTRAINT employee_signals_severity_check CHECK (((severity)::text = ANY (ARRAY[('low'::character varying)::text, ('medium'::character varying)::text, ('high'::character varying)::text, ('critical'::character varying)::text]))),
+    CONSTRAINT "employee_signals_signalType_check" CHECK ((("signalType")::text = ANY (ARRAY[('risk'::character varying)::text, ('promotion'::character varying)::text, ('burnout'::character varying)::text, ('custom'::character varying)::text])))
 );
 
 
@@ -11919,8 +11921,14 @@ CREATE TABLE public.journal_entries (
     "originalCurrency" character(3),
     "exchangeRate" numeric(18,8) DEFAULT 1,
     "originalAmount" numeric(18,2),
+    "documentStatus" text,
+    "paymentStatus" text,
+    "postingStatus" text,
     CONSTRAINT chk_journal_entries_currency_iso CHECK ((("originalCurrency" IS NULL) OR ("originalCurrency" ~ '^[A-Z]{3}$'::text))),
     CONSTRAINT "journal_entries_approvalStatus_check" CHECK ((("approvalStatus")::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_review'::character varying)::text, ('approved'::character varying)::text, ('posted'::character varying)::text, ('rejected'::character varying)::text]))),
+    CONSTRAINT journal_entries_documentstatus_chk CHECK ((("documentStatus" IS NULL) OR ("documentStatus" = ANY (ARRAY['draft'::text, 'submitted'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text])))),
+    CONSTRAINT journal_entries_paymentstatus_chk CHECK ((("paymentStatus" IS NULL) OR ("paymentStatus" = ANY (ARRAY['unpaid'::text, 'partially_paid'::text, 'paid'::text])))),
+    CONSTRAINT journal_entries_postingstatus_chk CHECK ((("postingStatus" IS NULL) OR ("postingStatus" = ANY (ARRAY['unposted'::text, 'posted'::text, 'reversed'::text])))),
     CONSTRAINT journal_entries_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('posted'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('rejected'::character varying)::text, ('returned'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -16721,6 +16729,16 @@ ALTER SEQUENCE public.scheduled_reports_id_seq OWNED BY public.scheduled_reports
 
 
 --
+-- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schema_migrations (
+    filename text NOT NULL,
+    applied_at timestamp with time zone DEFAULT now()
+);
+
+
+--
 -- Name: scoring_weights_per_company; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -17180,7 +17198,7 @@ CREATE TABLE public.subsidiary_accounts (
     "isActive" boolean DEFAULT true NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT "subsidiary_accounts_entityType_check" CHECK ((("entityType")::text = ANY ((ARRAY['employee'::character varying, 'client'::character varying, 'vendor'::character varying, 'project'::character varying, 'property'::character varying, 'umrah_agent'::character varying, 'umrah_sub_agent'::character varying, 'umrah_season'::character varying, 'property_unit'::character varying, 'vehicle'::character varying, 'driver'::character varying])::text[])))
+    CONSTRAINT "subsidiary_accounts_entityType_check" CHECK ((("entityType")::text = ANY (ARRAY[('employee'::character varying)::text, ('client'::character varying)::text, ('vendor'::character varying)::text, ('project'::character varying)::text, ('property'::character varying)::text, ('umrah_agent'::character varying)::text, ('umrah_sub_agent'::character varying)::text, ('umrah_season'::character varying)::text, ('property_unit'::character varying)::text, ('vehicle'::character varying)::text, ('driver'::character varying)::text])))
 );
 
 
@@ -17221,7 +17239,7 @@ CREATE TABLE public.supervision_lines (
     "isPrimary" boolean DEFAULT false NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT supervision_lines_check CHECK (("supervisorAssignmentId" <> "superviseeAssignmentId")),
-    CONSTRAINT "supervision_lines_lineType_check" CHECK ((("lineType")::text = ANY ((ARRAY['administrative'::character varying, 'project'::character varying, 'functional'::character varying, 'dotted'::character varying])::text[])))
+    CONSTRAINT "supervision_lines_lineType_check" CHECK ((("lineType")::text = ANY (ARRAY[('administrative'::character varying)::text, ('project'::character varying)::text, ('functional'::character varying)::text, ('dotted'::character varying)::text])))
 );
 
 
@@ -17510,7 +17528,7 @@ CREATE TABLE public.task_assignees (
     "assignedBy" integer,
     "removedAt" timestamp with time zone,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT task_assignees_role_check CHECK (((role)::text = ANY ((ARRAY['primary'::character varying, 'member'::character varying])::text[])))
+    CONSTRAINT task_assignees_role_check CHECK (((role)::text = ANY (ARRAY[('primary'::character varying)::text, ('member'::character varying)::text])))
 );
 
 
