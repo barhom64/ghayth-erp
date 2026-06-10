@@ -1530,7 +1530,7 @@ router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), asyn
     const scope = req.scope!;
     const { status, search, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
@@ -2174,7 +2174,7 @@ router.get("/maintenance", authorize({ feature: "fleet.maintenance", action: "li
     const scope = req.scope!;
     const { vehicleId, search, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
@@ -2752,7 +2752,7 @@ router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), 
     const scope = req.scope!;
     const { vehicleId, search, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'f."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
@@ -2922,7 +2922,7 @@ router.get("/insurance", authorize({ feature: "fleet.vehicles", action: "list" }
     const scope = req.scope!;
     const { vehicleId } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND i."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
