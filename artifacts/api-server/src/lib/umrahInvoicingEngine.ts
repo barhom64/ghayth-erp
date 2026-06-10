@@ -285,73 +285,55 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     totalPilgrims += mutamerCount;
     groupRefs.push(grp.nuskGroupNumber as string);
 
-    // Phase 3d — split the group's lineTotal into visa / transport /
-    // services sub-lines when ALL 3 products are configured AND the
-    // group has a matching NUSK invoice to source visa + transport
-    // pass-through costs from. Otherwise fall back to the bundled
-    // Phase 3c single line (which only consumes the services
-    // mapping). The fallback path keeps the existing pre-split
-    // behaviour byte-identical when ANY mapping is missing — strict
-    // regression safety.
+    // §6 of #1870 — TWO-LINE umrah invoice per operator directive:
+    //   1) "رسوم تأشيرة" (visa fees) — exempt + pass-through at NUSK cost.
+    //   2) "خدمة أرضية" (ground service) — everything else (transport +
+    //      hotel + electronic + services + insurance + margin). Standard
+    //      rate; VAT on margin only via the header marginBase / vatAmount
+    //      math below.
+    //
+    // The legacy 3-line split (visa + transport + services) is dropped:
+    // ZATCA only needs the two pass-through-vs-margin buckets, and the
+    // operator's invoice template renders cleaner with the consolidated
+    // ground-service line.
+    //
+    // Falls back to a single bundled line when the product mapping is
+    // incomplete OR no NUSK invoice exists for the group — same as
+    // before, since visa pass-through can't be split without it.
     const groupCost = canSplit ? nuskCostByGroup.get(grp.id as number) : undefined;
-    if (canSplit && groupCost && (groupCost.visa > 0 || groupCost.transport > 0)) {
-      // visa + transport are pass-through at NUSK cost (the
-      // operator's "fixed visa price" rule). Services absorbs the
-      // remainder — sales total minus the two pass-through costs —
-      // which is the operator's margin plus any other NUSK costs
-      // (hotel / electronic / insurance / etc.). Clamp to 0 if the
-      // operator priced below pass-through (sellingBelowCost from
-      // PR #1457 already surfaces this case).
+    if (canSplit && groupCost && groupCost.visa > 0) {
+      // Visa portion clamped at the sale total so a NUSK that exceeds
+      // the agent price doesn't produce a negative ground-service line.
+      // Ground-service absorbs the entire remainder (sale − visa).
       const visaPortion = Math.min(groupCost.visa, lineTotal);
-      const transportPortion = Math.min(groupCost.transport, Math.max(0, lineTotal - visaPortion));
-      const servicesPortion = Math.max(0, lineTotal - visaPortion - transportPortion);
+      const groundServicePortion = Math.max(0, lineTotal - visaPortion);
 
-      // Visa line — quantity per pilgrim matches NUSK's per-pilgrim
-      // visa pricing; zero-rated when the operator configured the
-      // visa product with defaultTaxCode='zero' (the typical setup).
-      if (visaPortion > 0) {
-        lineItems.push({
-          itemType: "group",
-          groupId: grp.id as number,
-          violationId: null,
-          description: `تأشيرة عمرة — مجموعة ${grp.nuskGroupNumber}`.trim(),
-          quantity: mutamerCount,
-          unitPrice: mutamerCount > 0 ? visaPortion / mutamerCount : visaPortion,
-          lineTotal: visaPortion,
-          productId: productMap!.visaProductId,
-          accountCode: overrideAccountCode ?? productMap!.visaAccountCode,
-          vatRate: taxCodeToVat(productMap!.visaTaxCode),
-        });
-      }
-
-      // Transport line — quantity 1 since transport is per-trip not
-      // per-pilgrim. vatRate from the product's defaultTaxCode.
-      if (transportPortion > 0) {
-        lineItems.push({
-          itemType: "group",
-          groupId: grp.id as number,
-          violationId: null,
-          description: `نقل — مجموعة ${grp.nuskGroupNumber}`.trim(),
-          quantity: 1,
-          unitPrice: transportPortion,
-          lineTotal: transportPortion,
-          productId: productMap!.transportProductId,
-          accountCode: overrideAccountCode ?? productMap!.transportAccountCode,
-          vatRate: taxCodeToVat(productMap!.transportTaxCode),
-        });
-      }
-
-      // Services line — the operator's margin + any uncategorised
-      // NUSK costs. ALWAYS emitted (even when 0) so the e-invoice
-      // shows a consistent 3-line structure per group.
+      // Line 1: Visa — pass-through, zero-rated.
+      // Quantity = mutamerCount so the per-pilgrim unit price matches NUSK.
       lineItems.push({
         itemType: "group",
         groupId: grp.id as number,
         violationId: null,
-        description: `خدمات أرضية — مجموعة ${grp.nuskGroupNumber}`.trim(),
+        description: `رسوم تأشيرة عمرة — مجموعة ${grp.nuskGroupNumber}`.trim(),
+        quantity: mutamerCount,
+        unitPrice: mutamerCount > 0 ? visaPortion / mutamerCount : visaPortion,
+        lineTotal: visaPortion,
+        productId: productMap!.visaProductId,
+        accountCode: overrideAccountCode ?? productMap!.visaAccountCode,
+        vatRate: taxCodeToVat(productMap!.visaTaxCode),
+      });
+
+      // Line 2: Ground service — covers transport + hotel + electronic +
+      // services + insurance + the operator's margin. VAT on the margin
+      // only (computed at header level via marginBase below).
+      lineItems.push({
+        itemType: "group",
+        groupId: grp.id as number,
+        violationId: null,
+        description: `خدمة أرضية — مجموعة ${grp.nuskGroupNumber}`.trim(),
         quantity: 1,
-        unitPrice: servicesPortion,
-        lineTotal: servicesPortion,
+        unitPrice: groundServicePortion,
+        lineTotal: groundServicePortion,
         productId: productMap!.servicesProductId,
         accountCode: overrideAccountCode ?? productMap!.servicesAccountCode,
         vatRate: taxCodeToVat(productMap!.servicesTaxCode),
@@ -466,9 +448,29 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     `SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'umrah_vat_rate' LIMIT 1`,
     [scope.companyId]
   );
+  // §6 of #1870 — VAT mode is operator-configurable:
+  //   'inclusive' (default) — KSA margin scheme: the ground-service price
+  //     ALREADY contains VAT; we extract it (× rate/(100+rate)) so the
+  //     customer pays the same total whether the rate changes or not.
+  //   'exclusive' — VAT added on top of the margin (legacy non-margin path).
+  // Both rate AND mode come from system_settings so operations can toggle
+  // them without code changes.
+  const [vatModeSetting] = await rawQuery<Record<string, unknown>>(
+    `SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'umrah_vat_mode' LIMIT 1`,
+    [scope.companyId]
+  );
   const vatRate = vatSetting ? Number(vatSetting.value) : 0;
-  const vatAmount = roundTo2(marginBase * (vatRate / 100));
-  const total = subtotal + penaltiesTotal + vatAmount;
+  const vatMode = (vatModeSetting?.value as string | undefined) ?? "inclusive";
+  const vatInclusive = vatMode === "inclusive";
+  const vatAmount = vatInclusive
+    ? roundTo2(marginBase * vatRate / (100 + vatRate))
+    : roundTo2(marginBase * (vatRate / 100));
+  // Inclusive mode: VAT is already inside the ground-service line, so the
+  // invoice total equals the subtotal (+ any penalties). Exclusive mode
+  // keeps the legacy "add on top" behavior.
+  const total = vatInclusive
+    ? subtotal + penaltiesTotal
+    : subtotal + penaltiesTotal + vatAmount;
 
   // #1141 closure — umrah sales invoice ref now routes through the
   // numbering center (scheme umrah.umrah_sales_invoice, seeded by
@@ -529,7 +531,13 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
       const params: unknown[] = [];
       for (const li of lineItems) {
         const lineVatRate = li.vatRate ?? vatRate;
-        const lineVatAmount = li.vatAmount ?? roundTo2(li.lineTotal * lineVatRate / 100);
+        // Per-line VAT respects the same inclusive/exclusive mode as the
+        // header. Informational only — GL posting is driven by the
+        // header vatAmount (margin scheme). Sum-of-lines may exceed the
+        // header when costBasis > 0 (line uses gross, header uses margin).
+        const lineVatAmount = li.vatAmount ?? (vatInclusive
+          ? roundTo2(li.lineTotal * lineVatRate / (100 + lineVatRate))
+          : roundTo2(li.lineTotal * lineVatRate / 100));
         const base = params.length;
         valuesSql.push(`(${Array.from({ length: cols }, (_, i) => `$${base + i + 1}`).join(",")})`);
         params.push(
@@ -570,14 +578,17 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     getAccountCodeFromMapping(scope.companyId, "umrah_invoice_revenue", "credit", "4200"),
     getAccountCodeFromMapping(scope.companyId, "umrah_penalty_revenue", "credit", "4210"),
   ]);
-  // Every GL line on an Umrah sales invoice carries the agent + season
-  // dimensions so revenue/AR drill by agent-season is preserved end-to-
-  // end in the books (financial-integrity audit gap #5). `subAgent.agentId`
-  // and `seasonId` are guaranteed available here — we read them before
-  // any insert so they're never silently dropped.
+  // Every GL line on an Umrah sales invoice carries the agent + season +
+  // CLIENT dimensions so revenue/AR drill by agent-season-client is
+  // preserved end-to-end (financial-integrity audit gap #5, operator
+  // directive §6: "أبعاد البيع — الوكيل العميل + الموسم"). The
+  // sub-agent's linked client (subAgent.clientId) IS the "client-agent"
+  // for sales-side drill: every line carries that customer FK so the
+  // ledger can be sliced by who owes us.
   const umrahDims = {
     umrahAgentId: (subAgent.agentId as number | null) ?? undefined,
     umrahSeasonId: (seasonId as number | null) ?? undefined,
+    clientId: (subAgent.clientId as number | null) ?? undefined,
   };
   const glLines: Array<{
     accountCode: string;
@@ -586,6 +597,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     description: string;
     umrahAgentId?: number;
     umrahSeasonId?: number;
+    clientId?: number;
   }> = [
     { accountCode: arCode, debit: total, credit: 0, description: `ذمم مدينة — ${subAgent.clientName || "وكيل فرعي"}`, ...umrahDims },
   ];
@@ -602,10 +614,30 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   // before, since penalty rows already use a distinct revenue
   // account (umrah_penalty_revenue / 4210).
   const revenueByAccount = new Map<string, number>();
+  let standardRatedCode: string | null = null;
   for (const li of lineItems) {
     if (li.itemType !== "group") continue;
     const code = li.accountCode ?? revCode;
     revenueByAccount.set(code, (revenueByAccount.get(code) ?? 0) + li.lineTotal);
+    // First standard-rated bucket (effective rate > 0) absorbs the
+    // inclusive-mode VAT extraction below. A line with vatRate=undefined
+    // inherits the header rate (i.e. the operator's default 15%) — visa
+    // is the only line that explicitly sets vatRate=0 (taxCodeToVat
+    // returns 0 for 'zero'/'exempt'; everything else is undefined ⇒
+    // inherits the header rate ⇒ standard-rated).
+    const effectiveRate = li.vatRate ?? vatRate;
+    if (effectiveRate > 0 && !standardRatedCode) {
+      standardRatedCode = code;
+    }
+  }
+  // Inclusive mode: the vatAmount lives INSIDE the standard-rated revenue
+  // bucket (the ground-service line). Extract it so revenue = sale ex-VAT
+  // and the JE balances against DR AR = subtotal (no addition).
+  if (vatInclusive && vatAmount > 0 && standardRatedCode) {
+    revenueByAccount.set(
+      standardRatedCode,
+      roundTo2((revenueByAccount.get(standardRatedCode) ?? 0) - vatAmount)
+    );
   }
   for (const [code, amount] of revenueByAccount) {
     glLines.push({
