@@ -1105,4 +1105,113 @@ router.get("/folder-counts", authorize({ feature: "communications", action: "lis
   }
 });
 
+// ─────────────────────── Thread snooze (follow-up reminders) ─────────────
+
+const snoozeCreateSchema = z.object({
+  wakeAt: z.string().datetime({ offset: true }),
+  reason: z.string().max(300).optional().nullable(),
+});
+
+/**
+ * POST /inbox/threads/:channel/:address/snooze — snooze a thread
+ * until wakeAt for the current user. Hides the thread from the
+ * default inbox view and queues a follow-up task to fire at wakeAt
+ * via the thread_snooze_wake cron worker.
+ *
+ * Idempotent: posting again for the same (user, thread) replaces the
+ * existing active snooze rather than stacking. Matches the unique
+ * partial index on (companyId, userId, channel, peerAddress) WHERE
+ * wokenAt IS NULL AND cancelledAt IS NULL.
+ */
+router.post("/threads/:channel/:address/snooze", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const channel = String(req.params.channel);
+    const address = String(req.params.address);
+    if (!["email", "whatsapp", "sms", "pbx"].includes(channel)) {
+      throw new ValidationError("قناة غير مدعومة");
+    }
+    const body = zodParse(snoozeCreateSchema.safeParse(req.body));
+    const wake = new Date(body.wakeAt);
+    if (Number.isNaN(wake.getTime())) {
+      throw new ValidationError("صيغة وقت التنبيه غير صحيحة", { field: "wakeAt" });
+    }
+    // 60s margin so a "snooze for 30 seconds" request can't fire before
+    // the POST round-trips — UI presets start at 1h anyway.
+    if (wake.getTime() < Date.now() + 60_000) {
+      throw new ValidationError("وقت التنبيه قريب جدًا — اختر وقتًا أبعد", { field: "wakeAt" });
+    }
+    // Replace any existing active snooze on the same thread for this
+    // user via INSERT … ON CONFLICT against the partial unique index.
+    const [row] = await rawQuery<{ id: number }>(
+      `INSERT INTO thread_snoozes ("companyId", "userId", channel, "peerAddress", "wakeAt", reason)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT ("companyId", "userId", channel, "peerAddress")
+         WHERE "wokenAt" IS NULL AND "cancelledAt" IS NULL
+       DO UPDATE SET "wakeAt" = EXCLUDED."wakeAt",
+                     reason   = EXCLUDED.reason,
+                     "snoozedAt" = NOW()
+       RETURNING id`,
+      [scope.companyId, scope.userId, channel, address, wake.toISOString(), body.reason ?? null],
+    );
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "thread_snoozes", entityId: row.id,
+      after: { channel, peerAddress: address, wakeAt: wake.toISOString() },
+    }).catch((e) => logger.warn(e, "[audit] thread.snooze.create"));
+    res.status(201).json({ id: row.id, wakeAt: wake.toISOString() });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/threads/snooze/create");
+  }
+});
+
+/**
+ * DELETE /inbox/threads/:channel/:address/snooze — un-snooze the
+ * current user's active snooze on a thread. No-op if there isn't
+ * one. Returns the cancelled-row id so the frontend can update
+ * its cached state.
+ */
+router.delete("/threads/:channel/:address/snooze", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const channel = String(req.params.channel);
+    const address = String(req.params.address);
+    const rows = await rawQuery<{ id: number }>(
+      `UPDATE thread_snoozes SET "cancelledAt" = NOW()
+        WHERE "companyId" = $1 AND "userId" = $2
+          AND channel = $3 AND "peerAddress" = $4
+          AND "wokenAt" IS NULL AND "cancelledAt" IS NULL
+        RETURNING id`,
+      [scope.companyId, scope.userId, channel, address],
+    );
+    res.json({ ok: true, cancelledId: rows[0]?.id ?? null });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/threads/snooze/cancel");
+  }
+});
+
+/**
+ * GET /inbox/snoozed — list the current user's currently-snoozed
+ * threads. Ordered by wakeAt so "what's coming back next" sits on
+ * top. Frontend renders a dedicated "مؤجَّلة" folder driven by this.
+ */
+router.get("/snoozed", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT s.id, s.channel, s."peerAddress" AS peer, s."wakeAt",
+              s."snoozedAt", s.reason
+         FROM thread_snoozes s
+        WHERE s."companyId" = $1 AND s."userId" = $2
+          AND s."wokenAt" IS NULL AND s."cancelledAt" IS NULL
+        ORDER BY s."wakeAt" ASC
+        LIMIT 100`,
+      [scope.companyId, scope.userId],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/snoozed");
+  }
+});
+
 export default router;
