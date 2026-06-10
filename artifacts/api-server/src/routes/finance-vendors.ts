@@ -139,6 +139,17 @@ vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "
     );
     assertInsert(insertId, "suppliers");
 
+    // #1945 FIN-003 — open the vendor's per-entity payable subsidiary account
+    // on create, the same as clients/employees/vehicles already do. This was
+    // the one gap: "vendor" is in the subsidiary_accounts entityType
+    // constraint and createSubsidiaryAccountsForEntity handles it, but no
+    // route ever called it — so vendors never got a per-supplier AP leaf.
+    // Fire-and-forget: an account hiccup must not block the vendor create
+    // (mirrors the sibling auto-create calls in clients/fleet/properties).
+    import("./accounting-engine.js")
+      .then((m) => m.createSubsidiaryAccountsForEntity(scope.companyId, "vendor", insertId, name))
+      .catch((err) => logger.error(err, "[FIN-003] vendor subsidiary account auto-create failed"));
+
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
