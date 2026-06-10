@@ -118,16 +118,18 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير ربحية المجموعة",
     description: "الإيراد × التكلفة × صافي الربح، بإمكانية الترتيب حسب الهامش.",
     category: "groups",
-    status: "stub",
+    status: "available",
     route: "/umrah/reports/group-profitability",
+    apiPath: "/umrah/reports/profitability",
   },
   {
     id: "agent_profitability",
     title: "تقرير ربحية الوكيل",
     description: "كل وكيل: الإيراد × التكلفة × صافي الربح × العمولة.",
     category: "agents",
-    status: "stub",
+    status: "available",
     route: "/umrah/reports/agent-profitability",
+    apiPath: "/umrah/reports/profitability",
   },
   // ── Compliance ─────────────────────────────────────────────────────────
   {
@@ -153,8 +155,9 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير التخلف والمخالفات",
     description: "المخالفات المسجَّلة مع الوكيل، المعتمر، الغرامة.",
     category: "compliance",
-    status: "partial",
-    route: "/umrah/violations",
+    status: "available",
+    route: "/umrah/reports/violations-summary",
+    apiPath: "/umrah/reports/violations-summary",
   },
   // ── Import / Data Quality ──────────────────────────────────────────────
   {
@@ -162,8 +165,9 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير الاستيراد والأخطاء",
     description: "تاريخ دفعات الاستيراد + الصفوف المرفوضة + التحذيرات.",
     category: "import",
-    status: "partial",
-    route: "/umrah/import",
+    status: "available",
+    route: "/umrah/reports/import-errors-summary",
+    apiPath: "/umrah/reports/import-errors-summary",
   },
   {
     id: "unlinked_rows",
@@ -180,8 +184,9 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير النقل المرتبط بالعمرة",
     description: "كل طلب نقل عبر العقد الخدمي + حالة التنفيذ من Fleet.",
     category: "transport",
-    status: "stub",
+    status: "available",
     route: "/umrah/reports/transport-requests",
+    apiPath: "/umrah/reports/umrah-transport",
   },
   // ── Finance ────────────────────────────────────────────────────────────
   {
@@ -189,24 +194,27 @@ export const UMRAH_REPORTS_CATALOG: ReportDefinition[] = [
     title: "تقرير تكاليف العمرة",
     description: "توزيع التكاليف على الموسم/المجموعة/الوكيل/مركز التكلفة.",
     category: "finance",
-    status: "stub",
+    status: "available",
     route: "/umrah/reports/umrah-costs",
+    apiPath: "/umrah/reports/umrah-costs",
   },
   {
     id: "nusk_invoices_report",
     title: "تقرير فواتير نسك",
     description: "فواتير نسك + حالة قيد AP + الاستردادات + الأرصدة.",
     category: "finance",
-    status: "partial",
-    route: "/umrah/nusk-invoices",
+    status: "available",
+    route: "/umrah/reports/nusk-invoices-summary",
+    apiPath: "/umrah/reports/nusk-invoices-summary",
   },
   {
     id: "sales_invoices_report",
     title: "تقرير فواتير العملاء والوكلاء",
     description: "فواتير البيع + المدفوع + الرصيد + التقادم.",
     category: "finance",
-    status: "partial",
-    route: "/umrah/invoices",
+    status: "available",
+    route: "/umrah/reports/sales-invoices-summary",
+    apiPath: "/umrah/reports/sales-invoices-summary",
   },
   // ── Commission ─────────────────────────────────────────────────────────
   {
