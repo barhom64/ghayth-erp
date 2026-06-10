@@ -5219,4 +5219,89 @@ router.get("/reports/nusk-invoices-summary", authorize({ feature: "umrah", actio
   } catch (err) { handleRouteError(err, res, "Nusk invoices summary"); }
 });
 
+// §11 stub conversion — umrah transport report (#1870).
+// Pulls every transport_bookings row tied to an umrah group + the
+// linked group/agent context + flight details. The fleet engine
+// hasn't yet written vehicleId/driverId/actualCost back onto the
+// booking, so those stay null until §7 Phase 2 lands the
+// fleet_trips bridge. Operator sees status + requested pickup
+// date so they can chase what's still 'submitted' vs 'dispatched'.
+router.get("/reports/umrah-transport", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
+    const status = req.query.status ? String(req.query.status) : null;
+
+    const params: unknown[] = [scope.companyId];
+    let seasonClause = "";
+    let statusClause = "";
+    if (seasonId) {
+      params.push(seasonId);
+      seasonClause = ` AND g."seasonId" = $${params.length}`;
+    }
+    if (status) {
+      params.push(status);
+      statusClause = ` AND b.status = $${params.length}`;
+    }
+
+    const rows = await rawQuery<{
+      bookingId: number;
+      bookingNumber: string;
+      status: string;
+      routeType: string | null;
+      fromLocation: string | null;
+      toLocation: string | null;
+      requestedPickupDate: string | null;
+      passengerCount: number | null;
+      flightNumber: string | null;
+      groupId: number | null;
+      groupName: string | null;
+      nuskGroupNumber: string | null;
+      agentId: number | null;
+      agentName: string | null;
+      seasonId: number | null;
+    }>(
+      `SELECT b.id AS "bookingId",
+              b."bookingNumber",
+              b.status,
+              b."routeType",
+              b."fromLocationText" AS "fromLocation",
+              b."toLocationText" AS "toLocation",
+              b."requestedPickupDate"::text AS "requestedPickupDate",
+              b."passengerCount",
+              b."flightNumber",
+              g.id AS "groupId",
+              g.name AS "groupName",
+              g."nuskGroupNumber",
+              a.id AS "agentId",
+              a.name AS "agentName",
+              g."seasonId"
+         FROM transport_bookings b
+         INNER JOIN umrah_groups g
+                 ON g.id = b."umrahGroupId"
+                AND g."companyId" = b."companyId"
+                AND g."deletedAt" IS NULL
+         LEFT JOIN umrah_agents a
+                ON a.id = g."agentId"
+               AND a."companyId" = g."companyId"
+               AND a."deletedAt" IS NULL
+        WHERE b."companyId" = $1
+          AND b."deletedAt" IS NULL
+          AND b."bookingSource" = 'umrah_group'${seasonClause}${statusClause}
+        ORDER BY b."requestedPickupDate" NULLS LAST, b.id DESC
+        LIMIT 500`,
+      params,
+    );
+
+    // Status histogram — bookkeeper sees how many requests are
+    // still pending vs dispatched vs completed at a glance.
+    const counts: Record<string, number> = {};
+    for (const r of rows) {
+      counts[r.status] = (counts[r.status] ?? 0) + 1;
+    }
+
+    res.json(maskFields(req, { data: rows, counts, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "Umrah transport report"); }
+});
+
 export default router;
