@@ -1359,6 +1359,9 @@ const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
   // resolved to a header and the post FAILED. Intent search finds the
   // postable receivables leaf (e.g. 1131 عملاء محليون).
   invoice_payment_ar: { type: "asset", keywords: ["ذمم", "مدينون", "عملاء", "receivable"] },
+  // #1945 FIN-18 — bank reconciliation adjustments (fees out / interest in).
+  bank_fee_expense: { type: "expense", keywords: ["عمولات بنكية", "رسوم بنكية", "مصروفات بنكية", "bank fee", "bank charge"] },
+  bank_interest_income: { type: "revenue", keywords: ["فوائد", "مرابحات", "عوائد بنكية", "interest"] },
 };
 
 const _resolvedAccountCache = new Map<string, string>();

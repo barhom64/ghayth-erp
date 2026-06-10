@@ -35,6 +35,11 @@ export default function BankManualMatchPage() {
   const row = rows.find((r: any) => String(r.id) === params?.rowId);
 
   const manualMatchMutation = useApiMutation("/finance/bank-reconciliation/manual-match", "POST");
+  // #1945 FIN-18 — when the bank moved money with NO journal counterpart
+  // (bank fee / interest), there is nothing to match against; this posts the
+  // real adjustment JE (accounts via the accounting engine) and matches the
+  // row to the freshly-posted bank line.
+  const postAdjustmentMutation = useApiMutation("/finance/bank-reconciliation/post-adjustment", "POST", [["bank-batch"]]);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -54,6 +59,23 @@ export default function BankManualMatchPage() {
       setJeResults([]);
     } finally {
       setJeSearching(false);
+    }
+  }
+
+  async function handlePostAdjustment() {
+    try {
+      const res = await postAdjustmentMutation.mutateAsync({ bankStatementId: Number(params?.rowId) });
+      setMatchMsg("تم ترحيل قيد التسوية ومطابقة السطر");
+      clearDraft();
+      toast({
+        title: "تم ترحيل قيد التسوية",
+        description: `${res?.ref ?? ""} — ${res?.direction === "fee" ? "رسوم/عمولات بنكية" : "فوائد/عوائد بنكية"}`,
+      });
+      setTimeout(() => setLocation("/finance/bank-reconciliation"), 1500);
+    } catch (err: any) {
+      const title = err?.message || "تعذّر ترحيل قيد التسوية";
+      toast({ variant: "destructive", title, description: err?.fix });
+      setMatchMsg(title);
     }
   }
 
@@ -107,6 +129,18 @@ export default function BankManualMatchPage() {
               <span>النوع: <strong>{row.type === "debit" ? "مدين" : "دائن"}</strong></span>
               <span>التاريخ: <strong>{row.statementDate ? formatDateAr(row.statementDate) : "-"}</strong></span>
               <span>الوصف: <strong>{row.description || "-"}</strong></span>
+            </div>
+            {/* #1945 FIN-18 — no journal counterpart? post the real adjustment
+                JE (fee/interest, accounts via the accounting engine). */}
+            <div className="mt-3 flex items-center justify-between bg-status-info-surface/30 border rounded-lg px-4 py-2 text-xs">
+              <span className="text-muted-foreground">
+                لا يوجد قيد مقابل (رسوم بنكية / فوائد)؟ رحِّل قيد تسوية حقيقيًا:
+                {" "}<strong>{row.type === "debit" ? "مدين مصروفات بنكية / دائن البنك" : "مدين البنك / دائن فوائد بنكية"}</strong>
+                {" "}— الحسابات يحدّدها محرك الترحيل.
+              </span>
+              <Button size="sm" variant="outline" onClick={handlePostAdjustment} disabled={postAdjustmentMutation.isPending} rateLimitAware>
+                {postAdjustmentMutation.isPending ? "جاري الترحيل..." : "ترحيل قيد تسوية"}
+              </Button>
             </div>
           </div>
         )}
