@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout } from "@workspace/ui-core";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
@@ -12,7 +11,6 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { HrCreateScaffold } from "@/components/shared/hr-create-scaffold";
 import { DatePicker } from "@/components/ui/date-picker";
-import { AlertTriangle } from "lucide-react";
 
 export default function ContractsCreate() {
   const [, setLocation] = useLocation();
@@ -104,7 +102,7 @@ export default function ContractsCreate() {
         // the whole scaffold body behind hr.contracts:create. Backend
         // authorize() still enforces.
         sensitivePerm="hr.contracts:create"
-        assignmentSelectorSlot={<AssignmentReadOnlyBadge employee={selectedEmp} />}
+        selectedEmployee={selectedEmp}
         detailsSlot={
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -147,33 +145,5 @@ export default function ContractsCreate() {
         isDirty={Boolean(form.employeeId || form.salary)}
       />
     </CreatePageLayout>
-  );
-}
-
-/**
- * Same auto-bind badge as loans/overtime. Single-assignment shops
- * surface the bound assignmentId so the operator sees where the
- * contract attaches; no active assignment → block.
- */
-function AssignmentReadOnlyBadge({ employee }: { employee: any }) {
-  if (!employee) return null;
-  const id = employee.activeAssignmentId ?? employee.assignmentId;
-  if (!id) {
-    return (
-      <Card>
-        <CardContent className="flex items-start gap-2 p-3 text-sm text-amber-700">
-          <AlertTriangle className="w-4 h-4 mt-0.5" />
-          <span>لا يوجد تعيين فعّال — لا يمكن إنشاء العقد.</span>
-        </CardContent>
-      </Card>
-    );
-  }
-  return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
-      <span>تعيين #{id}</span>
-      {employee.branchName && <span>· فرع: {employee.branchName}</span>}
-      {employee.jobTitle && <span>· {employee.jobTitle}</span>}
-      <span className="ms-auto text-emerald-600">مُحدَّد تلقائياً</span>
-    </div>
   );
 }

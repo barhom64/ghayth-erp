@@ -13,7 +13,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency } from "@/lib/formatters";
 import { OVERTIME_MULTIPLIERS } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Calculator, Info, AlertTriangle } from "lucide-react";
+import { Calculator, Info } from "lucide-react";
 import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { HrCreateScaffold } from "@/components/shared/hr-create-scaffold";
 
@@ -144,7 +144,7 @@ export default function OvertimeCreate() {
         onEmployeeChange={(v) => setForm({ ...form, employeeId: v })}
         assignmentId={assignmentId ? String(assignmentId) : undefined}
         contextSection="overtime"
-        assignmentSelectorSlot={<AssignmentReadOnlyBadge employee={selectedEmployee} />}
+        selectedEmployee={selectedEmployee}
         detailsSlot={
           <div className="space-y-4">
             <FormFieldWrapper label="تاريخ الوقت الإضافي" required error={fieldErrors.overtimeDate}>
@@ -228,33 +228,5 @@ export default function OvertimeCreate() {
         isDirty={Boolean(form.employeeId || form.overtimeDate)}
       />
     </CreatePageLayout>
-  );
-}
-
-/**
- * Same single-assignment read-only badge as in loans-create. The
- * doctrine is the same: surface which assignment the record will be
- * bound to, and block when there is no active assignment.
- */
-function AssignmentReadOnlyBadge({ employee }: { employee: any }) {
-  if (!employee) return null;
-  const id = employee.activeAssignmentId ?? employee.assignmentId;
-  if (!id) {
-    return (
-      <Card>
-        <CardContent className="flex items-start gap-2 p-3 text-sm text-amber-700">
-          <AlertTriangle className="w-4 h-4 mt-0.5" />
-          <span>لا يوجد تعيين فعّال — لا يمكن إرسال الطلب.</span>
-        </CardContent>
-      </Card>
-    );
-  }
-  return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
-      <span>تعيين #{id}</span>
-      {employee.branchName && <span>· فرع: {employee.branchName}</span>}
-      {employee.jobTitle && <span>· {employee.jobTitle}</span>}
-      <span className="ms-auto text-emerald-600">مُحدَّد تلقائياً</span>
-    </div>
   );
 }

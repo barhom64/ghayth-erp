@@ -1,19 +1,18 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
+import { CreatePageLayout } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { Star, Target, TrendingUp, BookOpen } from "lucide-react";
+import { Star, TrendingUp, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { EmployeeSelect } from "@/components/shared/entity-selects";
+import { HrCreateScaffold } from "@/components/shared/hr-create-scaffold";
 
 interface Competency {
   name: string;
@@ -61,16 +60,18 @@ export default function PerformanceCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
-  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
-  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
   const createMut = useApiMutation("/hr/performance", "POST", [["performance"]], {
     successMessage: "تم إضافة التقييم بنجاح",
   });
   const { data: empData, isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const employees = empData?.data || [];
 
+  // Wave-1/B group 2: form.employeeId holds the EMPLOYEE id; the
+  // assignmentId derives from activeAssignmentId at submit (the old
+  // form matched on `e.assignmentId || e.id` under one variable —
+  // same bug class fixed in group 1).
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
-    assignmentId: "",
+    employeeId: "",
     period: "",
     overallScore: 0,
     notes: "",
@@ -81,6 +82,14 @@ export default function PerformanceCreate() {
   const [competencies, setCompetencies] = useState<Competency[]>(defaultCompetencies.map((c) => ({ ...c })));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  const selectedEmployee = useMemo(
+    () => employees.find((e: any) => String(e.id) === form.employeeId),
+    [employees, form.employeeId]
+  );
+  const assignmentId = selectedEmployee?.activeAssignmentId
+    ?? selectedEmployee?.assignmentId
+    ?? null;
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -95,21 +104,23 @@ export default function PerformanceCreate() {
     setCompetencies(updated);
   };
 
-  const selectedEmployee = employees.find((e: any) => String(e.assignmentId || e.id) === form.assignmentId);
-
   const handleSubmit = () => {
     const firstError = validate({
-      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      employeeId: form.employeeId ? null : "يرجى اختيار الموظف",
       period: form.period ? null : "الفترة مطلوبة",
     });
     if (firstError) {
       toast({ variant: "destructive", title: firstError });
       return;
     }
+    if (!assignmentId) {
+      toast({ variant: "destructive", title: "لا يوجد تعيين فعّال لهذا الموظف" });
+      return;
+    }
     const finalScore = form.overallScore || Math.round(avgScore * 10) / 10;
     createMut.mutate(
       {
-        assignmentId: Number(form.assignmentId),
+        assignmentId: Number(assignmentId),
         period: form.period,
         overallScore: finalScore || undefined,
         notes: [
@@ -142,112 +153,98 @@ export default function PerformanceCreate() {
           <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <CreationDateField />
-      </div>
 
-      <div className="space-y-6">
-        <div>
-          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
-            <Target className="w-4 h-4" />
-            معلومات التقييم الأساسية
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <EmployeeSelect
-              value={form.assignmentId}
-              onChange={(v) => setForm((f) => ({ ...f, assignmentId: v }))}
-              label="الموظف"
-              required
-              error={fieldErrors.assignmentId}
-            />
-            <TextField
-              label="فترة التقييم"
-              required
-              value={form.period}
-              onChange={(v) => setForm((f) => ({ ...f, period: v }))}
-              placeholder="الربع الأول ٢٠٢٦"
-              error={fieldErrors.period}
-            />
-            <FormFieldWrapper label="التقييم العام">
-              <div className="flex items-center gap-3">
-                <StarRating value={form.overallScore} onChange={(v) => setForm((f) => ({ ...f, overallScore: v }))} />
-                {form.overallScore > 0 && (
-                  <span className={cn(
-                    "text-sm font-medium px-2 py-0.5 rounded",
-                    form.overallScore >= 4 ? "bg-status-success-surface text-status-success-foreground" :
-                    form.overallScore >= 3 ? "bg-status-warning-surface text-status-warning-foreground" :
-                    "bg-status-error-surface text-status-error-foreground"
-                  )}>
-                    {scoreLabels[form.overallScore]}
-                  </span>
-                )}
-              </div>
-            </FormFieldWrapper>
-          </div>
-          {selectedEmployee && (
-            <div className="mt-4">
-              <EmployeeContextCard employeeId={selectedEmployee.id} section="violations" />
+      <HrCreateScaffold
+        follows="assignment"
+        employeeId={form.employeeId}
+        onEmployeeChange={(v) => setForm((f) => ({ ...f, employeeId: v }))}
+        assignmentId={assignmentId ? String(assignmentId) : undefined}
+        contextSection="violations"
+        selectedEmployee={selectedEmployee}
+        detailsSlot={
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TextField
+                label="فترة التقييم"
+                required
+                value={form.period}
+                onChange={(v) => setForm((f) => ({ ...f, period: v }))}
+                placeholder="الربع الأول ٢٠٢٦"
+                error={fieldErrors.period}
+              />
+              <FormFieldWrapper label="التقييم العام">
+                <div className="flex items-center gap-3">
+                  <StarRating value={form.overallScore} onChange={(v) => setForm((f) => ({ ...f, overallScore: v }))} />
+                  {form.overallScore > 0 && (
+                    <span className={cn(
+                      "text-sm font-medium px-2 py-0.5 rounded",
+                      form.overallScore >= 4 ? "bg-status-success-surface text-status-success-foreground" :
+                      form.overallScore >= 3 ? "bg-status-warning-surface text-status-warning-foreground" :
+                      "bg-status-error-surface text-status-error-foreground"
+                    )}>
+                      {scoreLabels[form.overallScore]}
+                    </span>
+                  )}
+                </div>
+              </FormFieldWrapper>
             </div>
-          )}
-        </div>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" />
-              تقييم الكفاءات
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {competencies.map((comp, idx) => (
-                <div key={comp.name} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                  <span className="text-sm text-status-neutral-foreground w-48">{comp.name}</span>
-                  <div className="flex items-center gap-3">
-                    <StarRating value={comp.score} onChange={(v) => updateCompetency(idx, v)} size="sm" />
-                    {comp.score > 0 && <span className="text-xs text-muted-foreground w-20">{scoreLabels[comp.score]}</span>}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  تقييم الكفاءات
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {competencies.map((comp, idx) => (
+                    <div key={comp.name} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                      <span className="text-sm text-status-neutral-foreground w-48">{comp.name}</span>
+                      <div className="flex items-center gap-3">
+                        <StarRating value={comp.score} onChange={(v) => updateCompetency(idx, v)} size="sm" />
+                        {comp.score > 0 && <span className="text-xs text-muted-foreground w-20">{scoreLabels[comp.score]}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {avgScore > 0 && (
+                  <div className="mt-4 pt-3 border-t flex items-center justify-between">
+                    <span className="text-sm font-medium">متوسط الكفاءات</span>
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "text-lg font-bold",
+                        avgScore >= 4 ? "text-status-success-foreground" : avgScore >= 3 ? "text-status-warning-foreground" : "text-status-error-foreground"
+                      )}>
+                        {avgScore.toFixed(1)}/5
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-            {avgScore > 0 && (
-              <div className="mt-4 pt-3 border-t flex items-center justify-between">
-                <span className="text-sm font-medium">متوسط الكفاءات</span>
-                <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "text-lg font-bold",
-                    avgScore >= 4 ? "text-status-success-foreground" : avgScore >= 3 ? "text-status-warning-foreground" : "text-status-error-foreground"
-                  )}>
-                    {avgScore.toFixed(1)}/5
-                  </span>
-                </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div>
+              <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
+                <BookOpen className="w-4 h-4" />
+                التفاصيل والملاحظات
+              </h3>
+              <div className="grid grid-cols-1 gap-4">
+                <TextAreaField label="نقاط القوة" value={form.strengths} onChange={(v) => setForm((f) => ({ ...f, strengths: v }))} placeholder="ما يتميز به الموظف..." rows={2} />
+                <TextAreaField label="مجالات التحسين" value={form.improvements} onChange={(v) => setForm((f) => ({ ...f, improvements: v }))} placeholder="المجالات التي تحتاج تطوير..." rows={2} />
+                <TextAreaField label="الأهداف المستقبلية" value={form.goals} onChange={(v) => setForm((f) => ({ ...f, goals: v }))} placeholder="الأهداف المتوقعة للفترة القادمة..." rows={2} />
+                <TextAreaField label="ملاحظات عامة" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="أي ملاحظات إضافية..." rows={2} />
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
 
-        <div>
-          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
-            <BookOpen className="w-4 h-4" />
-            التفاصيل والملاحظات
-          </h3>
-          <div className="grid grid-cols-1 gap-4">
-            <TextAreaField label="نقاط القوة" value={form.strengths} onChange={(v) => setForm((f) => ({ ...f, strengths: v }))} placeholder="ما يتميز به الموظف..." rows={2} />
-            <TextAreaField label="مجالات التحسين" value={form.improvements} onChange={(v) => setForm((f) => ({ ...f, improvements: v }))} placeholder="المجالات التي تحتاج تطوير..." rows={2} />
-            <TextAreaField label="الأهداف المستقبلية" value={form.goals} onChange={(v) => setForm((f) => ({ ...f, goals: v }))} placeholder="الأهداف المتوقعة للفترة القادمة..." rows={2} />
-            <TextAreaField label="ملاحظات عامة" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="أي ملاحظات إضافية..." rows={2} />
+            <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات التقييم" />
           </div>
-        </div>
-      </div>
-
-      <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات التقييم" />
-
-      <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation("/hr/performance")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending} size="lg" rateLimitAware>
-          {createMut.isPending ? "جاري الحفظ..." : "حفظ التقييم"}
-        </Button>
-      </div>
+        }
+        onSubmit={handleSubmit}
+        saving={createMut.isPending}
+        saveLabel="حفظ التقييم"
+        isDirty={Boolean(form.employeeId || form.period)}
+      />
     </CreatePageLayout>
   );
 }
