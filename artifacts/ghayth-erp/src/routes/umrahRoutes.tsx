@@ -71,8 +71,14 @@ const UmrahGroupProfitabilityReport = lazy(() => import("@/pages/umrah/reports/p
 const UmrahAgentProfitabilityReport = lazy(() => import("@/pages/umrah/reports/agent-profitability"));
 const UmrahViolationsSummaryReport = lazy(() => import("@/pages/umrah/reports/violations-summary"));
 const UmrahCommissionsSummaryReport = lazy(() => import("@/pages/umrah/reports/commissions-summary"));
+// §11 stub → available — تقرير تكاليف العمرة (10 cost categories per dimension).
+const UmrahCostsReport = lazy(() => import("@/pages/umrah/reports/umrah-costs"));
 const UmrahNuskInvoicesSummaryReport = lazy(() => import("@/pages/umrah/reports/nusk-invoices-summary"));
 const UmrahTransportReport = lazy(() => import("@/pages/umrah/reports/transport-requests"));
+// §11 partial → available — تقرير ملخّص فواتير العملاء (KPIs + 3 breakdowns + 100 recent).
+const UmrahSalesInvoicesSummaryReport = lazy(() => import("@/pages/umrah/reports/sales-invoices-summary"));
+// §11 partial → available — ملخّص أخطاء الاستيراد (KPIs + 3 breakdowns + 100 recent batches).
+const UmrahImportErrorsSummaryReport = lazy(() => import("@/pages/umrah/reports/import-errors-summary"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -123,8 +129,11 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/reports/agent-profitability", component: UmrahAgentProfitabilityReport, module: "operations" },
   { path: "/umrah/reports/violations-summary", component: UmrahViolationsSummaryReport, module: "operations" },
   { path: "/umrah/reports/commissions-summary", component: UmrahCommissionsSummaryReport, module: "operations" },
+  { path: "/umrah/reports/umrah-costs", component: UmrahCostsReport, module: "operations" },
   { path: "/umrah/reports/nusk-invoices-summary", component: UmrahNuskInvoicesSummaryReport, module: "operations" },
   { path: "/umrah/reports/transport-requests", component: UmrahTransportReport, module: "operations" },
+  { path: "/umrah/reports/sales-invoices-summary", component: UmrahSalesInvoicesSummaryReport, module: "operations" },
+  { path: "/umrah/reports/import-errors-summary", component: UmrahImportErrorsSummaryReport, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },

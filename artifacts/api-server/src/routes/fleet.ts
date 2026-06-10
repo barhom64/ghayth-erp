@@ -15,7 +15,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { hashPassword } from "../lib/auth.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2, currentDateInTz } from "../lib/businessHelpers.js";
 import { sendMessage } from "../lib/messageSender.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -62,6 +62,14 @@ const vehicleTechnicalProfileSchema = z.object({
   safetyFeatures: z.array(z.string()).optional(),
   operatingHours: z.coerce.number().nonnegative().optional(),
   equipmentAttachments: z.array(z.string()).optional(),
+  // #1812 Wave 0.3 — assignment-decision fields (migration 284). The
+  // canonical filter the assignment engine uses to decide which
+  // vehicles can serve a passenger booking vs a cargo booking, and
+  // what payload the dispatcher should actually quote (operational
+  // payload sits below technical payloadKg for a safety margin).
+  operationalPayloadKg: z.coerce.number().nonnegative().optional(),
+  validForPassengers: z.boolean().optional(),
+  validForCargo: z.boolean().optional(),
 });
 
 // #1733 Pricing tier (Issue Comment 3) — driverServiceProfile extends
@@ -524,11 +532,14 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
 
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate","requiredLicenseClass",
-        "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments")
+        "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments",
+        "operationalPayloadKg","validForPassengers","validForCargo")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,
-        $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)`,
+        $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,
+        $42,$43,$44)`,
       [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null, b.requiredLicenseClass || null,
-        b.vehicleType ?? null, b.payloadKg ?? null, b.boxLengthCm ?? null, b.boxWidthCm ?? null, b.boxHeightCm ?? null, b.axleCount ?? null, b.tireCount ?? null, b.tireSize ?? null, b.engineDisplacementCc ?? null, b.transmissionType ?? null, b.seatCount ?? null, b.hasAc ?? null, b.screenCount ?? null, b.doorCount ?? null, b.upholsteryType ?? null, b.safetyFeatures ? JSON.stringify(b.safetyFeatures) : null, b.operatingHours ?? null, b.equipmentAttachments ? JSON.stringify(b.equipmentAttachments) : null]
+        b.vehicleType ?? null, b.payloadKg ?? null, b.boxLengthCm ?? null, b.boxWidthCm ?? null, b.boxHeightCm ?? null, b.axleCount ?? null, b.tireCount ?? null, b.tireSize ?? null, b.engineDisplacementCc ?? null, b.transmissionType ?? null, b.seatCount ?? null, b.hasAc ?? null, b.screenCount ?? null, b.doorCount ?? null, b.upholsteryType ?? null, b.safetyFeatures ? JSON.stringify(b.safetyFeatures) : null, b.operatingHours ?? null, b.equipmentAttachments ? JSON.stringify(b.equipmentAttachments) : null,
+        b.operationalPayloadKg ?? null, b.validForPassengers ?? null, b.validForCargo ?? null]
     );
     assertInsert(insertId, "fleet_vehicles");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -1079,6 +1090,8 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
       "requiredLicenseClass",
       // #1733 Blocker #2 — technical profile fields.
       "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments",
+      // #1812 Wave 0.3 — assignment-decision fields from migration 284.
+      "operationalPayloadKg","validForPassengers","validForCargo",
     ] as const;
     const colMap: Record<string, string> = {
       plateNumber: '"plateNumber"',
@@ -1118,6 +1131,10 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
       safetyFeatures: '"safetyFeatures"',
       operatingHours: '"operatingHours"',
       equipmentAttachments: '"equipmentAttachments"',
+      // #1812 Wave 0.3.
+      operationalPayloadKg: '"operationalPayloadKg"',
+      validForPassengers: '"validForPassengers"',
+      validForCargo: '"validForCargo"',
     };
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
@@ -4199,10 +4216,43 @@ const createRentalContractSchema = z.object({
   startDate: z.string().min(1),
   endDate: z.string().optional(),
   dailyRate: z.coerce.number().nonnegative().optional(),
+  weeklyRate: z.coerce.number().nonnegative().optional(),
+  monthlyRate: z.coerce.number().nonnegative().optional(),
   totalAmount: z.coerce.number().nonnegative().optional(),
   securityDeposit: z.coerce.number().nonnegative().optional(),
   paymentTerms: z.enum(["daily", "weekly", "monthly", "quarterly", "one_time"]).optional(),
+  // #1812 Wave 1 Step C — R5: with or without a company driver. When
+  // withDriver is true, driverId must point to a fleet_drivers row in
+  // the same company; the rental is then logged as a "driver assigned"
+  // operation and the driver's licence/eligibility checks apply.
+  withDriver: z.boolean().optional(),
+  driverId: z.coerce.number().int().positive().optional(),
   notes: z.string().optional(),
+}).refine(
+  (b) => !b.withDriver || b.driverId != null,
+  { message: "driverId مطلوب عند withDriver=true", path: ["driverId"] },
+);
+
+// #1812 Wave 1 Step C — R7: handover state recorded at vehicle pickup.
+// The contract must already be active. Odometer is the integer km
+// reading; fuelLevel is a 0..1 fraction. notes captures pre-existing
+// scratches / interior wear so a return inspection has a baseline.
+const rentalHandoverSchema = z.object({
+  handoverOdometer: z.coerce.number().int().nonnegative(),
+  handoverFuelLevel: z.coerce.number().min(0).max(1),
+  handoverNotes: z.string().max(2000).optional(),
+});
+
+// #1812 Wave 1 Step C — R9: return state recorded when the customer
+// brings the vehicle back. Overage (extra km / refuel charge / damage
+// surcharge) is set by the operator on the same call so the Accounting
+// Candidate downstream carries the surcharge as a separate line.
+const rentalReturnSchema = z.object({
+  returnOdometer: z.coerce.number().int().nonnegative(),
+  returnFuelLevel: z.coerce.number().min(0).max(1),
+  returnNotes: z.string().max(2000).optional(),
+  actualEndDate: z.string().optional(),
+  overageAmount: z.coerce.number().nonnegative().optional(),
 });
 
 router.get("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
@@ -4211,10 +4261,13 @@ router.get("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "
     const vehicleId = req.query.vehicleId ? Number(req.query.vehicleId) : null;
     const status = req.query.status ? String(req.query.status) : null;
     const params: unknown[] = [scope.companyId];
-    let sql = `SELECT c.*, v."plateNumber", cl.name AS "clientName"
+    let sql = `SELECT c.*, v."plateNumber", v.make, v.model,
+                      cl.name AS "clientName",
+                      d.name AS "driverName"
                  FROM fleet_rental_contracts c
                  LEFT JOIN fleet_vehicles v ON v.id = c."vehicleId" AND v."deletedAt" IS NULL
                  LEFT JOIN clients cl ON cl.id = c."clientId" AND cl."deletedAt" IS NULL
+                 LEFT JOIN fleet_drivers d ON d.id = c."driverId" AND d."deletedAt" IS NULL
                 WHERE c."companyId" = $1 AND c."deletedAt" IS NULL`;
     if (vehicleId) { params.push(vehicleId); sql += ` AND c."vehicleId" = $${params.length}`; }
     if (status) { params.push(status); sql += ` AND c.status = $${params.length}`; }
@@ -4239,11 +4292,37 @@ router.post("/rental-contracts", authorize({ feature: "fleet.vehicles", action: 
     );
     if (!cli) throw new ValidationError("العميل غير موجود", { field: "clientId" });
 
+    // #1812 Wave 1 Step C — if withDriver, validate the driverId is a
+    // fleet driver in the same company. The rental row links the
+    // historical driver assignment; eligibility/license checks live on
+    // dispatch-time guards in transport-bookings.ts.
+    if (b.withDriver) {
+      const [drv] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_drivers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [b.driverId!, scope.companyId],
+      );
+      if (!drv) throw new ValidationError("السائق غير موجود", { field: "driverId" });
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_rental_contracts
-         ("companyId","branchId","vehicleId","clientId","startDate","endDate","dailyRate","totalAmount","securityDeposit","paymentTerms",status,notes,"createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'draft',$11,$12)`,
-      [scope.companyId, veh.branchId, b.vehicleId, b.clientId, b.startDate, b.endDate ?? null, b.dailyRate ?? null, b.totalAmount ?? null, b.securityDeposit ?? 0, b.paymentTerms ?? 'monthly', b.notes ?? null, scope.userId]
+         ("companyId","branchId","vehicleId","clientId","startDate","endDate",
+          "dailyRate","weeklyRate","monthlyRate","totalAmount","securityDeposit",
+          "paymentTerms",status,
+          "withDriver","driverId",
+          notes,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,
+               $7,$8,$9,$10,$11,
+               $12,'draft',
+               $13,$14,
+               $15,$16)`,
+      [
+        scope.companyId, veh.branchId, b.vehicleId, b.clientId, b.startDate, b.endDate ?? null,
+        b.dailyRate ?? null, b.weeklyRate ?? null, b.monthlyRate ?? null,
+        b.totalAmount ?? null, b.securityDeposit ?? 0,
+        b.paymentTerms ?? 'monthly',
+        b.withDriver ?? false, b.withDriver ? b.driverId! : null,
+        b.notes ?? null, scope.userId,
+      ],
     );
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -4256,6 +4335,30 @@ router.post("/rental-contracts", authorize({ feature: "fleet.vehicles", action: 
     }).catch((e) => logger.error(e, "fleet rental contract event failed"));
     res.status(201).json({ id: insertId, ok: true });
   } catch (err) { handleRouteError(err, res, "rental contract create error"); }
+});
+
+// #1812 Wave 1 Step C — single-contract detail. The SPA detail page
+// (rental-detail.tsx) needs the full row + joined vehicle/client/
+// driver labels so the handover + return forms can render without
+// re-fetching three lookup endpoints.
+router.get("/rental-contracts/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery(
+      `SELECT c.*, v."plateNumber", v.make, v.model,
+              cl.name AS "clientName",
+              d.name AS "driverName"
+         FROM fleet_rental_contracts c
+         LEFT JOIN fleet_vehicles v ON v.id = c."vehicleId" AND v."deletedAt" IS NULL
+         LEFT JOIN clients cl ON cl.id = c."clientId" AND cl."deletedAt" IS NULL
+         LEFT JOIN fleet_drivers d ON d.id = c."driverId" AND d."deletedAt" IS NULL
+        WHERE c.id = $1 AND c."companyId" = $2 AND c."deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!row) throw new NotFoundError("العقد غير موجود");
+    res.json({ data: row });
+  } catch (err) { handleRouteError(err, res, "rental contract detail error"); }
 });
 
 router.post("/rental-contracts/:id/activate", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
@@ -4274,6 +4377,124 @@ router.post("/rental-contracts/:id/activate", authorize({ feature: "fleet.vehicl
     }).catch((e) => logger.error(e, "fleet rental audit failed"));
     res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "rental contract activate error"); }
+});
+
+// #1812 Wave 1 Step C — R7 handover. The dispatcher records the
+// vehicle state (odometer + fuel level + any pre-existing damage
+// notes) at the moment the customer takes the keys. Allowed only when
+// the contract is `active` (not draft / completed / cancelled).
+router.post("/rental-contracts/:id/handover", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(rentalHandoverSchema.safeParse(req.body));
+    const [c] = await rawQuery<{ id: number; status: string }>(
+      `SELECT id, status FROM fleet_rental_contracts
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!c) throw new NotFoundError("العقد غير موجود");
+    if (c.status !== "active") {
+      throw new ConflictError("التسليم لا يُسجَّل إلا بعد تفعيل العقد");
+    }
+    await rawExecute(
+      `UPDATE fleet_rental_contracts
+          SET "handoverOdometer" = $1,
+              "handoverFuelLevel" = $2,
+              "handoverNotes" = $3,
+              "handoverAt" = NOW(),
+              "updatedAt" = NOW()
+        WHERE id = $4 AND "companyId" = $5`,
+      [b.handoverOdometer, b.handoverFuelLevel, b.handoverNotes ?? null, id, scope.companyId],
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "handover", entity: "fleet_rental_contracts", entityId: id,
+      after: { odometer: b.handoverOdometer, fuelLevel: b.handoverFuelLevel },
+    }).catch((e) => logger.error(e, "rental handover audit failed"));
+    res.json({ ok: true });
+  } catch (err) { handleRouteError(err, res, "rental handover error"); }
+});
+
+// #1812 Wave 1 Step C — R9 return. Records the closing state and
+// flips the contract to `completed`. The overage amount the operator
+// supplies here is what will surface as a separate line in the
+// downstream Accounting Candidate — no JE is posted in this screen
+// (per the user's "السائق/الشاشة لا ترى المال — Candidate فقط" rule).
+router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(rentalReturnSchema.safeParse(req.body));
+    const [c] = await rawQuery<{
+      id: number; status: string; handoverAt: string | null;
+      ref: string | null; clientId: number; vehicleId: number;
+      driverId: number | null; startDate: string;
+      totalAmount: string | null; notes: string | null;
+      branchId: number | null;
+    }>(
+      `SELECT id, status, "handoverAt", ref, "clientId", "vehicleId",
+              "driverId", "startDate", "totalAmount", notes, "branchId"
+         FROM fleet_rental_contracts
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!c) throw new NotFoundError("العقد غير موجود");
+    if (c.status !== "active") {
+      throw new ConflictError("الإرجاع لا يُسجَّل إلا على عقد فعّال");
+    }
+    if (!c.handoverAt) {
+      throw new ConflictError("لا يمكن تسجيل الإرجاع قبل التسليم");
+    }
+    await rawExecute(
+      `UPDATE fleet_rental_contracts
+          SET "returnOdometer" = $1,
+              "returnFuelLevel" = $2,
+              "returnNotes" = $3,
+              "returnedAt" = NOW(),
+              "actualEndDate" = COALESCE($4, CURRENT_DATE),
+              "overageAmount" = COALESCE($5, 0),
+              status = 'completed',
+              "updatedAt" = NOW()
+        WHERE id = $6 AND "companyId" = $7`,
+      [b.returnOdometer, b.returnFuelLevel, b.returnNotes ?? null,
+       b.actualEndDate ?? null, b.overageAmount ?? null,
+       id, scope.companyId],
+    );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "return", entity: "fleet_rental_contracts", entityId: id,
+      after: {
+        returnOdometer: b.returnOdometer, returnFuelLevel: b.returnFuelLevel,
+        overageAmount: b.overageAmount ?? 0,
+      },
+    }).catch((e) => logger.error(e, "rental return audit failed"));
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.rental_contract.completed",
+      entity: "fleet_rental_contracts", entityId: id,
+      details: JSON.stringify({ overageAmount: b.overageAmount ?? 0 }),
+    }).catch((e) => logger.error(e, "rental return event failed"));
+    // #1812 — الإيراد عند الإغلاق → Accounting Candidate. Hands the
+    // closed rental to the accountant queue (transport_billing_candidates)
+    // with quantity = rental days so revenue is recognised over the
+    // duration. NO journal entry here — the accountant materializes from
+    // the finance side. Soft-fail: a candidate hiccup must not roll back
+    // the operational close (the insert is idempotent and re-runnable).
+    const candidate = await fleetEngine.createRentalBillingCandidate(
+      { companyId: scope.companyId, branchId: c.branchId ?? scope.branchId ?? 0, createdBy: scope.userId },
+      {
+        id: c.id, ref: c.ref, clientId: c.clientId, vehicleId: c.vehicleId,
+        driverId: c.driverId,
+        startDate: c.startDate,
+        actualEndDate: b.actualEndDate ?? currentDateInTz(),
+        totalAmount: c.totalAmount != null ? Number(c.totalAmount) : null,
+        overageAmount: b.overageAmount ?? 0,
+        notes: c.notes,
+      },
+    ).catch((e) => { logger.error(e, "rental billing candidate failed"); return null; });
+    res.json({ ok: true, billingCandidateId: candidate?.id ?? null });
+  } catch (err) { handleRouteError(err, res, "rental return error"); }
 });
 
 // Schedule a payment row (operator-driven schedule, mirrors property

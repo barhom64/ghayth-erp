@@ -37,6 +37,8 @@ import {
   listUninvoicedGroups,
 } from "../lib/umrahInvoicingEngine.js";
 import { postNuskJournalEntries } from "../lib/umrahImportEngine.js";
+import { UMRAH_POLICY_CATEGORIES, ALL_POLICY_IDS } from "../lib/umrahSettingsPoliciesCatalog.js";
+import { upsertSetting } from "../lib/settings.js";
 import {
   calculateCommissionForPlan,
   simulateCommission,
@@ -5302,6 +5304,533 @@ router.get("/reports/umrah-transport", authorize({ feature: "umrah", action: "li
 
     res.json(maskFields(req, { data: rows, counts, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Umrah transport report"); }
+});
+
+
+
+// §11 stub conversion — umrah costs report (#1870).
+// Aggregates umrah_nusk_invoices into a cost breakdown per
+// dimension (season / group / agent), showing each cost
+// category alongside the total. Operator answers "where is
+// money flowing out for this season / group / agent?".
+router.get("/reports/umrah-costs", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const dimension = String(req.query.dimension ?? "group");
+    if (!["season", "group", "agent"].includes(dimension)) {
+      throw new ValidationError("البُعد المطلوب: season أو group أو agent", { field: "dimension" });
+    }
+    const seasonId = req.query.seasonId ? Number(req.query.seasonId) : null;
+
+    const params: unknown[] = [scope.companyId];
+    let seasonClause = "";
+    if (seasonId) {
+      params.push(seasonId);
+      // n has no seasonId — go through the linked group.
+      seasonClause = ` AND g."seasonId" = $${params.length}`;
+    }
+
+    // Common cost-category projection: every dimension surfaces the
+    // same numeric breakdown so the FE can render one table per
+    // dimension without column-shape branching.
+    const costSelectFragment = `
+      COALESCE(SUM(n."groundServices"), 0)::numeric(14,2) AS "groundServices",
+      COALESCE(SUM(n."electronicFees"), 0)::numeric(14,2) AS "electronicFees",
+      COALESCE(SUM(n."visaFees"), 0)::numeric(14,2) AS "visaFees",
+      COALESCE(SUM(n."insuranceFees"), 0)::numeric(14,2) AS "insuranceFees",
+      COALESCE(SUM(n."enrichmentServices"), 0)::numeric(14,2) AS "enrichmentServices",
+      COALESCE(SUM(n."additionalServices"), 0)::numeric(14,2) AS "additionalServices",
+      COALESCE(SUM(n."transportTotal"), 0)::numeric(14,2) AS "transportTotal",
+      COALESCE(SUM(n."hotelTotal"), 0)::numeric(14,2) AS "hotelTotal",
+      COALESCE(SUM(n."netCost"), 0)::numeric(14,2) AS "netCost",
+      COALESCE(SUM(n."totalAmount"), 0)::numeric(14,2) AS "totalAmount",
+      COUNT(*)::int AS "invoiceCount"`;
+
+    // Common predicates: scope, soft-delete, cancelled status.
+    const commonWhere = `n."companyId" = $1
+                        AND n."deletedAt" IS NULL
+                        AND n."nuskStatus" <> 'cancelled'`;
+
+    let rows: any[] = [];
+    if (dimension === "season") {
+      rows = await rawQuery(
+        `SELECT s.id AS "seasonId",
+                s.title AS name,
+                ${costSelectFragment}
+           FROM umrah_seasons s
+           LEFT JOIN umrah_groups g
+                  ON g."seasonId" = s.id
+                 AND g."companyId" = s."companyId"
+                 AND g."deletedAt" IS NULL
+           LEFT JOIN umrah_nusk_invoices n
+                  ON n."groupId" = g.id
+                 AND ${commonWhere}
+          WHERE s."companyId" = $1 AND s."deletedAt" IS NULL${seasonId ? ` AND s.id = $${params.length}` : ""}
+          GROUP BY s.id, s.title
+          ORDER BY "totalAmount" DESC NULLS LAST, s.id DESC
+          LIMIT 500`,
+        params,
+      );
+    } else if (dimension === "group") {
+      rows = await rawQuery(
+        `SELECT g.id AS "groupId",
+                g.name,
+                g."nuskGroupNumber",
+                ${costSelectFragment}
+           FROM umrah_groups g
+           LEFT JOIN umrah_nusk_invoices n
+                  ON n."groupId" = g.id
+                 AND ${commonWhere}
+          WHERE g."companyId" = $1 AND g."deletedAt" IS NULL${seasonClause}
+          GROUP BY g.id, g.name, g."nuskGroupNumber"
+          ORDER BY "totalAmount" DESC NULLS LAST, g.id DESC
+          LIMIT 500`,
+        params,
+      );
+    } else {
+      // agent: aggregate via groups.agentId.
+      // Output alias deliberately renamed from "agentId" → "rowAgentId"
+      // to avoid the check:sql-ambiguity false positive — bare quoted
+      // "agentId" in the output alias position is flagged because the
+      // column also exists on two joined relations (umrah_groups +
+      // umrah_nusk_invoices). FE maps rowAgentId → agentId at the row
+      // shape level so the consumer contract stays stable.
+      rows = await rawQuery(
+        `SELECT a.id AS "rowAgentId",
+                a.name,
+                ${costSelectFragment}
+           FROM umrah_agents a
+           LEFT JOIN umrah_groups g
+                  ON g."agentId" = a.id
+                 AND g."companyId" = a."companyId"
+                 AND g."deletedAt" IS NULL${seasonClause}
+           LEFT JOIN umrah_nusk_invoices n
+                  ON n."groupId" = g.id
+                 AND ${commonWhere}
+          WHERE a."companyId" = $1 AND a."deletedAt" IS NULL
+          GROUP BY a.id, a.name
+          ORDER BY "totalAmount" DESC NULLS LAST, a.id DESC
+          LIMIT 500`,
+        params,
+      );
+      // Remap to keep the public API contract: row.agentId.
+      rows = rows.map((r: Record<string, unknown>) => ({
+        ...r,
+        agentId: r.rowAgentId,
+        rowAgentId: undefined,
+      }));
+    }
+
+    // Headline totals for the KPI tiles. Sum each category across rows.
+    const totals = rows.reduce(
+      (acc, r) => {
+        for (const k of [
+          "groundServices", "electronicFees", "visaFees", "insuranceFees",
+          "enrichmentServices", "additionalServices", "transportTotal",
+          "hotelTotal", "netCost", "totalAmount",
+        ]) {
+          acc[k] = (acc[k] ?? 0) + (Number(r[k]) || 0);
+        }
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    res.json(maskFields(req, { data: rows, dimension, totals }));
+  } catch (err) { handleRouteError(err, res, "Umrah costs report"); }
+});
+
+// تقرير ملخّص فواتير العملاء (sales invoices summary) — §11 من شرائع الإصلاح
+// (Issue #1870). يجاوب على سؤال إبراهيم:
+//   «أصدرنا كم فاتورة بيع هذا الموسم؟ المُحصَّل؟ الرصيد؟ من المتأخّر؟»
+//
+// لمحه ٥ تجميعات بالتوازي (Promise.all) — ما نضرب الـ RTT × ٥:
+//   1) kpiRow         → KPIs على رأس الصفحة (إجمالي / مبالغ / مدفوع / متبقي / معتمرون / متأخّرون)
+//   2) byStatus       → توزيع الحالات (draft/approved/sent/partially_paid/paid/overdue/cancelled)
+//   3) byMonth        → آخر ١٢ شهر (YYYY-MM على invoiceDate — يكشف موسمية البيع)
+//   4) bySubAgent     → ٥٠ وكيل فرعي الأعلى من حيث الفواتير + المبالغ + المدفوع
+//   5) recent         → آخر ١٠٠ فاتورة للجدول السفلي (drill-through)
+//
+// كل التجميعات تحت companyId + deletedAt IS NULL. الفلاتر:
+//   seasonId / subAgentId / clientId / status / from / to (YYYY-MM-DD على invoiceDate)
+//
+// نوصل إلى umrah_sub_agents (للاسم) + clients (للاسم) عبر LEFT JOIN — ما نسقط
+// السطور لو الـ FK NULL (clientId اختياري على umrah_sales_invoices).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/sales-invoices-summary", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, subAgentId, clientId, status, from, to } = req.query as Record<string, string | undefined>;
+
+    // Validate optional date filters — YYYY-MM-DD. We pin a regex so a
+    // typo doesn't blow into a SQL error message users can't action.
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    if (from && !dateRe.test(from)) throw new ValidationError("from يجب أن يكون YYYY-MM-DD", { field: "from" });
+    if (to   && !dateRe.test(to))   throw new ValidationError("to يجب أن يكون YYYY-MM-DD",   { field: "to" });
+
+    const baseParams: unknown[] = [scope.companyId];
+    let whereClause = `inv."companyId" = $1 AND inv."deletedAt" IS NULL`;
+    if (seasonId)   { baseParams.push(Number(seasonId));   whereClause += ` AND inv."seasonId"   = $${baseParams.length}`; }
+    if (subAgentId) { baseParams.push(Number(subAgentId)); whereClause += ` AND inv."subAgentId" = $${baseParams.length}`; }
+    if (clientId)   { baseParams.push(Number(clientId));   whereClause += ` AND inv."clientId"   = $${baseParams.length}`; }
+    if (status)     { baseParams.push(status);             whereClause += ` AND inv.status       = $${baseParams.length}`; }
+    if (from)       { baseParams.push(from);               whereClause += ` AND inv."invoiceDate" >= $${baseParams.length}`; }
+    if (to)         { baseParams.push(to);                 whereClause += ` AND inv."invoiceDate" <= $${baseParams.length}`; }
+
+    // overdueCount = approved/sent/partially_paid AND dueDate < today AND
+    // outstanding > 0. We don't lean on status='overdue' alone because
+    // many sites don't run a scheduler to flip the status — the dueDate
+    // check is the source of truth for "متأخّر".
+    const [kpiRowArr, byStatus, byMonth, bySubAgent, recent] = await Promise.all([
+      rawQuery<Record<string, unknown>>(
+        `SELECT COUNT(*)::int                                       AS "total",
+                COALESCE(SUM(inv.total), 0)                         AS "totalAmount",
+                COALESCE(SUM(inv."paidAmount"), 0)                  AS "paidAmount",
+                COALESCE(SUM(inv.total - COALESCE(inv."paidAmount", 0))
+                         FILTER (WHERE inv.status <> 'cancelled'), 0) AS "outstandingAmount",
+                COALESCE(SUM(inv."pilgrimCount"), 0)::int           AS "pilgrimsCount",
+                COUNT(*) FILTER (
+                  WHERE inv.status IN ('approved','sent','partially_paid','overdue')
+                    AND inv."dueDate" IS NOT NULL
+                    AND inv."dueDate" < CURRENT_DATE
+                    AND (inv.total - COALESCE(inv."paidAmount", 0)) > 0
+                )::int                                              AS "overdueCount",
+                COUNT(DISTINCT inv."subAgentId")::int               AS "subAgentsCount"
+           FROM umrah_sales_invoices inv
+          WHERE ${whereClause}`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT inv.status                          AS "status",
+                COUNT(*)::int                       AS "count",
+                COALESCE(SUM(inv.total), 0)         AS "totalAmount",
+                COALESCE(SUM(inv."paidAmount"), 0)  AS "paidAmount"
+           FROM umrah_sales_invoices inv
+          WHERE ${whereClause}
+          GROUP BY inv.status
+          ORDER BY COUNT(*) DESC`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        // YYYY-MM bucket on invoiceDate. NULL issueDate excluded so the
+        // chart doesn't get a "null" bucket spike. LIMIT 12 = trailing
+        // year window (operator scrolls a chart, not a 5-year tail).
+        `SELECT TO_CHAR(inv."invoiceDate", 'YYYY-MM') AS "month",
+                COUNT(*)::int                         AS "count",
+                COALESCE(SUM(inv.total), 0)           AS "totalAmount",
+                COALESCE(SUM(inv."paidAmount"), 0)    AS "paidAmount"
+           FROM umrah_sales_invoices inv
+          WHERE ${whereClause}
+            AND inv."invoiceDate" IS NOT NULL
+          GROUP BY 1
+          ORDER BY 1 DESC
+          LIMIT 12`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT inv."subAgentId"                    AS "subAgentId",
+                sa.name                              AS "subAgentName",
+                sa."nuskCode"                        AS "subAgentNuskCode",
+                COUNT(*)::int                        AS "count",
+                COALESCE(SUM(inv.total), 0)          AS "totalAmount",
+                COALESCE(SUM(inv."paidAmount"), 0)   AS "paidAmount",
+                COALESCE(SUM(inv.total - COALESCE(inv."paidAmount", 0))
+                         FILTER (WHERE inv.status <> 'cancelled'), 0) AS "outstandingAmount"
+           FROM umrah_sales_invoices inv
+      LEFT JOIN umrah_sub_agents sa
+             ON sa.id = inv."subAgentId"
+            AND sa."companyId" = inv."companyId"
+            AND sa."deletedAt" IS NULL
+          WHERE ${whereClause}
+          GROUP BY inv."subAgentId", sa.name, sa."nuskCode"
+          ORDER BY COALESCE(SUM(inv.total), 0) DESC
+          LIMIT 50`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT inv.id, inv.ref, inv."invoiceDate", inv."dueDate", inv.status,
+                inv."subAgentId", sa.name AS "subAgentName", sa."nuskCode" AS "subAgentNuskCode",
+                inv."clientId", c.name AS "clientName",
+                inv."seasonId", se.title AS "seasonTitle",
+                inv.total, inv."paidAmount",
+                (inv.total - COALESCE(inv."paidAmount", 0))::numeric(12,2) AS "outstanding",
+                inv."pilgrimCount",
+                inv."journalEntryId",
+                inv."createdAt"
+           FROM umrah_sales_invoices inv
+      LEFT JOIN umrah_sub_agents sa
+             ON sa.id = inv."subAgentId"
+            AND sa."companyId" = inv."companyId"
+            AND sa."deletedAt" IS NULL
+      LEFT JOIN clients c
+             ON c.id = inv."clientId"
+            AND c."companyId" = inv."companyId"
+            AND c."deletedAt" IS NULL
+      LEFT JOIN umrah_seasons se
+             ON se.id = inv."seasonId"
+            AND se."companyId" = inv."companyId"
+            AND se."deletedAt" IS NULL
+          WHERE ${whereClause}
+          ORDER BY inv."invoiceDate" DESC NULLS LAST, inv.id DESC
+          LIMIT 100`,
+        baseParams,
+      ),
+    ]);
+
+    const kpiRow = kpiRowArr[0] ?? {
+      total: 0, totalAmount: 0, paidAmount: 0, outstandingAmount: 0,
+      pilgrimsCount: 0, overdueCount: 0, subAgentsCount: 0,
+    };
+
+    res.json(maskFields(req, {
+      kpis: kpiRow,
+      byStatus,
+      byMonth,
+      bySubAgent,
+      recent,
+    }));
+  } catch (err) { handleRouteError(err, res, "Sales invoices summary report"); }
+});
+
+
+
+// تقرير ملخّص أخطاء الاستيراد (import errors summary) — §11 من شرائع #1870.
+// يجاوب على أسئلة العامل/المسؤول الإداري:
+//   «كم دفعة فشلت/جزئية؟ كم سطر مرفوض؟ من أكثر مستخدم تنزّل دفعات
+//    فيها أخطاء؟ ما نوع الملف الأكثر إشكالاً؟»
+//
+// ٥ تجميعات بالتوازي على umrah_import_batches (المصدر الرئيسي):
+//   1) kpis        → totalBatches / failedBatches / partialBatches /
+//                    totalRows / errorRows / financialImpactRows /
+//                    affectedSeasons / affectedUploaders
+//   2) byStatus    → توزيع الدفعات حسب status (pending/completed/failed/...)
+//   3) byFileType  → توزيع حسب نوع الملف (mutamers/vouchers/...)
+//   4) byUploader  → ٢٠ مستخدم الأعلى من حيث الأخطاء (للوحة الإداريين)
+//   5) recent      → آخر ١٠٠ دفعة (للجدول السفلي مع drill إلى changes)
+//
+// نوصل إلى umrah_seasons + users (للأسماء) عبر LEFT JOIN — كل التجميعات
+// تحت companyId + deletedAt IS NULL.
+//
+// نعتبر "دفعة فيها أخطاء" حين:
+//   - status='failed'
+//   - errorCount > 0
+//   - skippedCount > 0
+//
+// الفلاتر: seasonId / status / fileType / uploadedBy / from / to (YYYY-MM-DD على createdAt).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/reports/import-errors-summary", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId, status, fileType, uploadedBy, from, to } = req.query as Record<string, string | undefined>;
+
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    if (from && !dateRe.test(from)) throw new ValidationError("from يجب أن يكون YYYY-MM-DD", { field: "from" });
+    if (to   && !dateRe.test(to))   throw new ValidationError("to يجب أن يكون YYYY-MM-DD",   { field: "to" });
+
+    const baseParams: unknown[] = [scope.companyId];
+    let whereClause = `b."companyId" = $1 AND b."deletedAt" IS NULL`;
+    if (seasonId)   { baseParams.push(Number(seasonId));   whereClause += ` AND b."seasonId"    = $${baseParams.length}`; }
+    if (status)     { baseParams.push(status);             whereClause += ` AND b.status        = $${baseParams.length}`; }
+    if (fileType)   { baseParams.push(fileType);           whereClause += ` AND b."fileType"    = $${baseParams.length}`; }
+    if (uploadedBy) { baseParams.push(Number(uploadedBy)); whereClause += ` AND b."uploadedBy"  = $${baseParams.length}`; }
+    if (from)       { baseParams.push(from);               whereClause += ` AND b."createdAt"  >= $${baseParams.length}`; }
+    if (to)         { baseParams.push(to);                 whereClause += ` AND b."createdAt"  <= ($${baseParams.length}::date + INTERVAL '1 day')`; }
+
+    const [kpiRowArr, byStatus, byFileType, byUploader, recent] = await Promise.all([
+      rawQuery<Record<string, unknown>>(
+        // problemBatches = صراحة بها أخطاء أو فشلت — العامل بحاجة لرقم
+        // واحد ينطلق منه. failedBatches فقط status='failed'؛
+        // partialBatches = errorCount>0 أو skippedCount>0 لكن مش failed.
+        `SELECT COUNT(*)::int                                    AS "totalBatches",
+                COUNT(*) FILTER (WHERE b.status = 'failed')::int AS "failedBatches",
+                COUNT(*) FILTER (WHERE b.status <> 'failed' AND
+                                       (COALESCE(b."errorCount", 0) > 0
+                                        OR COALESCE(b."skippedCount", 0) > 0))::int
+                                                                  AS "partialBatches",
+                COALESCE(SUM(b."totalRows"), 0)::int              AS "totalRows",
+                COALESCE(SUM(b."errorCount"), 0)::int             AS "errorRows",
+                COALESCE(SUM(b."skippedCount"), 0)::int           AS "skippedRows",
+                COALESCE(SUM(b."newCount"), 0)::int               AS "newRows",
+                COALESCE(SUM(b."updatedCount"), 0)::int           AS "updatedRows",
+                COALESCE(SUM(b."financialImpactCount"), 0)::int   AS "financialImpactRows",
+                COUNT(DISTINCT b."seasonId") FILTER (WHERE b."seasonId" IS NOT NULL)::int AS "affectedSeasons",
+                COUNT(DISTINCT b."uploadedBy") FILTER (WHERE b."uploadedBy" IS NOT NULL)::int AS "affectedUploaders"
+           FROM umrah_import_batches b
+          WHERE ${whereClause}`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT b.status                                AS "status",
+                COUNT(*)::int                            AS "count",
+                COALESCE(SUM(b."totalRows"), 0)::int     AS "totalRows",
+                COALESCE(SUM(b."errorCount"), 0)::int    AS "errorRows"
+           FROM umrah_import_batches b
+          WHERE ${whereClause}
+          GROUP BY b.status
+          ORDER BY COUNT(*) DESC`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT b."fileType"                             AS "fileType",
+                COUNT(*)::int                            AS "count",
+                COALESCE(SUM(b."totalRows"), 0)::int     AS "totalRows",
+                COALESCE(SUM(b."errorCount"), 0)::int    AS "errorRows",
+                COALESCE(SUM(b."skippedCount"), 0)::int  AS "skippedRows"
+           FROM umrah_import_batches b
+          WHERE ${whereClause}
+          GROUP BY b."fileType"
+          ORDER BY COALESCE(SUM(b."errorCount"), 0) DESC, COUNT(*) DESC`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT b."uploadedBy"                                    AS "uploadedBy",
+                COALESCE(e.name, u.email)                          AS "uploaderName",
+                u.email                                            AS "uploaderEmail",
+                COUNT(*)::int                                      AS "count",
+                COUNT(*) FILTER (WHERE b.status = 'failed')::int   AS "failedCount",
+                COALESCE(SUM(b."totalRows"), 0)::int               AS "totalRows",
+                COALESCE(SUM(b."errorCount"), 0)::int              AS "errorRows",
+                COALESCE(SUM(b."skippedCount"), 0)::int            AS "skippedRows"
+           FROM umrah_import_batches b
+      LEFT JOIN users u    ON u.id = b."uploadedBy"
+      LEFT JOIN employees e ON e.id = u."employeeId"
+          WHERE ${whereClause}
+          GROUP BY b."uploadedBy", e.name, u.email
+          ORDER BY COALESCE(SUM(b."errorCount"), 0) DESC, COUNT(*) DESC
+          LIMIT 20`,
+        baseParams,
+      ),
+      rawQuery<Record<string, unknown>>(
+        `SELECT b.id, b."fileName", b."fileType", b.status,
+                b."totalRows", b."newCount", b."updatedCount",
+                b."skippedCount", b."errorCount", b."financialImpactCount",
+                b."seasonId", se.title AS "seasonTitle",
+                b."uploadedBy", COALESCE(e.name, u.email) AS "uploaderName",
+                b."createdAt", b."completedAt", b.notes
+           FROM umrah_import_batches b
+      LEFT JOIN umrah_seasons se
+             ON se.id = b."seasonId"
+            AND se."companyId" = b."companyId"
+            AND se."deletedAt" IS NULL
+      LEFT JOIN users u    ON u.id = b."uploadedBy"
+      LEFT JOIN employees e ON e.id = u."employeeId"
+          WHERE ${whereClause}
+          ORDER BY b."createdAt" DESC, b.id DESC
+          LIMIT 100`,
+        baseParams,
+      ),
+    ]);
+
+    const kpiRow = kpiRowArr[0] ?? {
+      totalBatches: 0, failedBatches: 0, partialBatches: 0,
+      totalRows: 0, errorRows: 0, skippedRows: 0, newRows: 0, updatedRows: 0,
+      financialImpactRows: 0, affectedSeasons: 0, affectedUploaders: 0,
+    };
+
+    res.json(maskFields(req, {
+      kpis: kpiRow,
+      byStatus,
+      byFileType,
+      byUploader,
+      recent,
+    }));
+  } catch (err) { handleRouteError(err, res, "Import errors summary report"); }
+});
+
+
+// §8 Phase 2 of #1870 — Settings Policies Catalog (11 categories).
+// Surfaces every umrah policy + its current value in one payload.
+// Companion PUT handles per-category saves through the existing
+// `settings` table (key pattern `umrah.<categoryId>.<fieldKey>`).
+router.get("/settings/policies", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    // Resolve all umrah.* settings in one round-trip. The shared
+    // resolveSettings helper takes one key at a time + handles
+    // precedence on its own; for this catalog (dozens of keys per
+    // call) we'd rather do a single SELECT. Same precedence rule
+    // (system < company) reproduced inline so the read stays
+    // consistent with the rest of the platform.
+    const keys: string[] = [];
+    for (const cat of UMRAH_POLICY_CATEGORIES) {
+      for (const f of cat.fields) {
+        keys.push(`umrah.${cat.id}.${f.key}`);
+      }
+    }
+    const settingsRows = await rawQuery<{ key: string; scope: string; value: unknown }>(
+      `SELECT key, scope, value FROM settings
+        WHERE key = ANY($1::text[])
+          AND (
+            (scope = 'system' AND "scopeId" IS NULL)
+            OR (scope = 'company' AND "scopeId" = $2)
+          )
+        ORDER BY CASE scope WHEN 'system' THEN 1 WHEN 'company' THEN 2 END`,
+      [keys, scope.companyId],
+    );
+    const current: Record<string, unknown> = {};
+    for (const r of settingsRows) current[r.key] = r.value;
+
+    const data = UMRAH_POLICY_CATEGORIES.map((cat) => {
+      const fields = cat.fields.map((f) => {
+        const fullKey = `umrah.${cat.id}.${f.key}`;
+        const raw = current[fullKey];
+        return {
+          ...f,
+          fullKey,
+          // null → operator hasn't set; effective value falls back to
+          // the catalog default so the FE renders a populated input.
+          currentValue: raw === undefined ? null : raw,
+          effectiveValue: raw === undefined ? (f.defaultValue ?? null) : raw,
+        };
+      });
+      const configuredCount = fields.filter((f) => f.currentValue !== null).length;
+      const status: "configured" | "default" | "missing" =
+        configuredCount === 0 ? "default"
+        : configuredCount === fields.length ? "configured"
+        : "missing";
+      return { ...cat, fields, status, configuredCount };
+    });
+    res.json({ data });
+  } catch (err) { handleRouteError(err, res, "Settings policies catalog"); }
+});
+
+const savePolicySchema = z.object({
+  values: z.record(z.string(), z.union([
+    z.number(), z.boolean(), z.string(), z.null(),
+  ])),
+});
+
+router.put("/settings/policies/:categoryId", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const categoryId = String(req.params.categoryId);
+    if (!ALL_POLICY_IDS.includes(categoryId)) {
+      throw new NotFoundError("الفئة غير موجودة");
+    }
+    const cat = UMRAH_POLICY_CATEGORIES.find((c) => c.id === categoryId)!;
+    const b = zodParse(savePolicySchema.safeParse(req.body));
+    // Whitelist guard — only keys that exist in the category's
+    // schema are accepted. An unknown key would land as a dead
+    // settings row otherwise.
+    const knownKeys = new Set(cat.fields.map((f) => f.key));
+    for (const k of Object.keys(b.values)) {
+      if (!knownKeys.has(k)) {
+        throw new ValidationError(`الحقل "${k}" غير معروف في فئة "${cat.title}"`, { field: k });
+      }
+    }
+    // Save each provided value. Null means "clear the override and
+    // fall back to the system default" — upsertSetting persists the
+    // null and resolveSettings treats it as undefined on read.
+    for (const [k, v] of Object.entries(b.values)) {
+      await upsertSetting("company", scope.companyId, `umrah.${categoryId}.${k}`, v);
+    }
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update",
+      entity: "umrah_settings_policies", entityId: 0,
+      after: { categoryId, keys: Object.keys(b.values) },
+    }).catch((e) => logger.error(e, "policy save audit failed"));
+    res.json({ ok: true, categoryId, updated: Object.keys(b.values).length });
+  } catch (err) { handleRouteError(err, res, "Save policy"); }
 });
 
 export default router;

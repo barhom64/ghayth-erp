@@ -8,6 +8,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PoliciesTab } from "@/components/umrah/policies-tab";
 import { Settings as SettingsIcon, Save, AlertTriangle, Wallet, Package, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/formatters";
@@ -192,6 +193,23 @@ export default function UmrahSettings() {
     <PageShell title="إعدادات العمرة" subtitle="ضبط ربط وحدة العمرة بالنظام المالي" breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/umrah", label: "العمرة" }, { label: "الإعدادات" }]}>
       <UmrahTabsNav />
       <div className="space-y-6 max-w-3xl">
+        {/* §8 Phase 2 of #1870 — Policies catalog. The existing
+            cards below (NUSK link, product mapping, overstay penalty)
+            stay as-is; this section adds the 11 missing categories
+            (Season / Visa / Overstay Grace / Violations / Import /
+            Auto-link / Pricing / Commission / Financial / Calendar /
+            Notifications) all wired to /umrah/settings/policies. */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <SettingsIcon className="h-4 w-4" />
+              سياسات العمرة (11 فئة)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PoliciesTab />
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">

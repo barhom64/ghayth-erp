@@ -1,0 +1,28 @@
+-- 286_company_documents_updated_at.sql
+--
+-- Operational-readiness fix (#1594 — write-path review, UPDATE SET-column class).
+--
+-- PROBLEM
+-- company_documents has createdAt + deletedAt but NO updatedAt, yet BOTH of its
+-- write paths stamp it:
+--   • PATCH /hr/company-documents/:id  unconditionally appends "updatedAt"=NOW()
+--     to every edit (routes/hr.ts ~8007) — the canonical "stamp updatedAt on
+--     every update" convention,
+--   • DELETE /hr/company-documents/:id  soft-deletes with
+--     SET status='deleted', "deletedAt"=NOW(), "updatedAt"=NOW() (~7979).
+-- So editing OR deleting any company document 500s with
+--   column "updatedAt" of relation "company_documents" does not exist.
+-- Verified live: both UPDATEs are rejected (undefined_column). The column is
+-- clearly intended (two call sites, including the standard update stamp) and was
+-- simply omitted when the table was created — same class as migration 284
+-- (updatedAt added to clients / documents / employee_assignments).
+--
+-- FIX
+-- Add the standard updatedAt column (additive, IF NOT EXISTS — non-breaking;
+-- existing rows get now() via the default). No code change: the writes were
+-- already correct, the column was missing. Revives both edit and delete.
+--
+-- @rollback:
+--   ALTER TABLE public.company_documents DROP COLUMN IF EXISTS "updatedAt";
+
+ALTER TABLE public.company_documents ADD COLUMN IF NOT EXISTS "updatedAt" timestamptz NOT NULL DEFAULT now();
