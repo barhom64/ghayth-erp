@@ -500,8 +500,8 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
         for (let i = 0; i < b.phases.length; i++) {
           const phase = b.phases[i];
           await client.query(
-            `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
-            [insertId, phase.name, i, phase.startDate, phase.endDate]
+            `INSERT INTO project_phases ("companyId","projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5,$6)`,
+            [scope.companyId, insertId, phase.name, i, phase.startDate, phase.endDate]
           );
         }
       }
@@ -825,8 +825,8 @@ router.post("/:id/phases", authorize({ feature: "projects.tasks", action: "creat
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
     const { insertId } = await rawExecute(
-      `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
-      [projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
+      `INSERT INTO project_phases ("companyId","projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5,$6)`,
+      [scope.companyId, projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
     );
     assertInsert(insertId, "project_phases");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [insertId, projectId]);
@@ -920,6 +920,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
             dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
             sourceType: "project_phases",
             sourceId: phaseId,
+            projectId,
           }
         );
         milestoneInvoiceCreated = true;
