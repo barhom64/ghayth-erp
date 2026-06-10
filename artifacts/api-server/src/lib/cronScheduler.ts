@@ -4255,7 +4255,111 @@ async function partyRegistrySync(): Promise<string> {
   return `synced ${companies.length} companies · ${linked} new party link(s)`;
 }
 
+/** Lot expiry alerts (migration 173): for every active lot whose expiry
+ *  falls inside one of the warehouse's expiryAlertDays thresholds, insert one
+ *  lot_expiry_alerts row per (lot, threshold) — the UNIQUE constraint is the
+ *  idempotency gate — and notify the company manager. */
+export async function warehouseLotExpiryAlerts(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let alerted = 0;
+  for (const company of companies) {
+    const due = await rawQuery<Record<string, any>>(
+      `SELECT l.id AS "lotId", l."lotNumber", l."expiryDate", p.name AS "productName",
+              t.threshold::int AS "thresholdDays",
+              (l."expiryDate" - CURRENT_DATE)::int AS "daysLeft"
+       FROM warehouse_stock_lots l
+       JOIN warehouse_products p ON p.id = l."productId"
+       JOIN warehouses w ON w.id = l."warehouseId" AND w."deletedAt" IS NULL
+       CROSS JOIN LATERAL jsonb_array_elements_text(w."expiryAlertDays") AS t(threshold)
+       WHERE l."companyId" = $1 AND l."deletedAt" IS NULL AND l.status = 'active'
+         AND l."expiryDate" IS NOT NULL
+         AND l."expiryDate" <= CURRENT_DATE + (t.threshold || ' days')::interval
+         AND l."expiryDate" >= CURRENT_DATE
+         AND NOT EXISTS (
+           SELECT 1 FROM lot_expiry_alerts a
+           WHERE a."lotId" = l.id AND a."thresholdDays" = t.threshold::int
+         )`,
+      [company.id]
+    );
+    const [mainBranch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM branches WHERE "companyId"=$1 AND status='active' ORDER BY id ASC LIMIT 1`,
+      [company.id]
+    );
+    for (const d of due) {
+      await rawExecute(
+        `INSERT INTO lot_expiry_alerts ("companyId","lotId","thresholdDays","expiryDate")
+         VALUES ($1,$2,$3,$4) ON CONFLICT ("lotId","thresholdDays") DO NOTHING`,
+        [company.id, d.lotId, d.thresholdDays, d.expiryDate]
+      );
+      const mgr = mainBranch
+        ? await getManagerAssignmentId(company.id, mainBranch.id).catch(() => null)
+        : null;
+      if (mgr) {
+        await createNotification({
+          companyId: company.id, assignmentId: mgr,
+          type: "warehouse", title: "دفعة تقترب من انتهاء الصلاحية",
+          body: `${d.productName} — دفعة ${d.lotNumber}: تنتهي خلال ${d.daysLeft} يوم`,
+          priority: Number(d.daysLeft) <= 30 ? "high" : "normal",
+          refType: "warehouse_stock_lots", refId: d.lotId,
+          actionUrl: "/warehouse/advanced",
+        }).catch((e) => logger.error(e, "[cron] lot expiry notification failed"));
+      }
+      alerted++;
+    }
+  }
+  return `lot expiry: ${alerted} alert(s) fired`;
+}
+
+/** Cycle-count plan scan: open a pending cycle count per plan once per
+ *  period window (weekly = ISO week, monthly = month, quarterly = quarter).
+ *  An existing count for the plan's warehouse inside the current window
+ *  means the plan already ran. */
+export async function warehouseCycleCountPlanScan(): Promise<string> {
+  const plans = await rawQuery<Record<string, any>>(
+    `SELECT pl.id, pl."companyId", pl."warehouseId", pl.period, pl."planType"
+     FROM warehouse_cycle_count_plans pl
+     JOIN warehouses w ON w.id = pl."warehouseId" AND w."deletedAt" IS NULL`,
+    []
+  );
+  let opened = 0;
+  for (const plan of plans) {
+    const trunc = plan.period === "weekly" ? "week" : plan.period === "quarterly" ? "quarter" : "month";
+    const [existing] = await rawQuery<{ n: string }>(
+      `SELECT COUNT(*) AS n FROM warehouse_cycle_counts
+       WHERE "companyId"=$1 AND "warehouseId"=$2
+         AND date_trunc($3, "scheduledDate") = date_trunc($3, CURRENT_DATE)`,
+      [plan.companyId, plan.warehouseId, trunc]
+    );
+    if (Number(existing?.n ?? 0) > 0) continue;
+    const { createCycleCountWithSnapshot } = await import("../routes/warehouse-cycle-counts.js");
+    const countId = await createCycleCountWithSnapshot(
+      plan.companyId, plan.warehouseId, `فُتح تلقائياً من خطة الجرد #${plan.id} (${plan.period})`
+    );
+    const [mainBranch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM branches WHERE "companyId"=$1 AND status='active' ORDER BY id ASC LIMIT 1`,
+      [plan.companyId]
+    );
+    const mgr = mainBranch
+      ? await getManagerAssignmentId(plan.companyId, mainBranch.id).catch(() => null)
+      : null;
+    if (mgr) {
+      await createNotification({
+        companyId: plan.companyId, assignmentId: mgr,
+        type: "warehouse", title: "جرد دوري مجدول فُتح",
+        body: `فُتح الجرد الدوري #${countId} وفق خطة ${plan.period}`,
+        priority: "normal",
+        refType: "warehouse_cycle_counts", refId: countId,
+        actionUrl: "/warehouse/advanced",
+      }).catch((e) => logger.error(e, "[cron] cycle count plan notification failed"));
+    }
+    opened++;
+  }
+  return `cycle-count plans: ${opened} count(s) opened from ${plans.length} plan(s)`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "warehouse_lot_expiry_alerts", description: "تنبيهات انتهاء صلاحية دفعات المستودع (عتبات المستودع)", schedule: "10 6 * * *", handler: warehouseLotExpiryAlerts },
+  { name: "warehouse_cycle_count_plan_scan", description: "فتح الجرد الدوري المستحق وفق خطط الجرد", schedule: "15 6 * * *", handler: warehouseCycleCountPlanScan },
   { name: "party_registry_sync", description: "مزامنة سجل الأطراف (Party) — ربط الكيانات الجديدة", schedule: "30 3 * * *", handler: partyRegistrySync },
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },

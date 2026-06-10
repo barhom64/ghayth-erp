@@ -75,16 +75,85 @@ router.get("/cycle-counts", authorize({ feature: "warehouse.inventory", action: 
 });
 
 // NOTE: declared before "/cycle-counts/:id" so "plans" is not captured as :id.
+const PLAN_PERIODS = new Set(["weekly", "monthly", "quarterly"]);
+
 router.get("/cycle-counts/plans", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM warehouse_cycle_count_plans WHERE "companyId"=$1 ORDER BY id DESC LIMIT 100`,
+      `SELECT pl.*, w.name AS "warehouseName",
+              ('خطة ' || pl."planType" || ' — ' || pl.period) AS name,
+              pl.period AS frequency
+       FROM warehouse_cycle_count_plans pl
+       LEFT JOIN warehouses w ON w.id=pl."warehouseId" AND w."deletedAt" IS NULL
+       WHERE pl."companyId"=$1 ORDER BY pl.id DESC LIMIT 100`,
       [scope.companyId]
     ).catch(() => [] as Record<string, unknown>[]);
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Cycle count plans error:"); }
 });
+
+// Replaces the last warehouse wiring-stub: a recurring counting plan. The
+// daily cron (warehouse_cycle_count_plan_scan) opens a cycle count per plan
+// once per period window.
+router.post("/cycle-counts/plans", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const period = String(req.body?.period ?? "monthly").trim();
+    if (!PLAN_PERIODS.has(period)) {
+      throw new ValidationError("دورية غير صالحة", { field: "period", fix: `الدوريات المتاحة: ${[...PLAN_PERIODS].join(", ")}` });
+    }
+    const planType = String(req.body?.planType ?? "full").trim().slice(0, 30) || "full";
+    const warehouseId = await resolveWarehouseId(
+      scope.companyId, scope.branchId,
+      req.body?.warehouseId ? Number(req.body.warehouseId) : undefined
+    );
+    const rows = await rawQuery<Record<string, unknown>>(
+      `INSERT INTO warehouse_cycle_count_plans ("companyId","warehouseId",period,"planType","createdBy",notes)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT ("companyId","warehouseId",period,"planType")
+       DO UPDATE SET notes=EXCLUDED.notes
+       RETURNING *`,
+      [scope.companyId, warehouseId, period, planType, scope.employeeId || null, req.body?.notes ?? null]
+    );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "warehouse_cycle_count_plans", entityId: Number(rows[0]?.id ?? 0),
+      after: { warehouseId, period, planType },
+    }).catch((e) => logger.error(e, "cycle-count background task failed"));
+    res.status(201).json(rows[0]);
+  } catch (err) { handleRouteError(err, res, "Cycle count plan create error:"); }
+});
+
+/** Create a cycle count with a stockable-lines snapshot — shared by the
+ *  POST route and the daily plan-scan cron. */
+export async function createCycleCountWithSnapshot(
+  companyId: number,
+  warehouseId: number,
+  notes: string | null
+): Promise<number> {
+  let countId = 0;
+  await withTransaction(async (client) => {
+    const ccRes = await client.query(
+      `INSERT INTO warehouse_cycle_counts ("companyId","warehouseId","scheduledDate",status,notes)
+       VALUES ($1,$2,CURRENT_DATE,'pending',$3) RETURNING id`,
+      [companyId, warehouseId, notes]
+    );
+    countId = ccRes.rows[0]?.id ?? 0;
+    // Snapshot system quantities NOW — stockable items only (services /
+    // digital / assets never carry stock so they are never counted).
+    await client.query(
+      `INSERT INTO warehouse_cycle_count_lines ("cycleCountId","productId","systemQuantity")
+       SELECT $1, p.id, COALESCE(p."currentStock",0)
+       FROM warehouse_products p
+       WHERE p."companyId"=$2 AND p."deletedAt" IS NULL AND p.status='active'
+         AND COALESCE(p."itemType",'product') IN ('product','consumable')
+       ORDER BY p.id`,
+      [countId, companyId]
+    );
+  });
+  return countId;
+}
 
 router.post("/cycle-counts", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
@@ -94,26 +163,7 @@ router.post("/cycle-counts", authorize({ feature: "warehouse.inventory", action:
       req.body?.warehouseId ? Number(req.body.warehouseId) : undefined
     );
 
-    let countId = 0;
-    await withTransaction(async (client) => {
-      const ccRes = await client.query(
-        `INSERT INTO warehouse_cycle_counts ("companyId","warehouseId","scheduledDate",status,notes)
-         VALUES ($1,$2,CURRENT_DATE,'pending',$3) RETURNING id`,
-        [scope.companyId, warehouseId, req.body?.notes ?? null]
-      );
-      countId = ccRes.rows[0]?.id ?? 0;
-      // Snapshot system quantities NOW — stockable items only (services /
-      // digital / assets never carry stock so they are never counted).
-      await client.query(
-        `INSERT INTO warehouse_cycle_count_lines ("cycleCountId","productId","systemQuantity")
-         SELECT $1, p.id, COALESCE(p."currentStock",0)
-         FROM warehouse_products p
-         WHERE p."companyId"=$2 AND p."deletedAt" IS NULL AND p.status='active'
-           AND COALESCE(p."itemType",'product') IN ('product','consumable')
-         ORDER BY p.id`,
-        [countId, scope.companyId]
-      );
-    });
+    const countId = await createCycleCountWithSnapshot(scope.companyId, warehouseId, req.body?.notes ?? null);
     assertInsert(countId, "warehouse_cycle_counts");
 
     createAuditLog({
