@@ -964,6 +964,7 @@ DROP INDEX IF EXISTS public.idx_journal_lines_dim_vehicle;
 DROP INDEX IF EXISTS public.idx_journal_lines_dim_property;
 DROP INDEX IF EXISTS public.idx_journal_lines_dim_project;
 DROP INDEX IF EXISTS public.idx_journal_lines_client;
+DROP INDEX IF EXISTS public.idx_journal_lines_branch;
 DROP INDEX IF EXISTS public.idx_journal_lines_active;
 DROP INDEX IF EXISTS public.idx_journal_entries_reversal_of;
 DROP INDEX IF EXISTS public.idx_journal_entries_posted_by;
@@ -12066,7 +12067,8 @@ CREATE TABLE public.journal_lines (
     "sourceLineTable" character varying(64),
     "sourceLineId" integer,
     "dimensionJson" jsonb,
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "branchId" integer
 );
 
 

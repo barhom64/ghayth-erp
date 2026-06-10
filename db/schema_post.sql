@@ -9933,6 +9933,13 @@ CREATE INDEX idx_journal_lines_active ON public.journal_lines USING btree (id) W
 
 
 --
+-- Name: idx_journal_lines_branch; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_journal_lines_branch ON public.journal_lines USING btree ("branchId") WHERE ("branchId" IS NOT NULL);
+
+
+--
 -- Name: idx_journal_lines_client; Type: INDEX; Schema: public; Owner: -
 --
 
