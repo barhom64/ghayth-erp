@@ -5071,4 +5071,152 @@ router.get("/finance-hygiene", authorize({ feature: "umrah", action: "list" }), 
   } catch (err) { handleRouteError(err, res, "Umrah finance hygiene"); }
 });
 
+// §11 partial → full conversion — nusk invoices summary report (#1870).
+// /umrah/nusk-invoices stays as the per-row list; this is the REPORT
+// with finance-focused KPIs + 3 breakdowns + recent rows. AP-status
+// aware (split by purchaseInvoiceId for "AP posted" tracking).
+router.get("/reports/nusk-invoices-summary", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const seasonId   = req.query.seasonId   ? Number(req.query.seasonId)   : null;
+    const agentId    = req.query.agentId    ? Number(req.query.agentId)    : null;
+    const statusFlt  = req.query.status     ? String(req.query.status)     : null;
+    const fromStr    = req.query.from       ? String(req.query.from)       : null;
+    const toStr      = req.query.to         ? String(req.query.to)         : null;
+
+    const params: unknown[] = [scope.companyId];
+    let where = `n."companyId" = $1 AND n."deletedAt" IS NULL`;
+    if (statusFlt) {
+      params.push(statusFlt);
+      where += ` AND n."nuskStatus" = $${params.length}`;
+    }
+    if (agentId) {
+      params.push(agentId);
+      where += ` AND n."agentId" = $${params.length}`;
+    }
+    if (seasonId) {
+      params.push(seasonId);
+      // nusk has no seasonId — chain through the linked group.
+      where += ` AND EXISTS (
+        SELECT 1 FROM umrah_groups g
+         WHERE g.id = n."groupId" AND g."companyId" = n."companyId"
+           AND g."seasonId" = $${params.length}
+      )`;
+    }
+    if (fromStr && /^\d{4}-\d{2}-\d{2}$/.test(fromStr)) {
+      params.push(fromStr);
+      where += ` AND n."issueDate" >= $${params.length}::date`;
+    }
+    if (toStr && /^\d{4}-\d{2}-\d{2}$/.test(toStr)) {
+      params.push(toStr);
+      where += ` AND n."issueDate" <= $${params.length}::date`;
+    }
+
+    const [kpiRow, byStatus, byMonth, byAgent, recent] = await Promise.all([
+      rawQuery<{
+        total: string; totalAmount: string; netCostTotal: string;
+        refundedTotal: string; mutamerCount: string;
+        apPostedCount: string; apPendingCount: string;
+      }>(
+        `SELECT COUNT(*)::text AS total,
+                COALESCE(SUM(n."totalAmount"), 0)::text AS "totalAmount",
+                COALESCE(SUM(n."netCost"), 0)::text AS "netCostTotal",
+                COALESCE(SUM(n."refundAmount"), 0)::text AS "refundedTotal",
+                COALESCE(SUM(n."mutamerCount"), 0)::text AS "mutamerCount",
+                SUM(CASE WHEN n."purchaseInvoiceId" IS NOT NULL THEN 1 ELSE 0 END)::text AS "apPostedCount",
+                SUM(CASE WHEN n."purchaseInvoiceId" IS NULL AND COALESCE(n."totalAmount",0) > 0 AND n."nuskStatus" <> 'cancelled' THEN 1 ELSE 0 END)::text AS "apPendingCount"
+           FROM umrah_nusk_invoices n
+          WHERE ${where}`,
+        params,
+      ),
+      rawQuery<{ status: string; c: string; total: string }>(
+        `SELECT n."nuskStatus" AS status, COUNT(*)::text AS c,
+                COALESCE(SUM(n."totalAmount"), 0)::text AS total
+           FROM umrah_nusk_invoices n
+          WHERE ${where}
+          GROUP BY n."nuskStatus"
+          ORDER BY COUNT(*) DESC`,
+        params,
+      ),
+      rawQuery<{ month: string; c: string; total: string }>(
+        `SELECT TO_CHAR(n."issueDate", 'YYYY-MM') AS month,
+                COUNT(*)::text AS c,
+                COALESCE(SUM(n."totalAmount"), 0)::text AS total
+           FROM umrah_nusk_invoices n
+          WHERE ${where} AND n."issueDate" IS NOT NULL
+          GROUP BY TO_CHAR(n."issueDate", 'YYYY-MM')
+          ORDER BY month DESC
+          LIMIT 12`,
+        params,
+      ),
+      rawQuery<{
+        agentId: number; agentName: string | null;
+        c: string; total: string;
+      }>(
+        `SELECT n."agentId",
+                a.name AS "agentName",
+                COUNT(*)::text AS c,
+                COALESCE(SUM(n."totalAmount"), 0)::text AS total
+           FROM umrah_nusk_invoices n
+           LEFT JOIN umrah_agents a ON a.id = n."agentId"
+                                  AND a."companyId" = n."companyId"
+                                  AND a."deletedAt" IS NULL
+          WHERE ${where} AND n."agentId" IS NOT NULL
+          GROUP BY n."agentId", a.name
+          ORDER BY SUM(n."totalAmount") DESC NULLS LAST
+          LIMIT 50`,
+        params,
+      ),
+      rawQuery<{
+        id: number; nuskInvoiceNumber: string; nuskStatus: string;
+        totalAmount: string | number; netCost: string | number;
+        refundAmount: string | number; mutamerCount: number;
+        issueDate: string | null; expiryDate: string | null;
+        agentId: number | null; agentName: string | null;
+        groupId: number | null; groupName: string | null;
+        purchaseInvoiceId: number | null;
+      }>(
+        `SELECT n.id, n."nuskInvoiceNumber", n."nuskStatus",
+                n."totalAmount", n."netCost", n."refundAmount",
+                n."mutamerCount",
+                n."issueDate"::text AS "issueDate",
+                n."expiryDate"::text AS "expiryDate",
+                n."agentId", a.name AS "agentName",
+                n."groupId", g.name AS "groupName",
+                n."purchaseInvoiceId"
+           FROM umrah_nusk_invoices n
+           LEFT JOIN umrah_agents a
+                  ON a.id = n."agentId" AND a."companyId" = n."companyId" AND a."deletedAt" IS NULL
+           LEFT JOIN umrah_groups g
+                  ON g.id = n."groupId" AND g."companyId" = n."companyId" AND g."deletedAt" IS NULL
+          WHERE ${where}
+          ORDER BY n."issueDate" DESC NULLS LAST, n.id DESC
+          LIMIT 100`,
+        params,
+      ),
+    ]);
+
+    const k = kpiRow[0] ?? {
+      total: "0", totalAmount: "0", netCostTotal: "0",
+      refundedTotal: "0", mutamerCount: "0",
+      apPostedCount: "0", apPendingCount: "0",
+    };
+    res.json(maskFields(req, {
+      kpis: {
+        total: Number(k.total),
+        totalAmount: Number(k.totalAmount),
+        netCostTotal: Number(k.netCostTotal),
+        refundedTotal: Number(k.refundedTotal),
+        mutamerCount: Number(k.mutamerCount),
+        apPostedCount: Number(k.apPostedCount),
+        apPendingCount: Number(k.apPendingCount),
+      },
+      byStatus: byStatus.map((r) => ({ status: r.status, count: Number(r.c), total: Number(r.total) })),
+      byMonth:  byMonth.map((r) => ({ month: r.month, count: Number(r.c), total: Number(r.total) })),
+      byAgent:  byAgent.map((r) => ({ agentId: r.agentId, agentName: r.agentName, count: Number(r.c), total: Number(r.total) })),
+      recent,
+    }));
+  } catch (err) { handleRouteError(err, res, "Nusk invoices summary"); }
+});
+
 export default router;
