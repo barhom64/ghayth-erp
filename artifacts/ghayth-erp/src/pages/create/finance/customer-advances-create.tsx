@@ -165,14 +165,20 @@ export default function CustomerAdvancesCreate() {
           <p className="text-xs font-semibold mb-2">معاينة القيد المُولّد</p>
           <div className="text-xs space-y-1 font-mono">
             <div className="flex justify-between">
-              <span>1100 — النقدية / البنك</span>
+              <span>النقدية / البنك (حسب طريقة الدفع)</span>
               <span className="text-orange-700">مدين {formatCurrency(amountNum)}</span>
             </div>
             <div className="flex justify-between">
-              <span>2400 — التزام دفعة مقدمة من العميل</span>
+              <span>التزام دفعة مقدمة من العميل</span>
               <span className="text-emerald-700">دائن {formatCurrency(amountNum)}</span>
             </div>
           </div>
+          {/* #1945 (FIN-08) — الحسابات الفعلية يحدّدها محرك الترحيل
+              (resolveAccountCode) عند الحفظ؛ لا نعرض أكوادًا ثابتة قد تخالف
+              ما يُرحَّل فعليًا (كانت 1100/2400 وهي قد تكون حسابات رأس غير قابلة للترحيل). */}
+          <p className="text-[10px] text-muted-foreground mt-2 font-sans">
+            الحسابات الفعلية يحدّدها محرك الترحيل عند الحفظ حسب إعداد الشركة.
+          </p>
         </div>
       )}
 
